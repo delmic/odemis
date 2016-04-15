@@ -45,23 +45,30 @@ class FileBrowser(wx.Panel):
     Note that like most of the wx widgets, SetValue does not generate an event.
     """
 
-    def __init__(self, parent, id=wx.ID_ANY,
-                  pos=wx.DefaultPosition,
-                  size=wx.DefaultSize,
-                  style=wx.TAB_TRAVERSAL,
-                  tool_tip=None,
-                  clear_btn=False,
-                  clear_label="",
-                  dialog_title="Browse for file",
-                  wildcard="*.*",
-                  name='fileBrowser',
-                  default_dir=None
+    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
+                 style=0,
+                 dialog_style=wx.FD_OPEN,
+                 tool_tip=None,
+                 clear_btn=False,
+                 clear_label="",
+                 dialog_title="Browse for file",
+                 wildcard="*.*",
+                 name='fileBrowser',
+                 file_path=None,
+                 default_dir=None,
+
         ):
 
-        self.file_path = None
-        self.default_dir = default_dir or os.path.curdir
+        style |= wx.TAB_TRAVERSAL
+
+        self.file_path = file_path
+        self.default_dir = os.path.abspath(default_dir or os.path.dirname(file_path) or
+                                           os.path.curdir)
+        if not os.path.dirname(self.file_path):
+            self.file_path = os.path.join(self.default_dir, self.file_path)
 
         self.dialog_title = dialog_title
+        self.dialog_style = dialog_style
         self.wildcard = wildcard
         self.label = clear_label  # Text to show when the control is cleared
 
@@ -79,16 +86,18 @@ class FileBrowser(wx.Panel):
 
         box = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.text_ctrl = wx.TextCtrl(self,
-                            style=wx.BORDER_NONE|wx.TE_READONLY)
+        self.text_ctrl = wx.TextCtrl(self, style=wx.BORDER_NONE | wx.TE_READONLY)
         self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
         self.text_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
         self.text_ctrl.Bind(wx.EVT_TEXT, self.on_changed)
+        if self.file_path:
+            self.SetValue(self.file_path)
 
         box.Add(self.text_ctrl, 1)
 
         if clear_btn:
-            self._btn_clear = ImageButton(self, bitmap=img.getBitmap("icon/ico_clear.png"), pos=(10, 8))
+            self._btn_clear = ImageButton(self, bitmap=img.getBitmap("icon/ico_clear.png"),
+                                          pos=(10, 8))
             self._btn_clear.bmpHover = img.getBitmap("icon/ico_clear_h.png")
 
             self._btn_clear.SetToolTipString("Clear calibration")  # FIXME: do not hard code
@@ -119,7 +128,7 @@ class FileBrowser(wx.Panel):
 
             self.file_path = file_path
 
-            if not os.path.exists(self.file_path):
+            if self.dialog_style & wx.FD_SAVE == 0 and not os.path.exists(self.file_path):
                 self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_ERROR)
             else:
                 self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
@@ -128,6 +137,7 @@ class FileBrowser(wx.Panel):
 
             self.text_ctrl.SetToolTipString(self.file_path)
             self.text_ctrl.SetInsertionPointEnd()
+
             if self._btn_clear:
                 self._btn_clear.Show()
         else:
@@ -193,8 +203,7 @@ class FileBrowser(wx.Panel):
 
         dlg = wx.FileDialog(self, self.dialog_title, directory, current,
                             wildcard=self.wildcard,
-                            style=wx.FD_OPEN)
-
+                            style=self.dialog_style)
 
         if dlg.ShowModal() == wx.ID_OK:
             self._SetValue(dlg.GetPath(), raise_event=True)

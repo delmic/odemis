@@ -5306,7 +5306,6 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_desc">
           <object class="wxBoxSizer">
-            
             <orient>wxVERTICAL</orient>
           </object>
           <fg>#E5E5E5</fg>
@@ -5397,10 +5396,9 @@ def __init_resources():
               <object class="sizeritem">
                 <object class="wxPanel">
                   <object class="wxBoxSizer">
-                    <orient>wxHORIZONTAL</orient>
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
-                        <size>-1,10</size>
+                        <size>-1,8</size>
                         <range>100</range>
                         <value>0</value>
                         <bg>#333333</bg>
@@ -5411,7 +5409,7 @@ def __init_resources():
                       </object>
                       <option>1</option>
                       <flag>wxALL|wxEXPAND</flag>
-                      <border>30</border>
+                      <border>10</border>
                     </object>
                     <object class="sizeritem">
                       <object class="wxStaticText" name="lbl_gauge">
@@ -5423,16 +5421,15 @@ def __init_resources():
                           <underlined>0</underlined>
                           <face>Ubuntu</face>
                         </font>
-                        <style>wxALIGN_RIGHT</style>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <flag>wxALL|wxALIGN_RIGHT</flag>
-                      <border>20</border>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>10</border>
                     </object>
+                    <orient>wxVERTICAL</orient>
                   </object>
-                  <size>-1,60</size>
                   <bg>#4D4D4D</bg>
                 </object>
                 <flag>wxEXPAND</flag>
