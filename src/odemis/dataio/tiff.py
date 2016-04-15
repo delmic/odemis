@@ -160,7 +160,14 @@ def _readTiffTag(tfile):
     """
     md = {}
 
-    # TODO: set MD_DIMS to "YXC" or "CYX" in case it looks like RGB
+    # Set MD_DIMS to "YXC" or "CYX" in case it looks like RGB
+    samples_pp = _GetFieldDefault(tfile, T.TIFFTAG_SAMPLESPERPIXEL, 1) # this number includes extra samples
+    if samples_pp > 1:
+        planar_config = _GetFieldDefault(tfile, T.TIFFTAG_PLANARCONFIG, T.PLANARCONFIG_CONTIG)
+        if planar_config == T.PLANARCONFIG_CONTIG:
+            md[model.MD_DIMS] = "YXC"
+        elif planar_config == T.PLANARCONFIG_SEPARATE:
+            md[model.MD_DIMS] = "CYX"
 
     # scale + position
     resunit = _GetFieldDefault(tfile, T.TIFFTAG_RESOLUTIONUNIT, T.RESUNIT_INCH)
@@ -1575,8 +1582,9 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
+        # TODO: handle RGB for C at any posiion before and after XY, but iif TZ=11
         # if metadata indicates YXC format just handle it as RGB
-        if data.metadata.get(model.MD_DIMS) == 'YXC':
+        if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
             write_rgb = True
             hdim = data.shape[:-3]
         # for data > 2D: write as a sequence of 2D images or RGB images
