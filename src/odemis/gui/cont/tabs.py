@@ -34,7 +34,7 @@ from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.acq.align import AutoFocus
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
-    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream
+    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream, RGBStream
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -1356,11 +1356,11 @@ class AnalysisTab(Tab):
               }),
             (viewports[2],
              {"name": "Combined 1",
-              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
               }),
             (viewports[3],
              {"name": "Combined 2",
-              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
               }),
             (viewports[4],
              {"name": "Angle-resolved",
