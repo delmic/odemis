@@ -411,7 +411,7 @@ class AlignedSEMStream(SEMStream):
         self._last_pos = pos
 
         # if self.is_active.value:
-        self._setStatus(logging.WARNING, u"SEM stream is not aligned")
+        self._setStatus(logging.WARNING, (u"SEM stream is not aligned", u"Play SEM stream"))
         self.calibrated.value = False
 
     # need to override it to support beam shift
@@ -508,7 +508,7 @@ class AlignedSEMStream(SEMStream):
                     logging.error("Unknown shiftbeam method %s", self._shiftebeam)
             except LookupError:
                 self._status_poll.cancel()
-                self._setStatus(logging.WARNING, u"Automatic SEM alignment unsuccessful")
+                self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
                 logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
                 self._status_poll.cancel()
@@ -977,7 +977,7 @@ class AlignedFluoStream(FluoStream):
         self._last_pos = pos
 
         if not self.is_active.value:
-            self._setStatus(logging.WARNING, u"Optical stream is not aligned")
+            self._setStatus(logging.WARNING, (u"Optical stream is not aligned due to stage movement", u"Update any stream acquired in old position"))
             self.calibrated.value = False
 
     def _onActive(self, active):

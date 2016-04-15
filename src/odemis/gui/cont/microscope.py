@@ -398,21 +398,31 @@ class SecomStateController(MicroscopeStateController):
         """ Display the given message, or clear it
         lvl, msg (int, str): same as Stream.status. Cleared when lvl is None.
         """
+        action = None
         # If there are any aligned streams, give priority to showing their status
         for s in self._status_list:
             if s.is_active.value and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                 lvl, msg = s.status.value
+                if (lvl is not None) and (not isinstance(msg, basestring)):
+                    # it seems it also contains an action
+                    msg, action = msg
                 break
         else:
             for s in self._status_list:
                 if model.hasVA(s, "calibrated") and (not s.calibrated.value):
                     lvl, msg = s.status.value
+                    if (lvl is not None) and (not isinstance(msg, basestring)):
+                        # it seems it also contains an action
+                        msg, action = msg
                     break
+        if action is None:
+            action = ""
         # Might still be none
         if lvl is None:
             msg = ""
-        self._show_status_icons(lvl)
+        self._show_status_icons(lvl, action)
         self._tab_panel.lbl_stream_status.SetLabel(msg)
+        self._tab_panel.lbl_stream_status.SetToolTipString(action)
 
         # Whether the status is actually displayed or the progress bar is shown
         # is only dependent on _show_progress_indicators()
@@ -437,11 +447,13 @@ class SecomStateController(MicroscopeStateController):
                         else:
                             v.addStream(s)
 
-    def _show_status_icons(self, lvl):
+    def _show_status_icons(self, lvl, action=None):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
         self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
         self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
         self._tab_panel.pnl_hw_info.Layout()
+        if action is not None:
+            self._tab_panel.pnl_hw_info.SetToolTipString(action)
 
     def _show_progress_indicators(self, show_load, show_status):
         """
