@@ -26,6 +26,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.dataio import csv
+import csv as pycsv
 import os
 import unittest
 
@@ -46,7 +47,7 @@ class TestCSVIO(unittest.TestCase):
     def testExportAR(self):
         """Try simple AR export"""
         size = (10, 10)
-        dtype = numpy.uint16
+        dtype = numpy.float
         metadata = {model.MD_DESCRIPTION: "Angle-resolved"}
         data = model.DataArray(numpy.zeros(size, dtype), metadata)
 
@@ -58,7 +59,7 @@ class TestCSVIO(unittest.TestCase):
         self.assertGreater(st.st_size, 0)
         raised = False
         try:
-            csv.csv.reader(open(FILENAME, 'rb'))
+            pycsv.reader(open(FILENAME, 'rb'))
         except IOError:
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
@@ -77,7 +78,7 @@ class TestCSVIO(unittest.TestCase):
         self.assertGreater(st.st_size, 0)
         raised = False
         try:
-            csv.csv.reader(open(FILENAME, 'rb'))
+            pycsv.reader(open(FILENAME, 'rb'))
         except IOError:
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
