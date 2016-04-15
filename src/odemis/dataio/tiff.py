@@ -137,7 +137,7 @@ def _convertToTiffTag(metadata):
 def _GetFieldDefault(tfile, tag, default=None):
     """
     Same as TIFF.GetField(), but if the tag is not defined, return default
-    Note: the C libtiff has GetFieldDefaulted() which returns the dafault value
+    Note: the C libtiff has GetFieldDefaulted() which returns the default value
     of the specification, this function is different.
     tag (int or string): tag id or name
     default (value): value to return if the tag is not defined
@@ -498,8 +498,8 @@ def _updateMDFromOME(root, das, basename):
                 scaling_y = math.sqrt(math.pow(sinv, 2) + math.pow(cosv, 2))
                 scaling_x = cossh * math.cos(rot) - sinsh * math.sin(rot)
                 shear = (cossh * math.sin(rot) + sinsh * math.cos(rot)) / scaling_x
-                if not (util.almost_equal(scaling_y, 1)
-                    and util.almost_equal(scaling_x, 1)):
+                if not (util.almost_equal(scaling_y, 1) and
+                        util.almost_equal(scaling_x, 1)):
                     logging.warning("Image metadata has complex transformation "
                                     "which is not supported by Odemis.")
                 md[model.MD_ROTATION] = rot
@@ -521,14 +521,20 @@ def _updateMDFromOME(root, das, basename):
         except (KeyError, ValueError):
             pass
 
-        ctz_2_ifd = _getIFDsFromOME(pxe, basename, offset=ifd_offset)
-        ifd_offset += len(ctz_2_ifd)
+        try:
+            dims = pxe.get("DimensionOrder")[::-1]
+            md[model.MD_DIMS] = dims
+        except (KeyError, ValueError):
+            pass
+
+        hd_2_ifd, hdims = _getIFDsFromOME(pxe, offset=ifd_offset)
+        ifd_offset += len(hd_2_ifd)
 
         # Channels are a bit tricky, because apparently they are associated to
         # each C only by the order they are specified.
         wl_list = [] # we'll know it only once all the channels are passed
-        chan = 0
-        for che in pxe.findall("Channel"):
+        for chan, che in enumerate(pxe.findall("Channel")):
+
             mdc = {}
             try:
                 mdc[model.MD_DESCRIPTION] = che.attrib["Name"]
@@ -612,7 +618,17 @@ def _updateMDFromOME(root, das, basename):
                     logging.info("LightSourceSettings without LightSource")
 
             # update all the IFDs related to this channel
-            for ifd in ctz_2_ifd[chan].flat:
+            try:
+                ci = hdims.index("C")
+                chans = [slice(None)] * len(hdims)
+                chans[ci] = chan
+                chans = tuple(chans)
+            except ValueError:
+                if chan > 0:
+                    raise ValueError("Multiple channels information but C dimension is low")
+                chans = slice(None)  # all of the IFDs
+
+            for ifd in hd_2_ifd[chans].flat:
                 if ifd == -1:
                     continue # no IFD known, it's alright, might be just 3D array
                 da = das[ifd]
@@ -622,14 +638,12 @@ def _updateMDFromOME(root, das, basename):
                 da.metadata.update(md)
                 da.metadata.update(mdc)
 
-            chan += 1
-
         # Update metadata of each da, so that they will be merged
         if wl_list:
             if len(wl_list) != chan:
                 logging.warning("WL_LIST has length %d, while expected %d",
                                 len(wl_list), chan)
-            for ifd in ctz_2_ifd.flat:
+            for ifd in hd_2_ifd.flat:
                 if ifd == -1:
                     continue
                 da = das[ifd]
@@ -637,12 +651,12 @@ def _updateMDFromOME(root, das, basename):
                     continue
                 da.metadata.update({model.MD_WL_LIST: wl_list})
 
-        # Plane (= one per CTZ -> IFD)
+        # Plane (= one per high dim -> IFD)
         for ple in pxe.findall("Plane"):
             mdp = {}
             pos = []
             try:
-                for d in "CTZ": # that's our fixed order
+                for d in hdims:
                     ds = int(ple.attrib["The%s" % d]) # required tag
                     pos.append(ds)
             except KeyError:
@@ -669,7 +683,7 @@ def _updateMDFromOME(root, das, basename):
             except (KeyError, ValueError):
                 pass
 
-            ifd = ctz_2_ifd[tuple(pos)]
+            ifd = hd_2_ifd[tuple(pos)]
             if ifd == -1:
                 continue # no IFD known, it's alright, might be just 3D array
             da = das[ifd]
@@ -714,11 +728,15 @@ def _updateMDFromOME(root, das, basename):
                 # all. Currently we only support (not) specifying C.
                 try:
                     chan = int(shpe.attrib["TheC"])
-                except KeyError:
-                    chan = slice(None) # all
+                    ci = hdims.index("C")
+                    chans = [slice(None)] * len(hdims)
+                    chans[ci] = chan
+                    chans = tuple(chans)
+                except (KeyError, ValueError):
+                    chans = slice(None)  # all
 
                 # update all the IFDs related to this channel
-                for ifd in ctz_2_ifd[chan].flat:
+                for ifd in hd_2_ifd[chans].flat:
                     if ifd == -1:
                         continue
                     da = das[ifd]
@@ -727,25 +745,57 @@ def _updateMDFromOME(root, das, basename):
                     # First apply the global MD, then per-channel
                     da.metadata.update(md)
 
-def _getIFDsFromOME(pixele, basename, offset=0):
+
+def _getIFDsFromOME(pxe, offset=0):
     """
-    Return the IFD containing the 2D data for each high dimension of an array.
-    Note: this doesn't take into account if the data is 3D.
-    pixele (ElementTree): the element to Pixels of an image
-    basename (unicode): the (base) name of the current file
+    Return the IFD containing the data with the low dimensions for each high dimension of an array.
+    pxe (ElementTree): the element to Pixels of an image
     offset (int): ifd offset based on the number of images found in the previous
         files
-    return (numpy.array of int): shape is the shape of the 3 high dimensions CTZ,
-     the value is the IFD number of -1 if not specified.
+    return:
+      hdc_2_ifd (numpy.array of int): the value is the IFD number or -1 if not
+         specified. Shape is the shape of the high dimensions.
+      hdims (str): ordered list of the high dimensions.
     """
-    hdshape = []
-    for d in "CTZ": # that's our fixed order
-        ds = int(pixele.get("Size%s" % d, "1"))
-        hdshape.append(ds)
+    dims = pxe.get("DimensionOrder", "XYZTC")[::-1]
 
-    imsetn = numpy.empty(hdshape, dtype="int")
+    # Guess how many are they "high" dimensions out of how many IFDs are referenced
+    nbifds = 0
+    for tfe in pxe.findall("TiffData"):
+        # TODO: if no IFD specified, PC should default to all the IFDs
+        # (but for now all the files we write have PC=1)
+        pc = int(tfe.get("PlaneCount", "1"))
+        nbifds += pc
+
+    hdims = ""
+    hdshape = []
+    for d in dims:
+        hdims += d
+        ds = int(pxe.get("Size%s" % d, "1"))
+        hdshape.append(ds)
+        needed_ifds = numpy.prod(hdshape)
+        if needed_ifds > nbifds:
+            logging.warning("High dims are %s = %s, which would require %d IFDs, but only %d seem present",
+                            hdims, hdshape, needed_ifds, nbifds)
+            break
+        ldims = dims.translate(None, hdims)  # low dim = dims - hdims
+        if len(ldims) <= 3 and needed_ifds == nbifds:
+            # If the next ldim is not XY and =1, consider it to be high dim
+            nxtdim = ldims[0]
+            nxtshape = int(pxe.get("Size%s" % nxtdim, "1"))
+            if nxtdim not in "XY" and nxtshape == 1:
+                hdims += nxtdim
+                hdshape.append(nxtshape)
+            logging.debug("Guessing high dims are %s = %s", hdims, hdshape)
+            break
+        # More dims in high dims needed
+    else:
+        logging.warning("All dims concidered high dims (%s = %s), but still not enough to use all %d IFDs referenced",
+                        hdims, hdshape, nbifds)
+
+    imsetn = numpy.empty(hdshape, dtype=numpy.int)
     imsetn[:] = -1
-    for tfe in pixele.findall("TiffData"):
+    for tfe in pxe.findall("TiffData"):
         # UUID: can indicate data from a different file. For now, we only load
         # data from this specific file.
         # TODO: have an option to either drop these data, or load the other
@@ -758,15 +808,14 @@ def _getIFDsFromOME(pixele, basename, offset=0):
             ifd += offset
 
         pos = []
-        for d in "CTZ": # that's our fixed order
+        for d in hdims:
             ds = int(tfe.get("First%s" % d, "0"))
             pos.append(ds)
         # TODO: if no IFD specified, PC should default to all the IFDs
+        # (but for now all the files we write have PC=1)
         pc = int(tfe.get("PlaneCount", "1"))
 
-
         # If PlaneCount is > 1: it's in the same order as DimensionOrder
-        # TODO: for now fixed to ZTC, but that should be same as DimensionOrder
         for i in range(pc):
             imsetn[tuple(pos)] = ifd + i
             if i == (pc - 1): # don't compute next position if it's over
@@ -778,7 +827,7 @@ def _getIFDsFromOME(pixele, basename, offset=0):
                     pos[d] = 0
                     pos[d - 1] += 1 # will fail if d = 0, on purpose
 
-    return imsetn
+    return imsetn, hdims
 
 # List of metadata which is allowed to merge (and possibly loose it partially)
 WHITELIST_MD_MERGE = frozenset([model.MD_DESCRIPTION, model.MD_FILTER_NAME,
@@ -863,36 +912,40 @@ def _foldArraysFromOME(root, das, basename):
         # and Plane refers to the C dimension.
 #        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
 
-        imsetn = _getIFDsFromOME(pxe, basename, offset=ifd_offset)
+        imsetn, hdims = _getIFDsFromOME(pxe, offset=ifd_offset)
         ifd_offset += len(imsetn)
         # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
         # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
 
-        fifd = imsetn[0, 0, 0]
+        fifd = imsetn.flat[0]
         if fifd == -1:
             logging.debug("Skipping metadata update for image %d", n)
             continue
-
-        # Read the complete shape of the dataset
-        dshape = list(imsetn.shape)
-        for d in "YX":
-            ds = int(pxe.get("Size%s" % d, "1"))
-            dshape.append(ds)
 
         # Check if the IFDs are 2D or 3D, based on the first one
         fim = das[fifd]
         if fim is None:
             continue # thumbnail
-        is_3d = (len(fim.shape) == 3 and fim.shape[0] > 1)
 
-        # Remove C dim if 3D
-        if is_3d:
-            if imsetn.shape[0] != fim.shape[0]:
-                # 3D data arrays are not officially supported in OME-TIFF anyway
-                raise NotImplementedError("Loading of %d channel from images "
-                       "with %d channels not supported" %
-                       (imsetn.shape[0], fim.shape[0]))
-            imsetn = imsetn[0]
+        # Handle if the IFD data is 3D. Officially OME-TIFF expects all the data
+        # in IFDs to be 2D, but we allow to have RGB images too (so dimension C).
+        dims = pxe.get("DimensionOrder", "XYZTC")[::-1]
+        if fim.ndim == 3:
+            planedims = dims.translate(None, "TZ")  # remove TZ
+            ci = planedims.index("C")
+            if fim.shape[ci] > 1:
+                if "C" in hdims:
+                    logging.warning("TiffData %d seems RGB but hdims (%s) contains C too",
+                                    fifd, hdims)
+                if imsetn.ndim >= 3:
+                    logging.error("_getIFDsFromOME reported %d high dims, but TiffData has shape %s",
+                                  imsetn.ndim, fim.shape)
+#                 if imsetn.shape[0] != fim.shape[ci]:
+#                     # RGB data arrays are not officially supported in OME-TIFF anyway
+#                     raise NotImplementedError("Loading of %d channel from images "
+#                                               "with %d channels not supported" %
+#                                               (imsetn.shape[ci], fim.shape[ci]))
+#                 imsetn = imsetn[0]
 
         # Short-circuit for dataset with only one IFD
         if all(d == 1 for d in imsetn.shape):
@@ -909,7 +962,14 @@ def _foldArraysFromOME(root, das, basename):
         # (like for a spectrum acquisition). If it's like fluorescence, with
         # complex channel metadata, they need to be kept separated.
         # Check for all the C with T=0, Z=0 (should be the same at other indices)
-        das_tz0n = list(imsetn[..., 0, 0])
+        try:
+            ci = hdims.index("C")
+            chans = [0] * len(hdims)
+            chans[ci] = slice(None)
+            chans = tuple(chans)
+        except ValueError:
+            chans = slice(None)  # all of the IFDs
+        das_tz0n = list(imsetn[chans])
         das_tz0 = [das[i] for i in das_tz0n]
         if not _canBeMerged(das_tz0):
             for sub_imsetn in imsetn:
@@ -920,12 +980,18 @@ def _foldArraysFromOME(root, das, basename):
         else:
             # Combine all the IFDs into a 5D array
             imset = _mergeDA(das, imsetn)
-            if is_3d:
-                # move the C axis back to first position (it's currently TZCYX)
-                imset = numpy.rollaxis(imset, -3)
             omedas.append(imset)
 
+    # Updating MD_DIMS to remove too many dims if the array is no 5 dims
+    for da in omedas:
+        try:
+            dims = da.metadata[model.MD_DIMS]
+            da.metadata[model.MD_DIMS] = dims[-da.ndim:]
+        except KeyError:
+            pass
+
     return omedas
+
 
 def _countNeededIFDs(da):
     """
@@ -1081,34 +1147,48 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
     da0 = das[0]
+    dshape = da0.shape
+    dims = globalMD.get(model.MD_DIMS, "CTZYX"[len(dshape)::])
 
-    dshape = das[0].shape
     if len(dshape) < 5:
-        dshape = [1] * (5-len(dshape)) + list(dshape)
-    if not 1 in dshape:
+        dshape = [1] * (5 - len(dshape)) + list(dshape)
+    while len(dims) < 5:
+        # Extend the dimension names with the missing ones in the default order
+        # ex: YXC -> TZYXC
+        for d in "XYZTC":
+            if d not in dims:
+                dims = d + dims
+                break
+
+    if 1 not in dshape:
         raise ValueError("No dimension found to concatenate images: %s" % dshape)
     concat_axis = dshape.index(1)
+
     # global shape (same as dshape, but the axis of concatenation is the number of images)
     gshape = list(dshape)
     gshape[concat_axis] = len(das)
     gshape = tuple(gshape)
+#     if len(das) > 1:
+#     else:
+#         concat_axis = 0
+#         gshape = dshape
 
     # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
     # each colour should go in a separate channel). However, that'd defeat
     # the purpose of the thumbnail, and it seems at OMERO handles this
     # not too badly (all the other images get 3 components).
-    is_rgb = (dshape[0] == 3)
+    is_rgb = (len(das) == 1 and dshape[dims.index("C")] in (3, 4))
 
     # TODO: check that all the DataArrays have the same shape
     pixels = ET.SubElement(ime, "Pixels", attrib={
                               "ID": "Pixels:%d" % idnum,
-                              "DimensionOrder": "XYZTC", # we don't have ZT so it doesn't matter
+                              "DimensionOrder": dims[::-1],  # numpy shape is reversed
                               "Type": "%s" % _dtype2OMEtype(da0.dtype),
-                              "SizeX": "%d" % gshape[4], # numpy shape is reversed
-                              "SizeY": "%d" % gshape[3],
-                              "SizeZ": "%d" % gshape[2],
-                              "SizeT": "%d" % gshape[1],
-                              "SizeC": "%d" % gshape[0],
+                              "SizeX": "%d" % gshape[dims.index("X")],
+                              "SizeY": "%d" % gshape[dims.index("Y")],
+                              "SizeZ": "%d" % gshape[dims.index("Z")],
+                              "SizeT": "%d" % gshape[dims.index("T")],
+                              "SizeC": "%d" % gshape[dims.index("C")],
                               })
     # Add optional values
     if model.MD_PIXEL_SIZE in globalMD:
@@ -1231,20 +1311,27 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
             subid += 1
 
-    # TiffData Element: describe every single IFD image
+    # TiffData Element: describe every single IFD image (ie, XY plane) in the
+    # same order as the data will be written: higher dims iterated the numpy style,
     # TODO: could be more compact for DAs of dim > 2, with PlaneCount = first dim > 1?
     subid = 0
-    rep_hdim = list(gshape[:-2])
-    if is_rgb:
-        rep_hdim[0] = 1
+    hdims = ""
+    rep_hdim = []
+    for d, s in zip(dims, gshape):
+        if d not in "XY":
+            hdims += d
+            if is_rgb and d == "C":
+                s = 1
+            rep_hdim.append(s)
+
     for index in numpy.ndindex(*rep_hdim):
         if fname is not None:
             tde = ET.SubElement(pixels, "TiffData", attrib={
                         # Since we have multiple files ifd is 0
                         "IFD": "%d" % subid,
-                        "FirstC": "%d" % index[0],
-                        "FirstT": "%d" % index[1],
-                        "FirstZ": "%d" % index[2],
+                        "FirstC": "%d" % index[hdims.index("C")],
+                        "FirstT": "%d" % index[hdims.index("T")],
+                        "FirstZ": "%d" % index[hdims.index("Z")],
                         "PlaneCount": "1"
                         })
             f_name = ET.SubElement(tde, "UUID", attrib={
@@ -1253,9 +1340,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         else:
             tde = ET.SubElement(pixels, "TiffData", attrib={
                                     "IFD": "%d" % (ifd + subid),
-                                    "FirstC": "%d" % index[0],
-                                    "FirstT": "%d" % index[1],
-                                    "FirstZ": "%d" % index[2],
+                                    "FirstC": "%d" % index[hdims.index("C")],
+                                    "FirstT": "%d" % index[hdims.index("T")],
+                                    "FirstZ": "%d" % index[hdims.index("Z")],
                                     "PlaneCount": "1"
                                     })
         subid += 1
@@ -1265,9 +1352,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     for index in numpy.ndindex(*rep_hdim):
         da = das[index[concat_axis]]
         plane = ET.SubElement(pixels, "Plane", attrib={
-                               "TheC": "%d" % index[0],
-                               "TheT": "%d" % index[1],
-                               "TheZ": "%d" % index[2],
+                               "TheC": "%d" % index[hdims.index("C")],
+                               "TheT": "%d" % index[hdims.index("T")],
+                               "TheZ": "%d" % index[hdims.index("Z")],
                                })
         if model.MD_ACQ_DATE in da.metadata:
             diff = da.metadata[model.MD_ACQ_DATE] - globalAD
@@ -1640,13 +1727,15 @@ def _dataFromTIFF(filename):
     data = [i for i in data if i is not None]
     return data
 
+
 def _ensure_fs_encoding(filename):
     if not isinstance(filename, unicode):
-        logging.warning("Got filename encoded as a string, while should be "
-                        "unicode: %r", filename)
+        logging.info("Got filename encoded as a string, while should be "
+                     "unicode: %r", filename)
         return filename # hope it's the correct encoding
     else:
         return filename.encode(sys.getfilesystemencoding())
+
 
 def export(filename, data, thumbnail=None, compressed=True, multiple_files=False):
     '''

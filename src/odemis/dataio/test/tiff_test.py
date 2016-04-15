@@ -46,12 +46,12 @@ logging.getLogger().setLevel(logging.DEBUG)
 FILENAME = u"test" + tiff.EXTENSIONS[0]
 class TestTiffIO(unittest.TestCase):
 
-    def tearDown(self):
-        # clean up
-        try:
-            os.remove(FILENAME)
-        except Exception:
-            pass
+#     def tearDown(self):
+#         # clean up
+#         try:
+#             os.remove(FILENAME)
+#         except Exception:
+#             pass
 
     # Be careful: numpy's notation means that the pixel coordinates are Y,X,C
 #    @skip("simple")
@@ -812,6 +812,7 @@ class TestTiffIO(unittest.TestCase):
         for i, md in enumerate(metadata):
             a = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
             a[i, i] = i  # "watermark" it
+            a[i + 1, i + 5] = i + 1  # "watermark" it
             ldata.append(a)
 
         # export
@@ -821,7 +822,11 @@ class TestTiffIO(unittest.TestCase):
         rdata = tiff.read_data(FILENAME)
         self.assertEqual(len(rdata), len(ldata))
 
+        for i, im in enumerate(rdata):
+            self.assertEqual(im[i + 1, i + 5], i + 1)
+
         im = rdata[0]
+
         emd = metadata[0].copy()
         rmd = im.metadata
         img.mergeMetadata(emd)
@@ -920,6 +925,53 @@ class TestTiffIO(unittest.TestCase):
         md = metadata[0]
         self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
                          owl[1] <= md[model.MD_OUT_WL][-1]))
+
+    def testRGB(self):
+        """
+        Checks that can both write and read back an RGB image
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "my exported image",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_DIMS: "YXC",
+                    },
+                    ]
+        # TODO: test without alpha channel and with different DIMS order
+        shape = (5120, 2560, 4)
+        dtype = numpy.dtype("uint8")
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(shape, dtype), md.copy())
+            a[:, :, 3] = 255  # no transparency
+            a[i, i] = i  # "watermark" it
+            a[i + 1, i + 5] = i + 1  # "watermark" it
+            ldata.append(a)
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            for j in range(shape[-1]):
+                self.assertEqual(im[i + 1, i + 5, j], i + 1)
+
+            self.assertEqual(im.shape, shape)
+            emd = metadata[i].copy()
+            rmd = im.metadata
+            img.mergeMetadata(emd)
+            img.mergeMetadata(rmd)
+            self.assertEqual(rmd[model.MD_DESCRIPTION], emd[model.MD_DESCRIPTION])
+            self.assertEqual(rmd[model.MD_DIMS], emd[model.MD_DIMS])
+            self.assertAlmostEqual(rmd[model.MD_POS][0], emd[model.MD_POS][0])
+            self.assertAlmostEqual(rmd[model.MD_POS][1], emd[model.MD_POS][1])
+            self.assertAlmostEqual(rmd[model.MD_PIXEL_SIZE][0], emd[model.MD_PIXEL_SIZE][0])
+            self.assertAlmostEqual(rmd[model.MD_PIXEL_SIZE][1], emd[model.MD_PIXEL_SIZE][1])
 
 
 def rational2float(rational):
