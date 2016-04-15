@@ -160,6 +160,8 @@ def _readTiffTag(tfile):
     """
     md = {}
 
+    # TODO: set MD_DIMS to "YXC" or "CYX" in case it looks like RGB
+
     # scale + position
     resunit = _GetFieldDefault(tfile, T.TIFFTAG_RESOLUTIONUNIT, T.RESUNIT_INCH)
     factor = resunit_to_m.get(resunit, 1) # default to 1
@@ -1148,7 +1150,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     # For now, if there are many possibilities, we pick the first one.
     da0 = das[0]
     dshape = da0.shape
-    dims = globalMD.get(model.MD_DIMS, "CTZYX"[len(dshape)::])
+    dims = globalMD.get(model.MD_DIMS, "CTZYX"[-len(dshape)::])
 
     if len(dshape) < 5:
         dshape = [1] * (5 - len(dshape)) + list(dshape)
