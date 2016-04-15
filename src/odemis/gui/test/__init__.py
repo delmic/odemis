@@ -24,6 +24,8 @@ from __future__ import division
 
 import logging
 import numpy
+from odemis.gui.model import MainGUIData
+
 from odemis.gui.xmlh import odemis_get_test_resources
 import os.path
 import random
@@ -93,6 +95,8 @@ class GuiTestApp(wx.App):
         test_gui.get_resources = odemis_get_test_resources
         self.test_frame = frame
         self.module_name = ""
+
+        self.main_data = MainGUIData(None)
 
         # gen_test_data()
         wx.App.__init__(self, redirect=False)
