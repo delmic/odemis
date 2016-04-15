@@ -36,10 +36,10 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
-from odemis.gui.model import MainGUIData, MicroscopeView, MicroscopyGUIData
+from odemis.gui.model import MicroscopeView, MicroscopyGUIData
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
-from odemis.model import VigilantAttribute, getVAs, BooleanVA
+from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
@@ -317,6 +317,7 @@ class AcquisitionDialog(xrcfr_plugin):
             self.lbl_description.SetLabel(text)
 
         self.entries = []  # Setting entries
+        self._acq_future_connector = None
         self.canvas = None
         self.buttons = []  # The buttons
 
@@ -366,10 +367,15 @@ class AcquisitionDialog(xrcfr_plugin):
             va = vas[name]
             set_conf = conf.get(name, {})
 
-            if 'control_type' in set_conf and set_conf['control_type'] == odemis.gui.CONTROL_FILE:
-                self.setting_controller.add_browse_button(name, va.value)
-            else:
-                self.setting_controller.add_setting_entry(name, va, None, conf=conf.get(name, None))
+            if 'control_type' in set_conf:
+                if set_conf['control_type'] == odemis.gui.CONTROL_NEW_FILE:
+                    self.setting_controller.add_file_btn(name, value=va.value, style=wx.FD_SAVE)
+                    return
+                elif set_conf['control_type'] == odemis.gui.CONTROL_EXISTING_FILE:
+                    self.setting_controller.add_file_btn(name, value=va.value)
+                    return
+
+            self.setting_controller.add_setting_entry(name, va, None, conf=conf.get(name, None))
 
     @call_in_wx_main
     def addButton(self, label, callback=None, face_colour='def'):
@@ -397,7 +403,8 @@ class AcquisitionDialog(xrcfr_plugin):
             def button_callback_wrapper(evt):
                 try:
                     self.SetReturnCode(btnid)
-                    t = threading.Thread(target=callback, args=(self,), name="Callback for button %s" % (label,))
+                    t = threading.Thread(target=callback, args=(self,),
+                                         name="Callback for button %s" % (label,))
                     t.start()
                 except Exception:
                     logging.exception("Error when processing button %s of plugin %s",
@@ -455,7 +462,7 @@ class AcquisitionDialog(xrcfr_plugin):
         if future is None:
             self._acq_future_connector = None
             return
-        elif hasattr(future, "add_update_callback"): # ProgressiveFuture
+        elif hasattr(future, "add_update_callback"):  # ProgressiveFuture
             self._acq_future_connector = ProgressiveFutureConnector(future,
                                                                     self.gauge_progress,
                                                                     self.lbl_gauge)
@@ -463,7 +470,7 @@ class AcquisitionDialog(xrcfr_plugin):
             # TODO: just pulse the gauge at a "good" frequency (need to use a timer)
             self.gauge_progress.Pulse()
 
-        future.add_done_callback(self._on_future_done)
+        # future.add_done_callback(self._on_future_done)
 
         # TODO: if the future is cancellable (ie, has task_canceller), allow to
         # press the "cancel" button, if such button exists, otherwise provide

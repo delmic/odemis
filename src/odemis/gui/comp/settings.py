@@ -21,16 +21,17 @@ This file is part of Odemis.
 """
 from __future__ import division
 
+import os
+import wx
 from decorator import decorator
+
+import odemis.gui as gui
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, Slider
 from odemis.gui.comp.text import UnitIntegerCtrl, UnitFloatCtrl
-import wx
-
-import odemis.gui as gui
 
 
 @decorator
@@ -324,16 +325,18 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_file_button(self, label_text, value=None, clearlabel=None):
+    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN):
 
         # Create label
         lbl_ctrl = self._add_side_label(label_text)
 
         value_ctrl = FileBrowser(self,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
+                                 dialog_style=dialog_style,
                                  clear_label=clearlabel,
                                  clear_btn=clearlabel is not None,
-                                 default_dir=value)
+                                 file_path=value,
+                                 default_dir=None)
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 

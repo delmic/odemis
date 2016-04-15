@@ -96,9 +96,12 @@ class SettingsController(object):
         for entry in [e for e in self.entries if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
-    def add_browse_button(self, label, value=None, tooltip=None, clear=None):
+    def add_file_btn(self, label, value=None, tooltip=None, clear=None, style=wx.FD_OPEN):
         config = guiconf.get_acqui_conf()
-        lbl_ctrl, value_ctrl = self.panel.add_file_button(label, value or config.last_path, clear)
+        lbl_ctrl, value_ctrl = self.panel.add_file_button(label,
+                                                          value or config.last_path,
+                                                          clear,
+                                                          style)
 
         if tooltip is not None:
             lbl_ctrl.SetToolTipString(tooltip)
@@ -108,6 +111,7 @@ class SettingsController(object):
         ne = SettingEntry(name=label, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
         self.entries.append(ne)
         return ne
+
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
         """ Add a name/value pair to the settings panel.
@@ -551,7 +555,7 @@ class AnalysisSettingsController(SettingsBarController):
         # Panel with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
         self._pnl_arfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._arfile_ctrl = self._pnl_arfile.add_browse_button(
+        self._arfile_ctrl = self._pnl_arfile.add_file_btn(
             "AR background",
             tooltip="Angle-resolved background acquisition file",
             clear= "None").value_ctrl
@@ -565,7 +569,7 @@ class AnalysisSettingsController(SettingsBarController):
         # Panel with spectrum background + efficiency compensation file information
         # They are displayed only if there are Spectrum streams
         self._pnl_specfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._spec_bckfile_ctrl = self._pnl_specfile.add_browse_button(
+        self._spec_bckfile_ctrl = self._pnl_specfile.add_file_btn(
             "Spec. background",
             tooltip="Spectrum background correction file",
             clear="None").value_ctrl
@@ -573,7 +577,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
-        self._specfile_ctrl = self._pnl_specfile.add_browse_button(
+        self._specfile_ctrl = self._pnl_specfile.add_file_btn(
             "Spec. correction",
             tooltip="Spectrum efficiency correction file",
             clear="None").value_ctrl

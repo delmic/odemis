@@ -30,10 +30,11 @@ from odemis.gui import plugin
 import time
 import unittest
 
+from odemis.gui.model import MainGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import odemis.gui.test as test
 from odemis.gui.xmlh import odemis_get_resources
-from odemis.gui import main_xrc
+from odemis.gui import main_xrc, CONTROL_NEW_FILE
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -56,13 +57,17 @@ class SimplePlugin(Plugin):
 
     def start(self):
         dlg = AcquisitionDialog(self, "Fancy Acquisition", "Enter everything")
-        dlg.addSettings(self, conf={"filename": {"control_type": "file"}})
+        dlg.addSettings(self, conf={"filename": {"control_type": CONTROL_NEW_FILE}})
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
         ans = dlg.ShowModal()
 
         if ans == 0:
-            self.showAcquisition(self.filename.value)
+            # Ignore errors about a missing analysis tab
+            try:
+                self.showAcquisition(self.filename.value)
+            except AttributeError:
+                pass
 
     def acquire(self, dlg):
         f = model.ProgressiveFuture()
@@ -86,12 +91,10 @@ class PluginTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    def test_find_plugin(self):
+    def test_find_plugins(self):
+        """ Test that find_plugins can find plugin modules"""
         paths = plugin.find_plugins()
-        for p in paths:
-            self.assertTrue(p.endswith(".py"))
-            ps = plugin.load_plugin(p, None, self.app)
-            self.assertGreater(len(ps), 0)
+        self.assertGreater(len(paths), 0)
 
     def test_load_plugin(self):
         # Try to load the example plugin present in this module
@@ -102,7 +105,8 @@ class PluginTestCase(test.GuiTestCase):
     def test_add_menu(self):
         self.frame.SetSize((400, 60))
         orig_menu_len = self.frame.GetMenuBar().GetMenuCount()
-        sp = SimplePlugin(None, self.app)
+        self.app.main_data = MainGUIData(None)
+        sp = SimplePlugin(self.app.main_data, self.app)
         sp.addMenu("TestRec/Recursive/Very Long/Finally the entry\tCtrl+T",
                    self._on_menu_entry)
         # Reuse the path

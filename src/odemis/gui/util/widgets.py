@@ -316,7 +316,7 @@ class ProgressiveFutureConnector(object):
 
         # Time left text
         self._prev_left = left
-        left = math.ceil(left) # pessimistic
+        left = math.ceil(left)  # pessimistic
 
         if left > 2:
             lbl_txt = u"%s" % units.readable_time(left, full=self._full_text)
@@ -334,3 +334,4 @@ class ProgressiveFutureConnector(object):
             # we could try to rely on IsEllipsized() (which requires support for
             # wxST_ELLIPSIZE_END in xrc) or dc.GetTextExtend()
             self._label.SetLabel(lbl_txt)
+            self._label.Parent.Layout()

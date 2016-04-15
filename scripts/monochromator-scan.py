@@ -367,7 +367,7 @@ class MonoScanPlugin(Plugin):
             "scale": "log",
         }),
         ("filename", {
-            "control_type": odemis.gui.CONTROL_FILE,  # TODO: NEW_FILE
+            "control_type": odemis.gui.CONTROL_NEW_FILE,  # TODO: NEW_FILE
         }),
         ("expectedDuration", {
         }),
