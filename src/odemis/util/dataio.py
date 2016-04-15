@@ -93,8 +93,7 @@ def data_to_static_streams(data):
         elif model.MD_OUT_WL in d.metadata:  # only MD_OUT_WL
             name = d.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
             klass = stream.StaticCLStream
-        elif dims == "YXC" and d.shape[ci] in (3, 4):
-            # TODO: also support "CYX"
+        elif dims in ("CYX", "YXC") and d.shape[ci] in (3, 4):
             # Only decide it's RGB as last resort, because most microscopy data is not RGB
             name = d.metadata.get(model.MD_DESCRIPTION, "RGB data")
             klass = stream.RGBStream
@@ -102,11 +101,11 @@ def data_to_static_streams(data):
             # Now, either it's a flat greyscale image and we decide it's a SEM image,
             # or it's gone too weird and we try again on flat images
             if numpy.prod(d.shape[:-2]) != 1:
-                # TODO: just split all dimensions, not just the channel
-                logging.info("Reprocessing data of shape %s into sub-channels", d.shape)
-                subdas = data_to_static_streams(_split_channels(d))
+                subdas = _split_planes(d)
+                logging.info("Reprocessing data of shape %s into %d sub-data",
+                             d.shape, len(subdas))
                 if len(subdas) > 1:
-                    result_streams.extend(subdas)
+                    result_streams.extend(data_to_static_streams(subdas))
                     continue
 
             name = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
@@ -127,9 +126,8 @@ def data_to_static_streams(data):
     return result_streams
 
 
-# TODO: make it work on any dim >= 3
-def _split_channels(data):
-    """ Separate a DataArray into multiple DataArrays along the 3rd dimension (channel)
+def _split_planes(data):
+    """ Separate a DataArray into multiple DataArrays along the high dimensions (ie, not XY)
 
     Args:
         data: (DataArray) can be any shape
@@ -141,13 +139,26 @@ def _split_channels(data):
     """
 
     # Anything to split?
-    if len(data.shape) >= 3 and data.shape[-3] > 1:
-        # multiple channels => split
-        das = []
-        for c in range(data.shape[-3]):
-            # TODO: if MD_DIMS, remove higher dimension
-            das.append(data[..., c, :, :])  # metadata ref is copied
-        return das
-    else:
-        # return just one DA
+    dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+    hdims = dims.translate(None, "XY") # remove XY while keeping order
+    ldims = dims.translate(None, hdims)
+    if not "X" in dims or not "Y" in dims:
         return [data]
+
+    das = []
+    hshape = list(data.shape)
+    hshape[dims.index("X")] = 1
+    hshape[dims.index("Y")] = 1
+    for i in numpy.ndindex(*hshape):
+        pelem = list(i)
+        pelem[dims.index("X")] = slice(None) # all
+        pelem[dims.index("Y")] = slice(None) # all
+        plane = data[tuple(pelem)]
+
+        # Update MD_DIMS if present (as metadata is just ref to the original)
+        if model.MD_DIMS in plane.metadata:
+            plane.metadata = plane.metadata.copy()
+            plane.metadata[model.MD_DIMS] = ldims
+        das.append(plane)
+
+    return das
