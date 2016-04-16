@@ -647,11 +647,12 @@ def _updateMDFromOME(root, das, basename):
                 da.metadata.update(md)
                 da.metadata.update(mdc)
 
+        nbchan = chan + 1
         # Update metadata of each da, so that they will be merged
         if wl_list:
-            if len(wl_list) != chan:
+            if len(wl_list) != nbchan:
                 logging.warning("WL_LIST has length %d, while expected %d",
-                                len(wl_list), chan)
+                                len(wl_list), nbchan)
             for ifd in hd_2_ifd.flat:
                 if ifd == -1:
                     continue
@@ -784,8 +785,12 @@ def _getIFDsFromOME(pxe, offset=0):
         hdshape.append(ds)
         needed_ifds = numpy.prod(hdshape)
         if needed_ifds > nbifds:
-            logging.warning("High dims are %s = %s, which would require %d IFDs, but only %d seem present",
-                            hdims, hdshape, needed_ifds, nbifds)
+            if hdims == "C" and hdshape[0] in (3, 4) and nbifds == 1:
+                logging.debug("High dims are %s = %s, while only 1 IFD, guessing it's a RGB image")
+                hdshape = [1]
+            else:
+                logging.warning("High dims are %s = %s, which would require %d IFDs, but only %d seem present",
+                                hdims, hdshape, needed_ifds, nbifds)
             break
         ldims = dims.translate(None, hdims)  # low dim = dims - hdims
         if len(ldims) <= 3 and needed_ifds == nbifds:
