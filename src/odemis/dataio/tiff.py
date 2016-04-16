@@ -1273,10 +1273,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                     chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
 
             if wl_list is not None and len(wl_list) > 0:
-                if model.MD_OUT_WL in da.metadata:
+                if "EmissionWavelength" in chan.attrib:
                     logging.warning("DataArray contains both OUT_WL (%s) and "
                                     "incompatible WL_LIST metadata",
-                                    da.metadata[model.MD_OUT_WL])
+                                    chan.attrib["EmissionWavelength"])
                 else:
                     chan.attrib["AcquisitionMode"] = "SpectralImaging"
                     # It should be an int, but that looses too much precision
