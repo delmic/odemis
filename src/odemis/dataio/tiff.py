@@ -1015,9 +1015,16 @@ def _countNeededIFDs(da):
     """
     # Storred as a sequence of 2D arrays... excepted if it contains RGB images,
     # then we store RGB images (i.e., 3D arrays).
-    rep_hdim = list(da.shape[:-2])
-    if da.ndim >= 5 and da.shape[-5] == 3: # RGB
-        rep_hdim[-3] = 1
+    dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim::])
+    if len(dims) != da.ndim:
+        logging.warning("MD_DIMS %s doesn't fit the data shape %s", dims, da.shape)
+        dims = "CTZYX"[-da.ndim::] # fallback to the default
+
+    shaped = dict((d, s) for d, s in zip(dims, da.shape))
+    rep_hdim = [shaped.get(d, 1) for d in "CTZ"]
+    # RGB iif C = 3 or 4 and TZ = 1,1
+    if rep_hdim[0] in (3, 4) and rep_hdim[1:] == [1, 1]:  # RGB
+        rep_hdim[0] = 1
     return numpy.prod(rep_hdim)
 
 
@@ -1182,10 +1189,6 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     gshape = list(dshape)
     gshape[concat_axis] = len(das)
     gshape = tuple(gshape)
-#     if len(das) > 1:
-#     else:
-#         concat_axis = 0
-#         gshape = dshape
 
     # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
     # each colour should go in a separate channel). However, that'd defeat
@@ -1496,14 +1499,16 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     # OME tags: a XML document in the ImageDescription of the first image
     if thumbnail is not None:
         thumbnail = _mergeCorrectionMetadata(thumbnail)
-        # OME expects channel as 5th dimension. If thumbnail is RGB as HxWx3,
-        # reorganise as 3x1x1xHxW
-        if len(thumbnail.shape) == 3:
-            OME_thumbnail = numpy.rollaxis(thumbnail, 2)
-            OME_thumbnail = OME_thumbnail[:,numpy.newaxis,numpy.newaxis,:,:] #5D
-        else:
-            OME_thumbnail = thumbnail
-        alldata = [OME_thumbnail] + ldata
+        # If thumbnail is 3 dims, but doesn't defined MD_DIMS, don't concider
+        # it as (CT)ZYX, but an RGB as either CYX or YXC.
+        if model.MD_DIMS not in thumbnail.metadata and len(thumbnail.shape) == 3:
+            if thumbnail.shape[0] in (3, 4):
+                dims = "CYX"
+            else:
+                dims = "YXC" # The most likely actually
+            thumbnail.metadata[model.MD_DIMS] = dims
+            logging.debug("Add MD_DIMS = %s to thumbnail metadata", thumbnail.metadata[model.MD_DIMS])
+        alldata = [thumbnail] + ldata
     else:
         alldata = ldata
 
@@ -1580,6 +1585,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         # Only get the corresponding data for this file
         ldata = sorted_x[file_index][1]
 
+    # TODO: to keep the code simple, we should just first convert the DAs into
+    # 2D or 3D DAs and put it in an dict original DA -> DAs
     for data in ldata:
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
         tags = _convertToTiffTag(data.metadata)
@@ -1587,11 +1594,11 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
-        # TODO: handle RGB for C at any posiion before and after XY, but iif TZ=11
         # if metadata indicates YXC format just handle it as RGB
         if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
             write_rgb = True
             hdim = data.shape[:-3]
+        # TODO: handle RGB for C at any posiion before and after XY, but iif TZ=11
         # for data > 2D: write as a sequence of 2D images or RGB images
         elif data.ndim == 5 and data.shape[0] == 3:  # RGB
             # Write an RGB image, instead of 3 images along C

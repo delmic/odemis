@@ -737,6 +737,8 @@ class TestTiffIO(unittest.TestCase):
         tshape = (size[1] // 8, size[0] // 8, 3)
         tdtype = numpy.uint8
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail.metadata[model.MD_DIMS] = "YXC"
+        thumbnail.metadata[model.MD_POS] = (13.7e-3, -30e-3)
         thumbnail[:, :, 1] += 255 # green
 
         # export
