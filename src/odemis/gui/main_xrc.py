@@ -5439,7 +5439,7 @@ def __init_resources():
                   <object class="wxBoxSizer">
                     <orient>wxHORIZONTAL</orient>
                   </object>
-                  <size>-1,58</size>
+                  <size>-1,68</size>
                   <bg>#444444</bg>
                   <XRCED>
                     <assign_var>1</assign_var>
