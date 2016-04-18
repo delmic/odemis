@@ -28,21 +28,21 @@ import cairo
 import logging
 import math
 import numpy
-import wx.lib.wxcairo as wxcairo
-import odemis.gui.img as guiimg
-
 from odemis import model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 import odemis.model
 from odemis.model._dataflow import DataArray
-from odemis.util import intersect
+from odemis.util import intersect, fluo
 from odemis.util import polar, img
 from odemis.util import units
 import operator
 import time
 import wx
+
+import odemis.gui.img as guiimg
+import wx.lib.wxcairo as wxcairo
 
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
@@ -1478,7 +1478,7 @@ def get_ordered_images(streams, rgb=True):
         if data_raw.metadata.get(model.MD_OUT_WL, None):
             stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
         if isinstance(s, stream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
-            stream_data.append(u"Center wavelength: %s" % units.readable_str(numpy.average(s.spectrumBandwidth.value), "m", sig=3))
+            stream_data.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
         if isinstance(s, stream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
