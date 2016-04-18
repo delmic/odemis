@@ -32,15 +32,17 @@ import logging
 import math
 import numbers
 import odemis.gui
+from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
-from odemis.model import NotApplicableError, hasVA
+from odemis.model import NotApplicableError
 from odemis.util.conversion import reproduce_typed_value
-from odemis.util.units import readable_str, SI_PREFIXES, to_string_si_prefix, decompose_si_prefix, \
+from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
     si_scale_val
 import re
 import wx
 from wx.lib.pubsub import pub
 
+import odemis.gui.conf as guiconf
 import odemis.util.units as utun
 
 
@@ -570,6 +572,31 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      va_2_ctrl=value_formatter)
+
+    elif control_type in (odemis.gui.CONTROL_SAVE_FILE, odemis.gui.CONTROL_OPEN_FILE):
+        val = va.value
+        if not val:
+            config = guiconf.get_acqui_conf()
+            val = config.last_path
+
+        if control_type == odemis.gui.CONTROL_SAVE_FILE:
+            dialog_style = wx.FD_SAVE
+        else:  # odemis.gui.CONTROL_OPEN_FILE
+            dialog_style = wx.FD_OPEN
+
+        clearlabel = conf.get('clearlabel')  # Text to show when no filename (+ allow to clear the filename)
+        lbl_ctrl, value_ctrl = container.add_file_button(label_text,
+                                                         val,
+                                                         clearlabel,
+                                                         dialog_style=dialog_style)
+
+        # TODO: allow to change the wildcard via a conf key?
+        # value_ctrl.SetWildcard(wildcards)
+
+        # Add the corresponding setting entry
+        setting_entry = SettingEntry(name=label_text, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=EVT_FILE_SELECT)
 
     elif control_type == odemis.gui.CONTROL_SLIDER:
         # The slider is accompanied by an extra number text field

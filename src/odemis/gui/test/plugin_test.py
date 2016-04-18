@@ -35,7 +35,7 @@ from odemis.gui.plugin import Plugin, AcquisitionDialog
 import odemis.gui.test as test
 from odemis.gui.test.comp_stream_test import FakeFluoStream
 from odemis.gui.xmlh import odemis_get_resources
-from odemis.gui import main_xrc, CONTROL_NEW_FILE
+from odemis.gui import main_xrc, CONTROL_SAVE_FILE
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -58,7 +58,7 @@ class SimplePlugin(Plugin):
 
     def start(self):
         dlg = AcquisitionDialog(self, "Fancy Acquisition", "Enter everything")
-        dlg.addSettings(self, conf={"filename": {"control_type": CONTROL_NEW_FILE}})
+        dlg.addSettings(self, conf={"filename": {"control_type": CONTROL_SAVE_FILE}})
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 

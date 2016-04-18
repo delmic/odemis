@@ -62,7 +62,7 @@ class TimelapsePlugin(Plugin):
             "control_type": odemis.gui.CONTROL_INT,  # no slider
         }),
         ("filename", {
-            "control_type": odemis.gui.CONTROL_NEW_FILE,  # TODO: NEW_FILE
+            "control_type": odemis.gui.CONTROL_SAVE_FILE,
         }),
     ))
 

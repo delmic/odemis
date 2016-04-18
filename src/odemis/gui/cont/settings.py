@@ -112,7 +112,6 @@ class SettingsController(object):
         self.entries.append(ne)
         return ne
 
-
     def add_setting_entry(self, name, va, hw_comp, conf=None):
         """ Add a name/value pair to the settings panel.
 

@@ -69,8 +69,8 @@ CONTROL_SLIDER = 5    # Value slider
 CONTROL_RADIO = 6     # Choice buttons (like radio buttons)
 CONTROL_COMBO = 7     # Drop down combo box
 CONTROL_CHECK = 8     # Check-box
-CONTROL_NEW_FILE = 9  # Save a new file
-CONTROL_EXISTING_FILE = 10  # Open a new file
+CONTROL_SAVE_FILE = 9  # Save a new file
+CONTROL_OPEN_FILE = 10  # Open an existing file
 
 # Overlay settings
 

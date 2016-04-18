@@ -177,6 +177,9 @@ class MonochromatorScanStream(stream.Stream):
             na.shape += (1, 1, 1, 1)  # make it 5th dim to indicate a channel
             md = self._md
             md[model.MD_WL_LIST] = wllist
+            if model.MD_OUT_WL in md:
+                # The MD_OUT_WL on the monochromator contains the current cw, which we don't want
+                del md[model.MD_OUT_WL]
 
             # MD_POS should already be at the correct position (from the e-beam metadata)
 
@@ -367,7 +370,7 @@ class MonoScanPlugin(Plugin):
             "scale": "log",
         }),
         ("filename", {
-            "control_type": odemis.gui.CONTROL_NEW_FILE,  # TODO: NEW_FILE
+            "control_type": odemis.gui.CONTROL_SAVE_FILE,
         }),
         ("expectedDuration", {
         }),
@@ -478,9 +481,9 @@ class MonoScanPlugin(Plugin):
 
         # The window is closed
         if ans == 0:
-            logging.info("Monochromator scan acquisition completed")
-        elif ans == 1:
             logging.info("Monochromator scan acquisition cancelled")
+        elif ans == 1:
+            logging.info("Monochromator scan acquisition completed")
 
     def acquire(self, dlg):
         # Configure the monochromator stream according to the settings
@@ -490,6 +493,9 @@ class MonoScanPlugin(Plugin):
         if self._survey_s:
             strs.append(self._survey_s)
         strs.append(self._mchr_s)
+
+        fn = self.filename.value
+        exporter = dataio.find_fittest_converter(fn)
 
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
         str_ctrl = self.main_app.main_data.tab.value.stream_controller
@@ -506,9 +512,10 @@ class MonoScanPlugin(Plugin):
         if not f.cancelled() and das:
             if e:
                 logging.warning("Monochromator scan partially failed: %s", e)
-            dataio.hdf5.export(self.filename.value, das)
+            logging.debug("Will save data to %s", fn)
+            exporter.export(fn, das)
 
-            self.showAcquisition(self.filename.value)
+            self.showAcquisition(fn)
 
         dlg.Destroy()
 

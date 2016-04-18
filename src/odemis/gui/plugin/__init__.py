@@ -364,17 +364,8 @@ class AcquisitionDialog(xrcfr_plugin):
 
         for name in vas_names:
             va = vas[name]
-            set_conf = conf.get(name, {})
-
-            if 'control_type' in set_conf:
-                if set_conf['control_type'] == odemis.gui.CONTROL_NEW_FILE:
-                    self.setting_controller.add_file_btn(name, value=va.value, style=wx.FD_SAVE)
-                    return
-                elif set_conf['control_type'] == odemis.gui.CONTROL_EXISTING_FILE:
-                    self.setting_controller.add_file_btn(name, value=va.value)
-                    return
-
-            self.setting_controller.add_setting_entry(name, va, None, conf=conf.get(name, None))
+            self.setting_controller.add_setting_entry(name, va, None,
+                                                      conf=conf.get(name, None))
 
     @call_in_wx_main
     def addButton(self, label, callback=None, face_colour='def'):
