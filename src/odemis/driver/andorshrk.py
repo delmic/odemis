@@ -107,7 +107,7 @@ class ShamrockDLL(CDLL):
         error.
         Follows the ctypes.errcheck callback convention
         """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
+        # everything returns SHAMROCK_SUCCESS on correct usage
         if result not in ShamrockDLL.ok_code:
             errmsg = create_string_buffer(ERRORLENGTH)
             self.ShamrockGetFunctionReturnDescription(result, errmsg, len(errmsg))
