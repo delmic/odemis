@@ -390,7 +390,7 @@ class AcquisitionDialog(xrcfr_plugin):
         if callback is not None and callable(callback):
             # Wrap the callback, to run in a separate thread, so it doesn't block
             # the GUI.
-            def button_callback_wrapper(evt):
+            def button_callback_wrapper(evt, btnid=btnid):
                 try:
                     self.SetReturnCode(btnid)
                     t = threading.Thread(target=callback, args=(self,),
@@ -427,7 +427,6 @@ class AcquisitionDialog(xrcfr_plugin):
         if stream:
             self.streambar_controller.addStream(stream)
             self.microscope_view.addStream(stream)
-
 
     @call_in_wx_main
     def showProgress(self, future):

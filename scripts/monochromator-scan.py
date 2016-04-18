@@ -484,6 +484,8 @@ class MonoScanPlugin(Plugin):
             logging.info("Monochromator scan acquisition cancelled")
         elif ans == 1:
             logging.info("Monochromator scan acquisition completed")
+        else:
+            logging.debug("Unknown return code %d", ans)
 
     def acquire(self, dlg):
         # Configure the monochromator stream according to the settings
