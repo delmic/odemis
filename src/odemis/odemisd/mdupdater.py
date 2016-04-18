@@ -259,10 +259,11 @@ class MetadataUpdater(model.Component):
         if comp.role == "spectrometer":
             # Currently, the spectrometers are special, and they automatically
             # pick up the right metadata by having the spectrograph as child.
-            pass
+            return
         elif comp.role != "monochromator":
             logging.warning("Does not know what to do with a spectrograph affecting a %s", comp.role)
             return
+
         if 'slit-monochromator' not in spectrograph.axes:
             logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
 
@@ -282,6 +283,7 @@ class MetadataUpdater(model.Component):
         self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
 
     def observeFilter(self, filter, comp):
+        # FIXME: If a monochromator + spectrograph, which MD_OUT_WL to pick?
         # update any affected component
         def updateOutWLRange(pos, fl=filter, comp=comp):
             wl_out = fl.axes["band"].choices[fl.position.value["band"]]
