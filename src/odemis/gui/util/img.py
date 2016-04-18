@@ -1477,6 +1477,8 @@ def get_ordered_images(streams, rgb=True):
             stream_data.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
         if data_raw.metadata.get(model.MD_OUT_WL, None):
             stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
+        if isinstance(s, stream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
+            stream_data.append(u"Center wavelength: %s" % units.readable_str(numpy.average(s.spectrumBandwidth.value), "m", sig=3))
         if isinstance(s, stream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
