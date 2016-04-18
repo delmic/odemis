@@ -50,8 +50,6 @@ def _add_var_config(config, var, content):
     Returns:
         dict: The `config` dictionary is returned with the found values added
 
-
-def _add_var_config(config, var, content):
     """
 
     # variable substitution
@@ -463,6 +461,19 @@ class BackendStarter(object):
         log_frame.ShowModal()
 
 
+def show_error_box(caption, message):
+    """
+    Shows an error message in a graphical window.
+    It blocks until the window is closed.
+    caption (str): the window title
+    message (str): the error text
+    """
+    app = wx.App()
+    box = wx.MessageDialog(None, message, caption, wx.OK | wx.ICON_ERROR | wx.CENTER)
+    box.ShowModal() # Waits for the window to be closed
+    app.Yield() # Hides the window
+
+
 def main(args):
     """ Parse the command line arguments and launch the Odemis daemon
 
@@ -530,13 +541,18 @@ def main(args):
                         try:
                             out = subprocess.check_output(cmd).splitlines()
                             if not out:
+                                show_error_box("Error starting Odemis back-end",
+                                               "No microscope file name provided by MODEL_SELECTOR %s.\n\n"
+                                               "Check all the hardware is connected and try again to start Odemis." % (cmd,))
                                 raise ValueError("No microscope file name provided by %s" % (cmd,))
                             elif len(out) > 1:
                                 logging.warning("Model selector returned multiple lines: %s", out)
                             modelfile = out[0].strip()
                             logging.info("Will use model %s", modelfile)
                         except subprocess.CalledProcessError as ex:
-                            # TODO: check if backend is already running anyway?
+                            show_error_box("Error starting Odemis back-end",
+                                           "Failed to pick the microscope file with MODEL_SELECTOR: %s.\n\n"
+                                           "Check all the hardware is connected and try again to start Odemis." % (ex,))
                             raise ValueError("Failed to pick the microscope file: %s" % (ex,))
                     else:
                         raise ValueError("No microscope model specified")
