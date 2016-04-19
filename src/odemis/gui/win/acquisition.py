@@ -510,6 +510,7 @@ class AcquisitionDialog(xrcfr_acq):
             logging.exception("Acquisition failed")
             self.btn_secom_acquire.Enable()
             self.lbl_acqestimate.SetLabel("Acquisition failed.")
+            self.lbl_acqestimate.Parent.Layout()
             # leave the gauge, to give a hint on what went wrong.
             return
 
@@ -520,6 +521,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
+        self.lbl_acqestimate.Parent.Layout()
         try:
             thumb = acq.computeThumbnail(self._view.stream_tree, future)
             filename = self.filename.value
@@ -533,6 +535,7 @@ class AcquisitionDialog(xrcfr_acq):
             logging.exception("Saving acquisition failed")
             self.btn_secom_acquire.Enable()
             self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
+            self.lbl_acqestimate.Parent.Layout()
             return
 
         if exp:
@@ -541,6 +544,7 @@ class AcquisitionDialog(xrcfr_acq):
             self.lbl_acqestimate.SetLabel("Acquisition completed.")
             # As the action is complete, rename "Cancel" to "Close"
             self.btn_cancel.SetLabel("Close")
+        self.lbl_acqestimate.Parent.Layout()
 
         # Make sure the file is not overridden
         self.btn_secom_acquire.Enable()
