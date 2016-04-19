@@ -351,22 +351,21 @@ class SettingsBarController(object):
         # build the default config value based on the global one + the role
         self._va_config = get_hw_settings_config(tab_data.main.role)
 
+        # disable settings while there is a preparation process running
+        self._tab_data_model.main.is_preparing.subscribe(self.on_preparation)
+
+    def on_preparation(self, is_preparing):
+        # Make sure nothing can be modified during alignment
+        self.enable(not is_preparing)
+
     def pause(self):
         """ Pause SettingEntry related control updates """
-#         print "Pause setting controller"
-        i = 0
         for setting_conroller in self.setting_controllers:
-#             print i
-            i += 1
             setting_conroller.pause()
 
     def resume(self):
         """ Resume SettingEntry related control updates """
-#         print "Resume setting controller"
-        i = 0
         for setting_conroller in self.setting_controllers:
-#             print i
-            i += 1
             setting_conroller.resume()
 
     @property
@@ -484,15 +483,6 @@ class SecomSettingsController(SettingsBarController):
             det = main_data.sed or main_data.bsd
             if det and hasattr(det, "bpp") and isinstance(det.bpp, VigilantAttributeBase):
                 self._sem_panel.add_bc_control(det)
-
-        main_data.is_aligning.subscribe(self.on_alignment)
-
-    def on_alignment(self, is_aligning):
-        # Make sure nothing can be modified during alignment
-        if is_aligning:
-            self.pause()
-        else:
-            self.resume()
 
 
 class LensAlignSettingsController(SettingsBarController):
