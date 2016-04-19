@@ -398,7 +398,7 @@ function specifically.
 
 
 VigilantAttribute
-===================
+=================
 
 VigilantAttributes are objects purposed to be used as attributes of other objects.
 As normal attributes, they contain a :py:attr:`value`, but they also provide
@@ -494,14 +494,14 @@ The following two Mixin classes can be inherited by any VigilantAttribute class.
 
 .range and .choices can be modified at runtime, but only by the owner of the VA and only if the current value is compatible. This should be avoided whenever possible because no notification is sent to the subscribers.
 
+    
+.. py:class:: model.IntVA
+
+    VigilantAttribute which can only contain ints.
 
 .. py:class:: model.FloatVA
 
     VigilantAttribute which can only contain floats or ints.
-    
-.. py:class:: model.IntegerVA
-
-    VigilantAttribute which can only contain ints.
     
 .. py:class:: model.BooleanVA
 
@@ -516,12 +516,29 @@ The following two Mixin classes can be inherited by any VigilantAttribute class.
     VigilantAttribute which can only contain an Iterable. The type of each 
     element might be different, and the length might change.
     
-    Be careful when using list (instead of a tuple), clients which change the
-    value must ensure to always set the entire value to a new object. In other
-    words, never change just one element of the list. Failure to do so will 
-    prevent notification to work.
+    It will detect both when the whole value is changed (ie, a new list),
+    and also when the content of the VA is modified (ie, an element in the list
+    is changed).
+
+.. py:class:: model.IntContinuous
+
+    VigilantAttribute which contains an integer within a given range.
+
+.. py:class:: model.IntEnumerated
+
+    VigilantAttribute which contains an integer within a given list of choices.
+
+.. py:class:: model.FloatContinuous
+
+    VigilantAttribute which contains a float or int within a given range.
+
+.. py:class:: model.FloatEnumerated
+
+    VigilantAttribute which contains a float or int within a given list of choices.
     
-    .. Rationale: because it is pretty hard to detect changes of a list.
+.. py:class:: model.StringEnumerated
+
+    VigilantAttribute which contains a string among a list of choices.
 
 .. py:class:: model.TupleContinuous
 
