@@ -1,3 +1,4 @@
+# This is for a Delphi 2016
 DELPHI: {
     class: Microscope,
     role: delphi,
@@ -8,20 +9,14 @@ DELPHI: {
                "AntiBacklash Focus"],
 }
 
+# LedHub
 "Light Engine": {
-    class: lle.LLE,
+    class: omicronxx.HubxX,
     role: light,
     init: {
         port: "/dev/ttyFTDI*",
-        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
-        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
-                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
-                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
-                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
-                 }
-        },
-        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+    },
+    # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
     affects: ["Camera"],
 }
 
@@ -30,11 +25,7 @@ DELPHI: {
     class: phenom.SEM,
     role: none,
     init: {
-           #Standalone Phenom
-           #host: "http://Phenom-MVE0206151080.local:8888", 
-           #username: "delmic",
-           #password: "6526AM9688B1",
-           #Delphi
+           # TODO: change to the Delphi correct password and serial number
            host: "http://Phenom-MVE0217221140.local:8888", 
            username: "Delmic",
            password: "C2CS5TRY1YJ7",
@@ -194,17 +185,17 @@ DELPHI: {
 
 # Controller for the X, Y, Z axes of the optical lens
 "Sample Holder Actuators": {
-    class: tmcm.TMCM3110,
+    class: tmcm.TMCLController,
     role: none,
     init: {
-        port: "/dev/ttyTMCM0",
-        #port: "/dev/fake",
+        port: "/dev/ttyTMCM*",
+        #port: "/dev/fake3",
         axes: ["x", "y", "z"],
         ustepsize: [5.9e-9, 5.9e-9, 0.302e-9], # m/µstep
         #refproc: "Standard", # referencing procedure for simulator
         refproc: "2xFinalForward", # official referencing procedure for the Delphi
         temp: True,
-        # inverted: ["y"],
+        inverted: ["x"],
     },
 }
 
