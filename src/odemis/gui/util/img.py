@@ -677,7 +677,10 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
         if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
             # This is just to make sure there are no blank parts when cropping and
             # then rotating
-            intersection = intersection[0], intersection[1], 1.1 * intersection[2], 1.1 * intersection[3]
+            intersection = (intersection[0] - 0.1 * intersection[2],
+                            intersection[1] - 0.1 * intersection[3],
+                            1.2 * intersection[2],
+                            1.2 * intersection[3])
             im_data, tl = get_sub_img(intersection, b_im_rect, im_data, total_scale)
             b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3],)
             x, y, _, _ = b_im_rect
