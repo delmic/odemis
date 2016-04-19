@@ -3,8 +3,8 @@ odemis (2.4-1ubuntu1) precise; urgency=low
   * New version: 2.4
   * Main new features:
    - Export images for spatial view to PNG or TIFF
-   - Export spectra to PNG, TIFF, or CSV (SPARC)
-   - Export Angular resolved view to PNT or TIFF (SPARC)
+   - Export spectra view to PNG, TIFF, or CSV (SPARC)
+   - Export angular-resolved view to PNT or TIFF (SPARC)
    - GUI plugin framework for easy extention of the GUI in Python
    - Plugin for acquiring a spectrum using a monochromator and scanning the center wavelength (SPARC)
    - Plugin for repeatedly acquiring a stream at a given frequency (SECOM/DELPHI)
@@ -21,8 +21,10 @@ odemis (2.4-1ubuntu1) precise; urgency=low
    - Fix memory leak when opening acquisition file
    - New 'pituner' utility program to tune PID values of PI controllers
    - Fix exposureTime shared for all optical stream in acquisition window (SECOM/DELPHI)
+   - Don't change fine alignment dwell time when exposure time of filtered stream is changed (SECOM)
+   - Show a warning if trying to calibrate a sample holder of wrong type (DELPHI)
 
- -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 15 Apr 2016 09:47:44 +0200
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 19 Apr 2016 14:47:44 +0200
 
 odemis (2.3-1ubuntu1) precise; urgency=low
 
