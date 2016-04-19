@@ -469,7 +469,7 @@ class MonoScanPlugin(Plugin):
         dlg = AcquisitionDialog(self, "Monochromator scan acquisition",
                                 "Acquires a spectrum using the monochomator while scanning over "
                                 "multiple wavelengths.\n\n"
-                                "Enter the settings and start the acquisition.")
+                                "Specify the settings and start the acquisition.")
 
         self.filename.value = self._get_new_filename()
         dlg.addSettings(self, conf=self.vaconf)
