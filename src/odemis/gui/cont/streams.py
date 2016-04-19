@@ -1407,14 +1407,17 @@ class StreamBarController(object):
         stream (Stream): the stream to prepare and activate.
         """
         if updated:
+            self._main_data_model.is_aligning.value = True
             self.preparation_future = stream.prepare()
         else:
             self.preparation_future.cancel()
+            self._main_data_model.is_aligning.value = False
         self.preparation_future.stream_to_update = stream
         self.preparation_future.updated = updated
         self.preparation_future.add_done_callback(self._canActivate)
 
     def _canActivate(self, future):
+        self._main_data_model.is_aligning.value = False
         logging.debug("Can now activate/deactivate %s", future.stream_to_update.name.value)
         future.stream_to_update.is_active.value = future.updated
 

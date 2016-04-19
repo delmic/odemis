@@ -353,12 +353,20 @@ class SettingsBarController(object):
 
     def pause(self):
         """ Pause SettingEntry related control updates """
+#         print "Pause setting controller"
+        i = 0
         for setting_conroller in self.setting_controllers:
+#             print i
+            i += 1
             setting_conroller.pause()
 
     def resume(self):
         """ Resume SettingEntry related control updates """
+#         print "Resume setting controller"
+        i = 0
         for setting_conroller in self.setting_controllers:
+#             print i
+            i += 1
             setting_conroller.resume()
 
     @property
@@ -476,6 +484,15 @@ class SecomSettingsController(SettingsBarController):
             det = main_data.sed or main_data.bsd
             if det and hasattr(det, "bpp") and isinstance(det.bpp, VigilantAttributeBase):
                 self._sem_panel.add_bc_control(det)
+
+        main_data.is_aligning.subscribe(self.on_alignment)
+
+    def on_alignment(self, is_aligning):
+        # Make sure nothing can be modified during alignment
+        if is_aligning:
+            self.pause()
+        else:
+            self.resume()
 
 
 class LensAlignSettingsController(SettingsBarController):
