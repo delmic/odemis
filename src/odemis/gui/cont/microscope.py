@@ -440,7 +440,9 @@ class SecomStateController(MicroscopeStateController):
                             v.removeStream(s)
                 else:
                     for v in self._tab_data.views.value:
-                        if (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
+                        if (v.name.value == "Overview"):
+                            continue
+                        elif (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
                             continue
                         elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
                             continue
