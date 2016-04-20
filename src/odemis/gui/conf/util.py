@@ -254,9 +254,14 @@ def determine_default_control(va):
         except (AttributeError, NotApplicableError):
             pass
 
-        # Is it just a boolean?
-        if isinstance(va.value, bool):
+        # Simple input => look at the type
+        val = va.value
+        if isinstance(val, bool):
             return odemis.gui.CONTROL_CHECK
+        elif isinstance(val, (int, long)):
+            return odemis.gui.CONTROL_INT
+        elif isinstance(val, float):
+            return odemis.gui.CONTROL_FLT
 
         # Return default control
         return odemis.gui.CONTROL_TEXT
@@ -571,7 +576,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                     va_2_ctrl=value_formatter)
+                                     va_2_ctrl=value_formatter,
+                                     events=wx.EVT_TEXT_ENTER)
 
     elif control_type in (odemis.gui.CONTROL_SAVE_FILE, odemis.gui.CONTROL_OPEN_FILE):
         val = va.value

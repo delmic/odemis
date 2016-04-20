@@ -170,7 +170,7 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = wx.TextCtrl(self, value=unicode(value or ""),
-                                 style=wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
+                                 style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
         if readonly:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
         else:
