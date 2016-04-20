@@ -613,7 +613,7 @@ class IntVA(VigilantAttribute):
 
     def _check(self, value):
         # we really accept only int, to avoid hiding lose of precision
-        if not isinstance(value, int):
+        if not isinstance(value, (int, long)):
             raise TypeError("Value '%r' is not a int." % value)
 
 # ListVA is difficult: not only change of the .value must be detected, but we
