@@ -326,6 +326,14 @@ class SecomStateController(MicroscopeStateController):
             if ch_pos.value["pressure"] == self._overview_pressure:
                 self._main_data.chamberState.value = CHAMBER_PUMPING
 
+        # disable optical and SEM buttons while there is a preparation process running
+        self._main_data.is_preparing.subscribe(self.on_preparation)
+
+    def on_preparation(self, is_preparing):
+        # Make sure cannot switch stream during preparation
+        self._sem_btn.Enable(not is_preparing)
+        self._opt_btn.Enable(not is_preparing)
+
     def _subscribe_current_stream_active(self, streams):
         """ Find the active stream and subscribe to its is_active VA
 
@@ -429,7 +437,7 @@ class SecomStateController(MicroscopeStateController):
 
     @call_in_wx_main
     def _on_stream_calibrated(self, calibrated):
-        # hide all the misaligned streams
+        # hide all the misaligned streams, unhide all calibrated streams
         for s in self._tab_data.streams.value:
             if model.hasVA(s, "calibrated"):
                 if not s.calibrated.value:

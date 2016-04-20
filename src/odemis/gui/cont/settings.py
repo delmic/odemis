@@ -355,7 +355,7 @@ class SettingsBarController(object):
         self._tab_data_model.main.is_preparing.subscribe(self.on_preparation)
 
     def on_preparation(self, is_preparing):
-        # Make sure nothing can be modified during alignment
+        # Make sure nothing can be modified during preparation
         self.enable(not is_preparing)
 
     def pause(self):
