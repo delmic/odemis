@@ -1619,7 +1619,7 @@ class TMCLController(model.Actuator):
     @classmethod
     def scan(cls):
         """
-        returns (list of 2-tuple): name, args (sn)
+        returns (list of 2-tuple): name, kwargs
         Note: it's obviously not advised to call this function if a device is already under use
         """
         # TODO: use serial.tools.list_ports.comports() (but only availabe in pySerial 2.6)
