@@ -43,6 +43,7 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_settings_config, get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
@@ -1415,6 +1416,7 @@ class StreamBarController(object):
         self.preparation_future.updated = updated
         self.preparation_future.add_done_callback(self._canActivate)
 
+    @call_in_wx_main
     def _canActivate(self, future):
         self._main_data_model.is_preparing.value = False
         logging.debug("Can now activate/deactivate %s", future.stream_to_update.name.value)

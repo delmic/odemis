@@ -329,6 +329,7 @@ class SecomStateController(MicroscopeStateController):
         # disable optical and SEM buttons while there is a preparation process running
         self._main_data.is_preparing.subscribe(self.on_preparation)
 
+    @call_in_wx_main
     def on_preparation(self, is_preparing):
         # Make sure cannot switch stream during preparation
         self._sem_btn.Enable(not is_preparing)
