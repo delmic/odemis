@@ -962,6 +962,7 @@ class AlignedFluoStream(FluoStream):
         self.calibrated = model.BooleanVA(True)  # whether the calibration has been already done
         self._last_pos = None  # last known position of the stage
         stage.position.subscribe(self._onStageMove)
+        self._focuser.position.subscribe(self._onFocusMove)
 
     def _onStageMove(self, pos):
         """
@@ -975,6 +976,14 @@ class AlignedFluoStream(FluoStream):
             return
         self._last_pos = pos
 
+        if not self.is_active.value:
+            self.calibrated.value = False
+
+    def _onFocusMove(self, pos):
+        """
+        Called when the focus moves (changes position)
+        pos (dict): new position
+        """
         if not self.is_active.value:
             self.calibrated.value = False
 
