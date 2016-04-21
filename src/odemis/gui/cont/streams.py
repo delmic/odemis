@@ -901,6 +901,7 @@ class StreamBarController(object):
 
         # Don't hide or show stream panel when the focused view changes
         self.ignore_view = ignore_view
+        self._prev_view = None
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         # FIXME: don't use pubsub events, but either wxEVT or VAs. For now every
@@ -1326,7 +1327,13 @@ class StreamBarController(object):
 
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
-        visible_streams = view.getStreams()
+        if self._prev_view is not None:
+            self._prev_view.stream_tree.flat.unsubscribe(self._on_visible_streams)
+        view.stream_tree.flat.subscribe(self._on_visible_streams, init=True)
+        self._prev_view = view
+
+    def _on_visible_streams(self, flat):
+        visible_streams = flat
 
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
