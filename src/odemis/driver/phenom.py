@@ -120,7 +120,7 @@ NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
 PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
 # Phenom version up to which high frame rate should not be allowed
-LOW_FR_VERSION = "Phenom G4 v4.4.1.rel.21032"
+LOW_FR_VERSION = "4.4.1.rel.21032"
 
 
 # Methods used for sw version comparison
