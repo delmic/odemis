@@ -21,8 +21,11 @@ from ctypes import *
 import ctypes
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.model import HwError
+import random
+import time
+import weakref
 
 
 # Based on phdefin.h
@@ -183,11 +186,14 @@ class PH300(model.Detector):
     Represents a PicoQuant PicoHarp 300.
     """
 
-    def __init__(self, name, role, device=None, **kwargs):
+    def __init__(self, name, role, device=None, children=None, daemon=None, ** kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
+        children
         """
+        if children is None:
+            children = {}
 
         if device == "fake":
             device = None
@@ -213,6 +219,19 @@ class PH300(model.Detector):
         self.Calibrate()
 
 
+        # TODO: how to pass the (live) count of each detector?
+        # => create one Detector Component per channel to represent each APD separately
+        self._detectors = {}
+        for name, ckwargs in children.items():
+            if name == "detector0":
+                i = 0
+            elif name == "detector1":
+                i = 1
+            else:
+                raise ValueError("")
+            self._detectors[name] = PH300RawDetector(channel=i, parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self._detectors[name])
+
         # TODO: what are good VA names?
         # dwellTime (= measurement duration) should be understandable and easily compatible
 
@@ -221,9 +240,6 @@ class PH300(model.Detector):
         # data while it's building up? Does reading histogram while the data is
         # building works? Otherwise, just let the client ask for shorter dwellTime
         # and accumulate client side?
-
-        # TODO: how to pass the (live) count of each detector?
-        # => create one Detector Component per channel to represent each APD separately
 
     def _openDevice(self, sn=None):
         """
@@ -291,6 +307,7 @@ class PH300(model.Detector):
         channel (0 <= int <= 1): the input channel
         return (0<=int): counts/s
         """
+        # TODO: check if we need a lock (to avoid multithread access)
         rate = c_int()
         self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
         return rate.value
@@ -349,7 +366,93 @@ class PH300(model.Detector):
 
         return dev
 
-# TODO: Simulator
+
+class PH300RawDetector(model.Detector):
+    """
+    Represents a raw detector (eg, APD) accessed via PicoQuant PicoHarp 300.
+    """
+
+    def __init__(self, name, role, channel, parent, **kwargs):
+        """
+        channel (0 or 1): detector ID of the detector
+        """
+        self._channel = channel
+        super(PH300RawDetector, self).__init__(name, role, parent=parent, **kwargs)
+
+        self._shape = (2**31,)  # only one point, with (32 bits) int size
+        self.data = RawDetDataFlow(self)
+
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+        self._generator = None
+
+    def terminate(self):
+        self.stop_generate()
+
+    def start_generate(self):
+        if self._generator is not None:
+            logging.warning("Generator already running")
+            return
+        self._generator = util.RepeatingTimer(100e-3,  # Fixed rate at 100ms
+                                              self._generate,
+                                              "Raw detector reading")
+        self._generator.start()
+
+    def stop_generate(self):
+        if self._generator is not None:
+            self._generator.cancel()
+            self._generator = None
+
+    def _generate(self):
+        """
+        Read the current detector rate and make it a data
+        """
+        # update metadata
+        metadata = self._metadata.copy()
+        metadata[model.MD_ACQ_DATE] = time.time()
+        metadata[model.MD_EXP_TIME] = 100e-3  # s
+
+        # Read data and make it a DataArray
+        d = self.parent.GetCountRate(self._channel)
+        nd = numpy.array([d], dtype=numpy.int)
+        img = model.DataArray(nd, metadata)
+
+        # send the new image (if anyone is interested)
+        self.data.notify(img)
+
+
+class RawDetDataFlow(model.DataFlow):
+    def __init__(self, detector):
+        """
+        detector (PH300RawDetector): the detector that the dataflow corresponds to
+        """
+        model.DataFlow.__init__(self)
+        self._detector = weakref.ref(detector)
+
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        det = self._detector()
+        if det is None:
+            # component has been deleted, it's all fine, we'll be GC'd soon
+            return
+
+        try:
+            det.start_generate()
+        except ReferenceError:
+            # component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+
+    def stop_generate(self):
+        det = self._detector()
+        if det is None:
+            # component has been deleted, it's all fine, we'll be GC'd soon
+            return
+
+        try:
+            det.stop_generate()
+        except ReferenceError:
+            # component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,
 # it returns the expected values.
@@ -387,12 +490,35 @@ class FakePHDLL(object):
 
     def __init__(self):
         self._idx = 0
+        self._mode = None
+        self._sn = "10234567"
 
     def PH_OpenDevice(self, i, sn_str):
         if i == self._idx:
-            sn_str.value = "10234567"
+            sn_str.value = self._sn
         else:
             raise PHError(-1, PHDLL.err_code[-1])  # ERROR_DEVICE_OPEN_FAIL
 
+    def PH_Initialize(self, i, mode):
+        self._mode = mode
 
+    def PH_CloseDevice(self, i):
+        self._mode = None
 
+    def PH_GetHardwareInfo(self, i, mod, partnum, ver):
+        mod.value = "FakeHarp 300"
+        partnum.value = "12345"
+        ver.value = "2.0"
+
+    def PH_GetLibraryVersion(self, ver_str):
+        ver_str.value = "3.00"
+
+    def PH_GetSerialNumber(self, i, sn_str):
+        sn_str.value = self._sn
+
+    def PH_Calibrate(self, i):
+        pass
+
+    def PH_GetCountRate(self, i, channel, p_rate):
+        rate = _deref(p_rate, c_int)
+        rate.value = random.randint(0, 5000)
