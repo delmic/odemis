@@ -236,6 +236,7 @@ class SecomStateController(MicroscopeStateController):
         super(SecomStateController, self).__init__(tab_data, tab_panel, btn_prefix)
 
         self._main_data = tab_data.main
+        self._tab_data = tab_data
         self._stream_controller = st_ctrl
 
         # Event for indicating sample reached overview position and phenom GUI
@@ -259,6 +260,12 @@ class SecomStateController(MicroscopeStateController):
 
         # To listen to change in play/pause
         self._active_prev_stream = None
+
+        # To update the display/hide the stream status according to visibility
+        self._views_list = []
+        self._views_prev_list = []
+        tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
+        tab_data.focussedView.subscribe(self.decide_status, init=True)
 
         # Turn off the light, but set the power to a nice default value
         # TODO: do the same with the brightlight and backlight
@@ -383,7 +390,7 @@ class SecomStateController(MicroscopeStateController):
         # First unsubscribe from the previous streams
         if len(self._status_prev_streams) != 0:
             for s in self._status_prev_streams:
-                s.status.unsubscribe(self._on_active_stream_status)
+                s.status.unsubscribe(self.decide_status)
                 if model.hasVA(s, "calibrated"):
                     s.calibrated.unsubscribe(self._on_stream_calibrated)
 
@@ -396,20 +403,34 @@ class SecomStateController(MicroscopeStateController):
                 self._status_list.append(stream)
 
         for s in self._status_list:
-            s.status.subscribe(self._on_active_stream_status, init=True)
+            s.status.subscribe(self.decide_status, init=True)
             if model.hasVA(s, "calibrated"):
                 s.calibrated.subscribe(self._on_stream_calibrated, init=True)
 
         self._status_prev_streams = self._status_list
 
+    def _subscribe_current_view_visibility(self, views):
+        if len(self._views_prev_list) != 0:
+            for v in self._views_prev_list:
+                v.stream_tree.flat.unsubscribe(self.decide_status)
+
+        self._views_list = views
+        for v in self._views_list:
+            v.stream_tree.flat.subscribe(self.decide_status)
+
+        self._views_prev_list = self._views_list
+
     @call_in_wx_main
-    def _on_active_stream_status(self, (lvl, msg)):
-        """ Display the given message, or clear it
-        lvl, msg (int, str): same as Stream.status. Cleared when lvl is None.
+    def decide_status(self, _):
+        """
+        Decide the status displayed based on the current focussed view, the
+        visible and calibrated streams.
         """
         action = None
+        lvl = None
+        flat = self._tab_data.focussedView.value.stream_tree.flat.value
         # If there are any aligned streams, give priority to showing their status
-        for s in self._status_list:
+        for s in flat:
             if s.is_active.value and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                 lvl, msg = s.status.value
                 if (lvl is not None) and (not isinstance(msg, basestring)):
@@ -417,13 +438,14 @@ class SecomStateController(MicroscopeStateController):
                     msg, action = msg
                 break
         else:
-            for s in self._status_list:
+            for s in flat:
                 if model.hasVA(s, "calibrated") and (not s.calibrated.value):
                     lvl, msg = s.status.value
                     if (lvl is not None) and (not isinstance(msg, basestring)):
                         # it seems it also contains an action
                         msg, action = msg
                     break
+
         if action is None:
             action = ""
         # Might still be none
@@ -432,9 +454,6 @@ class SecomStateController(MicroscopeStateController):
         self._show_status_icons(lvl, action)
         self._tab_panel.lbl_stream_status.SetLabel(msg)
         self._tab_panel.lbl_stream_status.SetToolTipString(action)
-
-        # Whether the status is actually displayed or the progress bar is shown
-        # is only dependent on _show_progress_indicators()
 
     @call_in_wx_main
     def _on_stream_calibrated(self, calibrated):
