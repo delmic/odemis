@@ -119,6 +119,21 @@ NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
 PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
+# Phenom version up to which high frame rate should not be allowed
+LOW_FR_VERSION = "Phenom G4 v4.4.1.rel.21032"
+
+
+# Methods used for sw version comparison
+def tryint(x):
+    try:
+        return int(x)
+    except ValueError:
+        return x
+
+
+def splittedname(s):
+    return tuple(tryint(x) for x in re.split('([0-9]+)', s))
+
 
 class SEM(model.HwComponent):
     '''
@@ -660,6 +675,13 @@ class Detector(model.Detector):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
+        self._high_fr = False
+        if splittedname(self._swVersion) > splittedname(LOW_FR_VERSION):
+            self._high_fr = True
+            logging.debug("High frame rate will be used.")
+        else:
+            logging.debug("Low frame rate will be used.")
+
         # will take care of executing autocontrast asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1098,7 +1120,12 @@ class Detector(model.Detector):
                     # Phenom generates semi-created frames that we want to avoid.
                     img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
                 else:
-                    img_str = self._acq_device.SEMGetLiveImageCopy(0)
+                    if self._high_fr:
+                        img_str = self._acq_device.SEMGetLiveImageCopy(0)
+                    else:
+                        # This is to avoid using high frame rate in Phenom versions
+                        # that misbehave with frequent SEMGetLiveImageCopy calls
+                        img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
 
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
