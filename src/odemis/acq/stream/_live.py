@@ -411,7 +411,6 @@ class AlignedSEMStream(SEMStream):
         self._last_pos = pos
 
         # if self.is_active.value:
-        self._setStatus(logging.WARNING, (u"SEM stream is not aligned", u"Play SEM stream"))
         self.calibrated.value = False
 
     # need to override it to support beam shift
@@ -977,11 +976,9 @@ class AlignedFluoStream(FluoStream):
         self._last_pos = pos
 
         if not self.is_active.value:
-            self._setStatus(logging.WARNING, (u"Optical stream is not aligned due to stage movement", u"Update any stream acquired in old position"))
             self.calibrated.value = False
 
     def _onActive(self, active):
-        self._setStatus(None)
         self.calibrated.value = True
         super(AlignedFluoStream, self)._onActive(active)
 

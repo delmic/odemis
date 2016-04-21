@@ -428,29 +428,37 @@ class SecomStateController(MicroscopeStateController):
         """
         action = None
         lvl = None
-        flat = self._tab_data.focussedView.value.stream_tree.flat.value
-        # If there are any aligned streams, give priority to showing their status
-        for s in flat:
-            if s.is_active.value and model.hasVA(s, "calibrated") and (not s.calibrated.value):
-                lvl, msg = s.status.value
-                if (lvl is not None) and (not isinstance(msg, basestring)):
-                    # it seems it also contains an action
-                    msg, action = msg
-                break
-        else:
-            for s in flat:
-                if model.hasVA(s, "calibrated") and (not s.calibrated.value):
-                    lvl, msg = s.status.value
-                    if (lvl is not None) and (not isinstance(msg, basestring)):
-                        # it seems it also contains an action
-                        msg, action = msg
-                    break
+        msg = ""
+
+        visible_streams = set()
+        misaligned = False
+        for v in self._tab_data.views.value:
+            if v.name.value != "Overview":
+                for s in v.stream_tree.flat.value:
+                    if s.raw not in [None, []]:
+                        visible_streams.add(s)
+                    if model.hasVA(s, "calibrated") and (not s.calibrated.value):
+                        misaligned = True
+                    if None not in s.status.value:
+                        lvl, msg = s.status.value
+                        if not isinstance(msg, basestring):
+                            # it seems it also contains an action
+                            msg, action = msg
 
         if action is None:
             action = ""
-        # Might still be none
+
+        # If there is a stream status we will display it anyway
         if lvl is None:
             msg = ""
+            # If there is just one or no stream displayed, there is no need to
+            # show any status
+            if len(visible_streams) > 1:
+                if misaligned:
+                    lvl = logging.WARNING
+                    msg = u"Displayed streams might be misaligned"
+                    action = u"Update any stream acquired in old position"
+
         self._show_status_icons(lvl, action)
         self._tab_panel.lbl_stream_status.SetLabel(msg)
         self._tab_panel.lbl_stream_status.SetToolTipString(action)
@@ -465,7 +473,9 @@ class SecomStateController(MicroscopeStateController):
                         if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
                             continue
                         else:
-                            v.removeStream(s)
+                            # Never hide an active stream
+                            if s in v.stream_tree.flat.value and not s.is_active.value:
+                                v.removeStream(s)
                 else:
                     for v in self._tab_data.views.value:
                         if (v.name.value == "Overview"):
@@ -475,7 +485,8 @@ class SecomStateController(MicroscopeStateController):
                         elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
                             continue
                         else:
-                            v.addStream(s)
+                            if s not in v.stream_tree.flat.value:
+                                v.addStream(s)
 
     def _show_status_icons(self, lvl, action=None):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
