@@ -1583,6 +1583,7 @@ class AndorCam3(model.DigitalCamera):
         assert(addressof(pbuffer.contents) == addressof(cbuffer))
 
         # Check if there is already a newer image
+        discarded = 0
         for discarded in range(max_discard):
             try:
                 # BUG: it sometimes return a timeout even if the queue is building up
