@@ -273,7 +273,7 @@ class SecomStateController(MicroscopeStateController):
         self._views_list = []
         self._views_prev_list = []
         tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
-#         tab_data.focussedView.subscribe(self.decide_status, init=True)
+        tab_data.focussedView.subscribe(self.decide_status, init=True)
 
         # Turn off the light, but set the power to a nice default value
         # TODO: do the same with the brightlight and backlight
@@ -430,7 +430,7 @@ class SecomStateController(MicroscopeStateController):
             if model.hasVA(s, "calibrated"):
                 self._calibrated_wrapper = functools.partial(self._on_stream_calibrated, s)
                 s.calibrated.subscribe(self._calibrated_wrapper, init=True)
-            elif s.should_update.value:
+            if s.should_update.value:
                 # means it was just played
                 self._show_stream(s)
 
@@ -500,12 +500,9 @@ class SecomStateController(MicroscopeStateController):
             if ((model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
                     self._is_misaligned(s)):
                 for v in self._tab_data.views.value:
-                    if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
-                        continue
-                    else:
-                        # Never hide an active stream
-                        if s in v.stream_tree.flat.value and not s.should_update.value:
-                            v.removeStream(s)
+                    # Never hide an active stream
+                    if s in v.stream_tree.flat.value and not s.should_update.value:
+                        v.removeStream(s)
 
     @call_in_wx_main
     def _show_stream(self, s):
@@ -528,8 +525,6 @@ class SecomStateController(MicroscopeStateController):
     def _on_stream_calibrated(self, stream, calibrated):
         if calibrated:
             self._show_stream(stream)
-        else:
-            self._remove_misaligned()
 
     def _is_misaligned(self, stream):
         return (not stream.should_update.value and ((stream.image.value is not None) and
