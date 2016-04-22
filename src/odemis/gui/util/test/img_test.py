@@ -25,11 +25,13 @@ import cairo
 import logging
 import math
 import numpy
-from odemis import model
+from odemis import model, dataio
 from odemis.acq import stream
 from odemis.gui.util import img
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util.polar import THETA_SIZE, PHI_SIZE
+import os
+import time
 import unittest
 import wx
 
@@ -87,8 +89,103 @@ class TestARExport(unittest.TestCase):
     def test_ar_raw(self):
         data = model.DataArray(numpy.zeros((256, 256)), metadata={model.MD_AR_POLE: (100, 100),
                                                                   model.MD_PIXEL_SIZE: (1e-03, 1e-03)})
-        raw_polar = img.calculate_raw_polar(data, data)
-        self.assertEqual(raw_polar.shape, (THETA_SIZE + 1, PHI_SIZE + 1))  # plus theta/phi values
+        raw_polar = img.calculate_raw_ar(data, data)
+        # shape = raw data + theta/phi axes values
+        self.assertEqual(raw_polar.shape, (THETA_SIZE + 1, PHI_SIZE + 1))
+
+    def test_ar_export(self):
+
+        filename = "test-ar.csv"
+
+        # Create AR data
+        md = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_HW_NAME: "fake ccd",
+            model.MD_DESCRIPTION: "AR",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_AR_POLE: (253.1, 65.1),
+            model.MD_LENS_MAG: 0.4,  # ratio
+        }
+
+        md0 = dict(md)
+        data0 = model.DataArray(1500 + numpy.zeros((512, 512), dtype=numpy.uint16), md0)
+        md1 = dict(md)
+        md1[model.MD_POS] = (1.5e-3, -30e-3)
+        md1[model.MD_BASELINE] = 300  # AR background should take this into account
+        data1 = model.DataArray(3345 + numpy.zeros((512, 512), dtype=numpy.uint16), md1)
+
+        # Create AR stream
+        ars = stream.StaticARStream("test", [data0, data1])
+        ars.point.value = md1[model.MD_POS]
+
+        # Convert to exportable RGB image
+        exdata = img.ar_to_export_data([ars], raw=True)
+        # shape = raw data + theta/phi axes values
+        self.assertEqual(exdata.shape, (THETA_SIZE + 1, PHI_SIZE + 1))
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exdata)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 100)
+
+        # clean up
+        try:
+            os.remove(filename)
+        except Exception:
+            pass
+
+    # TODO: check that exporting large AR image doesn't get crazy memory usage
+
+    def test_big_ar_export(self):
+
+        filename = "test-ar.csv"
+
+        # Create AR data
+        md = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_HW_NAME: "fake ccd",
+            model.MD_DESCRIPTION: "AR",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_AR_POLE: (253.1, 65.1),
+            model.MD_LENS_MAG: 0.4,  # ratio
+        }
+
+        md0 = dict(md)
+        data0 = model.DataArray(1500 + numpy.zeros((1080, 1024), dtype=numpy.uint16), md0)
+
+        # Create AR stream
+        ars = stream.StaticARStream("test", [data0])
+        ars.point.value = md0[model.MD_POS]
+
+        # Convert to exportable RGB image
+        exdata = img.ar_to_export_data([ars], raw=True)
+        # shape = raw data + theta/phi axes values
+        self.assertEqual(exdata.shape, (THETA_SIZE + 1, PHI_SIZE + 1))
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exdata)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 100)
+
+        # clean up
+        try:
+            os.remove(filename)
+        except Exception:
+            pass
 
 
 class TestSpectrumExport(unittest.TestCase):
@@ -209,7 +306,7 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (6.205915392651362e-05, 0.0001039324002586505)
         view_pos = [-0.00147293527265202, -0.0004728408264424368]
         draw_merge_ratio = 0.3
-        with self.assertRaises(IOError): 
+        with self.assertRaises(LookupError):
             img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
 
     def test_thin_column(self):

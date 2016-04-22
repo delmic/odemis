@@ -722,25 +722,29 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     ctx.restore()
 
 
-def calculate_raw_polar(data, bg_data):
-    # FIXME: This code is a dublicate of part of _project2Polar. The image data
-    # should be directly accessible from the stream.
-    if numpy.prod(data.shape) > (1280 * 1080):
+def calculate_raw_ar(data, bg_data):
+    """
+    Project the AR data to equirectangular
+    """
+    # FIXME: This code is a duplicate of part of _project2Polar
+    if numpy.prod(data.shape) > (800 * 800):
         logging.info("AR image is very large %s, will convert to "
-                     "azimuthal projection in reduced precision.",
+                     "equirectangular projection in reduced precision.",
                      data.shape)
         y, x = data.shape
         if y > x:
-            small_shape = 1024, int(round(1024 * x / y))
+            small_shape = 768, int(round(768 * x / y))
         else:
-            small_shape = int(round(1024 * y / x)), 1024
+            small_shape = int(round(768 * y / x)), 768
         # resize
         data = img.rescale_hq(data, small_shape)
         dtype = numpy.float16
     else:
         dtype = None  # just let the function use the best one
 
-    size = min(min(data.shape) * 2, 1134)
+    # FIXME: size is currently not used
+    # size = (400, 100) # TODO: increase if data is high def
+    size = 512
 
     if bg_data is None:
         # Simple version: remove the background value
@@ -764,9 +768,15 @@ def ar_to_export_data(streams, raw=False):
 
     returns (model.DataArray)
     """
+    # we expect just one stream
+    if len(streams) == 0:
+        raise LookupError("No stream to export")
+    elif len(streams) > 1:
+        logging.warning("More than one stream exported to AR, will only use the first one.")
+
+    s = streams[0]
 
     if raw:
-        s = streams[0]
         pos = s.point.value
 
         # find positions of each acquisition
@@ -777,16 +787,18 @@ def ar_to_export_data(streams, raw=False):
                 sempos[d.metadata[model.MD_POS]] = img.ensure2DImage(d)
             except KeyError:
                 logging.info("Skipping DataArray without known position")
-        raw_polar = calculate_raw_polar(sempos[pos], s.background.value)
-        return raw_polar
+        raw_ar = calculate_raw_ar(sempos[pos], s.background.value)
+        return raw_ar
     else:
-        # we expect just one stream
-        wim = format_rgba_darray(streams[0].image.value)
+        sim = s.image.value  # TODO: check that it's up to date (and not None)
+        if sim is None:
+            raise LookupError("Stream %s has no data selected", s.name.value)
+        wim = format_rgba_darray(sim)
         # image is always centered, fitting the whole canvass
-        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None, None)])
-        ar_margin = int(0.2 * streams[0].image.value.shape[0])
-        ar_size = streams[0].image.value.shape[0] + ar_margin, streams[0].image.value.shape[1] + ar_margin
-        scale = fit_to_content(images, streams[0].image.value.shape)
+        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value, None, None)])
+        ar_margin = int(0.2 * sim.shape[0])
+        ar_size = sim.shape[0] + ar_margin, sim.shape[1] + ar_margin
+        scale = fit_to_content(images, sim.shape)
 
         # Make surface based on the maximum resolution
         data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
@@ -798,7 +810,7 @@ def ar_to_export_data(streams, raw=False):
         buffer_center = (-ar_margin / 2, ar_margin / 2)
         buffer_scale = (im.metadata['dc_scale'][0] / scale,
                         im.metadata['dc_scale'][1] / scale)
-        buffer_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
+        buffer_size = sim.shape[0], sim.shape[1]
 
         draw_image(
             ctx,
@@ -1641,6 +1653,14 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
 def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
                           streams_data, draw_merge_ratio, rgb=True,
                           interpolate_data=False, logo=None):
+    """
+    view_hfw (tuple of float): Y, X
+    min_res (tuple of int): Y, X
+    raise LookupError: if no data visible in the selected FoV
+    return (list of DataArray)
+    """
+    # TODO: switch the axes of view_hfw and min_res to be X/Y
+
     # The list of images to export
     data_to_export = []
 
@@ -1684,9 +1704,9 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             intersection_found = True
 
     # if there is no intersection of any stream data with the viewport, then
-    # raise IOError
+    # raise LookupError
     if not intersection_found:
-        raise IOError("There is no visible stream data to be exported")
+        raise LookupError("There is no visible stream data to be exported")
 
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):

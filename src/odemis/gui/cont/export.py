@@ -23,14 +23,12 @@ This file is part of Odemis.
 from __future__ import division
 
 import logging
-from odemis import model
 from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import get_picture_folder, call_in_wx_main
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, convert_streams_to_images, images_to_export_data
 import os
-import threading
 import time
 import wx
 
@@ -38,24 +36,11 @@ import wx
 PR_PREFIX = "Print-ready"
 PP_PREFIX = "Post-processing"
 
-
-class SpatialOptions(object):
-    # Represents the options
-    # Each VA is passed as a kwargs key to the export
-    def __init__(self):
-        self.interpolate = model.BooleanVA(True)
-
-    conf = {}  # To override the way VAs are displayed
-
-
-# Dict where keys are the available export types and value is a list with the
-# available exporters for this type
-EXPORTERS = {"spatial": ([("PNG", SpatialOptions), ("TIFF", SpatialOptions)],
-                         [("Serialized TIFF", SpatialOptions)]),
-             "AR": ([("PNG", None), ("TIFF", None)],
-                    [("CSV", None)]),
-             "spectrum": ([("PNG", None), ("TIFF", None)],
-                          [("CSV", None)])}
+# Dict str -> (tuple of str, tuple of str):
+#   export type -> possible exporters for PR, possible exporters for PP
+EXPORTERS = {"spatial": (("PNG", "TIFF"), ("Serialized TIFF",)),
+             "AR": (("PNG", "TIFF"), ("CSV",)),
+             "spectrum": (("PNG", "TIFF"), ("CSV",))}
 
 
 class ExportController(object):
@@ -107,68 +92,66 @@ class ExportController(object):
 
     def start_export_as_viewport(self, event):
         """ Wrapper to run export_viewport in a separate thread."""
-        filepath, exporter, export_format, export_type = self._get_export_info()
-        if None not in (filepath, exporter, export_format, export_type):
-            thread = threading.Thread(target=self.export_viewport,
-                                      args=(filepath, exporter, export_format, export_type))
-            thread.start()
+        filepath, export_format, export_type = self._get_export_info()
+        if filepath is not None:
+            # TODO: run the real export function in a future, and based on the
+            # result, show a message box or popup or log message
+            self.export_viewport(filepath, export_format, export_type)
 
     def _get_export_info(self):
-        # TODO create ExportConfig
+        """
+        Return str, str, str: full filename, exporter name, export type
+          Full filename is None if cancelled by user
+        """
         # Set default to the first of the list
         export_type = self.get_export_type(self._data_model.focussedView.value)
         formats = EXPORTERS[export_type]
-        default_exporter = get_converter(formats[0][0][0])
+        default_exporter = get_converter(formats[0][0])
         extension = default_exporter.EXTENSIONS[0]
+        # TODO: default to the same path/filename as current file (but different extension)
         basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
         filepath = os.path.join(get_picture_folder(), basename + extension)
         # filepath will be None if cancelled by user
         filepath, export_format, export_type = self.ShowExportFileDialog(filepath, default_exporter)
         # get rid of the prefix before you ask for the exporter
-        if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, PP_PREFIX]):
+        if any(prefix in export_format.split(' ') for prefix in (PR_PREFIX, PP_PREFIX)):
             export_format = export_format.split(' ', 1)[1]
-        exporter = get_converter(export_format)
 
-        return filepath, exporter, export_format, export_type
+        return filepath, export_format, export_type
 
     @call_in_wx_main
-    def export_viewport(self, filepath, exporter, export_format, export_type):
+    def export_viewport(self, filepath, export_format, export_type):
         """ Export the image from the focused view to the filesystem.
 
         :param filepath: (str) full path to the destination file
-        :param exporter: (func) exporter to use for writing the file
         :param export_format: (str) the format name
         :param export_type: (str) spatial, AR or spectrum
-
-        When no dialog is shown, the name of the file will follow the scheme
-        `date`-`time`.tiff (e.g., 20120808-154812.tiff) and it will be saved
-        in the user's picture directory.
-
         """
-
         try:
-            # When exporting using the menu Export button the options to be
-            # set by the user are ignored
-            raw = export_format in [fmt[0] for fmt in EXPORTERS[export_type][1]]
+            exporter = get_converter(export_format)
+            raw = export_format in EXPORTERS[export_type][1]
             exported_data = self.export(export_type, raw)
-            popup.show_message(self._main_frame,
-                                 "Exported in %s" % (filepath,),
-                                 timeout=3
-                                 )
             # record everything to a file
             exporter.export(filepath, exported_data)
 
-            logging.info("Exported file '%s'.", filepath)
-        except IOError:
+            popup.show_message(self._main_frame,
+                               "Exported in %s" % (filepath,),
+                               timeout=3
+                               )
+
+            logging.info("Exported a %s view into file '%s'.", export_type, filepath)
+        except LookupError as ex:
+            logging.info("Export of a %s view as %s seems to contain no data.",
+                         export_type, export_format, exc_info=True)
             dlg = wx.MessageDialog(self._main_frame,
-                                   "There is no stream data present to be exported. "
-                                   "Please try with a non-empty image.",
-                                   "Empty image to export",
+                                   "Failed to export: %s\n"
+                                   "Please make sure that at least one stream is visible in the current view." % (ex,),
+                                   "No data to export",
                                    wx.OK | wx.ICON_WARNING)
             dlg.ShowModal()
             dlg.Destroy()
         except Exception:
-            logging.exception("Failed to export")
+            logging.exception("Failed to export a %s view as %s", export_type, export_format)
 
     def get_export_type(self, view):
         """
@@ -193,14 +176,10 @@ class ExportController(object):
         :param raw (boolean): raw data format if True
         :param interpolate_data (boolean): apply interpolation on data if True
 
-        returns DataArray: the data to be exported, either an image or raw data
-
+        returns DataArray or list of DataArray: the data to be exported, either
+          an RGB image or raw data.
         """
-        # TODO move 'interpolate_data' to kwargs and passed to all *_to_export_data()
         vp = self.get_viewport_by_view(self._data_model.focussedView.value)
-        interpolate_data = vp.microscope_view.interpolate_content.value
-        # TODO: do not rely on self.ClientSize, should just use
-        self.ClientSize = vp.canvas.ClientSize
         streams = self._data_model.focussedView.value.getStreams()
         if export_type == 'AR':
             exported_data = ar_to_export_data(streams, raw)
@@ -214,12 +193,14 @@ class ExportController(object):
             images, streams_data, self.images_cache, min_type = convert_streams_to_images(streams, self.images_cache, not raw)
             if not images:
                 return
+            interpolate_data = vp.microscope_view.interpolate_content.value
+            view_px = tuple(vp.canvas.ClientSize)
             view_mpp = self._data_model.focussedView.value.mpp.value
-            view_hfw = (view_mpp * self.ClientSize.y, view_mpp * self.ClientSize.x)
+            view_hfw = (view_mpp * view_px[1], view_mpp * view_px[0])
             view_pos = self._data_model.focussedView.value.view_pos.value
             draw_merge_ratio = self._data_model.focussedView.value.stream_tree.kwargs.get("merge", 0.5)
             exported_data = images_to_export_data(images, view_hfw,
-                                                  (self.ClientSize.y, self.ClientSize.x),
+                                                  (view_px[1], view_px[0]),
                                                   view_pos, min_type, streams_data, draw_merge_ratio,
                                                   rgb=not raw,
                                                   interpolate_data=interpolate_data,
@@ -242,8 +223,6 @@ class ExportController(object):
                 (string): the format name
                 (string): spatial, AR or spectrum
         """
-        # TODO use ExportConfig
-
         # Find the available formats (and corresponding extensions) according
         # to the export type
         export_type = self.get_export_type(self._data_model.focussedView.value)
@@ -316,11 +295,11 @@ class ExportController(object):
         # Look dynamically which format is available
         # First the print-ready formats
         for format_data in pr_formats:
-            exporter = get_converter(format_data[0])
+            exporter = get_converter(format_data)
             export_formats[PR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
         # Now for post-processing formats
         for format_data in pp_formats:
-            exporter = get_converter(format_data[0])
+            exporter = get_converter(format_data)
             export_formats[PP_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
 
         if not export_formats:
