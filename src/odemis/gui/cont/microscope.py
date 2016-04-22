@@ -29,6 +29,7 @@ from odemis import model
 from odemis.acq import _futures
 from odemis.acq import align, stream
 from odemis.acq._futures import executeTask
+from odemis.gui import img
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
@@ -37,11 +38,11 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
+import functools
 import threading
 import time
 import wx
 
-from odemis.gui import img
 import odemis.gui.win.delphi as windelphi
 import odemis.util.units as units
 
@@ -254,7 +255,7 @@ class SecomStateController(MicroscopeStateController):
         self._press_btn = getattr(tab_panel, btn_prefix + "press")
 
         # To update the stream status
-        self._status_list = []
+        # self._status_list = []
         self._status_prev_streams = []
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
 
@@ -354,7 +355,7 @@ class SecomStateController(MicroscopeStateController):
             return
         self._last_pos = pos
         self._stage_time = time.time()
-        self._on_stream_calibrated()
+        self._remove_misaligned()
         self.decide_status()
 
     def _on_focus_move(self, pos):
@@ -363,7 +364,7 @@ class SecomStateController(MicroscopeStateController):
         pos (dict): new position
         """
         self._focus_time = time.time()
-        self._on_stream_calibrated()
+        self._remove_misaligned()
         self.decide_status()
 
     @call_in_wx_main
@@ -417,27 +418,31 @@ class SecomStateController(MicroscopeStateController):
         2nd one, was the previous newest.
 
         """
+        print "lalalla"
         # First unsubscribe from the previous streams
         if len(self._status_prev_streams) != 0:
             for s in self._status_prev_streams:
                 s.status.unsubscribe(self.decide_status)
                 if model.hasVA(s, "calibrated"):
-                    s.calibrated.unsubscribe(self._on_stream_calibrated)
+                    s.calibrated.unsubscribe(self._calibrated_wrapper)
 
-        # Add the active one
-        self._status_list = [streams[0]] if not model.hasVA(streams[0], "calibrated") else []
 
-        # Now the aligned streams
-        for stream in streams:
-            if model.hasVA(stream, "calibrated"):
-                self._status_list.append(stream)
+        # self._status_list = streams  # [streams[0]] if not model.hasVA(streams[0], "calibrated") else []
 
-        for s in self._status_list:
+#         # Now the aligned streams
+#         for stream in streams:
+#             if model.hasVA(stream, "calibrated"):
+#                 self._status_list.append(stream)
+        for s in streams:
             s.status.subscribe(self.decide_status, init=True)
             if model.hasVA(s, "calibrated"):
-                s.calibrated.subscribe(self._on_stream_calibrated, init=True)
+                self._calibrated_wrapper = functools.partial(self._on_stream_calibrated, s)
+                s.calibrated.subscribe(self._calibrated_wrapper, init=True)
+            elif s.should_update.value:
+                # means it was just played
+                self._show_stream(s)
 
-        self._status_prev_streams = self._status_list
+        self._status_prev_streams = streams
 
     def _subscribe_current_view_visibility(self, views):
         if len(self._views_prev_list) != 0:
@@ -470,14 +475,8 @@ class SecomStateController(MicroscopeStateController):
                         visible_streams.add(s)
                     if (stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                         misaligned = True
-                    elif stream_img is not None and (not s.should_update.value):
-                        # Consider data that was acquired before the last move
-                        # of the stage or focus as misaligned
-                        img_md = s.image.value.metadata
-                        if model.MD_ACQ_DATE in img_md:
-                            img_time = img_md[model.MD_ACQ_DATE]
-                            if img_time < self._stage_time or img_time < self._focus_time:
-                                misaligned = True
+                    elif self._is_misaligned(s):
+                        misaligned = True
                     if None not in s.status.value:
                         lvl, msg = s.status.value
                         if not isinstance(msg, basestring):
@@ -503,31 +502,43 @@ class SecomStateController(MicroscopeStateController):
         self._tab_panel.lbl_stream_status.SetToolTipString(action)
 
     @call_in_wx_main
-    def _on_stream_calibrated(self, _=None):
-        # hide all the misaligned streams, unhide all calibrated streams
+    def _remove_misaligned(self):
+        # hide all the misaligned streams
         for s in self._tab_data.streams.value:
             if ((model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
-                    (not s.should_update.value and ((s.image.value is not None) and
-                                                    (s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
-                                                     s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)))):
+                    self._is_misaligned(s)):
                 for v in self._tab_data.views.value:
                     if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
                         continue
                     else:
                         # Never hide an active stream
-                        if s in v.stream_tree.flat.value and not s.is_active.value:
+                        if s in v.stream_tree.flat.value and not s.should_update.value:
                             v.removeStream(s)
+
+    @call_in_wx_main
+    def _show_stream(self, s):
+        for v in self._tab_data.views.value:
+            if (v.name.value == "Overview"):
+                continue
+            elif (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
+                continue
+            elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
+                continue
             else:
-                for v in self._tab_data.views.value:
-                    if (v.name.value == "Overview"):
-                        continue
-                    elif (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
-                        continue
-                    elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
-                        continue
-                    else:
-                        if s not in v.stream_tree.flat.value:
-                            v.addStream(s)
+                print s.name.value, v.name.value, v.stream_tree.flat.value
+                if s not in v.stream_tree.flat.value:
+                    v.addStream(s)
+
+    def _on_stream_calibrated(self, stream, calibrated):
+        if calibrated:
+            self._show_stream(stream)
+        else:
+            self._remove_misaligned()
+
+    def _is_misaligned(self, stream):
+        return (not stream.should_update.value and ((stream.image.value is not None) and
+                (stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
+                 stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)))
 
     def _show_status_icons(self, lvl, action=None):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
