@@ -29,7 +29,6 @@ from odemis import model, dataio
 from odemis.acq import stream
 from odemis.gui.util import img
 from odemis.gui.util.img import wxImage2NDImage
-from odemis.util.polar import THETA_SIZE, PHI_SIZE
 import os
 import time
 import unittest
@@ -91,7 +90,8 @@ class TestARExport(unittest.TestCase):
                                                                   model.MD_PIXEL_SIZE: (1e-03, 1e-03)})
         raw_polar = img.calculate_raw_ar(data, data)
         # shape = raw data + theta/phi axes values
-        self.assertEqual(raw_polar.shape, (THETA_SIZE + 1, PHI_SIZE + 1))
+        self.assertGreater(raw_polar.shape[0], 50)
+        self.assertGreater(raw_polar.shape[1], 50)
 
     def test_ar_export(self):
 
@@ -127,7 +127,8 @@ class TestARExport(unittest.TestCase):
         # Convert to exportable RGB image
         exdata = img.ar_to_export_data([ars], raw=True)
         # shape = raw data + theta/phi axes values
-        self.assertEqual(exdata.shape, (THETA_SIZE + 1, PHI_SIZE + 1))
+        self.assertGreater(exdata.shape[0], 50)
+        self.assertGreater(exdata.shape[1], 50)
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
@@ -173,7 +174,8 @@ class TestARExport(unittest.TestCase):
         # Convert to exportable RGB image
         exdata = img.ar_to_export_data([ars], raw=True)
         # shape = raw data + theta/phi axes values
-        self.assertEqual(exdata.shape, (THETA_SIZE + 1, PHI_SIZE + 1))
+        self.assertGreater(exdata.shape[0], 50)
+        self.assertGreater(exdata.shape[1], 50)
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")

@@ -199,11 +199,20 @@ class SnapshotController(object):
             raw_images = []
             for s in streams:
                 data = s.raw # list of raw images for this stream (with metadata)
-                # add the stream name to the image
                 for d in data:
+                    # add the stream name to the image
+                    if not hasattr(d, "metadata"):
+                        # Not a DataArray => let's try to convert it
+                        try:
+                            d = model.DataArray(d)
+                        except Exception:
+                            logging.warning("Raw data of stream %s doesn't seem to be DataArray", s.name.value)
+                            continue
+
                     if model.MD_DESCRIPTION not in d.metadata:
                         d.metadata[model.MD_DESCRIPTION] = s.name.value
-                raw_images.extend(data)
+
+                    raw_images.append(d)
 
             popup.show_message(self._main_frame,
                                  "Snapshot saved in %s" % (filepath,),

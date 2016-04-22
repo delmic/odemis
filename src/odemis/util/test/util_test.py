@@ -20,8 +20,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
-from decorator import partial
 
+from functools import partial
 import gc
 import logging
 from odemis import util

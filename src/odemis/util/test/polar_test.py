@@ -156,6 +156,17 @@ class TestPolarConversion(unittest.TestCase):
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
+    def test_uint16_input_rect(self):
+        """
+        Tests for input of DataArray with uint16 ndarray to rectangular projection
+        """
+        data = self.data
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        result = polar.AngleResolved2Rectangular(data[0], (100, 400))
+
+        self.assertEqual(result.shape, (101, 401))  # +1 due to "metadata"
+
     def test_int8_input(self):
         """
         Tests for input of DataArray with int8 ndarray.

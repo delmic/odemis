@@ -531,7 +531,7 @@ def set_images(im_args):
                 just overrides underlying layers.
         8. name (str): name of the stream that the image originated from
         9. date (int): seconds since epoch
-        10. stream (object): just needed to identify the image in case of dublicated name
+        10. stream (object): just needed to identify the image in case of duplicated name
 
     returns (list of wx.Image)
     """
@@ -742,9 +742,7 @@ def calculate_raw_ar(data, bg_data):
     else:
         dtype = None  # just let the function use the best one
 
-    # FIXME: size is currently not used
-    # size = (400, 100) # TODO: increase if data is high def
-    size = 512
+    size = (100, 400)  # TODO: increase if data is high def
 
     if bg_data is None:
         # Simple version: remove the background value
@@ -753,7 +751,7 @@ def calculate_raw_ar(data, bg_data):
         data0 = img.Subtract(data, bg_data)  # metadata from data
 
     # calculate raw polar representation
-    polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype, raw=True)
+    polard = polar.AngleResolved2Rectangular(data0, size, hole=False, dtype=dtype)
 
     return polard
 
@@ -1656,8 +1654,10 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
     """
     view_hfw (tuple of float): Y, X
     min_res (tuple of int): Y, X
-    raise LookupError: if no data visible in the selected FoV
+    rgb (bool): if True, generates one RGB image out of all the streams, otherwise
+      generates one greyscale image per stream
     return (list of DataArray)
+    raise LookupError: if no data visible in the selected FoV
     """
     # TODO: switch the axes of view_hfw and min_res to be X/Y
 
@@ -1779,7 +1779,9 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             # Clip background to baseline
             baseline = int(streams_data[im.metadata['stream']][1][-1])
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
-            data_to_export.append(model.DataArray(data_with_legend, im.metadata))
+
+            md = {model.MD_DESCRIPTION: im.metadata['name']}
+            data_to_export.append(model.DataArray(data_with_legend, md))
 
             data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
             surface = cairo.ImageSurface.create_for_data(
@@ -1828,11 +1830,12 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         # Clip background to baseline
         baseline = int(streams_data[last_image.metadata['stream']][1][-1])
         data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
+        md = {model.MD_DESCRIPTION: last_image.metadata['name']}
     else:
         data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
         data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
-        last_image.metadata[model.MD_DIMS] = 'YXC'
-    data_to_export.append(model.DataArray(data_with_legend, last_image.metadata))
+        md = {model.MD_DIMS: 'YXC'}
+    data_to_export.append(model.DataArray(data_with_legend, md))
 
     return data_to_export
 
