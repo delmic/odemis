@@ -742,9 +742,7 @@ def calculate_raw_ar(data, bg_data):
     else:
         dtype = None  # just let the function use the best one
 
-    # FIXME: size is currently not used
-    # size = (400, 100) # TODO: increase if data is high def
-    size = 512
+    size = (100, 400)  # TODO: increase if data is high def
 
     if bg_data is None:
         # Simple version: remove the background value
@@ -753,7 +751,7 @@ def calculate_raw_ar(data, bg_data):
         data0 = img.Subtract(data, bg_data)  # metadata from data
 
     # calculate raw polar representation
-    polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype, raw=True)
+    polard = polar.AngleResolved2Rectangular(data0, size, hole=False, dtype=dtype)
 
     return polard
 

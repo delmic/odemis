@@ -39,23 +39,95 @@ AR_HOLE_DIAMETER = 0.6e-3  # m, diameter the hole in the mirror
 AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/4f
 
-# data size for raw export
-PHI_SIZE = 400
-THETA_SIZE = 100
 
-
-def AngleResolved2Polar(data, output_size, hole=True, dtype=None, raw=False):
+def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     """
-    Converts an angle resolved image to polar representation
+    Converts an angle resolved image to polar (aka azymuthal) projection
     data (model.DataArray): The image that was projected on the CCD after being
-      relefted on the parabolic mirror. The flat line of the D shape is
+      relfected on the parabolic mirror. The flat line of the D shape is
       expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE
       metadata. Pixel size is the sensor pixel size * binning / magnification.
     output_size (int): The size of the output DataArray (assumed to be square)
     hole (boolean): Crop the pole if True
-    raw (boolean): if True, return a raw representation (phi/theta axes). Used
-      in csv export.
+    dtype (numpy dtype): intermediary dtype for computing the theta/phi data
     returns (model.DataArray): converted image in polar view
+    """
+    assert(len(data.shape) == 2)  # => 2D with greyscale
+    # TODO: separate raw projection to another function, named AngleResolved2Rectangular()
+
+    # Get the metadata
+    try:
+        pixel_size = data.metadata[model.MD_PIXEL_SIZE]
+        mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+        parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
+    except KeyError:
+        raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
+
+    if dtype is None:
+        dtype = numpy.float64
+
+    # Crop the input image to half circle
+    cropped_image = _CropHalfCircle(data, pixel_size, (mirror_x, mirror_y), hole)
+
+    theta_data = numpy.empty(shape=cropped_image.shape, dtype=dtype)
+    phi_data = numpy.empty(shape=cropped_image.shape, dtype=dtype)
+    omega_data = numpy.empty(shape=cropped_image.shape)
+
+    # For each pixel of the input ndarray, input metadata is used to
+    # calculate the corresponding theta, phi and radiant intensity
+    image_x, image_y = cropped_image.shape
+    jj = numpy.linspace(0, image_y - 1, image_y)
+    xpix = mirror_x - jj
+
+    for i in xrange(image_x):
+        ypix = (i - mirror_y) + (2 * parabola_f) / pixel_size[1]
+        theta, phi, omega = _FindAngle(data, xpix, ypix, pixel_size)
+
+        theta_data[i, :] = theta
+        phi_data[i, :] = phi
+        omega_data[i, :] = cropped_image[i] / omega
+
+    # Convert into polar coordinates
+    h_output_size = output_size / 2
+    theta = theta_data * (h_output_size / math.pi * 2)
+    phi = phi_data
+    theta_data = numpy.cos(phi) * theta
+    phi_data = numpy.sin(phi) * theta
+
+    # Interpolation into 2d array
+#    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+#    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+#    qz = mlab.griddata(phi_data.flat, theta_data.flat, omega_data.flat, xi, yi, interp="linear")
+
+    # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
+    # interpolation by 3 ?!
+    with warnings.catch_warnings():
+        # Some points might be so close that they are identical (within float
+        # precision). It's fine, no need to generate a warning.
+        warnings.simplefilter("ignore", DuplicatePointWarning)
+        triang = Triangulation(theta_data.flat, phi_data.flat)
+    interp = triang.linear_interpolator(omega_data.flat, default_value=0)
+    qz = interp[-h_output_size:h_output_size:complex(0, output_size),  # Y
+                - h_output_size:h_output_size:complex(0, output_size)]  # X
+    qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
+    result = model.DataArray(qz, data.metadata)
+
+    return result
+
+
+def AngleResolved2Rectangular(data, output_size, hole=True, dtype=None):
+    """
+    Converts an angle resolved image to equirectangular (aka cylindrical)
+      projection (ie, phi/theta axes)
+    data (model.DataArray): The image that was projected on the CCD after being
+      relfected on the parabolic mirror. The flat line of the D shape is
+      expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE
+      metadata. Pixel size is the sensor pixel size * binning / magnification.
+    output_size (int, int): The size of the output DataArray (theta, phi),
+      not including the theta/phi angles at the first row/column
+    hole (boolean): Crop the pole if True
+    dtype (numpy dtype): intermediary dtype for computing the theta/phi data
+    returns (model.DataArray): converted image in equirectangular view
     """
     assert(len(data.shape) == 2)  # => 2D with greyscale
 
@@ -91,65 +163,44 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None, raw=False):
         phi_data[i, :] = phi
         omega_data[i, :] = cropped_image[i] / omega
 
-    if raw:
-        # compute new mask
-        phi_lin = numpy.linspace(0, 2 * math.pi, PHI_SIZE)
-        theta_lin = numpy.linspace(0, math.pi / 2, THETA_SIZE)
-        phi_grid, theta_grid = numpy.meshgrid(phi_lin, theta_lin)
+    # compute new mask
+    phi_lin = numpy.linspace(0, 2 * math.pi, output_size[1])
+    theta_lin = numpy.linspace(0, math.pi / 2, output_size[0])
+    phi_grid, theta_grid = numpy.meshgrid(phi_lin, theta_lin)
 
-        a = (1 / (4 * parabola_f))
-        xcut = AR_XMAX - AR_PARABOLA_F
-        # length vector
-        c = (2 * (a * numpy.cos(phi_grid) * numpy.sin(theta_grid) + a)) ** -1
-        x = -numpy.sin(theta_grid) * numpy.cos(phi_grid) * c
-        z = numpy.cos(theta_grid) * c
+    a = (1 / (4 * parabola_f))
+    xcut = AR_XMAX - AR_PARABOLA_F
+    # length vector
+    c = (2 * (a * numpy.cos(phi_grid) * numpy.sin(theta_grid) + a)) ** -1
+    x = -numpy.sin(theta_grid) * numpy.cos(phi_grid) * c
+    z = numpy.cos(theta_grid) * c
 
-        mask = numpy.ones((THETA_SIZE, PHI_SIZE))
-        mask[(x > xcut) | (theta_grid < (4 * numpy.pi / 180)) | (z < AR_FOCUS_DISTANCE)] = 0
-        # TODO: can probably choose a selection here to speed up interpolation.
-        # This is a silly fix but it works. Prevents exptrapolation which leads to errors
-        theta_data = numpy.tile(theta_data, (1, 3))
-        phi_data = numpy.append(numpy.append(phi_data - 2 * math.pi, phi_data, axis=1), phi_data + 2 * math.pi, axis=1)
+    mask = numpy.ones(output_size)
+    mask[(x > xcut) | (theta_grid < (4 * numpy.pi / 180)) | (z < AR_FOCUS_DISTANCE)] = 0
+    # TODO: can probably choose a selection here to speed up interpolation.
+    # This is a silly fix but it works. Prevents extrapolation which leads to errors
+    theta_data = numpy.tile(theta_data, (1, 3))
+    phi_data = numpy.append(numpy.append(phi_data - 2 * math.pi, phi_data, axis=1), phi_data + 2 * math.pi, axis=1)
 
-        ARdata = numpy.tile(omega_data, (1, 3))
+    ARdata = numpy.tile(omega_data, (1, 3))
+    with warnings.catch_warnings():
+        # Some points might be so close that they are identical (within float
+        # precision). It's fine, no need to generate a warning.
+        warnings.simplefilter("ignore", DuplicatePointWarning)
         triang = Triangulation(phi_data.flat, theta_data.flat)
-        interp = triang.linear_interpolator(ARdata.flat, default_value=0)
-        qz = interp[0:numpy.pi / 2:complex(0, THETA_SIZE), 0:2 * numpy.pi:complex(0, PHI_SIZE)]
-        qz = numpy.roll(qz, qz.shape[1] // 2, axis=1)
-        qz_masked = qz * mask
-        # attach theta as first column
-        qz_masked = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), qz_masked, axis=1)
-        # attach phi as first row
-        phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
-        qz_masked = numpy.append(phi_lin, qz_masked, axis=0)
-        result = model.DataArray(qz_masked, data.metadata)
-        return result
+    interp = triang.linear_interpolator(ARdata.flat, default_value=0)
+    qz = interp[0:numpy.pi / 2:complex(0, output_size[0]),
+                0:2 * numpy.pi:complex(0, output_size[1])]
+    qz = numpy.roll(qz, qz.shape[1] // 2, axis=1)
+    qz_masked = qz * mask
 
-    else:
-        # Convert into polar coordinates
-        h_output_size = output_size / 2
-        theta = theta_data * (h_output_size / math.pi * 2)
-        phi = phi_data
-        theta_data = numpy.cos(phi) * theta
-        phi_data = numpy.sin(phi) * theta
-
-        # Interpolation into 2d array
-    #    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-    #    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-    #    qz = mlab.griddata(phi_data.flat, theta_data.flat, omega_data.flat, xi, yi, interp="linear")
-
-        # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
-        # interpolation by 3 ?!
-        with warnings.catch_warnings():
-            # Some points might be so close that they are identical (within float
-            # precision). It's fine, no need to generate a warning.
-            warnings.simplefilter("ignore", DuplicatePointWarning)
-            triang = Triangulation(theta_data.flat, phi_data.flat)
-        interp = triang.linear_interpolator(omega_data.flat, default_value=0)
-        qz = interp[-h_output_size:h_output_size:complex(0, output_size),  # Y
-                    - h_output_size:h_output_size:complex(0, output_size)]  # X
-        qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
-        result = model.DataArray(qz, data.metadata)
+    # TODO: put theta/phi angles in metadata?
+    # attach theta as first column
+    qz_masked = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), qz_masked, axis=1)
+    # attach phi as first row
+    phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
+    qz_masked = numpy.append(phi_lin, qz_masked, axis=0)
+    result = model.DataArray(qz_masked, data.metadata)
 
     return result
 
