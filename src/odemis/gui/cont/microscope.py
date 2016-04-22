@@ -265,7 +265,7 @@ class SecomStateController(MicroscopeStateController):
         self._views_list = []
         self._views_prev_list = []
         tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
-        tab_data.focussedView.subscribe(self.decide_status, init=True)
+#         tab_data.focussedView.subscribe(self.decide_status, init=True)
 
         # Turn off the light, but set the power to a nice default value
         # TODO: do the same with the brightlight and backlight
@@ -416,12 +416,12 @@ class SecomStateController(MicroscopeStateController):
 
         self._views_list = views
         for v in self._views_list:
-            v.stream_tree.flat.subscribe(self.decide_status)
+            v.stream_tree.flat.subscribe(self.decide_status, init=True)
 
         self._views_prev_list = self._views_list
 
     @call_in_wx_main
-    def decide_status(self, _):
+    def decide_status(self, _=None):
         """
         Decide the status displayed based on the current focussed view, the
         visible and calibrated streams.
@@ -435,9 +435,10 @@ class SecomStateController(MicroscopeStateController):
         for v in self._tab_data.views.value:
             if v.name.value != "Overview":
                 for s in v.stream_tree.flat.value:
-                    if s.raw not in [None, []]:
+                    stream_img = s.image.value
+                    if stream_img is not None:
                         visible_streams.add(s)
-                    if model.hasVA(s, "calibrated") and (not s.calibrated.value):
+                    if (stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                         misaligned = True
                     if None not in s.status.value:
                         lvl, msg = s.status.value
