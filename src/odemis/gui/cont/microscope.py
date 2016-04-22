@@ -470,7 +470,7 @@ class SecomStateController(MicroscopeStateController):
                         visible_streams.add(s)
                     if (stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                         misaligned = True
-                    elif stream_img is not None and (not s.is_active.value):
+                    elif stream_img is not None and (not s.should_update.value):
                         # Consider data that was acquired before the last move
                         # of the stage or focus as misaligned
                         img_md = s.image.value.metadata
@@ -507,9 +507,9 @@ class SecomStateController(MicroscopeStateController):
         # hide all the misaligned streams, unhide all calibrated streams
         for s in self._tab_data.streams.value:
             if ((model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
-                    (not s.is_active.value and ((s.image.value is not None) and
-                                                (s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
-                                                 s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)))):
+                    (not s.should_update.value and ((s.image.value is not None) and
+                                                    (s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
+                                                     s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)))):
                 for v in self._tab_data.views.value:
                     if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
                         continue
