@@ -1777,7 +1777,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
             data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
             # Clip background to baseline
-            baseline = streams_data[im.metadata['stream']][1][-1]
+            baseline = int(streams_data[im.metadata['stream']][1][-1])
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
             data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
@@ -1826,7 +1826,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
         data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
         # Clip background to baseline
-        baseline = streams_data[last_image.metadata['stream']][1][-1]
+        baseline = int(streams_data[last_image.metadata['stream']][1][-1])
         data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
     else:
         data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
