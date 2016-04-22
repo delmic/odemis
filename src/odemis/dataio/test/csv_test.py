@@ -48,7 +48,7 @@ class TestCSVIO(unittest.TestCase):
 
     def testExportAR(self):
         """Try simple AR export"""
-        size = (401, 101)
+        size = (101, 401)
         dtype = numpy.float
         metadata = {model.MD_DESCRIPTION: "Angle-resolved"}
         data = model.DataArray(numpy.zeros(size, dtype), metadata)
