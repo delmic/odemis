@@ -258,6 +258,13 @@ class SecomStateController(MicroscopeStateController):
         self._status_prev_streams = []
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
 
+        # Last stage and focus move time
+        self._last_pos = None
+        self._stage_time = time.time()
+        self._focus_time = time.time()
+        self._main_data.stage.position.subscribe(self._on_stage_move, init=True)
+        self._main_data.focus.position.subscribe(self._on_focus_move, init=True)
+
         # To listen to change in play/pause
         self._active_prev_stream = None
 
@@ -335,6 +342,29 @@ class SecomStateController(MicroscopeStateController):
 
         # disable optical and SEM buttons while there is a preparation process running
         self._main_data.is_preparing.subscribe(self.on_preparation)
+
+    def _on_stage_move(self, pos):
+        """
+        Called when the stage moves (changes position)
+        pos (dict): new position
+        """
+        # Check if the position has really changed, as some stage tend to
+        # report "new" position even when no actual move has happened
+        if self._last_pos == pos:
+            return
+        self._last_pos = pos
+        self._stage_time = time.time()
+        self._on_stream_calibrated()
+        self.decide_status()
+
+    def _on_focus_move(self, pos):
+        """
+        Called when the focus moves (changes position)
+        pos (dict): new position
+        """
+        self._focus_time = time.time()
+        self._on_stream_calibrated()
+        self.decide_status()
 
     @call_in_wx_main
     def on_preparation(self, is_preparing):
@@ -440,6 +470,14 @@ class SecomStateController(MicroscopeStateController):
                         visible_streams.add(s)
                     if (stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                         misaligned = True
+                    elif stream_img is not None and (not s.is_active.value):
+                        # Consider data that was acquired before the last move
+                        # of the stage or focus as misaligned
+                        img_md = s.image.value.metadata
+                        if model.MD_ACQ_DATE in img_md:
+                            img_time = img_md[model.MD_ACQ_DATE]
+                            if img_time < self._stage_time or img_time < self._focus_time:
+                                misaligned = True
                     if None not in s.status.value:
                         lvl, msg = s.status.value
                         if not isinstance(msg, basestring):
@@ -465,29 +503,31 @@ class SecomStateController(MicroscopeStateController):
         self._tab_panel.lbl_stream_status.SetToolTipString(action)
 
     @call_in_wx_main
-    def _on_stream_calibrated(self, calibrated):
+    def _on_stream_calibrated(self, _=None):
         # hide all the misaligned streams, unhide all calibrated streams
         for s in self._tab_data.streams.value:
-            if model.hasVA(s, "calibrated"):
-                if not s.calibrated.value:
-                    for v in self._tab_data.views.value:
-                        if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
-                            continue
-                        else:
-                            # Never hide an active stream
-                            if s in v.stream_tree.flat.value and not s.is_active.value:
-                                v.removeStream(s)
-                else:
-                    for v in self._tab_data.views.value:
-                        if (v.name.value == "Overview"):
-                            continue
-                        elif (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
-                            continue
-                        elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
-                            continue
-                        else:
-                            if s not in v.stream_tree.flat.value:
-                                v.addStream(s)
+            if ((model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
+                    (not s.is_active.value and ((s.image.value is not None) and
+                                                (s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
+                                                 s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)))):
+                for v in self._tab_data.views.value:
+                    if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
+                        continue
+                    else:
+                        # Never hide an active stream
+                        if s in v.stream_tree.flat.value and not s.is_active.value:
+                            v.removeStream(s)
+            else:
+                for v in self._tab_data.views.value:
+                    if (v.name.value == "Overview"):
+                        continue
+                    elif (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
+                        continue
+                    elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
+                        continue
+                    else:
+                        if s not in v.stream_tree.flat.value:
+                            v.addStream(s)
 
     def _show_status_icons(self, lvl, action=None):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
