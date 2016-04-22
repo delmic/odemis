@@ -1654,12 +1654,17 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
     """
     view_hfw (tuple of float): Y, X
     min_res (tuple of int): Y, X
+    stream_data (dict Stream -> tuple (float, list of str/values)): For each stream,
+      associate the acquisition date, stuff to display in the legend, and baseline value
+    im_min_type (numpy.dtype): data type for the output data (common for all the
+      DataArrays)
     rgb (bool): if True, generates one RGB image out of all the streams, otherwise
       generates one greyscale image per stream
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
     # TODO: switch the axes of view_hfw and min_res to be X/Y
+    # TODO: move the computation of stream_data (=legend data) here
 
     # The list of images to export
     data_to_export = []
@@ -1777,7 +1782,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
             data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
             # Clip background to baseline
-            baseline = int(streams_data[im.metadata['stream']][1][-1])
+            baseline = im_min_type(streams_data[im.metadata['stream']][1][-1])
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
 
             md = {model.MD_DESCRIPTION: im.metadata['name']}
@@ -1828,7 +1833,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
         data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
         # Clip background to baseline
-        baseline = int(streams_data[last_image.metadata['stream']][1][-1])
+        baseline = im_min_type(streams_data[last_image.metadata['stream']][1][-1])
         data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
         md = {model.MD_DESCRIPTION: last_image.metadata['name']}
     else:
