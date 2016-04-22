@@ -418,7 +418,6 @@ class SecomStateController(MicroscopeStateController):
         2nd one, was the previous newest.
 
         """
-        print "lalalla"
         # First unsubscribe from the previous streams
         if len(self._status_prev_streams) != 0:
             for s in self._status_prev_streams:
@@ -426,13 +425,6 @@ class SecomStateController(MicroscopeStateController):
                 if model.hasVA(s, "calibrated"):
                     s.calibrated.unsubscribe(self._calibrated_wrapper)
 
-
-        # self._status_list = streams  # [streams[0]] if not model.hasVA(streams[0], "calibrated") else []
-
-#         # Now the aligned streams
-#         for stream in streams:
-#             if model.hasVA(stream, "calibrated"):
-#                 self._status_list.append(stream)
         for s in streams:
             s.status.subscribe(self.decide_status, init=True)
             if model.hasVA(s, "calibrated"):
@@ -525,7 +517,6 @@ class SecomStateController(MicroscopeStateController):
             elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
                 continue
             else:
-                print s.name.value, v.name.value, v.stream_tree.flat.value
                 if s not in v.stream_tree.flat.value:
                     v.addStream(s)
 
