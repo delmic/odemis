@@ -518,6 +518,11 @@ class SecomStateController(MicroscopeStateController):
                 continue
             else:
                 if s not in v.stream_tree.flat.value:
+                    # make sure we don't display old data
+                    if ((s.image.value is not None) and
+                        (s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
+                         s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)):
+                        s.image.value = None
                     v.addStream(s)
 
     def _on_stream_calibrated(self, stream, calibrated):
