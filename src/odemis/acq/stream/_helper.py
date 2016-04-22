@@ -467,7 +467,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
-        self.raw = numpy.empty((0, 2), dtype=numpy.float64)
+        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
         self.image.value = model.DataArray([]) # start with an empty array
 
         # TODO: grating/cw as VAs (from the spectrograph)
@@ -507,7 +507,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
 
         # We must update .raw atomically as _updateImage() can run simultaneously
         new = numpy.array([[count, date]], dtype=numpy.float64)
-        self.raw = numpy.append(self.raw[first:], new, axis=0)
+        self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
 
     def _updateImage(self):
 
