@@ -18,8 +18,9 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import absolute_import, division
 
 import csv
+import logging
 import numpy
-from odemis import model
+from odemis.util import spectrum
 
 
 FORMAT = "CSV"
@@ -40,34 +41,34 @@ def export(filename, data):
     raises:
         IOError in case the spectrum does not contain wavelength metadata.
     '''
-    if (model.MD_DESCRIPTION in data.metadata) and data.metadata[model.MD_DESCRIPTION] == "Angle-resolved":
-        # In case of AR data just dump the array in the csv file and add header
-        # in 0,0 element
-        header = ['theta\phi(rad)']
-        with open(filename, 'w') as fd:
-            csv_writer = csv.writer(fd)
-            first_row = header + [d for d in data[0, 1:]]
-            csv_writer.writerow(first_row)
-            csv_writer.writerows(data[1:, :])
-    else:
-        if not hasattr(data, "metadata"):
-            spectrum_range = None
-        elif model.MD_WL_POLYNOMIAL in data.metadata:
-            wl_polynomial = data.metadata[model.MD_WL_POLYNOMIAL]
-            spectrum_range = numpy.arange(wl_polynomial[0], wl_polynomial[0] + len(data) * wl_polynomial[1], wl_polynomial[1])
-        elif model.MD_WL_LIST in data.metadata:
-            spectrum_range = data.metadata[model.MD_WL_LIST]
-        else:
+    if data.shape[0] > 1 and numpy.prod(data.shape) == data.shape[0]:
+        logging.debug("Exporting spectrum data to CSV")
+        try:
+            spectrum_range = spectrum.get_wavelength_per_pixel(data)
+        except Exception:
             # corner case where spectrum range is not available in metadata
+            logging.info("Exporting spectrum without wavelength information")
             spectrum_range = None
 
-        # turn range to nm
-        headers = ['#intensity']
-        spectrum_tuples = data.reshape(data.shape[0], 1)
         if spectrum_range is not None:
-            spectrum_tuples = zip(spectrum_range * 1e09, data)
-            headers = ['#wavelength(nm)'] + headers
+            # turn range to nm
+            spectrum_tuples = [(s * 1e9, d) for s, d in zip(spectrum_range, data)]
+            headers = ['# wavelength (nm)', 'intensity']
+        else:
+            spectrum_tuples = data.reshape(data.shape[0], 1)
+            headers = ['# intensity']
+
         with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)
             csv_writer.writerow(headers)
             csv_writer.writerows(spectrum_tuples)
+    elif data.ndim == 2 and all(s >= 2 for s in data.shape):
+        logging.debug("Exporting AR data to CSV")
+        # Data should be in the form of (Y+1, X+1), with the first row and colum the angles
+        with open(filename, 'w') as fd:
+            csv_writer = csv.writer(fd)
+            # Set the 'header' in the 0,0 element
+            first_row = ['theta\phi(rad)'] + [d for d in data[0, 1:]]
+            csv_writer.writerow(first_row)
+            # dump the array
+            csv_writer.writerows(data[1:, :])

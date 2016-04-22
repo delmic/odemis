@@ -23,12 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+import math
 import numpy
 from odemis import model
 from odemis.dataio import csv
-import csv as pycsv
 import os
 import unittest
+
+import csv as pycsv
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -46,17 +48,20 @@ class TestCSVIO(unittest.TestCase):
 
     def testExportAR(self):
         """Try simple AR export"""
-        size = (10, 10)
+        size = (401, 101)
         dtype = numpy.float
         metadata = {model.MD_DESCRIPTION: "Angle-resolved"}
         data = model.DataArray(numpy.zeros(size, dtype), metadata)
+        data += 26.1561
+        data[1:, 0] = numpy.linspace(0, math.pi / 2, data.shape[0] - 1)
+        data[0, 1:] = numpy.linspace(0, math.pi * 2, data.shape[1] - 1)
 
         # export
         csv.export(FILENAME, data)
 
         # check it's here
         st = os.stat(FILENAME)  # this test also that the file is created
-        self.assertGreater(st.st_size, 0)
+        self.assertGreater(st.st_size, 100)
         raised = False
         try:
             pycsv.reader(open(FILENAME, 'rb'))
@@ -66,16 +71,38 @@ class TestCSVIO(unittest.TestCase):
 
     def testExportSpectrum(self):
         """Try simple spectrum export"""
-        size = (10)
+        size = (150,)
         dtype = numpy.uint16
-        data = model.DataArray(numpy.zeros(size, dtype))
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist()}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
 
         # export
         csv.export(FILENAME, data)
 
         # check it's here
         st = os.stat(FILENAME)  # this test also that the file is created
-        self.assertGreater(st.st_size, 0)
+        self.assertGreater(st.st_size, 150)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportSpectrumNoWL(self):
+        """Try simple spectrum export"""
+        size = (10,)
+        dtype = numpy.uint16
+        data = model.DataArray(numpy.zeros(size, dtype))
+        data += 56486
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 10)
         raised = False
         try:
             pycsv.reader(open(FILENAME, 'rb'))
