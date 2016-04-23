@@ -50,7 +50,7 @@ def getSerialDriver(name):
 
 
 # From http://code.activestate.com/recipes/286222/
-_SCALE = {'kB': 2 ** 10, 'mB': 2 ** 20}
+_SCALE = {'KB': 2 ** 10, 'MB': 2 ** 20}
 
 def _VmB(VmKey):
     """
