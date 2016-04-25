@@ -413,6 +413,9 @@ class AlignedSEMStream(SEMStream):
         # if self.is_active.value:
         self.calibrated.value = False
 
+        # just reset status
+        self._setStatus(None)
+
     # need to override it to support beam shift
     def _applyROI(self):
         """
@@ -508,7 +511,7 @@ class AlignedSEMStream(SEMStream):
             except LookupError:
                 self._status_poll.cancel()
                 self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
-                logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
+                # logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
                 self._status_poll.cancel()
                 logging.exception("Failure while looking for the ebeam center")
