@@ -23,17 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from collections import OrderedDict
 import collections
 import functools
 import gc
 import logging
 import numpy
-import wx
-from collections import OrderedDict
-from wx.lib.pubsub import pub
-
-import odemis.acq.stream as acqstream
-import odemis.gui.model as guimodel
 from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -43,13 +38,18 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_settings_config, get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
-from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+import wx
+from wx.lib.pubsub import pub
+
+import odemis.acq.stream as acqstream
+import odemis.gui.model as guimodel
 
 
 # There are two kinds of controllers:
@@ -1342,18 +1342,6 @@ class StreamBarController(object):
         """
         Called when a stream "updated" state changes
         """
-        # Ensure it's visible in the current view (if feasible)
-        if updated:
-            fv = self._tab_data_model.focussedView.value
-            if (isinstance(stream, fv.stream_classes) and  # view is compatible
-                    not stream in fv.getStreams()):
-                # Add to the view
-                fv.addStream(stream)
-                # Update the graphical display
-                for e in self._stream_bar.stream_panels:
-                    if e.stream is stream:
-                        e.set_visible(True)
-
         # This is a stream scheduler:
         # * "should_update" streams are the streams to be scheduled
         # * a stream becomes "active" when it's currently acquiring
@@ -1651,6 +1639,25 @@ class SecomStreamsController(StreamBarController):
             self.add_action("EBIC", self.addEBIC, sem_capable)
 
     def _onStreamUpdate(self, stream, updated):
+        # Ensure it's visible in the current view (if feasible)
+        if updated:
+            fv = self._tab_data_model.focussedView.value
+            if stream not in fv.stream_tree.flat.value:
+                # if the stream is hidden in the current focused view, then unhide
+                # it everywhere
+                for v in self._tab_data_model.views.value:
+                    if (v.name.value == "Overview"):
+                        continue
+                    elif (v.name.value == "Optical") and isinstance(stream, acqstream.SEMStream):
+                        continue
+                    elif (v.name.value == "SEM") and isinstance(stream, acqstream.FluoStream):
+                        continue
+                    else:
+                        if stream not in v.stream_tree.flat.value:
+                            # make sure we don't display old data
+                            if stream.image.value is not None:
+                                stream.image.value = None
+                            v.addStream(stream)
         super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
         self._updateMicroscopeStates()
 
@@ -2116,6 +2123,16 @@ class SparcStreamsController(StreamBarController):
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
                     spots.is_active.value = True
+
+        fv = self._tab_data_model.focussedView.value
+        if (isinstance(stream, fv.stream_classes) and  # view is compatible
+                not stream in fv.getStreams()):
+            # Add to the view
+            fv.addStream(stream)
+            # Update the graphical display
+            for e in self._stream_bar.stream_panels:
+                if e.stream is stream:
+                    e.set_visible(True)
 
         super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
 

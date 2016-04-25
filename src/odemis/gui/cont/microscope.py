@@ -273,7 +273,6 @@ class SecomStateController(MicroscopeStateController):
         self._views_list = []
         self._views_prev_list = []
         tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
-        tab_data.focussedView.subscribe(self.decide_status, init=True)
 
         # Turn off the light, but set the power to a nice default value
         # TODO: do the same with the brightlight and backlight
@@ -422,17 +421,9 @@ class SecomStateController(MicroscopeStateController):
         if len(self._status_prev_streams) != 0:
             for s in self._status_prev_streams:
                 s.status.unsubscribe(self.decide_status)
-                if model.hasVA(s, "calibrated"):
-                    s.calibrated.unsubscribe(self._calibrated_wrapper)
 
         for s in streams:
             s.status.subscribe(self.decide_status, init=True)
-            if model.hasVA(s, "calibrated"):
-                self._calibrated_wrapper = functools.partial(self._on_stream_calibrated, s)
-                s.calibrated.subscribe(self._calibrated_wrapper, init=True)
-            if s.should_update.value:
-                # means it was just played
-                self._show_stream(s)
 
         self._status_prev_streams = streams
 
@@ -503,28 +494,6 @@ class SecomStateController(MicroscopeStateController):
                     # Never hide an active stream
                     if s in v.stream_tree.flat.value and not s.should_update.value:
                         v.removeStream(s)
-
-    @call_in_wx_main
-    def _show_stream(self, s):
-        for v in self._tab_data.views.value:
-            if (v.name.value == "Overview"):
-                continue
-            elif (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
-                continue
-            elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
-                continue
-            else:
-                if s not in v.stream_tree.flat.value:
-                    # make sure we don't display old data
-                    if ((s.image.value is not None) and
-                        (s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
-                         s.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)):
-                        s.image.value = None
-                    v.addStream(s)
-
-    def _on_stream_calibrated(self, stream, calibrated):
-        if calibrated:
-            self._show_stream(stream)
 
     def _is_misaligned(self, stream):
         return (not stream.should_update.value and ((stream.image.value is not None) and
