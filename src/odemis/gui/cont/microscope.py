@@ -363,6 +363,9 @@ class SecomStateController(MicroscopeStateController):
         pos (dict): new position
         """
         self._focus_time = time.time()
+        for s in self._tab_data.streams.value:
+            if model.hasVA(s, "calibrated"):
+                s.calibrated.value = False
         self._remove_misaligned()
         self.decide_status()
 
@@ -421,9 +424,15 @@ class SecomStateController(MicroscopeStateController):
         if len(self._status_prev_streams) != 0:
             for s in self._status_prev_streams:
                 s.status.unsubscribe(self.decide_status)
+                if model.hasVA(s, "calibrated"):
+                    s.calibrated.unsubscribe(self.decide_status)
 
         for s in streams:
-            s.status.subscribe(self.decide_status, init=True)
+            s.status.subscribe(self.decide_status)
+            if model.hasVA(s, "calibrated"):
+                s.calibrated.subscribe(self.decide_status)
+        # just to initialize
+        self.decide_status()
 
         self._status_prev_streams = streams
 
@@ -448,23 +457,27 @@ class SecomStateController(MicroscopeStateController):
         lvl = None
         msg = ""
 
-        visible_streams = set()
         misaligned = False
+        for s in self._tab_data.streams.value:
+            if None not in s.status.value:
+                lvl, msg = s.status.value
+                if not isinstance(msg, basestring):
+                    # it seems it also contains an action
+                    msg, action = msg
+
+        visible_streams = set()
         for v in self._tab_data.views.value:
             if v.name.value != "Overview":
                 for s in v.stream_tree.flat.value:
                     stream_img = s.image.value
-                    if stream_img is not None:
+                    if (not s.should_update.value) and (stream_img is None):
+                        continue
+                    else:
                         visible_streams.add(s)
                     if (stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value):
                         misaligned = True
                     elif self._is_misaligned(s):
                         misaligned = True
-                    if None not in s.status.value:
-                        lvl, msg = s.status.value
-                        if not isinstance(msg, basestring):
-                            # it seems it also contains an action
-                            msg, action = msg
 
         if action is None:
             action = ""
@@ -1065,8 +1078,8 @@ class DelphiStateController(SecomStateController):
             # Look in the config file if the sample holder is known, or needs
             # first-time calibration, and otherwise update the metadata
             if self._calibconf.get_sh_calib(shid) is None:
-                self.request_holder_calib() # async
-                return False # don't go further, as everything will be taken care
+                self.request_holder_calib()  # async
+                return False  # don't go further, as everything will be taken care
 
                 # TODO: shall we also reference the optical focus? It'd be handy only
                 # if the absolute position is used.
@@ -1350,7 +1363,7 @@ class DelphiStateController(SecomStateController):
                 return False
             future._delphi_load_state = CANCELLED
 
-            if hasattr(state, "cancel"): # a future? => cancel it, to stop quicker
+            if hasattr(state, "cancel"):  # a future? => cancel it, to stop quicker
                 state.cancel()
             logging.debug("Delphi loading cancelled.")
 

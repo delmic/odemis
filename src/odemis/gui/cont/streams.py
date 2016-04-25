@@ -1655,7 +1655,9 @@ class SecomStreamsController(StreamBarController):
                     else:
                         if stream not in v.stream_tree.flat.value:
                             # make sure we don't display old data
-                            if stream.image.value is not None:
+                            str_img = stream.image.value
+                            if ((str_img is not None) and
+                                (str_img.metadata.get(model.MD_POS, (0, 0)) != self._main_data_model.stage)):
                                 stream.image.value = None
                             v.addStream(stream)
         super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
