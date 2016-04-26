@@ -1639,7 +1639,6 @@ class SecomStreamsController(StreamBarController):
             self.add_action("EBIC", self.addEBIC, sem_capable)
 
     def _onStreamUpdate(self, stream, updated):
-        # Ensure it's visible in the current view (if feasible)
         if updated:
             fv = self._tab_data_model.focussedView.value
             if stream not in fv.stream_tree.flat.value:

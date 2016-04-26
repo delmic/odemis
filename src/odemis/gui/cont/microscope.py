@@ -412,13 +412,9 @@ class SecomStateController(MicroscopeStateController):
             self._main_data.ebeam.external.value = None
 
     def _subscribe_current_stream_status(self, streams):
-        """ Find the active stream + all the aligned streams and subscribe to
-        their status VAs in order to decide what status message needs to be
+        """ Find all the streams that have a status or calibrated VA and
+        subscribe to them in order to decide what status message needs to be
         displayed.
-
-        streams is sorted by Least Recently Used, so the first element is the newest and a possible
-        2nd one, was the previous newest.
-
         """
         # First unsubscribe from the previous streams
         if len(self._status_prev_streams) != 0:
@@ -437,6 +433,9 @@ class SecomStateController(MicroscopeStateController):
         self._status_prev_streams = streams
 
     def _subscribe_current_view_visibility(self, views):
+        """
+        Subscribe to the list of visible streams of each view.
+        """
         if len(self._views_prev_list) != 0:
             for v in self._views_prev_list:
                 v.stream_tree.flat.unsubscribe(self.decide_status)
@@ -450,8 +449,7 @@ class SecomStateController(MicroscopeStateController):
     @call_in_wx_main
     def decide_status(self, _=None):
         """
-        Decide the status displayed based on the current focussed view, the
-        visible and calibrated streams.
+        Decide the status displayed based on the visible and calibrated streams.
         """
         action = None
         lvl = None
@@ -474,9 +472,8 @@ class SecomStateController(MicroscopeStateController):
                         continue
                     else:
                         visible_streams.add(s)
-                    if (stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value):
-                        misaligned = True
-                    elif self._is_misaligned(s):
+                    if (((stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
+                            self._is_misaligned(s)):
                         misaligned = True
 
         if action is None:
