@@ -42,7 +42,6 @@ import time
 import wx
 
 import odemis.gui.img as guiimg
-import wx.lib.wxcairo as wxcairo
 
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
@@ -125,6 +124,7 @@ def min_type(data):
     data_min, data_max = data.min(), data.max()
 
     for t in types:
+        # FIXME: doesn't work with floats
         if numpy.all(data_min >= numpy.iinfo(t).min) and numpy.all(data_max <= numpy.iinfo(t).max):
             return t
     else:
@@ -1588,17 +1588,17 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     Since trimming the image will possibly change the top left buffer
     coordinates it should be drawn at, an adjusted (x, y) tuple will be
     returned as well.
-
-    TODO: Test if scaling a sub image really has performance benefits while rendering with
-    Cairo (i.e. Maybe Cairo is smart enough to render big images without calculating the pixels
-    that are not visible.)
-
     """
+    # TODO: Test if scaling a sub image really has performance benefits
+    # while rendering with Cairo (i.e. Maybe Cairo is smart enough to render
+    # big images without calculating the pixels that are not visible.)
+    # Although, it seems not, at least with Cairo 1.0.
+
     im_h, im_w = im_data.shape[:2]
 
     # No need to get sub images from small image data
     if im_h <= 4 or im_w <= 4:
-        logging.debug("Image too small to intersect...")
+        logging.debug("Image too small to worth computing intersection")
         return im_data, b_im_rect[:2]
 
     # where is this intersection in the original image?
@@ -1616,8 +1616,8 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     unsc_rnd_rect = [
         int(unsc_rect[0]),  # rounding down origin
         int(unsc_rect[1]),  # rounding down origin
-        math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
-        math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
+        int(math.ceil(unsc_rect[0] + unsc_rect[2])) - int(unsc_rect[0]),
+        int(math.ceil(unsc_rect[1] + unsc_rect[3])) - int(unsc_rect[1])
     ]
 
     # Make sure that the rectangle fits inside the image

@@ -153,7 +153,7 @@ from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip
+from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import os
@@ -1055,7 +1055,7 @@ class BitmapCanvas(BufferedCanvas):
             # If very little data is trimmed, it's better to scale the entire image than to create
             # a slightly smaller copy first.
             if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
-                im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
+                im_data, tl = get_sub_img(intersection, b_im_rect, im_data, total_scale)
                 b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3], )
 
         # Render the image data to the context
@@ -1139,82 +1139,6 @@ class BitmapCanvas(BufferedCanvas):
         final_size = (scaled_im_size[0] * self.scale, scaled_im_size[1] * self.scale)
 
         return b_topleft + final_size
-
-    @staticmethod
-    def _get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
-        """ Return the minimial image data that will cover the intersection
-
-        :param b_intersect: (rect) Intersection of the full image and the buffer
-        :param b_im_rect: (rect) The area the full image would occupy in the
-            buffer
-        :param im_data: (DataArray) The original image data
-        :param total_scale: (float, float) The scale used to convert the image data to
-            buffer pixels. (= image scale * buffer scale)
-
-        :return: (DataArray, (float, float))
-
-        Since trimming the image will possibly change the top left buffer
-        coordinates it should be drawn at, an adjusted (x, y) tuple will be
-        returned as well.
-
-        TODO: Test if scaling a sub image really has performance benefits while rendering with
-        Cairo (i.e. Maybe Cairo is smart enough to render big images without calculating the pixels
-        that are not visible.)
-
-        """
-
-        im_h, im_w = im_data.shape[:2]
-
-        # No need to get sub images from small image data
-        if im_h <= 4 or im_w <= 4:
-            logging.debug("Image too small to intersect...")
-            return im_data, b_im_rect[:2]
-
-        # where is this intersection in the original image?
-        unsc_rect = (
-            (b_intersect[0] - b_im_rect[0]) / total_scale[0],
-            (b_intersect[1] - b_im_rect[1]) / total_scale[1],
-            b_intersect[2] / total_scale[0],
-            b_intersect[3] / total_scale[1]
-        )
-
-        # Round the rectangle values to whole pixel values
-        # Note that the width and length get "double rounded":
-        # The bottom left gets rounded up to match complete pixels and that
-        # value is adjusted by a rounded down top/left.
-        unsc_rnd_rect = [
-            int(unsc_rect[0]),  # rounding down origin
-            int(unsc_rect[1]),  # rounding down origin
-            math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
-            math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
-        ]
-
-        # Make sure that the rectangle fits inside the image
-        if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > im_w or
-                unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
-            # sometimes floating errors + rounding leads to one pixel too
-            # much => just crop.
-            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
-            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
-            unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]  # clip width
-            unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
-
-        # New top left origin in buffer coordinates to account for the clipping
-        b_new_x = (unsc_rnd_rect[0] * total_scale[0]) + b_im_rect[0]
-        b_new_y = (unsc_rnd_rect[1] * total_scale[1]) + b_im_rect[1]
-
-        # Calculate slicing parameters
-        sub_im_x, sub_im_y = unsc_rnd_rect[:2]
-        sub_im_w, sub_im_h = unsc_rnd_rect[-2:]
-        sub_im_w = max(sub_im_w, 2)
-        sub_im_h = max(sub_im_h, 2)
-
-        # We need to copy the data, since cairo.ImageSurface.create_for_data expects a single
-        # segment buffer object (i.e. the data must be contiguous)
-        im_data = im_data[sub_im_y:sub_im_y + sub_im_h,
-                          sub_im_x:sub_im_x + sub_im_w].copy()
-
-        return im_data, (b_new_x, b_new_y)
 
     # Position conversion
 
