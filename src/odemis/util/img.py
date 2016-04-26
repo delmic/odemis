@@ -351,7 +351,8 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         else: # bytescale never does anything on a data already in uint8
             b = 255 / (irange[1] - irange[0])
             drescaled = data - irange[0]
-            drescaled *= b # keep memory and dtype
+            # keep memory and dtype, allowing for a loss of precision
+            numpy.multiply(drescaled, b, out=drescaled, casting="unsafe")
 
     # Now duplicate it 3 times to make it RGB (as a simple approximation of
     # greyscale)
@@ -375,9 +376,9 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         # multiply by a float, cast back to type of out, and put into out array
         # TODO: multiplying by float(x/255) is the same as multiplying by int(x)
         #       and >> 8
-        numpy.multiply(drescaled, rtint / 255, out=rgb[:, :, 0])
-        numpy.multiply(drescaled, gtint / 255, out=rgb[:, :, 1])
-        numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2])
+        numpy.multiply(drescaled, rtint / 255, out=rgb[:, :, 0], casting="unsafe")
+        numpy.multiply(drescaled, gtint / 255, out=rgb[:, :, 1], casting="unsafe")
+        numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2], casting="unsafe")
 
     return rgb
 

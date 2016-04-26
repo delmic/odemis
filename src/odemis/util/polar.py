@@ -320,7 +320,7 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, hole=True):
     circle_mask = x * x + y * y <= r * r
 
     # Create half circle mask
-    circle_mask[:lower_y, :] = False
+    circle_mask[:int(lower_y), :] = False
 
     # Crop the pole making hole of hole_diameter
     if hole:
