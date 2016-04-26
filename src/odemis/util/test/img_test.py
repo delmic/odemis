@@ -426,10 +426,34 @@ class TestDataArray2RGB(unittest.TestCase):
         numpy.testing.assert_equal(rgb, rgb_nc_back)
 
     def test_tint(self):
-        """test with tint"""
+        """test with tint (on the fast path)"""
         size = (1024, 1024)
         depth = 4096
         grey_img = numpy.zeros(size, dtype="uint16") + depth // 2
+        grey_img[0, 0] = 0
+        grey_img[0, 1] = depth - 1
+
+        # white should become same as the tint
+        tint = (0, 73, 255)
+        out = img.DataArray2RGB(grey_img, tint=tint)
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out[:, :, 0]), 1)  # R
+        self.assertEqual(self.CountValues(out[:, :, 1]), 3)  # G
+        self.assertEqual(self.CountValues(out[:, :, 2]), 3)  # B
+
+        pixel0 = out[0, 0]
+        pixel1 = out[0, 1]
+        pixelg = out[0, 2]
+        numpy.testing.assert_array_equal(pixel1, list(tint))
+        self.assertTrue(numpy.all(pixel0 <= pixel1))
+        self.assertTrue(numpy.all(pixel0 <= pixelg))
+        self.assertTrue(numpy.all(pixelg <= pixel1))
+
+    def test_tint_int16(self):
+        """test with tint, with the slow path"""
+        size = (1024, 1024)
+        depth = 4096
+        grey_img = numpy.zeros(size, dtype="int16") + depth // 2
         grey_img[0, 0] = 0
         grey_img[0, 1] = depth - 1
 

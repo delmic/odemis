@@ -32,8 +32,6 @@ from odemis import model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-import odemis.model
-from odemis.model._dataflow import DataArray
 from odemis.util import intersect, fluo
 from odemis.util import polar, img
 from odemis.util import units
@@ -75,8 +73,8 @@ ARC_TOP_MARGIN = 0.0104
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
 
-    If an alpha value is provided it will be set in the '4th' byte and used to scale the other RGB
-    values within the array.
+    alpha (0 <= int <= 255 or None): If an alpha value is provided it will be
+      set in the '4th' byte and used to scale the other RGB values within the array.
 
     """
 
@@ -88,8 +86,9 @@ def format_rgba_darray(im_darray, alpha=None):
         rgba[:, :, 0:3] = im_darray[:, :, ::-1]
         if alpha is not None:
             rgba[:, :, 3] = alpha
-            rgba = scale_to_alpha(rgba)
-        new_darray = odemis.model.DataArray(rgba)
+            if alpha != 255:
+                rgba = scale_to_alpha(rgba)
+        new_darray = model.DataArray(rgba)
 
         return new_darray
 
@@ -104,7 +103,7 @@ def format_rgba_darray(im_darray, alpha=None):
         rgba[:, :, 1] = im_darray[:, :, 1]
         rgba[:, :, 2] = im_darray[:, :, 0]
         rgba[:, :, 3] = im_darray[:, :, 3]
-        new_darray = odemis.model.DataArray(rgba)
+        new_darray = model.DataArray(rgba)
         new_darray.metadata['byteswapped'] = True
         return new_darray
     else:
@@ -1859,8 +1858,8 @@ def add_alpha_byte(im_darray, alpha=255):
         if alpha != 255:
             new_im = scale_to_alpha(new_im)
 
-        if isinstance(im_darray, DataArray):
-            return DataArray(new_im, im_darray.metadata)
+        if isinstance(im_darray, model.DataArray):
+            return model.DataArray(new_im, im_darray.metadata)
         else:
             return new_im
     else:
@@ -1868,14 +1867,20 @@ def add_alpha_byte(im_darray, alpha=255):
 
 
 def scale_to_alpha(im_darray):
-    """ Scale the R, G and B values to the alpha value present """
+    """
+    Scale the R, G and B values to the alpha value present.
+
+    im_darray (numpy.array of shape Y, X, 4, and dtype uint8). Alpha channel
+    is the fourth element of the last dimension. It is modified in place.
+    """
 
     if im_darray.shape[2] != 4:
         raise ValueError("DataArray needs to have 4 byte RGBA values!")
 
-    im_darray[:, :, 0] *= im_darray[:, :, 3] / 255
-    im_darray[:, :, 1] *= im_darray[:, :, 3] / 255
-    im_darray[:, :, 2] *= im_darray[:, :, 3] / 255
+    alphar = im_darray[:, :, 3] / 255
+    numpy.multiply(im_darray[:, :, 0], alphar, out=im_darray[:, :, 0], casting="unsafe")
+    numpy.multiply(im_darray[:, :, 1], alphar, out=im_darray[:, :, 1], casting="unsafe")
+    numpy.multiply(im_darray[:, :, 2], alphar, out=im_darray[:, :, 2], casting="unsafe")
 
     return im_darray
 

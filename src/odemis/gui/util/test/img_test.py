@@ -25,14 +25,15 @@ import cairo
 import logging
 import math
 import numpy
-from odemis import model, dataio
-from odemis.acq import stream
-from odemis.gui.util import img
-from odemis.gui.util.img import wxImage2NDImage
 import os
 import time
 import unittest
 import wx
+
+from odemis import model, dataio
+from odemis.acq import stream
+from odemis.gui.util import img
+from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -57,9 +58,54 @@ class TestWxImage2NDImage(unittest.TestCase):
         ndimage = wxImage2NDImage(wximage)
         self.assertEqual(ndimage.shape[0:2], size[-1:-3:-1])
         self.assertEqual(ndimage.shape[2], 3) # RGB
-        self.assertTrue((ndimage[0,0] == [0, 0, 0]).all())
+        self.assertTrue((ndimage[0, 0] == [0, 0, 0]).all())
 
     # TODO alpha channel
+
+
+class TestRGBA(unittest.TestCase):
+
+    def test_rgb_to_bgra(self):
+        size = (32, 64, 3)
+        rgbim = model.DataArray(numpy.zeros(size, dtype=numpy.uint8))
+        rgbim[:, :, 0] = 1
+        rgbim[:, :, 1] = 100
+        rgbim[:, :, 2] = 200
+        bgraim = format_rgba_darray(rgbim, 255)
+
+        # Checks it added alpha channel
+        self.assertEqual(bgraim.shape, (32, 64, 4))
+        self.assertEqual(bgraim[0, 0, 3], 255)
+        # Check the channels were swapped to BGR
+        self.assertTrue((bgraim[1, 1] == [200, 100, 1, 255]).all())
+
+    def test_rgb_alpha_to_bgra(self):
+        size = (32, 64, 3)
+        rgbim = model.DataArray(numpy.zeros(size, dtype=numpy.uint8))
+        rgbim[:, :, 0] = 1
+        rgbim[:, :, 1] = 100
+        rgbim[:, :, 2] = 200
+        bgraim = format_rgba_darray(rgbim, 0)
+
+        # Checks it added alpha channel and set everything to scale
+        self.assertEqual(bgraim.shape, (32, 64, 4))
+        self.assertTrue((bgraim == 0).all())
+
+    def test_rgba_to_bgra(self):
+        size = (32, 64, 4)
+        rgbaim = model.DataArray(numpy.zeros(size, dtype=numpy.uint8))
+        rgbaim[:, :, 0] = 1
+        rgbaim[:, :, 1] = 100
+        rgbaim[:, :, 2] = 200
+        rgbaim[:, :, 3] = 255
+        rgbaim[2, 2, 3] = 0
+        bgraim = format_rgba_darray(rgbaim)
+
+        # Checks it added alpha channel
+        self.assertEqual(bgraim.shape, (32, 64, 4))
+        # Check the channels were swapped to BGR
+        self.assertTrue((bgraim[1, 1] == [200, 100, 1, 255]).all())
+        self.assertTrue((bgraim[2, 2] == [200, 100, 1, 0]).all())
 
 
 class TestARExport(unittest.TestCase):
