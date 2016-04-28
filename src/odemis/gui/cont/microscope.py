@@ -38,7 +38,7 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
-import functools
+from odemis import util
 import threading
 import time
 import wx
@@ -440,10 +440,26 @@ class SecomStateController(MicroscopeStateController):
         self._views_prev_list = self._views_list
 
     @call_in_wx_main
+    def _updateStatus(self):
+        try:
+            msg = self._tab_panel.lbl_stream_status.GetLabel()
+            if msg in [u"Automatic SEM alignment in progress", u"Automatic SEM alignment in progress.",
+                       u"Automatic SEM alignment in progress.."]:
+                self._tab_panel.lbl_stream_status.SetLabel(msg + u".")
+            else:
+                self._tab_panel.lbl_stream_status.SetLabel(u"Automatic SEM alignment in progress")
+        except Exception:
+            logging.exception("Unexpected failure during status polling")
+
+    @call_in_wx_main
     def decide_status(self, _=None):
         """
         Decide the status displayed based on the visible and calibrated streams.
         """
+        if hasattr(self, "_status_poll"):
+            # cancel if there is a repeating timer updating the status message
+            self._status_poll.cancel()
+
         action = None
         lvl = None
         msg = ""
@@ -482,6 +498,10 @@ class SecomStateController(MicroscopeStateController):
                     lvl = logging.WARNING
                     msg = u"Displayed streams might be misaligned"
                     action = u"Update any stream acquired in old position"
+
+        if msg == u"Automatic SEM alignment in progress":
+            self._status_poll = util.RepeatingTimer(0.7, self._updateStatus, "Status update")
+            self._status_poll.start()
 
         self._show_status_icons(lvl, action)
         self._tab_panel.lbl_stream_status.SetLabel(msg)

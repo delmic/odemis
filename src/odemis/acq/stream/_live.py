@@ -23,7 +23,7 @@ from __future__ import division
 import collections
 import logging
 import numpy
-from odemis import model, util
+from odemis import model
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
@@ -457,20 +457,10 @@ class AlignedSEMStream(SEMStream):
     def __del__(self):
         self._executor.shutdown(wait=False)
 
-    def _updateStatus(self):
-        try:
-            _, msg = self.status.value
-            if msg in [u"Automatic SEM alignment in progress.", u"Automatic SEM alignment in progress.."]:
-                self._setStatus(logging.INFO, msg + u".")
-            else:
-                self._setStatus(logging.INFO, u"Automatic SEM alignment in progress.")
-        except Exception:
-            logging.exception("Unexpected failure during status polling")
-
     def _DoPrepare(self):
         # Need to calibrate ?
         if not self.calibrated.value:
-            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress.")
+            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress")
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
@@ -481,8 +471,6 @@ class AlignedSEMStream(SEMStream):
             shift = (0, 0)
             self._beamshift = None
             try:
-                self._status_poll = util.RepeatingTimer(0.7, self._updateStatus, "Status update")
-                self._status_poll.start()
                 logging.info("Determining the Ebeam center position")
                 # TODO Handle cases where current beam shift is larger than
                 # current limit. Happens when accel. voltage is changed
@@ -512,19 +500,15 @@ class AlignedSEMStream(SEMStream):
                 else:
                     logging.error("Unknown shiftbeam method %s", self._shiftebeam)
             except LookupError:
-                self._status_poll.cancel()
                 self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
                 # logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
-                self._status_poll.cancel()
                 logging.exception("Failure while looking for the ebeam center")
             else:
-                self._status_poll.cancel()
                 self._setStatus(None)
                 logging.info("Aligning SEM image using shift of %s", shift)
                 self.calibrated.value = True
             finally:
-                self._status_poll.cancel()
                 # restore hw settings
                 (self._emitter.dwellTime.value,
                  self._emitter.resolution.value) = no_spot_settings
