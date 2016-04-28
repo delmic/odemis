@@ -2074,18 +2074,6 @@ class SparcStreamsController(StreamBarController):
             return
 
         if updated:
-            # Preparing the optical path manager now is taken care of in stream's
-            # prepare method
-#             # Prepare the optical path
-#             opm = self._main_data_model.opm
-#             try:
-#                 opm.setPath(stream).result()
-#             except LookupError:
-#                 logging.debug("%s doesn't require optical path change", stream)
-#             else:
-#                 # TODO: Run in a separate thread as in live view it's ok if
-#                 # the path is not immediately correct?
-
             # Activate or deactive spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
