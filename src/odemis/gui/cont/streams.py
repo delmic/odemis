@@ -1632,11 +1632,9 @@ class SecomStreamsController(StreamBarController):
                 # if the stream is hidden in the current focused view, then unhide
                 # it everywhere
                 for v in self._tab_data_model.views.value:
-                    if (v.name.value == "Overview"):
+                    if isinstance(stream, acqstream.SEMStream) and (not v.is_compatible(acqstream.SEMStream)):
                         continue
-                    elif (v.name.value == "Optical") and isinstance(stream, acqstream.SEMStream):
-                        continue
-                    elif (v.name.value == "SEM") and isinstance(stream, acqstream.FluoStream):
+                    elif isinstance(stream, acqstream.FluoStream) and (not v.is_compatible(acqstream.FluoStream)):
                         continue
                     else:
                         if stream not in v.stream_tree.flat.value:
