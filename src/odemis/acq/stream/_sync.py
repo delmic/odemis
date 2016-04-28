@@ -106,8 +106,10 @@ class MultipleDetectorStream(Stream):
         # get opm if found in any of the substreams
         for s in self._streams:
             if hasattr(s, "_opm") and s._opm is not None:
+                if (self._opm is not None) and (self._opm != s._opm):
+                    logging.warning("Multiple different optical path managers were found.")
+                    break
                 self._opm = s._opm
-                break
 
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)

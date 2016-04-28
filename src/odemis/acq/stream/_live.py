@@ -452,6 +452,9 @@ class AlignedSEMStream(SEMStream):
         self._prepared = True
         f = self._executor.submit(self._DoPrepare)
 
+        # Note that there is no need to call super(). This would only check
+        # for an optical path manager which in this case has no effect.
+
         return f
 
     def __del__(self):

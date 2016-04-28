@@ -529,16 +529,6 @@ class Stream(object):
 
         self._shouldUpdateImage()
 
-#     def _should_update_setter(self, update):
-#         if update:
-#             self._preparation_done.clear()
-#             f = self.prepare()
-#             f.add_done_callback(self._on_preparation_done)
-#         return update
-
-#     def _on_preparation_done(self, future):
-#         self._preparation_done.set()
-
     def _is_active_setter(self, active):
         """
         Called just before the Stream becomes (in)active
