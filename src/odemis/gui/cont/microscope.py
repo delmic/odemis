@@ -260,11 +260,11 @@ class SecomStateController(MicroscopeStateController):
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
 
         # Last stage and focus move time
-        self._last_pos = None
-        self._stage_time = time.time()
-        self._focus_time = time.time()
-        self._main_data.stage.position.subscribe(self._on_stage_move, init=True)
-        self._main_data.focus.position.subscribe(self._on_focus_move, init=True)
+        self._last_pos = self._main_data.stage.position.value.copy()
+        self._last_pos.update(self._main_data.focus.position.value)
+        self._move_time = time.time()
+        self._main_data.stage.position.subscribe(self._on_move, init=True)
+        self._main_data.focus.position.subscribe(self._on_move, init=True)
 
         # To listen to change in play/pause
         self._active_prev_stream = None
@@ -343,29 +343,17 @@ class SecomStateController(MicroscopeStateController):
         # disable optical and SEM buttons while there is a preparation process running
         self._main_data.is_preparing.subscribe(self.on_preparation)
 
-    def _on_stage_move(self, pos):
+    def _on_move(self, pos):
         """
-        Called when the stage moves (changes position)
+        Called when the stage or focus moves (changes position)
         pos (dict): new position
         """
         # Check if the position has really changed, as some stage tend to
         # report "new" position even when no actual move has happened
         if self._last_pos == pos:
             return
-        self._last_pos = pos
-        self._stage_time = time.time()
-        self._remove_misaligned()
-        self.decide_status()
-
-    def _on_focus_move(self, pos):
-        """
-        Called when the focus moves (changes position)
-        pos (dict): new position
-        """
-        self._focus_time = time.time()
-        for s in self._tab_data.streams.value:
-            if model.hasVA(s, "calibrated"):
-                s.calibrated.value = False
+        self._last_pos.update(pos)
+        self._move_time = time.time()
         self._remove_misaligned()
         self.decide_status()
 
@@ -425,8 +413,13 @@ class SecomStateController(MicroscopeStateController):
 
         for s in streams:
             s.status.subscribe(self.decide_status)
+            # status is actually only used to inform about the spot alignment
+            # progress, not when the stream goes misaligned (to decide this
+            # message we use decide_status). For this the calibrated VA is used
+            # by AlignedSEMStream
             if model.hasVA(s, "calibrated"):
                 s.calibrated.subscribe(self.decide_status)
+
         # just to initialize
         self.decide_status()
 
@@ -507,8 +500,7 @@ class SecomStateController(MicroscopeStateController):
 
     def _is_misaligned(self, stream):
         return (not stream.should_update.value and ((stream.image.value is not None) and
-                (stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._stage_time or
-                 stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._focus_time)))
+                stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._move_time))
 
     def _show_status_icons(self, lvl, action=None):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))

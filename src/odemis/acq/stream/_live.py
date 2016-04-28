@@ -376,7 +376,7 @@ class AlignedSEMStream(SEMStream):
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
-                 ccd, stage, shiftebeam=MTD_MD_UPD, **kwargs):
+                 ccd, stage, focus, shiftebeam=MTD_MD_UPD, **kwargs):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.shift). If MTD_MD_UPD, it will just update the
@@ -385,30 +385,33 @@ class AlignedSEMStream(SEMStream):
         super(AlignedSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
         self._stage = stage
+        self._focus = focus
         self._shiftebeam = shiftebeam
         self.calibrated = model.BooleanVA(False)  # whether the calibration has been already done
-        self._last_pos = None  # last known position of the stage
+        self._last_pos = stage.position.value.copy()
+        self._last_pos.update(focus.position.value)  # last known position of the stage
         self._shift = (0, 0)  # (float, float): shift to apply in meters
         self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
         # In case initialization takes place in unload position the
         # calibration values are not obtained yet. Thus we avoid to initialize
         # cur_trans before spot alignment takes place.
         self._cur_trans = None
-        stage.position.subscribe(self._onStageMove)
+        stage.position.subscribe(self._onMove)
+        focus.position.subscribe(self._onMove)
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._beamshift = None
 
-    def _onStageMove(self, pos):
+    def _onMove(self, pos):
         """
         Called when the stage moves (changes position)
         pos (dict): new position
         """
         # Check if the position has really changed, as some stage tend to
         # report "new" position even when no actual move has happened
-        logging.debug("Stage location is %s m,m", pos)
+        logging.debug("Stage location is %s m,m,m", pos)
         if self._last_pos == pos:
             return
-        self._last_pos = pos
+        self._last_pos.update(pos)
 
         # if self.is_active.value:
         self.calibrated.value = False
@@ -949,50 +952,6 @@ class FluoStream(CameraStream):
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self)._onNewData(dataflow, data)
-
-
-class AlignedFluoStream(FluoStream):
-    """
-    This is a special Fluo stream which updates its calibration status, namely
-    it sets it to False when the stage is moved while the stream is inactive and
-    back to True once it is activated. This is to make sure we never display
-    old/misaligned data.
-    """
-    def __init__(self, name, detector, dataflow, emitter, em_filter, stage,
-                 **kwargs):
-        super(AlignedFluoStream, self).__init__(name, detector, dataflow, emitter, em_filter, **kwargs)
-        self._stage = stage
-        self.calibrated = model.BooleanVA(True)  # whether the calibration has been already done
-        self._last_pos = None  # last known position of the stage
-        stage.position.subscribe(self._onStageMove)
-        self._focuser.position.subscribe(self._onFocusMove)
-
-    def _onStageMove(self, pos):
-        """
-        Called when the stage moves (changes position)
-        pos (dict): new position
-        """
-        # Check if the position has really changed, as some stage tend to
-        # report "new" position even when no actual move has happened
-        logging.debug("Stage location is %s m,m", pos)
-        if self._last_pos == pos:
-            return
-        self._last_pos = pos
-
-        if not self.is_active.value:
-            self.calibrated.value = False
-
-    def _onFocusMove(self, pos):
-        """
-        Called when the focus moves (changes position)
-        pos (dict): new position
-        """
-        if not self.is_active.value:
-            self.calibrated.value = False
-
-    def _onActive(self, active):
-        self.calibrated.value = True
-        super(AlignedFluoStream, self)._onActive(active)
 
 
 class RGBCameraStream(CameraStream):

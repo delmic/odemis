@@ -1042,21 +1042,6 @@ class StreamBarController(object):
             logging.error("Failed to find a new unique name for stream")
             name = "Filtered colour"
 
-#         if self._main_data_model.role == "delphi":
-#             # For the Delphi, the Fluo stream needs to keep track of its
-#             # calibration status
-#             s = acqstream.AlignedFluoStream(
-#                 name,
-#                 self._main_data_model.ccd,
-#                 self._main_data_model.ccd.data,
-#                 self._main_data_model.light,
-#                 self._main_data_model.light_filter,
-#                 self._main_data_model.stage,
-#                 focuser=self._main_data_model.focus,
-#                 detvas={"exposureTime"},
-#                 emtvas={"power"}
-#             )
-#         else:
         s = acqstream.FluoStream(
             name,
             self._main_data_model.ccd,
@@ -1133,6 +1118,7 @@ class StreamBarController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
+                self._main_data_model.focus,
                 focuser=self._main_data_model.ebeam_focus,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
@@ -1164,6 +1150,7 @@ class StreamBarController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
+                self._main_data_model.focus,
                 focuser=self._main_data_model.ebeam_focus,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
