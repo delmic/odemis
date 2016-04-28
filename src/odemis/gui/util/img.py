@@ -698,13 +698,17 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
 
     # In Cairo a pattern is the 'paint' that it uses to draw
     surfpat = cairo.SurfacePattern(imgsurface)
-    # Set the filter, so we get best quality but slow scaling
-    # In opposition to the GUI gallery tab, here we care more about the
-    # quality of the exported image than being fast.
+
     if interpolate_data:
-        surfpat.set_filter(cairo.FILTER_BEST)
+        # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
+        # Downscaling and upscaling < 2x is nice, but above that, it just
+        # makes the pixels big (and antialiased)
+        if total_scale_x > 2:
+            surfpat.set_filter(cairo.FILTER_BILINEAR)
+        else:
+            surfpat.set_filter(cairo.FILTER_BEST)
     else:
-        surfpat.set_filter(cairo.FILTER_NEAREST)
+        surfpat.set_filter(cairo.FILTER_NEAREST)  # FAST
 
     ctx.translate(x, y)
     ctx.scale(total_scale_x, total_scale_y)
@@ -1369,9 +1373,15 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
         legend_ctx.save()
         # Note: Goal of antialiasing & interpolation is to smooth the edges when
         # downscaling the logo. It only works with cairo v1.14 or newer.
-        legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
         surfpat = cairo.SurfacePattern(logo_surface)
-        surfpat.set_filter(cairo.FILTER_BEST)
+        # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
+        # Downscaling and upscaling < 2x is nice, but above that, it just
+        # makes the pixels big (and antialiased)
+        if logo_scale_x > 2:
+            surfpat.set_filter(cairo.FILTER_BILINEAR)
+        else:
+            surfpat.set_filter(cairo.FILTER_BEST)
+
         logo_h_height = (logo_scale_x * logo_surface.get_height()) / 2
         legend_ctx.translate(buffer_size[0] - (cell_x_step / 2), (big_cell_height / 2) - logo_h_height)
         legend_ctx.scale(logo_scale_x, logo_scale_x)
