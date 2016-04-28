@@ -1078,10 +1078,15 @@ class BitmapCanvas(BufferedCanvas):
         surfpat = cairo.SurfacePattern(imgsurface)
 
         if interpolate_data:
-            surfpat.set_filter(cairo.FILTER_BEST)
+            # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
+            # Downscaling and upscaling < 2x is nice, but above that, it just
+            # makes the pixels big (and antialiased)
+            if total_scale_x > 2:
+                surfpat.set_filter(cairo.FILTER_BILINEAR)
+            else:
+                surfpat.set_filter(cairo.FILTER_BEST)
         else:
-            # In case of "raw" export try to maintain the original data
-            surfpat.set_filter(cairo.FILTER_FAST)
+            surfpat.set_filter(cairo.FILTER_NEAREST)  # FAST
 
         x, y, _, _ = b_im_rect
 
