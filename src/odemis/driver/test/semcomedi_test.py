@@ -107,7 +107,6 @@ class TestSEMStatic(unittest.TestCase):
         wrong_config["device"] = "/dev/comdeeeee"
         self.assertRaises(Exception, semcomedi.SEMComedi, **wrong_config)
 
-
         wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["children"]["scanner"]["channels"] = [1, 1]
         self.assertRaises(Exception, semcomedi.SEMComedi, **wrong_config)

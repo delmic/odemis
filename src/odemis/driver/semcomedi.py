@@ -443,27 +443,34 @@ class SEMComedi(model.HwComponent):
         except IOError:
             return 2 ** 20 * 1000  # Whatever (for test driver)
 
-    def _get_closest_period(self, subdevice, nchannels, period):
+    def _get_closest_period(self, subdevice, nchannels, period, cmd=None):
         """
         subdevice (int): subdevice ID
         nchannels (0< int): number of channels to be accessed simultaneously
         period (0<int): requested period in ns
+        cmd (cmd_struct): a cmd_struct to use, otherwise will create a temporary one
         returns (int): min scan period for the given subdevice with the given
           amount of channels in ns
         raises:
             IOError: if no timed period possible on the subdevice
         """
-        cmd = comedi.cmd_struct()
+        if cmd is None:
+            cmd = comedi.cmd_struct()
         try:
             comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, period)
         except comedi.ComediError:
-            # happens with the comedi_test driver
+            # happens with the comedi_test driver on Linux < 4.4, for AO devices
             pass
 
         if cmd.scan_begin_src != comedi.TRIG_TIMER:
-            logging.warning("Failed to find timed period for subdevice %d with %d channels",
-                            subdevice, nchannels)
-            raise IOError("Timed period not supported")
+            if (cmd.convert_src == comedi.TRIG_TIMER and
+                cmd.scan_begin_src == comedi.TRIG_FOLLOW):
+                # Timed command is made of multiple conversions
+                return cmd.convert_arg * nchannels
+            else:
+                logging.warning("Failed to find timed period for subdevice %d with %d channels",
+                                subdevice, nchannels)
+                raise IOError("Timed period not supported")
         return cmd.scan_begin_arg
 
     def _get_max_buffer_size(self):
@@ -769,24 +776,22 @@ class SEMComedi(model.HwComponent):
             return dpr * period_ns / 1e9, 1, dpr
 
         # let's find a compatible minimum dwell time for the output device
-        wcmd = comedi.cmd_struct()
-        if self._test:
-            wcmd.scan_begin_arg = period_ns # + ((-period_ns) % 800) # TEST
-        else:
-            comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                         wcmd, nwchans, period_ns)
-        period_ns = wcmd.scan_begin_arg
-        min_rperiod_ns = int(self._min_ai_periods[nrchans] * 1e9)
+        try:
+            period_ns = self._get_closest_period(self._ao_subdevice, nwchans, period_ns)
+        except IOError:
+            # Leave period_ns as is
+            pass
 
-        rcmd = comedi.cmd_struct()
+        min_rperiod_ns = max(1, int(self._min_ai_periods[nrchans] * 1e9))
+
+        rcmd = comedi.cmd_struct()  # Just to avoid recreating one all the time
         best_found = None # None or tuple of (wperiod, osr)
 
         # If period very small, try first with a read period just fitting.
         rperiod_ns = min_rperiod_ns
         osr = max(1, min(period_ns // rperiod_ns, max_osr))
-        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                     rcmd, nrchans, period_ns // osr)
-        rperiod_ns = rcmd.scan_begin_arg
+        rperiod_ns = self._get_closest_period(self._ai_subdevice, nrchans,
+                                              period_ns // osr, rcmd)
         wperiod_ns = rperiod_ns * osr
         if self._is_period_possible(self._ao_subdevice, nwchans, wperiod_ns):
             # that could work
@@ -820,10 +825,9 @@ class SEMComedi(model.HwComponent):
             prev_rperiod_ns = rperiod_ns
             i = 1
             while rperiod_ns == prev_rperiod_ns:
-                comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                             rcmd, nrchans, rperiod_ns + 2 ** i)
+                rperiod_ns = self._get_closest_period(self._ai_subdevice, nrchans,
+                                                      rperiod_ns + 2 ** i, rcmd)
                 i += 1
-                rperiod_ns = rcmd.scan_begin_arg
 
         if best_found:
             wperiod_ns, osr = best_found
@@ -887,6 +891,15 @@ class SEMComedi(model.HwComponent):
         cmd.start_arg = start_arg
         cmd.stop_src = stop_src
         cmd.stop_arg = stop_arg
+        # The get_cmd_generic_timed likes to spread the conversion, if the
+        # hardware allows it, but we don't.
+        if (cmd.convert_src == comedi.TRIG_TIMER and
+            cmd.scan_begin_src == comedi.TRIG_FOLLOW):
+            cmd.scan_begin_src = comedi.TRIG_TIMER
+            cmd.scan_begin_arg = period_ns
+            cmd.convert_src = comedi.TRIG_NOW
+            cmd.convert_arg = 0
+
         self._prepare_command(cmd)
 
         if (cmd.scan_begin_arg != period_ns or cmd.start_arg != start_arg or
