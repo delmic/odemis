@@ -229,6 +229,7 @@ class TestHDF5IO(unittest.TestCase):
         im = f["Acquisition0/ImageData/Image"]
         self.assertEqual(im[1, 0, 0, 1, 1], step)
         self.assertEqual(im.shape, data3d.shape)
+        self.assertEqual(im.attrs["CLASS"], "IMAGE")
         self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
 
         # check basic metadata
