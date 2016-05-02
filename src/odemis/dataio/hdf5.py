@@ -91,6 +91,7 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     image_dataset = group.create_dataset(dataset_name, data=image, **kwargs)
 
     # numpy.string_ is to force fixed-length string (necessary for compatibility)
+    # FIXME: needs to be NULLTERM, not NULLPAD... but h5py doesn't allow to distinguish
     image_dataset.attrs["CLASS"] = numpy.string_("IMAGE")
     # Colour image?
     if image.ndim == 3 and (image.shape[-3] == 3 or image.shape[-1] == 3):
@@ -162,7 +163,7 @@ def _read_image_dataset(dataset):
 
 
     # TODO: support DISPLAY_ORIGIN
-    dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL") 
+    dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL")
     if dorig != "UL":
         logging.warning("Image rotation %d not handled", dorig)
 
@@ -200,126 +201,144 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["YOffset"], ST_REPORTED)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
 
-    # Time
-    # TODO:
-    # Surprisingly (for such a usual type), time storage is a mess in HDF5.
-    # The documentation states that you can use H5T_TIME, but it is
-    # "is not supported. If H5T_TIME is used, the resulting data will be readable
-    # and modifiable only on the originating computing platform; it will not be
-    # portable to other platforms.". It appears many format are allowed.
-    # In addition in h5py, it's indicated as "deprecated" (although it seems
-    # it was added in the latest version of HDF5).
-    # Moreover, the only types available are 32 and 64 bits integers as number
-    # of seconds since epoch. No past, no milliseconds, no time-zone.
-    # So there are other proposals like in in F5
-    # (http://sciviz.cct.lsu.edu/papers/2007/F5TimeSemantics.pdf) to represent
-    # time with a float, a unit and an offset.
-    # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss.
-    # (cf http://www.knmi.nl/~beekhuis/documents/publicdocs/ir2009-01_hdftag36.pdf)
-    # So, to not solve anything, we save the date as a float representing the
-    # Unix time. At least it makes Huygens happy.
-    if model.MD_ACQ_DATE in image.metadata:
-        # For a ISO 8601 string:
-#        ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
-#        adstr = ad.strftime("%Y-%m-%dT%H:%M:%S.%f")
-#        group["TOffset"] = adstr
-        group["TOffset"] = image.metadata[model.MD_ACQ_DATE]
-        _h5svi_set_state(group["TOffset"], ST_REPORTED)
+    # If ids.CLASS is set and the wrong padding type attach_scale() fails.
+    # As a workaround, we temporarily remove it
+    # It's caused by the way attach_scale check whether the ids is
+    # a dimension scale too. is_scale() fails if the CLASS attribute is not
+    # NULLTERM, while h5py only allows NULLPAD.
+    # Reported to h5py on 03-02-2014, and again 02-05-2016
+    if "CLASS" in dataset.attrs:
+        ds_class = dataset.attrs["CLASS"]
+        del dataset.attrs["CLASS"]
     else:
-        group["TOffset"] = time.time()
-        _h5svi_set_state(group["TOffset"], ST_DEFAULT)
-    group["TOffset"].attrs["UNIT"] = "s" # our extension
+        ds_class = None
 
-    # Scale
-    if model.MD_PIXEL_SIZE in image.metadata:
-        # DimensionScales are not clearly explained in the specification to
-        # understand what they are supposed to represent. Surprisingly, there
-        # is no official way to attach a unit.
-        # Huygens seems to consider it's in m
-        xpos = dims.index("X")
-        ypos = dims.index("Y")
-        pxs = image.metadata[model.MD_PIXEL_SIZE]
-        group["DimensionScaleX"] = pxs[0]
-        group["DimensionScaleX"].attrs["UNIT"] = "m" # our extension
-        _h5svi_set_state(group["DimensionScaleX"], ST_REPORTED)
-        group["DimensionScaleY"] = pxs[1]
-        group["DimensionScaleY"].attrs["UNIT"] = "m"
-        _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
-        # No clear what's the relation between this name and the label
-        dataset.dims.create_scale(group["DimensionScaleX"], "X")
-        dataset.dims.create_scale(group["DimensionScaleY"], "Y")
-        dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
-        dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
+    try:
+        # Time
+        # TODO:
+        # Surprisingly (for such a usual type), time storage is a mess in HDF5.
+        # The documentation states that you can use H5T_TIME, but it is
+        # "is not supported. If H5T_TIME is used, the resulting data will be readable
+        # and modifiable only on the originating computing platform; it will not be
+        # portable to other platforms.". It appears many format are allowed.
+        # In addition in h5py, it's indicated as "deprecated" (although it seems
+        # it was added in the latest version of HDF5).
+        # Moreover, the only types available are 32 and 64 bits integers as number
+        # of seconds since epoch. No past, no milliseconds, no time-zone.
+        # So there are other proposals like in in F5
+        # (http://sciviz.cct.lsu.edu/papers/2007/F5TimeSemantics.pdf) to represent
+        # time with a float, a unit and an offset.
+        # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss.
+        # (cf http://www.knmi.nl/~beekhuis/documents/publicdocs/ir2009-01_hdftag36.pdf)
+        # So, to not solve anything, we save the date as a float representing the
+        # Unix time. At least it makes Huygens happy.
+        if model.MD_ACQ_DATE in image.metadata:
+            # For a ISO 8601 string:
+            # ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
+            # adstr = ad.strftime("%Y-%m-%dT%H:%M:%S.%f")
+            # group["TOffset"] = adstr
+            group["TOffset"] = image.metadata[model.MD_ACQ_DATE]
+            _h5svi_set_state(group["TOffset"], ST_REPORTED)
+        else:
+            group["TOffset"] = time.time()
+            _h5svi_set_state(group["TOffset"], ST_DEFAULT)
+        group["TOffset"].attrs["UNIT"] = "s"  # our extension
 
-    # Unknown data, but SVI needs them to take the scales into consideration
-    if "Z" in dims:
-        zpos = dims.index("Z")
-        group["ZOffset"] = 0.0
-        _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
-        group["DimensionScaleZ"] = 1e-3 # m
-        group["DimensionScaleZ"].attrs["UNIT"] = "m"
-        dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
-        _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-        dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
+        # Scale
+        if model.MD_PIXEL_SIZE in image.metadata:
+            # DimensionScales are not clearly explained in the specification to
+            # understand what they are supposed to represent. Surprisingly, there
+            # is no official way to attach a unit.
+            # Huygens seems to consider it's in m
+            xpos = dims.index("X")
+            ypos = dims.index("Y")
+            pxs = image.metadata[model.MD_PIXEL_SIZE]
+            group["DimensionScaleX"] = pxs[0]
+            group["DimensionScaleX"].attrs["UNIT"] = "m"  # our extension
+            _h5svi_set_state(group["DimensionScaleX"], ST_REPORTED)
+            group["DimensionScaleY"] = pxs[1]
+            group["DimensionScaleY"].attrs["UNIT"] = "m"
+            _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
+            # No clear what's the relation between this name and the label
+            dataset.dims.create_scale(group["DimensionScaleX"], "X")
+            dataset.dims.create_scale(group["DimensionScaleY"], "Y")
+            dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
+            dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
 
-        # Put here to please Huygens
-        # Seems to be the coverslip position, ie, the lower and upper glass of
-        # the sample. Not clear what's the relation with ZOffset.
-        group["PrimaryGlassMediumInterfacePosition"] = 0.0 # m?
-        _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)
-        group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
-        _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
+        # Unknown data, but SVI needs them to take the scales into consideration
+        if "Z" in dims:
+            zpos = dims.index("Z")
+            group["ZOffset"] = 0.0
+            _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
+            group["DimensionScaleZ"] = 1e-3  # m
+            group["DimensionScaleZ"].attrs["UNIT"] = "m"
+            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+            _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
+            dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
 
-    if "T" in dims:
-        tpos = dims.index("T")
-        group["DimensionScaleT"] = 1.0 # s
-        group["DimensionScaleT"].attrs["UNIT"] = "s"
-        # No clear what's the relation between this name and the label
-        dataset.dims.create_scale(group["DimensionScaleT"], "T")
-        _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
-        dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
+            # Put here to please Huygens
+            # Seems to be the coverslip position, ie, the lower and upper glass of
+            # the sample. Not clear what's the relation with ZOffset.
+            group["PrimaryGlassMediumInterfacePosition"] = 0.0  # m?
+            _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)
+            group["SecondaryGlassMediumInterfacePosition"] = 1.0  # m?
+            _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
-    # Wavelength (for spectrograms)
-    if ("C" in dims and
-        set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
-        try:
-            # polynomial of degree = 2 => linear, so use compact notation
-            if (model.MD_WL_POLYNOMIAL in image.metadata and
-                    len(image.metadata[model.MD_WL_POLYNOMIAL]) == 2):
-                pn = image.metadata[model.MD_WL_POLYNOMIAL]
-                group["COffset"] = pn[0]
-                _h5svi_set_state(group["COffset"], ST_REPORTED)
-                group["DimensionScaleC"] = pn[1] # m
-            else:
-                wll = spectrum.get_wavelength_per_pixel(image)
-                # list or polynomial of degree > 2 => store the values of each
-                # pixel index explicitly. We follow another way to express
-                # scaling in HDF5.
-                group["DimensionScaleC"] = wll  # m
+        if "T" in dims:
+            tpos = dims.index("T")
+            group["DimensionScaleT"] = 1.0  # s
+            group["DimensionScaleT"].attrs["UNIT"] = "s"
+            # No clear what's the relation between this name and the label
+            dataset.dims.create_scale(group["DimensionScaleT"], "T")
+            _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
+            dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
 
-            group["DimensionScaleC"].attrs["UNIT"] = "m"
-            dataset.dims.create_scale(group["DimensionScaleC"], "C")
-            _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
-            cpos = dims.index("C")
-            dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
-        except Exception:
-            logging.warning("Failed to record wavelength information, "
-                            "it will not be saved.")
+        # Wavelength (for spectrograms)
+        if ("C" in dims and
+            set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            try:
+                # polynomial of degree = 2 => linear, so use compact notation
+                if (model.MD_WL_POLYNOMIAL in image.metadata and
+                        len(image.metadata[model.MD_WL_POLYNOMIAL]) == 2):
+                    pn = image.metadata[model.MD_WL_POLYNOMIAL]
+                    group["COffset"] = pn[0]
+                    _h5svi_set_state(group["COffset"], ST_REPORTED)
+                    group["DimensionScaleC"] = pn[1]  # m
+                else:
+                    wll = spectrum.get_wavelength_per_pixel(image)
+                    # list or polynomial of degree > 2 => store the values of each
+                    # pixel index explicitly. We follow another way to express
+                    # scaling in HDF5.
+                    group["DimensionScaleC"] = wll  # m
 
-    # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
-    # angle in radians (according to the right-hand rule)
-    if model.MD_ROTATION in image.metadata:
-        # In Odemis we only support 2D rotation, so just around Z
-        group["Rotation"] = (0, 0, image.metadata[model.MD_ROTATION])
-        _h5svi_set_state(group["Rotation"], ST_REPORTED)
-        group["Rotation"].attrs["UNIT"] = "rad"
+                group["DimensionScaleC"].attrs["UNIT"] = "m"
+                dataset.dims.create_scale(group["DimensionScaleC"], "C")
+                _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
+                cpos = dims.index("C")
+                dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
+            except Exception:
+                logging.warning("Failed to record wavelength information, "
+                                "it will not be saved.")
 
-    # Shear (2-scalar): X,Y
-    if model.MD_SHEAR in image.metadata:
-        # Shear parallel to X axis, so just set Y to 0
-        group["Shear"] = (image.metadata[model.MD_SHEAR], 0)
-        _h5svi_set_state(group["Shear"], ST_REPORTED)
-        group["Shear"].attrs["UNIT"] = ""
+        # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
+        # angle in radians (according to the right-hand rule)
+        if model.MD_ROTATION in image.metadata:
+            # In Odemis we only support 2D rotation, so just around Z
+            group["Rotation"] = (0, 0, image.metadata[model.MD_ROTATION])
+            _h5svi_set_state(group["Rotation"], ST_REPORTED)
+            group["Rotation"].attrs["UNIT"] = "rad"
+
+        # Shear (2-scalar): X,Y
+        if model.MD_SHEAR in image.metadata:
+            # Shear parallel to X axis, so just set Y to 0
+            group["Shear"] = (image.metadata[model.MD_SHEAR], 0)
+            _h5svi_set_state(group["Shear"], ST_REPORTED)
+            group["Shear"].attrs["UNIT"] = ""
+
+    finally:
+        if ds_class is not None:
+            dataset.attrs["CLASS"] = ds_class
+
 
 def _read_image_info(group):
     """
@@ -977,12 +996,7 @@ def _add_acquistion_svi(group, data, mds, **kwargs):
 
     # TODO: use scaleoffset to store the number of bits used (MD_BPP)
     ids = _create_image_dataset(gi, "Image", data, **kwargs)
-    # FIXME: if ids.CLASS=IMAGE on 64 bits => attach_scale doesn't work
-    # as a workaround, we temporarily change it
-    # Reported to h5py on 03-02-2014 -> it's a bug in HDF5 lib, but works on 32 bits.
-    ids.attrs["CLASS"] = numpy.string_("BOOO")
     _add_image_info(gi, ids, data)
-    ids.attrs["CLASS"] = numpy.string_("IMAGE")
     _add_image_metadata(group, data, mds)
     _add_svi_info(group)
 
