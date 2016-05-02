@@ -153,9 +153,12 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.on_preset(None) # will force setting the current preset
 
+        # TODO: use the presets VAs and subscribe to each of them, instead of
+        # using pub/sub messages
         pub.subscribe(self.on_setting_change, 'setting.changed')
+
         # TODO: we should actually listen to the stream tree, but it's not
-        # currently possible.
+        # currently possible. => listen to .flat once it's there
         # Currently just use view.lastUpdate which should be "similar"
         # (but doesn't work if the stream contains no image)
         self._view.lastUpdate.subscribe(self.on_streams_changed)
@@ -195,12 +198,20 @@ class AcquisitionDialog(xrcfr_acq):
         for s in self._tab_data_model.streams.value:
             self._view.addStream(s)  # Add first to the view, so "visible" button is correct
             self.streambar_controller.add_acquisition_stream_cont(s)
+            # listen to changes in local VAs
+            local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
+            for lva in local_vas:
+                lva.subscribe(self.on_setting_change)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
         # Ensure we don't update the view after the window is destroyed
         for s in list(self._tab_data_model.streams.value):  # copy, as it's modified by stream cont
             self.streambar_controller.removeStream(s)
+            # Stop listening to changes in local VAs
+            local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
+            for lva in local_vas:
+                lva.unsubscribe(self.on_setting_change)
 
     def find_current_preset(self):
         """
@@ -272,7 +283,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         self.update_setting_display()
 
-    def on_setting_change(self):
+    def on_setting_change(self, _=None):
         self.update_setting_display()
 
         # check presets and fall-back to custom
