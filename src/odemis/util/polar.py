@@ -106,6 +106,8 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
         # precision). It's fine, no need to generate a warning.
         warnings.simplefilter("ignore", DuplicatePointWarning)
         triang = Triangulation(theta_data.flat, phi_data.flat)
+        # TODO use the standard matplotlib.tri.Triangulation
+        # + matplotlib.tri.LinearTriInterpolator
     interp = triang.linear_interpolator(omega_data.flat, default_value=0)
     qz = interp[-h_output_size:h_output_size:complex(0, output_size),  # Y
                 - h_output_size:h_output_size:complex(0, output_size)]  # X
