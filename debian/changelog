@@ -1,3 +1,16 @@
+odemis (2.4.1-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.1
+  * Main bugs fixed:
+   - Fix acquistion failure on SPARC with Zyla
+   - Don't fail to close the GUI if the Powermate has been disconnected (DELPHI)
+   - Don't fail saving snapshots in SPARCv2 alignment
+   - Don't use too much memory when exporting raw AR view (SPARC)
+   - Only use Phenom high-refresh rate with very latest Phenom v4.4.2+ (DELPHI)
+   - Fix StringVA and IntVA in GUI plugins not being updated
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 02 May 2016 18:06:53 +0200
+
 odemis (2.4-1ubuntu1) precise; urgency=low
 
   * New version: 2.4
