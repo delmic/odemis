@@ -192,8 +192,11 @@ class Powermate(threading.Thread):
                 # Sleep and after try and find the device again
                 while True:
                     time.sleep(5)
-                    self.device = self._find_powermate_device()
-                    break
+                    try:
+                        self.device = self._find_powermate_device()
+                        break
+                    except LookupError:
+                        pass
             except Exception:
                 logging.exception("Powermate listener failed")
                 self.keep_running = False
@@ -209,7 +212,9 @@ class Powermate(threading.Thread):
     def terminate(self):
         self.led_on(False)
         self.keep_running = False
-        self.device.close()
+        if self.device:
+            self.device.close()
+            self.device = None
 
     def _set_led_state(self, pulse_table=0, pulse_on_sleep=False):
         """ Changes the led state of the powermate
