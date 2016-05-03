@@ -1755,6 +1755,9 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         else:
             merge_ratio = 1 - i / n
 
+        # TODO: make interpolation work also with 16 bits and higher data type
+        # For now, as Cairo is convinced it's RGB, it computes wrong data.
+        # cf util.img.rescale_hq() before casting to RGB?
         draw_image(
             ctx,
             im,
@@ -1768,7 +1771,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=interpolate_data,
+            interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
             upscaling=((min_res[1], min_res[0]) == buffer_size)
         )
         if not rgb:
@@ -1820,7 +1823,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         shear=last_image.metadata['dc_shear'],
         flip=last_image.metadata['dc_flip'],
         blend_mode=last_image.metadata['blend_mode'],
-        interpolate_data=interpolate_data,
+        interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
         upscaling=((min_res[1], min_res[0]) == buffer_size)
     )
     # Create legend
