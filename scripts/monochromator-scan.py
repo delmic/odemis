@@ -118,6 +118,9 @@ class MonochromatorScanStream(stream.Stream):
         self._pt_acq.set()
 
     def _runAcquisition(self, future):
+        self._data = []
+        self._md = {}
+
         wls = self.startWavelength.value
         wle = self.endWavelength.value
         res = self.numberOfPixels.value
@@ -134,6 +137,9 @@ class MonochromatorScanStream(stream.Stream):
         df.subscribe(self._on_mchr_data)
 
         wllist = []
+        if wle == wls:
+            res = 1
+
         if res <= 1:
             res = 1
             wli = 0
@@ -142,7 +148,7 @@ class MonochromatorScanStream(stream.Stream):
 
         try:
             for i in range(res):
-                left = +((res - i) * (dt + 0.05))
+                left = (res - i) * (dt + 0.05)
                 future.set_progress(end=time.time() + left)
 
                 cwl = wls + i * wli  # requested value
@@ -165,11 +171,10 @@ class MonochromatorScanStream(stream.Stream):
             df.unsubscribe(self._on_mchr_data)
             df.synchronizedOn(None)
 
-            # TODO: make sure it works with wls > wle, or fail explicitly in such case
-
             # Convert the sequence of data into one spectrum in a DataArray
 
             if wls > wle:  # went backward? => sort back the spectrum
+                logging.debug("Inversing spectrum as acquisition went from %g to %g m", wls, wls)
                 self._data.reverse()
                 wllist.reverse()
 
