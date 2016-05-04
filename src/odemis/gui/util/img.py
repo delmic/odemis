@@ -519,7 +519,7 @@ def set_images(im_args):
     im_args: (list of tuples): Each element is either None or
         (im, w_pos, scale, keepalpha, rotation, name, blend_mode)
 
-        0. im (wx.Image): the image
+        0. im (DataArray of shape YXC): the image
         1. w_pos (2-tuple of float): position of the center of the image (in world units)
         2. scale (float, float): scale of the image
         3. keepalpha (boolean): whether the alpha channel must be used to draw
@@ -530,9 +530,9 @@ def set_images(im_args):
                 just overrides underlying layers.
         8. name (str): name of the stream that the image originated from
         9. date (int): seconds since epoch
-        10. stream (object): just needed to identify the image in case of duplicated name
+        10. stream (Stream): the stream from which the image corresponds to
 
-    returns (list of wx.Image)
+    returns (list of DataArray)
     """
 
     images = []
@@ -676,6 +676,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
         if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
             # This is just to make sure there are no blank parts when cropping and
             # then rotating
+            # TODO: move these 10% into calc_img_buffer_rect()
             intersection = (intersection[0] - 0.1 * intersection[2],
                             intersection[1] - 0.1 * intersection[3],
                             1.2 * intersection[2],
@@ -1263,7 +1264,7 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         return spec_plot
 
 
-def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
+def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
                        hfw=None, date=None, streams_data=None, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
@@ -1301,11 +1302,6 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
     legend_x_pos = init_x_pos
     legend_y_pos = MAIN_MIDDLE * buffer_size[0]
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    # For now obsolete magnification
-    # TODO: include image name typed by the user
-    # mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
-    # label = mag_text
-    # legend_ctx.show_text(label)
 
     # write HFW
     legend_x_pos += cell_x_step
@@ -1425,7 +1421,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
         legend_y_pos = (legend_y_pos_store + (small_cell_height - SUB_UPPER * buffer_size[0]))
 
 
-def get_ordered_images(streams, rgb=True):
+def get_ordered_images(streams, raw=False):
     """ Return the list of images to display, ordered bottom to top (=last to draw)
 
     The last image of the list will have the merge ratio applied (as opacity)
@@ -1450,7 +1446,7 @@ def get_ordered_images(streams, rgb=True):
         # FluoStreams are merged using the "Screen" method that handles colour
         # merging without decreasing the intensity.
         data_raw = s.raw[0]
-        if rgb:
+        if not raw:
             data = s.image.value
         else:
             # Pretend to be rgb
@@ -1537,33 +1533,18 @@ def physical_to_world_pos(phy_pos):
     return phy_pos[0], -phy_pos[1]
 
 
-def convert_streams_to_images(streams, images_cache, rgb=True):
+# Similar to miccanvas, but without cache, and with trick to support raw export
+def convert_streams_to_images(streams, raw=False):
     """ Temporary function to convert the StreamTree to a list of images as
     the export function currently expects.
 
     """
-    images, streams_data, im_min_type = get_ordered_images(streams, rgb)
+    images, streams_data, im_min_type = get_ordered_images(streams, raw)
 
     # add the images in order
     ims = []
-    im_cache = {}
     for rgbim, blend_mode, stream in images:
-        # TODO: convert to RGBA later, in canvas and/or cache the conversion
-        # On large images it costs 100 ms (per image and per canvas)
-
-        if not rgb:
-            # TODO use another method to fake rgba format
-            rgba_im = format_rgba_darray(rgbim)
-        else:
-            # Get converted RGBA image from cache, or create it and cache it
-            im_id = id(rgbim)
-            if im_id in images_cache:
-                rgba_im = images_cache[im_id]
-                im_cache[im_id] = rgba_im
-            else:
-                rgba_im = format_rgba_darray(rgbim)
-                im_cache[im_id] = rgba_im
-
+        rgba_im = format_rgba_darray(rgbim)
         keepalpha = False
         date = rgbim.metadata.get(model.MD_ACQ_DATE, None)
         scale = rgbim.metadata[model.MD_PIXEL_SIZE]
@@ -1572,14 +1553,13 @@ def convert_streams_to_images(streams, images_cache, rgb=True):
         shear = rgbim.metadata.get(model.MD_SHEAR, 0)
         flip = rgbim.metadata.get(model.MD_FLIP, 0)
 
+        # TODO: directly put the metadata as set_images do?
         ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode,
                     stream.name.value, date, stream))
 
-    # Replace the old cache, so the obsolete RGBA images can be garbage collected
-    images_cache = im_cache
     images = set_images(ims)
 
-    return images, streams_data, images_cache, im_min_type
+    return images, streams_data, im_min_type
 
 
 def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
@@ -1657,12 +1637,12 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, (b_new_x, b_new_y)
 
 
-def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
-                          streams_data, draw_merge_ratio, rgb=True,
+def images_to_export_data(streams, view_hfw, min_res, view_pos,
+                          draw_merge_ratio, raw=False,
                           interpolate_data=False, logo=None):
     """
-    view_hfw (tuple of float): Y, X
-    min_res (tuple of int): Y, X
+    view_hfw (tuple of float): X, Y in m
+    min_res (tuple of int): X, Y in px
     stream_data (dict Stream -> tuple (float, list of str/values)): For each stream,
       associate the acquisition date, stuff to display in the legend, and baseline value
     im_min_type (numpy.dtype): data type for the output data (common for all the
@@ -1672,49 +1652,41 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
-    # TODO: switch the axes of view_hfw and min_res to be X/Y
-    # TODO: move the computation of stream_data (=legend data) here
-
-    # The list of images to export
-    data_to_export = []
-
-    # meters per pixel for the focussed window
-    mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
+    images, streams_data, im_min_type = convert_streams_to_images(streams, raw)
+    if not images:
+        raise LookupError("There is no stream data to be exported")
 
     # Find min pixel size
-    min_pxs = min([im.metadata['dc_scale'] for im in images])
+    min_pxs = min(im.metadata['dc_scale'] for im in images)
 
     # Check that resolution of all images remains within limits if we use
     # the smallest pixel size, otherwise adjust it
     new_res = view_hfw[0] // min_pxs[0], view_hfw[1] // min_pxs[1]
     max_res = MAX_RES_FACTOR * min_res[0], MAX_RES_FACTOR * min_res[1]
-    clipped_res = tuple(numpy.clip(new_res, min_res, max_res))
-    if clipped_res != new_res:
-        min_pxs = tuple([a / b for a, b in zip(view_hfw, clipped_res)])
+    buffer_size = tuple(numpy.clip(new_res, min_res, max_res))
+    if buffer_size != new_res:
+        min_pxs = view_hfw[0] / buffer_size[0], view_hfw[1] / buffer_size[1]
 
-    clipped_res = int(clipped_res[0]), int(clipped_res[1])
-    mag = mpp_screen / min_pxs[0]
+    buffer_size = int(buffer_size[0]), int(buffer_size[1])
 
     # The buffer center is the same as the view window's center
     buffer_center = tuple(view_pos)
-    buffer_scale = (min_pxs[0], min_pxs[1])
-    buffer_size = clipped_res[1], clipped_res[0]
-
-    n = len(images)
+    buffer_scale = min_pxs
 
     # Check if we need to crop in order to only keep the stream data and get
     # rid of the blank parts of the canvas
     crop_pos = buffer_size
     crop_shape = (0, 0)
     intersection_found = False
-    for _, im in enumerate(images):
-        b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'], buffer_center, buffer_scale, buffer_size)
+    for im in images:
+        b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'],
+                                         buffer_center, buffer_scale, buffer_size)
         buffer_rect = (0, 0) + buffer_size
         intersection = intersect(buffer_rect, b_im_rect)
         if intersection:
             # Keep the min roi that contains all the stream data
-            crop_pos = [b if (b <= a) else a for a, b in zip(crop_pos, intersection[:2])]
-            crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
+            crop_pos = tuple(min(a, b) for a, b in zip(crop_pos, intersection[:2]))
+            crop_shape = tuple(max(a, b) for a, b in zip(crop_shape, intersection[2:]))
             intersection_found = True
 
     # if there is no intersection of any stream data with the viewport, then
@@ -1722,17 +1694,16 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
     if not intersection_found:
         raise LookupError("There is no visible stream data to be exported")
 
-    crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
-    if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
-        logging.debug("Need to crop the data")
-        new_size = max(crop_shape[0], CROP_RES_LIMIT), crop_shape[1]
-        if new_size[0] == CROP_RES_LIMIT:
-            new_size = new_size[0], (CROP_RES_LIMIT / crop_shape[0]) * crop_shape[1]
+    if crop_pos != (0, 0) or crop_shape != buffer_size:
+        logging.debug("Need to crop the data from %s to %s", crop_shape, buffer_size)
+        new_size = crop_shape
+        if new_size[0] < CROP_RES_LIMIT:
+            new_size = CROP_RES_LIMIT, (CROP_RES_LIMIT / new_size[0]) * new_size[1]
         new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         # we also need to adjust the hfw displayed on legend
         hfw_factor = crop_shape[0] / buffer_size[0], crop_shape[1] / buffer_size[1]
-        view_hfw = view_hfw[0] * hfw_factor[1], view_hfw[1] * hfw_factor[0]
+        view_hfw = view_hfw[0] * hfw_factor[0], view_hfw[1] * hfw_factor[1]
 
         crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
         buffer_size = new_size
@@ -1745,11 +1716,15 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
     ctx = cairo.Context(surface)
 
+    # The list of images to export
+    data_to_export = []
+
+    n = len(images)
     last_image = images.pop()
     # For every image, except the last
     i = 0
     for i, im in enumerate(images):
-        if im.metadata['blend_mode'] == BLEND_SCREEN or (not rgb):
+        if im.metadata['blend_mode'] == BLEND_SCREEN or raw:
             # No transparency in case of "raw" export
             merge_ratio = 1.0
         else:
@@ -1772,16 +1747,16 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
             interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
-            upscaling=((min_res[1], min_res[0]) == buffer_size)
+            upscaling=(min_res == buffer_size)  # TODO: why not always upscaling?
         )
-        if not rgb:
+        if raw:
             # Create legend
             legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
             legend_surface = cairo.ImageSurface.create_for_data(
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
             legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale, mag,
-                               view_hfw[1], last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
+            draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale,
+                               view_hfw[0], last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1805,7 +1780,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
                 data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
             ctx = cairo.Context(surface)
 
-    if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or (not rgb):
+    if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or raw:
         merge_ratio = 1.0
     else:
         merge_ratio = draw_merge_ratio
@@ -1824,16 +1799,16 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         flip=last_image.metadata['dc_flip'],
         blend_mode=last_image.metadata['blend_mode'],
         interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
-        upscaling=((min_res[1], min_res[0]) == buffer_size)
+        upscaling=(min_res == buffer_size)
     )
     # Create legend
     legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
     legend_surface = cairo.ImageSurface.create_for_data(
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
     legend_ctx = cairo.Context(legend_surface)
-    draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale, mag,
-                       view_hfw[1], last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
-    if not rgb:
+    draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale,
+                       view_hfw[0], last_image.metadata['date'], streams_data, last_image.metadata['stream'] if raw else None, logo=logo)
+    if raw:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
         new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 0], 16, dtype=numpy.uint32)

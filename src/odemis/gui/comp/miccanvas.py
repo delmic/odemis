@@ -415,17 +415,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         ims = []
         im_cache = {}
         for rgbim, blend_mode, name in images:
-            # TODO: convert to RGBA later, in canvas and/or cache the conversion
-            # On large images it costs 100 ms (per image and per canvas)
-
             # Get converted RGBA image from cache, or create it and cache it
+            # On large images it costs 100 ms (per image and per canvas)
             im_id = id(rgbim)
             if im_id in self.images_cache:
                 rgba_im = self.images_cache[im_id]
-                im_cache[im_id] = rgba_im
             else:
                 rgba_im = format_rgba_darray(rgbim)
-                im_cache[im_id] = rgba_im
+            im_cache[im_id] = rgba_im
 
             keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]

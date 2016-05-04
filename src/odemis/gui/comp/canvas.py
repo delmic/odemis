@@ -813,9 +813,9 @@ class BitmapCanvas(BufferedCanvas):
         """ Set (or update)  image
 
         :paran im_args: (list of tuples): Each element is either None or
-            (im, w_pos, scale, keepalpha, rotation, name, blend_mode)
+            (im, w_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name)
 
-            0. im (wx.Image): the image
+            0. im (DataArray of shape YXC): the image
             1. w_pos (2-tuple of float): position of the center of the image (in world units)
             2. scale (float, float): scale of the image
             3. keepalpha (boolean): whether the alpha channel must be used to draw

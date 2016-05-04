@@ -64,7 +64,6 @@ class ExportController(object):
         self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.start_export_as_viewport)
 
         self._viewports = viewports.keys()
-        self.images_cache = {}
 
         wx.EVT_MENU(self._main_frame,
                     self._main_frame.menu_item_export_as.GetId(),
@@ -178,9 +177,12 @@ class ExportController(object):
 
         returns DataArray or list of DataArray: the data to be exported, either
           an RGB image or raw data.
+        raises:
+            LookupError: if no data found to export
         """
-        vp = self.get_viewport_by_view(self._data_model.focussedView.value)
-        streams = self._data_model.focussedView.value.getStreams()
+        fview = self._data_model.focussedView.value
+        vp = self.get_viewport_by_view(fview)
+        streams = fview.getStreams()
         if export_type == 'AR':
             exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':
@@ -189,22 +191,18 @@ class ExportController(object):
             exported_data = spectrum_to_export_data(spectrum, raw, unit, spectrum_range)
         else:
             export_type = 'spatial'
-            streams = self._data_model.focussedView.value.getStreams()
-            images, streams_data, self.images_cache, min_type = convert_streams_to_images(streams, self.images_cache, not raw)
-            if not images:
-                return
-            interpolate_data = vp.microscope_view.interpolate_content.value
             view_px = tuple(vp.canvas.ClientSize)
-            view_mpp = self._data_model.focussedView.value.mpp.value
-            view_hfw = (view_mpp * view_px[1], view_mpp * view_px[0])
-            view_pos = self._data_model.focussedView.value.view_pos.value
-            draw_merge_ratio = self._data_model.focussedView.value.stream_tree.kwargs.get("merge", 0.5)
-            exported_data = images_to_export_data(images, view_hfw,
-                                                  (view_px[1], view_px[0]),
-                                                  view_pos, min_type, streams_data, draw_merge_ratio,
-                                                  rgb=not raw,
+            view_mpp = fview.mpp.value
+            view_hfw = (view_mpp * view_px[0], view_mpp * view_px[1])
+            view_pos = fview.view_pos.value
+            draw_merge_ratio = fview.stream_tree.kwargs.get("merge", 0.5)
+            interpolate_data = fview.interpolate_content.value
+            exported_data = images_to_export_data(streams,
+                                                  view_hfw, view_px, view_pos,
+                                                  draw_merge_ratio, raw,
                                                   interpolate_data=interpolate_data,
                                                   logo=self._main_frame.legend_logo)
+
         return exported_data
 
     def get_viewport_by_view(self, view):
