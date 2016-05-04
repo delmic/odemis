@@ -215,7 +215,8 @@ class DevxX(object):
                 status = self.GetActualStatus()
 
             if error:
-                raise HwError("Device reports error %04X, see documentation for more information" %
+                raise HwError("Device reports error %04X, power cycle the light source. "
+                              "If the problem persists, contact a support technician." %
                               (error,))
 
         if status & (1 << 8):  # bit 8: Need to toggle key

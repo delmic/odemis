@@ -1554,12 +1554,15 @@ class TMCLController(model.Actuator):
         else:
             names = glob.glob(port)
 
+        hwerror = None
         for n in names:
             try:
                 serial = self._openSerialPort(n)
-            except IOError:
+            except IOError as ex:
+                if isinstance(ex, HwError):
+                    hwerror = ex
                 # not possible to use this port? next one!
-                logging.info("Skipping port %s, which is not available", n)
+                logging.info("Skipping port %s, which is not available (%s)", n, ex)
                 continue
 
             # check whether it answers with the right address
@@ -1575,9 +1578,18 @@ class TMCLController(model.Actuator):
                               n, ex)
             serial.close()  # make sure to close/unlock that port
         else:
-            raise HwError("Failed to find a TMCM controller on ports '%s' with "
-                          "address %s. Check that the device is turned on and "
-                          "connected to the computer." % (port, address))
+            if address is None:
+                if len(names) == 1 and hwerror:
+                    # The user wanted any device, and there is one, but which is
+                    # not available => be more specific in the error message
+                    raise hwerror
+                raise HwError("Failed to find a TMCM controller on ports '%s'."
+                              "Check that the device is turned on and "
+                              "connected to the computer." % (port,))
+            else:
+                raise HwError("Failed to find a TMCM controller on ports '%s' with "
+                              "address %s. Check that the device is turned on and "
+                              "connected to the computer." % (port, address))
 
     @staticmethod
     def _openSerialPort(port):
@@ -1604,7 +1616,8 @@ class TMCLController(model.Actuator):
                 timeout=0.1 # s
             )
         except IOError:
-            raise HwError("Failed to find device on port %s. Ensure it is "
+            raise HwError("Failed to find a TMCM controller on port '%s'. "
+                          "Check that the device is turned on and "
                           "connected to the computer." % (port,))
 
         # Ensure we are the only one connected to it
