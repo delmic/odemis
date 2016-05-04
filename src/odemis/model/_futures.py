@@ -336,8 +336,9 @@ class CancellableFuture(futures.Future):
             self._condition.notify_all()
         self._invoke_callbacks()
 
-    def set_exception(self, exception):
-        """Sets the result of the future as being the given exception.
+    def set_exception_info(self, exception, traceback):
+        """Sets the result of the future as being the given exception
+        and traceback.
 
         Should only be used by Executor implementations and unit tests.
         """
@@ -348,11 +349,19 @@ class CancellableFuture(futures.Future):
                 logging.debug("Skipping exception from task after it was cancelled")
                 return
             self._exception = exception
+            self._traceback = traceback
             self._state = FINISHED
             for waiter in self._waiters:
                 waiter.add_exception(self)
             self._condition.notify_all()
         self._invoke_callbacks()
+
+    def set_exception(self, exception):
+        """Sets the result of the future as being the given exception.
+
+        Should only be used by Executor implementations and unit tests.
+        """
+        self.set_exception_info(exception, None)
 
 
 class ProgressiveFuture(CancellableFuture):
