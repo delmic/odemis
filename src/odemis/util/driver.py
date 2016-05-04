@@ -66,14 +66,18 @@ def _VmB(VmKey):
         t.close()
     except Exception:
         raise NotImplementedError("Non POSIX system not supported")
-    # get VmKey line e.g. 'VmRSS:  9999  kB\n ...'
-    i = v.index(VmKey + ":")
-    v = v[i:].split(None, 3)  # whitespaces, 4 parts
-    if len(v) < 3:
-        return NotImplementedError("Not supporting to read memory %s" % (v,))
 
-    # convert to bytes
-    return int(v[1]) * _SCALE[v[2].upper()]
+    try:
+        # get VmKey line e.g. 'VmRSS:  9999  kB\n ...'
+        i = v.index(VmKey + ":")
+        v = v[i:].split(None, 3)  # whitespaces, 4 parts
+        if len(v) < 3:
+            raise ValueError("Failed to find memory key %s" % (VmKey,))
+
+        # convert to bytes
+        return int(v[1]) * _SCALE[v[2].upper()]
+    except (ValueError, TypeError, KeyError):
+        raise NotImplementedError("System not reporting memory key %s" % (VmKey,))
 
 
 def readMemoryUsage():
