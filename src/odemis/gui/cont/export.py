@@ -27,7 +27,7 @@ from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import get_picture_folder, call_in_wx_main
-from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, convert_streams_to_images, images_to_export_data
+from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, images_to_export_data
 import os
 import time
 import wx
@@ -198,7 +198,7 @@ class ExportController(object):
             draw_merge_ratio = fview.stream_tree.kwargs.get("merge", 0.5)
             interpolate_data = fview.interpolate_content.value
             exported_data = images_to_export_data(streams,
-                                                  view_hfw, view_px, view_pos,
+                                                  view_hfw, view_pos,
                                                   draw_merge_ratio, raw,
                                                   interpolate_data=interpolate_data,
                                                   logo=self._main_frame.legend_logo)

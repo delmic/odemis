@@ -293,7 +293,7 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (0.00025158414075691866, 0.00017445320835792754)
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
-        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, self.min_res, view_pos, draw_merge_ratio, False)
+        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(exp_data[0].shape, (1226, 1576, 4))  # RGB
 
     def test_crop_need(self):
@@ -304,8 +304,8 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (0.0005031682815138373, 0.0003489064167158551)
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
-        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, self.min_res, view_pos, draw_merge_ratio, False)
-        self.assertEqual(exp_data[0].shape, (2312, 2529, 4))  # RGB
+        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(exp_data[0].shape, (2340, 2560, 4))  # RGB
 
     def test_crop_and_interpolation_need(self):
         """
@@ -316,20 +316,20 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (0.0010063365630276746, 0.0006978128334317102)
         view_pos = [-0.0015823014004405739, -0.0008081984265806109]
         draw_merge_ratio = 0.3
-        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, self.min_res, view_pos, draw_merge_ratio, False)
-        self.assertEqual(exp_data[0].shape, (111, 1024, 4))  # RGB
+        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(exp_data[0].shape, (182, 1673, 4))  # RGB
 
     def test_multiple_streams(self):
         # Print ready format
         view_hfw = (8.191282393266523e-05, 6.205915392651362e-05)
         view_pos = [-0.001203511795256, -0.000295338300158]
         draw_merge_ratio = 0.3
-        exp_data = img.images_to_export_data(self.streams, view_hfw, self.min_res, view_pos, draw_merge_ratio, False)
+        exp_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(len(exp_data), 1)
         self.assertEqual(len(exp_data[0].shape), 3)  # RGB
 
         # Post-process format
-        exp_data = img.images_to_export_data(self.streams, view_hfw, self.min_res, view_pos, draw_merge_ratio, True)
+        exp_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
         self.assertEqual(len(exp_data), 2)
         self.assertEqual(len(exp_data[0].shape), 2)  # grayscale
         self.assertEqual(len(exp_data[1].shape), 2)  # grayscale
@@ -343,7 +343,7 @@ class TestSpatialExport(unittest.TestCase):
         view_pos = [-0.00147293527265202, -0.0004728408264424368]
         draw_merge_ratio = 0.3
         with self.assertRaises(LookupError):
-            img.images_to_export_data(self.streams, view_hfw, self.min_res, view_pos, draw_merge_ratio, False)
+            img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
 
     def test_thin_column(self):
         """
@@ -353,7 +353,7 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (8.191282393266523e-05, 6.205915392651362e-05)
         view_pos = [-0.0014443006338779269, -0.0002968821446105185]
         draw_merge_ratio = 0.3
-        exp_data = img.images_to_export_data(self.streams, view_hfw, self.min_res, view_pos, draw_merge_ratio, False)
+        exp_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(len(exp_data), 1)
         self.assertEqual(len(exp_data[0].shape), 3)  # RGB
         self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)

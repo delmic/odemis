@@ -1538,6 +1538,12 @@ def convert_streams_to_images(streams, raw=False):
     """ Temporary function to convert the StreamTree to a list of images as
     the export function currently expects.
 
+    returns:
+        images (list of DataArray)
+        stream_data (dict Stream -> tuple (float, list of str/values)): For each stream,
+          associate the acquisition date, stuff to display in the legend, and baseline value
+        im_min_type (numpy.dtype): data type for the output data (common for all the
+          DataArrays)
     """
     images, streams_data, im_min_type = get_ordered_images(streams, raw)
 
@@ -1637,18 +1643,15 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, (b_new_x, b_new_y)
 
 
-def images_to_export_data(streams, view_hfw, min_res, view_pos,
+def images_to_export_data(streams, view_hfw, view_pos,
                           draw_merge_ratio, raw=False,
                           interpolate_data=False, logo=None):
     """
-    view_hfw (tuple of float): X, Y in m
-    min_res (tuple of int): X, Y in px
-    stream_data (dict Stream -> tuple (float, list of str/values)): For each stream,
-      associate the acquisition date, stuff to display in the legend, and baseline value
-    im_min_type (numpy.dtype): data type for the output data (common for all the
-      DataArrays)
-    rgb (bool): if True, generates one RGB image out of all the streams, otherwise
-      generates one greyscale image per stream
+    view_hfw (tuple of float): X (width), Y (heigth) in m
+    view_pos (tuple of float): center position X, Y in m
+    raw (bool): if False, generates one RGB image out of all the streams, otherwise
+      generates one image per stream using the raw data
+    logo (RGBA DataArray): Image to display in the legend
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
@@ -1661,6 +1664,7 @@ def images_to_export_data(streams, view_hfw, min_res, view_pos,
 
     # Check that resolution of all images remains within limits if we use
     # the smallest pixel size, otherwise adjust it
+    min_res = CROP_RES_LIMIT, CROP_RES_LIMIT * view_hfw[1] / view_hfw[0]
     new_res = view_hfw[0] // min_pxs[0], view_hfw[1] // min_pxs[1]
     max_res = MAX_RES_FACTOR * min_res[0], MAX_RES_FACTOR * min_res[1]
     buffer_size = tuple(numpy.clip(new_res, min_res, max_res))
@@ -1697,8 +1701,8 @@ def images_to_export_data(streams, view_hfw, min_res, view_pos,
     if crop_pos != (0, 0) or crop_shape != buffer_size:
         logging.debug("Need to crop the data from %s to %s", crop_shape, buffer_size)
         new_size = crop_shape
-        if new_size[0] < CROP_RES_LIMIT:
-            new_size = CROP_RES_LIMIT, (CROP_RES_LIMIT / new_size[0]) * new_size[1]
+        if new_size[0] < min_res[0]:
+            new_size = min_res[0], (min_res[0] / new_size[0]) * new_size[1]
         new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         # we also need to adjust the hfw displayed on legend
@@ -1709,6 +1713,8 @@ def images_to_export_data(streams, view_hfw, min_res, view_pos,
         buffer_size = new_size
         buffer_center = (buffer_center[0] + crop_center[0] * buffer_scale[0], buffer_center[1] - crop_center[1] * buffer_scale[1])
         buffer_scale = (buffer_scale[0] / crop_factor[0], buffer_scale[1] / crop_factor[1])
+
+    # TODO: make sure that Y dim of the buffer_size is not crazy high
 
     # Make surface based on the maximum resolution
     data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
