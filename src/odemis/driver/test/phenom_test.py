@@ -149,7 +149,7 @@ class TestSEM(unittest.TestCase):
 
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
-        self.scanner.resolution.value = (512, 256)
+        self.scanner.resolution.value = (512, 512)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver

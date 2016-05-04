@@ -4,7 +4,7 @@ Created on 30 April 2014
 
 @author: Kimon Tsitsikas
 
-Copyright © 2014 Kimon Tsitsikas, Delmic
+Copyright © 2014-2016 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -170,7 +170,7 @@ class SEM(model.HwComponent):
                 o = subprocess.check_output(["PhenomHeadless", self._ip, "on"])
                 logging.debug("Got response %s", o)
         except Exception as e:
-            logging.warning("Could not enable/disable Phenom GUI: %s", str(e))
+            logging.warning("Could not enable/disable Phenom GUI: %s", e)
             self._phenom_gui = True
 
         try:
@@ -204,7 +204,7 @@ class SEM(model.HwComponent):
         try:
             start = info.index("'Product Name'>") + len("'Product Name'>")
             end = info.index("</Property", start)
-            hwname = "%s" % (info[start:end])
+            hwname = info[start:end]
             self._metadata[model.MD_HW_NAME] = hwname
             # TODO: how to retrieve the edition information?
             hwver = "G4"
@@ -213,7 +213,7 @@ class SEM(model.HwComponent):
 
             start = info.index("'Version'>") + len("'Version'>")
             end = info.index("</Property", start)
-            self._swVersion = "%s" % (info[start:end])
+            self._swVersion = info[start:end]
             self._metadata[model.MD_SW_VERSION] = self._swVersion
 
             logging.info("Connected to %s v%s", self._hwVersion, self._swVersion)
@@ -296,6 +296,7 @@ class SEM(model.HwComponent):
         self._navcam.terminate()
         self._navcam_focus.terminate()
         self._pressure.terminate()
+
 
 class Scanner(model.Emitter):
     """
@@ -408,14 +409,14 @@ class Scanner(model.Emitter):
 
         # Directly set spot size instead of probe current due to Phenom API
         try:
-            self._spotSize = parent._device.SEMGetSpotSize()
+            spotSize = parent._device.SEMGetSpotSize()
             res = parent._device.SEMGetSpotSizeRange()
             spot_rng = res.min, res.max
         except suds.WebFault:
             logging.info("Failed to read init spot size, will read it later")
             spot_rng = SPOT_RANGE
-            self._spotSize = numpy.mean(SPOT_RANGE)
-        self.spotSize = model.FloatContinuous(self._spotSize, spot_rng,
+            spotSize = numpy.mean(SPOT_RANGE)
+        self.spotSize = model.FloatContinuous(spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
         self.blanker = model.VAEnumerated(True, choices=set([True, False]),
@@ -519,11 +520,12 @@ class Scanner(model.Emitter):
 
     def _setSpotSize(self, value):
         # Set the corresponding spot size to Phenom SEM
-        self._spotSize = value
         try:
-            current_tilt = self.parent._device.GetSEMSourceTilt()
-            self.parent._device.SEMSetSpotSize(value)
-            if not self.parent._blank_supported:
+            if self.parent._blank_supported:
+                self.parent._device.SEMSetSpotSize(value)
+            else:
+                current_tilt = self.parent._device.GetSEMSourceTilt()
+                self.parent._device.SEMSetSpotSize(value)
                 new_tilt = self.parent._device.GetSEMSourceTilt()
                 # This should never happen
                 if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
@@ -532,11 +534,18 @@ class Scanner(model.Emitter):
                                   self.accelVoltage.value, value, self.parent._detector._tilt_unblank)
                 if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
                     self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
-            return self._spotSize
         except suds.WebFault:
             logging.debug("Cannot set Spot Size when the sample is not in SEM.")
+            return self.spotSize.value
 
-        return self.spotSize.value
+        return value
+
+        # TODO: read the exact value accepted by the SEM
+#         try:
+#             return self.parent._device.SEMGetSpotSize()
+#         except suds.WebFault:
+#             logging.warning("Failed to read back spot size after setting it")
+#             return value
 
     def _onScale(self, s):
         # Abort current scanning when scale is changed
@@ -660,6 +669,7 @@ class Scanner(model.Emitter):
         clipped_shift = (value[0] / ratio, value[1] / ratio)
         return clipped_shift
 
+
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality
@@ -724,7 +734,6 @@ class Detector(model.Detector):
         self._coordinates = None
         self._is_scanning = False
         self._last_res = None
-        self._updater = functools.partial(self._scanSpots)
 
         # Start dedicated connection for acquisition stream
         acq_client = Client(self.parent._host + "?om", location=self.parent._host,
@@ -794,7 +803,6 @@ class Detector(model.Detector):
                 self.parent._device.SetSEMContrast(contr)
             except suds.WebFault:
                 logging.debug("Setting SEM contrast may be unsuccesful")
-
 
     def _onBrightness(self, value):
         with self.parent._acq_progress_lock:
@@ -866,8 +874,8 @@ class Detector(model.Detector):
         self.parent._scanner.accelVoltage.value = -volt
 
         # Get current spot size
-        self.parent._scanner._spotSize = self._acq_device.SEMGetSpotSize()
-        self.parent._scanner.spotSize.value = self.parent._scanner._spotSize
+        spotSize = self._acq_device.SEMGetSpotSize()
+        self.parent._scanner.spotSize.value = spotSize
 
         # Update all Detector VAs
         contr = (self._acq_device.GetSEMContrast() / 4)
@@ -947,7 +955,7 @@ class Detector(model.Detector):
                 # "Blank" the beam
                 self.parent._scanner.blanker.value = True
                 # Wait until it's indeed blanked
-                while (not self.parent._scanner.blanker.value):
+                while not self.parent._scanner.blanker.value:
                     time.sleep(1)
                     continue
 
@@ -1081,7 +1089,7 @@ class Detector(model.Detector):
                     self._stagePos = self.parent._objects.create('ns0:position')
                     # self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
                     self._navAlgorithm = 'NAVIGATION-AUTO'
-                    self._spot_scanner = util.RepeatingTimer(0, self._updater, "Grid scanner")
+                    self._spot_scanner = util.RepeatingTimer(0, self._scanSpots, "Grid scanner")
                     self._spot_scanner.start()
                     self._is_scanning = True
                 elif self._last_res != res:
@@ -1186,6 +1194,7 @@ class Detector(model.Detector):
             self._executor.shutdown()
             self._executor = None
 
+
 class SEMDataFlow(model.DataFlow):
     """
     This is an extension of model.DataFlow. It receives notifications from the
@@ -1215,6 +1224,7 @@ class SEMDataFlow(model.DataFlow):
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
+
 
 class Stage(model.Actuator):
     """
@@ -1328,12 +1338,14 @@ class Stage(model.Actuator):
             self._executor.shutdown()
             self._executor = None
 
+
 class PhenomFocus(model.Actuator):
     """
     This is an extension of the model.Actuator class and represents a focus
     actuator. This is an abstract class that should be inherited.
     """
     __metaclass__ = ABCMeta
+
     def __init__(self, name, role, parent, axes, rng, **kwargs):
         assert len(axes) > 0
         axes_def = {}
@@ -1436,6 +1448,7 @@ class PhenomFocus(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
 
 class EbeamFocus(PhenomFocus):
     """
@@ -1640,6 +1653,7 @@ class NavCam(model.DigitalCamera):
         """
         self.req_stop_flow()
 
+
 class NavCamDataFlow(model.DataFlow):
     def __init__(self, camera):
         """
@@ -1659,6 +1673,7 @@ class NavCamDataFlow(model.DataFlow):
         if comp is None:
             return
         comp.req_stop_flow()
+
 
 class NavCamFocus(PhenomFocus):
     """
@@ -1781,9 +1796,8 @@ class ChamberPressure(model.Actuator):
 
         # Thread that listens to pressure state changes
         self._chamber_must_stop = threading.Event()
-        target = self._chamber_move_thread
-        self._chamber_thread = threading.Thread(target=target,
-                name="Phenom chamber pressure state change")
+        self._chamber_thread = threading.Thread(target=self._chamber_move_thread,
+                                                name="Phenom chamber pressure state change")
         self._chamber_thread.start()
 
         # Event for reconnection thread
@@ -2090,11 +2104,11 @@ class ChamberPressure(model.Actuator):
                 else:
                     newEvent = expected_event[0][0].eventID
                     logging.debug("Try to read event: %s", newEvent)
-                    if (newEvent == eventID1):
+                    if newEvent == eventID1:
                         try:
                             time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
                             logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
-                            if (time_remaining == 0):
+                            if time_remaining == 0:
                                 # Move in progress is completed
                                 self._move_event.set()
                                 # Wait until any move performed by the user is completed
@@ -2106,24 +2120,23 @@ class ChamberPressure(model.Actuator):
                                 self._position_event.clear()
                         except Exception:
                             logging.warning("Received event does not have the expected attribute or format")
-                    elif (newEvent == eventID2):
+                    elif newEvent == eventID2:
                         logging.debug("Sample holder insertion, about to update sample holder id if needed")
                         self._updateSampleHolder()  # in case new sample holder was loaded
-                    elif (newEvent == eventID3):
+                    elif newEvent == eventID3:
                         logging.debug("Door status changed")
                         self._updateOpened()  # in case door status is changed
                     else:
                         logging.warning("Unexpected event received")
-        except Exception as e:
+        except Exception:
             logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             # Update the state of SEM component so the backend is aware of the error occured
             hw_error = HwError("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             self.parent.state._value = hw_error
             self.parent.state.notify(hw_error)
             # Keep on trying to reconnect
-            target = self._reconnection_thread
-            self._reconnect_thread = threading.Thread(target=target,
-                    name="Phenom reconnection attempt")
+            self._reconnect_thread = threading.Thread(target=self._reconnection_thread,
+                                                      name="Phenom reconnection attempt")
             self._reconnect_thread.start()
         finally:
             self._chamber_device.CloseEventChannel(ch_id)
@@ -2149,9 +2162,8 @@ class ChamberPressure(model.Actuator):
                         # Update with the current pressure state
                         self._updatePosition()
                         # We can now open the event channel again
-                        target = self._chamber_move_thread
-                        self._chamber_thread = threading.Thread(target=target,
-                                name="Phenom chamber pressure state change")
+                        self._chamber_thread = threading.Thread(target=self._chamber_move_thread,
+                                                                name="Phenom chamber pressure state change")
                         self._chamber_thread.start()
                         break
                 except Exception:
