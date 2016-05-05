@@ -23,17 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from collections import OrderedDict
 import collections
 import functools
 import gc
 import logging
 import numpy
-import wx
-from collections import OrderedDict
-from wx.lib.pubsub import pub
-
-import odemis.acq.stream as acqstream
-import odemis.gui.model as guimodel
 from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -45,10 +40,16 @@ from odemis.gui.conf.data import get_hw_settings_config, get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+import wx
+from wx.lib.pubsub import pub
+
+import odemis.acq.stream as acqstream
+import odemis.gui.model as guimodel
 
 
 # There are two kinds of controllers:
@@ -900,6 +901,7 @@ class StreamBarController(object):
 
         # Don't hide or show stream panel when the focused view changes
         self.ignore_view = ignore_view
+        self._prev_view = None
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         # FIXME: don't use pubsub events, but either wxEVT or VAs. For now every
@@ -911,6 +913,9 @@ class StreamBarController(object):
         self.static_mode = static
         # Disable all controls
         self.locked_mode = locked
+
+        # Stream preparation future
+        self.preparation_future = model.InstantaneousFuture()
 
         # If any stream already present: listen to them in the scheduler (but
         # don't display)
@@ -1067,6 +1072,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.brightlight,
             focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1086,6 +1092,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.backlight,
             focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1111,6 +1118,7 @@ class StreamBarController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
+                self._main_data_model.focus,
                 focuser=self._main_data_model.ebeam_focus,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
@@ -1122,7 +1130,7 @@ class StreamBarController(object):
                 self._main_data_model.sed,
                 self._main_data_model.sed.data,
                 self._main_data_model.ebeam,
-                focuser=self._main_data_model.ebeam_focus,
+                focuser=self._main_data_model.ebeam_focus
             )
         return self._add_stream(s, **kwargs)
 
@@ -1142,6 +1150,7 @@ class StreamBarController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
+                self._main_data_model.focus,
                 focuser=self._main_data_model.ebeam_focus,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
@@ -1151,7 +1160,7 @@ class StreamBarController(object):
                 self._main_data_model.bsd,
                 self._main_data_model.bsd.data,
                 self._main_data_model.ebeam,
-                focuser=self._main_data_model.ebeam_focus,
+                focuser=self._main_data_model.ebeam_focus
             )
         return self._add_stream(s, **kwargs)
 
@@ -1165,7 +1174,7 @@ class StreamBarController(object):
             self._main_data_model.ebic,
             self._main_data_model.ebic.data,
             self._main_data_model.ebeam,
-            focuser=self._main_data_model.ebeam_focus,
+            focuser=self._main_data_model.ebeam_focus
         )
         return self._add_stream(s, **kwargs)
 
@@ -1305,7 +1314,13 @@ class StreamBarController(object):
 
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
-        visible_streams = view.getStreams()
+        if self._prev_view is not None:
+            self._prev_view.stream_tree.flat.unsubscribe(self._on_visible_streams)
+        view.stream_tree.flat.subscribe(self._on_visible_streams, init=True)
+        self._prev_view = view
+
+    def _on_visible_streams(self, flat):
+        visible_streams = flat
 
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
@@ -1314,18 +1329,6 @@ class StreamBarController(object):
         """
         Called when a stream "updated" state changes
         """
-        # Ensure it's visible in the current view (if feasible)
-        if updated:
-            fv = self._tab_data_model.focussedView.value
-            if (isinstance(stream, fv.stream_classes) and  # view is compatible
-                    not stream in fv.getStreams()):
-                # Add to the view
-                fv.addStream(stream)
-                # Update the graphical display
-                for e in self._stream_bar.stream_panels:
-                    if e.stream is stream:
-                        e.set_visible(True)
-
         # This is a stream scheduler:
         # * "should_update" streams are the streams to be scheduled
         # * a stream becomes "active" when it's currently acquiring
@@ -1343,7 +1346,7 @@ class StreamBarController(object):
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
             if not updated:
-                stream.is_active.value = False
+                self._prepareAndActivate(stream, False)
                 # the other streams might or might not be updated, we don't care
             else:
                 # FIXME: hack to not stop the spot stream => different scheduling policy?
@@ -1352,18 +1355,18 @@ class StreamBarController(object):
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
                     if s != stream and s is not spots:
-                        s.is_active.value = False
+                        self._prepareAndActivate(s, False)
                         s.should_update.unsubscribe(cb)  # don't inform us of that change
                         s.should_update.value = False
                         s.should_update.subscribe(cb)
 
-                # activate this stream
+                # prepare and activate this stream
                 # It's important it's last, to ensure hardware settings don't
                 # mess up with each other.
-                stream.is_active.value = True
+                self._prepareAndActivate(stream, True)
         elif self._sched_policy == SCHED_ALL:
             # All streams with should_update are active
-            stream.is_active.value = updated
+            self._prepareAndActivate(stream, updated)
         else:
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
 
@@ -1380,6 +1383,26 @@ class StreamBarController(object):
                 return  # fast path
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
+
+    def _prepareAndActivate(self, stream, updated):
+        """
+        Prepare and activate the given stream.
+        stream (Stream): the stream to prepare and activate.
+        """
+        if updated:
+            self._main_data_model.is_preparing.value = True
+            self.preparation_future = stream.prepare()
+        else:
+            self.preparation_future.cancel()
+        self.preparation_future.stream_to_update = stream
+        self.preparation_future.updated = updated
+        self.preparation_future.add_done_callback(self._canActivate)
+
+    @call_in_wx_main
+    def _canActivate(self, future):
+        self._main_data_model.is_preparing.value = False
+        logging.debug("Can now activate/deactivate %s", future.stream_to_update.name.value)
+        future.stream_to_update.is_active.value = future.updated
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
@@ -1603,6 +1626,24 @@ class SecomStreamsController(StreamBarController):
             self.add_action("EBIC", self.addEBIC, sem_capable)
 
     def _onStreamUpdate(self, stream, updated):
+        if updated:
+            fv = self._tab_data_model.focussedView.value
+            if stream not in fv.stream_tree.flat.value:
+                # if the stream is hidden in the current focused view, then unhide
+                # it everywhere
+                for v in self._tab_data_model.views.value:
+                    if isinstance(stream, acqstream.SEMStream) and (not v.is_compatible(acqstream.SEMStream)):
+                        continue
+                    elif isinstance(stream, acqstream.FluoStream) and (not v.is_compatible(acqstream.FluoStream)):
+                        continue
+                    else:
+                        if stream not in v.stream_tree.flat.value:
+                            # make sure we don't display old data
+                            str_img = stream.image.value
+                            if ((str_img is not None) and
+                                (str_img.metadata.get(model.MD_POS, (0, 0)) != self._main_data_model.stage)):
+                                stream.image.value = None
+                            v.addStream(stream)
         super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
         self._updateMicroscopeStates()
 
@@ -1860,6 +1901,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             # TODO: add a focuser for the SPARCv2?
             detvas=get_local_vas(main_data.ccd),
         )
@@ -1891,6 +1933,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             focuser=self._main_data_model.ebeam_focus,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.cld),
         )
@@ -1947,6 +1990,7 @@ class SparcStreamsController(StreamBarController):
             detector.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             # emtvas=get_local_vas(main_data.ebeam), # no need
             detvas=get_local_vas(detector),
         )
@@ -1985,6 +2029,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             spectrograph=spg,
             sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator),
         )
@@ -2029,17 +2074,6 @@ class SparcStreamsController(StreamBarController):
             return
 
         if updated:
-            # Prepare the optical path
-            opm = self._main_data_model.opm
-            try:
-                opm.setPath(stream).result()
-            except LookupError:
-                logging.debug("%s doesn't require optical path change", stream)
-            else:
-                # TODO: Run in a separate thread as in live view it's ok if
-                # the path is not immediately correct?
-                logging.debug("Setting optical path for %s", stream)
-
             # Activate or deactive spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
@@ -2063,6 +2097,16 @@ class SparcStreamsController(StreamBarController):
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
                     spots.is_active.value = True
+
+        fv = self._tab_data_model.focussedView.value
+        if (isinstance(stream, fv.stream_classes) and  # view is compatible
+                not stream in fv.getStreams()):
+            # Add to the view
+            fv.addStream(stream)
+            # Update the graphical display
+            for e in self._stream_bar.stream_panels:
+                if e.stream is stream:
+                    e.set_visible(True)
 
         super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
 

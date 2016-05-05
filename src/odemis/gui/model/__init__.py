@@ -187,6 +187,9 @@ class MainGUIData(object):
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
 
+        # Indicates whether a stream is in preparation (i.e., a prepare() future is active)
+        self.is_preparing = model.BooleanVA(False)
+
         # The microscope object will be probed for common detectors, actuators, emitters etc.
         if microscope:
             self.role = microscope.role

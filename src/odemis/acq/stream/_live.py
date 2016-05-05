@@ -28,10 +28,11 @@ from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
 from odemis.util import img, conversion, fluo
-import random
 import threading
 import time
 import weakref
+from odemis.model import isasync
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from ._base import Stream, UNDEFINED_ROI
 
@@ -67,6 +68,7 @@ class LiveStream(Stream):
         self._hthread.start()
 
         self._prev_dur = None
+        self._prep_future = model.InstantaneousFuture()
 
     def _find_metadata(self, md):
         simpl_md = super(LiveStream, self)._find_metadata(md)
@@ -80,17 +82,27 @@ class LiveStream(Stream):
         """ Called when the Stream is activated or deactivated by setting the
         is_active attribute
         """
+        # Make sure the stream is prepared before really activate it
         if active:
-            msg = "Subscribing to dataflow of component %s"
-            logging.debug(msg, self._detector.name)
-            if not self.should_update.value:
-                logging.info("Trying to activate stream while it's not "
-                             "supposed to update")
-            self._dataflow.subscribe(self._onNewData)
+            if not self._prepared:
+                self._prep_future = self.prepare()
+                self._prep_future.add_done_callback(self._startAcquisition)
+            else:
+                self._startAcquisition()
         else:
+            self._prep_future.cancel()
+            self._prepared = False
             msg = "Unsubscribing from dataflow of component %s"
             logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self._onNewData)
+
+    def _startAcquisition(self, future=None):
+        msg = "Subscribing to dataflow of component %s"
+        logging.debug(msg, self._detector.name)
+        if not self.should_update.value:
+            logging.info("Trying to activate stream while it's not "
+                         "supposed to update")
+        self._dataflow.subscribe(self._onNewData)
 
     def _updateAcquisitionTime(self):
         """
@@ -282,7 +294,7 @@ class SEMStream(LiveStream):
         """
         logging.debug("dcRegion set to %s", roi)
         if roi == UNDEFINED_ROI:
-            return roi # No need to discuss it
+            return roi  # No need to discuss it
 
         width = (roi[2] - roi[0], roi[3] - roi[1])
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
@@ -335,18 +347,17 @@ class SEMStream(LiveStream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
-    def _onActive(self, active):
-        if active:
-            # Note: blank => unblank, is done automatically by the driver
+    def _startAcquisition(self, future=None):
+        # Note: blank => unblank, is done automatically by the driver
 
-            # update Hw settings to our own ROI
-            self._applyROI()
+        # update Hw settings to our own ROI
+        self._applyROI()
 
-            if self.dcRegion.value != UNDEFINED_ROI:
-                raise NotImplementedError("SEM drift correction on simple SEM "
-                                          "acquisition not yet implemented")
+        if self.dcRegion.value != UNDEFINED_ROI:
+            raise NotImplementedError("SEM drift correction on simple SEM "
+                                      "acquisition not yet implemented")
 
-        super(SEMStream, self)._onActive(active)
+        super(SEMStream, self)._startAcquisition()
 
     def _onDwellTime(self, value):
         self._updateAcquisitionTime()
@@ -365,7 +376,7 @@ class AlignedSEMStream(SEMStream):
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
-                 ccd, stage, shiftebeam=MTD_MD_UPD, **kwargs):
+                 ccd, stage, focus, shiftebeam=MTD_MD_UPD, **kwargs):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.shift). If MTD_MD_UPD, it will just update the
@@ -374,32 +385,39 @@ class AlignedSEMStream(SEMStream):
         super(AlignedSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
         self._stage = stage
+        self._focus = focus
         self._shiftebeam = shiftebeam
-        self._calibrated = False # whether the calibration has been already done
-        self._last_pos = None # last known position of the stage
-        self._shift = (0, 0) # (float, float): shift to apply in meters
+        self.calibrated = model.BooleanVA(False)  # whether the calibration has been already done
+        self._last_pos = stage.position.value.copy()
+        self._last_pos.update(focus.position.value)  # last known position of the stage
+        self._shift = (0, 0)  # (float, float): shift to apply in meters
         self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
         # In case initialization takes place in unload position the
         # calibration values are not obtained yet. Thus we avoid to initialize
         # cur_trans before spot alignment takes place.
         self._cur_trans = None
-        stage.position.subscribe(self._onStageMove)
+        stage.position.subscribe(self._onMove)
+        focus.position.subscribe(self._onMove)
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._beamshift = None
 
-    def _onStageMove(self, pos):
+    def _onMove(self, pos):
         """
         Called when the stage moves (changes position)
         pos (dict): new position
         """
         # Check if the position has really changed, as some stage tend to
         # report "new" position even when no actual move has happened
-        logging.debug("Stage location is %s m,m", pos)
+        logging.debug("Stage location is %s m,m,m", pos)
         if self._last_pos == pos:
             return
-        self._last_pos = pos
+        self._last_pos.update(pos)
 
-        if self.is_active.value:
-            self._setStatus(logging.WARNING, u"SEM stream is not aligned")
-        self._calibrated = False
+        # if self.is_active.value:
+        self.calibrated.value = False
+
+        # just reset status
+        self._setStatus(None)
 
     # need to override it to support beam shift
     def _applyROI(self):
@@ -423,9 +441,29 @@ class AlignedSEMStream(SEMStream):
         logging.debug("Update metadata for SEM image shift")
         self._detector.updateMetadata({MD_POS_COR: self._shift})
 
-    def _onActive(self, active):
+    @isasync
+    def prepare(self):
+        """
+        Perform calibration if needed
+        """
+        logging.debug("Preparing stream %s ...", self)
+        # actually indicate that preparation has been triggered, don't wait for
+        # it to be completed
+        self._prepared = True
+        f = self._executor.submit(self._DoPrepare)
+
+        # Note that there is no need to call super(). This would only check
+        # for an optical path manager which in this case has no effect.
+
+        return f
+
+    def __del__(self):
+        self._executor.shutdown(wait=False)
+
+    def _DoPrepare(self):
         # Need to calibrate ?
-        if active and not self._calibrated:
+        if not self.calibrated.value:
+            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress")
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
@@ -465,14 +503,14 @@ class AlignedSEMStream(SEMStream):
                 else:
                     logging.error("Unknown shiftbeam method %s", self._shiftebeam)
             except LookupError:
-                self._setStatus(logging.WARNING, u"Automatic SEM alignment unsuccessful")
-                logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
+                self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
+                # logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
                 logging.exception("Failure while looking for the ebeam center")
             else:
                 self._setStatus(None)
                 logging.info("Aligning SEM image using shift of %s", shift)
-                self._calibrated = True
+                self.calibrated.value = True
             finally:
                 # restore hw settings
                 (self._emitter.dwellTime.value,
@@ -483,6 +521,7 @@ class AlignedSEMStream(SEMStream):
             self._shift = shift
             self._compensateShift()
 
+    def _onActive(self, active):
         super(AlignedSEMStream, self)._onActive(active)
 
 
@@ -499,7 +538,7 @@ class SpotSEMStream(LiveStream):
         # TODO: forbid emt VAs resolution, translation and dwelltime
 
         # used to reset the previous settings after spot mode
-        self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
+        self._no_spot_settings = (None, None, None)  # dwell time, resolution, translation
 
         # To indicate the position, use the ROI. We expect that the ROI has an
         # "empty" area (ie, lt == rb)
@@ -564,7 +603,7 @@ class SpotSEMStream(LiveStream):
 
         # put a not too short dwell time to avoid acquisition to keep repeating,
         # and not too long to avoid using too much memory for acquiring one point.
-        self._emitter.dwellTime.value = 0.1 # s
+        self._emitter.dwellTime.value = 0.1  # s
 
     def _stopSpot(self):
         """
@@ -818,7 +857,7 @@ class FluoStream(CameraStream):
         current_exc = self._get_current_excitation()
         if current_exc is None:
             # pick the closest below the current emission
-            current_exc = min(exc_choices, key=lambda b: b[2]) # default to the smallest
+            current_exc = min(exc_choices, key=lambda b: b[2])  # default to the smallest
             for b in exc_choices:
                 # Works because exc_choices only contains 5-float tuples
                 if (b[2] < center_em and
@@ -878,7 +917,7 @@ class FluoStream(CameraStream):
         em = self.emission.value
         em_idx = self._emission_to_idx[em]
         f = self._em_filter.moveAbs({"band": em_idx})
-        f.result() # wait for the move to be finished
+        f.result()  # wait for the move to be finished
 
     def _setup_excitation(self):
         """
@@ -956,7 +995,7 @@ class RGBCameraStream(CameraStream):
             rgbim.flags.writeable = False
             # merge and ensures all the needed metadata is there
             rgbim.metadata = self._find_metadata(rgbim.metadata)
-            rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
+            rgbim.metadata[model.MD_DIMS] = "YXC"  # RGB format
             self.image.value = rgbim
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)

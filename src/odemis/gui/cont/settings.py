@@ -40,6 +40,7 @@ from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry
     create_axis_entry
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 import odemis.gui.util
+from odemis.gui.util import call_in_wx_main
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
 import time
@@ -350,6 +351,14 @@ class SettingsBarController(object):
 
         # build the default config value based on the global one + the role
         self._va_config = get_hw_settings_config(tab_data.main.role)
+
+        # disable settings while there is a preparation process running
+        self._tab_data_model.main.is_preparing.subscribe(self.on_preparation)
+
+    @call_in_wx_main
+    def on_preparation(self, is_preparing):
+        # Make sure nothing can be modified during preparation
+        self.enable(not is_preparing)
 
     def pause(self):
         """ Pause SettingEntry related control updates """

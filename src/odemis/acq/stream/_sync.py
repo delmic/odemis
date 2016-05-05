@@ -102,6 +102,15 @@ class MultipleDetectorStream(Stream):
         self._dc_estimator = None
         self._current_future = None
 
+        self._opm = None
+        # get opm if found in any of the substreams
+        for s in self._streams:
+            if hasattr(s, "_opm") and s._opm is not None:
+                if (self._opm is not None) and (self._opm != s._opm):
+                    logging.warning("Multiple different optical path managers were found.")
+                    break
+                self._opm = s._opm
+
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
 
@@ -191,6 +200,10 @@ class MultipleDetectorStream(Stream):
         return total_time
 
     def acquire(self):
+        # Make sure every stream is prepared, not really necessary to check _prepared
+        f = self.prepare()
+        f.result()
+
         # Order matters: if same local VAs for emitter (e-beam). the rep ones
         # are used.
         self._main_stream._linkHwVAs()

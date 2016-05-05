@@ -123,6 +123,11 @@ class SimpleStreamFuture(futures.Future):
         self._stream.image.subscribe(self._image_listener)
         self._stream.is_active.value = True
 
+        # call prepare explicitly just to make sure that the preparation is
+        # already done once we start waiting for the acquisition
+        f = self._stream.prepare()
+        f.result()
+
         # wait until one image acquired or cancelled
         if not self._acq_over.wait(10 * estt + 5):
             raise IOError("Acquisition of stream %s timeed out after %f s" %

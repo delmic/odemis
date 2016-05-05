@@ -30,6 +30,7 @@ from odemis.util import img
 import threading
 import time
 import weakref
+from odemis.model import isasync
 
 
 # Contains the base of the streams. Can be imported from other stream modules.
@@ -56,13 +57,14 @@ class Stream(object):
     # Minimum overhead time in seconds when acquiring an image
     SETUP_OVERHEAD = 0.1
 
-    def __init__(self, name, detector, dataflow, emitter, focuser=None,
+    def __init__(self, name, detector, dataflow, emitter, focuser=None, opm=None,
                  hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, raw=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Emitter): the emitter
+        opm (OpticalPathManager): the optical path manager
         focuser (Actuator or None): an actuator with a 'z' axis that allows to change
           the focus
         hwdetvas (None or set of str): names of all detector hardware VAs to be controlled by this
@@ -82,6 +84,7 @@ class Stream(object):
         self._detector = detector
         self._emitter = emitter
         self._focuser = focuser
+        self._opm = opm
 
         # Dataflow (Live image stream with meta data)
         # Note: A Detectors can have multiple dataflows, so that's why a Stream
@@ -112,6 +115,8 @@ class Stream(object):
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
 
+        # indicating if stream has already been prepared
+        self._prepared = False
         # TODO: should_update is a GUI stuff => move away from stream
         # should_update has no effect direct effect, it's just a flag to
         # indicate the user would like to have the stream updated (live)
@@ -465,6 +470,32 @@ class Stream(object):
             if not isinstance(hwva, VigilantAttributeBase):
                 raise AttributeError("Detector has not VA %s" % (vaname,))
             return hwva
+
+    @isasync
+    def prepare(self):
+        """
+        Take care of any action required to be taken before the stream becomes
+        active.
+
+        returns (model.ProgressiveFuture): Progress of preparation
+        """
+        logging.debug("Preparing stream %s ...", self.name.value)
+        # actually indicate that preparation has been triggered, don't wait for
+        # it to be completed
+        self._prepared = True
+        if self._opm is not None:
+            try:
+                f = self._opm.setPath(self)
+            except LookupError:
+                logging.debug("%s doesn't require optical path change", self.name.value)
+                f = model.InstantaneousFuture()
+            else:
+                # TODO: Run in a separate thread as in live view it's ok if
+                # the path is not immediately correct?
+                logging.debug("Setting optical path for %s", self.name.value)
+            finally:
+                return f
+        return model.InstantaneousFuture()
 
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current

@@ -2688,7 +2688,8 @@ class Sparc2AlignTab(Tab):
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
         self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
-        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
+        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data,
+                                     main_data.ebeam)
         mois = acqstream.MomentOfInertiaLiveStream("MoI",
                            main_data.ccd, main_data.ccd.data, main_data.ebeam,
                            moisem,

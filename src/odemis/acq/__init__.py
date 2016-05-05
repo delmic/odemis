@@ -53,7 +53,7 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-def acquire(streams, opm=None):
+def acquire(streams):
     """ Start an acquisition task for the given streams.
 
     It will decide in which order the stream must be acquired.
@@ -62,7 +62,6 @@ def acquire(streams, opm=None):
         It is highly recommended to not have any other acquisition going on.
 
     :param streams: [Stream] the streams to acquire
-            opm: [OpticalPathManager] if given, used to set the optical path
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a tuple:
@@ -74,7 +73,7 @@ def acquire(streams, opm=None):
     future = model.ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(streams, future, opm)
+    task = AcquisitionTask(streams, future)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # run executeTask in a thread
@@ -208,16 +207,6 @@ class AcquisitionTask(object):
         raw_images = {} # stream -> list of raw images
         try:
             for s in self._streams:
-                # if an optical path manager is given, try to guess and set the
-                # path according to the streams given
-                if self._opm is not None:
-                    try:
-                        logging.info("setting optical path for stream %s", s.name.value)
-                        self._opm.setPath(s).result()
-                    except LookupError:
-                        logging.info("No mode can be inferred for the given stream")
-                    except IOError:
-                        logging.warning("Given object is not a stream")
 
                 # Get the future of the acquisition, depending on the Stream type
                 if hasattr(s, "acquire"):

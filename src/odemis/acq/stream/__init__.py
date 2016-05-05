@@ -108,6 +108,7 @@ class StreamTree(object):
         assert(isinstance(streams, list))
 
         self.streams = []
+        self.flat = model.ListVA([], readonly=True)
         self.should_update = model.BooleanVA(False)
         self.size = model.IntVA(0)
         self.kwargs = kwargs
@@ -150,6 +151,10 @@ class StreamTree(object):
         else:
             msg = "Illegal type %s found in add_stream!" % type(stream)
             raise ValueError(msg)
+        # Also update the flat streams list
+        curr_streams = self.getStreams()
+        self.flat._value = curr_streams
+        self.flat.notify(curr_streams)
 
     def remove_stream(self, stream):
         if hasattr(stream, 'should_update'):
@@ -157,6 +162,10 @@ class StreamTree(object):
         self.streams.remove(stream)
         self.size.value = len(self.streams)
         self.on_stream_update_changed()
+        # Also update the flat streams list
+        curr_streams = self.getStreams()
+        self.flat._value = curr_streams
+        self.flat.notify(curr_streams)
 
     def on_stream_update_changed(self, _=None):
         """ Set the 'should_update' attribute when a streams' should_update VA changes """
