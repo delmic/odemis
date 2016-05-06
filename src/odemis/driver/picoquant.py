@@ -202,7 +202,7 @@ class PH300(model.Detector):
             self._dll = PHDLL()
         self._idx = self._openDevice(device)
 
-        super(PH300, self).__init__(name, role, **kwargs)
+        super(PH300, self).__init__(name, role, daemon=daemon, **kwargs)
 
         # TODO: what's the shape? 1D array with count as value, and time as dim
         # TODO: metadata for indicating the range? cf WL_LIST?
@@ -218,9 +218,9 @@ class PH300(model.Detector):
 
         self.Calibrate()
 
-
-        # TODO: how to pass the (live) count of each detector?
-        # => create one Detector Component per channel to represent each APD separately
+        # To pass the raw count of each detector, we create children detectors.
+        # It could also go into just separate DataFlow, but then it's difficult
+        # to allow using these DataFlows in a standard way.
         self._detectors = {}
         for name, ckwargs in children.items():
             if name == "detector0":

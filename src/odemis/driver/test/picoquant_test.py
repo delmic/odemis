@@ -20,17 +20,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Pyro4
 import copy
 import logging
 from odemis import model
-from odemis.driver import simsem, picoquant
+from odemis.driver import picoquant
 import os
-import pickle
-import threading
 import time
 import unittest
-from unittest.case import skip
 
 
 logging.getLogger().setLevel(logging.DEBUG)
