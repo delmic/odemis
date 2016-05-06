@@ -2742,20 +2742,45 @@ class Sparc2AlignTab(Tab):
         ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
 
         # chronograph of spectrometer if "fiber-align" mode is present
+        self._speccnt_stream = None
         if "fiber-align" in tab_data.align_mode.choices:
-            speccnts = acqstream.CameraCountStream("Spectrum average",
-                                   main_data.spectrometer,
-                                   main_data.spectrometer.data,
-                                   emitter=None,
-                                   detvas=get_local_vas(main_data.spectrometer),
-                                   )
-            speccnt_spe = self._stream_controller.addStream(speccnts,
-                                add_to_view=self.panel.vp_align_fiber.microscope_view)
-            speccnt_spe.stream_panel.flatten()
-            self._speccnt_stream = speccnts
-            speccnts.should_update.subscribe(self._on_ccd_stream_play)
-        else:
-            self._speccnt_stream = None
+            # Need to pick the right/best component which receives light via the fiber
+            fbdet = None
+            fbaffects = main_data.fibaligner.affects.value
+            # First try some known, good and reliable detectors
+            for d in (main_data.spectrometer, main_data.cld):
+                if d is not None and d.name in fbaffects:
+                    fbdet = d
+                    break
+            else:
+                # Take the first detector
+                for dname in fbaffects:
+                    try:
+                        d = model.getComponent(name=dname)
+                    except LookupError:
+                        logging.warning("Failed to find component %s affected by fiber-aligner", dname)
+                        continue
+
+                    if hasattr(d, "data") and isinstance(d.data, model.DataFlowBase):
+                        fbdet = d
+                        break
+
+            if fbdet is not None:
+                logging.debug("Using %s as fiber alignment detector", fbdet.name)
+
+                speccnts = acqstream.CameraCountStream("Spectrum average",
+                                       fbdet,
+                                       fbdet.data,
+                                       emitter=None,
+                                       detvas=get_local_vas(fbdet),
+                                       )
+                speccnt_spe = self._stream_controller.addStream(speccnts,
+                                    add_to_view=self.panel.vp_align_fiber.microscope_view)
+                speccnt_spe.stream_panel.flatten()
+                self._speccnt_stream = speccnts
+                speccnts.should_update.subscribe(self._on_ccd_stream_play)
+            else:
+                logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
