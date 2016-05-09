@@ -34,7 +34,6 @@ import logging
 import numbers
 from odemis import model, dataio, util
 import odemis
-from odemis.cli.video_displayer import VideoDisplayer
 from odemis.util import units
 from odemis.util.conversion import convert_to_object
 from odemis.util.driver import BACKEND_RUNNING, \
@@ -719,6 +718,11 @@ def live_display(comp_name, df_name):
     except (AttributeError, ValueError):
         # pick something not too stupid
         size = (512, 512)
+
+    # We only import it here, because it pools lots of dependencies for the GUI,
+    # which is slow to load, and annoying for all the times this function is not
+    # used.
+    from odemis.cli.video_displayer import VideoDisplayer
 
     # create a window
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
