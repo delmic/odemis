@@ -478,7 +478,7 @@ class MonoScanPlugin(Plugin):
 
         self.filename.value = self._get_new_filename()
         dlg.addSettings(self, conf=self.vaconf)
-        dlg.addButton("Cancel")
+        dlg.addButton("Close")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
         # Show the window, and wait until the acquisition is over
@@ -513,6 +513,8 @@ class MonoScanPlugin(Plugin):
             f = acq.acquire(strs, opm=self.main_app.main_data.opm)
             dlg.showProgress(f)
             das, e = f.result()
+        except CancelledError:
+            pass
         finally:
             str_ctrl.resumeStreams(stream_paused)
 

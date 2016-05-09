@@ -146,8 +146,10 @@ class TimelapsePlugin(Plugin):
         sacqt = self._stream.estimateAcquisitionTime()
         intp = max(0, p - sacqt)
         if p < sacqt:
-            logging.warning("Acquisition will take %g s, but period between acquisition must be only %g s",
-                            sacqt, p)
+            logging.warning(
+                "Acquisition will take %g s, but period between acquisition must be only %g s",
+                sacqt, p
+            )
 
         exporter = dataio.find_fittest_converter(self.filename.value)
 

@@ -498,6 +498,7 @@ class xrcfr_plugin(wx.Dialog):
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
         self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
 
 
@@ -5412,22 +5413,44 @@ def __init_resources():
                       <border>10</border>
                     </object>
                     <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_gauge">
-                        <fg>#DDDDDD</fg>
-                        <font>
-                          <size>14</size>
-                          <style>normal</style>
-                          <weight>normal</weight>
-                          <underlined>0</underlined>
-                          <face>Ubuntu</face>
-                        </font>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="wxStaticText" name="lbl_gauge">
+                            <fg>#DDDDDD</fg>
+                            <font>
+                              <size>14</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                            </font>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <option>1</option>
+                          <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_cancel">
+                            <height>24</height>
+                            <face_colour>def</face_colour>
+                            <label>cancel</label>
+                            <enabled>0</enabled>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+                          <border>5</border>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
                       </object>
-                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
-                      <border>10</border>
+                      <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                      <border>5</border>
                     </object>
+                    
                     <orient>wxVERTICAL</orient>
                   </object>
                   <bg>#4D4D4D</bg>

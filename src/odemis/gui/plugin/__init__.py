@@ -320,6 +320,8 @@ class AcquisitionDialog(xrcfr_plugin):
         self._acq_future_connector = None
         self.canvas = None
         self.buttons = []  # The buttons
+        self.current_future = None
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self._cancel_future)
 
         self.setting_controller = SettingsController(self.fp_settings,
                                                      "No settings defined")
@@ -440,38 +442,57 @@ class AcquisitionDialog(xrcfr_plugin):
 
         """
 
-        if future is None:
-            self.gauge_progress.Hide()
-            self.lbl_gauge.Hide()
-        else:
-            self.gauge_progress.Show()
-            self.lbl_gauge.Show()
+        if future is not None and not future.cancelled():
+            self.current_future = future
+            self.enable_buttons(False)
 
         self.Layout()
         self.Update()
 
-        if future is None:
+        if self.current_future is None:
             self._acq_future_connector = None
             return
-        elif hasattr(future, "add_update_callback"):  # ProgressiveFuture
-            self._acq_future_connector = ProgressiveFutureConnector(future,
-                                                                    self.gauge_progress,
-                                                                    self.lbl_gauge)
         else:
-            # TODO: just pulse the gauge at a "good" frequency (need to use a timer)
-            self.gauge_progress.Pulse()
+            if hasattr(self.current_future, "add_update_callback"):
+                self._acq_future_connector = ProgressiveFutureConnector(self.current_future,
+                                                                        self.gauge_progress,
+                                                                        self.lbl_gauge)
+            else:
+                # TODO: just pulse the gauge at a "good" frequency (need to use a timer)
+                self.gauge_progress.Pulse()
 
-        # future.add_done_callback(self._on_future_done)
+            if hasattr(self.current_future, 'task_canceller'):
+                self.btn_cancel.Enable()
+            else:
+                self.btn_cancel.Disable()
+
+        future.add_done_callback(self._on_future_done)
 
         # TODO: if the future is cancellable (ie, has task_canceller), allow to
         # press the "cancel" button, if such button exists, otherwise provide
         # such a button. That button will call cancel() on the future.
 
     @call_in_wx_main
+    def enable_buttons(self, enable):
+        """ Enable or disable all the buttons in the button panel """
+        for btn in self.pnl_buttons.GetChildren():
+            btn.Enable(enable)
+
+    def _cancel_future(self, _):
+        """ Cancel the future if it's there and running """
+        if self.current_future is not None and not self.current_future.cancelled():
+            if self.current_future.cancel():
+                logging.debug("Future cancelled")
+            else:
+                logging.debug("Failed to cancel future")
+
+    @call_in_wx_main
     def _on_future_done(self, _):
         """ Hide the gauge and label when the future finishes """
-        self.gauge_progress.Hide()
-        self.lbl_gauge.Hide()
+        self.gauge_progress.SetValue(0)
+        self.lbl_gauge.SetLabel("")
+        self.btn_cancel.Disable()
+        self.enable_buttons(True)
         self.Layout()
         self.Update()
 
