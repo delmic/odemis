@@ -1478,29 +1478,37 @@ def get_ordered_images(streams, rgb=True):
 
         # metadata useful for the legend
         stream_data = []
-        if data_raw.metadata.get(model.MD_EXP_TIME, None):
-            if sem_stream:
-                stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
-            else:
-                stream_data.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
-        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
-            stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
-        if data_raw.metadata.get(model.MD_LENS_MAG, None):
-            stream_data.append(u"%s x" % int(data_raw.metadata[model.MD_LENS_MAG]))
-        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
-            stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
-        if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
-            stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
-        if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
-            stream_data.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
-        if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
-            stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
-        if data_raw.metadata.get(model.MD_IN_WL, None):
-            stream_data.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
-        if data_raw.metadata.get(model.MD_OUT_WL, None):
-            stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
-        if isinstance(s, stream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
-            stream_data.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
+        try:
+            if data_raw.metadata.get(model.MD_EXP_TIME, None):
+                if sem_stream:
+                    stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+                else:
+                    stream_data.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+            if data_raw.metadata.get(model.MD_DWELL_TIME, None):
+                stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s", sig=3))
+            if data_raw.metadata.get(model.MD_LENS_MAG, None):
+                stream_data.append(u"%s x" % units.readable_str(data_raw.metadata[model.MD_LENS_MAG], sig=2))
+            if data_raw.metadata.get(model.MD_FILTER_NAME, None):
+                stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
+            if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
+                stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
+            if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
+                stream_data.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
+            if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
+                stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
+            if data_raw.metadata.get(model.MD_IN_WL, None):
+                stream_data.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
+            if data_raw.metadata.get(model.MD_OUT_WL, None):
+                out_wl = data_raw.metadata[model.MD_OUT_WL]
+                if isinstance(out_wl, basestring):
+                    stream_data.append(u"Emission: %s" % (out_wl,))
+                else:
+                    stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
+            if isinstance(s, stream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
+                stream_data.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
+        except Exception:
+            logging.exception("Failed to export metadata fully")
+
         if isinstance(s, stream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
