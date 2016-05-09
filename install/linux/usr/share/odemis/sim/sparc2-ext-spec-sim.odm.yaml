@@ -288,7 +288,7 @@ SPARC2: {
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"},
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"],
+    affects: ["Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between integrated spectrometer and external spectrometer
@@ -303,7 +303,7 @@ SPARC2: {
     metadata: {
         # Position of the mirror to select the external spectrometer (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.026112848}, # m
-        FAV_POS_ACTIVE_DEST: ["Fiber align", "Dedicated Spectrometer"],
+        FAV_POS_ACTIVE_DEST: ["Fiber align", "Spectral Camera", "Dedicated Spectrometer"],
         FAV_POS_DEACTIVE: {"x": 0.022}, # m
         FAV_POS_DEACTIVE_DEST: ["Spec CCD Flipper"], # m
     },
