@@ -1,3 +1,12 @@
+odemis (2.4.2-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.2
+  * Main bugs fixed:
+   - Fix post-processing export of 16 bits data with interpolation (disabled)
+   - Fix print-ready export of monochromator acquisition with filter (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 10 May 2016 14:23:11 +0200
+
 odemis (2.4.1-1ubuntu1) precise; urgency=medium
 
   * New version: 2.4.1
