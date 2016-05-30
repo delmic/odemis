@@ -607,7 +607,7 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
 
 def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
                buffer_size, opacity=1.0, im_scale=(1.0, 1.0), rotation=None,
-               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False, upscaling=False):
+               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False):
     """ Draw the given image to the Cairo context
 
     The buffer is considered to have it's 0,0 origin at the top left
@@ -625,8 +625,6 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     flip (wx.HORIZONTAL | wx.VERTICAL): If and how to flip the image
     blend_mode (int): Graphical blending type used for transparency
     interpolate_data (boolean): apply interpolation if True
-    upscaling (boolean): if True you need to crop the intersection of the image
-    and the buffer
 
     """
 
@@ -669,7 +667,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     height_ratio = float(im_scale[1]) / float(buffer_scale[1])
     total_scale = total_scale_x, total_scale_y = (width_ratio, height_ratio)
 
-    if upscaling:
+    if total_scale_x > 1.0 or total_scale_y > 1.0:
         logging.debug("Up scaling required")
 
         # If very little data is trimmed, it's better to scale the entire image than to create
@@ -1765,8 +1763,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
-            upscaling=((min_res[1], min_res[0]) == buffer_size)
+            interpolate_data=(interpolate_data and im_min_type == numpy.uint8)
         )
         if not rgb:
             # Create legend
@@ -1817,8 +1814,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
         shear=last_image.metadata['dc_shear'],
         flip=last_image.metadata['dc_flip'],
         blend_mode=last_image.metadata['blend_mode'],
-        interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
-        upscaling=((min_res[1], min_res[0]) == buffer_size)
+        interpolate_data=(interpolate_data and im_min_type == numpy.uint8)
     )
     # Create legend
     legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
