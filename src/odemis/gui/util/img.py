@@ -1385,10 +1385,10 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
         legend_ctx.paint()
         legend_ctx.restore()
 
-    # write stream data
+    # Write stream data, sorted by acquisition date (and fallback on stable order)
     legend_ctx.set_font_size(small_font)
     legend_y_pos = big_cell_height
-    sorted_data = sorted(streams_data.items(), key=operator.itemgetter(1))
+    sorted_data = sorted(streams_data.items(), key=lambda d: (d[1][0], hash(d[0])))
     for s, (_, data) in sorted_data:
         legend_ctx.set_font_size(small_font)
         if s == stream:
