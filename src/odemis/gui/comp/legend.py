@@ -31,7 +31,6 @@ from odemis.gui import FG_COLOUR_DIS
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.util import wxlimit_invocation
-from odemis.util import limit_invocation
 from odemis.gui.util.img import calculate_ticks
 from odemis.util.conversion import wxcol_to_frgb
 import wx
