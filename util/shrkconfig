@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Allows to read/write the configuration of Andor Shamrock spectrograph
+
+'''
+Created on May 2016
+
+@author: Éric Piel
+
+Copyright © 2016 Éric Piel, Delmic
+
+shrkconfig is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+shrkconfig is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+shrkconfig. If not, see http://www.gnu.org/licenses/.
+'''
+# To test:
+# ./util/shrkconfig --log-level 2 --serial fake --read
+
+from __future__ import division, print_function
+
+import argparse
+import logging
+import sys
+from odemis.driver import andorshrk
+
+
+def read_all(device):
+    print(device.hwVersion)
+
+    print("Grating offsets:")
+    for g in device.axes["grating"].choices:
+        o = device.GetGratingOffset(g)
+        print("\tGrating %d: %d" % (g, o))
+
+    print("Detector offsets:")
+    has_in = device.FlipperMirrorIsPresent(andorshrk.INPUT_FLIPPER)
+    has_out = device.FlipperMirrorIsPresent(andorshrk.OUTPUT_FLIPPER)
+    for fi, fo in ((0, 0), (1, 0), (0, 1), (1, 1)):
+        if (not has_in and fi) or (not has_out and fo):
+            continue
+        o = device.GetDetectorOffset(fi, fo)
+        print("\tDetector %d (%s) -> %d (%s): %d" % (fi, "side" if fi else "direct",
+                                                     fo, "side" if fo else "direct",
+                                                     o))
+
+
+def set_goffset(device, grating, offset):
+    if grating not in device.axes["grating"].choices:
+        raise ValueError("Grating must be one of %s" % (device.axes["grating"].choices.keys(),))
+
+    device.SetGratingOffset(grating, offset)
+    logging.info("Grating offset is at %d", device.GetGratingOffset(grating))
+
+
+def set_doffset(device, entrancep, exitp, offset):
+    if entrancep not in (0, 1) or exitp not in (0, 1):
+        raise ValueError("Entrance and exit setting must be 0 or 1")
+
+    device.SetDetectorOffset(entrancep, exitp, offset)
+    logging.info("Detector offset is at %d", device.GetDetectorOffset(entrancep, exitp))
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(description="Read/write parameters in a Andor Shamrock spectrograph")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=0, help="set verbosity level (0-2, default = 0)")
+
+    parser.add_argument('--read', dest="read", action="store_true",
+                        help="Will read all the offsets and display them")
+    parser.add_argument('--goffset', dest="goffset", nargs=2, type=int,
+                        metavar=("<grating>", "<offset>"),
+                        help="Changes the grating offset (integer value) for the given grating (starting from 1)")
+    parser.add_argument('--doffset', dest="doffset", nargs=3, type=int,
+                        metavar=("<entrance>", "<exit>", "<offset>"),
+                        help="Changes the detector offset for a given entrance/exit flipper configuration")
+    # TODO: allow to change the current turret?
+
+    parser.add_argument('--serial', dest="serial", default=0,
+                        help="Serial number of the device (by default, it will pick the one connected)")
+    # TODO: allow to configure a spectrograph connected via a CCD (with a I²C cable)
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        dev = andorshrk.Shamrock("test", "test", options.serial)
+
+        if options.read:
+            read_all(dev)
+        if options.goffset:
+            set_goffset(dev, *options.goffset)
+        if options.doffset:
+            set_doffset(dev, *options.doffset)
+
+        dev.terminate()
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

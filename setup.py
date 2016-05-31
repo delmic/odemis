@@ -95,6 +95,7 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-mic-selector',
                'util/piconfig',
                'util/tmcmconfig',
+               'util/shrkconfig',
                'util/odemis-park-mirror',
                'util/check-mirror-ref',
                ]
