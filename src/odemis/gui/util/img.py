@@ -900,7 +900,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         pixel = max(min_pixel, value_to_pixel(min_val, pixel_space, vtp_ratio,
                                               value_range, orientation))
         tick_list = [(pixel, min_val)]
-        return tick_list
+        return tick_list, vtp_ratio
 
     vtp_ratio = pixel_space / value_space
 

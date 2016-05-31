@@ -23,26 +23,26 @@ This file is part of Odemis.
 # Test module for Odemis' gui.comp.legend module
 from __future__ import division
 
+import collections
+import numbers
+import sys
 import threading
+import time
 import unittest
 import wx
-import sys
-import numbers
-import collections
 
 import odemis.gui.comp.legend as legend
 import odemis.gui.test as test
 
 
 # test.goto_manual()
-
 RANGES = [(-5, 5), (0, 37)]
-BAD_RANGES = [(0, 0)]
+BAD_RANGES = [(0, 0), (65535, 65535)]
 
 
 def getsize(obj):
     # recursive function to dig out sizes of member objects:
-    def inner(obj, _seen_ids = set()):
+    def inner(obj, _seen_ids=set()):
         obj_id = id(obj)
         if obj_id in _seen_ids:
             return 0
@@ -74,14 +74,18 @@ class LegendTestCase(test.GuiTestCase):
         self.add_control(leg, flags=wx.EXPAND)
         test.gui_loop()
 
+        is_done = threading.Event()
+
         def set_range():
             start, end = 0, 1
             while end < 10e6:
-                end *= 1.0001
+                end *= 1.001
                 leg.unit = 'm'
                 leg.range = (start, end)
-                threading._sleep(0.0005)
+                time.sleep(0.0005)
+
             self.frame.Destroy()
+            is_done.set()
 
         test.gui_loop(500)
 
@@ -90,7 +94,12 @@ class LegendTestCase(test.GuiTestCase):
         t.setDaemon(True)
         t.start()
 
-        test.gui_loop()
+        for i in range(30):  # Fail after 30s not yet finished
+            test.gui_loop(1000)
+            if is_done.is_set():
+                return
+
+        self.assertTrue(is_done.is_set())
 
     def test_bitmap_axis_legend(self):
         self.frame.SetSize((400, 300))
@@ -124,7 +133,7 @@ class LegendTestCase(test.GuiTestCase):
         for r in BAD_RANGES:
             hleg.range = r
             vleg.range = r
-            test.gui_loop()
+            test.gui_loop(100)
 
 
 if __name__ == "__main__":
