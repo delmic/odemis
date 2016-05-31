@@ -588,6 +588,9 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
     returns (float, float, float, float) top, left, width, height
 
     """
+    # TODO: get im_scale and im_center from the metadata of im_data
+    # TODO: also use shear and rotation to computer BBox. At least, add 10%
+    # in case there are not both null.
 
     # Scale the image
     im_h, im_w = im_data.shape[:2]
