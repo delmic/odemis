@@ -607,7 +607,7 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
 
 def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
                buffer_size, opacity=1.0, im_scale=(1.0, 1.0), rotation=None,
-               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False, upscaling=False):
+               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False):
     """ Draw the given image to the Cairo context
 
     The buffer is considered to have it's 0,0 origin at the top left
@@ -625,8 +625,6 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     flip (wx.HORIZONTAL | wx.VERTICAL): If and how to flip the image
     blend_mode (int): Graphical blending type used for transparency
     interpolate_data (boolean): apply interpolation if True
-    upscaling (boolean): if True you need to crop the intersection of the image
-    and the buffer
 
     """
 
@@ -636,6 +634,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
         return
 
     # Determine the rectangle the image would occupy in the buffer
+    # TODO: check why it works when there is rotation or skew
     b_im_rect = calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_scale, buffer_size)
 
     # To small to see, so no need to draw
@@ -668,7 +667,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     height_ratio = float(im_scale[1]) / float(buffer_scale[1])
     total_scale = total_scale_x, total_scale_y = (width_ratio, height_ratio)
 
-    if upscaling:
+    if total_scale_x > 1.0 or total_scale_y > 1.0:
         logging.debug("Up scaling required")
 
         # If very little data is trimmed, it's better to scale the entire image than to create
@@ -1577,16 +1576,17 @@ def convert_streams_to_images(streams, raw=False):
 
 
 def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
-    """ Return the minimial image data that will cover the intersection
+    """ Return the minimal image data that will cover the intersection
 
-    :param b_intersect: (rect) Intersection of the full image and the buffer
-    :param b_im_rect: (rect) The area the full image would occupy in the
+    :param b_intersect: (ltbr px = 4 float) Intersection of the full image and the buffer
+
+    :param b_im_rect: (ltbr px = 4 float) The area the full image would occupy in the
         buffer
     :param im_data: (DataArray) The original image data
     :param total_scale: (float, float) The scale used to convert the image data to
         buffer pixels. (= image scale * buffer scale)
 
-    :return: (DataArray, (float, float))
+    :return: (DataArray, (float, float)): cropped image and left-top coordinate
 
     Since trimming the image will possibly change the top left buffer
     coordinates it should be drawn at, an adjusted (x, y) tuple will be
@@ -1598,11 +1598,6 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     # Although, it seems not, at least with Cairo 1.0.
 
     im_h, im_w = im_data.shape[:2]
-
-    # No need to get sub images from small image data
-    if im_h <= 4 or im_w <= 4:
-        logging.debug("Image too small to worth computing intersection")
-        return im_data, b_im_rect[:2]
 
     # where is this intersection in the original image?
     unsc_rect = (
@@ -1624,31 +1619,20 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     ]
 
     # Make sure that the rectangle fits inside the image
-    if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > im_w or
-            unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
-        # sometimes floating errors + rounding leads to one pixel too
-        # much => just crop.
-        # assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
-        # assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
-        unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]  # clip width
-        unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
+    l = max(0, unsc_rnd_rect[0])
+    t = max(0, unsc_rnd_rect[1])
+    r = min(max(1, unsc_rnd_rect[0] + unsc_rnd_rect[2]), im_w - 1)
+    b = min(max(1, unsc_rnd_rect[1] + unsc_rnd_rect[3]), im_h - 1)
 
     # New top left origin in buffer coordinates to account for the clipping
-    b_new_x = (unsc_rnd_rect[0] * total_scale[0]) + b_im_rect[0]
-    b_new_y = (unsc_rnd_rect[1] * total_scale[1]) + b_im_rect[1]
-
-    # Calculate slicing parameters
-    sub_im_x, sub_im_y = unsc_rnd_rect[:2]
-    sub_im_w, sub_im_h = unsc_rnd_rect[-2:]
-    sub_im_w = max(sub_im_w, 2)
-    sub_im_h = max(sub_im_h, 2)
+    b_new = ((l * total_scale[0]) + b_im_rect[0],
+             (t * total_scale[1]) + b_im_rect[1])
 
     # We need to copy the data, since cairo.ImageSurface.create_for_data expects a single
     # segment buffer object (i.e. the data must be contiguous)
-    im_data = im_data[sub_im_y:sub_im_y + sub_im_h,
-                      sub_im_x:sub_im_x + sub_im_w].copy()
+    im_data = im_data[t:b, l:r].copy()
 
-    return im_data, (b_new_x, b_new_y)
+    return im_data, b_new
 
 
 def images_to_export_data(streams, view_hfw, view_pos,
@@ -1760,8 +1744,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
-            upscaling=(min_res == buffer_size)  # TODO: why not always upscaling?
+            interpolate_data=(interpolate_data and im_min_type == numpy.uint8)
         )
         if raw:
             # Create legend
@@ -1812,8 +1795,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
         shear=last_image.metadata['dc_shear'],
         flip=last_image.metadata['dc_flip'],
         blend_mode=last_image.metadata['blend_mode'],
-        interpolate_data=(interpolate_data and im_min_type == numpy.uint8),
-        upscaling=(min_res == buffer_size)
+        interpolate_data=(interpolate_data and im_min_type == numpy.uint8)
     )
     # Create legend
     legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
