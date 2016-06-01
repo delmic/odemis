@@ -52,8 +52,11 @@ class SimplePlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(SimplePlugin, self).__init__(microscope, main_app)
+#         if microscope is None or microscope.ccd is None:
+#             return
+
         self.addMenu("Acquisition/Fancy acquisition...", self.start)
-        self.importantValue = model.FloatContinuous(2, (0, 10), unit="s")
+        self.exposureTime = model.FloatContinuous(2, (0, 10), unit="s")
         self.filename = model.StringVA("boo.h5")
 
     def start(self):
@@ -77,6 +80,9 @@ class SimplePlugin(Plugin):
                 pass
 
     def acquire(self, dlg):
+        ccd = self.microscope.ccd
+        ccd.exposureTime.value = self.exposureTime.value
+
         f = model.ProgressiveFuture()
         f.task_canceller = lambda l: True  # To allow cancelling while it's running
         dlg.showProgress(f)
@@ -84,10 +90,11 @@ class SimplePlugin(Plugin):
         d = []
         for i in range(10):
             f.set_progress(end=time.time() + (10 - i))
-            if self.microscope is not None:
-                d.append(self.microscope.ccd.data.get())
+            d.append(ccd.data.get())
             if f.cancelled():
                 return
+
+        f.set_result(None)  # Indicate it's over
 
         if d:
             dataio.hdf5.export(self.filename.value, d)

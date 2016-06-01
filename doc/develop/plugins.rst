@@ -12,17 +12,23 @@ Plugin loading
 ==============
 
 A plugin is defined by a class present in a python file (called "module"), which
-is installed in one of these three places:
+must be installed in a specific directory.
+On Linux, plugins are searched in these three places:
 
- * /usr/share/odemis/plugins/
+ * ``/usr/share/odemis/plugins/``
 
- * /usr/local/share/odemis/plugins/
+ * ``/usr/local/share/odemis/plugins/``
  
- * ~/.local/share/odemis/plugins/
+ * ``~/.local/share/odemis/plugins/``
+
+On Windows, plugins are searched in these two places:
+
+ * ``plugins\`` of the Odemis program directory (ex: ``C:\Program Files (x86)\OdemisViewer\plugins``)
+
+ * ``.config\odemis\plugins\`` for the user directory (ex: ``C:\Users\Bob\.config\odemis\plugins``)
 
 Each ``.py`` file in these directories is loaded at GUI start as a python module
-and for each subclass of Plugin present in the module, an instance is created.
-
+and for each subclass of :py:class:`Plugin` present in the module, an instance is created.
 
 
 Plugin class
@@ -174,5 +180,72 @@ The Plugin class provides a few helper functions:
     
        (list of wx.Button): The buttons which were added.
        It allows enabling/disabling buttons and change label.
+
+
+Example plugins
+===============
+
+You can find example plugins in the Odemis source directory in ``plugins/``.
+An example of plugin that can also be used from the command line, as a script,
+can be found in ``scripts/monochromator-scan.py`` .
+
+Note that by convention the file name of python are always in lowercase and
+without spaces (replaced by ``_``).
+
+Below is an example of a very simple plugin which will create a menu entry.
+When that entry is selected, it shows an acquisition window and then acquire
+10 images from the CCD with the selected exposure time.
+
+.. code-block:: python
+
+    class SimplePlugin(Plugin):
+        name = "Example plugin"
+        __version__ = "1.0.1"
+        __author__ = "Éric Piel"
+        __license__ = "GNU General Public License 2"
+
+        def __init__(self, microscope, main_app):
+            super(SimplePlugin, self).__init__(microscope, main_app)
+            if microscope is None or microscope.ccd is None:
+                return
+
+            self.addMenu("Acquisition/Fancy acquisition...", self.start)
+            self.exposureTime = model.FloatContinuous(2, (0, 10), unit="s")
+            self.filename = model.StringVA("boo.h5")
+
+        def start(self):
+            dlg = AcquisitionDialog(self, "Fancy Acquisition", "Enter everything")
+            dlg.addSettings(self, conf={"filename": {"control_type": CONTROL_SAVE_FILE}})
+            dlg.addButton("Cancel")
+            dlg.addButton("Acquire", self.acquire, face_colour='blue')
+
+            ans = dlg.ShowModal()
+            if ans == 0:
+                # Ignore errors about a missing analysis tab
+                try:
+                    self.showAcquisition(self.filename.value)
+                except AttributeError:
+                    pass
+
+        def acquire(self, dlg):
+            ccd = self.microscope.ccd
+            ccd.exposureTime.value = self.exposureTime.value
+
+            f = model.ProgressiveFuture()
+            f.task_canceller = lambda l: True  # To allow cancelling while it's running
+            dlg.showProgress(f)
+
+            d = []
+            for i in range(10):
+                f.set_progress(end=time.time() + (10 - i))
+                d.append(ccd.data.get())
+                if f.cancelled():
+                    return
+
+            f.set_result(None)  # Indicate it's over
+
+            if d:
+                dataio.hdf5.export(self.filename.value, d)
+                dlg.Destroy()
 
 
