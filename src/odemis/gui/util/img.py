@@ -35,7 +35,6 @@ from odemis.gui.comp.overlay.base import Label
 from odemis.util import intersect, fluo
 from odemis.util import polar, img
 from odemis.util import units
-import operator
 import time
 import wx
 
