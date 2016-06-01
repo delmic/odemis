@@ -234,13 +234,12 @@ class Shamrock(model.Actuator):
     Note: we don't handle changing turret (live).
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
-                 slits=None, bands=None, fstepsize=1e-6, children=None, **kwargs):
+                 slits=None, bands=None, fstepsize=1e-6, **kwargs):
         """
         device (0<=int or str): if int, device number, if str serial number or
           "fake" to use the simulator
         camera (None or AndorCam2): Needed if the connection is done via the
-          I²C connector of the camera. In such case, no children should be
-          provided.
+          I²C connector of the camera.
         inverted (None): it is not allowed to invert the axes
         accessory (str or None): if "slitleds", then a TTL signal will be set to
           high on line 1 whenever one of the slit leds might be turned on.
@@ -693,6 +692,27 @@ class Shamrock(model.Actuator):
 
 #self._dll.ShamrockGetPixelWidth(self._device, float* Width)
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
+
+    # For hardware calibration
+    def SetDetectorOffset(self, entrancep, exitp, offset):
+        with self._hw_access:
+            self._dll.ShamrockSetDetectorOffsetEx(self._device, entrancep, exitp, offset)
+
+    def GetDetectorOffset(self, entrancep, exitp):
+        offset = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetDetectorOffsetEx(self._device, entrancep, exitp, byref(offset))
+        return offset.value
+
+    def SetGratingOffset(self, grating, offset):
+        with self._hw_access:
+            self._dll.ShamrockSetGratingOffset(self._device, grating, offset)
+
+    def GetGratingOffset(self, grating):
+        offset = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetGratingOffset(self._device, grating, byref(offset))
+        return offset.value
 
     # Focus mirror management
     # Note: the focus is automatically saved/changed after changing grating
@@ -1370,6 +1390,16 @@ class FakeShamrockDLL(object):
         # just for simulating the limitation of the iDus
         self._ccd = ccd
 
+        # offsets
+        # gratting number -> offset (int)
+        self._goffset = dict((i, 0) for i in range(len(self._gratings)))
+        # enrance port (flipper #1) / exit port (flipper #2) -> offset (int)
+        self._detoffset = {(0, 0): 0,
+                           (0, 1): 0,
+                           (1, 0): 0,
+                           (1, 1): 0,
+                          }
+
     def _check_hw_access(self):
         """
         Simulate hw connection failure if the CCD is acquiring, like the
@@ -1426,6 +1456,20 @@ class FakeShamrockDLL(object):
         offset = _deref(p_offset, c_int)
         info = self._gratings[_val(grating) - 1][0:4]
         lines.value, s_blaze.value, home.value, offset.value = info
+
+    def ShamrockSetDetectorOffsetEx(self, device, entrancePort, exitPort, offset):
+        self._detoffset[_val(entrancePort), _val(exitPort)] = _val(offset)
+
+    def ShamrockGetDetectorOffsetEx(self, device, entrancePort, exitPort, p_offset):
+        offset = _deref(p_offset, c_int)
+        offset.value = self._detoffset[_val(entrancePort), _val(exitPort)]
+
+    def ShamrockSetGratingOffset(self, device, grating, offset):
+        self._goffset[_val(grating) - 1] = _val(offset)
+
+    def ShamrockGetGratingOffset(self, device, grating, p_offset):
+        offset = _deref(p_offset, c_int)
+        offset.value = self._goffset[_val(grating) - 1]
 
     def ShamrockSetWavelength(self, device, wavelength):
         self._check_hw_access()
