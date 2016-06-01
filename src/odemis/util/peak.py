@@ -25,11 +25,19 @@ from scipy.optimize import curve_fit
 import threading
 import time
 
+# TODO: this code is full of reliance on numpy being quite lax with wrong
+# computation, and easily triggers numpy warnings. To force numpy to be
+# stricter:
+# import warnings
+# warnings.filterwarnings('error')
+# numpy.seterr(all='raise')
 
 # rough estimation of peak width based on fitting type
 PEAK_WIDTHS = {'gaussian': 0.1, 'lorentzian': 1e-4}
 
 # These two fitting functions are called back from curve_fit()
+# Note: when returning NaN, curve_fit() appears to not like the proposed parameters
+
 def GaussianFit(data, *peaks):
     """
     Applies gaussian fitting to data given the "peaks" parameters.
@@ -371,6 +379,10 @@ def _Grouped(iterable, n):
 
 def _Normalize(vector):
     normfac = numpy.max(vector)
+    if normfac == 0:
+        # TODO: raise a ValueError instead? But that confuses curve_fit a lot
+        logging.debug("Tried to normalize null vector")
+        return float("NaN")
 
     vecnorm = vector / normfac
     return vecnorm
