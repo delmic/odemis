@@ -3032,6 +3032,21 @@ class Sparc2AlignTab(Tab):
         """
         Called when the optical path mode is fiber-align and ready
         """
+        # Has no effect now, as OPM future are not cancellable (but it makes the
+        # code more future-proof)
+        if f.cancelled():
+            return
+        logging.debug("Fiber aligner finished moving")
+
+        # The optical path manager queues the futures. So the mode might already
+        # have been changed to another one, while this fiber-align future only
+        # finishes now. Without checking for this, the fiber selector position
+        # will be listen to, while in another mode.
+        if self.tab_data_model.align_mode.value != "fiber-align":
+            logging.debug("Not listening fiber selector as mode is now %s",
+                          self.tab_data_model.align_mode.value)
+            return
+
         # Make sure the user can move the X axis only once at ACTIVE position
         self.tab_data_model.main.spec_sel.position.subscribe(self._onFiberPos)
         self.panel.btn_m_fibaligner_x.Enable(True)
@@ -3188,6 +3203,7 @@ class Sparc2AlignTab(Tab):
         """
         # Save the axis position as the "calibrated" one
         ss = self.tab_data_model.main.spec_sel
+        logging.debug("Updating the active fiber position to %s", pos)
         ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
     def Show(self, show=True):
