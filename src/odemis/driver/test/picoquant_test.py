@@ -88,11 +88,70 @@ class TestPH300(unittest.TestCase):
         cls.dev.terminate()
         time.sleep(1)
 
+    def test_acquire_get(self):
+        dt = self.dev.dwellTime.range[0]
+        self.dev.dwellTime.value = dt
+        exp_shape = self.dev.shape[-2::-1]
+        df = self.dev.data
+        for i in range(3):
+            data = df.get()
+            self.assertEqual(data.shape, exp_shape)
+            self.assertEqual(data.metadata[model.MD_DWELL_TIME], dt)
+            self.dev.dwellTime.value = dt * 2
+            dt = self.dev.dwellTime.value
+
+    def test_acquire_sub(self):
+        """Test the subscription"""
+        dt = 1  # 1s
+        df = self.dev.data
+        self.dev.dwellTime.value = dt
+        exp_shape = self.dev.shape[-2::-1]
+
+        self._cnt = 0
+        self._lastdata = None
+        df.subscribe(self._on_det)
+        time.sleep(5)
+        df.unsubscribe(self._on_det)
+        self.assertGreater(self._cnt, 3)
+        self.assertEqual(self._lastdata.shape, exp_shape)
+
+    def _on_det(self, df, data):
+        self._cnt += 1
+        self._lastdata = data
+
+    def test_va(self):
+        """Test changing VA"""
+        dt = self.dev.dwellTime.range[0]
+        self.dev.dwellTime.value = dt
+        df = self.dev.data
+
+        tres_b_one = None
+
+        for i in range(1, 5):
+            self.dev.binning.value = (i, 1)
+            b = self.dev.binning.value
+            self.assertGreaterEqual(i, b[0])
+
+            so = -10e-9 * i
+            self.dev.syncOffset.value = so
+            self.assertAlmostEqual(self.dev.syncOffset.value, so)
+
+            data = df.get()
+            exp_shape = self.dev.shape[1] / b[1], self.dev.shape[0] / b[0]
+            self.assertEqual(data.shape, exp_shape)
+            self.assertEqual(data.metadata[model.MD_DWELL_TIME], dt)
+            self.assertEqual(data.metadata[model.MD_BINNING], b)
+            if tres_b_one is None and b[0] == 1:
+                self.assertGreater(data.metadata[model.MD_PIXEL_DUR], 0)
+                tres_b_one = data.metadata[model.MD_PIXEL_DUR]
+            else:
+                self.assertEqual(data.metadata[model.MD_PIXEL_DUR], tres_b_one * b[0])
+
     def test_acquire_rawdet(self):
         for i in range(3):
             data = self.det0.data.get()
             self.assertEqual(data.shape, (1,))
-            self.assertIn(model.MD_EXP_TIME, data.metadata)
+            self.assertIn(model.MD_DWELL_TIME, data.metadata)
 
         # Test the subscription
         self._cnt = 0
