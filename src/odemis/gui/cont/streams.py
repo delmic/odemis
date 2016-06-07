@@ -1525,9 +1525,7 @@ class StreamBarController(object):
         # as simple to reset all the lists
 
         # clear the graphical part
-        while self._stream_bar.stream_panels:
-            spanel = self._stream_bar.stream_panels[0]
-            self._stream_bar.remove_stream_panel(spanel)
+        self._stream_bar.clear()
 
         # clear the interface model
         # (should handle cases where a new stream is added simultaneously)
@@ -1560,7 +1558,7 @@ class StreamBarController(object):
 
 class SecomStreamsController(StreamBarController):
     """
-    Controlls the streams for the SECOM and DELPHI live view
+    Controls the streams for the SECOM and DELPHI live view
     """
 
     def _createAddStreamActions(self):
