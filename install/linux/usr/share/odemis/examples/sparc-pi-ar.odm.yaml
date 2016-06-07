@@ -3,9 +3,7 @@
 SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY", "AR Lens"],
-    detectors: ["SED ExtXY", "ARCam"],
-    actuators: ["MirrorMover"],
+    children: ["EBeam ExtXY", "AR Lens", "SED ExtXY", "ARCam", "MirrorMover"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -71,7 +69,7 @@ ARCam: {
     role: ccd,
     init: {
            device: "rspipixis", # use 0 if this symlink is no created
-           transpose: [-1, -2], # mirrored on Y axis
+           transp: [-1, -2],
            }
 }
 

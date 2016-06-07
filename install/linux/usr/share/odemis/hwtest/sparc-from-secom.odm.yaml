@@ -72,7 +72,7 @@ Clara: {
     role: ccd,
     init: {
         device: 0, # the only Andor camera connected so always 0
-        #transpose: [2, -1], # rotation by 90°
+        #transp: [-2, 1], # rotation by 90°
     }, 
     properties: {
         exposureTime: 0.3, # s

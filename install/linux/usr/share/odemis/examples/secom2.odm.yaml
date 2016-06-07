@@ -1,9 +1,9 @@
 SECOMv2: {
     class: Microscope,
     role: secom,
-    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
-    detectors: ["Camera", "SEM Detector"],
-    actuators: ["Sample Stage", "Objective Stage", "Optical Focus"],
+    children: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam",
+               "Camera", "SEM Detector",
+               "Sample Stage", "Objective Stage", "Optical Focus"],
 }
 
 # "Light Engine": {
@@ -113,7 +113,7 @@ SECOMv2: {
     role: ccd,
     init: {
         device: 0, # the only Andor camera connected so always 0
-        transpose: [2, -1], # rotation by 90°
+        transp: [-2, 1], # rotation by 90°
     },
     properties: {
         exposureTime: 0.3, # s

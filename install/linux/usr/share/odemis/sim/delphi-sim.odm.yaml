@@ -129,7 +129,7 @@ DELPHI: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
-           transpose: [-2, -1], # rotated 90° clockwise
+           transp: [-2, -1],
            image: "andorcam2-fake-clara.tiff", # only for simulator
     },
     properties: {

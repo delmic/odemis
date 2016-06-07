@@ -3,8 +3,8 @@ SPARC-Spec: {
     class: Microscope,
     role: sparc,
     children: ["SEM E-beam",
-    "SEM Detector", "Spectrometer",
-    "Mirror Actuators"],
+               "SEM Detector", "Spectrometer",
+               "Mirror Actuators"],
 }
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
@@ -69,7 +69,7 @@ SPARC-Spec: {
     role: sp-ccd,
     init: {
            device: 0, # 0 = first and only Andor SDK 2 camera, use "fake" if no camera is present
-           transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
+           transp: [-1, 2], # if mirrored on X axis
     },
     properties: {
         targetTemperature: -60, # °C
