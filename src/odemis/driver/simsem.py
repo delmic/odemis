@@ -451,8 +451,8 @@ class Detector(model.Detector):
                 mind, maxd = sim_img.min(), sim_img.max()
                 maxf = 2 ** bpp - 1
                 b = maxf / (maxd - mind)
-                sim_img -= mind
-                sim_img *= b
+                # Multiply by a float and drop to the original dtype
+                numpy.multiply(sim_img - mind, b, out=sim_img, casting="unsafe")
                 if bpp <= 8:
                     sim_img = sim_img.astype(numpy.uint8)
 

@@ -121,6 +121,7 @@ class TestSEM(unittest.TestCase):
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
         self.scanner.resolution.value = (512, 256)
+        self.sed.bpp.value = max(self.sed.bpp.choices)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
@@ -155,6 +156,20 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_acquire_8bpp(self):
+        self.sed.bpp.value = 8
+        self.scanner.dwellTime.value = 10e-6  # s
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        self.assertEqual(im.metadata[model.MD_BPP], 8)
 
     def test_hfv(self):
         orig_pxs = self.scanner.pixelSize.value
