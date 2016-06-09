@@ -707,8 +707,8 @@ class ListVA(VigilantAttribute):
         self._set_value(value, must_notify=True)
 
     # Redefine the setter, so we can force to listen to internal modifications
-    def _set_value(self, value, must_notify=False):
-        VigilantAttribute._set_value(self, value, must_notify)
+    def _set_value(self, value, **kwargs):
+        VigilantAttribute._set_value(self, value, **kwargs)
         # TODO: this means that .notify will be called with a simple list,
         # should it be overridden to change to a notifying list? Same for the proxy.
         self._value = _NotifyingList(self._value, notifier=self._internal_set_value)
@@ -1079,10 +1079,10 @@ class TupleContinuous(VigilantAttribute, Continuous):
         Continuous.__init__(self, range)
         VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
 
-    def _set_value(self, value):
+    def _set_value(self, value, **kwargs):
         # force tuple
         value = tuple(value)
-        VigilantAttribute._set_value(self, value)
+        VigilantAttribute._set_value(self, value, **kwargs)
     # need to overwrite the whole property
     value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value,
                      "The actual value")
