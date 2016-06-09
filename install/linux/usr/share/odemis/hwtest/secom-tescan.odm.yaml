@@ -1,10 +1,10 @@
 SimTescanSECOM: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY", "Chamber Light"],
-    detectors: ["Andor SimCam", "SED ExtXY", "ChamberCam", "CL PMT"],
-    actuators: ["SEM-Optical Alignment", "OpticalZ actuator",
-                "OLStage", "Ebeam-focus actuator"],
+    children: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY", "Chamber Light",
+               "Andor SimCam", "SED ExtXY", "ChamberCam", "CL PMT",
+               "SEM-Optical Alignment", "OpticalZ actuator", "OLStage",
+               "Ebeam-focus actuator"],
 }
 
 #Light: {
@@ -117,7 +117,7 @@ Spectra: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
-           transpose: [-2, 1], # rotated 90° clockwise
+           transp: [2, -1], # rotated 90° clockwise
            # Look-up table for recommended EMCCD Real Gain
            # readout rate, gain, real gain (integer)
            emgains: [[10.e+6, 1, 50],

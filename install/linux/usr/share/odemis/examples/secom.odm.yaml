@@ -1,9 +1,9 @@
 SECOM: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Lens", "MultiBand Fixed Filter", "EBeam ExtXY"],
-    detectors: [Clara, "SED ExtXY"],
-    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    children: [Spectra, "Nikon Lens", "MultiBand Fixed Filter", "EBeam ExtXY",
+               Clara, "SED ExtXY",
+               "OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
 Spectra: {
@@ -112,7 +112,7 @@ Clara: { # Also works with iXon Ultra
     role: ccd,
     init: {
         device: 0, # the only Andor camera connected so always 0
-        transpose: [2, -1], # rotation by 90°
+        transp: [-2, 1], # rotation by 90°
         # Look-up table for recommended EMCCD Real Gain (for iXon Ultra)
         # readout rate, gain, real gain (integer)
         emgains: [[17.e+6, 1, 200],

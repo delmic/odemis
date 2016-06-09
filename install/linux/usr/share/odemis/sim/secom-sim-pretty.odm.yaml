@@ -100,7 +100,7 @@ Spectra: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
-#            transpose: [-2, 1], # rotated 90° clockwise
+#            transp: [2, -1], # rotated 90° clockwise
            image: "songbird-sim-ccd.h5", # only for simulator
     },
 }
