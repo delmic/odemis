@@ -1524,6 +1524,9 @@ class AnalysisTab(Tab):
         self.tab_data_model.tool.value = guimod.TOOL_NONE
         self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
+        if filename is None:
+            return
+
         new_visible_views = list(self._def_views)  # Use a copy
 
         # Create a new file info model object
