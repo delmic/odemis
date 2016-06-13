@@ -17,15 +17,17 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+import Queue
 from ctypes import *
 import ctypes
 import logging
+import math
 import numpy
 from odemis import model, util
 from odemis.model import HwError
 import random
+import threading
 import time
-import weakref
 
 
 # Based on phdefin.h
@@ -204,7 +206,6 @@ class PH300(model.Detector):
 
         super(PH300, self).__init__(name, role, daemon=daemon, **kwargs)
 
-        # TODO: what's the shape? 1D array with count as value, and time as dim
         # TODO: metadata for indicating the range? cf WL_LIST?
 
         # TODO: do we need TTTR mode?
@@ -217,6 +218,12 @@ class PH300(model.Detector):
         logging.info("Opened device %d (%s s/n %s)", self._idx, mod, sn)
 
         self.Calibrate()
+
+        # Do basic set-up for things that should never be needed to change
+        self.SetSyncDiv(1)  # 1 = no divider TODO: needs to be a VA?
+
+        # TODO: needs to be changeable?
+        self.SetOffset(0)
 
         # To pass the raw count of each detector, we create children detectors.
         # It could also go into just separate DataFlow, but then it's difficult
@@ -232,14 +239,50 @@ class PH300(model.Detector):
             self._detectors[name] = PH300RawDetector(channel=i, parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detectors[name])
 
-        # TODO: what are good VA names?
-        # dwellTime (= measurement duration) should be understandable and easily compatible
+        # dwellTime = measurement duration
+        dt_rng = (ACQTMIN * 1e-3, ACQTMAX * 1e-3)  # s
+        self.dwellTime = model.FloatContinuous(1, dt_rng, unit="s")
 
+        # TODO: How to indicate first dim is time?
+        self._metadata[model.MD_DIMS] = "T"
+        self._shape = (HISTCHAN, 1, 2**16) # Histogram is 32 bits, but only return 16 bits info
+
+        # TODO: allow to change the CFD parameters (per channel)
+        self.SetInputCFD(0, 100, 10)
+        self.SetInputCFD(1, 100, 10)
+
+        # binning = resolution / base resolution
+        tresbase, bs = self.GetBaseResolution()
+        tres = self.GetResolution()
+        self._curbin = int(tres / tresbase)
+        b = max(1, self._curbin)
+        bin_rng = ((1, 1), (2**(BINSTEPSMAX - 1), 1))
+        self.binning = model.ResolutionVA((b, 1), bin_rng, setter=self._setBinning)
+
+        res = self._shape[:2]
+        min_res = (res[0] // bin_rng[1][0], res[1])
+        self.resolution = model.ResolutionVA(res, (min_res, res), readonly=True)
+
+        # TODO: (sync?) offset
+        self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-9, SYNCOFFSMAX * 1e-9),
+                                                unit="s", setter=self._setSyncOffset)
+
+        # Wrapper for the dataflow
+        self.data = BasicDataFlow(self)
         # TODO: how to get the data while it's building up via a dataflow?
         # => two dataflows? one that is only sending full data, and one that sends
         # data while it's building up? Does reading histogram while the data is
         # building works? Otherwise, just let the client ask for shorter dwellTime
         # and accumulate client side?
+
+        # Queue to control the acquisition thread:
+        # * "S" to start
+        # * "E" to end
+        # * "T" to terminate
+        self._genmsg = Queue.Queue()
+        self._generator = threading.Thread(target=self._acquire,
+                                           name="PicoHarp300 acquisition thread")
+        self._generator.start()
 
     def _openDevice(self, sn=None):
         """
@@ -268,6 +311,11 @@ class PH300(model.Detector):
 
     def terminate(self):
         model.Detector.terminate(self)
+        self.stop_generate()
+        if self._generator:
+            self._genmsg.put("T")
+            self._generator.join(5)
+            self._generator = None
         self.CloseDevice()
 
     def CloseDevice(self):
@@ -301,6 +349,90 @@ class PH300(model.Detector):
         logging.debug("Calibrating device %d", self._idx)
         self._dll.PH_Calibrate(self._idx)
 
+    def GetBaseResolution(self):
+        """
+        Raw device time resolution, and binning
+        return:
+            res (0<=float): min duration of a bin in the histogram (in ps)
+            binning code (0<=int): binning = 2**bc
+        """
+        # TODO: check that binning is indeed the binning code
+        res = c_double()
+        bs = c_int()
+        self._dll.PH_GetBaseResolution(self._idx, byref(res), byref(bs))
+        return res.value, bs.value
+
+    def GetResolution(self):
+        """
+        Current time resolution, taking into account the binning
+        return (0<=float): duration of a bin (in ps)
+        """
+        res = c_double()
+        self._dll.PH_GetResolution(self._idx, byref(res))
+        return res.value
+
+    def SetInputCFD(self, channel, level, zc):
+        """
+        Changes the Constant Fraction Discriminator
+        channel (0 or 1)
+        level (int) CFD discriminator level in millivolts
+        zc (0<=int): CFD zero cross in millivolts
+        """
+        assert(channel in {0, 1})
+        assert(DISCRMIN <= level <= DISCRMAX)
+        assert(ZCMIN <= zc <= ZCMAX)
+        self._dll.PH_SetInputCFD(self._idx, channel, level, zc)
+
+    def SetSyncDiv(self, div):
+        """
+        Changes the divider of the sync input (channel 0). This allows to reduce
+        the sync input rate so that the period is at least as long as the dead time.
+        Note: the count rate will need 100 ms to be valid again
+        div (1, 2, 4, or 8): input rate divider applied at channel 0
+        """
+        assert(SYNCDIVMIN <= div <= SYNCDIVMAX)
+        self._dll.PH_SetSyncDiv(self._idx, div)
+
+    def SetSyncOffset(self, offset):
+        """
+        Note that this offset must not be confused with the histogram acquisition offset.
+        offset (int): offset in ps
+        """
+        assert(SYNCOFFSMIN <= offset <= SYNCOFFSMAX)
+        self._dll.PH_SetOffset(self._idx, offset)
+
+    def SetOffset(self, offset):
+        """
+        Changes the acquisition offset. The offset is subtracted from each
+        start-stop measurement before it is used to address the histogram channel
+        to be incremented. Therefore, increasing the offset means shifting the
+        signal towards earlier times.
+        Note: This offset only acts on the difference between ch1 and ch0 in
+        histogramming and T3 mode. Do not confuse it with the input offsets.
+        offset (0<=int): offset in ps
+        """
+        assert(OFFSETMIN <= offset <= OFFSETMAX)
+        self._dll.PH_SetOffset(self._idx, offset)
+
+    def SetBinning(self, bc):
+        """
+        bc (0<=int): binning code. Binning = 2**bc (IOW, 0 for binning 1, 3 for binning 8)
+        """
+        assert(0 <= bc <= BINSTEPSMAX - 1)
+        self._dll.PH_SetBinning(self._idx, bc)
+
+    def SetStopOverflow(self, stop, stopcount):
+        """
+        Make the device stop the whole measurement as soon as one bin reaches
+        the given count (or disable that feature, in which case the bins will
+        get clipped)
+        stop (bool): True if it should stop on reaching the given count
+        stopcount (0<int<=2**16-1): count at which to stop
+        """
+        assert(0 <= stopcount <= 2**16 - 1)
+        stop_ovfl = 1 if stop else 0
+        self._dll.PH_SetStopOverflow(self._idx, stop_ovfl, stopcount)
+
     def GetCountRate(self, channel):
         """
         Note: need at least 100 ms per reading (otherwise will return the same value)
@@ -311,6 +443,55 @@ class PH300(model.Detector):
         rate = c_int()
         self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
         return rate.value
+
+    def ClearHistMem(self, block=0):
+        """
+        block (0 <= int): block number to clear
+        """
+        assert(0 <= block)
+        self._dll.PH_ClearHistMem(self._idx, block)
+
+    def StartMeas(self, tacq):
+        """
+        tacq (0<int): acquisition time in milliseconds
+        """
+        assert(ACQTMIN <= tacq <= ACQTMAX)
+        self._dll.PH_StartMeas(self._idx, tacq)
+
+    def StopMeas(self):
+        self._dll.PH_StopMeas(self._idx)
+
+    def CTCStatus(self):
+        """
+        Reports the status of the acquisition (CTC)
+        Return (bool): True if the acquisition time has ended
+        """
+        ctcstatus = c_int()
+        self._dll.PH_CTCStatus(self._idx, byref(ctcstatus))
+        return ctcstatus.value > 0
+
+    def GetHistogram(self, block=0):
+        """
+        block (0<=int): only useful if routing
+        return numpy.array of shape (1, res): the histogram
+        """
+        # Create array of HISTCHAN/binning ints
+        tresbase, bs = self.GetBaseResolution()
+        tres = self.GetResolution()
+        count = int(math.ceil(HISTCHAN * tresbase / tres))
+        buf = numpy.empty((1, count), dtype=numpy.uint32)
+
+        buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
+        self._dll.PH_GetHistogram(self._idx, buf_ct, block)
+        return buf
+
+    def GetElapsedMeasTime(self):
+        """
+        return 0<=float: time since the measurement started (in s)
+        """
+        elapsed = c_double() # in ms
+        self._dll.PH_GetElapsedMeasTime(self._idx, byref(elapsed))
+        return elapsed.value * 1e-3
 
     def ReadFiFo(self, count):
         """
@@ -332,6 +513,7 @@ class PH300(model.Detector):
         #   From the demo programs: markers are recorded as channel 0xf, in which
         #   case the next 12 bits are the marker number. Marker 0 indicates the
         #   counter overflow.
+        # See also https://github.com/tsbischof/libpicoquant
 
         assert 0 < count < TTREADMAX
         buf = numpy.empty((count,), dtype=numpy.uint32)
@@ -342,6 +524,132 @@ class PH300(model.Detector):
         # only return the values which were read
         # TODO: if it's really smaller (eg, 0), copy the data to avoid holding all the mem
         return buf[:nactual.value]
+
+    def _setBinning(self, binning):
+        # TODO: delay until the end of an acquisition
+
+        # Only accept a power of 2
+        bs = int(math.log(binning[0], 2))
+        self.SetBinning(bs)
+
+        # Update resolution
+        b = 2 ** bs
+        self._curbin = b
+        res = self._shape[0] // b, self._shape[1]
+        self.resolution._set_value(res, force_write=True)
+
+        self._metadata[model.MD_BINNING] = (b, 1)
+        self._metadata[model.MD_PIXEL_DUR] = self.GetResolution() * 1e-9  # ps -> s
+
+        return (b, 1)
+
+    def _setSyncOffset(self, offset):
+        offset_ps = int(offset * 1e9)
+        self.SetSyncOffset(offset_ps)
+        offset = offset_ps * 1e-9  # convert the round-down in ps back to s
+        self._metadata[model.MD_TIME_OFFSET] = offset
+        return offset
+
+    # Acquisition methods
+    def start_generate(self):
+        self._genmsg.put("S")
+
+    def stop_generate(self):
+        self._genmsg.put("E")
+
+    def _get_acq_msg(self, **kwargs):
+        """
+        Read one message from the acquisition queue
+        return str
+        raises Queue.Empty: if
+        """
+        msg = self._genmsg.get(**kwargs)
+        if msg not in ("S", "E", "T"):
+            logging.warning("Acq received unexpected message %s", msg)
+        else:
+            logging.debug("Acq received message %s", msg)
+        return msg
+
+    def _acquire(self):
+        """
+        Acquisition thread
+        Managed via the .genmsg Queue
+        """
+        state = "E"  # E = stopped
+        try:
+            while True:
+
+                # Wait until we have a start (or terminate) message
+                while state != "S":
+                    state = self._get_acq_msg(block=True)
+                    if state == "T":
+                        return
+
+                    # Check if there are already more messages on the queue
+                    try:
+                        state = self._get_acq_msg(block=False)
+                        if state == "T":
+                            return
+                    except Queue.Empty:
+                        pass
+
+                # Keep acquiring
+                while True:
+                    tacq = self.dwellTime.value
+                    tstart = time.time()
+                    tend = tstart + tacq * 3 + 1  # Give a big margin for timeout
+
+                    # TODO: only allow to update the setting here (not during acq)
+                    md = self._metadata.copy()
+                    md[model.MD_ACQ_DATE] = tstart
+                    md[model.MD_DWELL_TIME] = tacq
+
+                    logging.debug("Starting new acquisition")
+                    self.ClearHistMem()
+                    self.StartMeas(int(tacq * 1e3))
+
+                    # Wait for the acquisition to be done or until a stop or
+                    # terminate message comes
+                    try:
+                        now = tstart
+                        while now < tend:
+                            twait = max(1e-3, min((tend - now) / 2, tacq / 2))
+                            logging.debug("Waiting for %g s", twait)
+                            try:
+                                state = self._get_acq_msg(timeout=twait)
+                                if state == "E":
+                                    break
+                                elif state == "T":
+                                    return
+                            except Queue.Empty:
+                                pass
+
+                            # Is the data ready?
+                            if self.CTCStatus():
+                                logging.debug("acq still running")
+                                break
+                            now = time.time()
+                        else:
+                            logging.error("Acquisition timeout after %g s", tend - tstart)
+                            # TODO: try to reset the hardware?
+                            continue
+                    finally:
+                        # Must always be called, whether the measurement finished or not
+                        self.StopMeas()
+
+                    if state != "S":
+                        logging.debug("Acquisition stopped")
+                        break
+
+                    # Read data and pass it
+                    data = self.GetHistogram()
+                    da = model.DataArray(data, md)
+                    self.data.notify(da)
+
+        except Exception:
+            logging.exception("Failure in acquisition thread")
+
+        logging.debug("Acquisition thread ended")
 
     @classmethod
     def scan(cls):
@@ -380,7 +688,7 @@ class PH300RawDetector(model.Detector):
         super(PH300RawDetector, self).__init__(name, role, parent=parent, **kwargs)
 
         self._shape = (2**31,)  # only one point, with (32 bits) int size
-        self.data = RawDetDataFlow(self)
+        self.data = BasicDataFlow(self)
 
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
         self._generator = None
@@ -409,7 +717,7 @@ class PH300RawDetector(model.Detector):
         # update metadata
         metadata = self._metadata.copy()
         metadata[model.MD_ACQ_DATE] = time.time()
-        metadata[model.MD_EXP_TIME] = 100e-3  # s
+        metadata[model.MD_DWELL_TIME] = 100e-3  # s
 
         # Read data and make it a DataArray
         d = self.parent.GetCountRate(self._channel)
@@ -420,38 +728,21 @@ class PH300RawDetector(model.Detector):
         self.data.notify(img)
 
 
-class RawDetDataFlow(model.DataFlow):
+class BasicDataFlow(model.DataFlow):
     def __init__(self, detector):
         """
-        detector (PH300RawDetector): the detector that the dataflow corresponds to
+        detector (PH300): the detector that the dataflow corresponds to
         """
         model.DataFlow.__init__(self)
-        self._detector = weakref.ref(detector)
+        self._detector = detector
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
-        det = self._detector()
-        if det is None:
-            # component has been deleted, it's all fine, we'll be GC'd soon
-            return
-
-        try:
-            det.start_generate()
-        except ReferenceError:
-            # component has been deleted, it's all fine, we'll be GC'd soon
-            pass
+        self._detector.start_generate()
 
     def stop_generate(self):
-        det = self._detector()
-        if det is None:
-            # component has been deleted, it's all fine, we'll be GC'd soon
-            return
+        self._detector.stop_generate()
 
-        try:
-            det.stop_generate()
-        except ReferenceError:
-            # component has been deleted, it's all fine, we'll be GC'd soon
-            pass
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,
@@ -469,6 +760,7 @@ def _deref(p, typep):
     # byref= lambda x: x
     # and then dereferencing would be also identity function.
     return typep.from_address(addressof(p._obj))
+
 
 def _val(obj):
     """
@@ -492,6 +784,13 @@ class FakePHDLL(object):
         self._idx = 0
         self._mode = None
         self._sn = "10234567"
+        self._base_res = 4  # ps
+        self._bins = 0 # binning power
+        self._syncdiv = 0
+
+        # start/ (expected) end time of the current acquisition (or None if not started)
+        self._acq_start = None
+        self._acq_end = None
 
     def PH_OpenDevice(self, i, sn_str):
         if i == self._idx:
@@ -522,3 +821,77 @@ class FakePHDLL(object):
     def PH_GetCountRate(self, i, channel, p_rate):
         rate = _deref(p_rate, c_int)
         rate.value = random.randint(0, 5000)
+
+    def PH_GetBaseResolution(self, i, p_resolution, p_binsteps):
+        resolution = _deref(p_resolution, c_double)
+        binsteps = _deref(p_binsteps, c_int)
+        resolution.value = self._base_res
+        binsteps.value = self._bins
+
+    def PH_GetResolution(self, i, p_resolution):
+        resolution = _deref(p_resolution, c_double)
+        resolution.value = self._base_res * (2 ** self._bins)
+
+    def PH_SetInputCFD(self, i, channel, level, zc):
+        # TODO
+        return
+
+    def PH_SetSyncDiv(self, i, div):
+        self._syncdiv = _val(div)
+
+    def PH_SetSyncOffset(self, i, syncoffset):
+        # TODO
+        return
+
+    def PH_SetStopOverflow(self, i, stop_ovfl, stopcount):
+        return
+
+    def PH_SetBinning(self, i, binning):
+        self._bins = _val(binning)
+
+    def PH_SetOffset(self, i, offset):
+        # TODO
+        return
+
+    def PH_ClearHistMem(self, i, block):
+        # TODO
+        return
+
+    def PH_StartMeas(self, i, tacq):
+        if self._acq_start is not None:
+            raise PHError(-16, PHDLL.err_code[-16])
+        self._acq_start = time.time()
+        self._acq_end = self._acq_start + _val(tacq) * 1e-3
+
+    def PH_StopMeas(self, i):
+        self._acq_start = None
+        self._acq_end = None
+
+    def PH_CTCStatus(self, i, p_ctcstatus):
+        ctcstatus = _deref(p_ctcstatus, c_int)
+        if self._acq_end > time.time():
+            ctcstatus.value = 0  # 0 if still running
+        else:
+            ctcstatus.value = 1
+
+    def PH_GetElapsedMeasTime(self, i, p_elapsed):
+        elapsed = _deref(p_elapsed, c_double)
+        if self._acq_start is None:
+            elapsed.value = 0
+        else:
+            elapsed.value = min(self._acq_end, time.time()) - self._acq_start
+
+    def PH_GetHistogram(self, i, p_chcount, block):
+        p = cast(p_chcount, POINTER(c_uint32))
+        n = int(HISTCHAN / 2 ** self._bins)
+        ndbuffer = numpy.ctypeslib.as_array(p, (n,))
+
+        # make the max value dependent on the acquisition time
+        if self._acq_start is None:
+            maxval = 1
+        else:
+            dur = self._acq_end - self._acq_start
+            maxval = max(1, int(2 ** 16 * 10 / min(10, dur)))  # 10 s -> full scale
+
+        ndbuffer[...] = numpy.random.randint(0, maxval, n, dtype=numpy.uint32)
+

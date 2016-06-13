@@ -67,6 +67,9 @@ MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diam
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
 
+MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
+MD_TIME_OFFSET = "Time offset"  # Time of the first 'pixel' in the time dimension (added to ACQ_DATE), default is 0
+
 # TODO: MD_ACQ_TYPE: the type of acquisition contained in the DataArray, such as
 # EM_SPACIAL, FLUO_SPACIAL, ANCHOR_REGION, SPECTRUM, ANGULAR_RESOLVED...
 

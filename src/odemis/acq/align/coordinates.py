@@ -115,8 +115,8 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
             tab = tuple(map(operator.sub, (x_center_last, y_center_last),
                             (x_center, y_center)))
 
-            subimage = image[(dy.start - 2.5):(dy.stop + 2.5),
-                             (dx.start - 2.5):(dx.stop + 2.5)]
+            subimage = image[int(dy.start - 2.5):int(dy.stop + 2.5),
+                             int(dx.start - 2.5):int(dx.stop + 2.5)]
 
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 continue
@@ -279,7 +279,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
             logging.warning("Failed to get any coordinate match")
             return [], []
 
-        # Calculate succesful
+        # Calculate successful
         e_match_points = [not i for i in e_wrong_points]
         o_match_points = [not i for i in o_wrong_points]
         e_coord_exp = [estimated_coordinates[i] for i in compress(index1, e_match_points)]
@@ -551,7 +551,7 @@ def _BandPassFilter(image, len_noise, len_object):
     Source: http://physics-server.uoregon.edu/~raghu/particle_tracking.html
     """
     b = len_noise
-    w = round(len_object)
+    w = int(round(len_object))
     N = 2 * w + 1
 
     # Gaussian Convolution Kernel

@@ -443,7 +443,7 @@ class SEMComedi(model.HwComponent):
         except IOError:
             return 2 ** 20 * 1000  # Whatever (for test driver)
 
-    def _get_closest_period(self, subdevice, nchannels, period, cmd=None):
+    def _get_closest_period(self, subdevice, nchannels, period, cmd=None, maxtrials=2):
         """
         subdevice (int): subdevice ID
         nchannels (0< int): number of channels to be accessed simultaneously
@@ -459,19 +459,33 @@ class SEMComedi(model.HwComponent):
         try:
             comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, period)
         except comedi.ComediError:
-            # happens with the comedi_test driver on Linux < 4.4, for AO devices
-            pass
+            # Happens with the comedi_test driver on Linux < 4.4, for AO devices
+            cmd.scan_begin_src = 0  # => raise an IOError
 
         if cmd.scan_begin_src != comedi.TRIG_TIMER:
             if (cmd.convert_src == comedi.TRIG_TIMER and
                 cmd.scan_begin_src == comedi.TRIG_FOLLOW):
                 # Timed command is made of multiple conversions
-                return cmd.convert_arg * nchannels
+                newperiod = cmd.convert_arg * nchannels
             else:
                 logging.warning("Failed to find timed period for subdevice %d with %d channels",
                                 subdevice, nchannels)
                 raise IOError("Timed period not supported")
-        return cmd.scan_begin_arg
+        else:
+            newperiod = cmd.scan_begin_arg
+
+        # Make sure that this (rounded) period will immediately work.
+        # This can happen as get_cmd_generic_timed() computes convert_arg et al.
+        # based on the original period only, so the command is valid, but the
+        # next time a different command is generated.
+        if newperiod != period:
+            if maxtrials:
+                newperiod = self._get_closest_period(subdevice, nchannels, newperiod, cmd, maxtrials - 1)
+            else:
+                logging.warning("Period keeps changing, going again from %d to %d",
+                                period, newperiod)
+
+        return newperiod
 
     def _get_max_buffer_size(self):
         """
@@ -708,8 +722,8 @@ class SEMComedi(model.HwComponent):
         with self._acquisition_init_lock:
             logging.debug("Setting to rest position at %s", pos)
             for i, p in enumerate(pos):
-                comedi.data_write(self._device, self._ao_subdevice,
-                      channels[i], ranges[i], comedi.AREF_GROUND, int(p))
+                comedi.data_write(self._device, self._ao_subdevice, channels[i],
+                                  ranges[i], comedi.AREF_GROUND, int(p))
             logging.debug("Rest position set")
 
     def _prepare_command(self, cmd):
@@ -771,7 +785,7 @@ class SEMComedi(model.HwComponent):
             dpr = 1
 
         if nrchans == 0:  # easy
-            logging.debug("Found duplication & over-sampling rates: %g ns x %d x %d = %g ns",
+            logging.debug("Found duplication & over-sampling rates: %d ns x %d x %d = %d ns",
                           period_ns, dpr, 1, dpr * period_ns)
             return dpr * period_ns / 1e9, 1, dpr
 
@@ -831,7 +845,7 @@ class SEMComedi(model.HwComponent):
 
         if best_found:
             wperiod_ns, osr = best_found
-            logging.debug("Found duplication & over-sampling rates: %g ns x %d x %d = %g ns",
+            logging.debug("Found duplication & over-sampling rates: %d ns x %d x %d = %d ns",
                           wperiod_ns / osr, dpr, osr, dpr * wperiod_ns)
             # FIXME: if osr * itemsize > _max_bufsz, increase dpr and retry
             return dpr * wperiod_ns / 1e9, osr, dpr
@@ -853,7 +867,7 @@ class SEMComedi(model.HwComponent):
             wcmd.scan_begin_arg = period_ns # + ((-wperiod_ns) % 800) # TEST
         else:
             comedi.get_cmd_generic_timed(self._device, subdevice,
-                                          wcmd, nchans, period_ns)
+                                         wcmd, nchans, period_ns)
         return (wcmd.scan_begin_arg == period_ns)
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
@@ -895,6 +909,7 @@ class SEMComedi(model.HwComponent):
         # hardware allows it, but we don't.
         if (cmd.convert_src == comedi.TRIG_TIMER and
             cmd.scan_begin_src == comedi.TRIG_FOLLOW):
+            logging.debug("Converting 'follow' mode to 'timer' mode")
             cmd.scan_begin_src = comedi.TRIG_TIMER
             cmd.scan_begin_arg = period_ns
             cmd.convert_src = comedi.TRIG_NOW
@@ -1858,7 +1873,9 @@ class SEMComedi(model.HwComponent):
                 self._acquisitions.clear()
                 self._acq_cmd_q.put(ACQ_CMD_TERM)
                 self._req_stop_acquisition()
-            self._acquisition_thread.join(10)
+
+                if self._acquisition_thread:
+                    self._acquisition_thread.join(10)
 
             # Just to be really sure that the scan signal is off
             self._scanner.terminate()
@@ -2342,7 +2359,7 @@ class Writer(Accesser):
 
             # preload the buffer with enough data first
             dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
-            self._preload_size = dev_buf_size / buf.itemsize
+            self._preload_size = dev_buf_size // buf.itemsize
             logging.debug("Going to preload %d bytes", buf[:self._preload_size].nbytes)
             # It can block if we preload too much
             # TODO: write in non-blocking mode, and raise an error if not everything
@@ -2698,7 +2715,7 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
-        resolution = (256, 256)
+        resolution = (256, int(256 * self._shape[1] / self._shape[0]))
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
                                              setter=self._setResolution)
         self._resolution = resolution

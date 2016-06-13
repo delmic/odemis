@@ -181,7 +181,7 @@ SPARC-MONASH: {
     role: ccd,
     init: {
         device: 0,  # if a real camera is plugged in, it's usually 0
-        #transpose: [1, 2], # mirrored or rotated?
+        #transp: [1, 2], # mirrored or rotated?
     },
     properties: {
     #    fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
@@ -243,7 +243,7 @@ SPARC-MONASH: {
     role: sp-ccd,
     init: {
            device: 0, # 0 = first and only Andor SDK 2 camera
-           transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
+           transp: [-1, 2], # mirrored on X axis
     },
     properties: {
         targetTemperature: -60, # °C

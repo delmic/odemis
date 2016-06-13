@@ -119,7 +119,7 @@ DELPHI: {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {device: 0,
-           transpose: [-2, -1], # rotated 90° clockwise
+           transp: [-2, -1],
     },
     properties: {
         resolution: [2160, 2160],  # Crop Y axis which doesn't receive light anyway
