@@ -401,6 +401,8 @@ class SecomAcquiController(object):
 
             self._tab_data_model.main.is_acquiring.value = False
 
+            acq_dialog.Destroy()
+
         if action == wx.ID_OPEN:
             wx.GetApp().tab_controller.open_tab('analysis')
             self._tab_data_model.main.tab.value.load_data(acq_dialog.last_saved_file)

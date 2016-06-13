@@ -75,8 +75,16 @@ class VigilantAttributeConnector(object):
         else:
             self.change_events = events
 
+        if self.value_ctrl:
+            self.value_ctrl.Bind(wx.EVT_WINDOW_DESTROY, self._on_ctrl_destroy,
+                                 source=self.value_ctrl)
+
         # Subscribe to the vigilant attribute and initialize
         self._connect(init=True)
+
+    def _on_ctrl_destroy(self, evt):
+        self.disconnect()
+        self.value_ctrl = None
 
     def _on_ctrl_value_change(self, evt):
         """ Set the value of the VA when the value of the control is changed
@@ -116,11 +124,11 @@ class VigilantAttributeConnector(object):
         for event in self.change_events:
             self.value_ctrl.Bind(event, self._on_ctrl_value_change)
 
-    # def disconnect(self):
-    #     logging.debug("Disconnecting VigilantAttributeConnector")
-    #     for event in self.change_events:
-    #         self.value_ctrl.Unbind(event, handler=self._on_value_change)
-    #     self.vigilattr.unsubscribe(self.va_2_ctrl)
+    def disconnect(self):
+        logging.debug("Disconnecting VigilantAttributeConnector")
+        for event in self.change_events:
+            self.value_ctrl.Unbind(event, source=self.value_ctrl, handler=self._on_ctrl_value_change)
+        self.vigilattr.unsubscribe(self.va_2_ctrl)
 
 
 class AxisConnector(object):

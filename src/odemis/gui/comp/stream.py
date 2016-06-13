@@ -461,10 +461,6 @@ class StreamPanel(wx.Panel):
         # Counter that keeps track of the number of rows containing controls inside this panel
         self.num_rows = 0
 
-        # Event handling
-        # TODO: Remove if nothing weird happens while this event is not bound
-        # self.Bind(wx.EVT_SIZE, self.OnSize)
-
         self._create_controls()
 
     def _create_controls(self):
@@ -580,9 +576,6 @@ class StreamPanel(wx.Panel):
     def Destroy(self, *args, **kwargs):
         """ Delete the widget from the GUI
 
-        TODO: Is this method still necessary? If it's stull needed, it's content can probably still
-        be cleaned up.
-
         """
 
         # Avoid receiving data after the object is deleted
@@ -591,9 +584,7 @@ class StreamPanel(wx.Panel):
         if hasattr(self, "_sld_spec"):
             self.stream.image.unsubscribe(self.on_new_spec_data)
 
-        fpb_item = self.Parent
         super(StreamPanel, self).Destroy(*args, **kwargs)
-        fpb_item.fit_streams()
 
     def set_visible(self, visible):
         """ Set the "visible" toggle button of the stream panel """
@@ -1294,22 +1285,21 @@ class StreamBar(wx.Panel):
             self.btn_add_stream.SetForegroundColour("#999999")
             self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
 
-            self._set_warning()
-
             # self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self.fit_streams()
 
     def fit_streams(self):
+        logging.debug("Refitting stream panels")
+        self._set_warning()
+
         h = self._sz.GetMinSize().GetHeight()
 
         self.SetSize((-1, h))
 
         # The panel size is cached in the _PanelSize attribute.
         # Make sure it's updated by calling ResizePanel
-
         p = self.Parent
-
         while not isinstance(p, FoldPanelItem):
             p = p.Parent
 
@@ -1346,6 +1336,9 @@ class StreamBar(wx.Panel):
     #     evt.Skip()
 
     def on_stream_remove(self, evt):
+        """
+        Called when user request to remove a stream via the stream panel
+        """
         logging.debug("StreamBar received remove event %r", evt)
         # delete stream panel
         self.remove_stream_panel(evt.spanel)
@@ -1353,6 +1346,12 @@ class StreamBar(wx.Panel):
         # Publish removal notification
         logging.debug("Sending stream.remove message")
         pub.sendMessage("stream.remove", stream=evt.spanel.stream)
+
+    def on_streamp_destroy(self, evt):
+        """
+        Called when a stream panel is completely removed
+        """
+        wx.CallAfter(self.fit_streams)
 
     # === API of the stream panel
     def show_add_button(self):
@@ -1392,8 +1391,6 @@ class StreamBar(wx.Panel):
 
         self.stream_panels.insert(ins_pos, spanel)
 
-        self._set_warning()
-
         if self._sz is None:
             self._sz = wx.BoxSizer(wx.VERTICAL)
             self.SetSizer(self._sz)
@@ -1403,6 +1400,7 @@ class StreamBar(wx.Panel):
                               border=self.DEFAULT_BORDER)
 
         spanel.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
+        spanel.Bind(wx.EVT_WINDOW_DESTROY, self.on_streamp_destroy, source=spanel)
         spanel.Layout()
 
         # hide the stream if the current view is not compatible
@@ -1419,15 +1417,18 @@ class StreamBar(wx.Panel):
         # thread. (Note: this was causing issues with the garbage collection of Streams, because
         # StreamPanel have a direct reference to Streams, which should be moved to the controller)
         #
-        # Interesting side note: with CallAfter ever time the same image was loaded, Odemis would
+        # Interesting side note: with CallAfter every time the same image was loaded, Odemis would
         # leak 11 MB, when Destroyed is called directly, it would leak 9 MB each time
         wx.CallAfter(spanel.Destroy)
-        self._set_warning()
 
     def clear(self):
         """ Remove all stream panels """
         for p in list(self.stream_panels):
+            # Only refit the (empty) bar after all streams are gone
+            p.Unbind(wx.EVT_WINDOW_DESTROY, source=p, handler=self.on_streamp_destroy)
             self.remove_stream_panel(p)
+
+        wx.CallAfter(self.fit_streams)
 
     def _set_warning(self):
         """ Display a warning text when no streams are present, or show it
