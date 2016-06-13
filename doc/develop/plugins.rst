@@ -130,8 +130,9 @@ The Plugin class provides a few helper functions:
     
     .. py:method:: addButton(label, callback=None, face_colour='def')
     
-      Add a button at the bottom of the window. 
-      The buttons are positioned in order, from right to left, and assigned increasing
+      Add a button at the bottom of the window. The button is added at the
+      right of the current buttons. In other words, the buttons are positioned
+      in order, from left to right, and assigned increasing
       numbers starting from 0. If callback is None, pressing the button will close
       the window and the button number will be the return code of the dialog.
       
@@ -206,7 +207,11 @@ When that entry is selected, it shows an acquisition window and then acquire
 
         def __init__(self, microscope, main_app):
             super(SimplePlugin, self).__init__(microscope, main_app)
-            if microscope is None or microscope.ccd is None:
+            if not microscope:
+                return
+
+            self.main_data = self.main_app.main_data
+            if not self.main_data.ccd:
                 return
 
             self.addMenu("Acquisition/Fancy acquisition...", self.start)
@@ -220,24 +225,23 @@ When that entry is selected, it shows an acquisition window and then acquire
             dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
             ans = dlg.ShowModal()
-            if ans == 0:
-                # Ignore errors about a missing analysis tab
-                try:
-                    self.showAcquisition(self.filename.value)
-                except AttributeError:
-                    pass
+            if ans == 1:
+                self.showAcquisition(self.filename.value)
 
         def acquire(self, dlg):
-            ccd = self.microscope.ccd
-            ccd.exposureTime.value = self.exposureTime.value
+            ccd = self.main_data.ccd
+            exp = self.exposureTime.value
+            ccd.exposureTime.value = exp
 
             f = model.ProgressiveFuture()
             f.task_canceller = lambda l: True  # To allow cancelling while it's running
+            f.set_running_or_notify_cancel()  # Indicate the work is starting now
             dlg.showProgress(f)
 
             d = []
             for i in range(10):
-                f.set_progress(end=time.time() + (10 - i))
+                left = (10 - i) * exp
+                f.set_progress(end=time.time() + left)
                 d.append(ccd.data.get())
                 if f.cancelled():
                     return
@@ -246,6 +250,6 @@ When that entry is selected, it shows an acquisition window and then acquire
 
             if d:
                 dataio.hdf5.export(self.filename.value, d)
-                dlg.Destroy()
 
+            dlg.Destroy()
 
