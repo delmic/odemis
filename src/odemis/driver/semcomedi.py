@@ -443,7 +443,7 @@ class SEMComedi(model.HwComponent):
         except IOError:
             return 2 ** 20 * 1000  # Whatever (for test driver)
 
-    def _get_closest_period(self, subdevice, nchannels, period):
+    def _get_closest_period(self, subdevice, nchannels, period, maxtrials=2):
         """
         subdevice (int): subdevice ID
         nchannels (0< int): number of channels to be accessed simultaneously
@@ -464,7 +464,20 @@ class SEMComedi(model.HwComponent):
             logging.warning("Failed to find timed period for subdevice %d with %d channels",
                             subdevice, nchannels)
             raise IOError("Timed period not supported")
-        return cmd.scan_begin_arg
+
+        newperiod = cmd.scan_begin_arg
+        # Make sure that this (rounded) period will immediately work.
+        # This can happen as get_cmd_generic_timed() computes convert_arg et al.
+        # based on the original period only, so the command is valid, but the
+        # next time a different command is generated.
+        if newperiod != period:
+            if maxtrials:
+                newperiod = self._get_closest_period(subdevice, nchannels, newperiod, maxtrials - 1)
+            else:
+                logging.warning("Period keeps changing, going again from %d to %d",
+                                period, newperiod)
+
+        return newperiod
 
     def _get_max_buffer_size(self):
         """
