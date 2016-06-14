@@ -1,3 +1,14 @@
+odemis (2.4.3-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.3
+  * Main bugs fixed:
+    - Export function fails with some metadata
+    - Export function fails in some cases when a stream is rotated (SECOM/DELPHI)
+    - Some SEM dwell times fail when acquiring from multiple detectors simultaneously (SPARC)
+    - Memory leak in the GUI when closing the acquisition window (SECOM/DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 14 Jun 2016 13:21:34 +0200
+
 odemis (2.4.2-1ubuntu1) precise; urgency=medium
 
   * New version: 2.4.2
