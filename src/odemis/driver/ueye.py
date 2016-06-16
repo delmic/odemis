@@ -396,7 +396,7 @@ KNOWN_SENSORS = {
 }
 
 
-class UEye(model.DigitalCamera):
+class Camera(model.DigitalCamera):
     """
     Represents a IDS uEye camera.
     Currently, only greyscale mode is supported
@@ -407,7 +407,7 @@ class UEye(model.DigitalCamera):
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
         """
-        super(UEye, self).__init__(name, role, **kwargs)
+        super(Camera, self).__init__(name, role, **kwargs)
         self._dll = IDSDLL()
         self._hcam = self._openDevice(device)
 
