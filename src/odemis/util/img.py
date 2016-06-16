@@ -523,27 +523,27 @@ def mergeMetadata(current, correction=None):
     correction (dict or None): metadata with correction information, if None,
       will use current to find the correction metadata.
     """
-    if correction is None:
-        correction = current
+    if correction is not None:
+        current.update(correction)
 
     # TODO: rotation and position correction should use addition, not subtraction
-    if model.MD_ROTATION_COR in correction:
+    if model.MD_ROTATION_COR in current:
         # Default rotation is 0 rad if not specified
-        rotation_cor = correction[model.MD_ROTATION_COR]
+        rotation_cor = current[model.MD_ROTATION_COR]
         rotation = current.get(model.MD_ROTATION, 0)
         current[model.MD_ROTATION] = (rotation - rotation_cor) % (math.pi * 2)
 
-    if model.MD_POS_COR in correction:
+    if model.MD_POS_COR in current:
         # Default position is (0, 0) if not specified
-        position_cor = correction[model.MD_POS_COR]
+        position_cor = current[model.MD_POS_COR]
         position = current.get(model.MD_POS, (0, 0))
 
         current[model.MD_POS] = (position[0] - position_cor[0],
                                  position[1] - position_cor[1])
 
-    if model.MD_SHEAR_COR in correction:
+    if model.MD_SHEAR_COR in current:
         # Default shear is 0 if not specified
-        shear_cor = correction[model.MD_SHEAR_COR]
+        shear_cor = current[model.MD_SHEAR_COR]
         shear = current.get(model.MD_SHEAR, 0)
 
         current[model.MD_SHEAR] = shear - shear_cor
@@ -552,7 +552,7 @@ def mergeMetadata(current, correction=None):
     # be used as a fallback)
     if model.MD_PIXEL_SIZE in current:
         pxs = current[model.MD_PIXEL_SIZE]
-        pxs_cor = correction.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+        pxs_cor = current.get(model.MD_PIXEL_SIZE_COR, (1, 1))
         current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
     else:
         logging.debug("Cannot correct pixel size of data with unknown pixel size")
