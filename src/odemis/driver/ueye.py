@@ -17,9 +17,14 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from ctypes import *
+import ctypes
+import gc
 import logging
+import numpy
 from odemis import model
 from odemis.model._components import HwError
+import threading
+import time
 
 
 # Driver for Imaging Development Systems (IDS) uEye cameras.
@@ -32,9 +37,136 @@ from odemis.model._components import HwError
 # code. So, in order to avoid having to support another dependency, and likely
 # need to fork it, we have made the decision to only rely on ctypes. The source
 # code is still useful to understand how to call the IDS SDK.
-class IDSError(Exception):
+
+# For Exposure()
+EXPOSURE_CMD_GET_CAPS = 1
+EXPOSURE_CMD_GET_EXPOSURE_DEFAULT = 2
+EXPOSURE_CMD_GET_EXPOSURE_RANGE_MIN = 3
+EXPOSURE_CMD_GET_EXPOSURE_RANGE_MAX = 4
+EXPOSURE_CMD_GET_EXPOSURE_RANGE_INC = 5
+EXPOSURE_CMD_GET_EXPOSURE_RANGE = 6
+EXPOSURE_CMD_GET_EXPOSURE = 7
+EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE_MIN = 8
+EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE_MAX = 9
+EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE_INC = 10
+EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE = 11
+EXPOSURE_CMD_SET_EXPOSURE = 12
+EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE_MIN = 13
+EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE_MAX = 14
+EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE_INC = 15
+EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE = 16
+EXPOSURE_CMD_GET_LONG_EXPOSURE_ENABLE = 17
+EXPOSURE_CMD_SET_LONG_EXPOSURE_ENABLE = 18
+EXPOSURE_CMD_GET_DUAL_EXPOSURE_RATIO_DEFAULT = 19
+EXPOSURE_CMD_GET_DUAL_EXPOSURE_RATIO_RANGE = 20
+EXPOSURE_CMD_GET_DUAL_EXPOSURE_RATIO = 21
+EXPOSURE_CMD_SET_DUAL_EXPOSURE_RATIO = 22
+
+EXPOSURE_CAP_EXPOSURE = 0x00000001
+EXPOSURE_CAP_FINE_INCREMENT = 0x00000002
+EXPOSURE_CAP_LONG_EXPOSURE = 0x00000004
+EXPOSURE_CAP_DUAL_EXPOSURE = 0x00000008
+
+# For CaptureVideo() and StopLiveVideo()
+GET_LIVE = 0x8000
+WAIT = 0x0001
+DONT_WAIT = 0x0000
+FORCE_VIDEO_STOP = 0x4000
+FORCE_VIDEO_START = 0x4000
+USE_NEXT_MEM = 0x8000
+
+# For SetColorMode()
+GET_COLOR_MODE = 0x8000
+CM_SENSOR_RAW8 = 11
+CM_SENSOR_RAW10 = 33
+CM_SENSOR_RAW12 = 27
+CM_SENSOR_RAW16 = 29
+CM_MONO8 = 6
+CM_MONO10 = 34
+CM_MONO12 = 26
+CM_MONO16 = 28
+
+
+class UEYE_CAMERA_INFO(Structure):
+    _fields_ = [
+        ("dwCameraID", c_uint32),
+        ("dwDeviceID", c_uint32),
+        ("dwSensorID", c_uint32),
+        ("dwInUse", c_uint32),
+        ("SerNo", c_char * 16),
+        ("Model", c_char * 16),
+        ("dwStatus", c_uint32),
+        ("dwReserved", c_uint32 * 2),
+        ("FullModelName", c_char * 32),
+        ("dwReserved2", c_uint32 * 5),
+    ]
+
+
+def _create_camera_list(num):
+    """
+    Creates a UEYE_CAMERA_LIST structure for the given number of cameras
+    num (int > 0): number of cameras
+    return UEYE_CAMERA_LIST
+    """
+    # We need to create a structure on the fly, as the size depends on the
+    # number of cameras
+    class UEYE_CAMERA_LIST(Structure):
+        pass
+    UEYE_CAMERA_LIST._fields_ = [("dwCount", c_uint32),
+                                 ("uci", UEYE_CAMERA_INFO * num),
+                                ]
+
+    cl = UEYE_CAMERA_LIST()
+    cl.dwCount = num
+    return cl
+
+
+class CAMINFO(Structure):
+    _fields_ = [
+        ("SerNo", c_char * 12),
+        ("ID", c_char * 20), # manufacturer
+        ("Version", c_char * 10),
+        ("Date", c_char * 12),
+        ("Select", c_uint8),
+        ("Type", c_uint8),
+        ("Reserved", c_char * 8)
+    ]
+
+
+class SENSORINFO(Structure):
+    _fields_ = [
+        ("SensorID", c_uint16),
+        ("strSensorName", c_char * 32),
+        ("nColorMode", c_int8),
+        ("nMaxWidth", c_uint32),
+        ("nMaxHeight", c_uint32),
+        ("bMasterGain", c_int32), # bool
+        ("bRGain", c_int32), # bool
+        ("bGGain", c_int32), # bool
+        ("bBGain", c_int32), # bool
+        ("bGlobShutter", c_int32), # bool
+        ("wPixelSize", c_uint16),  # 10 nm
+        ("nUpperLeftBayerPixel", c_char),
+        ("Reserved", c_char * 13)
+    ]
+
+# For SENSORINFO
+COLORMODE_MONOCHROME = 1
+COLORMODE_BAYER = 2
+COLORMODE_CBYCRY = 4
+COLORMODE_JPEG = 8
+
+SENSOR_UI1545_M = 0x0028  # SXGA rolling shutter, monochrome, LE model
+
+# Sensor IDs with which this driver was tested
+KNOWN_SENSORS = {
+                 SENSOR_UI1545_M,
+}
+
+
+class UEyeError(Exception):
     def __init__(self, errno, strerror, *args, **kwargs):
-        super(IDSError, self).__init__(errno, strerror, *args, **kwargs)
+        super(UEyeError, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
@@ -43,7 +175,7 @@ class IDSError(Exception):
         return self.args[1]
 
 
-class IDSDLL(CDLL):
+class UEyeDLL(CDLL):
     """
     Subclass of CDLL specific to 'uEye' library, which handles error codes for
     all the functions automatically.
@@ -66,17 +198,26 @@ class IDSDLL(CDLL):
         """
         # everything returns 0 on correct usage, and < 0 on error
         if result != 0:
+            fn = func.__name__
+            if fn in self._no_check_get:
+                arg1 = args[1]
+                if isinstance(arg1, ctypes._SimpleCData):
+                    arg1 = arg1.value
+                if arg1 in self._no_check_get[fn]:
+                    # Was in a GET mode => the result value is not an error
+                    return result
+
             # Note: is_GetError() return the specific error state for a given camera
-            if result in IDSDLL.err_code:
-                raise IDSError(result, "Call to %s failed with error %s (%d)" %
-                               (str(func.__name__), IDSDLL.err_code[result], result))
+            if result in UEyeDLL.err_code:
+                raise UEyeError(result, "Call to %s failed with error %s (%d)" %
+                               (fn, UEyeDLL.err_code[result], result))
             else:
-                raise IDSError(result, "Call to %s failed with error %d" %
-                               (str(func.__name__), result))
+                raise UEyeError(result, "Call to %s failed with error %d" %
+                               (fn, result))
         return result
 
     def __getitem__(self, name):
-        func = super(IDSDLL, self).__getitem__(name)
+        func = super(UEyeDLL, self).__getitem__(name)
         if name in self._no_check_func:
             return func
 
@@ -86,9 +227,13 @@ class IDSDLL(CDLL):
 
     # Functions which don't return normal error code
     _no_check_func = ("is_GetDLLVersion",)
-    # TODO: a lot of Set*() have some mode which means GET*, where the return
-    # value is not an error code (but the value to read). ex:
-    # is_SetColorMode(hcam, IS_GET_COLOR_MODE)
+
+    # Some function (mainly Set*()) have some mode which means GET*, where the
+    # return value is not an error code (but the value to read).
+    # Function name -> list of values in second arg which can return any value
+    _no_check_get = {"is_CaptureVideo": (GET_LIVE,),
+                     "is_SetColorMode": (GET_COLOR_MODE,),
+                    }
 
     err_code = {
          -1: "NO_SUCCESS",
@@ -289,113 +434,6 @@ class IDSDLL(CDLL):
     }
 
 
-EXPOSURE_CMD_GET_CAPS = 1
-EXPOSURE_CMD_GET_EXPOSURE_DEFAULT = 2
-EXPOSURE_CMD_GET_EXPOSURE_RANGE_MIN = 3
-EXPOSURE_CMD_GET_EXPOSURE_RANGE_MAX = 4
-EXPOSURE_CMD_GET_EXPOSURE_RANGE_INC = 5
-EXPOSURE_CMD_GET_EXPOSURE_RANGE = 6
-EXPOSURE_CMD_GET_EXPOSURE = 7
-EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE_MIN = 8
-EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE_MAX = 9
-EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE_INC = 10
-EXPOSURE_CMD_GET_FINE_INCREMENT_RANGE = 11
-EXPOSURE_CMD_SET_EXPOSURE = 12
-EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE_MIN = 13
-EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE_MAX = 14
-EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE_INC = 15
-EXPOSURE_CMD_GET_LONG_EXPOSURE_RANGE = 16
-EXPOSURE_CMD_GET_LONG_EXPOSURE_ENABLE = 17
-EXPOSURE_CMD_SET_LONG_EXPOSURE_ENABLE = 18
-EXPOSURE_CMD_GET_DUAL_EXPOSURE_RATIO_DEFAULT = 19
-EXPOSURE_CMD_GET_DUAL_EXPOSURE_RATIO_RANGE = 20
-EXPOSURE_CMD_GET_DUAL_EXPOSURE_RATIO = 21
-EXPOSURE_CMD_SET_DUAL_EXPOSURE_RATIO = 22
-
-EXPOSURE_CAP_EXPOSURE = 0x00000001
-EXPOSURE_CAP_FINE_INCREMENT = 0x00000002
-EXPOSURE_CAP_LONG_EXPOSURE = 0x00000004
-EXPOSURE_CAP_DUAL_EXPOSURE = 0x00000008
-
-
-class UEYE_CAMERA_INFO(Structure):
-    _fields_ = [
-        ("dwCameraID", c_uint32),
-        ("dwDeviceID", c_uint32),
-        ("dwSensorID", c_uint32),
-        ("dwInUse", c_uint32),
-        ("SerNo", c_char * 16),
-        ("Model", c_char * 16),
-        ("dwStatus", c_uint32),
-        ("dwReserved", c_uint32 * 2),
-        ("FullModelName", c_char * 32),
-        ("dwReserved2", c_uint32 * 5),
-    ]
-
-
-class CAMINFO(Structure):
-    _fields_ = [
-        ("SerNo", c_char * 12),
-        ("ID", c_char * 20), # manufacturer
-        ("Version", c_char * 10),
-        ("Date", c_char * 12),
-        ("Select", c_uint8),
-        ("Type", c_uint8),
-        ("Reserved", c_char * 8)
-    ]
-
-
-class SENSORINFO(Structure):
-    _fields_ = [
-        ("SensorID", c_uint16),
-        ("strSensorName", c_char * 32),
-        ("nColorMode", c_int8),
-        ("nMaxWidth", c_uint32),
-        ("nMaxHeight", c_uint32),
-        ("bMasterGain", c_int32), # bool
-        ("bRGain", c_int32), # bool
-        ("bGGain", c_int32), # bool
-        ("bBGain", c_int32), # bool
-        ("bGlobShutter", c_int32), # bool
-        ("wPixelSize", c_uint16),  # 10 nm
-        ("nUpperLeftBayerPixel", c_char),
-        ("Reserved", c_char * 13)
-    ]
-
-
-def _create_camera_list(num):
-    """
-    Creates a UEYE_CAMERA_LIST structure for the given number of cameras
-    num (int > 0): number of cameras
-    return UEYE_CAMERA_LIST
-    """
-    # We need to create a structure on the fly, as the size depends on the
-    # number of cameras
-    class UEYE_CAMERA_LIST(Structure):
-        pass
-    UEYE_CAMERA_LIST._fields_ = [("dwCount", c_uint32),
-                                 ("uci", UEYE_CAMERA_INFO * num),
-                                ]
-
-    cl = UEYE_CAMERA_LIST()
-    cl.dwCount = num
-    return cl
-
-
-COLORMODE_MONOCHROME = 1
-COLORMODE_BAYER = 2
-COLORMODE_CBYCRY = 4
-COLORMODE_JPEG = 8
-
-
-SENSOR_UI1545_M = 0x0028  # SXGA rolling shutter, monochrome, LE model
-
-# Sensor IDs with which this driver was tested
-KNOWN_SENSORS = {
-                 SENSOR_UI1545_M,
-}
-
-
 class Camera(model.DigitalCamera):
     """
     Represents a IDS uEye camera.
@@ -408,7 +446,7 @@ class Camera(model.DigitalCamera):
           or None if any device is fine.
         """
         super(Camera, self).__init__(name, role, **kwargs)
-        self._dll = IDSDLL()
+        self._dll = UEyeDLL()
         self._hcam = self._openDevice(device)
 
         try:
@@ -438,9 +476,18 @@ class Camera(model.DigitalCamera):
                 logging.warning("This driver is only tested for monochrome sensors")
                 # TODO: also support RGB cameras
 
-            # TODO: depth based on the maximum BPP
-            # is_DeviceFeature( IS_DEVICE_FEATURE_CMD_GET_SUPPORTED_SENSOR_BIT_DEPTHS)
-            self._shape = res + (2 ** 16,)
+            self._prev_settings = (None,)  # exp,
+
+            # Set the format
+            # TODO: color mode based on the maximum BPP
+            # cf is_DeviceFeature( IS_DEVICE_FEATURE_CMD_GET_SUPPORTED_SENSOR_BIT_DEPTHS)
+            self._dll.is_SetColorMode(self._hcam, CM_MONO8)
+            self._dtype = numpy.uint8
+            self._metadata[model.MD_BPP] = 8
+            self._shape = res + (numpy.iinfo(self._dtype).max + 1,)
+
+            res = self._shape[:2]
+            self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
             exprng = self.GetExposureRange()  # mx is limited by current frame-rate
             ftrng = self.GetFrameTimeRange()
@@ -451,15 +498,21 @@ class Camera(model.DigitalCamera):
             self.exposureTime = model.FloatContinuous(self._exp_time, exprng,
                                                       unit="s", setter=self._setExposureTime)
 
+            # TODO: binning? frameRate? resolution + translation = AOI?
 
+            # Dataflow + acquisition
+            self.acquisition_lock = threading.Lock()
+            self.acquire_must_stop = threading.Event()
+            self.acquire_thread = None
 
-            # TODO: dataflow
-            
-            
+            # TODO: softwareTrigger?
+
+            self.data = UEyeDataFlow(self)
         except Exception:
             self._dll.is_ExitCamera(self._hcam)
             raise
 
+    # Direct mapping of the SDK functions
     def ExitCamera(self):
         self._dll.is_ExitCamera(self._hcam)
 
@@ -483,8 +536,18 @@ class Camera(model.DigitalCamera):
         self._dll.is_GetSensorInfo(self._hcam, byref(sensor_info))
         return sensor_info
 
+    def WaitForNextImage(self, timeout):
+        """
+        timeout (0<float): max duration in s
+        return (memory pointer, image ID)
+        """
+        mem = POINTER(c_uint8)()
+        imid = c_int32()
+        toms = int(timeout * 1e3)  # ms
+        self._dll.is_WaitForNextImage(self._hcam, toms, byref(mem), byref(imid))
+        return mem, imid
 
-    # These functions are mappings to just sub-part of the API functions, to
+    # These functions are mappings to just sub-part of the SDK functions, to
     # keep the setter and getter clearer
     def SetExposure(self, exp):
         """
@@ -542,6 +605,16 @@ class Camera(model.DigitalCamera):
         self._dll.is_GetFrameTimeRange(self._hcam, byref(ftmn), byref(ftmx), byref(ftic))
         return ftmn.value, ftmx.value
 
+    def SetFrameRate(self, fr):
+        """
+        Note: values out of range are automatically clipped
+        fr (0>float): framerate (in Hz) to be set
+        return (0>float): actual framerate applied
+        """
+        newfps = c_double()
+        self._dll.is_SetFrameRate(self._hcam, c_double(fr), byref(newfps))
+        return newfps.value
+
     # The component interface
 
     def _setExposureTime(self, exp):
@@ -550,8 +623,196 @@ class Camera(model.DigitalCamera):
         # TODO: based on increment, guess the value that will be accepted
         return exp
 
+    def start_generate(self):
+        """
+        Set up the camera and acquire a flow of images at the best quality for the given
+          parameters. Should not be called if already a flow is being acquired.
+        """
+        self._wait_stopped_flow()  # no-op is the thread is not running
+        self.acquisition_lock.acquire()
+        assert not self._dll.is_CaptureVideo(self._hcam, GET_LIVE)
+
+        # Set up thread
+        self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
+                                               name="ueye acquire flow thread")
+        self.acquire_thread.start()
+
+    def stop_generate(self):
+        """
+        Stop the acquisition of a flow of images.
+        sync (boolean): if True, wait that the acquisition is finished before returning.
+         Calling with this flag activated from the acquisition callback is not
+         permitted (it would cause a dead-lock).
+        """
+        assert not self.acquire_must_stop.is_set()
+        self.acquire_must_stop.set()
+        logging.debug("Asked acquisition thread to stop")
+        # Warning: calling AcquisitionStop here cause the thread to go crazy
+
+    def _wait_stopped_flow(self):
+        """
+        Waits until the end acquisition of a flow of images. Calling from the
+         acquisition callback is not permitted (it would cause a dead-lock).
+        """
+        # "if" is to not wait if it's already finished
+        if self.acquire_must_stop.is_set():
+            self.acquire_thread.join(10)  # 10s timeout for safety
+            if self.acquire_thread.isAlive():
+                raise OSError("Failed to stop the acquisition thread")
+            # ensure it's not set, even if the thread died prematurely
+            self.acquire_must_stop.clear()
+
+    def _need_update_settings(self):
+        """
+        returns (boolean): True if _update_settings() needs to be called
+        """
+        new_settings = (self._exp_time,)
+        return new_settings != self._prev_settings
+
+    def _update_settings(self):
+        """
+        Commits the settings to the camera. Only the settings which have been
+        modified are updated.
+        Note: acquisition_lock must be taken, and acquisition must _not_ going on.
+        """
+        (prev_exp,) = self._prev_settings
+
+        # Note: if pixel clock and binning are to be updated, it should be done
+        # before updating the frame-rate & exposure time
+
+        if prev_exp != self._exp_time:
+            # Update frame-rate first, as it clamps the maximum possible exp time
+            fr = 1 / self._exp_time
+            fr = self.SetFrameRate(fr)
+            logging.debug("Frame-rate set to %g fps", fr)
+            self._exp_time = self.SetExposure(self._exp_time)
+            self._metadata[model.MD_EXP_TIME] = self._exp_time
+            logging.debug("Updating exposure time to %g s", self._exp_time)
+
+        self._prev_settings = (self._exp_time,)
+
+    def _allocate_buffers(self, num, width, height, bpp):
+        """
+        Create memory buffers for image acquisition
+        num (int): number of buffers to create
+        width (int)
+        height (int)
+        bpp (int): number of bits per pixel (automatically rounded up to multiple of 8)
+        return (list of 2-tuples): memory pointer, image ID
+        """
+        logging.debug("Allocating %d buffers of %dx%dx%d", num, width, height, bpp)
+        self._dll.is_InitImageQueue(self._hcam, None)  # None means standard copy to memory
+        buf = []
+        for i in range(num):
+            mem = POINTER(c_uint8)()
+            imid = c_int32()
+            # TODO use numpy array + is_SetAllocatedImageMem()... but memory
+            # needs to be mlock(), munlock(), so it's harder (just do it after it's out of the queue?)
+            self._dll.is_AllocImageMem(self._hcam, width, height, bpp,
+                                       byref(mem), byref(imid))
+            self._dll.is_AddToSequence(self._hcam, mem, imid)
+            buf.append((mem, imid))
+
+        return buf
+
+    def _free_buffers(self, buffers):
+        logging.debug("Freeing the image queue")
+        self._dll.is_ExitImageQueue(self._hcam)
+        self._dll.is_ClearSequence(self._hcam)
+        for mem, imid in buffers:
+            self._dll.is_FreeImageMem(self._hcam, mem, imid)
+
+    def _buffer_as_array(self, mem, width, height, dtype, md):
+        """
+        mem (ctypes.POINTER): memory pointer
+        width (int)
+        height (int)
+        dtypes: numpy dtype corresponding to the image format
+        md (dict): metadata of the DataArray
+        return (DataArray): a numpy array corresponding to the data pointed to
+        """
+        na = numpy.empty((height, width), dtype=dtype)
+        # TODO check if GetImageMemPitch() is needed
+        memmove(na.ctypes.data, mem, na.nbytes)
+        return model.DataArray(na, md)
+
+    GC_PERIOD = 10  # how often the garbage collector should run (in number of buffers)
+    def _acquire_thread_run(self):
+        """
+        The core of the acquisition thread. Runs until acquire_must_stop is True.
+        """
+        num_gc = 0
+        need_reinit = True
+        buffers = []
+        try:
+            while not self.acquire_must_stop.is_set():
+                # need to stop acquisition to update settings
+                if need_reinit or self._need_update_settings():
+                    if self._dll.is_CaptureVideo(self._hcam, GET_LIVE):
+                        self.dll.is_StopLiveVideo(self._hcam, FORCE_VIDEO_STOP)
+                        self._free_buffers(buffers)
+
+                    self._update_settings()
+                    exposure_time = self._exp_time
+
+                    res = self.resolution.value
+                    dtype = self._dtype
+                    buffers = self._allocate_buffers(3, res[0], res[1], numpy.iinfo(dtype).bits)
+
+                    # Start acquisition
+                    self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
+                    need_reinit = False
+
+                # Acquire an image
+                metadata = dict(self._metadata)  # duplicate
+                timeout = exposure_time * 1.2 + 1  # s
+                # TODO: use the timestamp provided by is_GetImageInfo()
+                metadata[model.MD_ACQ_DATE] = time.time()
+
+                # TODO: while waiting, allocate the memory for the DataArray
+                # TODO: check for acquire_must_stop while waiting
+                # TODO: handle timeout/errors
+                mem, imid = self.WaitForNextImage(timeout)
+
+                if self.acquire_must_stop.is_set():
+                    # Acquisition cancelled
+                    return
+
+                array = self._buffer_as_array(mem, res[0], res[1], dtype, metadata)
+                self.data.notify(self._transposeDAToUser(array))
+
+                # force the GC to free non-used buffers, for some reason, without
+                # this the GC runs only after we've managed to fill up the memory
+                num_gc += 1
+                if num_gc >= self.GC_PERIOD:
+                    gc.collect()
+                    num_gc = 0
+        except Exception:
+            logging.exception("Acquisition failed with unexpected error")
+        finally:
+            try:
+                self._dll.is_StopLiveVideo(self._hcam, FORCE_VIDEO_STOP)
+            except UEyeError:
+                pass
+            self._free_buffers(buffers)
+            self.acquisition_lock.release()
+            gc.collect()
+            logging.debug("Acquisition thread closed")
+            self.acquire_must_stop.clear()
+
     def terminate(self):
-        self.ExitCamera()
+        # Stop the acquisition if it's active, as some hardware don't like to
+        # be disconnected while acquiring, and stop responding afterwards.
+        try:
+            if self.acquire_thread and not self.acquire_must_stop.is_set():
+                self.stop_generate()
+                self._wait_stopped_flow()
+        except Exception:
+            logging.exception("Failed to stop the active acquisition")
+
+        if self._hcam:
+            self.ExitCamera()
+            self._hcam = None
 
     def _openDevice(self, sn=None):
         """
@@ -580,7 +841,7 @@ class Camera(model.DigitalCamera):
         try:
             # TODO, add IS_ALLOW_STARTER_FW_UPLOAD to hcam to allow firmware update?
             self._dll.is_InitCamera(byref(hcam), None)
-        except IDSError as ex:
+        except UEyeError as ex:
             raise HwError("Failed to open IDS uEye camera: %s", ex)
 
         return hcam
@@ -616,7 +877,7 @@ class Camera(model.DigitalCamera):
         Note: it's obviously not advised to call this function if a device is already under use
         """
         found = []
-        dll = IDSDLL()
+        dll = UEyeDLL()
 
         cl = cls._get_camera_list(dll)
         if not cl:
@@ -626,3 +887,20 @@ class Camera(model.DigitalCamera):
             found.append((cl.uci[n].FullModelName, {"device": cl.uci[n].SerNo}))
 
         return found
+
+
+# Copy of picoquant.BasicDataFlow
+class UEyeDataFlow(model.DataFlow):
+    def __init__(self, detector):
+        """
+        detector (UEye): the detector that the dataflow corresponds to
+        """
+        model.DataFlow.__init__(self)
+        self._detector = detector
+
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        self._detector.start_generate()
+
+    def stop_generate(self):
+        self._detector.stop_generate()
