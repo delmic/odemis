@@ -104,8 +104,6 @@ class PHDLL(CDLL):
             logging.error("Check that PicoQuant PHLib is correctly installed")
             raise
 
-    # TODO: wrap the functions so that the return code <0 raise an error
-
     def at_errcheck(self, result, func, args):
         """
         Analyse the return value of a call and raise an exception in case of
@@ -188,7 +186,7 @@ class PH300(model.Detector):
     Represents a PicoQuant PicoHarp 300.
     """
 
-    def __init__(self, name, role, device=None, children=None, daemon=None, ** kwargs):
+    def __init__(self, name, role, device=None, children=None, daemon=None, **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
@@ -211,11 +209,15 @@ class PH300(model.Detector):
         # TODO: do we need TTTR mode?
         self.Initialise(MODE_HIST)
         self._swVersion = self.GetLibraryVersion()
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
         mod, partnum, ver = self.GetHardwareInfo()
         sn = self.GetSerialNumber()
         self._hwVersion = "%s %s %s (s/n %s)" % (mod, partnum, ver, sn)
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
 
         logging.info("Opened device %d (%s s/n %s)", self._idx, mod, sn)
+
 
         self.Calibrate()
 
@@ -267,6 +269,10 @@ class PH300(model.Detector):
         self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-9, SYNCOFFSMAX * 1e-9),
                                                 unit="s", setter=self._setSyncOffset)
 
+        # Make sure the device is synchronised and metadata is updated
+        self._setBinning(self.binning.value)
+        self._setSyncOffset(self.syncOffset.value)
+
         # Wrapper for the dataflow
         self.data = BasicDataFlow(self)
         # TODO: how to get the data while it's building up via a dataflow?
@@ -288,7 +294,7 @@ class PH300(model.Detector):
         """
         sn (None or str): serial number
         return (0 <= int < 8): device ID
-        raises: HwError if the device
+        raises: HwError if the device doesn't exist or cannot be opened
         """
         sn_str = create_string_buffer(8)
         for i in range(MAXDEVNUM):
@@ -690,7 +696,7 @@ class PH300RawDetector(model.Detector):
         self._shape = (2**31,)  # only one point, with (32 bits) int size
         self.data = BasicDataFlow(self)
 
-        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
         self._generator = None
 
     def terminate(self):
