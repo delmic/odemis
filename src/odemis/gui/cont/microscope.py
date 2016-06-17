@@ -851,10 +851,6 @@ class DelphiStateController(SecomStateController):
             # ejecting the sample holder
             try:
                 self._load_holder_calib()
-                if self._hole_focus is not None:
-                    self.good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
-                    ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
-                    ff.result()
                 ccd_md = self._main_data.ccd.getMetadata()
                 good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
                 self._main_data.ebeam.horizontalFoV.value = good_hfw
