@@ -307,7 +307,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         irange = numpy.array(irange, data.dtype)
         # TODO: warn if irange looks too different from original value?
 
-    if data.dtype == "uint8" and irange[0] == 0 and irange[1] == 255:
+    if data.dtype is numpy.uint8 and irange[0] == 0 and irange[1] == 255:
         # short-cut when data is already the same type
         # logging.debug("Applying direct range mapping to RGB")
         drescaled = data
@@ -346,7 +346,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             if force_white:
                 irange = (irange[1] - 1, irange[1])
 
-        if data.dtype != "uint8":
+        if data.dtype is numpy.uint8:
             drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
         else: # bytescale never does anything on a data already in uint8
             b = 255 / (irange[1] - irange[0])
@@ -360,7 +360,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     # apparently this is as fast (or even a bit better):
 
     # 0 copy (1 malloc)
-    rgb = numpy.empty(data.shape + (3,), dtype="uint8", order='C')
+    rgb = numpy.empty(data.shape + (3,), dtype=numpy.uint8, order='C')
 
     # Tint (colouration)
     if tint == (255, 255, 255):
