@@ -29,7 +29,7 @@ ctypedef numpy.uint16_t uint16_t
 # nogil allows multi-threading but prevents use of any Python objects or call
 @cython.cdivision(True)
 cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t irange1,
-                    int* tint, numpy.uint8_t* ret) nogil:
+                         int* tint, numpy.uint8_t* ret) nogil:
     cdef double b = 255. / <double>(irange1 - irange0)
     cdef double br = (b * <double>tint[0]) / 255.
     cdef double bg = (b * <double>tint[1]) / 255.
@@ -81,7 +81,7 @@ cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t
                 ret[retpos] = <numpy.uint8_t> (df * bb + 0.5)
                 retpos += 1
 
-# This function is probably not needed, but I have no idea how to instantiate 
+# This function is probably not needed, but I have no idea how to instantiate
 # a numpy array which can be passed as a pointer
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -95,9 +95,14 @@ def wrapDataArray2RGB(numpy.ndarray[uint16_t, ndim=2] data not None,
     ctint[2] = tint[2]
     cDataArray2RGB(&data[0,0], data.size, irange[0], irange[1], ctint, &ret[0,0,0])
 
+
 def DataArray2RGB(data, irange, tint=(255, 255, 255)):
     if not data.flags.c_contiguous:
         raise ValueError("Optimised version only works with C-contiguous arrays")
+    if data.dtype is not numpy.uint16:
+        # Note: cython automatically detects such errors, but it seems that with
+        # ctyhon 0.23, it can leak memory.
+        raise ValueError("Optimised version only works on uint16")
     # Note: we could also make an optimised version for F-contiguous arrays,
     # but it's not clear when it'd be useful. For more complex arrays, it's also
     # probably possible to generate a faster version than numpy, but I don't
@@ -107,5 +112,4 @@ def DataArray2RGB(data, irange, tint=(255, 255, 255)):
     ret = numpy.empty(data.shape + (3,), dtype=numpy.uint8)
     wrapDataArray2RGB(data, irange, tint, ret)
     return ret
-
 
