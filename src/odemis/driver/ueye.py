@@ -86,6 +86,30 @@ CM_MONO10 = 34
 CM_MONO12 = 26
 CM_MONO16 = 28
 
+# For is_CaptureStatus()
+CAPTURE_STATUS_INFO_CMD_RESET = 1
+CAPTURE_STATUS_INFO_CMD_GET = 2
+
+
+class UEYE_CAPTURE_STATUS_INFO(Structure):
+    _fields_ = [
+        ("dwCapStatusCnt_Total", c_uint32),
+        ("reserved", c_uint8 * 60),
+        ("adwCapStatusCnt_Detail", c_uint32 * 256),
+    ]
+
+CAP_STATUS_API_NO_DEST_MEM = 0xa2
+CAP_STATUS_API_CONVERSION_FAILED = 0xa3
+CAP_STATUS_API_IMAGE_LOCKED = 0xa5
+CAP_STATUS_DRV_OUT_OF_BUFFERS = 0xb2
+CAP_STATUS_DRV_DEVICE_NOT_READY = 0xb4
+CAP_STATUS_USB_TRANSFER_FAILED = 0xc7
+CAP_STATUS_DEV_MISSED_IMAGES = 0xe5
+CAP_STATUS_DEV_TIMEOUT = 0xd6
+CAP_STATUS_DEV_FRAME_CAPTURE_FAILED = 0xd9
+CAP_STATUS_ETH_BUFFER_OVERRUN = 0xe4
+CAP_STATUS_ETH_MISSED_IMAGES = 0xe5
+
 
 class UEYE_CAMERA_INFO(Structure):
     _fields_ = [
@@ -157,10 +181,12 @@ COLORMODE_CBYCRY = 4
 COLORMODE_JPEG = 8
 
 SENSOR_UI1545_M = 0x0028  # SXGA rolling shutter, monochrome, LE model
+SENSOR_UI1240LE_M = 0x0054  # SXGA global shutter, monochrome, single board
 
 # Sensor IDs with which this driver was tested
 KNOWN_SENSORS = {
                  SENSOR_UI1545_M,
+                 SENSOR_UI1240LE_M,
 }
 
 
@@ -466,7 +492,9 @@ class Camera(model.DigitalCamera):
             res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
             self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(res)
             pxs = sensorinfo.wPixelSize * 1e-8  # m
-            self._metadata[model.MD_SENSOR_PIXEL_SIZE] = (pxs, pxs)
+            self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser((pxs, pxs)),
+                                                     unit="m", readonly=True)
+            self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
 
             if sensorinfo.SensorID not in KNOWN_SENSORS:
                 logging.warning("This driver hasn't been tested for this sensor 0x%X (%s)",
@@ -486,8 +514,11 @@ class Camera(model.DigitalCamera):
             self._metadata[model.MD_BPP] = 8
             self._shape = res + (numpy.iinfo(self._dtype).max + 1,)
 
-            res = self._shape[:2]
+            # resolution & binning are fixed (for now), but we provide them
+            # because a lot of clients expect these VAs
+            res = self._transposeSizeToUser(self._shape[:2])
             self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
+            self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)), readonly=True)
 
             exprng = self.GetExposureRange()  # mx is limited by current frame-rate
             ftrng = self.GetFrameTimeRange()
@@ -499,6 +530,8 @@ class Camera(model.DigitalCamera):
                                                       unit="s", setter=self._setExposureTime)
 
             # TODO: binning? frameRate? resolution + translation = AOI?
+            # TODO: rolling/global shutter, pixel clock => minimize noise
+            # cf DeviceFeature(DEVICE_FEATURE_CMD_SET_SHUTTER_MODE)
 
             # Dataflow + acquisition
             self.acquisition_lock = threading.Lock()
@@ -615,6 +648,25 @@ class Camera(model.DigitalCamera):
         self._dll.is_SetFrameRate(self._hcam, c_double(fr), byref(newfps))
         return newfps.value
 
+    def GetCaptureStatus(self):
+        """
+        Read the capture status
+        return (UEYE_CAPTURE_STATUS_INFO.adwCapStatusCnt_Detail): count errors
+         for each CAP_STATUS_*
+        """
+        capstatus = UEYE_CAPTURE_STATUS_INFO()
+        self._dll.is_CaptureStatus(self._hcam, CAPTURE_STATUS_INFO_CMD_GET,
+                                   byref(capstatus), sizeof(capstatus))
+
+        return capstatus.adwCapStatusCnt_Detail
+
+    def ResetCaptureStatus(self):
+        """
+        Reset the capture status counts
+        """
+        self._dll.is_CaptureStatus(self._hcam, CAPTURE_STATUS_INFO_CMD_RESET,
+                                   None, 0)
+
     # The component interface
 
     def _setExposureTime(self, exp):
@@ -680,6 +732,8 @@ class Camera(model.DigitalCamera):
         # Note: if pixel clock and binning are to be updated, it should be done
         # before updating the frame-rate & exposure time
 
+        logging.debug("Updating the hardware settings")
+
         if prev_exp != self._exp_time:
             # Update frame-rate first, as it clamps the maximum possible exp time
             fr = 1 / self._exp_time
@@ -724,6 +778,7 @@ class Camera(model.DigitalCamera):
 
     def _buffer_as_array(self, mem, width, height, dtype, md):
         """
+        Get a DataArray corresponding to the given buffer
         mem (ctypes.POINTER): memory pointer
         width (int)
         height (int)
@@ -732,8 +787,14 @@ class Camera(model.DigitalCamera):
         return (DataArray): a numpy array corresponding to the data pointed to
         """
         na = numpy.empty((height, width), dtype=dtype)
-        # TODO check if GetImageMemPitch() is needed
+        # TODO use GetImageMemPitch() if needed: if width is not multiple of 4
+        # => create a na height x stride, and then return na[:, :size[0]]
+        assert(width % 4 == 0)
         memmove(na.ctypes.data, mem, na.nbytes)
+
+        # release the buffer
+        self._dll.is_UnlockSeqBuf(self._hcam, None, mem)  # None means guess the position
+
         return model.DataArray(na, md)
 
     GC_PERIOD = 10  # how often the garbage collector should run (in number of buffers)
@@ -742,6 +803,7 @@ class Camera(model.DigitalCamera):
         The core of the acquisition thread. Runs until acquire_must_stop is True.
         """
         num_gc = 0
+        num_errors = 0
         need_reinit = True
         buffers = []
         try:
@@ -749,7 +811,7 @@ class Camera(model.DigitalCamera):
                 # need to stop acquisition to update settings
                 if need_reinit or self._need_update_settings():
                     if self._dll.is_CaptureVideo(self._hcam, GET_LIVE):
-                        self.dll.is_StopLiveVideo(self._hcam, FORCE_VIDEO_STOP)
+                        self._dll.is_StopLiveVideo(self._hcam, FORCE_VIDEO_STOP)
                         self._free_buffers(buffers)
 
                     self._update_settings()
@@ -765,14 +827,27 @@ class Camera(model.DigitalCamera):
 
                 # Acquire an image
                 metadata = dict(self._metadata)  # duplicate
-                timeout = exposure_time * 1.2 + 1  # s
+                timeout = exposure_time * 1.2 + 3  # s
                 # TODO: use the timestamp provided by is_GetImageInfo()
                 metadata[model.MD_ACQ_DATE] = time.time()
 
                 # TODO: while waiting, allocate the memory for the DataArray
                 # TODO: check for acquire_must_stop while waiting
-                # TODO: handle timeout/errors
-                mem, imid = self.WaitForNextImage(timeout)
+                try:
+                    mem, imid = self.WaitForNextImage(timeout)
+                except UEyeError as ex:
+                    # Note: generates error 3 (CANT_OPEN_DEVICE) sometimes just after updating settings
+                    num_errors += 1
+                    if num_errors > 5:
+                        logging.error("%d errors in a row, cancelling acquisition", num_errors)
+                        return
+                    logging.warning("Failure during acquisition, while retry: %s", ex)
+                    self._check_capture_status()
+                    time.sleep(1)
+                    need_reinit = True
+                    continue
+
+                logging.debug("Acquired one image after %g s", time.time() - metadata[model.MD_ACQ_DATE])
 
                 if self.acquire_must_stop.is_set():
                     # Acquisition cancelled
@@ -799,6 +874,14 @@ class Camera(model.DigitalCamera):
             gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
+
+    def _check_capture_status(self):
+        cap_stat_cnt = self.GetCaptureStatus()
+        self.ResetCaptureStatus()
+        for n, v in globals().items():
+            if n.startswith("CAP_STATUS_"):
+                if cap_stat_cnt[v] > 0:
+                    logging.error("Error %s (%d times)", n, cap_stat_cnt[v])
 
     def terminate(self):
         # Stop the acquisition if it's active, as some hardware don't like to
@@ -842,7 +925,7 @@ class Camera(model.DigitalCamera):
             # TODO, add IS_ALLOW_STARTER_FW_UPLOAD to hcam to allow firmware update?
             self._dll.is_InitCamera(byref(hcam), None)
         except UEyeError as ex:
-            raise HwError("Failed to open IDS uEye camera: %s", ex)
+            raise HwError("Failed to open IDS uEye camera: %s" % (ex,))
 
         return hcam
 
