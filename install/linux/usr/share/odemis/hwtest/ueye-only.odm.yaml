@@ -1,0 +1,79 @@
+# Fake optical microscope to be able to use just a IDS uEye camera
+Optical: {
+    class: Microscope,
+    role: optical,
+    emitters: [Light, "Optical Objective", "Optical Emission Filter"],
+    detectors: [Camera],
+    actuators: ["FakeStage", "Objective Stage", "Optical Focus"],
+}
+
+Light: {
+    class: simulated.Light,
+    role: light,
+    affects: [Camera],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: [Camera]
+}
+
+"Optical Emission Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    affects: [Camera]
+}
+
+"Camera": {
+    class: ueye.Camera,
+    role: ccd,
+    init: {
+       device: null, # Any one found will do 
+    },
+}
+
+"FakeStage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: [Camera],
+    properties: {
+        speed: {'x':0.1, 'y':0.1} #m/s
+    }
+}
+
+# Use 2 MultiplexActuators to separate the axes of the PIGCS over different roles
+"Objective Stage": {
+    class: actuator.MultiplexActuator,
+    role: align,
+    affects: [Camera],
+    children: {"a": "Optical Stage", "b": "Optical Stage"},
+    init: {
+        axes_map: {"a": "a", "b": "b"},
+    },
+    properties: {
+        speed: {'a': 0.1, 'b': 0.1} #m/s
+    }
+}
+
+"Optical Focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    affects: [Camera],
+    children: {"z": "Optical Stage"},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
+"Optical Stage": {
+    class: simulated.Stage,
+    role: align,
+    init: {axes: ["a", "b", "z"]},
+}
