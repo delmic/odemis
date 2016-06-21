@@ -1705,7 +1705,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             if self.acquire_thread and not self.acquire_must_stop.is_set():
                 self.req_stop_flow()
-                self.wait_stopped_flow()
+            self.wait_stopped_flow()
         except Exception:
             logging.exception("Failed to stop the active acquisition")
 
