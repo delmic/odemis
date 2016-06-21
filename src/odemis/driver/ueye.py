@@ -38,6 +38,137 @@ import time
 # need to fork it, we have made the decision to only rely on ctypes. The source
 # code is still useful to understand how to call the IDS SDK.
 
+IGNORE_PARAMETER = -1
+
+# For DeviceFeature()
+
+DEVICE_FEATURE_CMD_GET_SUPPORTED_FEATURES = 1
+DEVICE_FEATURE_CMD_SET_LINESCAN_MODE = 2
+DEVICE_FEATURE_CMD_GET_LINESCAN_MODE = 3
+DEVICE_FEATURE_CMD_SET_LINESCAN_NUMBER = 4
+DEVICE_FEATURE_CMD_GET_LINESCAN_NUMBER = 5
+DEVICE_FEATURE_CMD_SET_SHUTTER_MODE = 6
+DEVICE_FEATURE_CMD_GET_SHUTTER_MODE = 7
+DEVICE_FEATURE_CMD_SET_PREFER_XS_HS_MODE = 8
+DEVICE_FEATURE_CMD_GET_PREFER_XS_HS_MODE = 9
+DEVICE_FEATURE_CMD_GET_DEFAULT_PREFER_XS_HS_MODE = 10
+DEVICE_FEATURE_CMD_GET_LOG_MODE_DEFAULT = 11
+DEVICE_FEATURE_CMD_GET_LOG_MODE = 12
+DEVICE_FEATURE_CMD_SET_LOG_MODE = 13
+DEVICE_FEATURE_CMD_GET_LOG_MODE_MANUAL_VALUE_DEFAULT = 14
+DEVICE_FEATURE_CMD_GET_LOG_MODE_MANUAL_VALUE_RANGE = 15
+DEVICE_FEATURE_CMD_GET_LOG_MODE_MANUAL_VALUE = 16
+DEVICE_FEATURE_CMD_SET_LOG_MODE_MANUAL_VALUE = 17
+DEVICE_FEATURE_CMD_GET_LOG_MODE_MANUAL_GAIN_DEFAULT = 18
+DEVICE_FEATURE_CMD_GET_LOG_MODE_MANUAL_GAIN_RANGE = 19
+DEVICE_FEATURE_CMD_GET_LOG_MODE_MANUAL_GAIN = 20
+DEVICE_FEATURE_CMD_SET_LOG_MODE_MANUAL_GAIN = 21
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_MODE_DEFAULT = 22
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_MODE = 23
+DEVICE_FEATURE_CMD_SET_VERTICAL_AOI_MERGE_MODE = 24
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_POSITION_DEFAULT = 25
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_POSITION_RANGE = 26
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_POSITION = 27
+DEVICE_FEATURE_CMD_SET_VERTICAL_AOI_MERGE_POSITION = 28
+DEVICE_FEATURE_CMD_GET_FPN_CORRECTION_MODE_DEFAULT = 29
+DEVICE_FEATURE_CMD_GET_FPN_CORRECTION_MODE = 30
+DEVICE_FEATURE_CMD_SET_FPN_CORRECTION_MODE = 31
+DEVICE_FEATURE_CMD_GET_SENSOR_SOURCE_GAIN_RANGE = 32
+DEVICE_FEATURE_CMD_GET_SENSOR_SOURCE_GAIN_DEFAULT = 33
+DEVICE_FEATURE_CMD_GET_SENSOR_SOURCE_GAIN = 34
+DEVICE_FEATURE_CMD_SET_SENSOR_SOURCE_GAIN = 35
+DEVICE_FEATURE_CMD_GET_BLACK_REFERENCE_MODE_DEFAULT = 36
+DEVICE_FEATURE_CMD_GET_BLACK_REFERENCE_MODE = 37
+DEVICE_FEATURE_CMD_SET_BLACK_REFERENCE_MODE = 38
+DEVICE_FEATURE_CMD_GET_ALLOW_RAW_WITH_LUT = 39
+DEVICE_FEATURE_CMD_SET_ALLOW_RAW_WITH_LUT = 40
+DEVICE_FEATURE_CMD_GET_SUPPORTED_SENSOR_BIT_DEPTHS = 41
+DEVICE_FEATURE_CMD_GET_SENSOR_BIT_DEPTH_DEFAULT = 42
+DEVICE_FEATURE_CMD_GET_SENSOR_BIT_DEPTH = 43
+DEVICE_FEATURE_CMD_SET_SENSOR_BIT_DEPTH = 44
+DEVICE_FEATURE_CMD_GET_TEMPERATURE = 45
+DEVICE_FEATURE_CMD_GET_JPEG_COMPRESSION = 46
+DEVICE_FEATURE_CMD_SET_JPEG_COMPRESSION = 47
+DEVICE_FEATURE_CMD_GET_JPEG_COMPRESSION_DEFAULT = 48
+DEVICE_FEATURE_CMD_GET_JPEG_COMPRESSION_RANGE = 49
+DEVICE_FEATURE_CMD_GET_NOISE_REDUCTION_MODE = 50
+DEVICE_FEATURE_CMD_SET_NOISE_REDUCTION_MODE = 51
+DEVICE_FEATURE_CMD_GET_NOISE_REDUCTION_MODE_DEFAULT = 52
+DEVICE_FEATURE_CMD_GET_TIMESTAMP_CONFIGURATION = 53
+DEVICE_FEATURE_CMD_SET_TIMESTAMP_CONFIGURATION = 54
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_HEIGHT_DEFAULT = 55
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_HEIGHT_NUMBER = 56
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_HEIGHT_LIST = 57
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_HEIGHT = 58
+DEVICE_FEATURE_CMD_SET_VERTICAL_AOI_MERGE_HEIGHT = 59
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_ADDITIONAL_POSITION_DEFAULT = 60
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_ADDITIONAL_POSITION_RANGE = 61
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_ADDITIONAL_POSITION = 62
+DEVICE_FEATURE_CMD_SET_VERTICAL_AOI_MERGE_ADDITIONAL_POSITION = 63
+DEVICE_FEATURE_CMD_GET_SENSOR_TEMPERATURE_NUMERICAL_VALUE = 64
+DEVICE_FEATURE_CMD_SET_IMAGE_EFFECT = 65
+DEVICE_FEATURE_CMD_GET_IMAGE_EFFECT = 66
+DEVICE_FEATURE_CMD_GET_IMAGE_EFFECT_DEFAULT = 67
+DEVICE_FEATURE_CMD_GET_EXTENDED_PIXELCLOCK_RANGE_ENABLE_DEFAULT = 68
+DEVICE_FEATURE_CMD_GET_EXTENDED_PIXELCLOCK_RANGE_ENABLE = 69
+DEVICE_FEATURE_CMD_SET_EXTENDED_PIXELCLOCK_RANGE_ENABLE = 70
+DEVICE_FEATURE_CMD_MULTI_INTEGRATION_GET_SCOPE = 71
+DEVICE_FEATURE_CMD_MULTI_INTEGRATION_GET_PARAMS = 72
+DEVICE_FEATURE_CMD_MULTI_INTEGRATION_SET_PARAMS = 73
+DEVICE_FEATURE_CMD_MULTI_INTEGRATION_GET_MODE_DEFAULT = 74
+DEVICE_FEATURE_CMD_MULTI_INTEGRATION_GET_MODE = 75
+DEVICE_FEATURE_CMD_MULTI_INTEGRATION_SET_MODE = 76
+DEVICE_FEATURE_CMD_SET_I2C_TARGET = 77
+DEVICE_FEATURE_CMD_SET_WIDE_DYNAMIC_RANGE_MODE = 78
+DEVICE_FEATURE_CMD_GET_WIDE_DYNAMIC_RANGE_MODE = 79
+DEVICE_FEATURE_CMD_GET_WIDE_DYNAMIC_RANGE_MODE_DEFAULT = 80
+DEVICE_FEATURE_CMD_GET_SUPPORTED_BLACK_REFERENCE_MODES = 81
+DEVICE_FEATURE_CMD_SET_LEVEL_CONTROLLED_TRIGGER_INPUT_MODE = 82
+DEVICE_FEATURE_CMD_GET_LEVEL_CONTROLLED_TRIGGER_INPUT_MODE = 83
+DEVICE_FEATURE_CMD_GET_LEVEL_CONTROLLED_TRIGGER_INPUT_MODE_DEFAULT = 84
+DEVICE_FEATURE_CMD_GET_VERTICAL_AOI_MERGE_MODE_SUPPORTED_LINE_MODES = 85
+DEVICE_FEATURE_CMD_SET_REPEATED_START_CONDITION_I2C = 86
+DEVICE_FEATURE_CMD_GET_REPEATED_START_CONDITION_I2C = 87
+DEVICE_FEATURE_CMD_GET_REPEATED_START_CONDITION_I2C_DEFAULT = 88
+DEVICE_FEATURE_CMD_GET_TEMPERATURE_STATUS = 89
+DEVICE_FEATURE_CMD_GET_MEMORY_MODE_ENABLE = 90
+DEVICE_FEATURE_CMD_SET_MEMORY_MODE_ENABLE = 91
+DEVICE_FEATURE_CMD_GET_MEMORY_MODE_ENABLE_DEFAULT = 92
+DEVICE_FEATURE_CMD_GET_SUPPORTED_EXTERNAL_INTERFACES = 97
+DEVICE_FEATURE_CMD_GET_EXTERNAL_INTERFACE = 98
+DEVICE_FEATURE_CMD_SET_EXTERNAL_INTERFACE = 99
+DEVICE_FEATURE_CMD_EXTENDED_AWB_LIMITS_GET = 100
+DEVICE_FEATURE_CMD_EXTENDED_AWB_LIMITS_SET = 101
+DEVICE_FEATURE_CMD_GET_MEMORY_MODE_ENABLE_SUPPORTED = 102
+DEVICE_FEATURE_CMD_SET_SPI_TARGET = 103
+
+DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING = 0x00000001
+DEVICE_FEATURE_CAP_SHUTTER_MODE_GLOBAL = 0x00000002
+DEVICE_FEATURE_CAP_LINESCAN_MODE_FAST = 0x00000004
+DEVICE_FEATURE_CAP_LINESCAN_NUMBER = 0x00000008
+DEVICE_FEATURE_CAP_PREFER_XS_HS_MODE = 0x00000010
+DEVICE_FEATURE_CAP_LOG_MODE = 0x00000020
+DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING_GLOBAL_START = 0x00000040
+DEVICE_FEATURE_CAP_SHUTTER_MODE_GLOBAL_ALTERNATIVE_TIMING = 0x00000080
+DEVICE_FEATURE_CAP_VERTICAL_AOI_MERGE = 0x00000100
+DEVICE_FEATURE_CAP_FPN_CORRECTION = 0x00000200
+DEVICE_FEATURE_CAP_SENSOR_SOURCE_GAIN = 0x00000400
+DEVICE_FEATURE_CAP_BLACK_REFERENCE = 0x00000800
+DEVICE_FEATURE_CAP_SENSOR_BIT_DEPTH = 0x00001000
+DEVICE_FEATURE_CAP_TEMPERATURE = 0x00002000
+DEVICE_FEATURE_CAP_JPEG_COMPRESSION = 0x00004000
+DEVICE_FEATURE_CAP_NOISE_REDUCTION = 0x00008000
+DEVICE_FEATURE_CAP_TIMESTAMP_CONFIGURATION = 0x00010000
+DEVICE_FEATURE_CAP_IMAGE_EFFECT = 0x00020000
+DEVICE_FEATURE_CAP_EXTENDED_PIXELCLOCK_RANGE = 0x00040000
+DEVICE_FEATURE_CAP_MULTI_INTEGRATION = 0x00080000
+DEVICE_FEATURE_CAP_WIDE_DYNAMIC_RANGE = 0x00100000
+DEVICE_FEATURE_CAP_LEVEL_CONTROLLED_TRIGGER = 0x00200000
+DEVICE_FEATURE_CAP_REPEATED_START_CONDITION_I2C = 0x00400000
+DEVICE_FEATURE_CAP_TEMPERATURE_STATUS = 0x00800000
+DEVICE_FEATURE_CAP_MEMORY_MODE = 0x01000000
+DEVICE_FEATURE_CAP_SEND_EXTERNAL_INTERFACE_DATA = 0x02000000
+
 # For Exposure()
 EXPOSURE_CMD_GET_CAPS = 1
 EXPOSURE_CMD_GET_EXPOSURE_DEFAULT = 2
@@ -504,7 +635,9 @@ class Camera(model.DigitalCamera):
                 logging.warning("This driver is only tested for monochrome sensors")
                 # TODO: also support RGB cameras
 
-            self._prev_settings = (None,)  # exp,
+            self._set_static_settings()
+
+            self._prev_settings = (None, None)  # exp, gain
 
             # Set the format
             # TODO: color mode based on the maximum BPP
@@ -514,6 +647,7 @@ class Camera(model.DigitalCamera):
             self._metadata[model.MD_BPP] = 8
             self._shape = res + (numpy.iinfo(self._dtype).max + 1,)
 
+            # TODO: binning? frameRate? resolution + translation = AOI?
             # resolution & binning are fixed (for now), but we provide them
             # because a lot of clients expect these VAs
             res = self._transposeSizeToUser(self._shape[:2])
@@ -529,9 +663,9 @@ class Camera(model.DigitalCamera):
             self.exposureTime = model.FloatContinuous(self._exp_time, exprng,
                                                       unit="s", setter=self._setExposureTime)
 
-            # TODO: binning? frameRate? resolution + translation = AOI?
-            # TODO: rolling/global shutter, pixel clock => minimize noise
-            # cf DeviceFeature(DEVICE_FEATURE_CMD_SET_SHUTTER_MODE)
+            self._gain = 1.0
+            self.gain = model.FloatContinuous(self._gain, (1.0, 2.0), unit="",
+                                              setter=self._setGain)
 
             # Dataflow + acquisition
             self.acquisition_lock = threading.Lock()
@@ -544,6 +678,22 @@ class Camera(model.DigitalCamera):
         except Exception:
             self._dll.is_ExitCamera(self._hcam)
             raise
+
+    def _set_static_settings(self):
+        """
+        Configures some of the camera parameters which are static for us
+        """
+        # Rolling shutter = less noise
+        devcaps = c_uint32()
+        self._dll.is_DeviceFeature(self._hcam, DEVICE_FEATURE_CMD_GET_SUPPORTED_FEATURES, byref(devcaps), sizeof(devcaps))
+        if devcaps.value & DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING:
+            logging.debug("Setting rolling shutter")
+            smode = c_uint32(DEVICE_FEATURE_CAP_SHUTTER_MODE_ROLLING)
+            self._dll.is_DeviceFeature(self._hcam, DEVICE_FEATURE_CMD_SET_SHUTTER_MODE, byref(smode), sizeof(smode))
+
+        # Note: for now the default pixel clock seems fine. Moreover, reducing
+        # it reduces the minimum exposure time (but we don't care), and the
+        # maximum exposure time is constant.
 
     # Direct mapping of the SDK functions
     def ExitCamera(self):
@@ -667,6 +817,22 @@ class Camera(model.DigitalCamera):
         self._dll.is_CaptureStatus(self._hcam, CAPTURE_STATUS_INFO_CMD_RESET,
                                    None, 0)
 
+    def SetHardwareGain(self, master, red=None, green=None, blue=None):
+        """
+        master (0<=int<=100): percentage of gain (0 = no gain == x1)
+        red (None or 0<=int<=100): red channel gain, or None if not to be changed
+        green (None or 0<=int<=100): green channel gain, or None if not to be changed
+        blue (None or 0<=int<=100): blue channel gain, or None if not to be changed
+        """
+        assert(0 <= master <= 100)
+        if red is None:
+            red = IGNORE_PARAMETER
+        if green is None:
+            green = IGNORE_PARAMETER
+        if blue is None:
+            blue = IGNORE_PARAMETER
+        self._dll.is_SetHardwareGain(self._hcam, master, red, green, blue)
+
     # The component interface
 
     def _setExposureTime(self, exp):
@@ -674,6 +840,12 @@ class Camera(model.DigitalCamera):
         self._exp_time = exp
         # TODO: based on increment, guess the value that will be accepted
         return exp
+
+    def _setGain(self, gain):
+        # Will only actually be updated once we (re)start image acquisition
+        gain = round(gain * 100) / 100  # round to 1%
+        self._gain = gain
+        return gain
 
     def start_generate(self):
         """
@@ -718,7 +890,7 @@ class Camera(model.DigitalCamera):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
-        new_settings = (self._exp_time,)
+        new_settings = (self._exp_time, self._gain)
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -727,7 +899,7 @@ class Camera(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        (prev_exp,) = self._prev_settings
+        (prev_exp, prev_gain) = self._prev_settings
 
         # Note: if pixel clock and binning are to be updated, it should be done
         # before updating the frame-rate & exposure time
@@ -743,7 +915,13 @@ class Camera(model.DigitalCamera):
             self._metadata[model.MD_EXP_TIME] = self._exp_time
             logging.debug("Updating exposure time to %g s", self._exp_time)
 
-        self._prev_settings = (self._exp_time,)
+        if prev_gain != self._gain:
+            # Convert from 1.0 -> 2.0 => 0 -> 100
+            hwgain = int((self._gain - 1) * 100)
+            self.SetHardwareGain(hwgain)
+            logging.debug("Hardware gain set to %d %%", hwgain)
+
+        self._prev_settings = (self._exp_time, self._gain)
 
     def _allocate_buffers(self, num, width, height, bpp):
         """
