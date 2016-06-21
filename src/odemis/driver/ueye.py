@@ -870,7 +870,6 @@ class Camera(model.DigitalCamera):
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
-        logging.debug("Asked acquisition thread to stop")
         # Warning: calling AcquisitionStop here cause the thread to go crazy
 
     def _wait_stopped_flow(self):
@@ -995,7 +994,7 @@ class Camera(model.DigitalCamera):
                     self._update_settings()
                     exposure_time = self._exp_time
 
-                    res = self.resolution.value
+                    res = self._transposeSizeFromUser(self.resolution.value)
                     dtype = self._dtype
                     buffers = self._allocate_buffers(3, res[0], res[1], numpy.iinfo(dtype).bits)
 
@@ -1025,6 +1024,8 @@ class Camera(model.DigitalCamera):
                     need_reinit = True
                     continue
 
+                # TODO: it seems that sometimes (especially for the first image),
+                # the time take to get the image is less than the exposure time.
                 logging.debug("Acquired one image after %g s", time.time() - metadata[model.MD_ACQ_DATE])
 
                 if self.acquire_must_stop.is_set():
@@ -1067,7 +1068,7 @@ class Camera(model.DigitalCamera):
         try:
             if self.acquire_thread and not self.acquire_must_stop.is_set():
                 self.stop_generate()
-                self._wait_stopped_flow()
+            self._wait_stopped_flow()
         except Exception:
             logging.exception("Failed to stop the active acquisition")
 
@@ -1092,9 +1093,9 @@ class Camera(model.DigitalCamera):
 
         else:
             for n in range(cl.dwCount):
-                if cl[n].SerNo == sn:
+                if cl.uci[n].SerNo == sn:
                     # Set the handle as camera ID
-                    hcam.value = cl[n].dwCameraID
+                    hcam.value = cl.uci[n].dwCameraID
                     break
             else:
                 raise HwError("Failed to find IDS uEye camera with S/N %s, check the connection to the computer" % (sn,))
