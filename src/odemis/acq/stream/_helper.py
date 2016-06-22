@@ -958,6 +958,16 @@ class OverlayStream(Stream):
                                  "scale ratio xy: %s)"
                                  % (scale_diff, rot_diff, f_scale_xy))
 
+            # Compensate also for any rotation applied by the user
+            emittermd = self._emitter.getMetadata()
+            rot_offset = self._emitter.rotation.value - emittermd.get(model.MD_ROTATION_COR, 0)
+            if rot_offset != 0:
+                logging.warning("The SEM image has been manually rotated by %f", rot_offset)
+                opt_md[model.MD_ROTATION_COR] = opt_md[model.MD_ROTATION_COR] - rot_offset
+
+            # Rotation correction on the original data is already correct, so don't provide new one
+            sem_md[model.MD_POS_COR] = (0, 0)
+            opt_md[model.MD_SHEAR_COR] = 0
             # Create an empty DataArray with trans_md as the metadata
             return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
 
