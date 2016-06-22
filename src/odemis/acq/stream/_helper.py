@@ -958,6 +958,35 @@ class OverlayStream(Stream):
                                  "scale ratio xy: %s)"
                                  % (scale_diff, rot_diff, f_scale_xy))
 
+            # The metadata will be used to _update_ the current metadata of the
+            # images. We need to be careful on what needs to be left as-is and what
+            # needs to be updated. In particular, the fine alignment has some
+            # expectation on how the images will be displayed.
+            # Optical:
+            #  * POS_COR: overridden by fine alignment
+            #  * PXS_COR: overridden by fine alignment
+            #  * ROT_COR: overridden by fine alignment, see trick below
+            #  * SHEAR_COR: fine alignment expects 0 => forced to 0
+            # SEM:
+            #  * POS_COR: fine alignment expects 0 => forced to 0
+            #  * PXS_COR: overridden by fine alignment
+            #  * ROT_COR: fine alignment expects 0, see trick below
+            #  * SHEAR_COR: overridden by fine alignment
+            # For the rotation, normally the SEM has no rotation, and the optical
+            # is rotated from fine alignment. However, if the user has manually
+            # rotated the SEM scanning, we want to have the rotation on the SEM.
+            # So, we first check the SEM rotation (= ROT-ROT_COR), and if it's
+            # rotated, rotate the optical image by the same amount.
+
+            # Compensate also for any rotation applied by the user
+            emittermd = self._emitter.getMetadata()
+            rot_offset = self._emitter.rotation.value - emittermd.get(model.MD_ROTATION_COR, 0)
+            if rot_offset != 0:
+                logging.warning("The SEM image has been manually rotated by %f", rot_offset)
+                opt_md[model.MD_ROTATION_COR] = opt_md[model.MD_ROTATION_COR] - rot_offset
+
+            sem_md[model.MD_POS_COR] = (0, 0)
+            opt_md[model.MD_SHEAR_COR] = 0
             # Create an empty DataArray with trans_md as the metadata
             return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
 
