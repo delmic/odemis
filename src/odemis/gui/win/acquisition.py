@@ -206,8 +206,8 @@ class AcquisitionDialog(xrcfr_acq):
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
         # Ensure we don't update the view after the window is destroyed
+        self.streambar_controller.clear()
         for s in list(self._tab_data_model.streams.value):  # copy, as it's modified by stream cont
-            self.streambar_controller.removeStream(s)
             # Stop listening to changes in local VAs
             local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
             for lva in local_vas:

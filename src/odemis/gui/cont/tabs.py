@@ -1519,22 +1519,24 @@ class AnalysisTab(Tab):
             data: ([model.DataArray]) List of data to display. Should contain at least one array
 
         """
-
-        # Reset tool, layout and visible views
-        self.tab_data_model.tool.value = guimod.TOOL_NONE
-        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
-
-        new_visible_views = list(self._def_views)  # Use a copy
-
-        # Create a new file info model object
-        fi = guimod.FileInfo(filename)
-
         # Remove all the previous streams
         self._stream_bar_controller.clear()
         # Clear any old plots
         self.panel.vp_inspection_plot.clear()
         self.panel.vp_spatialspec.clear()
         self.panel.vp_angular.clear()
+
+        # Reset tool, layout and visible views
+        self.tab_data_model.tool.value = guimod.TOOL_NONE
+        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
+
+        if filename is None:
+            return
+
+        new_visible_views = list(self._def_views)  # Use a copy
+
+        # Create a new file info model object
+        fi = guimod.FileInfo(filename)
 
         # Force the canvases to fit to the content
         for vp in [self.panel.vp_inspection_tl,

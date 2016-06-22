@@ -1493,7 +1493,7 @@ class AndorCam3(model.DigitalCamera):
                     if exp.errno in (11, 13):  # AT_ERR_NODATA, AT_ERR_TIMEDOUT
                         num_errors += 1
                         if num_errors > 5:
-                            logging.error("%d errors in a row, canceling acquisition", num_errors)
+                            logging.error("%d errors in a row, cancelling acquisition", num_errors)
                             return
                         logging.warning("trying again to acquire image after error %s", exp.strerror)
                         need_reinit = True
@@ -1528,7 +1528,7 @@ class AndorCam3(model.DigitalCamera):
             # received a must-stop event
             pass
         except Exception:
-            logging.exception("Acquisition failed with unexcepted error")
+            logging.exception("Acquisition failed with unexpected error")
         finally:
             try:
                 self.Command(u"AcquisitionStop")
@@ -1672,9 +1672,6 @@ class AndorCam3(model.DigitalCamera):
     def req_stop_flow(self):
         """
         Stop the acquisition of a flow of images.
-        sync (boolean): if True, wait that the acquisition is finished before returning.
-         Calling with this flag activated from the acquisition callback is not
-         permitted (it would cause a dead-lock).
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
@@ -1691,7 +1688,7 @@ class AndorCam3(model.DigitalCamera):
             self.acquire_thread.join(10) # 10s timeout for safety
             if self.acquire_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
-            # ensure it's not set, even if the thread died prematurately
+            # ensure it's not set, even if the thread died prematurely
             self.acquire_must_stop.clear()
 
     def terminate(self):
@@ -1708,7 +1705,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             if self.acquire_thread and not self.acquire_must_stop.is_set():
                 self.req_stop_flow()
-                self.wait_stopped_flow()
+            self.wait_stopped_flow()
         except Exception:
             logging.exception("Failed to stop the active acquisition")
 

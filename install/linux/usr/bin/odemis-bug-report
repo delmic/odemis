@@ -23,7 +23,7 @@ fi
 
 
 # Compress in background
-zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf &
+zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf /var/log/syslog &
 
 
 # Take a screenshot if the GUI is there
@@ -84,7 +84,14 @@ file-roller --add "$descfn" $hwfn $scfn --add-to "$fn"
 
 zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
 
+
+
 # Open wetransfer
 # TODO: any way to automatically send the file?
-firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com"
+# See https://github.com/predat/wetransferpy
+
+# Encode the (first 30 lines of) description into URL encoding for passing it also as message
+msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
+
+firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
 
