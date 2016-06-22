@@ -827,10 +827,19 @@ class Camera(model.DigitalCamera):
         assert(0 <= master <= 100)
         if red is None:
             red = IGNORE_PARAMETER
+        else:
+            assert(0 <= red <= 100)
+
         if green is None:
             green = IGNORE_PARAMETER
+        else:
+            assert(0 <= green <= 100)
+
         if blue is None:
             blue = IGNORE_PARAMETER
+        else:
+            assert(0 <= blue <= 100)
+
         self._dll.is_SetHardwareGain(self._hcam, master, red, green, blue)
 
     # The component interface
@@ -1026,6 +1035,9 @@ class Camera(model.DigitalCamera):
 
                 # TODO: it seems that sometimes (especially for the first image),
                 # the time take to get the image is less than the exposure time.
+                # See "Applying new parameters" of manual: in freerun mode, it
+                # can take several frames before the settings are applied.
+                # Still strange that this happens even if we stop/start acquisition.
                 logging.debug("Acquired one image after %g s", time.time() - metadata[model.MD_ACQ_DATE])
 
                 if self.acquire_must_stop.is_set():
