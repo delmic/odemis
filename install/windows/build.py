@@ -3,6 +3,7 @@ import subprocess
 import sys
 import odemis
 
+
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "-y", "viewer.spec"]
 nsis_command = [
@@ -13,7 +14,7 @@ nsis_command = [
 
 # PyInstaller/tkinter might have problems finding init.tcl
 if 'TCL_LIBRARY' not in os.environ or 'TK_LIBRARY' not in os.environ:
-    print "\n* WARNING * You might need to set the 'TCL_LIBRARY' and 'TK_LIBRARY' env vars!\n"
+    print "\n* ATTENTION * You might need to set the 'TCL_LIBRARY' and 'TK_LIBRARY' env vars!\n"
 
 
 def run_command(cmd, flavor=None):
@@ -33,7 +34,7 @@ def add_size_to_version():
         version = '.'.join(odemis._get_version().split('-')[:2])
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
-print "Build Odemis viewers", '.'.join(odemis._get_version().split('-')[:2])
+print "Build OdemisViewer", '.'.join(odemis._get_version().split('-')[:2])
 
 os.chdir(os.path.dirname(__file__) or '.')
 
@@ -83,7 +84,7 @@ while True:
 
     [7] Build everything
 
-    > """)
+> """)
 
     try:
         i = int(i)
