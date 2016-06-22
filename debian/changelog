@@ -1,3 +1,14 @@
+odemis (2.4.4-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.4
+  * Main improvements:
+    - Better rotation correction when doing fine alignment on DELPHI
+    - More information sent when reporting bug, for hardware issues analysis
+  * Main bugs fixed:
+    - Avoid memory leak when showing 8 bit greyscale on newer versions of Ubuntu
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 22 Jun 2016 12:06:35 +0200
+
 odemis (2.4.3-1ubuntu1) precise; urgency=medium
 
   * New version: 2.4.3
