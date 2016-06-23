@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Allows to read/write the configuration of Andor Shamrock spectrograph
-
 '''
 Created on May 2016
 
@@ -27,8 +26,9 @@ from __future__ import division, print_function
 
 import argparse
 import logging
-import sys
+from odemis import model
 from odemis.driver import andorshrk
+import sys
 
 
 def read_all(device):
@@ -46,6 +46,9 @@ def read_all(device):
         if (not has_in and fi) or (not has_out and fo):
             continue
         o = device.GetDetectorOffset(fi, fo)
+        # Note: user reports that (for output on SR193), it seems that 0 is for
+        # SIDE port, and 1 for DIRECT port. It might just be a matter of deciding
+        # which port to call side vs. direct.
         print("\tDetector %d (%s) -> %d (%s): %d" % (fi, "side" if fi else "direct",
                                                      fo, "side" if fo else "direct",
                                                      o))
@@ -91,7 +94,9 @@ def main(args):
     # TODO: allow to change the current turret?
 
     parser.add_argument('--serial', dest="serial", default=0,
-                        help="Serial number of the device (by default, it will pick the one connected)")
+                        help="Serial number of the device (by default, it will pick the one connected). Odemis must not be running.")
+    parser.add_argument('--role', dest="role",
+                        help="Role of the spectrograph in Odemis, to connect via the Odemis back-end. Ex: 'spectrograph'.")
     # TODO: allow to configure a spectrograph connected via a CCD (with a I²C cable)
 
     options = parser.parse_args(args[1:])
@@ -105,7 +110,10 @@ def main(args):
     logging.getLogger().setLevel(loglev)
 
     try:
-        dev = andorshrk.Shamrock("test", "test", options.serial)
+        if options.role:
+            dev = model.getComponent(role=options.role)
+        else:
+            dev = andorshrk.Shamrock("test", "test", options.serial)
 
         if options.read:
             read_all(dev)
@@ -114,7 +122,8 @@ def main(args):
         if options.doffset:
             set_doffset(dev, *options.doffset)
 
-        dev.terminate()
+        if not options.role:
+            dev.terminate()
     except ValueError as exp:
         logging.error("%s", exp)
         return 127
