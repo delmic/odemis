@@ -116,22 +116,24 @@ class VirtualTestCam(object):
     def setUp(self):
         # reset size and binning
         try:
-            self.camera.binning.value = (1, 1)
+            if not self.camera.binning.readonly:
+                self.camera.binning.value = (1, 1)
         except AttributeError:
             pass # no binning
         self.size = self.camera.shape[:-1]
-        self.camera.resolution.value = self.size
+        if not self.camera.resolution.readonly:
+            self.camera.resolution.value = self.size
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
 
     def tearDown(self):
+        time.sleep(1)
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
 
 #    @unittest.skip("simple")
     def test_temp(self):
-        if (not hasattr(self.camera, "targetTemperature") or
-            not isinstance(self.camera.targetTemperature, model.VigilantAttributeBase)):
+        if not model.hasVA(self.camera, "targetTemperature"):
             self.skipTest("Camera doesn't support setting temperature")
 
         ttemp = self.camera.targetTemperature.value
@@ -157,8 +159,7 @@ class VirtualTestCam(object):
         """
         test the translation VA (if available)
         """
-        if (not hasattr(self.camera, "translation") or
-            not isinstance(self.camera.translation, model.VigilantAttributeBase) or
+        if (not model.hasVA(self.camera, "translation") or
             self.camera.translation.readonly):
             self.skipTest("Camera doesn't support setting translation")
 
@@ -203,7 +204,8 @@ class VirtualTestCam(object):
         exposure = 0.1
 
         # just to check it works
-        self.camera.binning.value = (1, 1)
+        if not self.camera.binning.readonly:
+            self.camera.binning.value = (1, 1)
 
         self.camera.exposureTime.value = exposure
 
@@ -216,7 +218,8 @@ class VirtualTestCam(object):
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
         # just to check it still works
-        self.camera.binning.value = (1, 1)
+        if not self.camera.binning.readonly:
+            self.camera.binning.value = (1, 1)
 
         start = time.time()
         im = self.camera.data.get()
@@ -372,6 +375,10 @@ class VirtualTestCam(object):
 
 #    @unittest.skip("simple")
     def test_binning(self):
+        if (not model.hasVA(self.camera, "binning") or
+            self.camera.binning.readonly):
+            self.skipTest("Camera doesn't support setting binning")
+
         self.camera.binning.value = (1, 1)
         max_binning = self.camera.binning.range[1]
         new_binning = (2, 2)
