@@ -755,9 +755,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
-                    # Check whether it went fine
+                    # Check whether it went fine (= not too long and not too short)
                     dur = time.time() - start
-                    if timedout or dur < rep_time:
+                    if timedout or dur < rep_time * 0.95:
                         if timedout:
                             # Note: it can happen we don't receive the data if there
                             # no more memory left (without any other warning).
@@ -770,7 +770,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                             "pixel %s timed out after %g s. "
                                             "Memory usage is %d. Will try again",
                                             i, rep_time * 4 + 5, memu)
-                        else: # too fast to be possible
+                        else:  # too fast to be possible (< the expected time - 5%)
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)
                         failures += 1
@@ -792,6 +792,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
                                            % (i, sem_time * 1.5 + 5))
+                    logging.debug("Got main synchronisation")
                     self._main_df.unsubscribe(self._onMainImage)
 
                     if self._acq_state == CANCELLED:
@@ -1051,9 +1052,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
-                    # Check whether it went fine
+                    # Check whether it went fine (= not too long and not too short)
                     dur = time.time() - start
-                    if timedout or dur < rep_time:
+                    if timedout or dur < rep_time * 0.95:
                         if timedout:
                             # Note: it can happen we don't receive the data if there
                             # no more memory left (without any other warning).
@@ -1066,7 +1067,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                             "pixel %s timed out after %g s. "
                                             "Memory usage is %d. Will try again",
                                             i, rep_time * 4 + 5, memu)
-                        else:  # too fast to be possible
+                        else:  # too fast to be possible (< the expected time - 5%)
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)
                         failures += 1
