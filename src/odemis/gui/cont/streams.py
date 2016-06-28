@@ -461,7 +461,7 @@ class StreamController(object):
             wl_rng = (va.range[0][0], va.range[1][1])
 
             width = wl[1] - wl[0]
-            ctr_rng = wl_rng[0] + width // 2, wl_rng[1] - width // 2
+            ctr_rng = wl_rng[0] + width / 2, wl_rng[1] - width / 2
             req_center = ctrl.GetValue()
             new_center = min(max(ctr_rng[0], req_center), ctr_rng[1])
 
@@ -469,7 +469,7 @@ class StreamController(object):
                 # VA might not change => update value ourselves
                 ctrl.SetValue(new_center)
 
-            return new_center - width // 2, new_center + width // 2
+            return new_center - width / 2, new_center + width / 2
 
         se = SettingEntry(name="spectrum_center", va=self.stream.spectrumBandwidth,
                           stream=self.stream, value_ctrl=txt_spec_center, events=wx.EVT_COMMAND_ENTER,
@@ -490,13 +490,13 @@ class StreamController(object):
             center = (wl[0] + wl[1]) / 2
             max_width = max(center - wl_rng[0], wl_rng[1] - center) * 2
             req_width = ctrl.GetValue()
-            new_width = max(min(max_width, req_width), max_width // 1024)
+            new_width = max(0, min(req_width, max_width))
 
             if req_width != new_width:
                 # VA might not change => update value ourselves
                 ctrl.SetValue(new_width)
 
-            return center - new_width // 2, center + new_width // 2
+            return center - new_width / 2, center + new_width / 2
 
         se = SettingEntry(name="spectrum_bw", va=self.stream.spectrumBandwidth,
                           stream=self.stream, value_ctrl=txt_spec_bw, events=wx.EVT_COMMAND_ENTER,
