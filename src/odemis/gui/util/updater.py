@@ -23,19 +23,20 @@ from __future__ import division
 
 import logging
 import odemis
-from odemis.gui.conf import get_general_conf
 import os
 import pkg_resources
 import subprocess
 import tempfile
 import urllib2
 import wx
+from urllib2 import HTTPError
 
 
 VERSION_FILE = "version.txt"
 INSTALLER_FILE = "OdemisViewer-%s.exe"
 VIEWER_NAME = "Odemis Viewer"
-VIEWER_ROOT_URL = "http://www.delmic.com/odemisviewer/"
+VIEWER_ROOT_URLS = ("http://www.delmic.com/hubfs/odemisviewer/",  # new URL
+                    "http://www.delmic.com/odemisviewer/")
 
 
 class WindowsUpdater:
@@ -59,6 +60,28 @@ class WindowsUpdater:
         return ver_str
 
     @staticmethod
+    def _open_remote_file(fn):
+        """
+        Opens a remote file, trying different locations
+        fn (str): the filename
+        return (File): the opened File-like from urllib2
+        raise HTTPError: in case of failure to find the file
+        """
+        for url in VIEWER_ROOT_URLS:
+            try:
+                web_url = url + fn
+                web_file = urllib2.urlopen(web_url, timeout=10)
+                break
+            except HTTPError as err:
+                if err.getcode() == 404 and url != VIEWER_ROOT_URLS[-1]:
+                    logging.info("Opening URL %s failed, will try another address", web_url)
+                    continue
+                raise
+        # It should now either have succeeded or raised an exception
+
+        return web_file
+
+    @staticmethod
     def get_remote_version():
         """ Get the remote version of Odemis as a string
 
@@ -71,8 +94,7 @@ class WindowsUpdater:
         web_size = 0
 
         try:
-            web_version_file = urllib2.urlopen(os.path.join(VIEWER_ROOT_URL, VERSION_FILE),
-                                               timeout=10)
+            web_version_file = WindowsUpdater._open_remote_file(VERSION_FILE)
             web_version = web_version_file.readline().strip()
             web_size = int(web_version_file.readline().strip())
             web_version_file.close()
@@ -132,14 +154,11 @@ class WindowsUpdater:
             dest_dir = tempfile.gettempdir()
 
             installer_file = INSTALLER_FILE % remote_version
-
-            web_url = os.path.join(VIEWER_ROOT_URL, installer_file)
+            web_file = self._open_remote_file(installer_file)
             local_path = os.path.join(dest_dir, installer_file)
-
-            logging.info("Downloading from %s to %s...", web_url, local_path)
-
-            web_file = urllib2.urlopen(web_url, timeout=10)
             local_file = open(local_path, 'wb')
+
+            logging.info("Downloading from %s to %s...", web_file.url, local_path)
 
             pdlg = wx.ProgressDialog(
                 "Downloading update...",
@@ -164,12 +183,12 @@ class WindowsUpdater:
 
             web_file.close()
             local_file.close()
-            logging.info("Done.")
+            logging.info("Download done.")
 
             if keep_going:
                 self.run_installer(local_path)
         except Exception:
-            logging.exception("Failure to download!")
+            logging.exception("Failure to download")
             try:
                 pdlg.Destroy()
             except (wx.PyDeadObjectError, AttributeError):
