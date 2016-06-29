@@ -36,13 +36,13 @@ class TestWindowsUpdater(unittest.TestCase):
         # That should work on any OS
         u = updater.WindowsUpdater()
         lv = u.get_local_version()
-        # Should be #.#.###
-        self.assertEqual(len(lv.split('.')), 3)
+        # Should be #.#.### or #.#.#.###
+        self.assertIn(len(lv.split('.')), (3, 4))
 
         rv, rsize = u.get_remote_version()
         # Note: if no internet access, it would be acceptable to get None
 
-        self.assertEqual(len(rv.split('.')), 3)
+        self.assertIn(len(rv.split('.')), (3, 4))
         self.assertGreater(rsize, 1000)
 
         # u.check_for_update()
