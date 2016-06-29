@@ -94,93 +94,119 @@ The Plugin class provides a few helper functions:
    show the progress of an acquisition.
    Grossly, it's similar to the SECOM acquisition window, but parts which are not
    explicitly specified are by default hidden. The different parts are:
-   
+
       * Text (on the whole top)
-      
+
       * View (on the left) + Streams (on the bottom right)
-      
+
       * Settings (on the top right)
-      
+
       * Progress bar (at the bottom)
-      
+
       * Buttons (at the very bottom)
 
     .. py:method:: __init__(plugin, title, text="")
 
       Creates a window for acquisition.
-      
+
       :param plugin: The plugin that creates that window (ie, 'self').
-      
+
       :param title: The title of the window.
       :type title: str
-      
+
       :param text: Informational text displayed at the top.
       :type text: str
- 
+
     .. py:method:: addSettings(objWithVA, conf=None)
-    
+
       Adds settings as one widget on a line for each VigilantAttribute in the object.
-      
+
       :param objWithVA: An object that contains :py:class:`VigilantAttribute` s.
-      
+
       :param conf: Allows to override the automatic selection of the widget.
          Among other things, it allows to force a StringVA to specify a filename with
          a file selection dialog.  See odemis.gui.conf.data for documentation.
       :type conf: dict str -> dict
-    
+
     .. py:method:: addButton(label, callback=None, face_colour='def')
-    
+
       Add a button at the bottom of the window. The button is added at the
       right of the current buttons. In other words, the buttons are positioned
       in order, from left to right, and assigned increasing
       numbers starting from 0. If callback is None, pressing the button will close
       the window and the button number will be the return code of the dialog.
-      
+
       :param label: text displayed on the button
-      
+
       :param callback: is the function to be called 
          when the button is pressed (with the event and the dialog as arguments).
-    
+
     .. py:method:: addStream(stream)
-    
+
        Adds a stream to the canvas, and a stream panel to the panel box.
        It also ensure the panel box and canvas as shown.
        If this method is not called, the canvas is hidden.
-       
+
        :param stream: Stream to be shown.
-       
+
        :returns: The stream panel created to show the stream in the panel.
        :rtype: StreamPanel
-    
+
     .. py:method:: showProgress(future)
-    
+
        Shows a progress bar, based on the status of the progressive future given.
        If future is None, it will hide the progress bar.
        As long as progress is active, the buttons are disabled. 
        If future is cancellable, show a cancel button next to the progress bar.
 
     .. py:method:: ShowModal()
-    
+
        Inherited from the standard wx.Dialog. It shows the window and prevents from
        accessing the rest of the GUI until the window is closed.
 
     .. py:method:: Destroy()
-    
+
        Inherited from the standard wx.Dialog. Hides the window.
 
     .. py:attribute:: text 
-    
+
        (wx.StaticText): the widget containing the description text. Allows to 
        change the text displayed.
-       
+
     .. py:attribute:: canvas
- 
+
        (MicCanvas): The canvas that is shown in the view. It allows adding overlay.
 
     .. py:attribute:: buttons
-    
+
        (list of wx.Button): The buttons which were added.
        It allows enabling/disabling buttons and change label.
+
+
+Debugging tips
+==============
+Because plugins are loaded dynamically in a separate Python program (ie, Odemis),
+they can be a bit harder to debug with the standard tools.
+
+To display debug or information text in the debug panel of Odemis, use "logging".
+For example:
+
+.. code-block:: python
+
+    logging.debug("This is a message that appears in the debug panel")
+    logging.warning("This is a warning that appears in the debug panel")
+
+All the plugins loaded are listed in the Help/About/Credits window, with their
+name and authors. If it's not listed, it hasn't been loaded.
+
+Loading errors are not displayed in the standard debug panel (because they happen
+before the window is displayed). However, it is possible to find them in the
+odemis-gui.log file. It's also possible to look for such errors by simply loading
+the plugin with python. For instance, do a in terminal:
+
+``python ~/.local/usr/share/odemis/plugins/Myplugin.py``
+
+This shouldn't display anything, unless there are errors.
 
 
 Example plugins
