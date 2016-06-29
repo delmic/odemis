@@ -463,7 +463,7 @@ class AlignedSEMStream(SEMStream):
     def _DoPrepare(self):
         # Need to calibrate ?
         if not self.calibrated.value:
-            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress")
+            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress…")
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
