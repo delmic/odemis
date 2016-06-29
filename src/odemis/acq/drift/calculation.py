@@ -29,18 +29,19 @@ import math
 from numpy import arange
 from numpy import fft
 
+
 def CalculateDrift(previous_img, current_img, precision=1):
     """
     Given two images, it calculates the drift in x and y axis. It first computes
-    the cross-correlation of the two images and then locates the peak. The coordinates 
-    of the peak of the cross-correlation define the shift vector between the two images. 
-    This implementation is based on the "Efficient subpixel image registration by 
-    cross-correlation" by Manuel Guizar, for the corresponding matlab code see 
+    the cross-correlation of the two images and then locates the peak. The coordinates
+    of the peak of the cross-correlation define the shift vector between the two images.
+    This implementation is based on the "Efficient subpixel image registration by
+    cross-correlation" by Manuel Guizar, for the corresponding matlab code see
     http://www.mathworks.com/matlabcentral/fileexchange/
     18401-efficient-subpixel-image-registration-by-cross-correlation.
-    
+
     previous_img (numpy.array): 2d array with the previous frame
-    current_img (numpy.array): 2d array with the last frame, must be of same 
+    current_img (numpy.array): 2d array with the last frame, must be of same
       shape as previous_img
     precision (1<=int): Calculate drift within 1/precision of a pixel
     returns (tuple of floats): Drift in pixels
@@ -67,8 +68,8 @@ def CalculateDrift(previous_img, current_img, precision=1):
         cloc = loc2
 
         # Calculate shift from the peak
-        md2 = numpy.fix(m / 2)
-        nd2 = numpy.fix(n / 2)
+        md2 = m // 2
+        nd2 = n // 2
         if rloc > md2:
             row_shift = rloc - m
         else:
@@ -85,9 +86,9 @@ def CalculateDrift(previous_img, current_img, precision=1):
         # Upsample by factor of 2 to obtain initial estimation and
         # embed Fourier data in a 2x larger array
         CC = numpy.zeros((mlarge, nlarge), dtype=numpy.complex)
-        CC[m - numpy.fix(m / 2):m + 1 + numpy.fix((m - 1) / 2),
-           n - numpy.fix(n / 2):n + 1 + numpy.fix((n - 1) / 2)] = \
-				fft.fftshift(previous_fft) * fft.fftshift(current_fft).conj()
+        CC[m - m // 2:m + 1 + (m - 1) // 2,
+           n - n // 2:n + 1 + (n - 1) // 2] = (
+                fft.fftshift(previous_fft) * fft.fftshift(current_fft).conj())
 
         # Cross-correlation computation
         CC = fft.ifft2(fft.ifftshift(CC))
@@ -100,11 +101,11 @@ def CalculateDrift(previous_img, current_img, precision=1):
 
         rloc = loc1[loc2]
         cloc = loc2
-       
+
         # Calculate shift in previous pixel grid from the position of the peak
         (m, n) = CC.shape
-        md2 = numpy.fix(m / 2)
-        nd2 = numpy.fix(n / 2)
+        md2 = m // 2
+        nd2 = n // 2
 
         if rloc > md2:
             row_shift = rloc - m
@@ -160,23 +161,23 @@ def CalculateDrift(previous_img, current_img, precision=1):
 
 def _UpsampledDFT(data, nor, noc, precision=1, roff=0, coff=0):
     """
-    Upsampled DFT by matrix multiplies. 
-    data (numpy.array): 2d array 
+    Upsampled DFT by matrix multiplies.
+    data (numpy.array): 2d array
     nor, noc (ints): Number of pixels in the output upsampled DFT, in units
     of upsampled pixels
     precision (int): Calculate drift within 1/precision of a pixel
     roff, coff (ints): Row and column offsets, allow to shift the output array
-                    to a region of interest on the DFT 
+                    to a region of interest on the DFT
     returns (tuple of floats): Drift in pixels
     """
     z = 1j  # imaginary unit
     nr, nc = data.shape
 
     # Compute kernels and obtain DFT by matrix products
-    kernc = numpy.power(math.e, (-z * 2 * math.pi / (nc * precision)) * ((fft.ifftshift((arange(0, nc)))[:, None]).transpose() \
+    kernc = numpy.power(math.e, (-z * 2 * math.pi / (nc * precision)) * ((fft.ifftshift(arange(0, nc))[:, None]).transpose() \
                                 - numpy.floor(nc / 2)) * (arange(0, noc) - coff)[:, None])
 
-    kernr = numpy.power(math.e, (-z * 2 * math.pi / (nr * precision)) * ((fft.ifftshift(arange(0, nr)))[:, None] \
+    kernr = numpy.power(math.e, (-z * 2 * math.pi / (nr * precision)) * (fft.ifftshift(arange(0, nr))[:, None] \
                                 - numpy.floor(nr / 2)) * ((arange(0, nor)[:, None]).transpose() - roff))
 
     return numpy.dot(numpy.dot((kernr.transpose()), data), kernc.transpose())
