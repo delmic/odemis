@@ -23,11 +23,12 @@ This file is part of Odemis.
 from __future__ import division
 
 import logging
+from odemis import model
 from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import get_picture_folder, call_in_wx_main
-from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, images_to_export_data
+from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, images_to_export_data, line_to_export_data
 import os
 import time
 import wx
@@ -40,7 +41,8 @@ PP_PREFIX = "Post-processing"
 #   export type -> possible exporters for PR, possible exporters for PP
 EXPORTERS = {"spatial": (("PNG", "TIFF"), ("Serialized TIFF",)),
              "AR": (("PNG", "TIFF"), ("CSV",)),
-             "spectrum": (("PNG", "TIFF"), ("CSV",))}
+             "spectrum": (("PNG", "TIFF"), ("CSV",)),
+             "spectrum-line": (("PNG", "TIFF"), ("CSV",))}
 
 
 class ExportController(object):
@@ -124,7 +126,7 @@ class ExportController(object):
 
         :param filepath: (str) full path to the destination file
         :param export_format: (str) the format name
-        :param export_type: (str) spatial, AR or spectrum
+        :param export_type: (str) spatial, AR, spectrum or spectrum-line
         """
         try:
             exporter = get_converter(export_format)
@@ -155,7 +157,7 @@ class ExportController(object):
     def get_export_type(self, view):
         """
         Based on the given view gives the corresponding export type
-        return (string): spatial, AR or spectrum
+        return (string): spatial, AR, spectrum or spectrum-line
         """
         view_name = view.name.value
         # TODO: just use another dict
@@ -163,6 +165,8 @@ class ExportController(object):
             export_type = 'AR'
         elif view_name == 'Spectrum plot':
             export_type = 'spectrum'
+        elif view_name == 'Spatial spectrum':
+            export_type = 'spectrum-line'
         else:
             export_type = 'spatial'
         return export_type
@@ -171,7 +175,7 @@ class ExportController(object):
         """
         Returns the data to be exported with respect to the settings and options.
 
-        :param export_type (string): spatial, AR or spectrum
+        :param export_type (string): spatial, AR, spectrum or spectrum-line
         :param raw (boolean): raw data format if True
         :param interpolate_data (boolean): apply interpolation on data if True
 
@@ -184,11 +188,24 @@ class ExportController(object):
         vp = self.get_viewport_by_view(fview)
         streams = fview.getStreams()
         if export_type == 'AR':
+            # TODO: set MD_ACQ_TYPE in stream code
+            for i, _ in enumerate(streams):
+                for r in streams[i].raw:
+                    r.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
             exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':
             spectrum = vp.stream.get_pixel_spectrum()
             spectrum_range, unit = vp.stream.get_spectrum_range()
+            spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
             exported_data = spectrum_to_export_data(spectrum, raw, unit, spectrum_range)
+        elif export_type == 'spectrum-line':
+            spectrum_md = vp.stream.get_pixel_spectrum().metadata
+            spectrum = vp.stream.get_line_spectrum()
+            # copy only non existed values (we mainly care about MD_WL_*)
+            spectrum.metadata.update({k: v for k, v in spectrum_md.iteritems() if k not in spectrum.metadata})
+            spectrum_range, unit = vp.stream.get_spectrum_range()
+            spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+            exported_data = line_to_export_data(spectrum, raw, unit, spectrum_range)
         else:
             export_type = 'spatial'
             view_px = tuple(vp.canvas.ClientSize)
@@ -219,7 +236,7 @@ class ExportController(object):
         default_exporter (module): default exporter to be used
         return (string or None): the new filename (or the None if the user cancelled)
                 (string): the format name
-                (string): spatial, AR or spectrum
+                (string): spatial, AR, spectrum or spectrum-line
         """
         # Find the available formats (and corresponding extensions) according
         # to the export type
@@ -283,7 +300,7 @@ class ExportController(object):
     def get_export_formats(self, export_type):
         """
         Find the available file formats for the given export_type
-        export_type (string): spatial, AR or spectrum
+        export_type (string): spatial, AR, spectrum or spectrum-line
         return (dict string -> list of strings): name of each format -> list of
             extensions.
         """

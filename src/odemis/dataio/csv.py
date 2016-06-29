@@ -20,6 +20,7 @@ from __future__ import absolute_import, division
 import csv
 import logging
 import numpy
+from odemis import model
 from odemis.util import spectrum
 
 
@@ -41,30 +42,60 @@ def export(filename, data):
     raises:
         IOError in case the spectrum does not contain wavelength metadata.
     '''
-    if data.shape[0] > 1 and numpy.prod(data.shape) == data.shape[0]:
-        logging.debug("Exporting spectrum data to CSV")
+    if data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_SPECTRUM:
         try:
-            spectrum_range = spectrum.get_wavelength_per_pixel(data)
+            spectrum_range, unit = spectrum.get_wavelength_per_pixel(data), "nm"
+            spectrum_range = [s * 1e9 for s in spectrum_range]
         except Exception:
-            # corner case where spectrum range is not available in metadata
-            logging.info("Exporting spectrum without wavelength information")
-            spectrum_range = None
+            # Calculate wavelength in pixels if not given
+            max_bw = data.shape[0] // 2
+            min_bw = (max_bw - data.shape[0]) + 1
+            spectrum_range, unit = range(min_bw, max_bw + 1), "px"
+        if data.ndim == 1:
+            logging.debug("Exporting spectrum data to CSV")
 
-        if spectrum_range is not None:
-            # turn range to nm
-            spectrum_tuples = [(s * 1e9, d) for s, d in zip(spectrum_range, data)]
-            headers = ['# wavelength (nm)', 'intensity']
+            if unit == "nm":
+                # turn range to nm
+                spectrum_tuples = [(s, d) for s, d in zip(spectrum_range, data)]
+                headers = ['# wavelength (nm)', 'intensity']
+            else:
+                logging.info("Exporting spectrum without wavelength information")
+                spectrum_tuples = data.reshape(data.shape[0], 1)
+                headers = ['# intensity']
+
+            with open(filename, 'w') as fd:
+                csv_writer = csv.writer(fd)
+                csv_writer.writerow(headers)
+                csv_writer.writerows(spectrum_tuples)
+        elif data.ndim == 2:
+            # FIXME: For now it handles the rest of 2d data as spectrum-line
+            logging.debug("Exporting spectrum-line data to CSV")
+
+            # attach wavelength as first column
+            wavelength_lin = numpy.linspace(spectrum_range[0], spectrum_range[-1], data.shape[0])
+            qz_masked = numpy.append(wavelength_lin.reshape(data.shape[0], 1), data, axis=1)
+            # attach distance as first row
+            line_length = data.shape[1] * data.metadata[model.MD_PIXEL_SIZE][1]
+            distance_lin = numpy.linspace(0, line_length, data.shape[1])
+            distance_lin.shape = (1, distance_lin.shape[0])
+            distance_lin = numpy.append([[0]], distance_lin, axis=1)
+            qz_masked = numpy.append(distance_lin, qz_masked, axis=0)
+            data = model.DataArray(qz_masked, data.metadata)
+
+            # Data should be in the form of (Y+1, X+1), with the first row and column the
+            # distance_from_origin\wavelength
+            with open(filename, 'w') as fd:
+                csv_writer = csv.writer(fd)
+                # Set the 'header' in the 0,0 element
+                first_row = ['wavelength(' + unit + ')\distance_from_origin(m)'] + [d for d in data[0, 1:]]
+                csv_writer.writerow(first_row)
+                # dump the array
+                csv_writer.writerows(data[1:, :])
         else:
-            spectrum_tuples = data.reshape(data.shape[0], 1)
-            headers = ['# intensity']
-
-        with open(filename, 'w') as fd:
-            csv_writer = csv.writer(fd)
-            csv_writer.writerow(headers)
-            csv_writer.writerows(spectrum_tuples)
-    elif data.ndim == 2 and all(s >= 2 for s in data.shape):
+            raise IOError("Unknown type of data to be exported as CSV")
+    elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_AR:
         logging.debug("Exporting AR data to CSV")
-        # Data should be in the form of (Y+1, X+1), with the first row and colum the angles
+        # Data should be in the form of (Y+1, X+1), with the first row and column the angles
         with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)
             # Set the 'header' in the 0,0 element

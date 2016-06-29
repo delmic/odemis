@@ -70,8 +70,14 @@ MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
 MD_TIME_OFFSET = "Time offset"  # Time of the first 'pixel' in the time dimension (added to ACQ_DATE), default is 0
 
-# TODO: MD_ACQ_TYPE: the type of acquisition contained in the DataArray, such as
-# EM_SPACIAL, FLUO_SPACIAL, ANCHOR_REGION, SPECTRUM, ANGULAR_RESOLVED...
+MD_ACQ_TYPE = "Acquisition type"  # the type of acquisition contained in the DataArray
+# The following tags are to be used as the values of MD_ACQ_TYPE
+MD_AT_SPECTRUM = "Spectrum"
+MD_AT_AR = "Angle-resolved"
+MD_AT_EM = "Electron microscope"
+MD_AT_FLUO = "Fluorescence"
+MD_AT_ANCHOR = "Anchor region"
+MD_AT_OVERVIEW = "Overview"
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position

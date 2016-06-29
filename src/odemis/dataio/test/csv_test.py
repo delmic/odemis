@@ -50,7 +50,8 @@ class TestCSVIO(unittest.TestCase):
         """Try simple AR export"""
         size = (101, 401)
         dtype = numpy.float
-        metadata = {model.MD_DESCRIPTION: "Angle-resolved"}
+        metadata = {model.MD_DESCRIPTION: "Angle-resolved",
+                    model.MD_ACQ_TYPE: model.MD_AT_AR}
         data = model.DataArray(numpy.zeros(size, dtype), metadata)
         data += 26.1561
         data[1:, 0] = numpy.linspace(0, math.pi / 2, data.shape[0] - 1)
@@ -73,7 +74,8 @@ class TestCSVIO(unittest.TestCase):
         """Try simple spectrum export"""
         size = (150,)
         dtype = numpy.uint16
-        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist()}
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
         data = model.DataArray(numpy.zeros(size, dtype), md)
         data += 56
 
@@ -94,7 +96,8 @@ class TestCSVIO(unittest.TestCase):
         """Try simple spectrum export"""
         size = (10,)
         dtype = numpy.uint16
-        data = model.DataArray(numpy.zeros(size, dtype))
+        md = {model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
         data += 56486
 
         # export
@@ -103,6 +106,49 @@ class TestCSVIO(unittest.TestCase):
         # check it's here
         st = os.stat(FILENAME)  # this test also that the file is created
         self.assertGreater(st.st_size, 10)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportSpectrumLine(self):
+        """Try simple spectrum-line export"""
+        size = (1340, 6)
+        dtype = numpy.float
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+              model.MD_PIXEL_SIZE: (None, 4.2e-06),
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 5)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportSpectrumLineNoWL(self):
+        """Try simple spectrum-line export"""
+        size = (1340, 6)
+        dtype = numpy.float
+        md = {model.MD_PIXEL_SIZE: (None, 4.2e-06),
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 5)
         raised = False
         try:
             pycsv.reader(open(FILENAME, 'rb'))
