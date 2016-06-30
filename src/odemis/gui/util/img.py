@@ -1265,6 +1265,101 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         return spec_plot
 
 
+def line_to_export_data(spectrum, raw, unit, spectrum_range):
+    """
+    Creates either raw or WYSIWYG representation for the spectrum line data
+
+    spectrum (model.DataArray): spectrum line data
+    raw (boolean): if True returns raw representation
+    unit (string): wavelength unit
+    spectrum_range (list of float): spectrum range
+
+    returns (model.DataArray)
+    """
+
+    if raw:
+        data = spectrum[:, :, 0]
+        return numpy.fliplr(data.T)
+    else:
+        images = set_images([(spectrum, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None)])
+        client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
+        im = images[0]  # just one image
+        # adjust to viewport size
+        scale = (im.shape[1] / client_size.x, im.shape[0] / client_size.y)
+        # Make surface based on the maximum resolution
+        data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+            data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
+        ctx = cairo.Context(surface)
+
+        buffer_center = (0, 0)
+        buffer_scale = scale
+        buffer_size = client_size.x, client_size.y
+
+        draw_image(
+            ctx,
+            im,
+            im.metadata['dc_center'],
+            buffer_center,
+            buffer_scale,
+            buffer_size,
+            1.0,
+            im_scale=im.metadata['dc_scale'],
+            rotation=im.metadata['dc_rotation'],
+            shear=im.metadata['dc_shear'],
+            flip=im.metadata['dc_flip'],
+            blend_mode=im.metadata['blend_mode'],
+            interpolate_data=False
+        )
+        # Draw bottom horizontal scale legend
+        value_range = (spectrum_range[0], spectrum_range[-1])
+        orientation = wx.HORIZONTAL
+        tick_spacing = SPEC_PLOT_SIZE // 4
+        font_size = SPEC_PLOT_SIZE // 50
+        scale_x_draw = numpy.zeros((SPEC_SCALE_WIDTH, client_size.x, 4), dtype=numpy.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_WIDTH)
+        ctx = cairo.Context(surface)
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.rectangle(0, 0, client_size.x, SPEC_SCALE_WIDTH)
+        ctx.fill()
+        text_colour = (1, 1, 1)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, text_colour, unit, SPEC_SCALE_WIDTH, font_size, "wavelength")
+        data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
+
+        # Draw left vertical scale legend
+        orientation = wx.VERTICAL
+        tick_spacing = SPEC_PLOT_SIZE // 6
+        line_length = spectrum.shape[0] * spectrum.metadata[model.MD_PIXEL_SIZE][1]
+        value_range = (0, line_length)
+        scale_y_draw = numpy.zeros((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
+        ctx = cairo.Context(surface)
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.rectangle(0, 0, SPEC_SCALE_WIDTH, client_size.y)
+        ctx.fill()
+        text_colour = (1, 1, 1)
+        unit = "m"
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, text_colour, unit, SPEC_SCALE_WIDTH, font_size, "distance from origin")
+
+        # Extend y scale bar to fit the height of the bar plot with the x
+        # scale bar attached
+        extend = numpy.zeros((SPEC_SCALE_WIDTH, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+            extend, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, SPEC_SCALE_WIDTH)
+        ctx = cairo.Context(surface)
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.rectangle(0, 0, SPEC_SCALE_WIDTH, SPEC_SCALE_WIDTH)
+        ctx.fill()
+        scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
+        data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
+
+        line_img = model.DataArray(data_with_legend)
+        line_img.metadata[model.MD_DIMS] = 'YXC'
+        return line_img
+
+
 def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
                        hfw=None, date=None, streams_data=None, stream=None, logo=None):
     """

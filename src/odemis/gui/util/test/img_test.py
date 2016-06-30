@@ -148,6 +148,7 @@ class TestARExport(unittest.TestCase):
             model.MD_SW_VERSION: "1.0-test",
             model.MD_HW_NAME: "fake ccd",
             model.MD_DESCRIPTION: "AR",
+            model.MD_ACQ_TYPE: model.MD_AT_AR,
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 1),  # px, px
@@ -199,6 +200,7 @@ class TestARExport(unittest.TestCase):
             model.MD_SW_VERSION: "1.0-test",
             model.MD_HW_NAME: "fake ccd",
             model.MD_DESCRIPTION: "AR",
+            model.MD_ACQ_TYPE: model.MD_AT_AR,
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 1),  # px, px
@@ -239,7 +241,8 @@ class TestARExport(unittest.TestCase):
 class TestSpectrumExport(unittest.TestCase):
 
     def setUp(self):
-        self.spectrum = numpy.linspace(0, 750, 200)
+        self.spectrum = model.DataArray(numpy.linspace(0, 750, 200),
+                                        metadata={model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM})
         self.spectrum_range = numpy.linspace(4.7e-07, 1.02e-06, 200)
         self.unit = "m"
         self.app = wx.App()  # needed for the gui font name
@@ -254,6 +257,29 @@ class TestSpectrumExport(unittest.TestCase):
     def test_spectrum_raw(self):
         exported_data = img.spectrum_to_export_data(self.spectrum, True, self.unit, self.spectrum_range)
         self.assertEqual(exported_data.shape[0], len(self.spectrum_range))  # exported image includes only raw data
+
+
+class TestSpectrumLineExport(unittest.TestCase):
+
+    def setUp(self):
+        self.spectrum = model.DataArray(numpy.zeros(shape=(5, 1340, 3)),
+                                        metadata={model.MD_PIXEL_SIZE: (None, 4.2e-06),
+                                                  model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM})
+        self.spectrum_range = numpy.linspace(4.7e-07, 1.02e-06, 200)
+        self.unit = "m"
+        self.app = wx.App()  # needed for the gui font name
+
+    def test_line_ready(self):
+        exported_data = img.line_to_export_data(self.spectrum, False, self.unit, self.spectrum_range)
+        self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
+        self.assertEqual(exported_data.shape[:2],
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH))  # exported image includes scale bars
+
+    def test_line_raw(self):
+        exported_data = img.line_to_export_data(self.spectrum, True, self.unit, self.spectrum_range)
+        self.assertEqual(exported_data.shape[0], self.spectrum.shape[1])
+        self.assertEqual(exported_data.shape[1], self.spectrum.shape[0])
 
 
 class TestSpatialExport(unittest.TestCase):
