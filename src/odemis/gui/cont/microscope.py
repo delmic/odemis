@@ -255,9 +255,10 @@ class SecomStateController(MicroscopeStateController):
         self._press_btn = getattr(tab_panel, btn_prefix + "press")
 
         # To update the stream status
-        # self._status_list = []
         self._status_prev_streams = []
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
+        self._status_poll = None  # Thread for status animation
+        self._status_msg = ""  # Current message to be animated
 
         # Last stage and focus move time
         self._last_pos = self._main_data.stage.position.value.copy()
@@ -442,23 +443,24 @@ class SecomStateController(MicroscopeStateController):
     @call_in_wx_main
     def _updateStatus(self):
         try:
-            msg = self._tab_panel.lbl_stream_status.GetLabel()
-            if msg in [u"Automatic SEM alignment in progress", u"Automatic SEM alignment in progress.",
-                       u"Automatic SEM alignment in progress.."]:
-                self._tab_panel.lbl_stream_status.SetLabel(msg + u".")
-            else:
-                self._tab_panel.lbl_stream_status.SetLabel(u"Automatic SEM alignment in progress")
+            # Compute how many dots to display (0->3)
+            n = int((time.time() / self._status_poll.period) % 4)
+            msg = self._status_msg.replace(u"…", u"." * n)
+            self._tab_panel.lbl_stream_status.SetLabel(msg)
         except Exception:
-            logging.exception("Unexpected failure during status polling")
+            logging.exception("Unexpected failure during status message animation")
 
     @call_in_wx_main
     def decide_status(self, _=None):
         """
         Decide the status displayed based on the visible and calibrated streams.
+        If the message contains the special character … (ellipsis), it will be
+         animated.
         """
-        if hasattr(self, "_status_poll"):
+        if self._status_poll:
             # cancel if there is a repeating timer updating the status message
             self._status_poll.cancel()
+            self._status_poll = None
 
         action = None
         lvl = None
@@ -477,35 +479,35 @@ class SecomStateController(MicroscopeStateController):
             if v.name.value != "Overview":
                 for s in v.stream_tree.flat.value:
                     stream_img = s.image.value
-                    if (not s.should_update.value) and (stream_img is None):
+                    if not s.should_update.value and stream_img is None:
                         continue
                     else:
                         visible_streams.add(s)
-                    if (((stream_img is not None) and model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
+                    if ((stream_img is not None and model.hasVA(s, "calibrated") and not s.calibrated.value) or
                             self._is_misaligned(s)):
                         misaligned = True
-
-        if action is None:
-            action = ""
 
         # If there is a stream status we will display it anyway
         if lvl is None:
             msg = ""
             # If there is just one or no stream displayed, there is no need to
             # show any status
-            if len(visible_streams) > 1:
-                if misaligned:
-                    lvl = logging.WARNING
-                    msg = u"Displayed streams might be misaligned"
-                    action = u"Update any stream acquired in old position"
+            if len(visible_streams) > 1 and misaligned:
+                lvl = logging.WARNING
+                msg = u"Displayed streams might be misaligned"
+                action = u"Update any stream acquired in old position"
 
-        if msg == u"Automatic SEM alignment in progress":
+        if action is None:
+            action = ""
+        self._show_status_icons(lvl, action)
+        self._tab_panel.lbl_stream_status.SetToolTipString(action)
+        if u"…" in msg:
+            self._status_msg = msg
             self._status_poll = util.RepeatingTimer(0.7, self._updateStatus, "Status update")
             self._status_poll.start()
-
-        self._show_status_icons(lvl, action)
-        self._tab_panel.lbl_stream_status.SetLabel(msg)
-        self._tab_panel.lbl_stream_status.SetToolTipString(action)
+            self._updateStatus()
+        else:
+            self._tab_panel.lbl_stream_status.SetLabel(msg)
 
     @call_in_wx_main
     def _remove_misaligned(self):
