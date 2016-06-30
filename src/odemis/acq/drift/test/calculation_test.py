@@ -96,7 +96,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         drift = calculation.CalculateDrift(self.data[0], self.data[0], 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 1)
-    
+
     # @unittest.skip("skip")
     def test_known_drift(self):
         """
@@ -104,7 +104,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         drift = calculation.CalculateDrift(self.data[0], self.data_drifted[0], 1)
         numpy.testing.assert_almost_equal(drift, (-3, 5), 1)
-        
+
     # @unittest.skip("skip")
     def test_random_drift(self):
         """
