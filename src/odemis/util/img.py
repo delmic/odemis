@@ -562,8 +562,8 @@ def mergeMetadata(current, correction=None):
         pxs = current[model.MD_PIXEL_SIZE]
         pxs_cor = current.get(model.MD_PIXEL_SIZE_COR, (1, 1))
         current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
-    else:
-        logging.debug("Cannot correct pixel size of data with unknown pixel size")
+    elif model.MD_PIXEL_SIZE_COR in current:
+        logging.info("Cannot correct pixel size of data with unknown pixel size")
 
     # remove correction metadata (to make it clear the correction has been applied)
     for k in (model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR, model.MD_SHEAR_COR):
