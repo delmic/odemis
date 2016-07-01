@@ -139,6 +139,7 @@ class AcquisitionDialog(xrcfr_acq):
         self._view.merge_ratio.value = orig_view.merge_ratio.value
 
         # attach the view to the viewport
+        self.pnl_view_acq.canvas.fit_view_to_next_image = False
         self.pnl_view_acq.setView(self._view, self._tab_data_model)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
