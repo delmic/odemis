@@ -213,25 +213,35 @@ def _add_image_info(group, dataset, image):
     else:
         ds_class = None
 
+    # Time
+    # Surprisingly (for such a usual type), time storage is a mess in HDF5.
+    # The documentation states that you can use H5T_TIME, but it is
+    # "is not supported. If H5T_TIME is used, the resulting data will be readable
+    # and modifiable only on the originating computing platform; it will not be
+    # portable to other platforms.". It appears many format are allowed.
+    # In addition in h5py, it's indicated as "deprecated" (although it seems
+    # it was added in the latest version of HDF5).
+    # Moreover, the only types available are 32 and 64 bits integers as number
+    # of seconds since epoch. No past, no milliseconds, no time-zone.
+    # So there are other proposals like in in F5
+    # (http://sciviz.cct.lsu.edu/papers/2007/F5TimeSemantics.pdf) to represent
+    # time with a float, a unit and an offset.
+    # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss.
+    # (cf http://www.knmi.nl/~beekhuis/documents/publicdocs/ir2009-01_hdftag36.pdf)
+    # So, to not solve anything, we save the date as a float representing the
+    # Unix time. At least it makes Huygens happy.
+    # Moreover, in Odemis we store two types of time:
+    # * MD_ACQ_DATE, which is the (absolute) time at which the acquisition
+    #   was performed. It's stored in TOffset as a float of s since epoch.
+    # * MD_TIME_OFFSET, which is the (relative) time of the first element of
+    #   the time dimension compared to the acquisition event (eg, energy
+    #   release on the sample). It's stored in the TOffsetRelative in s.
+    # Finally, there is MD_PIXEL_DUR which is the duration between each
+    # element on the time dimension scale.
+    # TODO: in retrospective, it would have been more logical to store the
+    # relative time in TOffset, and the acquisition date (which is not essential
+    # to the data) in PhysicalData/AcquisitionDate.
     try:
-        # Time
-        # TODO:
-        # Surprisingly (for such a usual type), time storage is a mess in HDF5.
-        # The documentation states that you can use H5T_TIME, but it is
-        # "is not supported. If H5T_TIME is used, the resulting data will be readable
-        # and modifiable only on the originating computing platform; it will not be
-        # portable to other platforms.". It appears many format are allowed.
-        # In addition in h5py, it's indicated as "deprecated" (although it seems
-        # it was added in the latest version of HDF5).
-        # Moreover, the only types available are 32 and 64 bits integers as number
-        # of seconds since epoch. No past, no milliseconds, no time-zone.
-        # So there are other proposals like in in F5
-        # (http://sciviz.cct.lsu.edu/papers/2007/F5TimeSemantics.pdf) to represent
-        # time with a float, a unit and an offset.
-        # KNMI uses a string like this: DD-MON-YYYY;HH:MM:SS.sss.
-        # (cf http://www.knmi.nl/~beekhuis/documents/publicdocs/ir2009-01_hdftag36.pdf)
-        # So, to not solve anything, we save the date as a float representing the
-        # Unix time. At least it makes Huygens happy.
         if model.MD_ACQ_DATE in image.metadata:
             # For a ISO 8601 string:
             # ad = datetime.utcfromtimestamp(image.metadata[model.MD_ACQ_DATE])
@@ -243,6 +253,11 @@ def _add_image_info(group, dataset, image):
             group["TOffset"] = time.time()
             _h5svi_set_state(group["TOffset"], ST_DEFAULT)
         group["TOffset"].attrs["UNIT"] = "s"  # our extension
+
+        if model.MD_TIME_OFFSET in image.metadata:
+            group["TOffsetRelative"] = image.metadata[model.MD_TIME_OFFSET]
+            _h5svi_set_state(group["TOffsetRelative"], ST_REPORTED)
+            group["TOffsetRelative"].attrs["UNIT"] = "s"  # our extension
 
         # Scale
         if model.MD_PIXEL_SIZE in image.metadata:
@@ -259,7 +274,7 @@ def _add_image_info(group, dataset, image):
             group["DimensionScaleY"] = pxs[1]
             group["DimensionScaleY"].attrs["UNIT"] = "m"
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
-            # No clear what's the relation between this name and the label
+            # Attach the scales to each dimensions (referenced by their label)
             dataset.dims.create_scale(group["DimensionScaleX"], "X")
             dataset.dims.create_scale(group["DimensionScaleY"], "Y")
             dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
@@ -286,11 +301,17 @@ def _add_image_info(group, dataset, image):
 
         if "T" in dims:
             tpos = dims.index("T")
-            group["DimensionScaleT"] = 1.0  # s
+            try:
+                v = image.metadata[model.MD_PIXEL_DUR]
+                s = ST_REPORTED
+            except KeyError:
+                # Just to put something
+                v = 1.0  # s
+                s = ST_DEFAULT
+            group["DimensionScaleT"] = v  # s
             group["DimensionScaleT"].attrs["UNIT"] = "s"
-            # No clear what's the relation between this name and the label
             dataset.dims.create_scale(group["DimensionScaleT"], "T")
-            _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
+            _h5svi_set_state(group["DimensionScaleT"], s)
             dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
 
         # Wavelength (for spectrograms)
@@ -352,27 +373,53 @@ def _read_image_info(group):
     try:
         pos = (float(group["XOffset"][()]), float(group["YOffset"][()]))
         md[model.MD_POS] = pos
-    except Exception:
+    except KeyError:
         pass
+    except Exception:
+        logging.warning("Failed to parse XYOffset info", exc_info=True)
+
     try:
         acq_date = float(group["TOffset"][()])
         md[model.MD_ACQ_DATE] = acq_date
-        # TODO: add scale for each Z ??
-    except Exception:
+    except KeyError:
         pass
+    except Exception:
+        logging.warning("Failed to parse TOffset info", exc_info=True)
 
-    # Scale
+    try:
+        toffset = float(group["TOffsetRelative"][()])
+        md[model.MD_TIME_OFFSET] = toffset
+    except KeyError:
+        pass
+    except Exception:
+        logging.warning("Failed to parse TOffsetRelative info", exc_info=True)
+
+    # Scale pixel size
     try:
         pxs = [None, None]
         for dim in dataset.dims:
-            if dim.label == "X":
+            if dim.label == "X" and dim:
                 pxs[0] = float(dim[0][()])
-            if dim.label == "Y":
+            if dim.label == "Y" and dim:
                 pxs[1] = float(dim[0][()])
 
+        # TODO: add scale for Z ??
         md[model.MD_PIXEL_SIZE] = tuple(pxs)
     except Exception:
-        pass
+        logging.warning("Failed to parse XY scale", exc_info=True)
+
+    # Time scale
+    try:
+        for dim in dataset.dims:
+            if dim.label == "T" and dim:
+                state = _h5svi_get_state(dim[0])
+                if state != ST_REPORTED:
+                    # Only set as real metadata if it was actual information
+                    break
+                pxd = float(dim[0][()])
+                md[model.MD_PIXEL_DUR] = pxd
+    except Exception:
+        logging.warning("Failed to parse T scale", exc_info=True)
 
     # Wavelength is only if the data has a C dimension and it has two numbers
     # that represent the range of the monochromator bandwidth or the offset and
@@ -385,7 +432,7 @@ def _read_image_info(group):
     # metadata related in the PhysicalData group).
     try:
         for i, dim in enumerate(dataset.dims):
-            if dim.label == "C":
+            if dim.label == "C" and dim:
                 if dim[0].shape == (dataset.shape[i],):
                     md[model.MD_WL_LIST] = map(float, dim[0][...].tolist())
                 elif dim[0].shape == ():
@@ -404,7 +451,7 @@ def _read_image_info(group):
                         else:
                             md[model.MD_WL_POLYNOMIAL] = pn
     except Exception:
-        pass
+        logging.warning("Failed to parse C scale", exc_info=True)
 
     try:
         rot = group["Rotation"]
@@ -412,8 +459,10 @@ def _read_image_info(group):
         if rot[0] != 0 or rot[1] != 0:
             logging.info("Metadata contains rotation vector %s, which cannot be"
                          " fully reproduced in Odemis.", rot)
-    except Exception:
+    except KeyError:
         pass
+    except Exception:
+        logging.warning("Failed to parse Rotation info", exc_info=True)
 
     try:
         she = group["Shear"]
@@ -421,8 +470,10 @@ def _read_image_info(group):
         if she[1] != 0:
             logging.info("Metadata contains shear vector %s, which cannot be"
                          " fully reproduced in Odemis.", she)
-    except Exception:
+    except KeyError:
         pass
+    except Exception:
+        logging.warning("Failed to parse Shear info", exc_info=True)
 
     return md
 
