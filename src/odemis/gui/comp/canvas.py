@@ -1648,6 +1648,39 @@ class DraggableCanvas(BitmapCanvas):
 
         wx.CallAfter(self.request_drawing_update)
 
+    def fit_to_window(self):
+        """ Adapt the scale and (optionally) center to fit to the current window """
+
+        # Find bounding box of all the content
+        bbox = [None, None, None, None]  # ltrb in wu
+        for im in self.images:
+            if im is None:
+                continue
+            im_scale = im.metadata['dc_scale']
+            w, h = im.shape[1] * im_scale[0], im.shape[0] * im_scale[1]
+            c = im.metadata['dc_center']
+            bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
+            if bbox[0] is None:
+                bbox = bbox_im
+            else:
+                bbox = (min(bbox[0], bbox_im[0]), min(bbox[1], bbox_im[1]),
+                        max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
+
+        if bbox[0] is None:
+            return  # no image => nothing to do
+
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # wu
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f wu", w, h)
+            return  # no image
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortes
+
+        wx.CallAfter(self.request_drawing_update)
+
 
 # PlotCanvas configuration flags
 PLOT_CLOSE_NOT = 0
