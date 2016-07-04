@@ -83,6 +83,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
 
         self.abilities |= {CAN_ZOOM, CAN_FOCUS}
+        self.view_as_is = False
         self.fit_view_to_next_image = True
 
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
@@ -462,7 +463,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if (self.fit_view_to_next_image and
             any(i is not None for i in self.images) and  # at least an image
             all(s > 1 for s in self.ClientSize)):  # at least visible
-            self.fit_view_to_content()
+            if self.view_as_is:
+                self.fit_view_to_window()
+            else:
+                self.fit_view_to_content()
             self.fit_view_to_next_image = False
         # logging.debug("Will update drawing for new image")
         wx.CallAfter(self.request_drawing_update)
@@ -517,6 +521,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.microscope_view:
             phys_shift = self.world_to_physical_pos(shift)
             self.microscope_view.moveStageBy(phys_shift)
+
+    def fit_view_to_window(self):
+        """
+        Adapts the MPP and center to fit to the AcquisitionDialog window
+        """
+        super(DblMicroscopeCanvas, self).fit_to_window()
 
     def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP and center to fit to the current content
