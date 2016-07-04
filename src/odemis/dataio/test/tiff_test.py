@@ -975,6 +975,108 @@ class TestTiffIO(unittest.TestCase):
             self.assertAlmostEqual(rmd[model.MD_PIXEL_SIZE][0], emd[model.MD_PIXEL_SIZE][0])
             self.assertAlmostEqual(rmd[model.MD_PIXEL_SIZE][1], emd[model.MD_PIXEL_SIZE][1])
 
+    def testReadMDTime(self):
+        """
+        Checks that we can read back the metadata of an acquisition with time correlation
+        """
+        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 512, 1, 1, 1)]
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "test",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_LENS_MAG: 1200,  # ratio
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake time correlator",
+                     model.MD_DESCRIPTION: "test3d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 16,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-6),  # m/px
+                     model.MD_PIXEL_DUR: 1e-9,  # s
+                     model.MD_TIME_OFFSET:-20e-9,  # s, of the first time value
+                     model.MD_OUT_WL: "pass-through",
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake time correlator",
+                     model.MD_DESCRIPTION: "test1d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 16,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_PIXEL_DUR: 10e-9,  # s
+                     model.MD_TIME_OFFSET:-500e-9,  # s, of the first time value
+                     model.MD_OUT_WL: (500e-9, 600e-9),
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                    },
+                    ]
+        # create 1 simple greyscale image
+        ldata = []
+        a = model.DataArray(numpy.zeros(shapes[0], numpy.uint16), metadata[0])
+        ldata.append(a)
+        # Create 2D time correlated image
+        a = model.DataArray(numpy.zeros(shapes[1], numpy.uint32), metadata[1])
+        a[:, :, :, 1, 5] = 1
+        a[0, 10, 0, 1, 0] = 10000
+        ldata.append(a)
+        # Create time correlated spot acquisition
+        a = model.DataArray(numpy.zeros(shapes[2], numpy.uint32), metadata[2])
+        a[0, 10, 0, 0, 0] = 20000
+        ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (400, 300, 3)
+        thumbnail = model.DataArray(numpy.zeros(tshape, numpy.uint8))
+        thumbnail[:, :, 1] += 255  # green
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            if model.MD_LENS_MAG in md:
+                self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+
+            # None of the images are using light => no MD_IN_WL
+            self.assertFalse(model.MD_IN_WL in im.metadata,
+                             "Reporting excitation wavelength while there is none")
+
+            if model.MD_PIXEL_DUR in md:
+                pxd = md[model.MD_PIXEL_DUR]
+                self.assertAlmostEqual(im.metadata[model.MD_PIXEL_DUR], pxd)
+            if model.MD_TIME_OFFSET in md:
+                tof = md[model.MD_TIME_OFFSET]
+                self.assertAlmostEqual(im.metadata[model.MD_TIME_OFFSET], tof)
+
+        # check thumbnail
+        rthumbs = tiff.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
 
 def rational2float(rational):
     """

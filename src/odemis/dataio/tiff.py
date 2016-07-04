@@ -473,7 +473,7 @@ def _updateMDFromOME(root, das, basename):
         acq_date = ime.find("AcquisitionDate")
         if acq_date is not None:
             try:
-                # the earliest time of all the acquisitions in this image (see DeltaT)
+                # the earliest time of all the acquisitions in this image
                 val = acq_date.text
                 md[model.MD_ACQ_DATE] = calendar.timegm(time.strptime(val, "%Y-%m-%dT%H:%M:%S"))
             except (OverflowError, ValueError):
@@ -662,6 +662,7 @@ def _updateMDFromOME(root, das, basename):
                 da.metadata.update({model.MD_WL_LIST: wl_list})
 
         # Plane (= one per high dim -> IFD)
+        deltats = {}  # T -> DeltaT
         for ple in pxe.findall("Plane"):
             mdp = {}
             pos = []
@@ -674,8 +675,8 @@ def _updateMDFromOME(root, das, basename):
                 continue
 
             try:
-                deltat = float(ple.attrib["DeltaT"]) # s
-                mdp[model.MD_ACQ_DATE] = md[model.MD_ACQ_DATE] + deltat
+                t = int(ple.attrib["TheT"])
+                deltats[t] = float(ple.attrib["DeltaT"])  # s
             except (KeyError, ValueError):
                 pass
 
@@ -700,6 +701,28 @@ def _updateMDFromOME(root, das, basename):
             if da is None:
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
+
+        # Convert the DeltaT's into PIXEL_DUR + TIME_OFFSET
+        if len(deltats) >= 2:
+            dk = deltats.keys()
+            mint = min(dk)
+            maxt = max(dk)
+            tof = deltats[mint]
+            pxd = (deltats[maxt] - tof) / (maxt - mint)
+            for t, dt in deltats.iteritems():
+                if not util.almost_equal(dt, tof + pxd * t):
+                    logging.warning("DeltaT's are not linear, which cannot be encoded in metadata: %s",
+                                    deltats)
+
+            # Update metadata of all the DAs
+            for ifd in hd_2_ifd.flat:
+                if ifd == -1:
+                    continue
+                da = das[ifd]
+                if da is None:
+                    continue
+                da.metadata.update({model.MD_TIME_OFFSET: tof,
+                                    model.MD_PIXEL_DUR: pxd})
 
         # Mirror data
         md = {}
@@ -1157,6 +1180,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         rot = globalMD.get(model.MD_ROTATION, 0)
         sinr, cosr = math.sin(rot), math.cos(rot)
         she = globalMD.get(model.MD_SHEAR, 0)
+        # Note: Transform was suggested in 2013 (and mistakenly shown as official
+        # for a short while) but it's just our extention.
+        # It was suggested to use a special key/value pair in MapAnnotation instead.
         trane = ET.SubElement(ime, "Transform")
         trans_mat = [[cosr + sinr * she, sinr, 0],
                      [-sinr + cosr * she, cosr, 0]]
@@ -1212,6 +1238,10 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
+
+    # Note: TimeIncrement can be used to replace DeltaT if the duration is always
+    # the same (which it is), but it also means it starts at 0, which is not
+    # always the case with TIME_OFFSET. => use DeltaT
 
     if model.MD_BPP in globalMD:
         bpp = globalMD[model.MD_BPP]
@@ -1373,9 +1403,16 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                                "TheT": "%d" % index[hdims.index("T")],
                                "TheZ": "%d" % index[hdims.index("Z")],
                                })
-        if model.MD_ACQ_DATE in da.metadata:
-            diff = da.metadata[model.MD_ACQ_DATE] - globalAD
-            plane.attrib["DeltaT"] = "%.15f" % diff
+        # Note: we used to store ACQ_DATE also in this attribute (in addition to
+        # AcquisitionDate) in order to save the different acquisition date for
+        # each C. However, that's not the point of this field, and it's pretty
+        # much never useful to know the slightly different acquisition dates for
+        # each C.
+        # We now just store TIME_OFFSET + PIXEL_DUR info
+        if model.MD_PIXEL_DUR in da.metadata:
+            t = index[hdims.index("T")]
+            deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
+            plane.attrib["DeltaT"] = "%.15f" % deltat
 
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
