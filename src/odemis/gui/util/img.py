@@ -797,7 +797,7 @@ def ar_to_export_data(streams, raw=False):
     else:
         sim = s.image.value  # TODO: check that it's up to date (and not None)
         if sim is None:
-            raise LookupError("Stream %s has no data selected", s.name.value)
+            raise LookupError("Stream %s has no data selected" % (s.name.value,))
         wim = format_rgba_darray(sim)
         # image is always centered, fitting the whole canvass
         images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value, None, None)])
