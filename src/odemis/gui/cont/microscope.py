@@ -733,12 +733,11 @@ class SecomStateController(MicroscopeStateController):
     @call_in_wx_main
     def on_door_opened(self, value):
         """
-        Disable the load button when the chamber door is open.
+        Disable the load button when the chamber door is open, or there is no sample
         """
-        if value:
-            self._press_btn.Enable(False)
-        else:
-            self._press_btn.Enable(True)
+        loadable = not value and None not in self._main_data.chamber.sampleHolder.value
+        self._press_btn.Enable(loadable)
+        if loadable:  # Immediately start loading while at it...
             self._press_btn.SetToggle(True)
             self._phenom_load_done = False
             self._main_data.chamberState.value = CHAMBER_PUMPING
@@ -1043,6 +1042,9 @@ class DelphiStateController(SecomStateController):
                 # sample holder was just removed (or something went wrong)
                 logging.warning("Failed to read sample holder ID %s, aborting load",
                                 (shid, sht))
+                # Eject the sample holder (mainly to update the load button
+                # state, since there is nothing really loaded)
+                self._main_data.chamberState.value = CHAMBER_VENTING
                 return False
 
             logging.debug("Detected sample holder type %d, id %x", sht, shid)
