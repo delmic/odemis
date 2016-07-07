@@ -448,7 +448,7 @@ class SecomStateController(MicroscopeStateController):
         """
         if self._ellipsis_animator:
             # cancel if there is an ellipsis animator updating the status message
-            self._ellipsis_animator.stop()
+            self._ellipsis_animator.cancel()
             self._ellipsis_animator = None
 
         action = None

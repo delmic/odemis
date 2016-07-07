@@ -316,6 +316,8 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
+        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
+        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
         self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
         self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
@@ -3980,23 +3982,55 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                            <label>No region of interest selected.</label>
-                            <fg>#DDDDDD</fg>
-                            <font>
-                              <size>10</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxALL</flag>
-                          <border>12</border>
+                            <object class="wxPanel">
+                              <object class="wxBoxSizer">
+                                <orient>wxHORIZONTAL</orient>
+                                <object class="sizeritem">
+                                  <object class="wxStaticBitmap" name="bmp_acq_status_info">
+                                    <bitmap>img_icon_dialog_info_png</bitmap>
+                                    <hidden>1</hidden>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxRIGHT</flag>
+                                  <border>5</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticBitmap" name="bmp_acq_status_warn">
+                                    <bitmap>img_icon_dialog_warning_png</bitmap>
+                                    <hidden>1</hidden>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxRIGHT</flag>
+                                  <border>5</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                    <label>No region of interest selected.</label>
+                                    <fg>#DDDDDD</fg>
+                                    <font>
+                                      <size>10</size>
+                                      <style>normal</style>
+                                      <weight>normal</weight>
+                                      <underlined>0</underlined>
+                                      <face>Ubuntu</face>
+                                    </font>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                </object>
+                              </object>
+                              <bg>#333333</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                            <border>12</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxBoxSizer">
@@ -6415,4 +6449,3 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', img_icon_dialog_info_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', img_icon_dialog_error_png)
     __res.Load('memory:XRC/main/main_xrc')
-

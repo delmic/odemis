@@ -357,7 +357,7 @@ class ProgressiveFutureConnector(object):
             self._label.Parent.Layout()
 
 
-class EllipsisAnimator(object):
+class EllipsisAnimator(RepeatingTimer):
     """ This class animates the special character … (ellipsis) in case it is
         contained in the given message
     """
@@ -366,29 +366,20 @@ class EllipsisAnimator(object):
         msg (string): message to be displayed
         label (StaticText): label to be updated with the message text
         """
+        super(EllipsisAnimator, self).__init__(0.7, self._updateStatus, "Status update")
         self._status_msg = msg  # Current message to be animated
         self._label = label
 
     def start(self):
         """ Starts ellipsis animation """
-        self._status_poll = RepeatingTimer(0.7, self._updateStatus, "Status update")
-        self._status_poll.start()
+        super(EllipsisAnimator, self).start()
         self._updateStatus()
-
-    def stop(self):
-        """ Stops ellipsis animation """
-        if self._status_poll:
-            # cancel if there is a repeating timer updating the status message
-            self._status_poll.cancel()
-            # make sure thread is stopped before is made None
-            self._status_poll.join(10)
-            self._status_poll = None
 
     @call_in_wx_main
     def _updateStatus(self):
         try:
             # Compute how many dots to display (0->3)
-            n = int((time.time() / self._status_poll.period) % 4)
+            n = int((time.time() / self.period) % 4)
             msg = self._status_msg.replace(u"…", u"." * n)
             self._label.SetLabel(msg)
         except Exception:
