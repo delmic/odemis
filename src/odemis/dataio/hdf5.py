@@ -1102,12 +1102,16 @@ def _adjustDimensions(da):
     SVI convention). If it seems to contain RGB data, an exception is made to
     return just CYX data.
     da (DataArray)
-    returns (DataArray): a new DataArray (possibly just a view) 
+    returns (DataArray): a new DataArray (possibly just a view)
     """
+    md = dict(da.metadata)
+
     # Dimension names (default to CTZYX)
     l = da.ndim
-    dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-l::])
-    md = dict(da.metadata)
+    dims = md.get(model.MD_DIMS, "CTZYX"[-l::])
+    if len(dims) != l:
+        logging.warning("MD_DIMS contains %s, but the data has shape %s, will discard it", dims, da.shape)
+        dims = "CTZYX"[-l::]
 
     # Special cases for RGB
     if dims == "YXC":
