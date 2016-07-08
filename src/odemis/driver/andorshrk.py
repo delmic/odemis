@@ -1004,6 +1004,10 @@ class Shamrock(model.Actuator):
         centerpixel = (npixels - 1) / 2
         cw = self.position.value["wavelength"]  # m
         gid = self.position.value["grating"]
+        if self.axes["grating"].choices[gid] == "mirror":
+            logging.debug("Returning no wavelength information for mirror grating")
+            return []
+
         gl = self.GetGratingInfo(gid)[0]  # lines/meter
         if gl < 1e-5:
             logging.warning("Trying to compute pixel->wavelength with null lines/mm")
