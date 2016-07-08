@@ -34,8 +34,8 @@ from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import ProgressiveFutureConnector
-from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
+                                    EllipsisAnimator
 from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
 from odemis import util
@@ -257,8 +257,7 @@ class SecomStateController(MicroscopeStateController):
         # To update the stream status
         self._status_prev_streams = []
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
-        self._status_poll = None  # Thread for status animation
-        self._status_msg = ""  # Current message to be animated
+        self._ellipsis_animator = None  # animator for messages containing ellipsis character
 
         # Last stage and focus move time
         self._last_pos = self._main_data.stage.position.value.copy()
@@ -441,26 +440,16 @@ class SecomStateController(MicroscopeStateController):
         self._views_prev_list = self._views_list
 
     @call_in_wx_main
-    def _updateStatus(self):
-        try:
-            # Compute how many dots to display (0->3)
-            n = int((time.time() / self._status_poll.period) % 4)
-            msg = self._status_msg.replace(u"…", u"." * n)
-            self._tab_panel.lbl_stream_status.SetLabel(msg)
-        except Exception:
-            logging.exception("Unexpected failure during status message animation")
-
-    @call_in_wx_main
     def decide_status(self, _=None):
         """
         Decide the status displayed based on the visible and calibrated streams.
         If the message contains the special character … (ellipsis), it will be
          animated.
         """
-        if self._status_poll:
-            # cancel if there is a repeating timer updating the status message
-            self._status_poll.cancel()
-            self._status_poll = None
+        if self._ellipsis_animator:
+            # cancel if there is an ellipsis animator updating the status message
+            self._ellipsis_animator.cancel()
+            self._ellipsis_animator = None
 
         action = None
         lvl = None
@@ -502,10 +491,8 @@ class SecomStateController(MicroscopeStateController):
         self._show_status_icons(lvl, action)
         self._tab_panel.lbl_stream_status.SetToolTipString(action)
         if u"…" in msg:
-            self._status_msg = msg
-            self._status_poll = util.RepeatingTimer(0.7, self._updateStatus, "Status update")
-            self._status_poll.start()
-            self._updateStatus()
+            self._ellipsis_animator = EllipsisAnimator(msg, self._tab_panel.lbl_stream_status)
+            self._ellipsis_animator.start()
         else:
             self._tab_panel.lbl_stream_status.SetLabel(msg)
 

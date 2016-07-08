@@ -26,6 +26,7 @@ from __future__ import division
 import collections
 import logging
 import math
+from odemis.util import RepeatingTimer
 from odemis.gui.util import call_in_wx_main_wrapper, call_in_wx_main, dead_object_wrapper
 from odemis.util import units
 import time
@@ -354,3 +355,32 @@ class ProgressiveFutureConnector(object):
             # wxST_ELLIPSIZE_END in xrc) or dc.GetTextExtend()
             self._label.SetLabel(lbl_txt)
             self._label.Parent.Layout()
+
+
+class EllipsisAnimator(RepeatingTimer):
+    """ This class animates the special character … (ellipsis) in case it is
+        contained in the given message
+    """
+    def __init__(self, msg, label):
+        """
+        msg (string): message to be displayed
+        label (StaticText): label to be updated with the message text
+        """
+        super(EllipsisAnimator, self).__init__(0.7, self._updateStatus, "Status update")
+        self._status_msg = msg  # Current message to be animated
+        self._label = label
+
+    def start(self):
+        """ Starts ellipsis animation """
+        super(EllipsisAnimator, self).start()
+        self._updateStatus()
+
+    @call_in_wx_main
+    def _updateStatus(self):
+        try:
+            # Compute how many dots to display (0->3)
+            n = int((time.time() / self.period) % 4)
+            msg = self._status_msg.replace(u"…", u"." * n)
+            self._label.SetLabel(msg)
+        except Exception:
+            logging.exception("Unexpected failure during status message animation")
