@@ -29,12 +29,14 @@ This module contains classes that allow to create ToolBars for the MicroscopeGUI
 
 """
 from __future__ import division
+
 from odemis.gui import model, img
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButtonImageButton, darken_image
+from odemis.gui.util import call_in_wx_main
 import wx
 
-# List of tools available
 
+# List of tools available
 TOOL_RO_ZOOM = 1  # Select the region to zoom in
 TOOL_ROI = 2  # Select the region of interest (sub-area to be updated)
 TOOL_ROA = 3  # Select the region of acquisition (area to be acquired, SPARC-only)
@@ -229,6 +231,7 @@ class ToolBar(wx.Panel):
             else:
                 va.value = value_off
 
+        @call_in_wx_main
         def _on_va_change(new_value, value_on=value_on, btn=btn):
             btn.SetToggle(new_value == value_on)
 
