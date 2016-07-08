@@ -38,6 +38,12 @@ logging.getLogger().setLevel(logging.DEBUG)
 DEFAULT_CONFIG = {"LOGLEVEL": "1",
                   "TERMINAL": "/usr/bin/gnome-terminal"}
 
+# Used to parse the back-end log, and display it nicely
+RE_MSG_BE_START = "Starting Odemis back-end"
+RE_MSG_BE_FAILURE = "ERROR: Failed to instantiate the model due to component"
+RE_MSG_BE_TRACEBACK = "ERROR: Full traceback of the error follows"
+RE_MSG_BE_HEADER = r"[0-9]+-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]+ \(\S+\) \S+:"
+
 
 def _add_var_config(config, var, content):
     """ Add one variable to the config, handling substitution
@@ -448,16 +454,39 @@ class BackendStarter(object):
         # Start at the beginning of the latest log (skipping the log from
         # previous runs)
         for i, l in enumerate(reversed(lines)):
-            if "Starting Odemis back-end" in l:
-                startl = -(i + 1)
+            if RE_MSG_BE_START in l:
+                lines = lines[-(i + 1):]
                 break
-        else:
-            startl = 0
 
-        msg = "".join(lines[startl:])
+        # TODO: first show a "simple" error message, by looking for:
+        # "Failed to instantiate the model due to component" (+all the backtrace)
+        # If it exists -> only show it, and have a "Show details" button
+
+        failurelb = None
+        failurele = None
+        for i, l in enumerate(lines):
+            if failurelb is None:
+                if RE_MSG_BE_FAILURE in l:
+                    failurelb = i
+            else:
+                if RE_MSG_BE_TRACEBACK not in l and re.match(RE_MSG_BE_HEADER, l):
+                    failurele = i
+                    break
+
+        if failurelb is not None:
+            failmsg = "".join(lines[failurelb:failurele])
+            failmsg += "\nWould you like to see the full log message now?"
+            box = wx.MessageDialog(None, failmsg,
+                                   "Failure during Odemis back-end initialisation",
+                                   wx.YES_NO | wx.YES_DEFAULT | wx.ICON_ERROR | wx.CENTER)
+            ans = box.ShowModal()  # Waits for the window to be closed
+            if ans == wx.ID_NO:
+                return
+
+        fullmsg = "".join(lines)
 
         # At least, skip everything not related to this last run
-        log_frame = self._create_log_frame(msg)
+        log_frame = self._create_log_frame(fullmsg)
         log_frame.ShowModal()
 
 
