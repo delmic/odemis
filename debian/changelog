@@ -1,3 +1,16 @@
+odemis (2.4.5-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.5
+  * Main bugs fixed:
+    - Very long CCD acquisitions (>60s) could sometimes fail (SPARC)
+    - Windows updater knows about the new website URL
+    - Changing spectrum stream bandwidth manually caused it to become 0 (SPARC)
+    - View in SECOM/DELPHI acquisition would sometimes have a very large HFW
+    - Don't try to load the sample if the door is closed without sample (DELPHI)
+    - Fix some (rare) GUI crashes after autofocus (SECOM/DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 08 Jul 2016 18:07:09 +0200
+
 odemis (2.4.4-1ubuntu1) precise; urgency=medium
 
   * New version: 2.4.4
