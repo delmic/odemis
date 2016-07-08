@@ -505,7 +505,7 @@ class SecomStreamsTab(Tab):
 
             # run only if focuser is available
             if self.curr_s.focuser:
-                # FIXME: maybe this can be done in a nicer why
+                # TODO: maybe this can be done in a less hard-coded way
                 self.orig_hfw = None
                 self.orig_binning = None
                 self.orig_exposureTime = None
