@@ -8,7 +8,7 @@ if [ "$status" -ne 0 -a "$status" -ne 3 ] ; then
 fi
 
 # Find the detectors and select one
-redet="role:(ccd|sp-ccd|overview-ccd|se-detector|bs-detector|cl-detector)"
+redet="role:(ccd|sp-ccd|overview-ccd|se-detector|bs-detector|cl-detector|ebic-detector|time-correlator|spectrometer|spectrometer-integrated)"
 detector=$(odemis-cli --list --machine | grep -E "$redet" | cut -f 2 | cut -d : -f 2 |
             zenity --list --title "Live view" --text "Select a detector" --column "" --hide-header)
 
