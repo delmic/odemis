@@ -1222,6 +1222,11 @@ class Shamrock(model.Actuator):
         """
         v = FLIPPER_TO_PORT[pos]
         self.SetFlipperMirror(flipper, v)
+        # Note: That function _only_ changes the mirror position.
+        # It doesn't update the turret position, based on the (new) detector offset
+        # => Force it by moving an "empty" move
+        # Note: Setting the detector offset or grating would also do the job
+        self.SetWavelength(self.GetWavelength())
         self._updatePosition()
 
     def stop(self, axes=None):
