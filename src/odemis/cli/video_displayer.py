@@ -28,6 +28,7 @@ from odemis.util import img
 from scipy import ndimage
 import wx
 
+MAX_WIDTH = 2000
 
 class VideoDisplayer(object):
     '''
@@ -56,12 +57,22 @@ class VideoDisplayer(object):
             # TODO: add "(plot)" to the window title
             # Create a simple bar plot of X x 400 px
             lenx = data.shape[-1]
+            if lenx > MAX_WIDTH:
+                binning = lenx // MAX_WIDTH
+                data = data[..., 0::binning]
+                logging.debug("Compressed data from %d to %d elements", lenx, data.shape[-1])
+                lenx = data.shape[-1]
             leny = 400
+            miny = min(0, data.min())
             maxy = data.max()
-            logging.info("Plot data max = %s", maxy)
+            diffy = maxy - miny
+            if diffy == 0:
+                diffy = 1
+            logging.info("Plot data from %s to %s", miny, maxy)
             rgb = numpy.zeros((leny, lenx, 3), dtype=numpy.uint8)
             for i, v in numpy.ndenumerate(data):
-                h = leny - int((v * leny) / maxy)
+                # TODO: have the base at 0, instead of miny, so that negative values are columns going down
+                h = leny - int(((v - miny) * leny) / diffy)
                 rgb[h:-1, i[-1], :] = 255
         else: # Greyscale (hopefully)
             mn, mx, mnp, mxp = ndimage.extrema(data)
