@@ -853,12 +853,11 @@ class TestHDF5IO(unittest.TestCase):
         owl = rdata[0].metadata[model.MD_OUT_WL]  # nm
         self.assertEqual(owl, ldata[0].metadata[model.MD_OUT_WL])
 
-
     def testReadMDTime(self):
         """
         Checks that we can read back the metadata of an acquisition with time correlation
         """
-        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 5000, 1, 1, 1)]
+        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 5000)]
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -888,13 +887,14 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_DESCRIPTION: "test1d",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 16,
-                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_BINNING: (1, 128),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_PIXEL_DUR: 10e-9,  # s
                      model.MD_TIME_OFFSET:-500e-9,  # s, of the first time value
                      model.MD_OUT_WL: (500e-9, 600e-9),
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_DIMS: "XT",
                     },
                     ]
         # create 1 simple greyscale image
@@ -908,7 +908,7 @@ class TestHDF5IO(unittest.TestCase):
         ldata.append(a)
         # Create time correlated spot acquisition
         a = model.DataArray(numpy.zeros(shapes[2], numpy.uint32), metadata[2])
-        a[0, 10, 0, 0, 0] = 20000
+        a[0, 10] = 20000
         ldata.append(a)
 
         # thumbnail : small RGB completely red
@@ -928,6 +928,9 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(len(rdata), len(ldata))
 
         for i, im in enumerate(rdata):
+            orshape = shapes[i]
+            if len(orshape) == 5:
+                self.assertEqual(orshape, im.shape)
             md = metadata[i]
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
             self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
