@@ -647,8 +647,9 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
         logging.debug("Calibration info returned")
         # Note: it just applies the polynomial, so you can end up with negative
-        # values => clamp them to 0.
-        return [max(0, v * 1e-9) for v in CalibrationValues]
+        # values. We used to change all to 0, but that was even more confusing
+        # because multiple bins were associated to 0.
+        return [v * 1e-9 for v in CalibrationValues]
 
     def GetPixelCalibrationCoefficients(self):
         """
@@ -864,10 +865,10 @@ class Shamrock(model.Actuator):
 
         # Sometimes, the SR-193 gets a bit confused and if changing to the same
         # value, it will move the focus. So avoid changing to the current value.
-        checkfocus = False and "focus" in self.axes # Set to True if need debugging
+        checkfocus = False and "focus" in self.axes  # Set to True if need debugging #DEBUG
         if self.GetFlipperMirror(flipper) == port:
             if checkfocus:
-	        cf = self.GetFocusMirror()
+                cf = self.GetFocusMirror()
             else:
                 logging.info("Not changing again flipper %d to current pos %d", flipper, port)
                 return
@@ -997,9 +998,6 @@ class Shamrock(model.Actuator):
 
         self.SetNumberPixels(npixels)
         self.SetPixelWidth(pxs)
-        # TODO: GetCalibration() return several values identical (eg, 0's if
-        # cw is < 75 nm). Need to decide if we return something better (what?)
-        # or check all the clients handle this corner case well.
         calib = self.GetCalibration(npixels)
         if calib[-1] < 1e-9:
             logging.error("Calibration data doesn't seem valid, will use internal one (cw = %g): %s",
@@ -1026,6 +1024,10 @@ class Shamrock(model.Actuator):
         centerpixel = (npixels - 1) / 2
         cw = self.position.value["wavelength"]  # m
         gid = self.position.value["grating"]
+        if self.axes["grating"].choices[gid] == "mirror":
+            logging.debug("Returning no wavelength information for mirror grating")
+            return []
+
         gl = self.GetGratingInfo(gid)[0]  # lines/meter
         if gl < 1e-5:
             logging.warning("Trying to compute pixel->wavelength with null lines/mm")
@@ -1242,6 +1244,11 @@ class Shamrock(model.Actuator):
         """
         v = FLIPPER_TO_PORT[pos]
         self.SetFlipperMirror(flipper, v)
+        # Note: That function _only_ changes the mirror position.
+        # It doesn't update the turret position, based on the (new) detector offset
+        # => Force it by moving an "empty" move
+        # Note: Setting the detector offset or grating would also do the job
+        self.SetWavelength(self.GetWavelength())
         self._updatePosition()
 
     def stop(self, axes=None):

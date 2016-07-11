@@ -35,6 +35,7 @@ from odemis import model
 import odemis
 from odemis.model import roattribute, oneway
 import os
+import re
 import threading
 import time
 import weakref
@@ -127,6 +128,19 @@ def get_best_dtype_for_acc(idtype, count):
         adtype = numpy.float64 # might accumulate errors
 
     return adtype
+
+
+def _get_linux_version():
+    """
+    return (tuple of 3 int): major, minor, micro
+    raise LookupError: if the version fails to find (eg: not a Linux kernel)
+    """
+    try:
+        lv = os.uname()[2]  # version string
+        sv = re.match(r"\d+\.\d+\.\d+", lv).group()  # get the raw version, without -XXX
+        return tuple(int(s) for s in sv.split("."))
+    except AttributeError:  # No uname, or no match
+        raise LookupError("Failed to find Linux version")
 
 
 class CancelledError(Exception):
@@ -222,11 +236,20 @@ class SEMComedi(model.HwComponent):
         self._writer = Writer(self)
 
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
-        self._swVersion = "%s (driver %s)" % (odemis.__version__, self.getSwVersion())
+        self._lnx_ver = _get_linux_version()
+        self._swVersion = "%s (driver %s, linux %s)" % (odemis.__version__,
+                                    self.getSwVersion(),
+                                    ".".join("%s" % v for v in self._lnx_ver))
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_HW_VERSION] = self._hwVersion # unknown
 
         self._check_test_device()
+
+        # Since ebb657babf, (Kernel 3.15+) needs NI_TRIG_AI_START1 as trig number instead of 0
+        if self._lnx_ver >= (3, 15, 0):
+            self._ao_trig = NI_TRIG_AI_START1
+        else:
+            self._ao_trig = 0
 
         # detect when values are strange
         comedi.set_global_oor_behavior(comedi.OOR_NAN)
@@ -1308,7 +1331,8 @@ class SEMComedi(model.HwComponent):
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
         # but it is. Maybe just to let Comedi know that the command has started.
         if nwscans != 1:
-            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+            comedi.internal_trigger(self._device, self._ao_subdevice, self._ao_trig)
+
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
         start = time.time()
 
@@ -1488,7 +1512,7 @@ class SEMComedi(model.HwComponent):
 
         # run the commands
         if not self._test:
-            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+            comedi.internal_trigger(self._device, self._ao_subdevice, self._ao_trig)
         start = time.time()
         self._writer.run()
         counter.reader.run()
@@ -2062,6 +2086,8 @@ class Reader(Accesser):
         try:
             self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
             logging.debug("read took %g s", time.time() - self._begin)
+            # Kernel 4.4 (and maybe before) requires to cancel reading
+            comedi.cancel(self._device, self._subdevice)
         except IOError:
             # might be due to a cancel
             logging.debug("Read ended before the end")

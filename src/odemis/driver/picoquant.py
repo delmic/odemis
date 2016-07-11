@@ -218,7 +218,6 @@ class PH300(model.Detector):
 
         logging.info("Opened device %d (%s s/n %s)", self._idx, mod, sn)
 
-
         self.Calibrate()
 
         # Do basic set-up for things that should never be needed to change
@@ -245,8 +244,8 @@ class PH300(model.Detector):
         dt_rng = (ACQTMIN * 1e-3, ACQTMAX * 1e-3)  # s
         self.dwellTime = model.FloatContinuous(1, dt_rng, unit="s")
 
-        # TODO: How to indicate first dim is time?
-        self._metadata[model.MD_DIMS] = "T"
+        # Indicate first dim is time and second dim is (useless) X (in reversed order)
+        self._metadata[model.MD_DIMS] = "XT"
         self._shape = (HISTCHAN, 1, 2**16) # Histogram is 32 bits, but only return 16 bits info
 
         # TODO: allow to change the CFD parameters (per channel)
@@ -265,7 +264,6 @@ class PH300(model.Detector):
         min_res = (res[0] // bin_rng[1][0], res[1])
         self.resolution = model.ResolutionVA(res, (min_res, res), readonly=True)
 
-        # TODO: (sync?) offset
         self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-9, SYNCOFFSMAX * 1e-9),
                                                 unit="s", setter=self._setSyncOffset)
 
@@ -275,11 +273,14 @@ class PH300(model.Detector):
 
         # Wrapper for the dataflow
         self.data = BasicDataFlow(self)
-        # TODO: how to get the data while it's building up via a dataflow?
-        # => two dataflows? one that is only sending full data, and one that sends
-        # data while it's building up? Does reading histogram while the data is
-        # building works? Otherwise, just let the client ask for shorter dwellTime
-        # and accumulate client side?
+        # Note: Apparently, the hardware supports reading the data, while it's
+        # still accumulating (ie, the acquisition is still running).
+        # We don't support this feature for now, and if the user needs to see
+        # the data building up, it shouldn't be costly (in terms of overhead or
+        # noise) to just do multiple small acquisitions and do the accumulation
+        # in software.
+        # Alternatively, we could provide a second dataflow that sends the data
+        # while it's building up.
 
         # Queue to control the acquisition thread:
         # * "S" to start
@@ -362,7 +363,7 @@ class PH300(model.Detector):
             res (0<=float): min duration of a bin in the histogram (in ps)
             binning code (0<=int): binning = 2**bc
         """
-        # TODO: check that binning is indeed the binning code
+        # TODO: check that binning is indeed the binning code: doesn't seem so (always 8?!)
         res = c_double()
         bs = c_int()
         self._dll.PH_GetBaseResolution(self._idx, byref(res), byref(bs))
@@ -405,7 +406,7 @@ class PH300(model.Detector):
         offset (int): offset in ps
         """
         assert(SYNCOFFSMIN <= offset <= SYNCOFFSMAX)
-        self._dll.PH_SetOffset(self._idx, offset)
+        self._dll.PH_SetSyncOffset(self._idx, offset)
 
     def SetOffset(self, offset):
         """
@@ -481,15 +482,20 @@ class PH300(model.Detector):
         block (0<=int): only useful if routing
         return numpy.array of shape (1, res): the histogram
         """
-        # Create array of HISTCHAN/binning ints
+        # Can't find any better way to know how many useful bins will be returned
+        # Maybe we could just use self._curbin
         tresbase, bs = self.GetBaseResolution()
         tres = self.GetResolution()
         count = int(math.ceil(HISTCHAN * tresbase / tres))
-        buf = numpy.empty((1, count), dtype=numpy.uint32)
+
+        # TODO: for optimization, we could use always the same buffer, and copy
+        # into a smaller buffer (of uint16).
+        # Seems GetHistogram() always write the whole HISTCHAN, even if not all is used
+        buf = numpy.empty((1, HISTCHAN), dtype=numpy.uint32)
 
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
         self._dll.PH_GetHistogram(self._idx, buf_ct, block)
-        return buf
+        return buf[:, :count]
 
     def GetElapsedMeasTime(self):
         """
@@ -566,8 +572,8 @@ class PH300(model.Detector):
     def _get_acq_msg(self, **kwargs):
         """
         Read one message from the acquisition queue
-        return str
-        raises Queue.Empty: if
+        return (str): message
+        raises Queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
         if msg not in ("S", "E", "T"):
@@ -611,6 +617,16 @@ class PH300(model.Detector):
                     md[model.MD_DWELL_TIME] = tacq
 
                     logging.debug("Starting new acquisition")
+                    # check if any message received before starting again
+                    try:
+                        state = self._get_acq_msg(block=False)
+                        if state == "E":
+                            break
+                        elif state == "T":
+                            return
+                    except Queue.Empty:
+                        pass
+
                     self.ClearHistMem()
                     self.StartMeas(int(tacq * 1e3))
 
@@ -899,5 +915,5 @@ class FakePHDLL(object):
             dur = self._acq_end - self._acq_start
             maxval = max(1, int(2 ** 16 * 10 / min(10, dur)))  # 10 s -> full scale
 
-        ndbuffer[...] = numpy.random.randint(0, maxval, n, dtype=numpy.uint32)
-
+        # Old numpy doesn't support dtype argument for randint
+        ndbuffer[...] = numpy.random.randint(0, maxval, n).astype(numpy.uint32)
