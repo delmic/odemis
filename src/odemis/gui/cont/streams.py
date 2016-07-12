@@ -1735,7 +1735,10 @@ class SparcStreamsController(StreamBarController):
             self.add_action("EBIC", self.addEBIC)
         if main_data.cld:
             self.add_action("CL intensity", self.addCLIntensity)
-        if main_data.ccd:
+        if main_data.ccd and main_data.lens and model.hasVA(main_data.lens, "polePosition"):
+            # Some simple SPARC have a CCD which can only do rough chamber view,
+            # but no actual AR acquisition. This is indicate by not having any
+            # polePosition VA on the optical path.
             self.add_action("Angle-resolved", self.addAR)
 
         # On the SPARCv2, there is potentially 4 different ways to acquire a

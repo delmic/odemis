@@ -2708,7 +2708,12 @@ class Sparc2AlignTab(Tab):
             mois.detReadoutRate.value = max(mois.detReadoutRate.choices)
         self._moi_stream = mois
         # Update ROI based on the lens pole position
-        main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
+        if model.hasVA(main_data.lens, "polePosition"):
+            main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
+        else:
+            # Leave the ROI at the center
+            mois.detROI.value = (MOI_ROI_WIDTH / 2, MOI_ROI_WIDTH / 2,
+                                 1 - (MOI_ROI_WIDTH / 2), 1 - (MOI_ROI_WIDTH / 2))
         mois_spe = self._stream_controller.addStream(mois,
                          add_to_view=self.panel.vp_moi.microscope_view)
         mois_spe.stream_panel.flatten()  # No need for the stream name
@@ -2720,19 +2725,19 @@ class Sparc2AlignTab(Tab):
         # The center align view share the same CCD stream (and settings)
         self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
 
-        # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
-        mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
-        lens = main_data.lens
-        try:
-            mirror_ol.set_mirror_dimensions(lens.parabolaF.value,
-                                            lens.xMax.value,
-                                            lens.focusDistance.value,
-                                            lens.holeDiameter.value)
-        except (AttributeError, TypeError) as ex:
-            logging.warning("Failed to get mirror dimensions: %s", ex)
-        mirror_ol.set_hole_position(tab_data.polePositionPhysical)
-        self.panel.vp_align_center.show_mirror_overlay()
-
+        if "center-align" in tab_data.align_mode.choices:
+            # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
+            mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
+            lens = main_data.lens
+            try:
+                mirror_ol.set_mirror_dimensions(lens.parabolaF.value,
+                                                lens.xMax.value,
+                                                lens.focusDistance.value,
+                                                lens.holeDiameter.value)
+            except (AttributeError, TypeError) as ex:
+                logging.warning("Failed to get mirror dimensions: %s", ex)
+            mirror_ol.set_hole_position(tab_data.polePositionPhysical)
+            self.panel.vp_align_center.show_mirror_overlay()
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
