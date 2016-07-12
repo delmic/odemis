@@ -65,6 +65,8 @@ def MomentOfInertia(data, background=None):
     xsum = numpy.dot(data0, x).sum()
 
     data_sum = data0.sum(dtype=numpy.int64)  # TODO: dtype should depend on data.dtype
+    if data_sum == 0:
+        return float('nan')
     cY = ysum / data_sum
     cX = xsum / data_sum
     xx = (x - cX) ** 2
