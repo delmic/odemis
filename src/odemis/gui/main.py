@@ -21,6 +21,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import Pyro4
 import Pyro4.errors
 import argparse
 import logging
@@ -465,6 +466,14 @@ def main(args):
     """
     args is the list of arguments passed
     """
+
+    # HACK: odemis.model sets it at 16, because some hardware components needs
+    # a lot of simultaneous connections. One the client side, there is almost
+    # no server created, so it's useless... excepted for the callback of
+    # RemoteFutures (corresponding to actuator moves). But even in such case,
+    # 1 connection should be enough in every case. To be safe, we set it to 2.
+    # That helps to reduce memory usage.
+    Pyro4.config.THREADPOOL_MINTHREADS = 2
 
     # arguments handling
     parser = argparse.ArgumentParser(prog="odemis-gui",
