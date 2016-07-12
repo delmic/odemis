@@ -8,8 +8,10 @@ odemis (2.4.5-1ubuntu1) precise; urgency=medium
     - View in SECOM/DELPHI acquisition would sometimes have a very large HFW
     - Don't try to load the sample if the door is closed without sample (DELPHI)
     - Fix some (rare) GUI crashes after autofocus (SECOM/DELPHI)
+    - Andor spectographs with two detectors configured could be set in wrong offset (SPARC)
+    - Avoid warnings about wrong wavelength in GUI when wavelength is near 0nm (SPARC)
 
- -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 08 Jul 2016 18:07:09 +0200
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 12 Jul 2016 18:07:09 +0200
 
 odemis (2.4.4-1ubuntu1) precise; urgency=medium
 
