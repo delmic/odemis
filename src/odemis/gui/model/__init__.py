@@ -675,8 +675,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
-        if (main.lens and hasattr(main.lens, "polePosition") and
-            isinstance(main.lens.polePosition, model.VigilantAttributeBase)):
+        if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
             # pixels from the top-left corner of the AR image.
