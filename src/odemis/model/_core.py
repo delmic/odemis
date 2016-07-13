@@ -23,6 +23,7 @@ from __future__ import division
 
 import Pyro4
 from Pyro4.core import oneway
+import collections
 import inspect
 import logging
 import multiprocessing
@@ -131,6 +132,36 @@ def _getChildren(root):
     return ret
 
 
+# TODO: that should be part of Pyro, called anytime a proxy is received
+def _getMostDirectObject(obj, rmtobj):
+    """
+    obj (object): a object (typically) registered on the Pyro Daemon (server)
+    rmtobj (object): any object, which could be a Pyro proxy
+    returns (object): if rmtobj is a pyroProxy of an object handled by the same
+      Pyro daemon as obj, returns the actual object, otherwise, returns rmtobj
+    """
+    if not isinstance(rmtobj, Pyro4.core.Proxy):
+        return rmtobj
+
+    if isinstance(obj, Pyro4.core.DaemonObject):
+        daemon = obj.daemon  # DaemonObject is special
+    else:
+        daemon = getattr(obj, "_pyroDaemon", None)
+    if daemon is None:
+        logging.info("Not possible to find shortcut as obj is not registered on Pyro")
+        return rmtobj
+
+    # check if this daemon is exporting an object with the same URI
+    uri = rmtobj._pyroUri
+    for obj_id, act_obj in daemon.objectsById.items():
+        if uri == daemon.uriFor(obj_id):
+            logging.info("Found short-cut for Proxy %r: %r", rmtobj, act_obj)
+            return act_obj
+    else:
+        logging.debug("Found no URI matching %s in the %d objects available", uri, len(daemon.objectsById))
+    return rmtobj
+
+
 # TODO special attributes, which are just properties that are explicitly duplicated
 # on the proxy. Getting/setting them always access the actual object remotely.
 # declarator is like a property. Two possible implementations:
@@ -202,6 +233,21 @@ class ContainerObject(Pyro4.core.DaemonObject):
         kwargs (dict (str -> value)): arguments for the __init__() of the component
         returns the new component instantiated
         """
+        try:
+            # HACK: we know that children can contain components, which are pretty
+            # much always PyroProxies. In case, the component run in the same
+            # container, get the direct reference, to make it faster.
+            # The best would be that Pyro takes care of this automatically for all Proxies
+            children = kwargs["children"]
+            if isinstance(children, collections.Mapping):
+                logging.debug("Looking to simplify children entry %s", children)
+                children = dict((k, _getMostDirectObject(self, v)) for k, v in children.items())
+                kwargs["children"] = children
+        except KeyError:
+            pass
+        except Exception:
+            logging.warning("Exception while trying to unwrap children", exc_info=True)
+
         return self.daemon.instantiate(klass, kwargs)
 
     def getRoot(self):

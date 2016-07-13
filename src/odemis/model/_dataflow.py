@@ -633,27 +633,6 @@ class Event(EventBase):
     def __init__(self):
         self._listeners = set() # object (None -> None)
 
-    # TODO: that should be part of Pyro, called anytime a proxy is received
-    def _getMostDirectObject(self, obj):
-        """
-        obj (object): any object
-        returns (object): if obj is a pyroProxy of an object handled by the same
-          Pyro daemon as this component is handled, returns the actual object,
-          otherwise, returns obj
-        """
-        if not isinstance(obj, Pyro4.core.Proxy):
-            return obj
-        daemon = getattr(self, "_pyroDaemon", None)
-        if daemon is None:
-            return obj
-
-        # check if this daemon is exporting an object with the same URI
-        uri = obj._pyroUri
-        for obj_id, act_obj in daemon.objectsById.items():
-            if uri == daemon.uriFor(obj_id):
-                return act_obj
-        return obj
-
     def hasListeners(self):
         """
         returns (boolean): True if the event currently has some listeners, or
@@ -676,7 +655,7 @@ class Event(EventBase):
         # TODO: listener could be directly a callable, and if it is a bound method,
         # get the object and the method name, and reconstruct it with the direct
         # object
-        callback = self._getMostDirectObject(listener).onEvent
+        callback = _core._getMostDirectObject(self, listener).onEvent
         assert callable(callback)
         # not using WeakMethod, because callback would immediately be unreferenced
         # and disappear anyway.
