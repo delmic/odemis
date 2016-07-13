@@ -52,6 +52,10 @@ def init_logger(level=logging.DEBUG, log_file=None):
     Initializes the logger to some nice defaults
     To be called only once, at the initialisation
     """
+    if level <= logging.INFO:
+        pyrolog = logging.getLogger("Pyro4")
+        pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), level))
+
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
     l.setLevel(level)
