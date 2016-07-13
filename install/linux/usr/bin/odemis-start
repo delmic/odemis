@@ -589,8 +589,21 @@ def main(args):
                     starter.start_backend(modelfile)
                 if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED, driver.BACKEND_STARTING):
                     starter.wait_backend_is_ready()
+            except ValueError:
+                raise  # Typically cancelled by user
             except IOError:
                 starter.display_backend_log()
+                raise
+            except Exception as ex:
+                # Something went very wrong (ie, back-end is blocked half-way
+                # starting) => stop backend
+                proc = subprocess.Popen(["sudo", "/usr/bin/odemis-stop"])
+                show_error_box("Error starting Odemis back-end",
+                               "Unexpected error while starting Odemis back-end:\n"
+                               "%s\n\n"
+                               "Try starting Odemis again, and use the \"Report a "
+                               "problem\" function if the issue continues." % ex)
+                proc.wait()
                 raise
         else:
             logging.debug("Back-end already started, so not starting again")
