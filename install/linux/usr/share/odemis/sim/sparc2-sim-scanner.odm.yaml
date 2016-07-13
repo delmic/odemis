@@ -5,7 +5,7 @@ SPARC2: {
     role: sparc2,
     children: ["SEM Detector", "Calibration Light",
                "Optical Path Properties", "SEM E-beam full", "Spectrometer Vis-NIR",
-               "Camera", "Spectrometer IR", "CL Detector",
+               "Camera", "Spectrometer IR", "CL Detector", "EBeam Focus",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
                "Sample Stage", "Scan Stage",
