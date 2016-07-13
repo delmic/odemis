@@ -16,10 +16,10 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import math
 import numpy
 from odemis import model
 from odemis.dataio import tiff, hdf5
-from odemis.util import img
 from odemis.util import spot
 import unittest
 
@@ -56,10 +56,36 @@ class TestMomentOfInertia(unittest.TestCase):
 
 #        self.assertEqual(valid, True)
 
+    def test_black(self):
+        data = numpy.zeros((480, 640), dtype=numpy.uint16)
+        mi = spot.MomentOfInertia(data)
+        self.assertTrue(math.isnan(mi))
+
+    def test_spot(self):
+        data = numpy.zeros((480, 640), dtype=numpy.uint16)
+        data[240, 360] = 5000
+        mi = spot.MomentOfInertia(data)
+        self.assertTrue(math.isnan(mi) or mi > 0)
 
 
+class TestSpotIntensity(unittest.TestCase):
+    """
+    Test SpotIntensity()
+    """
 
-# TODO: test SpotSize()
+    def test_precomputed(self):
+        # These are example data (computer generated)
+        data = hdf5.read_data("image1.h5")[0]
+        data.shape = data.shape[-2:]
+        si = spot.SpotIntensity(data)  # guessed background
+        self.assertAlmostEqual(si, 0.713582339927869)
+
+        # Same thing, with some static background
+        background = numpy.zeros(data.shape, dtype=data.dtype)
+        background += 50
+        si = spot.SpotIntensity(data, background)
+        self.assertAlmostEqual(si, 0.8621370728816907)
+
 
 TEST_IMAGE_PATH = "./"
 class TestFindCenterCoordinates(unittest.TestCase):
