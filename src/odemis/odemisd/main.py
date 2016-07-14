@@ -258,9 +258,13 @@ class BackendContainer(model.Container):
             # TODO: if a component was created by delegation, use its creator
             # instead of itself of the other components, to ensure they might
             # not be terminated too early.
-            for child in comp.children.value:
-                # TODO: do not add the creator
-                parents[child].add(comp)
+            try:
+                for child in comp.children.value:
+                    # TODO: do not add the creator
+                    parents[child].add(comp)
+            except Exception:
+                logging.warning("Failed to find children of component %s when terminating",
+                                comp.name, exc_info=True)
 
         # TODO: for the components created by delegation, either terminate them
         # before their parents, or don't do it at all (as the parent normally
