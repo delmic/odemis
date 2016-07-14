@@ -1,3 +1,11 @@
+odemis (2.4.6-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.6
+  * Bug fixed:
+   - Regression in v2.4.5 causing issues when starting with Andor spectrograph (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 14 Jul 2016 11:56:03 +0200
+
 odemis (2.4.5-1ubuntu1) precise; urgency=medium
 
   * New version: 2.4.5
