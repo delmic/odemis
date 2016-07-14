@@ -1247,8 +1247,11 @@ class Shamrock(model.Actuator):
         # Note: That function _only_ changes the mirror position.
         # It doesn't update the turret position, based on the (new) detector offset
         # => Force it by moving an "empty" move
-        # Note: Setting the detector offset or grating would also do the job
-        self.SetWavelength(self.GetWavelength())
+        # Note: Setting the detector offset or wavelength would also do the job
+        try:
+            self.SetGrating(self.GetGrating())
+        except ShamrockError:
+            logging.warning("Failed to update turret position, detector offset might be incorrect", exc_info=True)
         self._updatePosition()
 
     def stop(self, axes=None):
