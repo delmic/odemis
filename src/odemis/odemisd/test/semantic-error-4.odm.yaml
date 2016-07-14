@@ -1,0 +1,25 @@
+# Cyclic creation test
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    children: [Light, Stupid, Stupid2],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+}
+
+"Stupid": {
+    # creator: Stupid2,
+    role: null,
+    children: {c: "Stupid2",
+    }
+}
+
+"Stupid2": {
+    # creator: Stupid,
+    role: null,
+    children: {c: "Stupid",
+    }
+}

@@ -89,6 +89,13 @@ def get_class(name):
     return the_class
 
 
+# TODO: one big flaw of this model is that there is confusion between two types
+# of "children":
+#  * A component which is needed by another one (a functional dependency/requirement)
+#    => could be in a 'requires' attribute
+#  * A component which is created by another one (provided/creation)
+#    => could be in a 'provides' attribute
+
 class Instantiator(object):
     """
     manages the instantiation of a whole model
@@ -107,6 +114,7 @@ class Instantiator(object):
         self.root_container = container # the container for non-leaf components
 
         self.microscope = None # the root of the model (Microscope component)
+        self._microscope_name = None  # the name of the microscope
         self._microscope_ast = None # the definition of the Microscope
         self.components = set() # all the components created
         self.sub_containers = {}  # container's name -> container: all the sub-containers created for the components
@@ -119,6 +127,10 @@ class Instantiator(object):
         # update/fill up the model with implicit information
         self._fill_creator()
 
+        # Sanity checks
+        self._check_lone_component()
+        self._check_affects()
+
         # TODO: if the microscope has a known role, check it has the minimum
         # required sub-components (with the right roles) and otherwise raise
         # SemanticError
@@ -127,9 +139,6 @@ class Instantiator(object):
 
         # TODO: check there is no cyclic dependencies on the parents/children
 
-        # TODO: check that all the components are reachable from the microscope
-        # (= no component created alone)
-
     def _preparate_microscope(self):
         """
         Find the microscope definition and do some updates on the definition if
@@ -137,17 +146,18 @@ class Instantiator(object):
         child. In case the definition has not been updated, we do it here.
         """
         # look for the microscope def
-        microscopes = [a for a in self.ast.values() if a.get("class") == "Microscope"]
+        microscopes = [(n, a) for n, a in self.ast.items() if a.get("class") == "Microscope"]
         if len(microscopes) == 1:
-            microscope = microscopes[0]
+            cname, microscope = microscopes[0]
         elif len(microscopes) > 1:
             raise SemanticError("Error in microscope file: "
                                 "there are several Microscopes (%s)." %
-                                ", ".join(microscopes))
+                                ", ".join(n for n, a in microscopes))
         else:
             raise SemanticError("Error in microscope file: "
                                 "no Microscope component found.")
 
+        self._microscope_name = cname
         self._microscope_ast = microscope
 
         if "children" not in microscope:
@@ -229,6 +239,57 @@ class Instantiator(object):
             raise SemanticError("Some components could not be instantiated due "
                                 "to cyclic dependency: %s" %
                                 (", ".join(left)))
+
+    def _check_lone_component(self):
+        """
+        Check that every component is instantiate for eventually being a part
+        of the microscope.
+        Every component should be either:
+         * A child of the microscope
+         * Creator of a child of the microscope
+        """
+        # All the components used for the microscope
+        comps_used = {self._microscope_name}
+        comps_used |= self.get_required_components(self._microscope_name)
+        for cname in comps_used.copy():
+            # If a used component creates non-used components (as side effect),
+            # these created components are not required by the microscope, but used
+            attrs = self.ast[cname]
+            while "creator" in attrs:
+                comps_used |= self.get_delegated_children(cname)
+                cname = attrs["creator"]  # look at the creator too
+                attrs = self.ast[cname]
+            comps_used |= self.get_delegated_children(cname)
+
+        for cname, attrs in self.ast.items():
+            if cname not in comps_used:
+                role = attrs.get("role")
+                if role is not None:
+                    # Note: some old microscope files had 'none' instead of 'null'
+                    # which was turning into the string 'none' instead of None.
+                    # TODO: don't warn if the role == 'none' or 'None'?
+                    logging.warning("Component '%s' is not directly required by the microscope but has non-null role '%s'",
+                                    cname, role)
+
+                creations = self.get_delegated_children(cname)
+                if not creations & comps_used:
+                    if len(creations) > 1:
+                        logging.info("Component '%s' would create non-used components %s", cname, creations)
+                    raise SemanticError("Component '%s' is defined but not required by the microscope" % (cname,))
+
+    def _check_affects(self):
+        """
+        Check that the affects of the components are correct.
+        In particular, it checks that all affects points to existing components
+        """
+        for cname, attrs in self.ast.items():
+            affects = attrs.get("affects", [])
+            for affcname in affects:
+                if affcname not in self.ast:
+                    # TODO: Convert to a SemanticError (in 2017 or later), once
+                    # all the currently broken microscope files are fixed
+                    logging.warning("Component '%s' affects non-existing component '%s'.", cname, affcname)
+                    # raise SemanticError("Component '%s' affects non-existing component '%s'." % (cname, affcname))
 
     def _parse_instantiation_model(self, inst_file):
         """
@@ -319,7 +380,7 @@ class Instantiator(object):
         # take care of power supplier argument
         if "power_supplier" in init:
             raise SemanticError("Error in microscope file: "
-                "component '%s' should not have a 'children' entry in the init." % name)
+                "component '%s' should not have a 'power_supplier' entry in the init." % name)
         if "power_supplier" in attr:
             psu_name = attr["power_supplier"]
             init["power_supplier"] = self._get_component_by_name(psu_name)
@@ -334,8 +395,8 @@ class Instantiator(object):
         """
         attr = self.ast[name]
 
-        children_names = attr.get("children", {})
-        for child_name in children_names.values():
+        children_names = attr.get("children", {}).values()
+        for child_name in children_names:
             child_attr = self.ast[child_name]
             if "class" in child_attr:
                 # the child has a class => it will be instantiated separately
@@ -450,6 +511,31 @@ class Instantiator(object):
                 return comp
         raise LookupError("No component named '%s' found" % name)
 
+    def get_required_components(self, name):
+        """
+        Return all the components required (but not created) by the component for
+          instantiation
+        name (str): name of the component
+        return (set of str): the name of the components that will be required when
+          instantiating the given component, (not including the component itself)
+        """
+        ret = set()
+
+        attrs = self.ast[name]
+        children = attrs.get("children", {}).values()
+        try:
+            children.append(attrs["power_supplier"])
+        except KeyError:
+            pass  # no power supplier
+
+        for n in children:
+            cattrs = self.ast[n]
+            if cattrs.get("creator") != name and n not in ret:
+                ret.add(n)
+                ret |= self.get_required_components(n)
+
+        return ret
+
     def get_delegated_children(self, name):
         """
         Return all the components created by delegation when creating the given
@@ -461,6 +547,9 @@ class Instantiator(object):
         ret = {name}
         for n, attrs in self.ast.items():
             if attrs.get("creator") == name:
+                # Note: by passing ret, and checking it's not already added,
+                # we could handle cyclic creation... but it's better to fail here
+                # than trying to instantiate such beast.
                 ret |= self.get_delegated_children(n)
 
         return ret
@@ -491,8 +580,7 @@ class Instantiator(object):
             ParseError
             Exception (dependent on the driver): in case initialisation of a driver fails
         """
-        name = [c[0] for c in self.ast.items() if c[1].get("class") == "Microscope"][0]
-        self.microscope = self._instantiate_comp(name)
+        self.microscope = self._instantiate_comp(self._microscope_name)
         return self.microscope
 
     def _update_properties(self, name):

@@ -58,7 +58,7 @@ class TestCommandLine(unittest.TestCase):
         for config in configs_pass:
             setattr(cls, "test_pass_%d" % i, cls.create_test_validate_pass(config))
             i += 1
-    
+
         configs_error = ["syntax-error-1.odm.yaml",
                    "syntax-error-2.odm.yaml",
                    # Skipped: PyYaml is not able to detect this error :  http://pyyaml.org/ticket/128
@@ -67,6 +67,8 @@ class TestCommandLine(unittest.TestCase):
                    "semantic-error-2.odm.yaml",
                    # This one can only be detected on a real instantiation
                    # "semantic-error-3.odm.yaml",
+                   # TODO: handle cyclic creation error
+                   # "semantic-error-4.odm.yaml",
                    "semantic-error-md.odm.yaml",
                    ]
 
@@ -74,7 +76,7 @@ class TestCommandLine(unittest.TestCase):
         for config in configs_error:
             setattr(cls, "test_error_%d" % i, cls.create_test_validate_error(config))
             i += 1
-    
+
     @staticmethod
     def create_test_validate_pass(filename):
         def test_validate_pass(self):
@@ -85,7 +87,7 @@ class TestCommandLine(unittest.TestCase):
                                 "file '%s'" % filename)
             os.remove("test.log")
         return test_validate_pass
-      
+
     @staticmethod
     def create_test_validate_error(filename):
         def test_validate_error(self):
@@ -96,17 +98,17 @@ class TestCommandLine(unittest.TestCase):
                                 "file '%s'" % filename)
             os.remove("test.log")
         return test_validate_error
-          
+
     def setUp(self):
         # reset the logging (because otherwise it accumulates)
         if logging.root:
             del logging.root.handlers[:]
-        
+
         # save the stdout in case it's modified
         # NOTE: it seems unittest does this already, but that's just in case
         self.saved_stdout = sys.stdout
 
-    def tearDown(self):        
+    def tearDown(self):
         sys.stdout = self.saved_stdout
 
     def test_error_command_line(self):
@@ -124,12 +126,12 @@ class TestCommandLine(unittest.TestCase):
         cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % SIM_CONFIG
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         # a log file?
         st = os.stat("test.log") # this tests also that the file is created
         self.assertGreater(st.st_size, 0)
         os.remove("test.log")
-        
+
     def test_help(self):
         """
         It checks handling help option
@@ -138,13 +140,13 @@ class TestCommandLine(unittest.TestCase):
             # change the stdout
             out = StringIO.StringIO()
             sys.stdout = out
-            
+
             cmdline = "odemisd --help"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         output = out.getvalue()
         self.assertTrue("positional arguments" in output)
 
@@ -275,9 +277,9 @@ class TestCommandLine(unittest.TestCase):
 
         return ret
 
-# extends the class fully at module 
+# extends the class fully at module
 TestCommandLine.create_tests()
-                            
+
 if __name__ == '__main__':
     unittest.main()
 
