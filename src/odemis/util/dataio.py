@@ -48,12 +48,14 @@ def data_to_static_streams(data):
 
     # Add each data as a stream of the correct type
     for d in data:
+        acqtype = d.metadata.get(model.MD_ACQ_TYPE)
         # Hack for not displaying Anchor region data
         # TODO: store and use acquisition type with MD_ACQ_TYPE?
-        if d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
+        if acqtype == model.MD_AT_ANCHOR or d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
             continue
 
         dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
         if (((model.MD_WL_LIST in d.metadata or
               model.MD_WL_POLYNOMIAL in d.metadata) and
@@ -64,6 +66,31 @@ def data_to_static_streams(data):
             # Spectrum: either it's obvious according to metadata, or no metadata
             # but lots of wavelengths, so no other way to display
             name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
+            klass = stream.StaticSpectrumStream
+        elif model.MD_PIXEL_DUR in d.metadata and ti >= 0 and d.shape[ti] > 1:
+            # Time data (with XY)
+            logging.info("Converting time data into spectrum data")
+            # HACK: for now we don't have a good static stream and GUI tools for
+            # showing data with time, but it's pretty much the same as a spectrum
+            # (expected it's on the 4th dim, in s, instead of 5th dim in m).
+            # FIXME: make the StaticSpectrumStream more generic, to support any
+            # 3D data (ie, dYX).
+            i3d = [0] * (d.ndim - 2) + [slice(None), slice(None)]
+            i3d[ti] = slice(None)
+            sda = d[tuple(i3d)] # basically, d[0, :, 0, :, :] for CTZYX
+            if sda.size != d.size:
+                logging.warning("Attempted to reduce data to TYX, but data had shape %s", d.shape)
+
+            d = sda
+            d.metadata[model.MD_DIMS] = "TYX"
+            # Convert linear scale (PIXEL_DUR + TIME_OFFSET) to WL_LIST
+            pd = d.metadata[model.MD_PIXEL_DUR]
+            to = d.metadata.get(model.MD_TIME_OFFSET, 0)
+            n = sda.shape[0]
+            tv = numpy.linspace(to, to + pd * (n - 1), n)
+            d.metadata[model.MD_WL_LIST] = tv
+
+            name = d.metadata.get(model.MD_DESCRIPTION, "Time")
             klass = stream.StaticSpectrumStream
         elif model.MD_AR_POLE in d.metadata:
             # AR data
