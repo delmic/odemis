@@ -866,7 +866,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BINNING: (1, 2),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_POS: (1e-3, -30e-3),  # m
-                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_DWELL_TIME: 1.2,  # s
                      model.MD_LENS_MAG: 1200,  # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
@@ -880,7 +880,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_TIME_OFFSET:-20e-9,  # s, of the first time value
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
-                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_DWELL_TIME: 1.2,  # s
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake time correlator",
@@ -893,7 +893,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_TIME_OFFSET:-500e-9,  # s, of the first time value
                      model.MD_OUT_WL: (500e-9, 600e-9),
                      model.MD_POS: (1e-3, -30e-3),  # m
-                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_DWELL_TIME: 1.2,  # s
                      model.MD_DIMS: "XT",
                     },
                     ]
