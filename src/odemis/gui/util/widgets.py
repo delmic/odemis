@@ -378,6 +378,11 @@ class EllipsisAnimator(RepeatingTimer):
     @call_in_wx_main
     def _updateStatus(self):
         try:
+            # Run in main GUI thread, with some delay on the sleeping thread
+            # If was cancelled in between, don't write (old info on) the label
+            if self._must_stop.is_set():
+                return
+
             # Compute how many dots to display (0->3)
             n = int((time.time() / self.period) % 4)
             msg = self._status_msg.replace(u"…", u"." * n)
