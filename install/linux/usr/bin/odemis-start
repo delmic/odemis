@@ -529,7 +529,7 @@ def main(args):
     # Use the log level for ourselves first
     try:
         loglevel = int(odemis_config["LOGLEVEL"])
-        if 'LOGFILE' in odemis_config and options.logtarget:
+        if options.logtarget:
             odemis_config['LOGFILE'] = options.logtarget
     except ValueError:
         loglevel = 1
