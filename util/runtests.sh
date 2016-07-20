@@ -1,5 +1,15 @@
 #!/bin/bash
-# Should be run in the root directory of Odemis source
+# Should be run in the directory where the log files should be saved.
+# It should also have ../mic-odm-yaml/ directory, which contains all the microscopes files.
+# Ex:
+# cd odemis-testing/
+# ../odemis/util/runtests.sh | tee test-$(date +%Y%m%d).log
+#
+# The global result is saved in test-XXX.log
+# It will generate one file and one directory:
+#  * unittest-full-$DATE.log : results of unit tests
+#  * ./integtest-$DATE/ : results of integration testing (2 files per conf)
+
 # Root path of the repo
 ODEMIS_DIR="$(readlink -m $(dirname $0)/../)"
 ODEMIS_SRC="$ODEMIS_DIR/src/odemis"
@@ -29,7 +39,7 @@ DATE=$(date +%Y%m%d)
 # Every file which is in the pattern /test/*_test.py
 MAXTIME=1800  # 30 min maximum per test case
 
-PYTHONPATH=./src/:../Pyro4/src/
+PYTHONPATH=$ODEMIS_SRC/../:../Pyro4/src/
 if [ -f /etc/odemis.conf ]; then
     # use the odemis config if it's available
     . /etc/odemis.conf
