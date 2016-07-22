@@ -124,6 +124,10 @@ SPARC2_MODES = {
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                 }),
+            'time-correlator': ("time-correlator",
+                {'lens-switch': {'x': 'off'},
+                 'chamber-light': {'power': 'off'},
+                }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'on'},
