@@ -590,6 +590,9 @@ class Sparc2PathTestCase(unittest.TestCase):
                          self.find_dict_key(self.specgraph, sparc2_modes["ar"])
                         ['grating']) or (0, self.specgraph.position.value['wavelength']))
 
+        # Change positions back
+        self.optmngr.setPath("mirror-align").result()
+
         self.optmngr.setPath(sas).result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
@@ -618,6 +621,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.cl_det_sel.position.value,
                          {'x': 0.01})
 
+        # Change positions back
+        self.optmngr.setPath("chamber-view").result()
+
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
@@ -634,6 +640,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         specs = stream.SpectrumSettingsStream("test spec", self.spec_integrated, self.spec_integrated.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
 
+        # Change positions back
+        self.optmngr.setPath("chamber-view").result()
+
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
@@ -645,6 +654,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
         self.assertEqual(self.cl_det_sel.position.value,
                          {'x': 0.01})
+
+        # Change positions back
+        self.optmngr.setPath("chamber-view").result()
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
@@ -873,6 +885,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                          self.find_dict_key(self.specgraph, sparc2_modes["ar"])
                         ['grating']) or (0, self.specgraph.position.value['wavelength']))
 
+        # Change positions back
+        self.optmngr.setPath("mirror-align").result()
+
         self.optmngr.setPath(sas).result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
@@ -900,6 +915,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 #                          self.find_dict_key(self.slit, sparc2_modes["spectral"]))
         self.assertAlmostEqual(self.spec_sel.position.value["x"],
                                0.026112848)
+
+        # Change positions back
+        self.optmngr.setPath("chamber-view").result()
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
