@@ -28,7 +28,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.odemisd import main
-from odemis.util import timeout
+from odemis.util import timeout, test
 import os
 import subprocess
 import sys
@@ -60,17 +60,21 @@ class TestCommandLine(unittest.TestCase):
             i += 1
 
         configs_error = ["syntax-error-1.odm.yaml",
-                   "syntax-error-2.odm.yaml",
-                   # Skipped: PyYaml is not able to detect this error :  http://pyyaml.org/ticket/128
-                   #"syntax-error-3.odm.yaml",
-                   "semantic-error-1.odm.yaml",
-                   "semantic-error-2.odm.yaml",
-                   # This one can only be detected on a real instantiation
-                   # "semantic-error-3.odm.yaml",
-                   # TODO: handle cyclic creation error
-                   # "semantic-error-4.odm.yaml",
-                   "semantic-error-md.odm.yaml",
-                   ]
+                         "syntax-error-2.odm.yaml",
+                         # Skipped: for now, double key def is only a warning
+                         # "syntax-error-3.odm.yaml",
+                         "semantic-error-1.odm.yaml",
+                         "semantic-error-2.odm.yaml",
+                         # This one can only be detected on a real instantiation
+                         # "semantic-error-3.odm.yaml",
+                         # TODO: handle cyclic creation error
+                         # "semantic-error-4.odm.yaml",
+                         # Skipped: for now, wrong affects are only a warning
+                         # "semantic-error-5.odm.yaml",
+                         # Skipped: for now, unused components are only a warning
+                         # "semantic-error-6.odm.yaml",
+                         "semantic-error-md.odm.yaml",
+                        ]
 
         i = 0
         for config in configs_error:
@@ -84,7 +88,7 @@ class TestCommandLine(unittest.TestCase):
             cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertEqual(ret, 0, "error detected in correct config "
-                                "file '%s'" % filename)
+                                     "file '%s'" % filename)
             os.remove("test.log")
         return test_validate_pass
 
@@ -95,7 +99,7 @@ class TestCommandLine(unittest.TestCase):
             cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
-                                "file '%s'" % filename)
+                                        "file '%s'" % filename)
             os.remove("test.log")
         return test_validate_error
 
@@ -110,6 +114,14 @@ class TestCommandLine(unittest.TestCase):
 
     def tearDown(self):
         sys.stdout = self.saved_stdout
+        # Make sure the backend is stopped
+        try:
+            test.stop_backend()
+        except Exception:
+            try:  # Try harder
+                subprocess.call(["sudo", "odemis-stop"])
+            except Exception:
+                pass  # Odemis is not installed, too bad
 
     def test_error_command_line(self):
         """
@@ -156,26 +168,26 @@ class TestCommandLine(unittest.TestCase):
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 2, "Backend is said to be running")
-        
+
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
         cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         time.sleep(1) # give some time to start
-        
+
         # now it should say it's starting, and eventually running
         ret = self._wait_backend_starts(5)
         self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
-        
+
         # stop the backend
         cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         time.sleep(5) # give some time to stop
-        
+
         # backend should be stopped by now
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
@@ -237,7 +249,6 @@ class TestCommandLine(unittest.TestCase):
         ret = self._wait_backend_starts(10)
         self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
 
-
         # Check that the specific properties are set
         ccd = model.getComponent(role="ccd")
         self.assertEqual(ccd.exposureTime.value, 0.3)
@@ -254,7 +265,6 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("testdaemon.log")
-
 
     def _wait_backend_starts(self, timeout=5):
         """

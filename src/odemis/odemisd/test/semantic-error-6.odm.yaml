@@ -1,0 +1,28 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    children: [Light, "Stage"], 
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor SimCam"]
+}
+
+# Component not used (= not referenced by Microscope)
+"Andor SimCam": {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {device: 1}
+}
+
+"Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {'x':1, 'y':1} #m/s
+    }
+}
