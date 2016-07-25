@@ -296,7 +296,8 @@ class Container(Pyro4.core.Daemon):
         Can be called remotely or locally
         """
         # wrapper to shutdown(), in order to be more consistent with the vocabulary
-        self.shutdown()
+        if self.transportServer:  # To avoid failure on multiple calls
+            self.shutdown()
         # All the cleaning is done in the original thread, after the run()
 
     def close(self):
@@ -408,6 +409,8 @@ def createNewContainer(name, validate=True, in_own_process=True):
             if xc:
                 # exitcode < 0 if ended by a signal
                 logging.warning("Container %s finished with exit code %d", name, xc)
+                # TODO: report the container (and all its component) are not alive
+                # anymore to the creator?
 
         wpt = threading.Thread(name="Waiter for container " + name, target=wait_process,
                                args=(p,))

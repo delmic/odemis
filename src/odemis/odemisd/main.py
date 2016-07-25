@@ -5,7 +5,7 @@ Created on 26 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2014 Éric Piel, Delmic
+Copyright © 2012-2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -250,7 +250,7 @@ class BackendContainer(model.Container):
         It also stops the containers, once no component is running in them.
         """
         mic = self._instantiator.microscope
-        alive = list(mic.alive.value)
+        alive = set(mic.alive.value)
 
         # create a "graph" child->parents
         parents = dict((c, set()) for c in alive)  # comp -> set of comps (all its parents)
@@ -310,6 +310,11 @@ class BackendContainer(model.Container):
                 del parents[c]
                 for p in parents.values():
                     p.discard(c)
+                alive.discard(c)
+                try:
+                    mic.alive.value = alive
+                except Exception:
+                    logging.warning("Failed to update the alive VA", exc_info=True)
 
     def terminate(self):
         # Stop the component instantiator, to be sure it'll not restart the components
@@ -519,7 +524,7 @@ def main(args):
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
                          help="Kill the running back-end")
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
-                        help="Check for a running back-end (only returns exit code)")
+                         help="Check for a running back-end (only returns exit code)")
     dm_grpe.add_argument("--daemonize", "-D", action="store_true", dest="daemon",
                          default=False, help="Daemonize the back-end")
     opt_grp = parser.add_argument_group('Options')

@@ -4,7 +4,7 @@ Created on 26 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2015 Éric Piel, Delmic
+Copyright © 2012-2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -34,13 +34,53 @@ import re
 import yaml
 
 
+# Detect duplicate keys on mappings (e.g., two components with the same name)
+# Currently Pyyaml fail to detect that error: http://pyyaml.org/ticket/128 (contains patch)
+# We extend the class, to make it behave as we need.
+from yaml.constructor import ConstructorError
+from yaml.nodes import MappingNode
+
+
+class SafeLoader(yaml.SafeLoader):
+
+    def construct_mapping(self, node, deep=False):
+        # From BaseConstructor
+        if not isinstance(node, MappingNode):
+            raise ConstructorError(None, None,
+                    "expected a mapping node, but found %s" % node.id,
+                    node.start_mark)
+        # From SafeContrusctor
+        self.flatten_mapping(node)
+        # From BaseConstructor
+        mapping = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                hash(key)
+            except TypeError, exc:
+                raise ConstructorError("while constructing a mapping", node.start_mark,
+                        "found unacceptable key (%s)" % exc, key_node.start_mark)
+            value = self.construct_object(value_node, deep=deep)
+            if key in mapping:
+                # TODO: Raise a ConstructorError (as defined in YAML), once all
+                # offending files are fixed. Or do a deep merge instead?
+                logging.warning("Mapping already has key (%s) defined, will override it. "
+                                "Semantic will soon change, do not rely on this behaviour. "
+                                "Only define the key once.",
+                                key)
+#                 raise ConstructorError("while constructing a mapping", node.start_mark,
+#                                        "key (%s) already defined" % (key,),
+#                                        key_node.start_mark)
+            mapping[key] = value
+        return mapping
+
+
 class ParseError(Exception):
     pass
 
 
 class SemanticError(Exception):
     pass
-
 
 # the classes that we provide in addition to the device drivers
 # Nice name => actual class name
@@ -275,7 +315,10 @@ class Instantiator(object):
                 if not creations & comps_used:
                     if len(creations) > 1:
                         logging.info("Component '%s' would create non-used components %s", cname, creations)
-                    raise SemanticError("Component '%s' is defined but not required by the microscope" % (cname,))
+                    # TODO: Convert to a SemanticError (in 2017 or later), once
+                    # all the currently broken microscope files have been fixed
+                    logging.warning("Component '%s' is defined but not required by the microscope", cname)
+                    # raise SemanticError("Component '%s' is defined but not required by the microscope" % (cname,))
 
     def _check_affects(self):
         """
@@ -305,8 +348,8 @@ class Instantiator(object):
             ParseError in case there is a syntax error
         """
         try:
-            # yaml.load() is dangerous as it can create any python object
-            data = yaml.safe_load(inst_file)
+            # The standard PyYAML loader is dangerous as it can create any python object
+            data = yaml.load(inst_file, SafeLoader)
         except yaml.YAMLError as exc:
             logging.error("Syntax error in microscope file: %s", exc)
             if hasattr(exc, 'problem_mark'):
@@ -320,8 +363,6 @@ class Instantiator(object):
             raise ParseError("Syntax error in microscope file.")
 
         logging.debug("YAML file read like this: " + str(data))
-        # TODO detect duplicate keys (e.g., two components with the same name)
-        # Currently Pyyaml fail to detect that error: http://pyyaml.org/ticket/128 (contains patch)
 
         return data
 
