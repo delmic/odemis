@@ -593,12 +593,13 @@ class SparcAcquiController(object):
         else:
             streams = self._tab_data_model.acquisitionView.getStreams()
             acq_time = acq.estimateTime(streams)
-            acq_time = math.ceil(acq_time) # round a bit pessimistic
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
 
-        self._show_status_icons(lvl)
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
         self.lbl_acqestimate.SetLabel(txt)
+        self._show_status_icons(lvl)
 
     def _show_status_icons(self, lvl):
         # update status icon to show the logging level
