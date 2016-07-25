@@ -402,9 +402,14 @@ def _read_image_info(group):
                 pxs[0] = float(dim[0][()])
             if dim.label == "Y" and dim:
                 pxs[1] = float(dim[0][()])
-
         # TODO: add scale for Z ??
-        md[model.MD_PIXEL_SIZE] = tuple(pxs)
+
+        if pxs == [None, None]:
+            logging.debug("No pixel size metadata provided")
+        elif None in pxs:
+            logging.warning("Pixel size metadata not complete: %s", pxs)
+        else:
+            md[model.MD_PIXEL_SIZE] = tuple(pxs)
     except Exception:
         logging.warning("Failed to parse XY scale", exc_info=True)
 
