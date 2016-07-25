@@ -494,6 +494,7 @@ class VirtualTestSynchronized(object):
 
     def setUp(self):
         self.got_image = threading.Event()
+        self.end_time = 0
 
     def tearDown(self):
         # just in case it failed

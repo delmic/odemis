@@ -251,12 +251,27 @@ class TestSpectrumExport(unittest.TestCase):
         exported_data = img.spectrum_to_export_data(self.spectrum, False, self.unit, self.spectrum_range)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
-                         (img.SPEC_PLOT_SIZE + 2 * img.SPEC_SCALE_WIDTH,
-                          img.SPEC_PLOT_SIZE + 2 * img.SPEC_SCALE_WIDTH))  # exported image includes scale bars
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
 
     def test_spectrum_raw(self):
+
+        filename = "test-spec-spot.csv"
+
         exported_data = img.spectrum_to_export_data(self.spectrum, True, self.unit, self.spectrum_range)
         self.assertEqual(exported_data.shape[0], len(self.spectrum_range))  # exported image includes only raw data
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exported_data)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 10)
+
+        # clean up
+        try:
+            os.remove(filename)
+        except Exception:
+            pass
 
 
 class TestSpectrumLineExport(unittest.TestCase):
@@ -273,13 +288,27 @@ class TestSpectrumLineExport(unittest.TestCase):
         exported_data = img.line_to_export_data(self.spectrum, False, self.unit, self.spectrum_range)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
-                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH,
-                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH))  # exported image includes scale bars
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
 
     def test_line_raw(self):
+        filename = "test-spec-line.csv"
+
         exported_data = img.line_to_export_data(self.spectrum, True, self.unit, self.spectrum_range)
         self.assertEqual(exported_data.shape[0], self.spectrum.shape[1])
         self.assertEqual(exported_data.shape[1], self.spectrum.shape[0])
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exported_data)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 100)
+
+        # clean up
+        try:
+            os.remove(filename)
+        except Exception:
+            pass
 
 
 class TestSpatialExport(unittest.TestCase):

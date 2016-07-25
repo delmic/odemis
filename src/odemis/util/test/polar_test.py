@@ -29,42 +29,42 @@ class TestPolarConversion(unittest.TestCase):
     """
     def setUp(self):
         data = hdf5.read_data("ar-example-input.h5")
-        mag = 0.4917
-        spxs = (13e-6, 13e-6)
-        binning = (4, 4)
-        # data[0].metadata[model.MD_BASELINE] = 820
-        data[0].metadata[model.MD_BINNING] = binning
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
-        data[0].metadata[model.MD_LENS_MAG] = mag
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
-        data[0].metadata[model.MD_AR_XMAX] = 13.25e-3 
-        data[0].metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
-        data[0].metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
-        data[0].metadata[model.MD_AR_PARABOLA_F] = 2.5e-3
-        mag = data[0].metadata[model.MD_LENS_MAG]
-        pxs = (spxs[0] * binning[0] / mag,
-               spxs[1] * binning[1] / mag)
-        data[0].metadata[model.MD_PIXEL_SIZE] = pxs
+#         mag = 0.4917
+#         spxs = (13e-6, 13e-6)
+#         binning = (4, 4)
+#         # data[0].metadata[model.MD_BASELINE] = 820
+#         data[0].metadata[model.MD_BINNING] = binning
+#         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
+#         data[0].metadata[model.MD_LENS_MAG] = mag
+#         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
+#         data[0].metadata[model.MD_AR_XMAX] = 13.25e-3
+#         data[0].metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+#         data[0].metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+#         data[0].metadata[model.MD_AR_PARABOLA_F] = 2.5e-3
+#         mag = data[0].metadata[model.MD_LENS_MAG]
+#         pxs = (spxs[0] * binning[0] / mag,
+#                spxs[1] * binning[1] / mag)
+#         data[0].metadata[model.MD_PIXEL_SIZE] = pxs
         self.data = data
 
         # test also for different polar parameters
         data_mini = hdf5.read_data("ar-example-minimirror-input.h5")
-        mag = 0.40
-        spxs = (20e-6, 20e-6)
-        binning = (1, 1)
+#         mag = 0.40
+#         spxs = (20e-6, 20e-6)
+#         binning = (1, 1)
         # data_mini[0].metadata[model.MD_BASELINE] = 820
-        data_mini[0].metadata[model.MD_BINNING] = binning
-        data_mini[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
-        data_mini[0].metadata[model.MD_LENS_MAG] = mag
-        data_mini[0].metadata[model.MD_AR_POLE] = (128, 255 - 152)
-        data_mini[0].metadata[model.MD_AR_XMAX] = 10e-3
-        data_mini[0].metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
-        data_mini[0].metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
-        data_mini[0].metadata[model.MD_AR_PARABOLA_F] = 0.8e-3
-        mag = data_mini[0].metadata[model.MD_LENS_MAG]
-        pxs = (spxs[0] * binning[0] / mag,
-               spxs[1] * binning[1] / mag)
-        data_mini[0].metadata[model.MD_PIXEL_SIZE] = pxs
+#         data_mini[0].metadata[model.MD_BINNING] = binning
+#         data_mini[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
+#         data_mini[0].metadata[model.MD_LENS_MAG] = mag
+#         data_mini[0].metadata[model.MD_AR_POLE] = (128, 255 - 152)
+#         data_mini[0].metadata[model.MD_AR_XMAX] = 10e-3
+#         data_mini[0].metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+#         data_mini[0].metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+#         data_mini[0].metadata[model.MD_AR_PARABOLA_F] = 0.8e-3
+#         mag = data_mini[0].metadata[model.MD_LENS_MAG]
+#         pxs = (spxs[0] * binning[0] / mag,
+#                spxs[1] * binning[1] / mag)
+#         data_mini[0].metadata[model.MD_PIXEL_SIZE] = pxs
         self.data_mini = data_mini
 
         white_data_512 = model.DataArray(numpy.empty((512, 512), dtype="uint16"))
@@ -282,6 +282,9 @@ class TestPolarConversion(unittest.TestCase):
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
+#         diff = result - desired_output
+#         del result.metadata[model.MD_AR_POLE]
+#         hdf5.export("actual_white_2500.h5", [result, diff])
         # FIXME: doesn't seem to pass on 64 bits ?! floating point computation differences?
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
