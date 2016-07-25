@@ -77,6 +77,9 @@ SPARC_MODES = {'ar': ("ccd",
                 }),
          }
 
+# Not much is needed, as most of the optical path is guessed from the affects
+# It's still important to have every possible detector roles listed, for the
+# guessing methods to know which detector is optical.
 SPARC2_MODES = {
             'ar': ("ccd",
                 {'lens-switch': {'x': 'on'},
@@ -313,7 +316,7 @@ class OpticalPathManager(object):
             comp = self._getComponent(comp_role)
             target = comp.name
 
-        logging.debug("Going to optical path '%s'", mode)
+        logging.debug("Going to optical path '%s', with target detector %s.", mode, target)
 
         modeconf = self._modes[mode][1]
         fmoves = []  # moves in progress
@@ -482,7 +485,7 @@ class OpticalPathManager(object):
 
     def guessMode(self, guess_stream):
         """
-        Given a stream and by checking its components (e.g. role of detectors)
+        Given a stream and by checking its components (e.g. role of detector)
         guesses and returns the corresponding optical path mode.
         guess_stream (object): The given optical stream
         returns (str): Mode estimated
@@ -514,20 +517,37 @@ class OpticalPathManager(object):
         returns (str): detector name
         raises:
                 IOError if given object is not a stream
-                AttributeError: if stream has no detector
+                LookupError: if stream has no detector
         """
         if not isinstance(path_stream, stream.Stream):
             raise IOError("Given object is not a stream")
 
         # Handle multiple detector streams
         if isinstance(path_stream, stream.MultipleDetectorStream):
+            dets = []
             for st in path_stream.streams:
                 try:
-                    return self.getStreamDetector(st)
+                    # Prefer the detectors which have a role in the mode, as it's much
+                    # more likely to be the optical detector
+                    # TODO: handle setting multiple optical paths? => return all the detectors
+                    role = st.detector.role
+                    name = st.detector.name
+                    for conf in self.guessed.values():
+                        if conf[0] == role:
+                            return name
+                    dets.append(name)
                 except AttributeError:
                     pass
+            if dets:
+                logging.warning("No detector on stream %s has a known optical role", path_stream.name.value)
+                return dets[0]
         else:
-            return path_stream.detector.name
+            try:
+                return path_stream.detector.name
+            except AttributeError:
+                pass  # will raise error just after
+
+        raise LookupError("Failed to find a detector on stream %s" % (path_stream.name.value))
 
     def findNonMirror(self, choices):
         """
