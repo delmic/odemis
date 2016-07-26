@@ -14,7 +14,7 @@ import sys
 
 
 # To be updated to the current version
-VERSION = "2.4.6"
+VERSION = "2.4.7"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
