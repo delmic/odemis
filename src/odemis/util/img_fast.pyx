@@ -99,10 +99,10 @@ def wrapDataArray2RGB(numpy.ndarray[uint16_t, ndim=2] data not None,
 def DataArray2RGB(data, irange, tint=(255, 255, 255)):
     if not data.flags.c_contiguous:
         raise ValueError("Optimised version only works with C-contiguous arrays")
-    if data.dtype is not numpy.uint16:
+    if data.dtype != numpy.uint16:
         # Note: cython automatically detects such errors, but it seems that with
         # ctyhon 0.23, it can leak memory.
-        raise ValueError("Optimised version only works on uint16")
+        raise ValueError("Optimised version only works on uint16 (got %s)" % (data.dtype,))
     # Note: we could also make an optimised version for F-contiguous arrays,
     # but it's not clear when it'd be useful. For more complex arrays, it's also
     # probably possible to generate a faster version than numpy, but I don't
