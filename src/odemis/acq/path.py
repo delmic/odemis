@@ -164,8 +164,7 @@ SPARC2_MODES = {
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                 }),
-            # TODO: make this mode work
-            'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
+            'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': 'off'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
