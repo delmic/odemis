@@ -1,3 +1,11 @@
+odemis (2.4.8-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.4.8
+  * Bug fixed:
+   - Optimised 16 bits -> RGB function was never called (bug introduced in v2.4.3)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 27 Jul 2016 16:24:33 +0200
+
 odemis (2.4.7-1ubuntu1) precise; urgency=medium
 
   * New version: 2.4.7
