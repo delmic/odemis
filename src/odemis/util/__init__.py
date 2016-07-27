@@ -454,7 +454,7 @@ class RepeatingTimer(threading.Thread):
                     # it's gone, it's over
                     return
         except Exception:
-            logging.exception("Failure while calling a repeating timer")
+            logging.exception("Failure while calling repeating timer '%s'", self.name)
         finally:
             logging.debug("Repeating timer thread '%s' over", self.name)
 
