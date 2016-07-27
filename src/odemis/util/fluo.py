@@ -67,7 +67,7 @@ def get_one_band_em(band, ex_band):
             ex_center = get_center(ex_band)
 
         # Force each band as a tuple to make sure the key is hashable
-        em_b2c = dict((tuple(b), get_center(b)) for b in band)
+        em_b2c = {tuple(b): get_center(b) for b in band}
         bands_above = [b for b, c in em_b2c.items() if c > ex_center]
         if bands_above:
             em_band = min(bands_above, key=em_b2c.get)
