@@ -126,46 +126,28 @@ class ATDLL(CDLL):
         return func
 
     err_code = {
-1: "AT_ERR_NONINITIALISED"
-" Function called with an uninitialised handle",
-2: "AT_ERR_NOTIMPLEMENTED"
-" Feature has not been implemented for the chosen camera",
-3: "AT_ERR_READONLY"
-" Feature is read only",
-4: "AT_ERR_NOTREADABLE"
-" Feature is currently not readable",
-5: "AT_ERR_NOTWRITABLE"
-" Feature is currently not writable",
-6: "AT_ERR_OUTOFRANGE"
-" Value is outside the maximum and minimum limits",
-7: "AT_ERR_INDEXNOTAVAILABLE"
-" Index is currently not available",
-8: "AT_ERR_INDEXNOTIMPLEMENTED"
-" Index is not implemented for the chosen camera",
-9: "AT_ERR_EXCEEDEDMAXSTRINGLENGTH"
-" String value provided exceeds the maximum allowed length",
-10: "AT_ERR_CONNECTION"
-" Error connecting to or disconnecting from hardware",
+1: "AT_ERR_NONINITIALISED (Function called with an uninitialised handle)",
+2: "AT_ERR_NOTIMPLEMENTED (Feature has not been implemented for the chosen camera)",
+3: "AT_ERR_READONLY (Feature is read only)",
+4: "AT_ERR_NOTREADABLE (Feature is currently not readable)",
+5: "AT_ERR_NOTWRITABLE (Feature is currently not writable)",
+6: "AT_ERR_OUTOFRANGE (Value is outside the maximum and minimum limits)",
+7: "AT_ERR_INDEXNOTAVAILABLE (Index is currently not available)",
+8: "AT_ERR_INDEXNOTIMPLEMENTED (Index is not implemented for the chosen camera)",
+9: "AT_ERR_EXCEEDEDMAXSTRINGLENGTH (String value provided exceeds the maximum allowed length)",
+10: "AT_ERR_CONNECTION (Error connecting to or disconnecting from hardware)",
 11: "AT_ERR_NODATA",
 12: "AT_ERR_INVALIDHANDLE",
-13: "AT_ERR_TIMEDOUT"
-" The AT_WaitBuffer function timed out while waiting for data arrive in output"
-" queue",
-14: "AT_ERR_BUFFERFULL"
-" The input queue has reached its capacity",
-15: "AT_ERR_INVALIDSIZE"
-" The size of a queued buffer did not match the frame size",
-16: "AT_ERR_INVALIDALIGNMENT"
-" A queued buffer was not aligned on an 8-byte boundary",
-17: "AT_ERR_COMM"
-" An error has occurred while communicating with hardware",
-18: "AT_ERR_STRINGNOTAVAILABLE"
-" Index / String is not available",
-19: "AT_ERR_STRINGNOTIMPLEMENTED"
-" Index / String is not implemented for the chosen camera",
+13: "AT_ERR_TIMEDOUT (The AT_WaitBuffer function timed out while waiting for "
+"data arrive in output queue)",
+14: "AT_ERR_BUFFERFULL (The input queue has reached its capacity)",
+15: "AT_ERR_INVALIDSIZE (The size of a queued buffer did not match the frame size)",
+16: "AT_ERR_INVALIDALIGNMENT (A queued buffer was not aligned on an 8-byte boundary)",
+17: "AT_ERR_COMM (An error has occurred while communicating with hardware)",
+18: "AT_ERR_STRINGNOTAVAILABLE (Index / String is not available)",
+19: "AT_ERR_STRINGNOTIMPLEMENTED (Index / String is not implemented for the chosen camera)",
 20: "AT_ERR_NULL_FEATURE",
-21: "AT_ERR_NULL_HANDLE"
-" Null device handle passed to function",
+21: "AT_ERR_NULL_HANDLE (Null device handle passed to function)",
 22: "AT_ERR_NULL_IMPLEMENTED_VAR",
 23: "AT_ERR_NULL_READABLE_VAR",
 24: "AT_ERR_NULL_READONLY_VAR",
@@ -182,11 +164,9 @@ class ATDLL(CDLL):
 35: "AT_ERR_NULL_WAIT_PTR",
 36: "AT_ERR_NULL_PTRSIZE",
 37: "AT_ERR_NOMEMORY",
-38: "AT_ERR_DEVICEINUSE"
-" Function failed to connect to a device because it is already being used",
-100: "AT_ERR_HARDWARE_OVERFLOW"
-" The software was not able to retrieve data from the card or camera fast enough"
-" to avoid the internal hardware buffer bursting.",
+38: "AT_ERR_DEVICEINUSE (Function failed to connect to a device because it is already being used)",
+100: "AT_ERR_HARDWARE_OVERFLOW (The software was not able to retrieve data from the card or camera fast enough"
+" to avoid the internal hardware buffer bursting)",
 }
 
 # Internal way to store the type of binning control
@@ -253,9 +233,11 @@ class AndorCam3(model.DigitalCamera):
             # nothing else to initialise
             return
 
+        # TODO: use serial number instead
+        self._device = device  # for reconnection
         self._check_connection()
 
-        # TODO: handle when the camera is turned off/on => use CameraPresent ?
+        # TODO: handle when the camera is turned off/on => use CameraPresent'event ?
 
         logging.info("opened device %d successfully", device)
 
@@ -381,7 +363,7 @@ class AndorCam3(model.DigitalCamera):
         self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
-                                         "AndorCam3 temperature update")
+                                              "AndorCam3 temperature update")
         self.temp_timer.start()
 
         self.acquisition_lock = threading.Lock()
@@ -435,6 +417,22 @@ class AndorCam3(model.DigitalCamera):
             self.Command(u"TimestampClockReset")
             self._clock_shift = time.time()
 
+    def _reset_va_values(self):
+        """
+        Reset the hardware settings based on the VA values
+        Note: for the VAs which are not directly affecting the hardware, they
+        will be updated only on next acquisition.
+        """
+        self._prev_settings = [None, None, None, None, None, None, None]
+
+        # The VAs which directly update the hardware
+        for vaname in ("targetTemperature", "fanSpeed"):
+            try:
+                va = getattr(self, vaname)
+            except AttributeError:
+                continue # This VA is not supported
+            va.value = va.value  # setter will be called, but not listeners
+
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
 
@@ -447,9 +445,9 @@ class AndorCam3(model.DigitalCamera):
             self.handle = c_int(ATDLL.HANDLE_SYSTEM)
         else:
             logging.info("Opening camera device, might take time...")
-            self.handle = c_int()
+            handle = c_int()
             try:
-                self.atcore.AT_Open(device, byref(self.handle))
+                self.atcore.AT_Open(device, byref(handle))
             except ATError:
                 # Let's try to diagnose a bit the problem...
                 if self._bitflow_install_dirs is None:
@@ -471,6 +469,7 @@ class AndorCam3(model.DigitalCamera):
                                   "you are using a supported kernel.")
                     raise
                 raise
+            self.handle = handle
 
     def Close(self):
         assert self.handle is not None
@@ -523,7 +522,95 @@ class AndorCam3(model.DigitalCamera):
                               "Check the connection of the camera goes to a USB 3.0 port."
                               % (self.name, usbv))
 
+    def _reconnect(self):
+        """
+        Attempt to reconnect the camera. It will block until this happens.
+        On return, the hardware should be ready to use as before, excepted it
+        still needs the settings to be applied.
+        """
+        # TODO: make it thread-safe. => for now, only called from acquisition thread
+        # TODO: get this function called also in case VA setting or temperature
+        # timer detects an error
+        self.state._set_value(HwError("Camera disconnected"), force_write=True)
+        try:
+            # Note: currently, with SDK 3.11.30050, it always says it's present.
+            # Also, "DeviceCount" stays the same all the time
+#             if self.handle and self.GetBool(u"CameraPresent"):
+#                 logging.warning("Reconnection attempt while SDK says it's present")
+#             else:
+            logging.info("Will attempt to reconnect to camera")
+
+            # Stop everything first
+            if self.temp_timer is not None:
+                self.temp_timer.cancel()
+                self.temp_timer.join(10)
+                self.temp_timer = None
+
+            if self.handle is not None:
+                self.Close()
+                self.handle = None
+            # Note: FinaliseLibrary() doesn't seem to help
+
+            while(not self.handle):
+                try:
+                    handle = c_int()
+                    # Note: with USB, doesn't seem to work if the camera is
+                    # reconnected to a different port.
+                    self.atcore.AT_Open(self._device, byref(handle))
+                    self.handle = handle
+                except ATError as exp:
+                    if exp.errno in (6, 10, 17, 38):  # OUTOFRANGE, CONNECTION, COMM, DEVICEINUSE
+                        # TODO: is it the right errors that indicate it's not yet back in order
+                        logging.debug("Will keep trying to reconnect after error %s", exp)
+                        # Not too often, especially because some cameras have
+                        # a couple of seconds after boot up where connecting
+                        # to them fails (or even make matters worse)
+                        if self.acquire_must_stop.wait(10):
+                            raise CancelledError()
+                        continue
+                    else:
+                        logging.info("Unexpected error %s", exp)
+                        raise
+
+                # If the component is terminating, stop looking for the hardware
+                if self.acquire_must_stop.is_set():
+                    raise CancelledError()
+
+                # Device is now re-opened... check it's the right connection
+                try:
+                    self._check_connection()
+                except HwError as exp:
+                    # Not correctly connected => back to square 1
+                    logging.error("%s", exp)
+                    self.state._set_value(exp, force_write=True)
+                    self.Close()
+                    self.handle = None
+
+            # Normally, the camera should be back now
+            if not self.GetBool(u"CameraPresent"):
+                logging.warning("Camera just got opened, but it's not reported present")
+
+            # Reinitialise
+            self._SetStaticSettings()
+            self._reset_va_values()
+            self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
+                                                  "AndorCam3 temperature update")
+            self.temp_timer.start()
+            logging.info("Successfully reconnected to camera")
+        except CancelledError:
+            self.state._set_value(HwError("Camera disconnected, acquire an image to attempt reconnection)"),
+                                  force_write=True)
+            raise
+        except Exception:
+            logging.exception("Failure during reconnection attempt to hardware")
+            self.state._set_value(HwError("Camera disconnected and not answering"), force_write=True)
+            raise
+
+        self.state._set_value(model.ST_RUNNING, force_write=True)
+
     def Command(self, command):
+        if not self.handle:
+            raise HwError("Device not opened")
         self.atcore.AT_Command(self.handle, command)
 
     def QueueBuffer(self, cbuffer):
@@ -625,6 +712,8 @@ class AndorCam3(model.DigitalCamera):
     def GetBool(self, prop):
         assert(isinstance(prop, unicode))
         result = c_int()
+        if not self.handle:  # TODO: apply this to all API calls. As a decorator?
+            raise HwError("Device not opened")
         self.atcore.AT_GetBool(self.handle, prop, byref(result))
         return (result.value != 0)
 
@@ -783,10 +872,19 @@ class AndorCam3(model.DigitalCamera):
             logging.info("No temperature update, camera is stopped")
             return
 
-        temp = self.GetFloat(u"SensorTemperature")
-        self._metadata[model.MD_SENSOR_TEMP] = temp
-        self.temperature._set_value(temp, force_write=True)
-        logging.debug(u"Temp is %f°C", temp)
+        try:
+            temp = self.GetFloat(u"SensorTemperature")
+            self._metadata[model.MD_SENSOR_TEMP] = temp
+            self.temperature._set_value(temp, force_write=True)
+            logging.debug(u"Temp is %f°C", temp)
+        except ATError as exp:
+            # This is a known error if the camera is turned off or disconnected.
+            # We don't do anything, but at least we can hint the user something
+            # is not working properly and how to recover.
+            if exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
+                self.state._set_value(HwError("Camera disconnected, acquire an image to attempt reconnection"),
+                                      force_write=True)
+            raise
 
     def setFanSpeed(self, speed):
         """
@@ -1411,11 +1509,20 @@ class AndorCam3(model.DigitalCamera):
          function called for each image acquired
         returns immediately. To stop acquisition, call req_stop_flow()
         """
-        self.wait_stopped_flow() # no-op is the thread is not running
+        self.wait_stopped_flow()  # no-op if the thread is not running
+        logging.debug("Going to acquire lock for acquisition")
         self.acquisition_lock.acquire()
-        assert not self.GetBool(u"CameraAcquiring")
+        try:
+            logging.debug("Checking if camera is acquiring")
+            assert not self.GetBool(u"CameraAcquiring")
+        except (ATError, HwError) as exp:
+            if isinstance(exp, HwError) or exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
+                logging.warning("Camera seems not responding, will let acquisition thread try to reconnect")
+            else:
+                raise
 
         # Set up thread
+        logging.debug("Starting acq thread")
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
                name="andorcam acquire flow thread",
                args=(callback,))
@@ -1430,15 +1537,23 @@ class AndorCam3(model.DigitalCamera):
         num_gc = 0
         num_errors = 0
         need_reinit = True
+        logging.debug("beginning of acq thread")
         try:
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
                 if need_reinit or self._need_update_settings():
-                    if self.GetBool(u"CameraAcquiring"):
-                        try:
+                    try:
+                        if self.GetBool(u"CameraAcquiring"):
                             self.Command(u"AcquisitionStop")
-                        except ATError as (errno, strerr):
-                            logging.error("AcquisitionStop failed with error %s:", strerr)
+                    except (ATError, HwError) as exp:
+                        if isinstance(exp, HwError) or exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
+                            # This handle the camera being disconnected:
+                            #  * before even starting the acquisition
+                            #  * during acquisition, causing a time-out
+                            logging.warning("Camera seems disconnected, will try to reconnect")
+                            self._reconnect()
+                        else:
+                            logging.error("AcquisitionStop failed with error %s:", exp.strerror)
                             # try anyway
 
                     # We don't use the framecount feature as it's not always present, and
@@ -1477,7 +1592,7 @@ class AndorCam3(model.DigitalCamera):
 
                 # Acquire an image
                 if synchronised:
-                    logging.debug("waiting for acquisition trigger")
+                    logging.debug("Waiting for acquisition trigger")
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
                 tend = time.time() + exposure_time + readout_time * 1.2 + 3  # s
@@ -1490,12 +1605,17 @@ class AndorCam3(model.DigitalCamera):
                     # Sometimes there is timeout, don't completely give up
                     # Note: Timeouts can happen when the hardware buffer is full
                     # because the framerate is faster than what we can process.
-                    if exp.errno in (11, 13):  # AT_ERR_NODATA, AT_ERR_TIMEDOUT
+                    if exp.errno in (11, 13, 100):  # ERR_NODATA, ERR_TIMEDOUT, ERR_HARDWARE_OVERFLOW
                         num_errors += 1
                         if num_errors > 5:
-                            logging.error("%d errors in a row, cancelling acquisition", num_errors)
-                            return
-                        logging.warning("trying again to acquire image after error %s", exp.strerror)
+                            logging.error("%d errors in a row, trying to reconnect to camera", num_errors)
+                            self._reconnect()
+                        logging.warning("Trying again to acquire image after error %s", exp)
+                        need_reinit = True
+                        continue
+                    elif exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
+                        logging.warning("Camera connection error %d while acquiring, will try to reconnect", exp.errno)
+                        self._reconnect()
                         need_reinit = True
                         continue
                     else:
@@ -1530,11 +1650,15 @@ class AndorCam3(model.DigitalCamera):
         except Exception:
             logging.exception("Acquisition failed with unexpected error")
         finally:
-            try:
-                self.Command(u"AcquisitionStop")
-            except ATError:
-                pass # probably just complaining it was already stopped
-            self.Flush()
+            if self.handle: # In case it was terminated or failed to reconnect
+                try:
+                    self.Command(u"AcquisitionStop")
+                except ATError:
+                    pass  # probably just complaining it was already stopped
+                try:
+                    self.Flush()
+                except ATError:
+                    pass
             self.acquisition_lock.release()
             gc.collect()
             logging.debug("Acquisition thread closed")
@@ -1761,7 +1885,7 @@ class AndorCam3(model.DigitalCamera):
         return (set of 2-tuple): name (str), dict for initialisation (device number)
         """
         camera = AndorCam3("System", "bus")
-        dc = camera.GetInt(u"Device Count")
+        dc = camera.GetInt(u"DeviceCount")
         logging.debug("Found %d devices.", dc)
 
         # Trick: we reuse the same object to avoid init/del all the time
