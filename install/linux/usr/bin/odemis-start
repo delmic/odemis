@@ -109,7 +109,6 @@ def parse_config(configfile):
 
 odemis_config = parse_config("/etc/odemis.conf")
 
-
 # Updates the python path if requested
 if "PYTHONPATH" in odemis_config:
     logging.debug("PYTHONPATH from config: '%s'", odemis_config["PYTHONPATH"])
@@ -235,6 +234,8 @@ class BackendStarter(object):
 
         # odemisd likes to start as root to be able to create /var/run files, but then
         # drop its privileges to the odemis group
+        # Note: sudo drops all the env variables, so /etc/odemis.conf might be
+        # interpreted differently in odemisd than what we've just read
         error = subprocess.call(
             ["sudo", "odemisd", "--daemonize",
              "--log-level", self._config["LOGLEVEL"],
