@@ -318,10 +318,14 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     # Check if the emitter is a scanner (focusing = SEM)
-    if hasattr(emt, "dwellTime") and isinstance(emt.dwellTime, model.VigilantAttributeBase):
+    if model.hasVA(emt, "dwellTime"):
         et = emt.dwellTime.value * numpy.prod(emt.resolution.value)
-    else:
+    elif model.hasVA(detector, "exposureTime"):
         et = detector.exposureTime.value
+    else:
+        # Completely random... but we are in a case where probably that's the last
+        # thing the caller will care about.
+        et = 1
 
     # use the .depthOfField on detector or emitter as maximum stepsize
     avail_depths = (detector, emt)
