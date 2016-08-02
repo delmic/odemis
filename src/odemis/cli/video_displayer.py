@@ -109,7 +109,7 @@ class ImageWindowApp(wx.App):
 
     def update_view(self):
         logging.debug("Received a new image of %d x %d", *self.img.GetSize())
-        self.frame.Size = self.img.GetSize()
+        self.frame.ClientSize = self.img.GetSize()
         self.imageCtrl.SetBitmap(wx.BitmapFromImage(self.img))
 
     def OnKey(self, event):
