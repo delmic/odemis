@@ -194,6 +194,8 @@ class AndorCapabilities(Structure):
     CAMERATYPE_ALTAF = 27
     CAMERATYPE_IKONXL = 28
     CAMERATYPE_RES1 = 29
+    CAMERATYPE_ISTAR_SCMOS = 30
+    CAMERATYPE_IKONLR = 31
 
     # only put here the cameras confirmed to work with this driver
     CameraTypes = {
@@ -241,12 +243,18 @@ class AndorV2DLL(CDLL):
     DRV_TEMPERATURE_NOT_REACHED = 20037
     DRV_TEMPERATURE_DRIFT = 20040
 
-    # For SetReadMode()
+    # For SetReadMode(). Values are different from the capabilities READMODE_*
     RM_FULL_VERTICAL_BINNING = 0
     RM_MULTI_TRACK = 1
     RM_RANDOM_TRACK = 2
     RM_SINGLE_TRACK = 3
     RM_IMAGE = 4
+
+    AM_SINGLE = 1
+    AM_ACCUMULATE = 2
+    AM_KINETIC = 3
+    AM_FASTKINETICS = 4
+    AM_VIDEO = 5  # aka "run til abort"
 
     @staticmethod
     def at_errcheck(result, func, args):
@@ -1620,7 +1628,7 @@ class AndorCam2(model.DigitalCamera):
             self.select()
             assert(self.GetStatus() == AndorV2DLL.DRV_IDLE)
 
-            self.atcore.SetAcquisitionMode(1) # 1 = Single scan
+            self.atcore.SetAcquisitionMode(AndorV2DLL.AM_SINGLE)
             # Seems exposure needs to be re-set after setting acquisition mode
             self._prev_settings[1] = None # 1 => exposure time
             size = self._update_settings()
@@ -1702,7 +1710,7 @@ class AndorCam2(model.DigitalCamera):
                             raise
                     # We don't use the kinetic mode as it might go faster than we can
                     # process them.
-                    self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
+                    self.atcore.SetAcquisitionMode(AndorV2DLL.AM_VIDEO)
                     # Seems exposure needs to be re-set after setting acquisition mode
                     self._prev_settings[1] = None # 1 => exposure time
                     size = self._update_settings()
@@ -1740,6 +1748,7 @@ class AndorCam2(model.DigitalCamera):
                         except AndorV2Error as (errno, strerr):
                             if errno == 20024: # DRV_NO_NEW_DATA
                                 if time.time() > tend + 1:
+                                    logging.warning("Timeout after %g s", time.time() - tstart)
                                     raise # seems actually serious
                                 else:
                                     pass
@@ -1835,7 +1844,7 @@ class AndorCam2(model.DigitalCamera):
                             raise
                     # We don't use the kinetic mode as it might go faster than we can
                     # process them.
-                    self.atcore.SetAcquisitionMode(1) # 1 = Single scan
+                    self.atcore.SetAcquisitionMode(AndorV2DLL.AM_SINGLE)
                     # Seems exposure needs to be re-set after setting acquisition mode
                     self._prev_settings[1] = None # 1 => exposure time
                     size = self._update_settings()
@@ -1875,6 +1884,7 @@ class AndorCam2(model.DigitalCamera):
                         except AndorV2Error as (errno, strerr):
                             if errno == 20024: # DRV_NO_NEW_DATA
                                 if time.time() > tend + 1:
+                                    logging.warning("Timeout after %g s", time.time() - tstart)
                                     raise # seems actually serious
                                 else:
                                     pass
@@ -2543,8 +2553,9 @@ class FakeAndorV2DLL(object):
             raise NotImplementedError()
 
     def SetAcquisitionMode(self, mode):
-        # 1 = Single scan
-        # 5 = Run till abort
+        """
+        mode (int): cf AM_* (1 = Single scan, 5 = Run till abort)
+        """
         self.acqmode = _val(mode)
 
     def SetKineticCycleTime(self, t):
