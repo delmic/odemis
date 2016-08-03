@@ -195,6 +195,13 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
         except Exception:
             raise IOError("Conversion update failed to find sample holder holes.")
+
+        # TODO: move focus to good_focus = _hole_focus - GOOD_FOCUS_OFFSET ?
+
+        # TODO: when is this called with first_insertion==False? In such case,
+        # almost the whole algorithm is different => either remove or put in a
+        # different function.
+
         # Check if the sample holder is inserted for the first time
         if first_insertion is True:
             if future._conversion_update_state == CANCELLED:

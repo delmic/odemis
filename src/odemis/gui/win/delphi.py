@@ -401,7 +401,6 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     raise CancelledError()
 
                 # Update progress of the future
-                logging.debug("Try to update the remaining time...")
                 future.set_progress(end=time.time() + 12.5 * 60)
 
                 # Compute stage calibration values
@@ -423,7 +422,6 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     raise CancelledError()
 
                 # Update progress of the future
-                logging.debug("Try to update the remaining time...")
                 future.set_progress(end=time.time() + 60)
 
                 # Proper hfw for spot grid to be within the ccd fov
