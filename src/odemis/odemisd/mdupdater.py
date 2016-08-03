@@ -138,7 +138,7 @@ class MetadataUpdater(model.Component):
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
 
     def observeLens(self, lens, comp):
-        if comp.role != "ccd":
+        if comp.role not in ("ccd", "sp-ccd"):
             logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
             return
 
@@ -171,8 +171,7 @@ class MetadataUpdater(model.Component):
             pass
 
         # update pole position, if available
-        if (hasattr(lens, "polePosition")
-            and isinstance(lens.polePosition, model.VigilantAttributeBase)):
+        if model.hasVA(lens, "polePosition"):
             def updatePolePos(unused, lens=lens, comp=comp):
                 # the formula is: Pole = Pole_no_binning / binning
                 try:
@@ -192,8 +191,7 @@ class MetadataUpdater(model.Component):
             except AttributeError:
                 pass
 
-        if (hasattr(lens, "rotation")
-            and isinstance(lens.rotation, model.VigilantAttributeBase)):
+        if model.hasVA(lens, "rotation"):
             def updateRotation(unused, lens=lens, comp=comp):
                 rot = lens.rotation.value
                 md = {model.MD_ROTATION: rot}
@@ -210,13 +208,12 @@ class MetadataUpdater(model.Component):
                       ("focusDistance", model.MD_AR_FOCUS_DISTANCE),
                       ("parabolaF", model.MD_AR_PARABOLA_F))
         for va_name, md_key in md_va_list:
-            if (hasattr(lens, va_name)
-                and isinstance(getattr(lens, va_name), model.VigilantAttributeBase)):
-                va = getattr(lens, va_name)
+            if model.hasVA(lens, va_name):
                 def updateARData(val, md_key=md_key, comp=comp):
                     md = {md_key: val}
                     comp.updateMetadata(md)
 
+                va = getattr(lens, va_name)
                 va.subscribe(updateARData, init=True)
                 self._onTerminate.append((va.unsubscribe, (updateARData,)))
 
