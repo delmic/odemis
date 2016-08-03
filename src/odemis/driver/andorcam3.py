@@ -1607,7 +1607,10 @@ class AndorCam3(model.DigitalCamera):
                     # because the framerate is faster than what we can process.
                     if exp.errno in (11, 13, 100):  # ERR_NODATA, ERR_TIMEDOUT, ERR_HARDWARE_OVERFLOW
                         num_errors += 1
-                        if num_errors > 5:
+                        if num_errors > 10:
+                            logging.error("Giving up reconnection trials after %d errors", num_errors)
+                            raise
+                        elif num_errors > 5:
                             logging.error("%d errors in a row, trying to reconnect to camera", num_errors)
                             self._reconnect()
                         logging.warning("Trying again to acquire image after error %s", exp)
