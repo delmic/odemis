@@ -1,13 +1,11 @@
-# Configuration for the SPARC v2 Compact with a spectrometer (connected via optical fiber from the plate 2)
+# Configuration for the SPARC v2 Compact with an Analog PMT
 SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Optical Path Properties",
                "Lens1 Mover", "Lens2 Switch", "Calibration Light",
-               "Spectrometer Selector", "Fiber align",
                "Calibration Camera",
-               "External Spectrograph", "Spec CCD Flipper", "Spectrograph focus",
-               "Spectral Camera", "Spectrometer",
+               "CL Detector", "CL Selector", "CL Filter Wheel",
                "Mirror Actuators", "Mirror Actuators in XY referential",
                ],
 }
@@ -27,9 +25,11 @@ SPARC2: {
 #        port: "/dev/ttyPMT*",
         port: "/dev/fake", # for simulator
         pin_map: {"Calibration Light": 0,
+                  "CL PMT control unit": 1,
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "CL PMT control unit": 0, # Actually just provide power to the  PMT
             "Optical Actuators": 1,
         },
         init: { # Which component to power on from the very beginning (to save time)
@@ -94,8 +94,10 @@ SPARC2: {
            image: "sparc-etd-gold-balls.h5",
     },
     # more detectors can be added, if necessary
-    children: {scanner: "SEM E-beam",
-               detector0: "SEM Detector"
+    children: {
+       scanner: "SEM E-beam",
+       detector0: "SEM Detector",
+       detector1: "CL PMT",
     }
 }
 
@@ -106,7 +108,7 @@ SPARC2: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SEM Detector", "Spectral Camera", "Spectrometer", "Calibration Camera"]
+    affects: ["SEM Detector", "CL Detector", "Calibration Camera"]
 }
 
 "SEM Detector": { # aka ETD
@@ -115,10 +117,44 @@ SPARC2: {
     init: {},
 }
 
+
+# CL PMT: composed of the control unit + the PMT output connected to the DAQ board
+
+
+"CL PMT": { # the raw detector of the PMT
+    # Internal child of SEM Scan Interface, so no class but instead a creator
+    creator: "SEM Scan Interface",
+    role: null,
+    init: {},
+}
+
+"CL PMT control unit": {
+    class: pmtctrl.PMTControl,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake",
+        prot_time: 0.0002,  # s
+        prot_curr: 20.e-6,  # A
+    }
+}
+
+"CL Detector": {
+    class: pmtctrl.PMT,
+    role: cl-detector,
+    init: {
+        settle_time: 0.5,  # s, time for the gain to be fully active
+    },
+    children: {
+       "detector": "CL PMT",
+       "pmt-control": "CL PMT control unit",
+    },
+}
+
 # # In reality, this is a IDS uEye
 # "Calibration Camera": {
 #     class: ueye.Camera,
-#     role: ccd, # TODO: calib-ccd
+#     role: ccd,
 #     init: {
 #        device: null, # Any one found will do 
 #     },
@@ -127,81 +163,11 @@ SPARC2: {
 # For simulation, we use this component
 "Calibration Camera": {
     class: andorcam2.AndorCam2,
-    role: ccd, # TODO: ccd (without pole position) or calib-ccd?
+    role: ccd,
     init: {
        device: "fake",
        image: "sparc-ar-mirror-align.h5", # only for simulator
     },
-}
-
-
-# Spectrometer = Andor iVac + Shamrock SR193 (connected via USB)
-"Spectrometer": {
-    class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
-    init: {
-        transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
-    },
-    properties: {
-        #binning: [4, 16],
-    },
-}
-
-# Dedicated camera for the acquisition of the spectra
-"Spectral Camera": {
-    class: andorcam2.AndorCam2,
-    role: sp-ccd,
-    init: {
-        #device: 0,
-        device: "fake",
-        transp: [-1, 2], # if mirrored on X axis
-    },
-    properties: {
-        targetTemperature: -60, # °C
-    },
-}
-
-"External Spectrograph": {
-    class: andorshrk.Shamrock,
-    role: spectrograph, # TODO: or spectrograph-dedicated ?
-    init: {
-        device: "fake",
-        slits: {1: "slit-in", # INPUT_SIDE
-        },
-        # TODO: only if there are filters
-#         bands: { # The filters in the filter-wheel
-#             6: "pass-through"
-#         },
-        fstepsize: 10.9e-6, # m, size of one focus step
-    },
-    affects: ["Spectral Camera", "Spectrometer"],
-}
-
-"Spectrograph focus": {
-    class: actuator.MultiplexActuator,
-    role: "focus",
-    children: {"z": "External Spectrograph"},
-    init: {
-        axes_map: {"z": "focus"},
-    },
-    affects: ["Spectral Camera", "Spectrometer"],
-}
-
-# Provide the mirror (aka port selector) of the spectrograph as a separate component
-# Only used to disable the CCD, to perform basic background subtraction
-"Spec CCD Flipper": {
-    class: actuator.FixedPositionsActuator,
-    role: "spec-det-selector",
-    children: {"rx": "External Spectrograph"},
-    init: {
-        axis_name: "flip-out",
-        positions: {
-            0: ["Spectral Camera", "Spectrometer"],
-            1.5707963267948966: [],   # nothing connected
-        },
-    },
-    affects: ["Spectral Camera", "Spectrometer"],
 }
 
 "Optical Path Properties": {
@@ -219,7 +185,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Spectral Camera", "Spectrometer", "Calibration Camera"]
+    affects: ["CL Detector", "Calibration Camera"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -233,11 +199,11 @@ SPARC2: {
         port: "/dev/fake6",
         #address: 2,
         address: null,
-        axes: ["l1", "l2", "spec-sel", "fiby"],
+        axes: ["l1", "l2", "cl-sel", "fw"],
         # These values are adapted to make the simulator roughly the same speed
-        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 5.86e-9], # m/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5], # m/µstep... rad/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4, "fiby": 4},
+        refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
     },
 }
@@ -255,7 +221,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Spectral Camera", "Spectrometer", "Calibration Camera"],
+    affects: ["Lens2 Switch", "CL Detector", "Calibration Camera"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -270,39 +236,48 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Spectral Camera", "Spectrometer", "Calibration Camera"],
+    affects: ["CL Detector", "Calibration Camera"],
 }
 
-# Note that the next two components actually move the _same_ axis!
-# Mirror & Lens in Plate 2, to change X&Y of fiber alignment
-"Fiber align": {
-    class: actuator.MultiplexActuator,
-    role: "fiber-aligner",
-    children: {"x": "Optical Actuators", "y": "Optical Actuators"},
-    init: {
-        axes_map: {"x": "spec-sel", "y": "fiby"},
-    },
-    affects: ["Spectral Camera", "Spectrometer"],
-}
-
-# Mirror in Plate 2, selects between integrated spectrometer and external spectrometer
-"Spectrometer Selector": {
-    class: actuator.MultiplexActuator,
-    role: "spec-selector",
+# Mirror in Plate 2, selects between spectrometer and cl-detector
+"CL Selector": {
+    class: actuator.FixedPositionsActuator,
+    role: "cl-det-selector",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "spec-sel"},
-        ref_on_init: ["x"],
+        axis_name: "cl-sel",
+        positions: {
+            0.00123453: ["CL Detector"],
+            0.0088107: ["Calibration Camera"]
+        },
     },
-    metadata: {
-        # Position of the mirror to select the external spectrometer (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 0.026112848}, # m
-        FAV_POS_ACTIVE_DEST: ["Fiber align", "Spec CCD Flipper", "Spectral Camera", "Spectrometer"],
-        FAV_POS_DEACTIVE: {"x": 0.022}, # m
-        FAV_POS_DEACTIVE_DEST: ["Calibration Camera"], # m
-    },
-    affects: ["Spectral Camera", "Spectrometer", "Calibration Camera"],
+    affects: ["CL Detector", "Calibration Camera"],
 }
+
+# S/N 20151117001
+"CL Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: "cl-filter",
+    children: {"band": "Optical Actuators"},
+    init: {
+        axis_name: "fw",
+        # It supports up to 8 filters
+        positions: {
+            # pos (rad) -> m,m
+            0.3392:  "pass-through",           # 1
+            1.1245981634:  [0, 400.e-9],       # 2
+            1.90999632679: [425.e-9, 475.e-9], # 3
+            2.69539:       "Blue",             # 4
+            3.48079:       "Green",            # 5
+            4.26619081699: "Red",              # 6
+            5.05159:       [625.e-9, 675.e-9], # 7
+            5.83699:       [675.e-9, 725.e-9], # 8
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    affects: ["CL Detector"],
+}
+
 
 # Controller for moving the 'Redux' stage
 # Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
@@ -337,4 +312,3 @@ SPARC2: {
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }
-
