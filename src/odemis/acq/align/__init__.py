@@ -25,7 +25,7 @@ from __future__ import division
 import logging
 from odemis.model._metadata import MD_PIXEL_SIZE
 
-from .autofocus import AutoFocus
+from .autofocus import AutoFocus, AutoFocusSpectrometer
 from .delphi import UpdateConversion
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
