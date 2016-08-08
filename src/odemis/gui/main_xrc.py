@@ -76,12 +76,12 @@ class xrcpnl_tab_secom_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_secom_align.PreCreate
 
     def __init__(self, parent):
@@ -133,12 +133,12 @@ class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
 
     def __init__(self, parent):
@@ -185,12 +185,12 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc2_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_sparc2_align.PreCreate
 
     def __init__(self, parent):
@@ -244,12 +244,12 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
 
     def __init__(self, parent):
@@ -277,12 +277,12 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
 
     def __init__(self, parent):
@@ -329,12 +329,12 @@ class xrcpnl_tab_inspection(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
 
     def __init__(self, parent):
@@ -378,12 +378,12 @@ class xrcpnl_tab_secom_streams(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_streams.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcpnl_tab_secom_streams.PreCreate
 
     def __init__(self, parent):
@@ -439,12 +439,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -476,12 +476,12 @@ class xrcfr_plugin(wx.Dialog):
 #!XRCED:begin-block:xrcfr_plugin.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_plugin.PreCreate
 
     def __init__(self, parent):
@@ -2670,6 +2670,7 @@ def __init_resources():
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Auto focus</label>
+                          <tooltip>Attempts to auto focus the spectrometer with all its gratings and detectors.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -3982,55 +3983,55 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                            <object class="wxPanel">
-                              <object class="wxBoxSizer">
-                                <orient>wxHORIZONTAL</orient>
-                                <object class="sizeritem">
-                                  <object class="wxStaticBitmap" name="bmp_acq_status_info">
-                                    <bitmap>img_icon_dialog_info_png</bitmap>
-                                    <hidden>1</hidden>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxRIGHT</flag>
-                                  <border>5</border>
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
+                                  <bitmap>img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticBitmap" name="bmp_acq_status_warn">
-                                    <bitmap>img_icon_dialog_warning_png</bitmap>
-                                    <hidden>1</hidden>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxRIGHT</flag>
-                                  <border>5</border>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
+                                  <bitmap>img_icon_dialog_warning_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                                    <label>No region of interest selected.</label>
-                                    <fg>#DDDDDD</fg>
-                                    <font>
-                                      <size>10</size>
-                                      <style>normal</style>
-                                      <weight>normal</weight>
-                                      <underlined>0</underlined>
-                                      <face>Ubuntu</face>
-                                    </font>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No region of interest selected.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <style>normal</style>
+                                    <weight>normal</weight>
+                                    <underlined>0</underlined>
+                                    <face>Ubuntu</face>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
                               </object>
-                              <bg>#333333</bg>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
                             </object>
-                            <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
-                            <border>12</border>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                          <border>12</border>
                         </object>
                         <object class="sizeritem">
                           <object class="wxBoxSizer">
@@ -5484,7 +5485,6 @@ def __init_resources():
                       <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                       <border>5</border>
                     </object>
-                    
                     <orient>wxVERTICAL</orient>
                   </object>
                   <bg>#4D4D4D</bg>
@@ -6216,6 +6216,40 @@ X\xa4~R\x05\x06q\xd8\x06\xd1a\x03d\xda9\x030p\xc9\x27 \xf3\x90=\xab\x02\
 \xe2=\x93\xf8\x07\xb8\xd30\xf6c\xc4\xbc\xbd\xd9\xc7\xe4Z\x8a\xdb\xcdR\xf2\
 6{\\\x05\xf6\xd3/\xf21\xd2V@\x80\x978\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_icon_dialog_info_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x02\x82IDATx\xda}\x93]H\x93a\x14\xc7\xcf\xfcZ%\x05\
+\xe6e\x10\xd4\x85\x95`\x10\x95m\xb3\xcc\x9c\x94\x1f\x84\x16\x88aYfZ\x96\
+\xa1\x9b\xd3\xfch:E\xa50\xbb\xc8\x95d\x86\xa5\xae\x88\x1c\x96\xe6\xcc\xa6\
+\xd3\x88\xd9\x17\x0eSJ/2wU\xecJ\xe8\xc2\xc8\xd6\xeb\xbf\xb3w\xf0\xae\x1c\
+\xf9\xc0\x8f\xe7\xbc\xe79\xe7\xc7y^\xde\x97\x00,G\xc6\x840\xa1C\x8e\xb9\
+M\xb6\x09\xe7f\x00k\x99UL\xc0\xf2\xfa\xe5\xcd\x81\x17\x9b\x07\x14\xc9z\xf3\
+\xd8\x89&\xeb\xf7
+\xd3\xdb\xa5z\xb3\x03Em\xf6\x85\xac\xeb\xd6\x09C\x97}?\x80\xa0\xff\x09\
+\x02\xb6\xe7\xb4\xe8w\x14t\xfd\xbce\x99\xc6s\xc7W\x8cL\xb9`\x9btq\xfc\x0d\
+\x1d#\xb3\xc8\xbcfs\x27\xea\xcd\x8d\x1e\x89\x9f <\xb9N\x17\x91\xd3\x8e\xf6\
+\xe1Y4=\x9dA\xd5\x83)\\1\xf2 \xc6\x8d=30\xbd\x9cCR\xdd "N\xdf\xa9\x06 \
+\x93\x04\xb4\xabpK\xd0\xc1\x86\x85\xcaN\x07\xb4w\xc7\xa1i\x1b\x87\xde\xf4\
+\x01\x8bnA\x84cON<\xaby8\x09y\x9a\xf1GhR\xed6\x9f@\xa1\xeb\x8e/\xebA\x9e\
+\xf1\x0drn\xbc\x16)\xe6\xe2\xdf\xc2\x92\x08\xc7R>\x97k\xd4z\x0b\xe8@\xad\
+\xd9\x27P\xea\x9c\xeaJ\x0b\xd2\xaf\x8e\xfeC\xfe\xcd1\x9c3\xda\xfd\xf2)\xb5\
+V\x90\xba\xc1)\xf6R\xd4\xf90\x16\x08\x09\xfa\x01$\x1a^H\xfc\xbd\x0e\xd5\
+\x0cqnH:K\xad\xf7\x08\xea\x05\x8a\xba\x10F\x14\xa9]O
+\xad\x10\xad\xe9\x85\xaa\xb4\xcfK\xf9 \x94\x97\xad\x92 \xa6j\x94\x9f\x87\
+\x11Y\xd8\x87\x0d\xd9&\x04\xa7\xb6\x81\xe2\x0c\x02m-\x08\xf7^a\x8f\xd6E\
+\x89\xcd\x90\x1d\xbe\x8d\x90t\x13\xd6d?\xc1\xba\xdc~\xcc\xcf\xcf\x8b\xd0\
+\xa9\x01PV?\xe8\x98\x19t\xb4\x13\x94\xd2\x02\x8a)w\xf9\xde\xc1n\x8d\x9d\
+\x12\x1aAi\xed\xa0\x8c\xc7\xa0\x93\xdc\x90=\xe8\x13\x9c\xb1\x81rG\xc5\xbc\
+x\x9el\x04Ek\xc6$\x01O\xa0$E\x89\x9b\x8et\x80\x8e\xf7z\x1a\xa4fIR\xf0\xce\
++\xca\xe8\x06)J\xdd,PI\x02\xef\x14E\xad\x14[\x0d\xca\xec\x01\x9d}\xc5\x0d\
+\xefA\xc5\x1fA\x97f\xbd{\xd1\x848\x15\xc5\x1a\xc0\x13\xb7\xfa}\x89\xbcd\
+|p\x8f\x27\x11He\xe2{?c\xd94\xef_@y\xc3\xa0}\x8f\x10\xa0,\x15\xb8\xe6\xbe\
+\xa7\xd6O %vj\xe2\xe5{K>\xcb\xe3\xca\x16eJ\x1d\x88\x09N\xa8\xf8\xb5Z]\xe1\
+\x0cT\xe9\xd4+\xfc\x8d\xfe\xc8\xa2\xf27\x12\xb3R\xcd\x1fj\xeah/\xc8\xb3\
+\xae\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_icon_ico_acqui_png = '''\
 \x89PNG\x0d
 \x1a
@@ -6356,40 +6390,6 @@ s\x1d\x08`6\x9b\x09\xb7\x1a\xc0
 \x04\xf8\x17\x00\xdf\x18\xe7\xaf\xce\xb2\xbe\xf6\x85\x00\x00\x00\x00IEN\
 D\xaeB`\x82'''
 
-    img_icon_dialog_info_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x02\x82IDATx\xda}\x93]H\x93a\x14\xc7\xcf\xfcZ%\x05\
-\xe6e\x10\xd4\x85\x95`\x10\x95m\xb3\xcc\x9c\x94\x1f\x84\x16\x88aYfZ\x96\
-\xa1\x9b\xd3\xfch:E\xa50\xbb\xc8\x95d\x86\xa5\xae\x88\x1c\x96\xe6\xcc\xa6\
-\xd3\x88\xd9\x17\x0eSJ/2wU\xecJ\xe8\xc2\xc8\xd6\xeb\xbf\xb3w\xf0\xae\x1c\
-\xf9\xc0\x8f\xe7\xbc\xe79\xe7\xc7y^\xde\x97\x00,G\xc6\x840\xa1C\x8e\xb9\
-M\xb6\x09\xe7f\x00k\x99UL\xc0\xf2\xfa\xe5\xcd\x81\x17\x9b\x07\x14\xc9z\xf3\
-\xd8\x89&\xeb\xf7
-\xd3\xdb\xa5z\xb3\x03Em\xf6\x85\xac\xeb\xd6\x09C\x97}?\x80\xa0\xff\x09\
-\x02\xb6\xe7\xb4\xe8w\x14t\xfd\xbce\x99\xc6s\xc7W\x8cL\xb9`\x9btq\xfc\x0d\
-\x1d#\xb3\xc8\xbcfs\x27\xea\xcd\x8d\x1e\x89\x9f <\xb9N\x17\x91\xd3\x8e\xf6\
-\xe1Y4=\x9dA\xd5\x83)\\1\xf2 \xc6\x8d=30\xbd\x9cCR\xdd "N\xdf\xa9\x06 \
-\x93\x04\xb4\xabpK\xd0\xc1\x86\x85\xcaN\x07\xb4w\xc7\xa1i\x1b\x87\xde\xf4\
-\x01\x8bnA\x84cON<\xaby8\x09y\x9a\xf1GhR\xed6\x9f@\xa1\xeb\x8e/\xebA\x9e\
-\xf1\x0drn\xbc\x16)\xe6\xe2\xdf\xc2\x92\x08\xc7R>\x97k\xd4z\x0b\xe8@\xad\
-\xd9\x27P\xea\x9c\xeaJ\x0b\xd2\xaf\x8e\xfeC\xfe\xcd1\x9c3\xda\xfd\xf2)\xb5\
-V\x90\xba\xc1)\xf6R\xd4\xf90\x16\x08\x09\xfa\x01$\x1a^H\xfc\xbd\x0e\xd5\
-\x0cqnH:K\xad\xf7\x08\xea\x05\x8a\xba\x10F\x14\xa9]O
-\xad\x10\xad\xe9\x85\xaa\xb4\xcfK\xf9 \x94\x97\xad\x92 \xa6j\x94\x9f\x87\
-\x11Y\xd8\x87\x0d\xd9&\x04\xa7\xb6\x81\xe2\x0c\x02m-\x08\xf7^a\x8f\xd6E\
-\x89\xcd\x90\x1d\xbe\x8d\x90t\x13\xd6d?\xc1\xba\xdc~\xcc\xcf\xcf\x8b\xd0\
-\xa9\x01PV?\xe8\x98\x19t\xb4\x13\x94\xd2\x02\x8a)w\xf9\xde\xc1n\x8d\x9d\
-\x12\x1aAi\xed\xa0\x8c\xc7\xa0\x93\xdc\x90=\xe8\x13\x9c\xb1\x81rG\xc5\xbc\
-x\x9el\x04Ek\xc6$\x01O\xa0$E\x89\x9b\x8et\x80\x8e\xf7z\x1a\xa4fIR\xf0\xce\
-+\xca\xe8\x06)J\xdd,PI\x02\xef\x14E\xad\x14[\x0d\xca\xec\x01\x9d}\xc5\x0d\
-\xefA\xc5\x1fA\x97f\xbd{\xd1\x848\x15\xc5\x1a\xc0\x13\xb7\xfa}\x89\xbcd\
-|p\x8f\x27\x11He\xe2{?c\xd94\xef_@y\xc3\xa0}\x8f\x10\xa0,\x15\xb8\xe6\xbe\
-\xa7\xd6O %vj\xe2\xe5{K>\xcb\xe3\xca\x16eJ\x1d\x88\x09N\xa8\xf8\xb5Z]\xe1\
-\x0cT\xe9\xd4+\xfc\x8d\xfe\xc8\xa2\xf27\x12\xb3R\xcd\x1fj\xeah/\xc8\xb3\
-\xae\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     img_icon_dialog_error_png = '''\
 \x89PNG\x0d
 \x1a
@@ -6443,9 +6443,10 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', img_icon_ico_eject_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', img_icon_ico_eject_orange_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', img_icon_dialog_info_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', img_icon_ico_acqui_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_export_png', img_icon_ico_export_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', img_icon_ico_press_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', img_icon_dialog_info_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', img_icon_dialog_error_png)
     __res.Load('memory:XRC/main/main_xrc')
+
