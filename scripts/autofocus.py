@@ -39,6 +39,9 @@ def main(args):
     parser.add_argument("--focuser", "-f", dest="focuser", default="focus",
                         help="role of the focus component (default: focus). "
                              "It must be an actuator with a 'z' axis.")
+    parser.add_argument("--spectrograph", "-s", dest="spectrograph",
+                        help="role of the spectrograph component. "
+                             "If provided, a full spectrometer autofocus will be executed.")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
 
@@ -73,12 +76,24 @@ def main(args):
                 logging.info("Failed to find e-beam emitter")
                 pass
 
+        if options.spectrograph:
+            try:
+                spgr = model.getComponent(role=options.spectrograph)
+                # TODO: allow multiple detectors
+            except LookupError:
+                raise ValueError("Failed to find spectrograph '%s'" % (options.spectrograph,))
+        else:
+            spgr = None
+
         logging.info("Original focus position: %f m", focuser.position.value["z"])
 
         # Apply autofocus
-        future_focus = align.AutoFocus(det, emt, focuser)
+        if spgr:
+            future_focus = align.AutoFocusSpectrometer(spgr, focuser, det)
+        else:
+            future_focus = align.AutoFocus(det, emt, focuser)
         try:
-            foc_pos, fm_final = future_focus.result(300)  # putting a timeout allows to get KeyboardInterrupts
+            foc_pos, fm_final = future_focus.result(1000)  # putting a timeout allows to get KeyboardInterrupts
         except KeyboardInterrupt:
             future_focus.cancel()
             raise
@@ -90,7 +105,6 @@ def main(args):
     except ValueError as exp:
         logging.error("%s", exp)
         return 127
-
     except Exception:
         logging.exception("Unexpected error while performing action.")
         return 127
