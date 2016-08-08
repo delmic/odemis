@@ -2677,10 +2677,11 @@ class Sparc2AlignTab(Tab):
         max_res = speclines.detResolution.range[1]
         res = max_res[0] // b[0], max_res[1] // b[1]
         speclines.detResolution.value = speclines.detResolution.clip(res)
-        try:
-            speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
-        except AttributeError:
-            speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
+        if model.hasVA(speclines, "detReadoutRate"):
+            try:
+                speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
+            except AttributeError:
+                speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
         self._specline_stream = speclines
         # TODO: make the legend display a merge slider (currently not happening
         # because both streams are optical)
@@ -2702,10 +2703,11 @@ class Sparc2AlignTab(Tab):
         mois.repetition.value = (9, 9)
         mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
         mois.detBinning.value = mois.detBinning.clip((8, 8))
-        try:
-            mois.detReadoutRate.value = mois.detReadoutRate.range[1]
-        except AttributeError:
-            mois.detReadoutRate.value = max(mois.detReadoutRate.choices)
+        if model.hasVA(mois, "detReadoutRate"):
+            try:
+                mois.detReadoutRate.value = mois.detReadoutRate.range[1]
+            except AttributeError:
+                mois.detReadoutRate.value = max(mois.detReadoutRate.choices)
         self._moi_stream = mois
         # Update ROI based on the lens pole position
         if model.hasVA(main_data.lens, "polePosition"):
