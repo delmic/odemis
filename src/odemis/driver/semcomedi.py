@@ -379,7 +379,6 @@ class SEMComedi(model.HwComponent):
             # function when we read from different channel.
             return
 
-
         # Only works if the device is soft-calibrated, and has been calibrated
         try:
             path = comedi.get_default_calibration_path(self._device)
@@ -398,6 +397,10 @@ class SEMComedi(model.HwComponent):
         """
         driver = comedi.get_driver_name(self._device)
         if driver == "comedi_test":
+            # WARNING (2016-06-30): on kernels 3.18 to 4.7, cancelling a read on
+            # comedi_test can cause a kernel panic.
+            # Fixed by "comedi_test: fix timer race conditions", which should be
+            # backported at least on v4.4+.
             self._test = True
             self._write_read_raw_one_cmd = self._fake_write_read_raw_one_cmd
             self._actual_writer = self._writer # keep a ref to avoid closing the file
@@ -928,23 +931,21 @@ class SEMComedi(model.HwComponent):
         cmd.start_arg = start_arg
         cmd.stop_src = stop_src
         cmd.stop_arg = stop_arg
-        # The get_cmd_generic_timed likes to spread the conversion, if the
-        # hardware allows it, but we don't.
-        if (cmd.convert_src == comedi.TRIG_TIMER and
-            cmd.scan_begin_src == comedi.TRIG_FOLLOW):
-            logging.debug("Converting 'follow' mode to 'timer' mode")
-            cmd.scan_begin_src = comedi.TRIG_TIMER
-            cmd.scan_begin_arg = period_ns
-            cmd.convert_src = comedi.TRIG_NOW
-            cmd.convert_arg = 0
 
         self._prepare_command(cmd)
 
-        if (cmd.scan_begin_arg != period_ns or cmd.start_arg != start_arg or
+        if (cmd.convert_src == comedi.TRIG_TIMER and
+            cmd.scan_begin_src == comedi.TRIG_FOLLOW):
+            logging.debug("Using 'follow' mode for conversion")
+            actual_period = cmd.convert_arg * nchans
+        else:
+            actual_period = cmd.scan_begin_arg
+
+        if (actual_period != period_ns or cmd.start_arg != start_arg or
             cmd.stop_arg != stop_arg):
             #raise ValueError("Failed to create the precise command")
             logging.error("Failed to create the precise command period = %d ns "
-                          "(should be %d ns)", cmd.scan_begin_arg, period_ns)
+                          "(should be %d ns)", actual_period, period_ns)
 
         # send the command
         comedi.command(self._device, cmd)
@@ -1328,8 +1329,13 @@ class SEMComedi(model.HwComponent):
                 self._writer.prepare(data.ravel(), expected_time)
 
         # run the commands
-        # AO is waiting for AI/Start1, so not sure why internal trigger needed,
-        # but it is. Maybe just to let Comedi know that the command has started.
+        # AO is waiting for External AI/Start1, but the comedi driver automatically
+        # implies that _also_ an internal trigger (0) is needed. That's to really
+        # make sure the command doesn't start before enough data is available in
+        # the buffer.
+        # Warning (2016-07-19): From kernel 3.15 to 4.7, the driver expected an
+        # internal trigger with the same number (instead of 0). It might get
+        # backported later on. See "ni_mio_common: fix AO inttrig backwards compatibility".
         if nwscans != 1:
             comedi.internal_trigger(self._device, self._ao_subdevice, self._ao_trig)
 
@@ -1512,7 +1518,7 @@ class SEMComedi(model.HwComponent):
 
         # run the commands
         if not self._test:
-            comedi.internal_trigger(self._device, self._ao_subdevice, self._ao_trig)
+            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         start = time.time()
         self._writer.run()
         counter.reader.run()
@@ -1730,7 +1736,7 @@ class SEMComedi(model.HwComponent):
 
     def _req_stop_acquisition(self):
         """
-        Request the acquisition thread to stop
+        Request the acquisition to stop
         """
         # This must be entirely done before any new comedi command is started
         # So it's protected with the init of read/write and set_to_resting_position
@@ -3301,6 +3307,9 @@ class CountingDetector(model.Detector):
         counter (0 <= int): hardware counter number
         source (0 <= int): PFI number, the input pin on which the signal is received
         """
+        # Warning (2016-07-20): NI counters are broken on Linux 3.14 until 4.7.
+        # They need the patch "ni_mio_common: fix wrong insn_write handler".
+        # It will hopefully be backported, at least onto 3.17+.
 
         # Counters and pulse generators are fairly different in terms of
         # functionality, but they correspond to similar devices seen as input

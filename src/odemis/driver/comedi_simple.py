@@ -83,8 +83,8 @@ _function_wrappers = {
                      "perror": None,
                      }
 def _wrap():
-    # With comedi >= 0.10.2, the functions already have comedi_ removed and are
-    # wrapped, so need to handle it differently
+    # With comedi = 0.10.2 (not later), the functions already have comedi_
+    # removed and are wrapped, so need to handle it differently
     if hasattr(_comedi, "wrapped"):
         mwrapped = _comedi.wrapped
     else:
@@ -102,7 +102,7 @@ def _wrap():
         if name not in global_dict:
             global_dict[name] = value
         else:
-            logging.warning("comedi has already %s", name)
+            logging.debug("comedi has already %s", name)
 
         # wrap every function starting with "comedi_"
         if name.startswith('comedi_'):
