@@ -226,6 +226,9 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_fibaligner_y = xrc.XRCCTRL(self, "btn_m_fibaligner_y")
         self.btn_m_fibaligner_x = xrc.XRCCTRL(self, "btn_m_fibaligner_x")
         self.btn_p_fibaligner_x = xrc.XRCCTRL(self, "btn_p_fibaligner_x")
+        self.pnl_fib_focus = xrc.XRCCTRL(self, "pnl_fib_focus")
+        self.btn_fib_autofocus = xrc.XRCCTRL(self, "btn_fib_autofocus")
+        self.gauge_fib_autofocus = xrc.XRCCTRL(self, "gauge_fib_autofocus")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
         self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
@@ -3282,6 +3285,49 @@ def __init_resources():
                       <growablerows/>
                     </object>
                     <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_fib_focus">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_fib_autofocus">
+                            <height>24</height>
+                            <face_colour>def</face_colour>
+                            <label>Auto focus</label>
+                            <tooltip>Attempts to auto focus the spectrometer, which is connected via the optical fiber, with all its gratings and detectors.</tooltip>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <border>0</border>
+                          <minsize>90,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGauge" name="gauge_fib_autofocus">
+                            <size>-1,1</size>
+                            <range>100</range>
+                            <value>0</value>
+                            <style>wxGA_SMOOTH</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <option>1</option>
+                          <flag>wxLEFT|wxALIGN_CENTRE</flag>
+                          <border>7</border>
+                          <minsize>-1,10</minsize>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
+                      </object>
+                      <fg>#E5E5E5</fg>
+                      <bg>#444444</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
                 </object>

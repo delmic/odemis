@@ -2182,7 +2182,7 @@
                       <vgap>5</vgap>
                       <hgap>5</hgap>
                       <growablecols>1</growablecols>
-                      <growablerows/>
+                      <growablerows></growablerows>
                     </object>
                     <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>10</border>
@@ -2765,6 +2765,49 @@
                       <growablerows/>
                     </object>
                     <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_fib_focus">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_fib_autofocus">
+                            <height>24</height>
+                            <face_colour>def</face_colour>
+                            <label>Auto focus</label>
+                            <tooltip>Attempts to auto focus the spectrometer, which is connected via the optical fiber, with all its gratings and detectors.</tooltip>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <border>0</border>
+                          <minsize>90,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGauge" name="gauge_fib_autofocus">
+                            <size>-1,1</size>
+                            <range>100</range>
+                            <value>0</value>
+                            <style>wxGA_SMOOTH</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <option>1</option>
+                          <flag>wxLEFT|wxALIGN_CENTRE</flag>
+                          <border>7</border>
+                          <minsize>-1,10</minsize>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
+                      </object>
+                      <fg>#E5E5E5</fg>
+                      <bg>#444444</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
                 </object>

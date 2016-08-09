@@ -155,7 +155,7 @@ SPARC2_MODES = {
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
                 }),
-            'spec-focus': ("ccd",
+            'spec-focus': ("ccd",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
@@ -172,9 +172,15 @@ SPARC2_MODES = {
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
                  'chamber-light': {'power': 'off'},
                 }),
+            'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
+                {'lens-switch': {'x': 'off'},
+                 # TODO: should use affects to know whether to use spectrograph or spectrograph-dedicated?
+                 'spectrograph-dedicated': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
+                 'chamber-light': {'power': 'off'},
+                }),
          }
 
-ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus'}
+ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus', 'spec-fiber-focus'}
 
 
 # TODO: Could be moved to util
