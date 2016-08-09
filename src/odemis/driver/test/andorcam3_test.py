@@ -50,7 +50,7 @@ class TestAndorCam3(VirtualTestCam, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
-    
+
 #@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
@@ -58,6 +58,17 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
+
+# Notes on testing the reconnection (which is pretty impossible to do non-manually):
+# * Test both cable disconnect/reconnect and turning off/on
+# * Test the different scenarios:
+#   - No acquisition; camera goes away -> the .state is updated
+#   - No acquisition; camera goes away; camera comes back; acquisition -> acquisition starts
+#   - No acquisition; camera goes away; acquisition; camera comes back -> acquisition starts
+#   - Acquisition; camera goes away; camera comes back -> acquisition restarts
+#   - Acquisition; camera goes away; acquisition stops; camera comes back; acquisition -> acquisition restarts
+#   - Acquisition; camera goes away; acquisition stops; acquisition; camera comes back -> acquisition restarts
+#   - Acquisition; camera goes away; terminate -> component ends
 
 if __name__ == '__main__':
     unittest.main()
