@@ -146,19 +146,20 @@ def wait_backend_ready():
     return True
 
 
-def test_config(sim_conf, logpath):
+def test_config(sim_conf, path_root, logpath):
     """ Test one running a backend and GUI with a given microscope file
     sim_conf (str): full filename of the microscope file to start
+    path_root (str): beginning of the sim_conf, which is not useful for the user
     logpath (str): directory where to store the log files
     return (bool): True if no error running the whole system, False otherwise
     """
-
+    assert sim_conf.startswith(path_root)
     sim_conf_fn = os.path.basename(sim_conf)
 
     # sim_conf_path = os.path.join(SIM_CONF_PATH, sim_conf)
-    test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
-    dlog_path = os.path.join(logpath, 'odemisd-%s-test.log' % test_name)
-    guilog_path = os.path.join(logpath, 'gui-%s-test.log' % test_name)
+    test_name = "test_%s" % "".join(c if c.isalnum() else '_' for c in sim_conf[len(path_root):])
+    dlog_path = os.path.join(logpath, 'odemisd_%s.log' % test_name)
+    guilog_path = os.path.join(logpath, 'gui_%s.log' % test_name)
 
     # Clear any old log files might have been left behind
     try:
@@ -203,7 +204,7 @@ def test_config(sim_conf, logpath):
     if start.returncode != 0:  # 'ok' return code
         logging.error("Backend failed to start, with return code %d", start.returncode)
         return False
-    elif dlog_path:
+    elif os.path.exists(dlog_path):
         # TODO: make error/exception detection in log files more intelligent?
         # TODO: backend always start with an "ERROR" from Pyro, trying to connect to existing backend
         # TODO: differentiate errors happening after asking to stop the back-end
@@ -219,7 +220,7 @@ def test_config(sim_conf, logpath):
             logging.warning("Back-end might have not finish loading before the GUI was started")
         logging.error("GUI failed to start, with return code %d", gui.returncode)
         return False
-    elif guilog_path:
+    elif os.path.exists(guilog_path):
         gui_log = open(guilog_path).read()
         for lbl in ERROR_TRIGGER:
             if lbl in gui_log:
@@ -228,6 +229,24 @@ def test_config(sim_conf, logpath):
                 break
 
     return passed
+
+
+def _get_common_root(paths):
+    """
+    return (str): the longest path common to all paths
+    """
+    if not paths or os.sep not in paths[0]:
+        return ""
+
+    root, _ = paths[0].rsplit(os.sep, 1)
+    for p in paths[1:]:
+        while not p.startswith(root):
+            splitted = root.rsplit(os.sep, 1)
+            if len(splitted) < 2:
+                return ""
+            root = splitted[0]
+
+    return root
 
 
 def main(args):
@@ -266,9 +285,12 @@ def main(args):
         if not sim_conf_files:
             raise ValueError("No simulator yaml files in %s" % (paths,))
 
+        proot = _get_common_root(sim_conf_files)
+        logging.debug("Found common conf file root = %s", proot)
+
         # Create a test and add it to the test case for each configuration found
         for sim_conf in sim_conf_files:
-            passed = test_config(sim_conf, options.logpath)
+            passed = test_config(sim_conf, proot, options.logpath)
             all_passed = all_passed and passed
 
     except ValueError as exp:
