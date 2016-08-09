@@ -274,6 +274,7 @@ class HwComponent(Component):
         # will be visible only by the children.
         # It could almost be an enumerated, but needs to accept any HwError
         self.state = _vattributes.VigilantAttribute(ST_RUNNING, readonly=True)
+        self.state.subscribe(self._log_state_change)
 
         # if PowerSupplier available then create powerSupply VA by copying the
         # corresponding value of the supplied VA of the PowerSupplier.
@@ -322,6 +323,17 @@ class HwComponent(Component):
         f = self._power_supplier.supply({self.name: value})
         f.result()
         return self._power_supplier.supplied.value[self.name]
+
+    def _log_state_change(self, state):
+        """
+        Called whenever .state is updated
+        state (ST_* or Exception): new state of the component
+        """
+        if isinstance(state, Exception):
+            llevel = logging.WARNING
+        else:
+            llevel = logging.DEBUG
+        logging.log(llevel, "State of component '%s' is now: %s", self.name, state)
 
     # to be overridden by components which can do self test
     def selfTest(self):

@@ -498,7 +498,7 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
         # setup everything best (fixed)
-        self._prev_settings = [None, None, None, None, None]  # image, exposure, readout, gain
+        self._prev_settings = [None, None, None, None, None]  # image, exposure, readout, gain, shutter per
         self._setStaticSettings()
         self._shape = resolution + (2 ** self._getMaxBPP(),)
 
@@ -786,7 +786,7 @@ class AndorCam2(model.DigitalCamera):
         logging.info("Reinitialisation successful")
 
         # put back the settings
-        self._prev_settings = [None, None, None, None]
+        self._prev_settings = [None, None, None, None, None]
         self._setStaticSettings()
         self._setTargetTemperature(self.targetTemperature.value, force=True)
         self._setFanSpeed(self.fanSpeed.value, force=True)
