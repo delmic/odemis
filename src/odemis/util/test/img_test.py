@@ -416,13 +416,21 @@ class TestDataArray2RGB(unittest.TestCase):
         # convert to RGB
         hist, edges = img.histogram(data)
         irange = img.findOptimalRange(hist, edges, 1 / 256)
-        rgb = img.DataArray2RGB(data, irange)
+        tstart = time.time()
+        for i in range(10):
+            rgb = img.DataArray2RGB(data, irange)
+        fast_dur = time.time() - tstart
 
         hist_nc, edges_nc = img.histogram(data_nc)
         irange_nc = img.findOptimalRange(hist_nc, edges_nc, 1 / 256)
-        rgb_nc = img.DataArray2RGB(data_nc, irange_nc)
+        tstart = time.time()
+        for i in range(10):
+            rgb_nc = img.DataArray2RGB(data_nc, irange_nc)
+        std_dur = time.time() - tstart
         rgb_nc_back = rgb_nc.swapaxes(0, 1)
 
+        print("Time fast conversion = %g s, standard = %g s" % (fast_dur, std_dur))
+        numpy.testing.assert_almost_equal(rgb, rgb_nc_back, decimal=0)
         numpy.testing.assert_equal(rgb, rgb_nc_back)
 
     def test_tint(self):
