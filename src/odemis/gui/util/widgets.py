@@ -294,6 +294,10 @@ class ProgressiveFutureConnector(object):
         if not future.cancelled():
             self._bar.Range = 100
             self._bar.Value = 100
+            if self._label is None:
+                self._bar.SetToolTipString("Completed")
+        elif self._label is None:
+            self._bar.SetToolTipString("Cancelled")
 
     def _update_progress(self):
         """ Update the progression controls """
@@ -331,7 +335,8 @@ class ProgressiveFutureConnector(object):
         self._bar.Value = 100 * past
 
         if self._future.done():
-            # make really sure we don't update the text after the future is over
+            # Make sure we don't update the lbl_txt after the future is over as
+            # it might be used to display other information
             return
 
         # Time left text
