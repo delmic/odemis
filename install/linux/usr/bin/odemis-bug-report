@@ -21,9 +21,17 @@ else
     MODEL=("$MODEL") # Convert into an array of one
 fi
 
+# Add the latest overlay-report if it's possibly related (ie, less than a day old)
+LAST_OVERLAY_REP=$(ls -dt ~/odemis-overlay-report/* | head -1)
+if [ -n "$LAST_OVERLAY_REP" ]; then
+    if [ $(find "$LAST_OVERLAY_REP" -maxdepth 0 -mtime +1 | wc -l) -gt 0 ]; then
+       LAST_OVERLAY_REP="" # Too old
+    fi
+fi
+
 
 # Compress in background
-zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf /var/log/syslog &
+zip -jr $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf /var/log/syslog "$LAST_OVERLAY_REP" &
 
 
 # Take a screenshot if the GUI is there
@@ -37,6 +45,8 @@ else
 fi
 
 # Save hw status (if available)
+# TODO: also do this in background (especially, it can block for a long time if
+# the backend is in some weird state)
 odemis-cli --check
 status=$?
 if [ $status -eq 0 -o $status -eq 3 ] ; then
@@ -47,6 +57,7 @@ else
 fi
 
 
+# TODO: auto-complete contact person from the last bug report?
 # Ask to describe the problem (in the mean time)
 descfn="/tmp/description.txt"
 zenity --text-info --editable --width 800 --height 800 --title "Enter problem description" >"$descfn" <<EOL
