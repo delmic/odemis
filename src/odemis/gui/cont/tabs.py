@@ -2668,6 +2668,11 @@ class Sparc2AlignTab(Tab):
                             add_to_view=self.panel.vp_align_lens.microscope_view)
         ccd_spe.stream_panel.flatten()
 
+        if "lens-align" not in tab_data.align_mode.choices:
+            self.panel.pnl_lens_mover.Show(False)
+            # In such case, there is no focus affecting the ccd, so the
+            # pnl_focus will also be hidden later on, by the ccd_focuser code
+
         # For running autofocus (can only one at a time)
         self._autofocus_f = model.InstantaneousFuture()
         self._autofocus_align_mode = None  # Which mode is autofocus running on
@@ -2837,12 +2842,14 @@ class Sparc2AlignTab(Tab):
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
         # Switch between alignment modes
-        # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * lens-align: first auto-focus spectrograph, then align lens1
+        # * spot-mirror-align: same GUI as lens-align, but without auto-focus or lens => just
+        # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * goal-align: find the center of the AR image using a "Goal" image
         # * fiber-align: move x, y of the fibaligner with mean of spectrometer as feedback
         self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
+            (panel.btn_align_spot, "spot-mirror-align"),
             (panel.btn_align_mirror, "mirror-align"),
             (panel.btn_align_centering, "center-align"),
             (panel.btn_align_fiber, "fiber-align"),
@@ -2851,6 +2858,7 @@ class Sparc2AlignTab(Tab):
         # The GUI mode to the optical path mode
         self._mode_to_opm = {
             "mirror-align": "mirror-align",
+            "spot-mirror-align": "mirror-align",
             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
             "center-align": "ar",
             "fiber-align": "fiber-align",
@@ -3035,6 +3043,14 @@ class Sparc2AlignTab(Tab):
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
+        elif mode == "spot-mirror-align":
+            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
+            self._ccd_stream.should_update.value = True
+            self.panel.pnl_mirror.Enable(True)
+            self.panel.pnl_lens_mover.Enable(False)  # Should be hidden anyway
+            self.panel.pnl_focus.Enable(False)  # Should be hidden anyway
+            self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
         elif mode == "mirror-align":
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
             self._moi_stream.should_update.value = True

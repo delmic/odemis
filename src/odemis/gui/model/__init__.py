@@ -675,6 +675,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
+        # If no (direct) spectrograph, the lens 1 doesn't need to be aligned.
+        # => change the lens-align mode to spot-mirror-align mode
+        if not main.spectrograph:
+            amodes[0] = "spot-mirror-align"
+
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
