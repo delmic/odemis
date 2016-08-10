@@ -2647,12 +2647,7 @@ class Sparc2AlignTab(Tab):
 
         # Focuser here too so that it's possible to focus with right mouse button,
         # and also menu controller believes it's possible to autofocus.
-        if main_data.focus:
-            focus_affects = main_data.focus.affects.value
-        else:
-            focus_affects = {}
-
-        if main_data.ccd.name in focus_affects:
+        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
             ccd_focuser = main_data.focus
         else:
             ccd_focuser = None
