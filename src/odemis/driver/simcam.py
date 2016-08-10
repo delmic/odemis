@@ -144,10 +144,7 @@ class Camera(model.DigitalCamera):
                    int(round(old_resolution[1] * change[1])))
 
         # fit
-        max_res = self.resolution.range[1]
-        new_res = (min(new_res[0], max_res[0]),
-                   min(new_res[1], max_res[1]))
-        self.resolution.value = new_res
+        self.resolution.value = self.resolution.clip(new_res)
         return self._binning
 
     def _setResolution(self, value):
@@ -155,10 +152,15 @@ class Camera(model.DigitalCamera):
         value (2-tuple int)
         Called when "resolution" VA is modified. It actually modifies the camera resolution.
         """
-        self._resolution = value
+        max_res = (self._shape[0] // self._binning[0],
+                   self._shape[1] // self._binning[1])
+
+        self._resolution = (max(1, min(value[0], max_res[0])),
+                            max(1, min(value[1], max_res[1])))
+
         if not self.translation.readonly:
             self.translation.value = self.translation.value  # force re-check
-        return value
+        return self._resolution
 
     def _setTranslation(self, value):
         """
