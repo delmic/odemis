@@ -24,7 +24,6 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
-import cv2
 import logging
 import numpy
 from odemis import model
@@ -33,10 +32,26 @@ from odemis.util.img import Subtract
 from scipy import ndimage
 import threading
 import time
+import cv2
 
 
 MAX_STEPS_NUMBER = 100  # Max steps to perform autofocus
 MAX_BS_NUMBER = 1  # Maximum number of applying binary search with a smaller max_step
+
+
+def _convertRBGToGrayscale(image):
+    """
+    Quick and dirty convertion of RGB data to grayscale
+    image (numpy array of shape YX3)
+    return (numpy array of shape YX)
+    """
+    r, g, b = image[:, :, 0], image[:, :, 1], image[:, :, 2]
+    gray = numpy.empty(image.shape[0:2], dtype="uint16")
+    gray[...] = r
+    gray += g
+    gray += b
+
+    return gray
 
 
 def MeasureSEMFocus(image):
@@ -44,20 +59,14 @@ def MeasureSEMFocus(image):
     Given an image, focus measure is calculated using the standard deviation of
     the raw data.
     image (model.DataArray): SEM image
-    returns (float):    The focus level of the SEM image
+    returns (float): The focus level of the SEM image (higher is better)
     """
     # Handle RGB image
     if len(image.shape) == 3:
-        # TODO find faster solution
-        r, g, b = image[:, :, 0], image[:, :, 1], image[:, :, 2]
-        gray = numpy.empty(image.shape[0:2], dtype="uint16")
-        gray[...] = r
-        gray += g
-        gray += b
-    else:
-        gray = image
+        # TODO find faster/better solution
+        image = _convertRBGToGrayscale(image)
 
-    return ndimage.standard_deviation(gray)
+    return ndimage.standard_deviation(image)
 
 
 def MeasureOpticalFocus(image):
@@ -65,20 +74,14 @@ def MeasureOpticalFocus(image):
     Given an image, focus measure is calculated using the variance of Laplacian
     of the raw data.
     image (model.DataArray): Optical image
-    returns (float):    The focus level of the optical image
+    returns (float): The focus level of the optical image (higher is better)
     """
     # Handle RGB image
     if len(image.shape) == 3:
-        # TODO find faster solution
-        r, g, b = image[:, :, 0], image[:, :, 1], image[:, :, 2]
-        gray = numpy.empty(image.shape[0:2], dtype="uint16")
-        gray[...] = r
-        gray += g
-        gray += b
-    else:
-        gray = image
+        # TODO find faster/better solution
+        image = _convertRBGToGrayscale(image)
 
-    return cv2.Laplacian(gray, cv2.CV_64F).var()
+    return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
 def AcquireNoBackground(ccd, dfbkg=None):
@@ -112,26 +115,27 @@ def _discard_data(df, data):
     pass
 
 
-def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
+def _DoAutoFocus(future, detector, min_step, focus, dfbkg, good_focus):
     """
     Iteratively acquires an optical image, measures its focus level and adjusts
     the optical focus with respect to the focus level.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector: model.DigitalCamera or model.Detector
     min_step (float): minimum step size used, equal to depth of field (m)
-    thres_factor: threshold factor depending on type of detector and binning
-    et (float): acquisition time (s) of one image exposure time if detector is a ccd,
-        dwellTime*prod(resolution) if detector is an SEM
     focus (model.Actuator): The optical focus
     dfbkg (model.DataFlow): dataflow of se- or bs- detector
     good_focus (float): if provided, an already known good focus position to be
       taken into consideration while autofocusing
-    returns (float):    Focus position (m)
-                        Focus level
+    returns:
+        (float): Focus position (m)
+        (float): Focus level
     raises:
             CancelledError if cancelled
             IOError if procedure failed
     """
+    # TODO: dfbkg is mis-named, as it's the dataflow to use to _activate_ the
+    # emitter. To acquire the background, it's specifically not used.
+
     # It does a dichotomy search on the focus level. In practice, it means it
     # will start going into the direction that increase the focus with big steps
     # until the focus decreases again. Then it'll bounce back and forth with
@@ -156,10 +160,19 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
         last_pos = None
 
         rng = focus.axes["z"].range
-        # Pick measurement method
-        if detector.role == "ccd":
+        max_step = (rng[1] - rng[0]) / 2
+        if max_step <= 0:
+            raise ValueError("Unexpected focus range %s" % (rng,))
+
+        # Pick measurement method based on the heuristics that SEM detectors
+        # are typically just a point (ie, shape == data depth).
+        # TODO: is this working as expected? Alternatively, we could check
+        # MD_DET_TYPE.
+        if len(detector.shape) > 1:
+            logging.debug("Using Optical method to estimate focus")
             Measure = MeasureOpticalFocus
         else:
+            logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
 
         step_factor = 2 ** 7
@@ -184,7 +197,15 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
                 # it also means we are pretty close
             step_factor = 2 ** 4
 
-        logging.debug("Step factor used for autofocus: %d", step_factor)
+        if step_factor * min_step > max_step:
+            # Large steps would be too big. We can reduce step_factor and/or
+            # min_step. => let's take our time, and maybe find finer focus
+            min_step = max_step / step_factor
+            logging.debug("Reducing min step to %g", min_step)
+
+        # TODO: to go a bit faster, we could use synchronised acquisition on
+        # the detector (if it supports it)
+        logging.debug("Step factor used for autofocus: %g", step_factor)
         step_cntr = 1
         while step_factor >= 1 and step_cntr <= MAX_STEPS_NUMBER:
             # Start at the current focus position
@@ -196,34 +217,38 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
             else:
                 image = AcquireNoBackground(detector, dfbkg)
                 fm_center = Measure(image)
-                logging.debug("Focus level at %f is %f", center, fm_center)
+                logging.debug("Focus level (center) at %f is %f", center, fm_center)
                 focus_levels[center] = fm_center
 
             # Move to right position
             right = center + step_factor * min_step
+            right = max(rng[0], min(right, rng[1]))  # clip
             if not max_reached and right in focus_levels:
                 fm_right = focus_levels[right]
             else:
-                right = _ClippedMove(rng, focus, step_factor * min_step)
+                focus.moveAbsSync({"z": right})
+                right = focus.position.value["z"]
                 image = AcquireNoBackground(detector, dfbkg)
                 fm_right = Measure(image)
-                logging.debug("Focus level at %f is %f", right, fm_right)
+                logging.debug("Focus level (right) at %f is %f", right, fm_right)
                 focus_levels[right] = fm_right
 
             # Move to left position
             left = center - step_factor * min_step
+            left = max(rng[0], min(left, rng[1]))  # clip
             if not max_reached and left in focus_levels:
                 fm_left = focus_levels[left]
             else:
-                left = _ClippedMove(rng, focus, -2 * step_factor * min_step)
+                focus.moveAbsSync({"z": left})
+                left = focus.position.value["z"]
                 image = AcquireNoBackground(detector, dfbkg)
                 fm_left = Measure(image)
-                logging.debug("Focus level at %f is %f", left, fm_left)
+                logging.debug("Focus level (left) at %f is %f", left, fm_left)
                 focus_levels[left] = fm_left
                 last_pos = left
 
-            fm_range = [fm_left, fm_center, fm_right]
-            pos_range = [left, center, right]
+            fm_range = (fm_left, fm_center, fm_right)
+            pos_range = (left, center, right)
             best_fm = max(fm_range)
             i_max = fm_range.index(best_fm)
             best_pos = pos_range[i_max]
@@ -233,8 +258,17 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
 
             # if best focus was found at the center
             if i_max == 1:
-                step_factor = step_factor // 2
+                step_factor /= 2
+                if not max_reached:
+                    logging.debug("Now zooming in on improved focus")
                 max_reached = True
+            elif (rng[0] > best_pos - step_factor * min_step or
+                  rng[1] < best_pos + step_factor * min_step):
+                step_factor /= 1.5
+                logging.debug("Reducing step factor to %g because the focus (%g) is near range limit %s",
+                              step_factor, best_pos, rng)
+                if step_factor <= 8:
+                    max_reached = True  # Force re-checking data
 
             focus.moveAbsSync({"z": best_pos})
             step_cntr += 1
@@ -254,25 +288,6 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
             future._autofocus_state = FINISHED
-
-
-def _ClippedMove(rng, focus, shift):
-    """
-    Clips the focus move requested within the range
-    """
-    cur_pos = focus.position.value['z']
-    test_pos = cur_pos + shift
-    if rng[0] >= test_pos:
-        diff = rng[0] - cur_pos
-        f = focus.moveRel({"z": diff})
-    elif test_pos >= rng[1]:
-        diff = rng[1] - cur_pos
-        f = focus.moveRel({"z": diff})
-    else:
-        f = focus.moveRel({"z": shift})
-    f.result()
-    final_pos = focus.position.value.get('z')
-    return final_pos
 
 
 def _CancelAutoFocus(future):
@@ -318,17 +333,21 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     # Check if the emitter is a scanner (focusing = SEM)
-    if hasattr(emt, "dwellTime") and isinstance(emt.dwellTime, model.VigilantAttributeBase):
+    if model.hasVA(emt, "dwellTime"):
         et = emt.dwellTime.value * numpy.prod(emt.resolution.value)
-    else:
+    elif model.hasVA(detector, "exposureTime"):
         et = detector.exposureTime.value
+    else:
+        # Completely random... but we are in a case where probably that's the last
+        # thing the caller will care about.
+        et = 1
 
     # use the .depthOfField on detector or emitter as maximum stepsize
     avail_depths = (detector, emt)
-    if focus.role == "ebeam-focus":
+    if model.hasVA(emt, "dwellTime"):
         avail_depths = (emt, detector)
     for c in avail_depths:
-        if hasattr(c, "depthOfField") and isinstance(c.depthOfField, model.VigilantAttributeBase):
+        if model.hasVA(c, "depthOfField"):
             dof = c.depthOfField.value
             break
     else:
@@ -347,7 +366,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
     autofocus_thread = threading.Thread(target=executeTask,
                                         name="Autofocus",
                                         args=(f, _DoAutoFocus, f, detector, min_stp_sz,
-                                              et, focus, dfbkg, good_focus))
+                                              focus, dfbkg, good_focus))
 
     autofocus_thread.start()
     return f
