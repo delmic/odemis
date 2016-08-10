@@ -112,7 +112,7 @@ class ShamrockDLL(CDLL):
             errmsg = create_string_buffer(ERRORLENGTH)
             self.ShamrockGetFunctionReturnDescription(result, errmsg, len(errmsg))
             raise ShamrockError(result,
-                                "Call to %s failed with unknown error %d: %s" %
+                                "Call to %s failed with error %d: %s" %
                                 (func.__name__, result, errmsg.value))
         return result
 
@@ -396,10 +396,10 @@ class Shamrock(model.Actuator):
                                               choices=set(FLIPPER_TO_PORT.keys())
                                               )
                 logging.info("Adding out mirror flipper as flip-out")
-                # Some of the SR-193 don't have the hardware switch working, so better force it to a known position
-                self.SetFlipperMirror(OUTPUT_FLIPPER, self.GetFlipperMirror(OUTPUT_FLIPPER))
+                self._sanitiesFlipper(OUTPUT_FLIPPER)
             else:
                 logging.info("Out mirror flipper is not present")
+            # TODO: support INPUT_FLIPPER
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
@@ -431,6 +431,55 @@ class Shamrock(model.Actuator):
         self.SetAccessory(line, not value)
 
         return value
+
+    def _sanitiesFlipper(self, flipper):
+        """
+        Make sure the flipper is in good order by working around hardware and
+        software bugs.
+        flipper (int): the flipper for which to apply the workaround
+        """
+        # Some hardware don't have a working mirror position detector, and the
+        # only way to make sure it's at the right position is to ask to go there.
+        # Also there is a double SDK/firmware bug (as of 20160801/SDK 2.101.30001):
+        # * When requesting a flipper move from the current position to the
+        #  _same_ position, the focus offset is applied anyway.
+        # * When opening the device via the SDK, the focus is moved by the
+        #  (flipper) focus offset. Most likely, this is because the SDK or the
+        #  firmware attempts to move the flipper to the same position as it's
+        #  currently is (ie, first bug).
+        # => workaround that second bug by 'taking advantage' of the first bug.
+        # If they are both fixed, the actions become a no-op... and hopefully
+        # they'll get fixed at the same time.
+
+        assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
+
+        port = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetFlipperMirror(self._device, flipper, byref(port))
+
+        if self.FocusMirrorIsPresent():
+            with self._hw_access:
+                # Init has already moved focus by +Foffset (cf bug #2)
+                focus_init = c_int()
+                self._dll.ShamrockGetFocusMirror(self._device, byref(focus_init))
+                logging.info("Calling SetFlipperMirror back and forth to work-around "
+                             "focus initialisation, starting with focus @ %d stp on port %d",
+                             focus_init.value, port.value)
+                other_port = {DIRECT_PORT: SIDE_PORT, SIDE_PORT: DIRECT_PORT}[port.value]
+                self._dll.ShamrockSetFlipperMirror(self._device, flipper, other_port)  # -Foffset
+                self._dll.ShamrockSetFlipperMirror(self._device, flipper, other_port)  # -Foffset (bug #1)
+                self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)  # +Foffset
+                # => focus is at original position
+                focus_end = c_int()
+                self._dll.ShamrockGetFocusMirror(self._device, byref(focus_end))
+                logging.info("Focus is now @ %d stp on port %d",
+                             focus_end.value, port.value)
+        else:
+            # Just make sure it's at the right position
+            # TODO: doesn't the SDK already do this?
+            logging.info("Calling SetFlipperMirror on port %d to ensure the position", port.value)
+            with self._hw_access:
+                self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
     def Initialize(self):
         """
@@ -492,6 +541,7 @@ class Shamrock(model.Actuator):
 
     def SetGrating(self, grating):
         """
+        Note: it will update the focus position (if there is a focus)
         grating (0<int<=3)
         """
         assert 1 <= grating <= 3
@@ -720,6 +770,11 @@ class Shamrock(model.Actuator):
     def SetFocusMirror(self, steps):
         """
         Relative move on the focus
+        Note: It's RELATIVE!!!
+        Note: the position is saved per grating + offset for the detector.
+        It seems that changing when on first detector updates the grating value
+        (+ the Fdetector offset), and changing on the second detector only
+        updates the Fdetector offset.
         steps (int): relative numbers of steps to do
         """
         assert isinstance(steps, int)
@@ -831,6 +886,66 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
         return (present.value != 0)
 
+    # Note: the following 4 functions are not documented (altough advertised in
+    # the changelog and in the include file)
+    # Available since SDK 2.100, but not documented, and raise a "Not available"
+    # error with the SR-193i
+    def SetAutoSlitCoefficients(self, index, x1, y1, x2, y2):
+        """
+        No idea what this does! (Excepted guesses from the name)
+        index (1<=int<=4): Slit number
+        x1, y1, x2, y2 (ints): ???
+        """
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
+        with self._hw_access:
+            self._dll.ShamrockSetAutoSlitCoefficients(self._device, index, x1, y1, x2, y2)
+
+    def GetAutoSlitCoefficients(self, index):
+        """
+        No idea what this does! (Excepted guesses from the name)
+        index (1<=int<=4): Slit number
+        return: x1, y1, x2, y2 (ints) ???
+        """
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
+        x1 = c_int()
+        y1 = c_int()
+        x2 = c_int()
+        y2 = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetAutoSlitCoefficients(self._device, index,
+                                  byref(x1), byref(y1), byref(x2), byref(y2))
+
+        return x1.value, y1.value, x2.value, y2.value
+
+    # Available since SDK 2.101, but currently raises either "Communication error"
+    # (for the Set) or "Parameter 3 invalid" (for the Get)
+    def SetSlitZeroPosition(self, index, offset):
+        """
+        (Probably) changes the calibration offset for the position of the slit
+        to be closed (= 0).
+        index (1<=int<=4): Slit number
+        offset (-200 <= int <= 0): some value representing the distance that needs to be moved
+          by the actuator for the slit to just be closed when set to 0
+          (ie, any further move would open a bit the slit)
+        """
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
+        with self._hw_access:
+            self._dll.ShamrockSetSlitZeroPosition(self._device, index, offset)
+
+    def GetSlitZeroPosition(self, index):
+        """
+        Read the current calibration offset for the position of the slit
+        to be closed (= 0).
+        index (1<=int<=4): Slit number
+        return (int): the offset
+        """
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
+        offset = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetSlitZeroPosition(self._device, index, byref(offset))
+
+        return offset.value
+
     # Shutter management
     def SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
@@ -860,6 +975,18 @@ class Shamrock(model.Actuator):
 
     # Mirror flipper management
     def SetFlipperMirror(self, flipper, port):
+        """
+        Switches the given mirror to a different position.
+        Note: The focus position is updated, but the detector offset (= turret
+          position extra angle) is _not_ updated.
+        Note 2: As of 20160801, the focus position is not always correctly updated.
+          It is seen as special focus offset, but if asked to move to the same
+          position as it's currently in (= no move), it will still apply the offset.
+          Also, if the offset would lead to moving the focus out of range, it's
+          not applied _at all_ and is then saved as 0.
+        flipper (int from *PUT_FLIPPER): the mirror index
+        port (int from *_PORT): the new position
+        """
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         assert(0 <= port <= 1)
 
