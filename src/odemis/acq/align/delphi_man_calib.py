@@ -301,6 +301,8 @@ def main(args):
         if hole_focus is not None:
             f = ebeam_focus.moveAbs({"z": hole_focus})
             f.result()
+            # TODO: instead of hole_focus, use good_focus = _hole_focus - GOOD_FOCUS_OFFSET ?
+
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
         escan.horizontalFoV.value = escan.horizontalFoV.range[0]

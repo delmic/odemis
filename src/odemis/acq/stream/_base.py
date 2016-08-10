@@ -546,6 +546,7 @@ class Stream(object):
                 self._unlinkHwVAs()
         return active
 
+    # TODO: different versions for static (no hw/just one data) and live (hw/data&drange changes)
     def _updateDRange(self, data=None):
         """
         Update the ._drange, with whatever data is known so far.

@@ -381,6 +381,10 @@ class AlignedSEMStream(SEMStream):
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.shift). If MTD_MD_UPD, it will just update the
          position correction metadata on the SEM images.
+        ccd (Optical detector)
+        stage (actuator): the sample stage, just to know when re-alignment is needed
+        focus (actuator): the _optical_ focuser, just to know when re-alignment is needed
+        focuser (actuator): the _e-beam_ focuser, to allow focusing the image
         """
         super(AlignedSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
@@ -501,7 +505,7 @@ class AlignedSEMStream(SEMStream):
                 elif self._shiftebeam == MTD_MD_UPD:
                     pass
                 else:
-                    logging.error("Unknown shiftbeam method %s", self._shiftebeam)
+                    raise NotImplementedError("Unknown shiftbeam method %s" % (self._shiftebeam,))
             except LookupError:
                 self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
                 # logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
