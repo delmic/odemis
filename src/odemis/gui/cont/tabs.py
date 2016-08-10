@@ -32,7 +32,7 @@ import math
 import numpy
 from odemis import dataio, model
 from odemis.acq import calibration
-from odemis.acq.align import AutoFocus
+from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream, RGBStream
 from odemis.driver.actuator import ConvertStage
@@ -1040,10 +1040,14 @@ class ChamberTab(Tab):
         self.panel.vp_chamber.SetFlip(wx.VERTICAL)
 
         # Just one stream: chamber view
+        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
+            ccd_focuser = main_data.focus
+        else:
+            ccd_focuser = None
         self._ccd_stream = acqstream.CameraStream("Chamber view",
                                                   main_data.ccd, main_data.ccd.data,
                                                   emitter=None,
-                                                  focuser=main_data.focus,
+                                                  focuser=ccd_focuser,
                                                   detvas=get_local_vas(main_data.ccd))
         # Make sure image has square pixels and full FoV
         self._ccd_stream.detBinning.value = (1, 1)
@@ -2642,13 +2646,17 @@ class Sparc2AlignTab(Tab):
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
         # Focuser here too so that it's possible to focus with right mouse button,
-        # and also menu controller beleives it's possible to autofocus.
+        # and also menu controller believes it's possible to autofocus.
+        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
+            ccd_focuser = main_data.focus
+        else:
+            ccd_focuser = None
         ccd_stream = acqstream.BrightfieldStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
                             emitter=None,
-                            focuser=main_data.focus,
+                            focuser=ccd_focuser,
                             detvas=get_local_vas(main_data.ccd),
                             forcemd={model.MD_POS: (0, 0)}  # Just in case the stage is there
                             )
@@ -2660,34 +2668,71 @@ class Sparc2AlignTab(Tab):
                             add_to_view=self.panel.vp_align_lens.microscope_view)
         ccd_spe.stream_panel.flatten()
 
-        speclines = acqstream.BrightfieldStream(
-                            "Spectrograph line",
-                            main_data.ccd,
-                            main_data.ccd.data,
-                            main_data.brightlight,
-                            focuser=main_data.focus,
-                            detvas=get_local_vas(main_data.ccd),
-                            forcemd={model.MD_POS: (0, 0)}
-                            )
-        speclines.tint.value = (0, 64, 255)  # colour it blue
-        # Fixed values, known to work well for autofocus
-        speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
-        speclines.detBinning.value = speclines.detBinning.clip((2, 2))
-        b = speclines.detBinning.value
-        max_res = speclines.detResolution.range[1]
-        res = max_res[0] // b[0], max_res[1] // b[1]
-        speclines.detResolution.value = speclines.detResolution.clip(res)
-        if model.hasVA(speclines, "detReadoutRate"):
-            try:
-                speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
-            except AttributeError:
-                speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
-        self._specline_stream = speclines
-        # TODO: make the legend display a merge slider (currently not happening
-        # because both streams are optical)
-        # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
-        self._stream_controller.addStream(speclines, visible=False,
-                            add_to_view=self.panel.vp_align_lens.microscope_view)
+        # For running autofocus (can only one at a time)
+        self._autofocus_f = model.InstantaneousFuture()
+        self._autofocus_align_mode = None  # Which mode is autofocus running on
+        self._pfc_autofocus = None  # For showing the autofocus progress
+
+        # TODO: handle if there are two spectrometers with focus (but for now,
+        # there is no such system)
+        if ccd_focuser:
+            # Add a stream to see the focus, and the slit for lens alignment
+            speclines = acqstream.BrightfieldStream(
+                                "Spectrograph line",
+                                main_data.ccd,
+                                main_data.ccd.data,
+                                main_data.brightlight,
+                                focuser=ccd_focuser,
+                                detvas=get_local_vas(main_data.ccd),
+                                forcemd={model.MD_POS: (0, 0)}
+                                )
+            speclines.tint.value = (0, 64, 255)  # colour it blue
+            # Fixed values, known to work well for autofocus
+            speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
+            speclines.detBinning.value = speclines.detBinning.clip((2, 2))
+            b = speclines.detBinning.value
+            max_res = speclines.detResolution.range[1]
+            res = max_res[0] // b[0], max_res[1] // b[1]
+            speclines.detResolution.value = speclines.detResolution.clip(res)
+            if model.hasVA(speclines, "detReadoutRate"):
+                try:
+                    speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
+                except AttributeError:
+                    speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
+            self._specline_stream = speclines
+            # TODO: make the legend display a merge slider (currently not happening
+            # because both streams are optical)
+            # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
+            self._stream_controller.addStream(speclines, visible=False,
+                                add_to_view=self.panel.vp_align_lens.microscope_view)
+
+            # Focus position axis -> AxisConnector
+            z = main_data.focus.axes["z"]
+            self.panel.slider_focus.SetRange(z.range[0], z.range[1])
+            self._ac_focus = AxisConnector("z", main_data.focus, self.panel.slider_focus,
+                                           events=wx.EVT_SCROLL_CHANGED)
+
+            # Bind autofocus (the complex part is to get the menu entry working too)
+            self.panel.btn_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
+            tab_data.autofocus_active.subscribe(self._onAutofocus)
+        else:
+            self.panel.pnl_focus.Show(False)
+
+        # Add autofocus in case there is a spectrometer after the optical fiber,
+        # and the spectrometer
+        # Consider the focuser is after the fiber, if the fiber aligner affects it
+        if (main_data.fibaligner and main_data.focus and
+            main_data.focus.name in main_data.fibaligner.affects.value):
+            if ccd_focuser:
+                logging.warning("Focus seems to both affect the 'ccd' and be after "
+                                "the optical fiber ('fiber-aligner').")
+            # Bind autofocus
+            # Note: we can use the same functions as for the ccd_focuser, because
+            # we'll distinguish which autofocus to run based on the align_mode.
+            self.panel.btn_fib_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
+            tab_data.autofocus_active.subscribe(self._onAutofocus)
+        else:
+            self.panel.pnl_fib_focus.Show(False)
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
         self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
@@ -2821,31 +2866,17 @@ class Sparc2AlignTab(Tab):
         self._layoutModeButtons()
         tab_data.align_mode.subscribe(self._onAlignMode)
 
+        # Make sure the calibration light is off
+        emissions = [0.] * len(main_data.brightlight.emissions.value)
+        main_data.brightlight.emissions.value = emissions
+        main_data.brightlight.power.value = main_data.brightlight.power.range[0]
+
         # Bind moving buttons & keys
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
 
         # TODO: warn user if the mirror stage is too far from the official engaged
         # position. => The S axis will fail!
-
-        if main_data.focus:
-            # Focus position axis -> AxisConnector
-            z = main_data.focus.axes["z"]
-            self.panel.slider_focus.SetRange(z.range[0], z.range[1])
-            self._ac_focus = AxisConnector("z", main_data.focus, self.panel.slider_focus,
-                                           events=wx.EVT_SCROLL_CHANGED)
-
-            # Bind autofocus (the complex part is to get the menu entry working too)
-            self.panel.btn_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
-            self._autofocus_f = model.InstantaneousFuture()
-            self._pfc_autofocus = None
-            self._autofocused = False  # to force autofocus on the first trial
-            tab_data.autofocus_active.subscribe(self._onAutofocus)
-
-            # Make sure the calibration light is off
-            emissions = [0.] * len(main_data.brightlight.emissions.value)
-            main_data.brightlight.emissions.value = emissions
-            main_data.brightlight.power.value = main_data.brightlight.power.range[0]
 
         # Bind MoI background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
@@ -2977,6 +3008,8 @@ class Sparc2AlignTab(Tab):
 
         # Disable controls/streams which are useless (to guide the user)
         self._stream_controller.pauseStreams()
+        # Cancel autofocus (if it happens to run)
+        self.tab_data_model.autofocus_active.value = False
 
         main = self.tab_data_model.main
 
@@ -3031,6 +3064,8 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_p_fibaligner_x.Enable(False)
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
+            # Note: it's OK to leave autofocus enabled, as it will wait by itself
+            # for the fiber-aligner to be in place
             f.add_done_callback(self._on_fibalign_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
@@ -3090,37 +3125,151 @@ class Sparc2AlignTab(Tab):
     @call_in_wx_main
     def _onAutofocus(self, active):
         if active:
-            if self.tab_data_model.align_mode.value != "lens-align":
-                logging.info("Autofocus requested outside of lens alignment mode, not doing anything")
+            main = self.tab_data_model.main
+            align_mode = self.tab_data_model.align_mode.value
+            if align_mode == "lens-align":
+                s = self._specline_stream
+                focuser = s.focuser
+                opath = "spec-focus"
+                btn = self.panel.btn_autofocus
+                gauge = self.panel.gauge_autofocus
+            elif align_mode == "fiber-align":
+                s = None  # No stream to play
+                focuser = main.focus
+                opath = "spec-fiber-focus"
+                btn = self.panel.btn_fib_autofocus
+                gauge = self.panel.gauge_fib_autofocus
+            else:
+                logging.info("Autofocus requested outside of lens or fiber alignment mode, not doing anything")
                 return
 
-            self.panel.btn_autofocus.SetLabel("Cancel")
+            # Get all the detectors affected by by the focuser
+            try:
+                spgr, dets, selector = self._getSpectrometerFocusingComponents(focuser)
+            except LookupError as ex:
+                logging.error("Failed to focus: %s" % (ex,))
+                # TODO: just run the standard autofocus procedure instead?
+                return
+
+            fopm = main.opm.setPath(opath)
+
+            btn.SetLabel("Cancel")
+            self._stream_controller.pauseStreams()
 
             # Go to the special focus mode (=> close the slit & turn on the lamp)
-            self._stream_controller.pauseStreams()
-            s = self._specline_stream
-            # Turn on the light
-            bl = self.tab_data_model.main.brightlight
+            bl = main.brightlight
             bl.power.value = bl.power.range[1]
-            s.should_update.value = True  # the stream will set all the emissions to 1
-            self.tab_data_model.main.opm.setPath("spec-focus").result()
-            self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
+            if s:
+                s.should_update.value = True  # the stream will set all the emissions to 1
+            else:
+                bl.emissions.value = [1] * len(bl.emissions.value)
+
+            # Configure each detector with good settings
+            for d in dets:
+                if s and d.name == s.detector.name:
+                    # The stream takes care of configuring its detector, so no need
+                    continue
+                if model.hasVA(d, "binning"):
+                    d.binning.value = (1, 1)
+                if model.hasVA(d, "exposureTime"):
+                    d.exposureTime.value = d.exposureTime.clip(0.2)
+
+            fopm.result()  # TODO: don't block the GUI => make it part of the autofocus
+            # self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
+            self._autofocus_f = AutoFocusSpectrometer(spgr, focuser, dets, selector)
+            self._autofocus_align_mode = align_mode
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
 
             # Update GUI
-            self._pfc_autofocus = ProgressiveFutureConnector(self._autofocus_f, self.panel.gauge_autofocus)
+            self._pfc_autofocus = ProgressiveFutureConnector(self._autofocus_f, gauge)
         else:
             # Cancel task, if we reached here via the GUI cancel button
             self._autofocus_f.cancel()
-            self.panel.btn_autofocus.SetLabel("Auto focus")
+
+            if self._autofocus_align_mode == "lens-align":
+                btn = self.panel.btn_autofocus
+            elif self._autofocus_align_mode == "fiber-align":
+                btn = self.panel.btn_fib_autofocus
+            btn.SetLabel("Auto focus")
+
+    def _getSpectrometerFocusingComponents(self, focuser):
+        """
+        Finds the different components needed to run auto-focusing with the
+        given focuser.
+        focuser (Actuator): the focuser that will be used to change focus
+        return:
+            * spectrograph (Actuator): component to move the grating and wavelength
+            * detectors (list of Detectors): the detectors attached on the
+              spectrograph, which can be used for focusing
+            * selector (Actuator or None): the component to switch detectors
+        raise LookupError: if not all the components could be found
+        """
+        main = self.tab_data_model.main
+
+        dets = []
+        # "ccd", which is the detector of the stream, should be first, as it's
+        # normally on the "direct" output port (which the SR193 tends to prefer
+        # for focusing), and typically has a better performance for focus.
+        for r in ("ccd", "sp-ccd"):
+            try:
+                d = model.getComponent(role=r)
+            except LookupError:
+                continue
+            if d.name in focuser.affects.value:
+                dets.append(d)
+
+        if not dets:
+            raise LookupError("Failed to find any detector for the spectrometer focusing")
+
+        # Get the spectrograph and selector based on the fact they affect the
+        # same detectors.
+        spgr = self._findSameAffects([main.spectrograph, main.spectrograph_ded],
+                                     dets)
+        if len(dets) <= 1:
+            selector = None  # we can keep it simple
+        else:
+            # TODO: make this code able to handle systems with multiple
+            # spectrographs (with a focus)
+            # Precisely, a selector would have multiple positions, with
+            # each position corresponding to one of the detectors
+            sels = [model.getComponent(role="spec-det-selector")]
+            selector = self._findSameAffects(sels, dets)
+
+        return spgr, dets, selector
+
+    def _findSameAffects(self, comps, affected):
+        """
+        Find a component that affects all the given components
+        comps (list of Component or None): set of components in which to look
+          for the "affecter"
+        affected (list of Component): set of affected components
+        return (Component): the first component that affects all the affected
+        raise LookupError: if no component found
+        """
+        naffected = set(c.name for c in affected)
+        for c in comps:
+            if c is not None and naffected <= set(c.affects.value):
+                return c
+        else:
+            raise LookupError("Failed to find a component that affects all %s" % (naffected,))
 
     def _on_autofocus_done(self, future):
+        align_mode = self._autofocus_align_mode
+        if align_mode == "lens-align" and not future.cancelled():
+            # Ensure the latest image in _specline_stream shows the slit focused,
+            # with the same grating as used in lens-align mode.
+            self.tab_data_model.main.opm.setPath("spec-focus").result()
+            self._specline_stream.detector.data.get(asap=False)
+
+        # Turn off the light
         bl = self.tab_data_model.main.brightlight
         bl.power.value = bl.power.range[0]
         # That VA will take care of updating all the GUI part
         self.tab_data_model.autofocus_active.value = False
-        # Go back to normal mode
-        self._onAlignMode("lens-align")
+        # Go back to normal mode. Note: it can be "a little weird" in case the
+        # autofocus was stopped due to changing mode, but it should end-up doing
+        # just twice the same thing, with the second time being a no-op.
+        self._onAlignMode(self.tab_data_model.align_mode.value)
 
     def _onBkgAcquire(self, evt):
         """

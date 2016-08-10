@@ -4,7 +4,7 @@ Created on 11 Apr 2014
 
 @author: Kimon Tsitsikas
 
-Copyright © 2013-2014 Kimon Tsitsikas, Delmic
+Copyright © 2013-2016 Kimon Tsitsikas and Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -22,16 +22,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import collections
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
+from odemis.model import InstantaneousFuture
 from odemis.util.img import Subtract
 from scipy import ndimage
 import threading
 import time
+
 import cv2
 
 
@@ -115,13 +118,13 @@ def _discard_data(df, data):
     pass
 
 
-def _DoAutoFocus(future, detector, min_step, focus, dfbkg, good_focus):
+def _DoAutoFocus(future, detector, emt, focus, dfbkg, good_focus):
     """
     Iteratively acquires an optical image, measures its focus level and adjusts
     the optical focus with respect to the focus level.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector: model.DigitalCamera or model.Detector
-    min_step (float): minimum step size used, equal to depth of field (m)
+    emt (None or model.Emitter): In case of a SED this is the scanner used
     focus (model.Actuator): The optical focus
     dfbkg (model.DataFlow): dataflow of se- or bs- detector
     good_focus (float): if provided, an already known good focus position to be
@@ -149,6 +152,29 @@ def _DoAutoFocus(future, detector, min_step, focus, dfbkg, good_focus):
     logging.debug("Starting Autofocus...")
 
     try:
+        # use the .depthOfField on detector or emitter as maximum stepsize
+        avail_depths = (detector, emt)
+        if model.hasVA(emt, "dwellTime"):
+            # Hack in case of using the e-beam with a DigitalCamera detector.
+            # All the digital cameras have a depthOfField, which is updated based
+            # on the optical lens properties... but the depthOfField in this
+            # case depends on the e-beam lens.
+            avail_depths = (emt, detector)
+        for c in avail_depths:
+            if model.hasVA(c, "depthOfField"):
+                dof = c.depthOfField.value
+                break
+        else:
+            logging.debug("No depth of field info found")
+            dof = 1e-6  # m, not too bad value
+        logging.debug("Depth of field is %f", dof)
+        min_step = dof / 2
+
+        rng = focus.axes["z"].range
+        max_step = (rng[1] - rng[0]) / 2
+        if max_step <= 0:
+            raise ValueError("Unexpected focus range %s" % (rng,))
+
         max_reached = False  # True once we've passed the maximum level (ie, start bouncing)
         # It's used to cache the focus level, to avoid reacquiring at the same
         # position. We do it only for the 'rough' max search because for the fine
@@ -158,11 +184,6 @@ def _DoAutoFocus(future, detector, min_step, focus, dfbkg, good_focus):
         best_pos = focus.position.value['z']
         best_fm = 0
         last_pos = None
-
-        rng = focus.axes["z"].range
-        max_step = (rng[1] - rng[0]) / 2
-        if max_step <= 0:
-            raise ValueError("Unexpected focus range %s" % (rng,))
 
         # Pick measurement method based on the heuristics that SEM detectors
         # are typically just a point (ie, shape == data depth).
@@ -205,9 +226,15 @@ def _DoAutoFocus(future, detector, min_step, focus, dfbkg, good_focus):
 
         # TODO: to go a bit faster, we could use synchronised acquisition on
         # the detector (if it supports it)
+        # TODO: we could estimate the quality of the autofocus by looking at the
+        # standard deviation of the the focus levels (and the standard deviation
+        # of the focus levels measured for the same focus position)
         logging.debug("Step factor used for autofocus: %g", step_factor)
         step_cntr = 1
         while step_factor >= 1 and step_cntr <= MAX_STEPS_NUMBER:
+            # TODO: update the estimated time (based on how long it takes to
+            # move + acquire, and how many steps are approximately left)
+
             # Start at the current focus position
             center = focus.position.value['z']
             # Don't redo the acquisition either if we've just done it, or if it
@@ -300,11 +327,12 @@ def _CancelAutoFocus(future):
         if future._autofocus_state == FINISHED:
             return False
         future._autofocus_state = CANCELLED
-        logging.debug("Autofocus cancelled.")
+        logging.debug("Autofocus cancellation requested.")
 
     return True
 
 
+# TODO: drop steps, which is unused, or use it
 def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     """
     Estimates overlay procedure duration
@@ -342,20 +370,6 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
         # thing the caller will care about.
         et = 1
 
-    # use the .depthOfField on detector or emitter as maximum stepsize
-    avail_depths = (detector, emt)
-    if model.hasVA(emt, "dwellTime"):
-        avail_depths = (emt, detector)
-    for c in avail_depths:
-        if model.hasVA(c, "depthOfField"):
-            dof = c.depthOfField.value
-            break
-    else:
-        logging.debug("No depth of field info found")
-        dof = 1e-6  # m, not too bad value
-    logging.debug("Depth of field is %f", dof)
-    min_stp_sz = dof / 2
-
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateAutoFocusTime(et))
     f._autofocus_state = RUNNING
@@ -365,8 +379,204 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
     # Run in separate thread
     autofocus_thread = threading.Thread(target=executeTask,
                                         name="Autofocus",
-                                        args=(f, _DoAutoFocus, f, detector, min_stp_sz,
+                                        args=(f, _DoAutoFocus, f, detector, emt,
                                               focus, dfbkg, good_focus))
 
     autofocus_thread.start()
     return f
+
+
+def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
+    """
+    Run autofocus for a spectrograph. It will actually run autofocus on each
+    gratings, and for each detectors. The input slit should already be in a
+    good position (typically, almost closed), and a light source should be
+    active.
+    Note: it's currently tailored to the Andor Shamrock SR-193i. It's recommended
+    to put the detector on the "direct" output as first detector.
+    spectrograph (Actuator): should have grating and wavelength.
+    focuser (Actuator): should have a z axis
+    detectors (Detector or list of Detectors): all the detectors available on
+      the spectrometer. The first detector will be used to autofocus all the
+      gratings, and each other detector will be focused with the original
+      grating.
+    selector (Actuator or None): must have a rx axis with each position corresponding
+     to one of the detectors. If there is only one detector, selector can be None.
+    return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
+      which will eventually return a map of grating/detector -> focus position.
+    """
+    if not isinstance(detectors, collections.Iterable):
+        detectors = [detectors]
+    if not detectors:
+        raise ValueError("At least one detector must be provided")
+
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    detector = detectors[0]
+    if model.hasVA(detector, "exposureTime"):
+        et = detector.exposureTime.value
+    else:
+        # Completely random... but we are in a case where probably that's the last
+        # thing the caller will care about.
+        et = 1
+
+    # 1 time / grating + 1 time / extra detector
+    cnts = len(spectrograph.axes["grating"].choices) + (len(detectors) - 1)
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + cnts * estimateAutoFocusTime(et))
+    f.task_canceller = _CancelAutoFocusSpectrometer
+    # Extra info for the canceller
+    f._autofocus_state = RUNNING
+    f._autofocus_lock = threading.Lock()
+    f._subfuture = InstantaneousFuture()
+
+    # Run in separate thread
+    autofocus_thread = threading.Thread(target=executeTask,
+                                        name="Spectrometer Autofocus",
+                                        args=(f, _DoAutoFocusSpectrometer, f,
+                                              spectrograph, focuser, detectors, selector))
+
+    autofocus_thread.start()
+    return f
+
+
+def _moveSelectorToDetector(selector, detector):
+    """
+    Move the selector to have the given detector receive light
+    selector (Actuator): a rx axis with a position
+    detector (Component): the component to receive light
+    return (position): the new position of the selector
+    raise LookupError: if no position on the selector affects the detector
+    """
+    # TODO: handle every way of indicating affect position in acq.path? -> move to odemis.util
+    mv = {}
+    for an, ad in selector.axes.items():
+        if hasattr(ad, "choices") and isinstance(ad.choices, dict):
+            for pos, value in ad.choices.items():
+                if detector.name in value:
+                    # set the position so it points to the target
+                    mv[an] = pos
+
+    if mv:
+        selector.moveAbsSync(mv)
+        return mv
+    raise LookupError("Failed to find detector '%s' in positions of selector axes %s" %
+                      (detector.name, selector.axes.keys()))
+
+
+def _updateAFSProgress(future, last_dur, left):
+    """
+    Update the progress of the future based on duration of the previous autofocus
+    future (ProgressiveFuture)
+    last_dur (0< float): duration of the latest autofocusing action
+    left (0<= int): number of autofocus actions still left
+    """
+    # Estimate that all the other autofocusing will take the same amount of time
+    tleft = left * last_dur + 5  # 5 s to go back to original pos
+    future.set_progress(end=time.time() + tleft)
+
+
+def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector):
+    """
+    cf AutoFocusSpectrometer
+    return dict((grating, detector) -> focus pos)
+    """
+    ret = {}
+    # Record the wavelength and grating position
+    pos_orig = {k: v for k, v in spectrograph.position.value.items()
+                              if k in ("wavelength", "grating")}
+    gratings = spectrograph.axes["grating"].choices.keys()
+    if selector:
+        sel_orig = selector.position.value
+
+    # For progress update
+    cnts = len(gratings) + (len(detectors) - 1)
+
+    # Note: this procedure works well with the SR-193i. In particular, it
+    # records the focus position for each grating (in absolute) and each
+    # detector (as an offset). It needs to be double checked if used with
+    # other detectors.
+    if "Shamrock" not in spectrograph.hwVersion:
+        logging.warning("Spectrometer autofocusing has not been tested on"
+                        "this type of spectrograph (%s)", spectrograph.hwVersion)
+
+    try:
+        # Autofocus each grating, using the first detector
+        detector = detectors[0]
+        if selector:
+            _moveSelectorToDetector(selector, detector)
+
+        if future._autofocus_state == CANCELLED:
+            raise CancelledError()
+
+        # start with the current grating, to save the move time
+        gratings.sort(key=lambda g: 0 if g == pos_orig["grating"] else 1)
+        for g in gratings:
+            logging.debug("Autofocusing on grating %s", g)
+            tstart = time.time()
+            try:
+                # 0th order is not absolutely necessary for focusing, but it
+                # typically gives the best results
+                spectrograph.moveAbsSync({"wavelength": 0, "grating": g})
+            except Exception:
+                logging.exception("Failed to move to 0th order for grating %s", g)
+
+            future._subfuture = AutoFocus(detector, None, focuser)
+            fp, flvl = future._subfuture.result()
+            ret[(g, detector)] = fp
+            cnts -= 1
+            _updateAFSProgress(future, time.time() - tstart, cnts)
+
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
+
+        # Autofocus each additional detector
+        grating = pos_orig["grating"]
+        for d in detectors[1:]:
+            logging.debug("Autofocusing on detector %s", d)
+            tstart = time.time()
+            _moveSelectorToDetector(selector, d)
+            try:
+                # 0th order + original grating
+                # TODO: instead of using original grating, use mirror grating if
+                # available
+                spectrograph.moveAbsSync({"wavelength": 0, "grating": grating})
+            except Exception:
+                logging.exception("Failed to move to 0th order and grating %s", grating)
+
+            future._subfuture = AutoFocus(detector, None, focuser)
+            fp, flvl = future._subfuture.result()
+            ret[(grating, d)] = fp
+            cnts -= 1
+            _updateAFSProgress(future, time.time() - tstart, cnts)
+
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
+
+        return ret
+    except CancelledError:
+        logging.debug("AutofocusSpectrometer cancelled")
+    finally:
+        spectrograph.moveAbsSync(pos_orig)
+        if selector:
+            selector.moveAbsSync(sel_orig)
+        with future._autofocus_lock:
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
+            future._autofocus_state = FINISHED
+
+
+def _CancelAutoFocusSpectrometer(future):
+    """
+    Canceller of _DoAutoFocus task.
+    """
+    logging.debug("Cancelling autofocus...")
+
+    with future._autofocus_lock:
+        if future._autofocus_state == FINISHED:
+            return False
+        future._autofocus_state = CANCELLED
+        future._subfuture.cancel()
+        logging.debug("AutofocusSpectrometer cancellation requested.")
+
+    return True

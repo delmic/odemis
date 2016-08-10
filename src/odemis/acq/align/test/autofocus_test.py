@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from concurrent.futures._base import CancelledError
 import logging
 from odemis import model
 import odemis
@@ -38,7 +39,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_CONFIG = CONFIG_PATH + "sim/secom-focus-test.odm.yaml"  # 4x4
+SECOM_CONFIG = CONFIG_PATH + "sim/secom-focus-test.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sim/sparc2-focus-test.odm.yaml"
 
 
 class TestAutofocus(unittest.TestCase):
@@ -80,10 +82,6 @@ class TestAutofocus(unittest.TestCase):
         test.stop_backend()
 
     def setUp(self):
-        self.data = hdf5.read_data(os.path.dirname(__file__) + "/grid_10x10.h5")
-        C, T, Z, Y, X = self.data[0].shape
-        self.data[0].shape = Y, X
-        self.fake_img = self.data[0]
 
         if self.backend_was_running:
             self.skipTest("Running backend found")
@@ -92,12 +90,15 @@ class TestAutofocus(unittest.TestCase):
         """
         Test MeasureFocus
         """
-        input = self.fake_img
+        data = hdf5.read_data(os.path.dirname(__file__) + "/grid_10x10.h5")
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        input = data[0]
 
         prev_res = autofocus.MeasureSEMFocus(input)
         for i in range(1, 10, 1):
-            input = ndimage.gaussian_filter(input, sigma=i)
-            res = autofocus.MeasureSEMFocus(input)
+            blur = ndimage.gaussian_filter(input, sigma=i)
+            res = autofocus.MeasureSEMFocus(blur)
             self.assertGreater(prev_res, res)
             prev_res = res
 
@@ -143,6 +144,95 @@ class TestAutofocus(unittest.TestCase):
         self.assertAlmostEqual(foc_pos, self._sem_good_focus, 3)
         self.assertGreater(foc_lev, 0)
 
+
+class TestAutofocusSpectrometer(unittest.TestCase):
+    """
+    Test autofocus spectrometer function
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+
+        try:
+            test.start_backend(SPARC_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # find components by their role
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spccd = model.getComponent(role="sp-ccd")
+        cls.focus = model.getComponent(role="focus")
+        cls.spgr = model.getComponent(role="spectrograph")
+        cls.light = model.getComponent(role="brightlight")
+        cls.selector = model.getComponent(role="spec-det-selector")
+
+        # The good focus position is the start up position
+        cls._good_focus = cls.focus.position.value["z"]
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+        # Speed it up
+        self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
+        self.spccd.exposureTime.value = self.spccd.exposureTime.range[0]
+
+    @timeout(1000)
+    def test_one_det(self):
+        """
+        Test AutoFocus Spectrometer on CCD
+        """
+        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        f = align.AutoFocusSpectrometer(self.spgr, self.focus, self.ccd)
+        res = f.result(timeout=900)
+        for (g, d), fpos in res.items():
+            self.assertIs(d, self.ccd)
+            self.assertAlmostEqual(fpos, self._good_focus, 3)
+
+        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
+
+    @timeout(100)
+    def test_cancel(self):
+        """
+        Test cancelling does cancel (relatively quickly)
+        """
+        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        f = align.AutoFocusSpectrometer(self.spgr, self.focus, [self.ccd])
+        time.sleep(2)
+        f.cancel()
+        self.assertTrue(f.cancelled())
+        with self.assertRaises(CancelledError):
+            res = f.result(timeout=900)
+
+    @timeout(1000)
+    def test_multi_det(self):
+        """
+        Test AutoFocus Spectrometer with multiple detectors
+        """
+        # Note: a full procedure would start by setting the slit to the smallest position
+        # (cf optical path mode "spec-focus") and activating an energy source
+
+        self.focus.moveAbs({"z": self._good_focus + 400e-6}).result()
+        f = align.AutoFocusSpectrometer(self.spgr, self.focus, [self.ccd, self.spccd], self.selector)
+        res = f.result(timeout=900)
+        for (g, d), fpos in res.items():
+            self.assertIn(d, (self.ccd, self.spccd))
+            self.assertAlmostEqual(fpos, self._good_focus, 3)
+
+        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices) + 1)
+
+
 if __name__ == '__main__':
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestAutofocus)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.main()
