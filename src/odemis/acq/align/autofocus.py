@@ -448,15 +448,20 @@ def _moveSelectorToDetector(selector, detector):
     return (position): the new position of the selector
     raise LookupError: if no position on the selector affects the detector
     """
-    # TODO: handle every way of indicating affect position? -> move to odemis.util
-    choices = selector.axes["rx"].choices
-    for p, affected in choices.items():
-        if detector.name in affected:
-            selector.moveAbsSync({"rx": p})
-            return {"rx": p}
+    # TODO: handle every way of indicating affect position in acq.path? -> move to odemis.util
+    mv = {}
+    for an, ad in selector.axes.items():
+        if hasattr(ad, "choices") and isinstance(ad.choices, dict):
+            for pos, value in ad.choices.items():
+                if detector.name in value:
+                    # set the position so it points to the target
+                    mv[an] = pos
 
-    raise LookupError("Failed to find detector '%s' in selector positions %s" %
-                      (detector.name, choices.values()))
+    if mv:
+        selector.moveAbsSync(mv)
+        return mv
+    raise LookupError("Failed to find detector '%s' in positions of selector axes %s" %
+                      (detector.name, selector.axes.keys()))
 
 
 def _updateAFSProgress(future, last_dur, left):
