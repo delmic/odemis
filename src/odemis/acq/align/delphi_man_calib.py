@@ -238,6 +238,7 @@ def main(args):
 
         # Calculate offset approximation
         try:
+            # TODO: report failure in a nicer way
             f = aligndelphi.LensAlignment(overview_ccd, sem_stage)
             position = f.result()
         except Exception:

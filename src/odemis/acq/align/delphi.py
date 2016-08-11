@@ -27,18 +27,26 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import cv2
 import logging
 import math
+from numpy import array, ones, linalg
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform, spot, GOOD_FOCUS_OFFSET
 from odemis.acq.drift import CalculateDrift
+import os
+from scipy.ndimage import zoom
 import threading
 import time
-from . import autofocus
-from . import FindOverlay
+
 from autofocus import AcquireNoBackground
-from scipy.ndimage import zoom
-from numpy import array, ones, linalg
+
+from . import FindOverlay
+from . import autofocus
+
+
+logger = logging.getLogger(__name__)
+CALIB_DIRECTORY = u"delphi-calibration-report"  # delphi calibration report directory
+CALIB_LOG = u"calibration.log"
 
 EXPECTED_HOLES = ({"x":0, "y":12e-03}, {"x":0, "y":-12e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius
@@ -115,6 +123,16 @@ def _DoDelphiCalibration(future, main_data):
     """
     logging.debug("Delphi calibration...")
 
+    # handler storing the messages related to delphi calibration
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    path = os.path.join(os.path.expanduser(u"~"), CALIB_DIRECTORY,
+                        time.strftime(u"%Y%m%d-%H%M%S"))
+    os.makedirs(path)
+    hdlr_calib = logging.FileHandler(os.path.join(path, CALIB_LOG))
+    hdlr_calib.setFormatter(formatter)
+    hdlr_calib.addFilter(logging.Filter())
+    logger.addHandler(hdlr_calib)
+
     pressures = main_data.chamber.axes["pressure"].choices
     vacuum_pressure = min(pressures.keys())  # Pressure to go to SEM mode
     # vented_pressure = max(pressures.keys())
@@ -124,8 +142,6 @@ def _DoDelphiCalibration(future, main_data):
             break
     else:
         raise IOError("Failed to find the overview pressure in %s" % (pressures,))
-
-    # raise IOError("Boooo") # For debugging manual calibration
 
     if future._delphi_calib_state == CANCELLED:
         raise CancelledError()
@@ -137,7 +153,7 @@ def _DoDelphiCalibration(future, main_data):
         # their role.
         sem_stage = None
         opt_stage = None
-        logging.debug("Find SEM and optical stages...")
+        logger.debug("Find SEM and optical stages...")
         for c in main_data.stage.children.value:
             if c.role == "sem-stage":
                 sem_stage = c
@@ -154,20 +170,20 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Reference the (optical) stage
-        logging.debug("Reference the (optical) stage...")
+        logger.debug("Reference the (optical) stage...")
         f = opt_stage.reference({"x", "y"})
         f.result()
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
 
-        logging.debug("Reference the focus...")
+        logger.debug("Reference the focus...")
         f = main_data.focus.reference({"z"})
         f.result()
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
 
         # SEM stage to (0,0)
-        logging.debug("Move to the center of SEM stage...")
+        logger.debug("Move to the center of SEM stage...")
         f = sem_stage.moveAbs({"x": 0, "y": 0})
         f.result()
         if future._delphi_calib_state == CANCELLED:
@@ -175,10 +191,10 @@ def _DoDelphiCalibration(future, main_data):
 
         # Calculate offset approximation
         try:
-            logging.debug("Starting lens alignment...")
+            logger.debug("Starting lens alignment...")
             future.lens_alignment_f = LensAlignment(main_data.overview_ccd, sem_stage)
             position = future.lens_alignment_f.result()
-            logging.debug("SEM position after lens alignment: %s", position)
+            logger.debug("SEM position after lens alignment: %s", position)
         except Exception:
             raise IOError("Lens alignment failed.")
         if future._delphi_calib_state == CANCELLED:
@@ -207,11 +223,11 @@ def _DoDelphiCalibration(future, main_data):
 
         # Detect the holes/markers of the sample holder
         try:
-            logging.debug("Detect the holes/markers of the sample holder...")
+            logger.debug("Detect the holes/markers of the sample holder...")
             future.hole_detectionf = HoleDetection(main_data.bsd, main_data.ebeam, sem_stage,
                                                    main_data.ebeam_focus)
             htop, hbot, hfoc = future.hole_detectionf.result()
-            logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", htop, hbot)
+            logger.debug("First hole: %s (m,m) Second hole: %s (m,m)", htop, hbot)
         except Exception:
             raise IOError("Conversion update failed to find sample holder holes.")
 
@@ -223,7 +239,7 @@ def _DoDelphiCalibration(future, main_data):
 
         # Update progress of the future
         future.set_progress(end=time.time() + 11.5 * 60)
-        logging.debug("Move SEM stage to expected offset...")
+        logger.debug("Move SEM stage to expected offset...")
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
         # Due to stage lack of precision we have to double check that we
@@ -231,23 +247,23 @@ def _DoDelphiCalibration(future, main_data):
         reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
         vector = [a - b for a, b in zip(reached_pos, position)]
         dist = math.hypot(*vector)
-        logging.debug("Distance from required position after lens alignment: %f", dist)
+        logger.debug("Distance from required position after lens alignment: %f", dist)
         if dist >= 10e-06:
-            logging.debug("Retry to reach position..")
+            logger.debug("Retry to reach position..")
             f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
             f.result()
             reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
             vector = [a - b for a, b in zip(reached_pos, position)]
             dist = math.hypot(*vector)
-            logging.debug("New distance from required position: %f", dist)
-        logging.debug("Move objective stage to (0,0)...")
+            logger.debug("New distance from required position: %f", dist)
+        logger.debug("Move objective stage to (0,0)...")
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
         main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
 
-        logging.debug("Initial calibration to align and calculate the offset...")
+        logger.debug("Initial calibration to align and calculate the offset...")
         try:
             future.align_offsetf = AlignAndOffset(main_data.ccd, main_data.bsd,
                                                   main_data.ebeam, sem_stage,
@@ -262,7 +278,7 @@ def _DoDelphiCalibration(future, main_data):
 
         # Update progress of the future
         future.set_progress(end=time.time() + 10 * 60)
-        logging.debug("Calculate rotation and scaling...")
+        logger.debug("Calculate rotation and scaling...")
         try:
             future.rotation_scalingf = RotationAndScaling(main_data.ccd, main_data.bsd,
                                                           main_data.ebeam, sem_stage,
@@ -274,7 +290,7 @@ def _DoDelphiCalibration(future, main_data):
 
         # Update progress of the future
         future.set_progress(end=time.time() + 7.5 * 60)
-        logging.debug("Calculate shift parameters...")
+        logger.debug("Calculate shift parameters...")
         try:
             # Compute spot shift percentage
             future.spot_shiftf = SpotShiftFactor(main_data.ccd, main_data.bsd,
@@ -354,7 +370,7 @@ def _DoDelphiCalibration(future, main_data):
                                                 bgsub=True)
             _, cor_md = future.find_overlay_f.result()
         except Exception:
-            logging.debug("Fine alignment failed. Retrying to focus...")
+            logger.debug("Fine alignment failed. Retrying to focus...")
             if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
 
@@ -397,6 +413,9 @@ def _DoDelphiCalibration(future, main_data):
         iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
         return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
+    except Exception as e:
+        # log failure msg
+        logger.error(str(e))
     finally:
         # TODO: also cancel the current sub-future
         with future._delphi_calib_lock:
@@ -405,6 +424,7 @@ def _DoDelphiCalibration(future, main_data):
                 raise CancelledError()
             future._delphi_calib_state = FINISHED
         logging.debug("Calibration thread ended.")
+        logger.removeHandler(hdlr_calib)
 
 
 def _CancelDelphiCalibration(future):
