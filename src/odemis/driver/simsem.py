@@ -73,27 +73,29 @@ class SimSEM(model.HwComponent):
 
         # create the scanner child
         try:
-            kwargs = children["scanner"]
+            ckwargs = children["scanner"]
         except (KeyError, TypeError):
             raise KeyError("SimSEM was not given a 'scanner' child")
-        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+        self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
 
-        # create the scanner child
-        try:
-            kwargs = children["detector0"]
-        except (KeyError, TypeError):
+        # create the detector children
+        self._detectors = []
+        for c, ckwargs in children.items():
+            if c.startswith("detector"):
+                self._detectors.append(Detector(parent=self, daemon=daemon, **ckwargs))
+
+        if not self._detectors:
             raise KeyError("SimSEM was not given a 'detector0' child")
-        self._detector = Detector(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._detector)
+        self.children.value.update(set(self._detectors))
 
         try:
-            kwargs = children["focus"]
+            ckwargs = children["focus"]
         except (KeyError, TypeError):
             logging.info("Will not simulate focus")
             self._focus = None
         else:
-            self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
+            self._focus = EbeamFocus(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._focus)
 
     def terminate(self):
@@ -101,7 +103,8 @@ class SimSEM(model.HwComponent):
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterwards.
         """
-        self._detector._update_drift_timer.cancel()
+        for d in self._detectors:
+            d.terminate()
 
 
 class Scanner(model.Emitter):
@@ -363,6 +366,10 @@ class Detector(model.Detector):
 
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
 
+    def terminate(self):
+        self._update_drift_timer.cancel()
+        self.stop_acquire()
+
     @isasync
     def applyAutoContrast(self):
         """
@@ -495,6 +502,7 @@ class Detector(model.Detector):
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
+
 class SEMDataFlow(model.DataFlow):
     """
     This is an extension of model.DataFlow. It receives notifications from the
@@ -524,7 +532,6 @@ class SEMDataFlow(model.DataFlow):
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
-
 
 
 class EbeamFocus(model.Actuator):
