@@ -54,7 +54,6 @@ PHENOM_SH_TYPE_OPTICAL = 200  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
 DELPHI_OVERVIEW_FOCUS = {"z": 0.006}  # Good focus position for overview image on the Delphi sample holder
-GOOD_FOCUS_OFFSET = 200e-06  # Offset from hole focus
 
 
 class MicroscopeStateController(object):
@@ -1326,7 +1325,7 @@ class DelphiStateController(SecomStateController):
             # We know that a good initial focus value is a bit lower than the
             # one found while focusing on the holes
             if self._hole_focus is not None:
-                self.good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
+                self.good_focus = self._hole_focus - align.GOOD_FOCUS_OFFSET
                 ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
                 ff.result()
             ccd_md = self._main_data.ccd.getMetadata()

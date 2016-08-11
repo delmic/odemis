@@ -179,23 +179,6 @@ if not TEST_NOHW:
         offset = f.result()
 
 if not TEST_NOHW:
-    def test_update_conversion(self):
-        """
-        Test UpdateConversion
-        """
-        ccd = self.ccd
-        detector = self.sed
-        escan = self.ebeam
-        sem_stage = self.sem_stage
-        opt_stage = self.opt_stage
-        ebeam_focus = self.ebeam_focus
-        focus = self.focus
-        combined_stage = self.combined_stage
-        f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
-                                    focus, combined_stage, True)
-        first_hole, second_hole, hole_focus, offset, rotation, scaling = f.result()
-
-if not TEST_NOHW:
     def test_scan_pattern(self):
         """
         Test PatternDetection

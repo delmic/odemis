@@ -269,7 +269,7 @@ def main(args):
                 print "\033[1;30mTrying to detect the holes/markers, please wait...\033[1;m"
                 try:
                     hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
-                                                                ebeam_focus, known_focus=None, manual=True)
+                                                                ebeam_focus, manual=True)
                     new_first_hole, new_second_hole, new_hole_focus = hole_detectionf.result()
                     new_hole_focus = ebeam_focus.position.value.get('z')
                     print '\033[1;36m'
@@ -299,9 +299,9 @@ def main(args):
         f.result()
 
         if hole_focus is not None:
-            f = ebeam_focus.moveAbs({"z": hole_focus})
+            good_focus = hole_focus - align.GOOD_FOCUS_OFFSET
+            f = ebeam_focus.moveAbs({"z": good_focus})
             f.result()
-            # TODO: instead of hole_focus, use good_focus = _hole_focus - GOOD_FOCUS_OFFSET ?
 
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
@@ -413,11 +413,11 @@ def main(args):
 
                     print "\033[1;30mCalculating resolution and HFW shift, please wait...\033[1;m"
                     # Compute resolution-related values
-                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
+                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, good_focus)
                     new_resa, new_resb = resolution_shiftf.result()
 
                     # Compute HFW-related values
-                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
+                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, good_focus)
                     new_hfwa = hfw_shiftf.result()
 
                     print '\033[1;36m'
