@@ -886,7 +886,7 @@ class FineAlignController(object):
         # Prevent moving the stages
         for c in [self._tab_panel.vp_align_ccd.canvas,
                   self._tab_panel.vp_align_sem.canvas]:
-            c.abilities -= set([CAN_DRAG, CAN_FOCUS])
+            c.abilities -= {CAN_DRAG, CAN_FOCUS}
 
     def _resume(self):
         self._settings_controller.resume()
@@ -902,7 +902,7 @@ class FineAlignController(object):
         # Allow moving the stages
         for c in [self._tab_panel.vp_align_ccd.canvas,
                   self._tab_panel.vp_align_sem.canvas]:
-            c.abilities |= set([CAN_DRAG, CAN_FOCUS])
+            c.abilities |= {CAN_DRAG, CAN_FOCUS}
 
     def _on_fine_align(self, event):
         """
@@ -1058,7 +1058,7 @@ class AutoCenterController(object):
         # Prevent moving the stages
         for c in [self._tab_panel.vp_align_ccd.canvas,
                   self._tab_panel.vp_align_sem.canvas]:
-            c.abilities -= set([CAN_DRAG, CAN_FOCUS])
+            c.abilities -= {CAN_DRAG, CAN_FOCUS}
 
     def _resume(self):
         self._settings_controller.resume()
@@ -1075,7 +1075,7 @@ class AutoCenterController(object):
         # Allow moving the stages
         for c in [self._tab_panel.vp_align_ccd.canvas,
                   self._tab_panel.vp_align_sem.canvas]:
-            c.abilities |= set([CAN_DRAG, CAN_FOCUS])
+            c.abilities |= {CAN_DRAG, CAN_FOCUS}
 
     def _on_auto_center(self, event):
         """

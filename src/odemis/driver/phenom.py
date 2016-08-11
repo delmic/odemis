@@ -419,7 +419,7 @@ class Scanner(model.Emitter):
         self.spotSize = model.FloatContinuous(spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
-        self.blanker = model.VAEnumerated(True, choices=set([True, False]),
+        self.blanker = model.VAEnumerated(True, choices={True, False},
                                           setter=self._setBlanker)
 
     def updateMetadata(self, md):
@@ -696,8 +696,7 @@ class Detector(model.Detector):
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # 16 or 8 bits image
-        self.bpp = model.IntEnumerated(8, set([8, 16]),
-                                          unit="", setter=self._setBpp)
+        self.bpp = model.IntEnumerated(8, {8, 16}, unit="", setter=self._setBpp)
 
         # HW contrast and brightness
         self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")

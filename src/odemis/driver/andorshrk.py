@@ -341,7 +341,7 @@ class Shamrock(model.Actuator):
             if self.FilterIsPresent():
                 if bands is None:  # User gave no info => fallback to what the hardware knows
                     # TODO: way to detect that a position has no filter?
-                    bands = dict((i, self.GetFilterInfo(i)) for i in range(FILTERMIN, FILTERMAX + 1))
+                    bands = {i: self.GetFilterInfo(i) for i in range(FILTERMIN, FILTERMAX + 1)}
                 else:  # Check the content
                     try:
                         for pos, band in bands.items():
@@ -1529,7 +1529,7 @@ class FakeShamrockDLL(object):
 
         # offsets
         # gratting number -> offset (int)
-        self._goffset = dict((i, 0) for i in range(len(self._gratings)))
+        self._goffset = {i: 0 for i in range(len(self._gratings))}
         # enrance port (flipper #1) / exit port (flipper #2) -> offset (int)
         self._detoffset = {(0, 0): 0,
                            (0, 1): 0,

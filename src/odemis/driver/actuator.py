@@ -100,7 +100,7 @@ class MultiplexActuator(model.Actuator):
             if child in children_axes:
                 children_axes[child].add(axis)
             else:
-                children_axes[child] = set([axis])
+                children_axes[child] = {axis}
 
         # position & speed: special VAs combining multiple VAs
         self.position = model.VigilantAttribute(self._position, readonly=True)
@@ -723,7 +723,7 @@ class AntiBacklashActuator(model.Actuator):
         # Whether currently a backlash shift is applied on an axis
         # If True, moving the axis by the backlash value would restore its expected position
         # _shifted_lock must be taken before modifying this attribute
-        self._shifted = dict((a, False) for a in axes_def.keys())
+        self._shifted = {a: False for a in axes_def.keys()}
         self._shifted_lock = threading.Lock()
 
         # look for axes in backlash not existing in the child

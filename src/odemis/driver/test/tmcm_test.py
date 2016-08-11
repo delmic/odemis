@@ -341,7 +341,7 @@ class TestActuator(unittest.TestCase):
             self.assertEqual(self.dev.position.value[a], 0)
 
         # try all axes simultaneously
-        mv = dict((a, 1e-3) for a in axes)
+        mv = {a: 1e-3 for a in axes}
         self.dev.moveRel(mv)
         f = self.dev.reference(axes)
         f.result()
@@ -375,7 +375,7 @@ class TestActuator(unittest.TestCase):
             self.assertFalse(f.cancelled())
 
         # try all axes simultaneously, and cancel during ref
-        mv = dict((a, 1e-3) for a in axes)
+        mv = {a: 1e-3 for a in axes}
         self.dev.moveRel(mv)
         f = self.dev.reference(axes)
         time.sleep(5e-3)

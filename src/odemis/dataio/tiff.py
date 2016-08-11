@@ -1043,7 +1043,7 @@ def _countNeededIFDs(da):
         logging.warning("MD_DIMS %s doesn't fit the data shape %s", dims, da.shape)
         dims = "CTZYX"[-da.ndim::] # fallback to the default
 
-    shaped = dict((d, s) for d, s in zip(dims, da.shape))
+    shaped = {d: s for d, s in zip(dims, da.shape)}
     rep_hdim = [shaped.get(d, 1) for d in "CTZ"]
     # RGB iif C = 3 or 4 and TZ = 1,1
     if rep_hdim[0] in (3, 4) and rep_hdim[1:] == [1, 1]:  # RGB

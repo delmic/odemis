@@ -412,17 +412,17 @@ class Controller(object):
         # FIXME: only if the command is supported
         # dict axis -> boolean
         try:
-            self._hasLimitSwitches = dict((a, self.HasLimitSwitches(a)) for a in self._channels)
+            self._hasLimitSwitches = {a: self.HasLimitSwitches(a) for a in self._channels}
         except NotImplementedError:
-            self._hasLimitSwitches = dict((a, False) for a in self._channels)
+            self._hasLimitSwitches = {a: False for a in self._channels}
         # dict axis -> boolean
         try:
-            self._hasRefSwitch = dict((a, self.HasRefSwitch(a)) for a in self._channels)
+            self._hasRefSwitch = {a: self.HasRefSwitch(a) for a in self._channels}
         except NotImplementedError:
-            self._hasLimitSwitches = dict((a, False) for a in self._channels)
+            self._hasLimitSwitches = {a: False for a in self._channels}
 
         # Dict of axis (int) -> bool: whether the axis supports position update
-        self.canUpdate = dict((a, False) for a in self._channels)
+        self.canUpdate = {a: False for a in self._channels}
 
         self._position = {} # m (dict axis-> position)
         self.pos_rng = {}  # m, dict axis -> min,max position
@@ -433,7 +433,7 @@ class Controller(object):
 
         # only for interpolated position (on open-loop)
         self._target = {} # m (dict axis-> expected position at the end of the move)
-        self._end_move = dict((a, 0) for a in self._channels) # m (dict axis -> time the move will finish)
+        self._end_move = {a: 0 for a in self._channels} # m (dict axis -> time the move will finish)
         self._start_move = {} # m (dict axis -> time the move started)
 
         # If the controller is mis-configured for the actuator, things can go quite
