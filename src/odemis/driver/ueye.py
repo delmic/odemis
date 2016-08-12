@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import Queue
 from ctypes import *
 import ctypes
 import gc
@@ -37,7 +38,6 @@ import time
 # code. So, in order to avoid having to support another dependency, and likely
 # need to fork it, we have made the decision to only rely on ctypes. The source
 # code is still useful to understand how to call the IDS SDK.
-
 IGNORE_PARAMETER = -1
 
 # For DeviceFeature()
@@ -221,6 +221,21 @@ CM_MONO16 = 28
 CAPTURE_STATUS_INFO_CMD_RESET = 1
 CAPTURE_STATUS_INFO_CMD_GET = 2
 
+# For is_Blacklevel()
+AUTO_BLACKLEVEL_OFF = 0
+AUTO_BLACKLEVEL_ON = 1
+
+BLACKLEVEL_CAP_SET_AUTO_BLACKLEVEL = 1
+BLACKLEVEL_CAP_SET_OFFSET = 2
+
+BLACKLEVEL_CMD_GET_CAPS = 1
+BLACKLEVEL_CMD_GET_MODE_DEFAULT = 2
+BLACKLEVEL_CMD_GET_MODE = 3
+BLACKLEVEL_CMD_SET_MODE = 4
+BLACKLEVEL_CMD_GET_OFFSET_DEFAULT = 5
+BLACKLEVEL_CMD_GET_OFFSET_RANGE = 6
+BLACKLEVEL_CMD_GET_OFFSET = 7
+BLACKLEVEL_CMD_SET_OFFSET = 8
 
 class UEYE_CAPTURE_STATUS_INFO(Structure):
     _fields_ = [
@@ -637,7 +652,7 @@ class Camera(model.DigitalCamera):
 
             self._set_static_settings()
 
-            self._prev_settings = (None, None)  # exp, gain
+            self._prev_settings = ()  # TODO: put res and binning
 
             # Set the format
             # TODO: color mode based on the maximum BPP
@@ -667,10 +682,12 @@ class Camera(model.DigitalCamera):
             self.gain = model.FloatContinuous(self._gain, (1.0, 2.0), unit="",
                                               setter=self._setGain)
 
-            # Dataflow + acquisition
-            self.acquisition_lock = threading.Lock()
-            self.acquire_must_stop = threading.Event()
-            self.acquire_thread = None
+            # Queue to control the acquisition thread:
+            # * "S" to start
+            # * "E" to end
+            # * "T" to terminate
+            self._genmsg = Queue.Queue()
+            self._generator = None
 
             # TODO: softwareTrigger?
 
@@ -694,6 +711,10 @@ class Camera(model.DigitalCamera):
         # Note: for now the default pixel clock seems fine. Moreover, reducing
         # it reduces the minimum exposure time (but we don't care), and the
         # maximum exposure time is constant.
+
+        # Auto black level = different black level per pixel (= more range?)
+        blmode = c_uint32(AUTO_BLACKLEVEL_ON)
+        self._dll.is_Blacklevel(self._hcam, BLACKLEVEL_CMD_SET_MODE, byref(blmode), sizeof(blmode))
 
     # Direct mapping of the SDK functions
     def ExitCamera(self):
@@ -842,63 +863,47 @@ class Camera(model.DigitalCamera):
 
         self._dll.is_SetHardwareGain(self._hcam, master, red, green, blue)
 
+    def StopLiveVideo(self, wait=True):
+        """
+        Stop the live mode, or cancel trigger (if was waiting for trigger)
+        wait (bool): True if should wait until the current image is finished captured
+        """
+        if wait:
+            await = 0
+        else:
+            await = FORCE_VIDEO_STOP
+        self._dll.is_StopLiveVideo(self._hcam, await)
+
     # The component interface
 
     def _setExposureTime(self, exp):
-        # Will only actually be updated once we (re)start image acquisition
-        self._exp_time = exp
-        # TODO: based on increment, guess the value that will be accepted
+        if exp != self.exposureTime.value:
+            fr = 1 / exp
+            fr = self.SetFrameRate(fr)
+            logging.debug("Frame-rate set to %g fps", fr)
+            exp = self.SetExposure(exp)  # can take ~2s
+            logging.debug("Updated exposure time to %g s", exp)
+
+            self._metadata[model.MD_EXP_TIME] = exp
         return exp
 
     def _setGain(self, gain):
-        # Will only actually be updated once we (re)start image acquisition
         gain = round(gain * 100) / 100  # round to 1%
-        self._gain = gain
+        if gain != self.gain.value:
+            # Convert from 1.0 -> 2.0 => 0 -> 100
+            hwgain = int((gain - 1) * 100)
+            self.SetHardwareGain(hwgain)
+            logging.debug("Hardware gain set to %d %%", hwgain)
+            # TODO: also allow to use GainBoost (as the range from 2->3? or 2->4?
+            # Gain 50% + Gain boost ~= Gain 100%
+
         return gain
-
-    def start_generate(self):
-        """
-        Set up the camera and acquire a flow of images at the best quality for the given
-          parameters. Should not be called if already a flow is being acquired.
-        """
-        self._wait_stopped_flow()  # no-op is the thread is not running
-        self.acquisition_lock.acquire()
-        assert not self._dll.is_CaptureVideo(self._hcam, GET_LIVE)
-
-        # Set up thread
-        self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-                                               name="ueye acquire flow thread")
-        self.acquire_thread.start()
-
-    def stop_generate(self):
-        """
-        Stop the acquisition of a flow of images.
-        sync (boolean): if True, wait that the acquisition is finished before returning.
-         Calling with this flag activated from the acquisition callback is not
-         permitted (it would cause a dead-lock).
-        """
-        assert not self.acquire_must_stop.is_set()
-        self.acquire_must_stop.set()
-        # Warning: calling AcquisitionStop here cause the thread to go crazy
-
-    def _wait_stopped_flow(self):
-        """
-        Waits until the end acquisition of a flow of images. Calling from the
-         acquisition callback is not permitted (it would cause a dead-lock).
-        """
-        # "if" is to not wait if it's already finished
-        if self.acquire_must_stop.is_set():
-            self.acquire_thread.join(10)  # 10s timeout for safety
-            if self.acquire_thread.isAlive():
-                raise OSError("Failed to stop the acquisition thread")
-            # ensure it's not set, even if the thread died prematurely
-            self.acquire_must_stop.clear()
 
     def _need_update_settings(self):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
-        new_settings = (self._exp_time, self._gain)
+        new_settings = ()
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -907,29 +912,13 @@ class Camera(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        (prev_exp, prev_gain) = self._prev_settings
+        # () = self._prev_settings
+        # logging.debug("Updating the hardware settings")
 
-        # Note: if pixel clock and binning are to be updated, it should be done
-        # before updating the frame-rate & exposure time
+        # Note: if pixel clock and binning are to be updated, the frame-rate &
+        # exposure time needs to be reset
 
-        logging.debug("Updating the hardware settings")
-
-        if prev_exp != self._exp_time:
-            # Update frame-rate first, as it clamps the maximum possible exp time
-            fr = 1 / self._exp_time
-            fr = self.SetFrameRate(fr)
-            logging.debug("Frame-rate set to %g fps", fr)
-            self._exp_time = self.SetExposure(self._exp_time)
-            self._metadata[model.MD_EXP_TIME] = self._exp_time
-            logging.debug("Updating exposure time to %g s", self._exp_time)
-
-        if prev_gain != self._gain:
-            # Convert from 1.0 -> 2.0 => 0 -> 100
-            hwgain = int((self._gain - 1) * 100)
-            self.SetHardwareGain(hwgain)
-            logging.debug("Hardware gain set to %d %%", hwgain)
-
-        self._prev_settings = (self._exp_time, self._gain)
+        self._prev_settings = ()
 
     def _allocate_buffers(self, num, width, height, bpp):
         """
@@ -956,7 +945,9 @@ class Camera(model.DigitalCamera):
         return buf
 
     def _free_buffers(self, buffers):
-        logging.debug("Freeing the image queue")
+        logging.debug("Freeing the %d buffers from image queue", len(buffers))
+        if not buffers:
+            return
         self._dll.is_ExitImageQueue(self._hcam)
         self._dll.is_ClearSequence(self._hcam)
         for mem, imid in buffers:
@@ -983,106 +974,217 @@ class Camera(model.DigitalCamera):
 
         return model.DataArray(na, md)
 
+    # Acquisition methods
+    def start_generate(self):
+        """
+        Set up the camera and acquire a flow of images at the best quality for the given
+          parameters. Should not be called if already a flow is being acquired.
+        """
+        if not self._generator:  # restart if it crashed
+            self._genmsg = Queue.Queue()
+            self._generator = threading.Thread(target=self._acquire,
+                                               name="uEye acquisition thread")
+            self._generator.start()
+        self._genmsg.put("S")
+
+    def stop_generate(self):
+        """
+        Stop the acquisition of a flow of images.
+        """
+        self._genmsg.put("E")
+
+    def _get_acq_msg(self, **kwargs):
+        """
+        Read one message from the acquisition queue
+        return (str): message
+        raises Queue.Empty: if no message on the queue
+        """
+        msg = self._genmsg.get(**kwargs)
+        if msg not in ("S", "E", "T"):
+            logging.warning("Acq received unexpected message %s", msg)
+        else:
+            logging.debug("Acq received message %s", msg)
+        return msg
+
+    def _acq_wait_start(self):
+        """
+        Blocks until the acquisition should start.
+        Note: it expects that the acquisition is stopped.
+        raise StopIteration: if a terminate message was received
+        """
+        while True:
+            state = self._get_acq_msg(block=True)
+            if state == "T":
+                raise StopIteration()
+
+            # Check if there are already more messages on the queue
+            try:
+                state = self._get_acq_msg(block=False)
+                if state == "T":
+                    raise StopIteration()
+            except Queue.Empty:
+                pass
+
+            if state == "S":
+                return
+
+    def _acq_should_stop(self, timeout=None):
+        """
+        Indicate whether the acquisition should now stop or can keep running.
+        Note: it expects that the acquisition is running.
+        timeout (0<float or None): how long to wait to check (if None, don't wait)
+        return (bool): True if needs to stop, False if can continue
+        raise StopIteration: if a terminate message was received
+        """
+        try:
+            if timeout is None:
+                state = self._get_acq_msg(block=False)
+            else:
+                state = self._get_acq_msg(timeout=timeout)
+            if state == "E":
+                return True
+            elif state == "T":
+                raise StopIteration()
+        except Queue.Empty:
+            pass
+        return False
+
     GC_PERIOD = 10  # how often the garbage collector should run (in number of buffers)
-    def _acquire_thread_run(self):
+    def _acquire(self):
         """
-        The core of the acquisition thread. Runs until acquire_must_stop is True.
+        Acquisition thread
+        Managed via the .genmsg Queue
         """
-        num_gc = 0
         num_errors = 0
-        need_reinit = True
         buffers = []
         try:
-            while not self.acquire_must_stop.is_set():
-                # need to stop acquisition to update settings
-                if need_reinit or self._need_update_settings():
-                    if self._dll.is_CaptureVideo(self._hcam, GET_LIVE):
-                        self._dll.is_StopLiveVideo(self._hcam, FORCE_VIDEO_STOP)
+            while True:
+                # Wait until we have a start (or terminate) message
+                gc.collect()
+                num_gc = 0
+                self._acq_wait_start()
+                need_reinit = True
+
+                # Keep acquiring
+                while True:
+                    # need to stop acquisition to update settings
+                    if need_reinit or self._need_update_settings():
+                        while True:
+                            self._check_capture_status()
+                            # If it has just been requested to stop, it might
+                            # indicate to be live but asking again can fail => wait
+                            try:
+                                if self._dll.is_CaptureVideo(self._hcam, GET_LIVE):
+                                    self.StopLiveVideo(wait=False)
+                            except UEyeError as ex:
+                                logging.warning("Failed to stop video (%s), will try again", ex)
+                                self._check_capture_status()
+                                time.sleep(1)
+                                continue
+                            break
+
                         self._free_buffers(buffers)
+                        buffers = []
+                        exposure_time = self.exposureTime.value
 
-                    self._update_settings()
-                    exposure_time = self._exp_time
+                        # check if any message received before starting again
+                        if self._acq_should_stop():
+                            logging.debug("Acquisition stopped")
+                            break
 
-                    res = self._transposeSizeFromUser(self.resolution.value)
-                    dtype = self._dtype
-                    buffers = self._allocate_buffers(3, res[0], res[1], numpy.iinfo(dtype).bits)
+                        res = self._transposeSizeFromUser(self.resolution.value)
+                        dtype = self._dtype
+                        buffers = self._allocate_buffers(3, res[0], res[1], numpy.iinfo(dtype).bits)
 
-                    # Start acquisition
-                    self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
-                    need_reinit = False
+                        # Start acquisition
+                        self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
+                        need_reinit = False
 
-                # Acquire an image
-                metadata = dict(self._metadata)  # duplicate
-                timeout = exposure_time * 1.2 + 3  # s
-                # TODO: use the timestamp provided by is_GetImageInfo()
-                metadata[model.MD_ACQ_DATE] = time.time()
+                    # Acquire an image
+                    metadata = self._metadata.copy()
+                    timeout = exposure_time * 1.2 + 3  # s
+                    # TODO: use the timestamp provided by is_GetImageInfo()
+                    metadata[model.MD_ACQ_DATE] = time.time()
 
-                # TODO: while waiting, allocate the memory for the DataArray
-                # TODO: check for acquire_must_stop while waiting
-                try:
-                    mem, imid = self.WaitForNextImage(timeout)
-                except UEyeError as ex:
-                    # Note: generates error 3 (CANT_OPEN_DEVICE) sometimes just after updating settings
-                    num_errors += 1
-                    if num_errors > 5:
-                        logging.error("%d errors in a row, cancelling acquisition", num_errors)
-                        return
-                    logging.warning("Failure during acquisition, while retry: %s", ex)
-                    self._check_capture_status()
-                    time.sleep(1)
-                    need_reinit = True
-                    continue
+                    # TODO: while waiting, allocate the memory for the DataArray
+                    # TODO: check for _acq_should_stop(timeout) while waiting
+                    try:
+                        logging.debug("Waiting for %g s", timeout)
+                        mem, imid = self.WaitForNextImage(timeout)
+                    except UEyeError as ex:
+                        # Note: generates error 3 (CANT_OPEN_DEVICE) sometimes just after updating settings
+                        num_errors += 1
+                        if num_errors > 5:
+                            logging.error("%d errors in a row, cancelling acquisition", num_errors)
+                            return
+                        logging.warning("Failure during acquisition, will retry: %s", ex)
+                        self._check_capture_status()
+                        time.sleep(1)
+                        need_reinit = True
+                        continue
+                    else:
+                        num_errors = 0
 
-                # TODO: it seems that sometimes (especially for the first image),
-                # the time take to get the image is less than the exposure time.
-                # See "Applying new parameters" of manual: in freerun mode, it
-                # can take several frames before the settings are applied.
-                # Still strange that this happens even if we stop/start acquisition.
-                logging.debug("Acquired one image after %g s", time.time() - metadata[model.MD_ACQ_DATE])
+                    # TODO: it seems that sometimes (especially for the first image),
+                    # the time take to get the image is less than the exposure time.
+                    # See "Applying new parameters" of manual: in freerun mode, it
+                    # can take several frames before the settings are applied.
+                    # Still strange that this happens even if we stop/start acquisition.
+                    logging.debug("Acquired one image after %g s", time.time() - metadata[model.MD_ACQ_DATE])
 
-                if self.acquire_must_stop.is_set():
-                    # Acquisition cancelled
-                    return
+                    if self._acq_should_stop():
+                        logging.debug("Acquisition stopped")
+                        try:
+                            self.StopLiveVideo(wait=False)
+                        except UEyeError:
+                            logging.exception("Failed to correctly stop the video")
+                        self._free_buffers(buffers)
+                        buffers = []
+                        break
 
-                array = self._buffer_as_array(mem, res[0], res[1], dtype, metadata)
-                self.data.notify(self._transposeDAToUser(array))
+                    array = self._buffer_as_array(mem, res[0], res[1], dtype, metadata)
+                    self.data.notify(self._transposeDAToUser(array))
 
-                # force the GC to free non-used buffers, for some reason, without
-                # this the GC runs only after we've managed to fill up the memory
-                num_gc += 1
-                if num_gc >= self.GC_PERIOD:
-                    gc.collect()
-                    num_gc = 0
+                    # force the GC to free non-used buffers, for some reason, without
+                    # this the GC runs only after we've managed to fill up the memory
+                    num_gc += 1
+                    if num_gc >= self.GC_PERIOD:
+                        gc.collect()
+                        num_gc = 0
+        except StopIteration:
+            logging.debug("Acquisition thread requested to terminate")
         except Exception:
-            logging.exception("Acquisition failed with unexpected error")
+            logging.exception("Failure in acquisition thread")
+        else:  # Shouldn't happen
+            logging.error("Acquisition thread ended without exception")
         finally:
             try:
-                self._dll.is_StopLiveVideo(self._hcam, FORCE_VIDEO_STOP)
+                self.StopLiveVideo()
             except UEyeError:
                 pass
             self._free_buffers(buffers)
-            self.acquisition_lock.release()
-            gc.collect()
+            self._generator = None
             logging.debug("Acquisition thread closed")
-            self.acquire_must_stop.clear()
 
     def _check_capture_status(self):
+        """
+        Log the capture errors, and reset the counter.
+        Note: the "errors" are not necessarily fatal, and most are recovered
+          automatically by the ueye driver.
+        """
         cap_stat_cnt = self.GetCaptureStatus()
         self.ResetCaptureStatus()
         for n, v in globals().items():
             if n.startswith("CAP_STATUS_"):
                 if cap_stat_cnt[v] > 0:
-                    logging.error("Error %s (%d times)", n, cap_stat_cnt[v])
+                    logging.warning("Error %s (%d times)", n, cap_stat_cnt[v])
 
     def terminate(self):
-        # Stop the acquisition if it's active, as some hardware don't like to
-        # be disconnected while acquiring, and stop responding afterwards.
-        try:
-            if self.acquire_thread and not self.acquire_must_stop.is_set():
-                self.stop_generate()
-            self._wait_stopped_flow()
-        except Exception:
-            logging.exception("Failed to stop the active acquisition")
+        self.stop_generate()
+        if self._generator:
+            self._genmsg.put("T")
+            self._generator.join(5)
+            self._generator = None
 
         if self._hcam:
             self.ExitCamera()
