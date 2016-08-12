@@ -26,6 +26,7 @@ import logging
 import math
 from odemis import model
 import odemis
+from odemis import acq
 from odemis.acq import align, stream
 from odemis.dataio import hdf5
 from odemis.driver.actuator import ConvertStage
@@ -150,22 +151,12 @@ class TestAlignment(unittest.TestCase):
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
 
         # start one image acquisition (so it should do the calibration)
-        self.image_received = threading.Event()
-        st.image.subscribe(self.on_image)
-        st.should_update.value = True
-        st.is_active.value = True
-
-        # wait until the image is acquired, which can be a bit long if the
-        # calibration is difficult => 30s
-        received = self.image_received.wait(30)
-        st.is_active.value = False
-        st.image.unsubscribe(self.on_image)
+        f = acq.acquire([st])
+        received, _ = f.result()
         self.assertTrue(received, "No image received after 30 s")
 
         # Check the correction metadata is there
         md = self.sed.getMetadata()
-        self.assertIn(model.MD_POS_COR, md)
-        md = st.raw[0].metadata
         self.assertIn(model.MD_POS_COR, md)
 
         # Check the position of the image is correct
@@ -173,20 +164,14 @@ class TestAlignment(unittest.TestCase):
         pos_dict = self.stage.position.value
         pos = (pos_dict["x"], pos_dict["y"])
         exp_pos = tuple(p - c for p, c in zip(pos, pos_cor))
-        imd = st.image.value.metadata
+        imd = received[0].metadata
         self.assertEqual(exp_pos, imd[model.MD_POS])
 
         # Check the calibration doesn't happen again on a second acquisition
         bad_cor = (-1, -1) # stupid impossible value
         self.sed.updateMetadata({model.MD_POS_COR: bad_cor})
-        self.image_received.clear()
-        st.image.subscribe(self.on_image)
-        st.is_active.value = True
-
-        # wait until the image is acquired
-        received = self.image_received.wait(10)
-        st.is_active.value = False
-        st.image.unsubscribe(self.on_image)
+        f = acq.acquire([st])
+        received, _ = f.result()
         self.assertTrue(received, "No image received after 10 s")
 
         # if calibration has happened (=bad), it has changed the metadata
@@ -199,14 +184,9 @@ class TestAlignment(unittest.TestCase):
         f.result() # make sure the move is over
         time.sleep(0.1) # make sure the stream had time to detect position has changed
 
-        self.image_received.clear()
-        st.image.subscribe(self.on_image)
-        st.is_active.value = True
-
-        # wait until the image is acquired
-        received = self.image_received.wait(30)
-        st.is_active.value = False
-        st.image.unsubscribe(self.on_image)
+        received = st.image.value
+        f = acq.acquire([st])
+        received, _ = f.result()
         self.assertTrue(received, "No image received after 30 s")
 
         # if calibration has happened (=good), it has changed the metadata
@@ -214,10 +194,6 @@ class TestAlignment(unittest.TestCase):
         self.assertNotEqual(bad_cor, md[model.MD_POS_COR],
                             "metadata hasn't been updated while it should have")
 
-
-    def on_image(self, im):
-        self.image = im
-        self.image_received.set()
 
 class FakeCCD(model.HwComponent):
     """
