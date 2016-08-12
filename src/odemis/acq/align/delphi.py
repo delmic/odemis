@@ -47,6 +47,7 @@ from . import autofocus
 logger = logging.getLogger(__name__)
 CALIB_DIRECTORY = u"delphi-calibration-report"  # delphi calibration report directory
 CALIB_LOG = u"calibration.log"
+CALIB_CONFIG = u"calibration.config"
 
 EXPECTED_HOLES = ({"x":0, "y":12e-03}, {"x":0, "y":-12e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius
@@ -411,6 +412,11 @@ def _DoDelphiCalibration(future, main_data):
         irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
         ishear = skew_md[model.MD_SHEAR_COR]
         iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+
+        # we can now store the calibration file in report
+        shid, _ = main_data.chamber.sampleHolder.value
+        _StoreConfig(path, shid, htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift)
+
         return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
     except Exception as e:
@@ -425,6 +431,55 @@ def _DoDelphiCalibration(future, main_data):
             future._delphi_calib_state = FINISHED
         logging.debug("Calibration thread ended.")
         logger.removeHandler(hdlr_calib)
+
+
+def _StoreConfig(path, shid, htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift):
+        """ Store the calibration data for a given sample holder
+
+        shid (int): the sample holder ID
+        htop (2 floats): position of the top hole
+        hbot (2 floats): position of the bottom hole
+        hfoc (float): focus used for hole detection
+        strans (2 floats): stage translation
+        sscale (2 floats > 0): stage scaling
+        srot (float): stage rotation (rad)
+        iscale (2 floats > 0): image scaling applied to CCD
+        irot (float): image rotation (rad)
+        iscale_xy (2 floats > 0)): image scaling applied to SEM
+        ishear (float): image shear
+        resa (2 floats): resolution related SEM image shift, slope of linear fit
+        resb (2 floats): resolution related SEM image shift, intercept of linear fit
+        hfwa (2 floats): hfw related SEM image shift, slope of linear fit
+        spotshift (2 floats): SEM spot shift in percentage of HFW
+
+        """
+        calib_f = open(os.path.join(path, CALIB_CONFIG), 'w')
+        calib_f.write("[delphi-" + format(shid, 'x') + "]\n"
+                        + str("top_hole_x = %.15f\n" % htop[0])
+                        + str("top_hole_y = %.15f\n" % htop[1])
+                        + str("bottom_hole_x = %.15f\n" % hbot[0])
+                        + str("bottom_hole_y = %.15f\n" % hbot[1])
+                        + str("hole_focus = %.15f\n" % hfoc)
+                        + str("stage_trans_x = %.15f\n" % strans[0])
+                        + str("stage_trans_y = %.15f\n" % strans[1])
+                        + str("stage_scaling_x = %.15f\n" % sscale[0])
+                        + str("stage_scaling_y = %.15f\n" % sscale[1])
+                        + str("stage_rotation = %.15f\n" % srot)
+                        + str("image_scaling_x = %.15f\n" % iscale[0])
+                        + str("image_scaling_y = %.15f\n" % iscale[1])
+                        + str("image_rotation = %.15f\n" % irot)
+                        + str("image_scaling_scan_x = %.15f\n" % iscale_xy[0])
+                        + str("image_scaling_scan_y = %.15f\n" % iscale_xy[1])
+                        + str("image_shear = %.15f\n" % ishear)
+                        + str("resolution_a_x = %.15f\n" % resa[0])
+                        + str("resolution_a_y = %.15f\n" % resa[1])
+                        + str("resolution_b_x = %.15f\n" % resb[0])
+                        + str("resolution_b_y = %.15f\n" % resb[1])
+                        + str("hfw_a_x = %.15f\n" % hfwa[0])
+                        + str("hfw_a_y = %.15f\n" % hfwa[1])
+                        + str("spot_shift_x = %.15f\n" % spotshift[0])
+                        + str("spot_shift_y = %.15f\n" % spotshift[1]))
+        calib_f.close()
 
 
 def _CancelDelphiCalibration(future):
