@@ -582,28 +582,58 @@ class PH300(model.Detector):
             logging.debug("Acq received message %s", msg)
         return msg
 
+    def _acq_wait_start(self):
+        """
+        Blocks until the acquisition should start.
+        Note: it expects that the acquisition is stopped.
+        raise StopIteration: if a terminate message was received
+        """
+        while True:
+            state = self._get_acq_msg(block=True)
+            if state == "T":
+                raise StopIteration()
+
+            # Check if there are already more messages on the queue
+            try:
+                state = self._get_acq_msg(block=False)
+                if state == "T":
+                    raise StopIteration()
+            except Queue.Empty:
+                pass
+
+            if state == "S":
+                return
+
+    def _acq_should_stop(self, timeout=None):
+        """
+        Indicate whether the acquisition should now stop or can keep running.
+        Note: it expects that the acquisition is running.
+        timeout (0<float or None): how long to wait to check (if None, don't wait)
+        return (bool): True if needs to stop, False if can continue
+        raise StopIteration: if a terminate message was received
+        """
+        try:
+            if timeout is None:
+                state = self._get_acq_msg(block=False)
+            else:
+                state = self._get_acq_msg(timeout=timeout)
+            if state == "E":
+                return True
+            elif state == "T":
+                raise StopIteration()
+        except Queue.Empty:
+            pass
+        return False
+
     def _acquire(self):
         """
         Acquisition thread
         Managed via the .genmsg Queue
         """
-        state = "E"  # E = stopped
         try:
             while True:
-
                 # Wait until we have a start (or terminate) message
-                while state != "S":
-                    state = self._get_acq_msg(block=True)
-                    if state == "T":
-                        return
-
-                    # Check if there are already more messages on the queue
-                    try:
-                        state = self._get_acq_msg(block=False)
-                        if state == "T":
-                            return
-                    except Queue.Empty:
-                        pass
+                self._acq_wait_start()
 
                 # Keep acquiring
                 while True:
@@ -618,33 +648,24 @@ class PH300(model.Detector):
 
                     logging.debug("Starting new acquisition")
                     # check if any message received before starting again
-                    try:
-                        state = self._get_acq_msg(block=False)
-                        if state == "E":
-                            break
-                        elif state == "T":
-                            return
-                    except Queue.Empty:
-                        pass
+                    if self._acq_should_stop():
+                        logging.debug("Acquisition stopped")
+                        break
 
                     self.ClearHistMem()
                     self.StartMeas(int(tacq * 1e3))
 
                     # Wait for the acquisition to be done or until a stop or
                     # terminate message comes
+                    must_stop = False
                     try:
                         now = tstart
                         while now < tend:
                             twait = max(1e-3, min((tend - now) / 2, tacq / 2))
                             logging.debug("Waiting for %g s", twait)
-                            try:
-                                state = self._get_acq_msg(timeout=twait)
-                                if state == "E":
-                                    break
-                                elif state == "T":
-                                    return
-                            except Queue.Empty:
-                                pass
+                            if self._acq_should_stop(twait):
+                                must_stop = True
+                                break
 
                             # Is the data ready?
                             if self.CTCStatus():
@@ -659,7 +680,7 @@ class PH300(model.Detector):
                         # Must always be called, whether the measurement finished or not
                         self.StopMeas()
 
-                    if state != "S":
+                    if must_stop:
                         logging.debug("Acquisition stopped")
                         break
 
@@ -668,8 +689,12 @@ class PH300(model.Detector):
                     da = model.DataArray(data, md)
                     self.data.notify(da)
 
+        except StopIteration:
+            logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
+        else:
+            logging.error("Acquisition thread ended without exception")
 
         logging.debug("Acquisition thread ended")
 
