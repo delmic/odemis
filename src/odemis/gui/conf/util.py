@@ -453,6 +453,8 @@ def format_choices(choices, uniformat=True, si=None):
             choices_formatted = zip(choices, [u"%g" % c for c in fmt])
         elif len(choices) > 1 and all([isinstance(c, numbers.Real) for c in choices]):
             try:
+                # TODO: does it matter? Can't we always do non-uniform?
+                # Or just guess based on the magnitude between the lowest and biggest value?
                 if uniformat:
                     fmt, choices_si_prefix = utun.si_scale_list(choices)
                     choices_formatted = zip(choices, [u"%g" % c for c in fmt])

@@ -846,7 +846,7 @@ class FluoStream(CameraStream):
             em_choices[k] = conversion.ensure_tuple(v)
 
         # invert the dict, to directly convert the emission to the position value
-        self._emission_to_idx = dict((v, k) for k, v in em_choices.items())
+        self._emission_to_idx = {v: k for k, v in em_choices.items()}
 
         cur_pos = em_filter.position.value["band"]
         current_em = em_choices[cur_pos]

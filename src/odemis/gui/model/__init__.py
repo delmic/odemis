@@ -169,9 +169,9 @@ class MainGUIData(object):
         self.ebic = None  # electron beam-induced current detector
         self.cld = None  # cathodoluminescnence detector (aka PMT)
         self.spectrometer = None  # 1D detector that returns a spectrum
-        self.spectrometer_int = None  # second spectrometer (SPARCv2)
-        self.spectrograph = None  # actuator to change the wavelength
-        self.spectrograph_ded = None  # second external spectrograph dedicated (SPARCv2)
+        self.spectrometer_int = None  # second spectrometer, which has its detector also usable for AR (SPARCv2)
+        self.spectrograph = None  # actuator to change the wavelength/grating (on SPARCv2, it's directly on the optical path)
+        self.spectrograph_ded = None  # spectrograph connected via an optical fiber (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)

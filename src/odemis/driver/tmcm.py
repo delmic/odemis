@@ -259,7 +259,7 @@ class TMCLController(model.Actuator):
 
         if refproc is not None:
             # str -> boolean. Indicates whether an axis has already been referenced
-            axes_ref = dict((a, False) for a in axes)
+            axes_ref = {a: False for a in axes}
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
         try:

@@ -110,7 +110,7 @@ def read_param(ctrl, f):
 
     # Write the name of the board, for reference
     f.write("# Parameters from %s, address %d\n" % (ctrl.hwVersion, ctrl._target))
-    f.write("# Bank/Axis\tAddress\tDescription\n")
+    f.write("# Bank/Axis\tAddress\tValue\tDescription\n")
 
     # FIXME: it seems that if the board is connected to a power source but not
     # getting any current from there, it will not load some of the axis parameters

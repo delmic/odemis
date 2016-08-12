@@ -95,7 +95,7 @@ class BackendContainer(model.Container):
 
         # Start by filling up the ghosts VA with all the components
         ghosts_names = set(self._instantiator.ast.keys()) - {mic.name}
-        mic.ghosts.value = dict((n, ST_UNLOADED) for n in ghosts_names)
+        mic.ghosts.value = {n: ST_UNLOADED for n in ghosts_names}
 
         if self._dry_run:
             # Try to instantiate everything, it will raise an exception if it fails
@@ -253,7 +253,7 @@ class BackendContainer(model.Container):
         alive = set(mic.alive.value)
 
         # create a "graph" child->parents
-        parents = dict((c, set()) for c in alive)  # comp -> set of comps (all its parents)
+        parents = {c: set() for c in alive}  # comp -> set of comps (all its parents)
         for comp in alive:
             # TODO: if a component was created by delegation, use its creator
             # instead of itself of the other components, to ensure they might

@@ -413,7 +413,7 @@ class TestActuator(unittest.TestCase):
                 d = -1
 
             dist = d * (i + 1) * 1e-6
-            mv = dict((a, dist) for a in cup_axes)
+            mv = {a: dist for a in cup_axes}
             f = stage.moveRel(mv, update=True)
             f.add_done_callback(self.callback_test_notify)
             time.sleep(0.05)  # 50 ms for 'user update'

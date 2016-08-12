@@ -125,7 +125,7 @@ def _getChildren(root):
     root (HwComponent): the component to start from
     returns (set of HwComponents)
     """
-    ret = set([root])
+    ret = {root}
     for child in root.children.value:
         ret |= _getChildren(child)
 
@@ -198,7 +198,7 @@ def dump_roattributes(self):
     roattr = getattr(self, "_odemis_roattributes", [])
     roattr += get_roattributes(self)
 
-    return dict((name, getattr(self, name)) for name in roattr)
+    return {name: getattr(self, name) for name in roattr}
 
 
 def load_roattributes(self, roattributes):
@@ -241,7 +241,7 @@ class ContainerObject(Pyro4.core.DaemonObject):
             children = kwargs["children"]
             if isinstance(children, collections.Mapping):
                 logging.debug("Looking to simplify children entry %s", children)
-                children = dict((k, _getMostDirectObject(self, v)) for k, v in children.items())
+                children = {k: _getMostDirectObject(self, v) for k, v in children.items()}
                 kwargs["children"] = children
         except KeyError:
             pass

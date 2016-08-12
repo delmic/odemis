@@ -126,7 +126,7 @@ class Component(ComponentBase):
             children = {}
         # Do not add non-Component, so that it's compatible with passing a kwargs
         # It's up to the sub-class to set correctly the .parent of the children
-        cc = set([c for c in children.values() if isinstance(c, ComponentBase)])
+        cc = set(c for c in children.values() if isinstance(c, ComponentBase))
         # Note the only way to ensure the VA notifies changes is to set a
         # different object at every change.
         self.children = _vattributes.VigilantAttribute(cc)

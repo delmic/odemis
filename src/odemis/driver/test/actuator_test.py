@@ -365,7 +365,7 @@ class TestCoupledStage(unittest.TestCase):
             # self.assertAlmostEqual(self.stage.position.value[a], 0)
 
         # try all axes simultaneously
-        mv = dict((a, 1e-3) for a in axes)
+        mv = {a: 1e-3 for a in axes}
         self.stage.moveRel(mv)
         f = self.stage.reference(axes)
         f.result()

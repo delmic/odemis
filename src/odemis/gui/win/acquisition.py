@@ -184,7 +184,7 @@ class AcquisitionDialog(xrcfr_acq):
         new.views.value.append(view)
         new.focussedView = model.VigilantAttribute(view)
         new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
-                                             choices=set([guimodel.VIEW_LAYOUT_ONE]))
+                                             choices={guimodel.VIEW_LAYOUT_ONE})
 
         return new
 

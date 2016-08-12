@@ -205,7 +205,7 @@ class Instantiator(object):
         elif not isinstance(microscope["children"], collections.Mapping):
             # upgrade from list -> dict
             logging.debug("Upgrading the microscope children list to a dict")
-            d = dict(("c%d" % i, c) for i, c in enumerate(microscope["children"]))
+            d = {"c%d" % i: c for i, c in enumerate(microscope["children"])}
             microscope["children"] = d
 
         for a in ("actuators", "detectors", "emitters"):

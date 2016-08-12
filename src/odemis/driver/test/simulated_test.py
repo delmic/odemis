@@ -176,7 +176,7 @@ class ActuatorTest(object):
             self.assertAlmostEqual(self.dev.position.value[a], 0)
 
         # try all axes simultaneously
-        mv = dict((a, 1e-3) for a in axes)
+        mv = {a: 1e-3 for a in axes}
         self.dev.moveRel(mv)
         f = self.dev.reference(axes)
         f.result()
