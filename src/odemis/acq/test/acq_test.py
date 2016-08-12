@@ -265,11 +265,12 @@ class SPARCTestCase(unittest.TestCase):
         try synchronized acquisition using the Optical Path Manager
         """
         # Create the streams and streamTree
+        opmngr = path.OpticalPathManager(self.microscope)
         semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, opm=opmngr)
         semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
-        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam, opm=opmngr)
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
         st = stream.StreamTree(streams=[semsur, semars, sps])
 
@@ -297,8 +298,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        opmngr = path.OpticalPathManager(self.microscope)
-        f = acq.acquire(st.getStreams(), opm=opmngr)
+        f = acq.acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
