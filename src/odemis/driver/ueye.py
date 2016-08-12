@@ -237,6 +237,15 @@ BLACKLEVEL_CMD_GET_OFFSET_RANGE = 6
 BLACKLEVEL_CMD_GET_OFFSET = 7
 BLACKLEVEL_CMD_SET_OFFSET = 8
 
+# For is_PixelClock()
+PIXELCLOCK_CMD_GET_NUMBER = 1
+PIXELCLOCK_CMD_GET_LIST = 2
+PIXELCLOCK_CMD_GET_RANGE = 3
+PIXELCLOCK_CMD_GET_DEFAULT = 4
+PIXELCLOCK_CMD_GET = 5
+PIXELCLOCK_CMD_SET = 6
+
+
 class UEYE_CAPTURE_STATUS_INFO(Structure):
     _fields_ = [
         ("dwCapStatusCnt_Total", c_uint32),
@@ -669,6 +678,10 @@ class Camera(model.DigitalCamera):
             self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
             self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)), readonly=True)
 
+            rorate = self.GetPixelClock() * 1e6 # MHz -> Hz
+            self.readoutRate = model.VigilantAttribute(rorate, readonly=True,
+                                                       unit="Hz")
+
             exprng = self.GetExposureRange()  # mx is limited by current frame-rate
             ftrng = self.GetFrameTimeRange()
             # TODO: check mx ft is always same as mx of exp, otherwise, first set
@@ -818,6 +831,14 @@ class Camera(model.DigitalCamera):
         newfps = c_double()
         self._dll.is_SetFrameRate(self._hcam, c_double(fr), byref(newfps))
         return newfps.value
+
+    def GetPixelClock(self):
+        """
+        return (float): the pixel clock in MHz
+        """
+        pc = c_uint32()
+        self._dll.is_PixelClock(self._hcam, PIXELCLOCK_CMD_GET, byref(pc), sizeof(pc))
+        return pc.value
 
     def GetCaptureStatus(self):
         """
