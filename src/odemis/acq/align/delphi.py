@@ -134,6 +134,10 @@ def _DoDelphiCalibration(future, main_data):
     hdlr_calib.addFilter(logging.Filter())
     logger.addHandler(hdlr_calib)
 
+    shid, _ = main_data.chamber.sampleHolder.value
+    # dict that stores all the calibration values found
+    calib_values = {}
+
     pressures = main_data.chamber.axes["pressure"].choices
     vacuum_pressure = min(pressures.keys())  # Pressure to go to SEM mode
     # vented_pressure = max(pressures.keys())
@@ -228,9 +232,13 @@ def _DoDelphiCalibration(future, main_data):
             future.hole_detectionf = HoleDetection(main_data.bsd, main_data.ebeam, sem_stage,
                                                    main_data.ebeam_focus)
             htop, hbot, hfoc = future.hole_detectionf.result()
+            # update known values
+            calib_values["top_hole"] = htop
+            calib_values["bottom_hole"] = hbot
+            calib_values["hole_focus"] = hfoc
             logger.debug("First hole: %s (m,m) Second hole: %s (m,m)", htop, hbot)
         except Exception:
-            raise IOError("Conversion update failed to find sample holder holes.")
+            raise IOError("Failed to find sample holder holes.")
 
         # expected good focus value when focusing on the glass
         good_focus = hfoc - GOOD_FOCUS_OFFSET
@@ -271,7 +279,7 @@ def _DoDelphiCalibration(future, main_data):
                                                   opt_stage, main_data.focus)
             offset = future.align_offsetf.result()
         except Exception:
-            raise IOError("Conversion update failed to align and calculate offset.")
+            raise IOError("Failed to align and calculate offset.")
         center_focus = main_data.focus.position.value.get('z')
 
         if future._delphi_calib_state == CANCELLED:
@@ -285,9 +293,15 @@ def _DoDelphiCalibration(future, main_data):
                                                           main_data.ebeam, sem_stage,
                                                           opt_stage, main_data.focus,
                                                           offset)
-            acc_offset, srot, sscale = future.rotation_scalingf.result()
+            pure_offset, srot, sscale = future.rotation_scalingf.result()
+            # Offset is divided by scaling, since Convert Stage applies scaling
+            # also in the given offset
+            strans = ((pure_offset[0] / sscale[0]), (pure_offset[1] / sscale[1]))
+            calib_values["stage_trans"] = strans
+            calib_values["stage_scaling"] = sscale
+            calib_values["stage_rotation"] = srot
         except Exception:
-            raise IOError("Conversion update failed to calculate rotation and scaling.")
+            raise IOError("Failed to calculate rotation and scaling.")
 
         # Update progress of the future
         future.set_progress(end=time.time() + 7.5 * 60)
@@ -297,6 +311,7 @@ def _DoDelphiCalibration(future, main_data):
             future.spot_shiftf = SpotShiftFactor(main_data.ccd, main_data.bsd,
                                                  main_data.ebeam, main_data.focus)
             spotshift = future.spot_shiftf.result()
+            calib_values["spot_shift"] = spotshift
 
             # Compute resolution-related values
             future.resolution_shiftf = ResolutionShiftFactor(main_data.bsd,
@@ -304,6 +319,8 @@ def _DoDelphiCalibration(future, main_data):
                                                              main_data.ebeam_focus,
                                                              good_focus)
             resa, resb = future.resolution_shiftf.result()
+            calib_values["resolution_a"] = resa
+            calib_values["resolution_b"] = resb
 
             # Compute HFW-related values
             future.hfw_shiftf = HFWShiftFactor(main_data.bsd,
@@ -311,15 +328,9 @@ def _DoDelphiCalibration(future, main_data):
                                                main_data.ebeam_focus,
                                                good_focus)
             hfwa = future.hfw_shiftf.result()
+            calib_values["hfw_a"] = hfwa
         except Exception:
-            raise IOError("Conversion update failed to calculate shift parameters.")
-
-        # Now we can return. There is no need to update the convert stage
-        # metadata as the current sample holder will be unloaded
-        # Offset is divided by scaling, since Convert Stage applies scaling
-        # also in the given offset
-        pure_offset = acc_offset
-        strans = ((acc_offset[0] / sscale[0]), (acc_offset[1] / sscale[1]))
+            raise IOError("Failed to calculate shift parameters.")
 
         # Return to the center so fine overlay can be executed just after calibration
         f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
@@ -412,10 +423,10 @@ def _DoDelphiCalibration(future, main_data):
         irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
         ishear = skew_md[model.MD_SHEAR_COR]
         iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
-
-        # we can now store the calibration file in report
-        shid, _ = main_data.chamber.sampleHolder.value
-        _StoreConfig(path, shid, htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift)
+        calib_values["image_scaling"] = iscale
+        calib_values["image_scaling_scan"] = iscale_xy
+        calib_values["image_rotation"] = irot
+        calib_values["image_shear"] = ishear
 
         return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
@@ -423,6 +434,8 @@ def _DoDelphiCalibration(future, main_data):
         # log failure msg
         logger.error(str(e))
     finally:
+        # we can now store the calibration file in report
+        _StoreConfig(path, shid, calib_values)
         # TODO: also cancel the current sub-future
         with future._delphi_calib_lock:
             future._done.set()
@@ -433,52 +446,20 @@ def _DoDelphiCalibration(future, main_data):
         logger.removeHandler(hdlr_calib)
 
 
-def _StoreConfig(path, shid, htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift):
+def _StoreConfig(path, shid, calib_values):
         """ Store the calibration data for a given sample holder
 
-        shid (int): the sample holder ID
-        htop (2 floats): position of the top hole
-        hbot (2 floats): position of the bottom hole
-        hfoc (float): focus used for hole detection
-        strans (2 floats): stage translation
-        sscale (2 floats > 0): stage scaling
-        srot (float): stage rotation (rad)
-        iscale (2 floats > 0): image scaling applied to CCD
-        irot (float): image rotation (rad)
-        iscale_xy (2 floats > 0)): image scaling applied to SEM
-        ishear (float): image shear
-        resa (2 floats): resolution related SEM image shift, slope of linear fit
-        resb (2 floats): resolution related SEM image shift, intercept of linear fit
-        hfwa (2 floats): hfw related SEM image shift, slope of linear fit
-        spotshift (2 floats): SEM spot shift in percentage of HFW
+        calib_values (dict): calibration data
 
         """
         calib_f = open(os.path.join(path, CALIB_CONFIG), 'w')
-        calib_f.write("[delphi-" + format(shid, 'x') + "]\n"
-                        + str("top_hole_x = %.15f\n" % htop[0])
-                        + str("top_hole_y = %.15f\n" % htop[1])
-                        + str("bottom_hole_x = %.15f\n" % hbot[0])
-                        + str("bottom_hole_y = %.15f\n" % hbot[1])
-                        + str("hole_focus = %.15f\n" % hfoc)
-                        + str("stage_trans_x = %.15f\n" % strans[0])
-                        + str("stage_trans_y = %.15f\n" % strans[1])
-                        + str("stage_scaling_x = %.15f\n" % sscale[0])
-                        + str("stage_scaling_y = %.15f\n" % sscale[1])
-                        + str("stage_rotation = %.15f\n" % srot)
-                        + str("image_scaling_x = %.15f\n" % iscale[0])
-                        + str("image_scaling_y = %.15f\n" % iscale[1])
-                        + str("image_rotation = %.15f\n" % irot)
-                        + str("image_scaling_scan_x = %.15f\n" % iscale_xy[0])
-                        + str("image_scaling_scan_y = %.15f\n" % iscale_xy[1])
-                        + str("image_shear = %.15f\n" % ishear)
-                        + str("resolution_a_x = %.15f\n" % resa[0])
-                        + str("resolution_a_y = %.15f\n" % resa[1])
-                        + str("resolution_b_x = %.15f\n" % resb[0])
-                        + str("resolution_b_y = %.15f\n" % resb[1])
-                        + str("hfw_a_x = %.15f\n" % hfwa[0])
-                        + str("hfw_a_y = %.15f\n" % hfwa[1])
-                        + str("spot_shift_x = %.15f\n" % spotshift[0])
-                        + str("spot_shift_y = %.15f\n" % spotshift[1]))
+        calib_f.write("[delphi-" + format(shid, 'x') + "]\n")
+        for k, v in calib_values.items():
+            if type(v) == "tuple":
+                calib_f.write(str(k + "_x = %.15f\n" % v[0]))
+                calib_f.write(str(k + "_y = %.15f\n" % v[1]))
+            else:
+                calib_f.write(str(k + " = %.15f\n" % v))
         calib_f.close()
 
 
