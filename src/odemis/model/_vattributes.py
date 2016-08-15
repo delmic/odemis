@@ -206,11 +206,14 @@ class VigilantAttribute(VigilantAttributeBase):
         try:
             if must_notify:
                 pass  # no need to check for more
-            elif isinstance(value, numpy.ndarray):
+            elif isinstance(self._value, numpy.ndarray):
                 # For numpy arrays, it's not possible to use !=
                 # => just check it's the same object
                 if prev_value is not self._value or value is not self._value:
                     must_notify = True
+            elif any(isinstance(v, numpy.ndarray) for v in (prev_value, value)):
+                # the new value is _not_ a numpy array => it's different
+                must_notify = True
             else:
                 if prev_value != self._value or value != self._value:
                     must_notify = True
