@@ -1050,8 +1050,10 @@ class ChamberTab(Tab):
                                                   focuser=ccd_focuser,
                                                   detvas=get_local_vas(main_data.ccd))
         # Make sure image has square pixels and full FoV
-        self._ccd_stream.detBinning.value = (1, 1)
-        self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
+        if hasattr(self._ccd_stream, "detBinning"):
+            self._ccd_stream.detBinning.value = (1, 1)
+        if hasattr(self._ccd_stream, "detResolution"):
+            self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
         self._ccd_stream.should_update.value = True
@@ -2661,7 +2663,8 @@ class Sparc2AlignTab(Tab):
                             forcemd={model.MD_POS: (0, 0)}  # Just in case the stage is there
                             )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
-        ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
+        if hasattr(ccd_stream, "detBinning"):
+            ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
         self._ccd_stream = ccd_stream
 
         ccd_spe = self._stream_controller.addStream(ccd_stream,
@@ -2694,8 +2697,11 @@ class Sparc2AlignTab(Tab):
             speclines.tint.value = (0, 64, 255)  # colour it blue
             # Fixed values, known to work well for autofocus
             speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
-            speclines.detBinning.value = speclines.detBinning.clip((2, 2))
-            b = speclines.detBinning.value
+            if hasattr(speclines, "detBinning"):
+                speclines.detBinning.value = speclines.detBinning.clip((2, 2))
+                b = speclines.detBinning.value
+            else:
+                b = (1, 1)
             max_res = speclines.detResolution.range[1]
             res = max_res[0] // b[0], max_res[1] // b[1]
             speclines.detResolution.value = speclines.detResolution.clip(res)
@@ -2752,8 +2758,9 @@ class Sparc2AlignTab(Tab):
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
         mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
-        mois.detBinning.value = mois.detBinning.clip((8, 8))
-        if model.hasVA(mois, "detReadoutRate"):
+        if hasattr(mois, "detBinning"):
+            mois.detBinning.value = mois.detBinning.clip((8, 8))
+        if hasattr(mois, "detReadoutRate"):
             try:
                 mois.detReadoutRate.value = mois.detReadoutRate.range[1]
             except AttributeError:
