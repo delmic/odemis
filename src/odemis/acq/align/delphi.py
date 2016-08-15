@@ -433,6 +433,8 @@ def _DoDelphiCalibration(future, main_data):
     except Exception as e:
         # log failure msg
         logger.error(str(e))
+        # still raise the error
+        raise e
     finally:
         # we can now store the calibration file in report
         _StoreConfig(path, shid, calib_values)

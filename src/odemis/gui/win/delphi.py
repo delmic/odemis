@@ -201,10 +201,11 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             self.gauge.Hide()
             self.Layout()
             return
-        except Exception:
+        except Exception as e:
             # Suggest to the user to run the semi-manual calibration
             self.calib_future.cancel()
             self.time_txt.SetLabel("Automatic calibration failed.\n"
+                                   + str(e) + "\n"
                                    "Please follow the manual calibration procedure. \n"
                                    "Press Run to start.")
             self.cancel_btn.SetLabel("Run")
