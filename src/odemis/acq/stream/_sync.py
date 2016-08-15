@@ -1545,25 +1545,27 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
-        shape = self._rep_det.shape
-        binning = self._rep_det.binning.value
-        res = (max(1, int(round(shape[0] * width[0] / binning[0]))),
-               max(1, int(round(shape[1] * width[1] / binning[1]))))
-        # translation is distance from center (situated at 0.5, 0.5), can be floats
-        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
-        # clip translation so ROI remains in bounds
-        bin_trans = (trans[0] / binning[0], trans[1] / binning[1])
-        half_res = (int(round(res[0] / 2)), int(round(res[1] / 2)))
-        cur_res = (shape[0] / binning[0], shape[1] / binning[1])
-        bin_trans = (numpy.clip(bin_trans[0], -(cur_res[0] / 2) + half_res[0], (cur_res[0] / 2) - half_res[0]),
-                     numpy.clip(bin_trans[1], -(cur_res[1] / 2) + half_res[1], (cur_res[1] / 2) - half_res[1]))
-        trans = (int(bin_trans[0] * binning[0]), int(bin_trans[1] * binning[1]))
-        # always in this order
-        self._rep_det.resolution.value = res
-        if model.hasVA(self._rep_det, "translation"):
-            self._rep_det.translation.value = trans
-        else:
-            logging.info("CCD doesn't support ROI translation, would have used %s", trans)
+        if not self._rep_det.resolution.read_only:
+            shape = self._rep_det.shape
+            binning = self._rep_det.binning.value
+            res = (max(1, int(round(shape[0] * width[0] / binning[0]))),
+                   max(1, int(round(shape[1] * width[1] / binning[1]))))
+            # translation is distance from center (situated at 0.5, 0.5), can be floats
+            trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+            # clip translation so ROI remains in bounds
+            bin_trans = (trans[0] / binning[0], trans[1] / binning[1])
+            half_res = (int(round(res[0] / 2)), int(round(res[1] / 2)))
+            cur_res = (shape[0] / binning[0], shape[1] / binning[1])
+            bin_trans = (numpy.clip(bin_trans[0], -(cur_res[0] / 2) + half_res[0], (cur_res[0] / 2) - half_res[0]),
+                         numpy.clip(bin_trans[1], -(cur_res[1] / 2) + half_res[1], (cur_res[1] / 2) - half_res[1]))
+            trans = (int(bin_trans[0] * binning[0]), int(bin_trans[1] * binning[1]))
+            # always in this order
+            self._rep_det.resolution.value = self._rep_det.resolution.clip(res)
+
+            if model.hasVA(self._rep_det, "translation"):
+                self._rep_det.translation.value = trans
+            else:
+                logging.info("CCD doesn't support ROI translation, would have used %s", trans)
         return super(MomentOfInertiaMDStream, self)._adjustHardwareSettings()
 
     def acquire(self):
