@@ -23,7 +23,7 @@ import gc
 import logging
 import numpy
 from odemis import model
-from odemis.model._components import HwError
+from odemis.model import HwError, oneway
 import threading
 import time
 
@@ -236,6 +236,28 @@ BLACKLEVEL_CMD_GET_OFFSET_DEFAULT = 5
 BLACKLEVEL_CMD_GET_OFFSET_RANGE = 6
 BLACKLEVEL_CMD_GET_OFFSET = 7
 BLACKLEVEL_CMD_SET_OFFSET = 8
+
+# For is_SetExternalTrigger()
+GET_EXTERNALTRIGGER = 0x8000
+GET_TRIGGER_STATUS = 0x8001
+GET_TRIGGER_MASK = 0x8002
+GET_TRIGGER_INPUTS = 0x8003
+GET_SUPPORTED_TRIGGER_MODE = 0x8004
+GET_TRIGGER_COUNTER = 0x8000
+SET_TRIGGER_MASK = 0x0100
+SET_TRIGGER_CONTINUOUS = 0x1000
+SET_TRIGGER_OFF = 0x0000
+SET_TRIGGER_HI_LO = (SET_TRIGGER_CONTINUOUS | 0x0001)
+SET_TRIGGER_LO_HI = (SET_TRIGGER_CONTINUOUS | 0x0002)
+SET_TRIGGER_SOFTWARE = (SET_TRIGGER_CONTINUOUS | 0x0008)
+SET_TRIGGER_HI_LO_SYNC = 0x0010
+SET_TRIGGER_LO_HI_SYNC = 0x0020
+SET_TRIGGER_PRE_HI_LO = (SET_TRIGGER_CONTINUOUS | 0x0040)
+SET_TRIGGER_PRE_LO_HI = (SET_TRIGGER_CONTINUOUS | 0x0080)
+GET_TRIGGER_DELAY = 0x8000
+GET_MIN_TRIGGER_DELAY = 0x8001
+GET_MAX_TRIGGER_DELAY = 0x8002
+GET_TRIGGER_DELAY_GRANULARITY = 0x8003
 
 # For is_PixelClock()
 PIXELCLOCK_CMD_GET_NUMBER = 1
@@ -661,7 +683,7 @@ class Camera(model.DigitalCamera):
 
             self._set_static_settings()
 
-            self._prev_settings = ()  # TODO: put res and binning
+            self._prev_settings = (None,)  # sync, TODO: put res and binning
 
             # Set the format
             # TODO: color mode based on the maximum BPP
@@ -702,7 +724,9 @@ class Camera(model.DigitalCamera):
             self._genmsg = Queue.Queue()
             self._generator = None
 
-            # TODO: softwareTrigger?
+            # TODO: check with GET_SUPPORTED_TRIGGER_MODE?
+            self.softwareTrigger = model.Event()
+            self._events = Queue.Queue()  # events which haven't been handled yet
 
             self.data = UEyeDataFlow(self)
         except Exception:
@@ -895,6 +919,20 @@ class Camera(model.DigitalCamera):
             await = FORCE_VIDEO_STOP
         self._dll.is_StopLiveVideo(self._hcam, await)
 
+    def FreezeVideo(self, wait):
+        """
+        wait (int): DONT_WAIT (immediately returns), WAIT (blocks until the image
+          is acquired), or block with a timeout (duration = wait * 10ms)
+        """
+        self._dll.is_FreezeVideo(self._hcam, wait)
+
+    def SetExternalTrigger(self, mode):
+        """
+        Change the trigger
+        mode (SET_TRIGGER_*): the new trigger to use
+        """
+        self._dll.is_SetExternalTrigger(self._hcam, mode)
+
     # The component interface
 
     def _setExposureTime(self, exp):
@@ -924,7 +962,7 @@ class Camera(model.DigitalCamera):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
-        new_settings = ()
+        new_settings = (self.data._sync_event,)
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -933,13 +971,21 @@ class Camera(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        # () = self._prev_settings
+        (prev_sync,) = self._prev_settings
         # logging.debug("Updating the hardware settings")
 
         # Note: if pixel clock and binning are to be updated, the frame-rate &
         # exposure time needs to be reset
 
-        self._prev_settings = ()
+        sync = self.data._sync_event
+        if prev_sync != sync:
+            if sync:
+                self.SetExternalTrigger(SET_TRIGGER_SOFTWARE)
+            else:
+                self.SetExternalTrigger(SET_TRIGGER_OFF)
+
+        self._prev_settings = (sync,)
+        return self._prev_settings
 
     def _allocate_buffers(self, num, width, height, bpp):
         """
@@ -1106,6 +1152,9 @@ class Camera(model.DigitalCamera):
 
                         self._free_buffers(buffers)
                         buffers = []
+
+                        # Update the settings
+                        (sync,) = self._update_settings()
                         exposure_time = self.exposureTime.value
 
                         # check if any message received before starting again
@@ -1118,10 +1167,22 @@ class Camera(model.DigitalCamera):
                         buffers = self._allocate_buffers(3, res[0], res[1], numpy.iinfo(dtype).bits)
 
                         # Start acquisition
-                        self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
+                        if not sync:
+                            self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
                         need_reinit = False
 
                     # Acquire an image
+                    if sync:
+                        if not self._wait_trigger():
+                            logging.debug("Acquisition stopped")
+                            try:
+                                self.StopLiveVideo(wait=False)
+                            except UEyeError:
+                                logging.exception("Failed to correctly stop the video")
+                            self._free_buffers(buffers)
+                            buffers = []
+                            break
+
                     metadata = self._metadata.copy()
                     timeout = exposure_time * 1.2 + 3  # s
                     # TODO: use the timestamp provided by is_GetImageInfo()
@@ -1186,6 +1247,52 @@ class Camera(model.DigitalCamera):
             self._free_buffers(buffers)
             self._generator = None
             logging.debug("Acquisition thread closed")
+
+    def _wait_trigger(self):
+        """
+        Triggers the start of the acquisition on the camera.
+        return (bool): True if the acquisition should happen, False if it was
+          cancelled.
+        raises:
+            StopIteration: if the acquisition thread must terminate
+        """
+        # The difficult parts are:
+        # * Synchronisation is cancelled while we are waiting for an event
+        # * Acquisition is stopped while we are waiting for an event
+        # * Synchronisation event is changed
+
+        # TODO: don't do it if not synchronised?
+        logging.debug("Waiting for event trigger")
+        while True:
+            try:
+                event_time = self._events.get(timeout=0.1)
+                break
+            except Queue.Empty:
+                pass
+            if self._acq_should_stop():
+                return False
+
+        if event_time is None:
+            delay = 0
+        else:
+            delay = time.time() - event_time
+        if not self._events.empty():
+            logging.warning("starting acquisition late by %g s", delay)
+
+        self.FreezeVideo(DONT_WAIT)
+        logging.debug("Started acquisition via software trigger (%g s late)", delay)
+        return True
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        # Pass the new event (with the time, just for logging how late it is)
+        self._events.put(time.time())
+        # Note: we could try to be clever, and immediately send the trigger
+        # from here, but it's tricky and we probably don't need that little
+        # latency with such hardware.
 
     def _check_capture_status(self):
         """
@@ -1294,6 +1401,8 @@ class UEyeDataFlow(model.DataFlow):
         """
         model.DataFlow.__init__(self)
         self._detector = detector
+        self._sync_event = None  # synchronization Event
+        self._prev_max_discard = self._max_discard
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
@@ -1301,3 +1410,30 @@ class UEyeDataFlow(model.DataFlow):
 
     def stop_generate(self):
         self._detector.stop_generate()
+
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the DataFlow will start a new acquisition.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        The DataFlow can be synchronized only with one Event at a time.
+        """
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self._detector)
+            self.max_discard = self._prev_max_discard
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._prev_max_discard = self._max_discard
+            self.max_discard = 0
+            self._detector._events = Queue.Queue()  # reset the events queue
+            self._sync_event.subscribe(self._detector)
+        else:
+            logging.debug("Sending unsynchronisation event")
+            self._detector._events.put(None)  # To unblock in case the acquisition was waiting for an event

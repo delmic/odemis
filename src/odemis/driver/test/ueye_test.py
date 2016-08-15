@@ -21,6 +21,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+
 from __future__ import division
 
 import logging
@@ -28,7 +29,8 @@ from odemis.driver import ueye
 import unittest
 from unittest.case import skip
 
-from cam_test_abs import VirtualTestCam, VirtualStaticTestCam
+from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -50,6 +52,13 @@ class TestUEye(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
 
+# @skip("simple")
+class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
+    """
+    Test the synchronizedOn(Event) interface, using the fake SEM
+    """
+    camera_type = CLASS
+    camera_kwargs = KWARGS
 
 if __name__ == '__main__':
     unittest.main()
