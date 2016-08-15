@@ -1,0 +1,122 @@
+# Configuration to test just a spectrometer SR193i + iVac
+SPARC-Spec: {
+    class: Microscope,
+    role: sparc,
+    children: ["SEM E-beam", "SEM Detector", "Optical Path Properties",
+               "External Spectrograph", "Spec CCD Flipper", "Spectrograph focus",
+               "Spectral Camera", "Spectrometer"],
+}
+
+# This is a more realistic SEM simulator (image-wise, but less realistic HW-wise)
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: none,
+    init: {
+           drift_period: 5, # s  (disable to get a the whole resolution of the image)
+           image: "sparc-etd-gold-balls.h5",
+    },
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector"
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector", "Spectrometer", "Spectral Camera"] # affects the CCD in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+
+# Spectrometer = Andor iVac + Shamrock SR193 (connected via USB)
+"Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer,
+    children: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
+    init: {
+        transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
+    },
+    properties: {
+        binning: [4, 256],
+    },
+}
+
+# Dedicated camera for the acquisition of the spectra
+"Spectral Camera": {
+    class: andorcam2.AndorCam2,
+    role: sp-ccd,
+    init: {
+        device: 0,
+        transp: [-1, 2], # if mirrored on X axis
+    },
+    properties: {
+        targetTemperature: -60, # °C
+    },
+}
+
+"External Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph,
+    init: {
+        device: 0,
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        fstepsize: 10.e-6, # m, size of one focus step
+    },
+    affects: ["Spectral Camera", "Spectrometer"],
+}
+
+"Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: "focus",
+    children: {"z": "External Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
+    affects: ["Spectral Camera", "Spectrometer"],
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+# Only used to disable the CCD, to perform basic background subtraction
+"Spec CCD Flipper": {
+    class: actuator.FixedPositionsActuator,
+    role: "spec-det-selector",
+    children: {"rx": "External Spectrograph"},
+    init: {
+        axis_name: "flip-out",
+        positions: {
+            0: ["Spectral Camera", "Spectrometer"],
+            1.5707963267948966: [],   # nothing connected
+        },
+    },
+    affects: ["Spectral Camera", "Spectrometer"],
+}
+
+"Optical Path Properties": {
+    class: static.OpticalLens,
+    role: lens,
+    # Standard mirror config
+    init: {
+        # TODO: put the right values for mag and rotation
+       mag: 0.31, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+       # no pole_pos indicates it's not possible to do AR acquisition
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+    },
+    affects: ["Spectral Camera", "Spectrometer"]
+}
