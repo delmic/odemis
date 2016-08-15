@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from Pyro4.core import oneway
 import collections
 from ctypes import *
 import ctypes  # for fake AndorV2DLL
@@ -30,7 +29,7 @@ import gc
 import logging
 import numpy
 from odemis import model, util, dataio
-from odemis.model import HwError
+from odemis.model import HwError, oneway
 from odemis.util import img
 import os
 import random
