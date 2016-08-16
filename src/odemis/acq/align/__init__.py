@@ -26,11 +26,17 @@ import logging
 from odemis.model._metadata import MD_PIXEL_SIZE
 
 from .autofocus import AutoFocus, AutoFocusSpectrometer
-from .delphi import UpdateConversion
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
 from odemis.util.img import Subtract
 from odemis.dataio import hdf5
+
+# Offset from hole focus value in Delphi calibration.
+# Since the e-beam focus value found in the calibration file was determined by
+# focusing on the hole surface of the sample carrier, we expect the good focus
+# value when focusing on the glass to have an offset. This offset was measured
+# after experimenting with several carriers.
+GOOD_FOCUS_OFFSET = 200e-06
 
 
 def FindEbeamCenter(ccd, detector, escan):
@@ -102,6 +108,7 @@ def FindEbeamCenter(ccd, detector, escan):
 
     raise LookupError("Failed to locate spot after exposure time %g s" % exp)
 
+
 def _ConvertCoordinates(coord, img):
     """
     Converts position to meters from center
@@ -111,6 +118,7 @@ def _ConvertCoordinates(coord, img):
     pos = (-(coord[0] - center[0]) * pxs[0],
             (coord[1] - center[1]) * pxs[1])  # physical Y is opposite direction
     return pos
+
 
 def discard_data(df, data):
     """

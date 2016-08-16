@@ -27,18 +27,27 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import cv2
 import logging
 import math
+from numpy import array, ones, linalg
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.acq.align import transform
-from odemis.acq.align import spot
+from odemis.acq.align import transform, spot, GOOD_FOCUS_OFFSET
 from odemis.acq.drift import CalculateDrift
+import os
+from scipy.ndimage import zoom
 import threading
 import time
-from . import autofocus
+
 from autofocus import AcquireNoBackground
-from scipy.ndimage import zoom
-from numpy import array, ones, linalg
+
+from . import FindOverlay
+from . import autofocus
+
+
+logger = logging.getLogger(__name__)
+CALIB_DIRECTORY = u"delphi-calibration-report"  # delphi calibration report directory
+CALIB_LOG = u"calibration.log"
+CALIB_CONFIG = u"calibration.config"
 
 EXPECTED_HOLES = ({"x":0, "y":12e-03}, {"x":0, "y":-12e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius
@@ -54,336 +63,452 @@ SHIFT_DETECTION = {"x":0, "y":11.7e-03}  # Use holder hole images to measure the
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
-def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
-                     focus, combined_stage, first_insertion, known_first_hole=None,
-                     known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
-                     known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
-                     known_resolution_slope=None, known_resolution_intercept=None,
-                     known_hfw_slope=None, known_spot_shift=None):
+def DelphiCalibration(main_data):
     """
-    Wrapper for DoUpdateConversion. It provides the ability to check the progress
-    of conversion update procedure or even cancel it.
-    ccd (model.DigitalCamera): The ccd
-    detector (model.Detector): The se-detector
-    escan (model.Emitter): The e-beam scanner
-    sem_stage (model.Actuator): The SEM stage
-    opt_stage (model.Actuator): The objective stage
-    ebeam_focus (model.Actuator): EBeam focus
-    focus (model.Actuator): Focus of objective lens
-    combined_stage (model.Actuator): The combined stage
-    first_insertion (Boolean): If True it is the first insertion of this sample
-                                holder
-    known_first_hole (tuple of floats): Hole coordinates found in the calibration file
-    known_second_hole (tuple of floats): Hole coordinates found in the calibration file
-    known_focus (float): Focus used for hole detection #m
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
-    known_rotation (float): Rotation of sample holder found in the calibration file #radians
-    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file
-    sem_position (tuple of floats): SEM position for rough alignment
-    known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
-    known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
-    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift)
-    known_spot_shift (tuple of floats): spot shift percentage
-    returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
-                                         whose result() will return:
-            returns first_hole (tuple of floats): Coordinates of first hole
-                    second_hole (tuple of floats): Coordinates of second hole
-                    hole_focus (float): Focus used for hole detection
-                    (tuple of floats):    offset #m,m
-                    (float):    rotation #radians
-                    (tuple of floats):    scaling
-                    (tuple of floats): slope of linear fit (resolution shift)
-                    (tuple of floats): intercept of linear fit (resolution shift)
-                    (tuple of floats): slope of linear fit (hfw shift)
-                    (tuple of floats): spot shift percentage
+    Wrapper for DoDelphiCalibration. It provides the ability to check the
+    progress of the procedure.
+    main_data (odemis.gui.model.MainGUIData)
+    returns (ProgressiveFuture): Progress DoDelphiCalibration
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateConversionTime(first_insertion))
-    f._conversion_update_state = RUNNING
+                                end=est_start + estimateDelphiCalibration())
+    f._delphi_calib_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelUpdateConversion
-    f._conversion_lock = threading.Lock()
+    f.task_canceller = _CancelDelphiCalibration
+    f._delphi_calib_lock = threading.Lock()
     f._done = threading.Event()
 
-    # Create align_offset and rotation_scaling and hole_detection module
-    f._hole_detectionf = model.InstantaneousFuture()
-    f._align_offsetf = model.InstantaneousFuture()
-    f._rotation_scalingf = model.InstantaneousFuture()
-    f._hfw_shiftf = model.InstantaneousFuture()
-    f._resolution_shiftf = model.InstantaneousFuture()
-    f._spot_shiftf = model.InstantaneousFuture()
-    f._autofocus_f = model.InstantaneousFuture()
+    f.lens_alignment_f = model.InstantaneousFuture()
+    f.update_conversion_f = model.InstantaneousFuture()
+    f.find_overlay_f = model.InstantaneousFuture()
+    f.auto_focus_f = model.InstantaneousFuture()
+    f.hole_detectionf = model.InstantaneousFuture()
+    f.align_offsetf = model.InstantaneousFuture()
+    f.rotation_scalingf = model.InstantaneousFuture()
+    f.hfw_shiftf = model.InstantaneousFuture()
+    f.resolution_shiftf = model.InstantaneousFuture()
+    f.spot_shiftf = model.InstantaneousFuture()
 
     # Run in separate thread
-    conversion_thread = threading.Thread(target=executeTask,
-                                         name="Conversion update",
-                                         args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
-                                               opt_stage, ebeam_focus, focus, combined_stage, first_insertion,
-                                               known_first_hole, known_second_hole, known_focus, known_offset,
-                                               known_rotation, known_scaling, sem_position, known_resolution_slope,
-                                               known_resolution_intercept, known_hfw_slope, known_spot_shift))
+    delphi_calib_thread = threading.Thread(target=executeTask,
+                                           name="Delphi Calibration",
+                                           args=(f, _DoDelphiCalibration, f, main_data))
 
-    conversion_thread.start()
+    delphi_calib_thread.start()
     return f
 
 
-def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
-                        focus, combined_stage, first_insertion, known_first_hole=None,
-                        known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
-                        known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
-                        known_resolution_slope=None, known_resolution_intercept=None,
-                        known_hfw_slope=None, known_spot_shift=None):
+def _DoDelphiCalibration(future, main_data):
     """
-    First calls the HoleDetection to find the hole centers. Then if the current
-    sample holder is inserted for the first time, calls AlignAndOffset,
-    RotationAndScaling and enters the data to the calibration file. Otherwise
-    given the holes coordinates of the original calibration and the current
-    holes coordinates, update the offset, rotation and scaling to be used by the
-     Combined Stage. It also calculates the parameters for the Phenom shift
-    calibration.
+    It performs all the calibration steps for Delphi including the lens alignment,
+    the conversion metadata update and the fine alignment.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    ccd (model.DigitalCamera): The ccd
-    detector (model.Detector): The se-detector
-    escan (model.Emitter): The e-beam scanner
-    sem_stage (model.Actuator): The SEM stage
-    opt_stage (model.Actuator): The objective stage
-    ebeam_focus (model.Actuator): EBeam focus
-    focus (model.Actuator): Focus of objective lens
-    combined_stage (model.Actuator): The combined stage
-    first_insertion (Boolean): If True it is the first insertion of this sample
-                                holder
-    known_first_hole (tuple of floats): Hole coordinates found in the calibration file
-    known_second_hole (tuple of floats): Hole coordinates found in the calibration file
-    known_focus (float): Focus used for hole detection #m
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
-    known_rotation (float): Rotation of sample holder found in the calibration file #radians
-    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file
-    sem_position (tuple of floats): SEM position for rough alignment
-    known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
-    known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
-    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift)
-    known_spot_shift (tuple of floats): spot shift percentage
-    returns
-            first_hole (tuple of floats): Coordinates of first hole
-            second_hole (tuple of floats): Coordinates of second hole
-            hole_focus (float): Focus used for hole detection
-            (tuple of floats): offset
-            (float): rotation #radians
-            (tuple of floats): scaling
-            (tuple of floats): slope of linear fit (resolution shift)
-            (tuple of floats): intercept of linear fit (resolution shift)
-            (tuple of floats): slope of linear fit (hfw shift)
-            (tuple of floats): spot shift percentage
+    main_data (odemis.gui.model.MainGUIData)
+    returns (tuple of floats): Hole top
+            (tuple of floats): Hole bottom
+            (float): Focus used for hole detection
+            (tuple of floats): Stage translation
+            (tuple of floats): Stage scale
+            (float): Stage rotation
+            (tuple of floats): Image scale
+            (float): Image rotation
+            (tuple of floats): Resolution-related shift slope
+            (tuple of floats): Resolution-related shift intercept
+            (tuple of floats): HFW-related shift slope
+            (tuple of floats): Spot shift percentage
     raises:
-            CancelledError() if cancelled
-            IOError
+        CancelledError() if cancelled
     """
-    logging.debug("Starting calibration procedure...")
+    logging.debug("Delphi calibration...")
+
+    # handler storing the messages related to delphi calibration
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    path = os.path.join(os.path.expanduser(u"~"), CALIB_DIRECTORY,
+                        time.strftime(u"%Y%m%d-%H%M%S"))
+    os.makedirs(path)
+    hdlr_calib = logging.FileHandler(os.path.join(path, CALIB_LOG))
+    hdlr_calib.setFormatter(formatter)
+    hdlr_calib.addFilter(logging.Filter())
+    logger.addHandler(hdlr_calib)
+
+    shid, _ = main_data.chamber.sampleHolder.value
+    # dict that stores all the calibration values found
+    calib_values = {}
+
+    pressures = main_data.chamber.axes["pressure"].choices
+    vacuum_pressure = min(pressures.keys())  # Pressure to go to SEM mode
+    # vented_pressure = max(pressures.keys())
+    for p, pn in pressures.items():
+        if pn == "overview":
+            overview_pressure = p  # Pressure to go to overview mode
+            break
+    else:
+        raise IOError("Failed to find the overview pressure in %s" % (pressures,))
+
+    if future._delphi_calib_state == CANCELLED:
+        raise CancelledError()
+
     try:
-        if future._conversion_update_state == CANCELLED:
+        # We need access to the separate sem and optical stages, which form
+        # the "stage". They are not found in the model, but we can find them
+        # as children of stage (on the DELPHI), and distinguish them by
+        # their role.
+        sem_stage = None
+        opt_stage = None
+        logger.debug("Find SEM and optical stages...")
+        for c in main_data.stage.children.value:
+            if c.role == "sem-stage":
+                sem_stage = c
+            elif c.role == "align":
+                opt_stage = c
+
+        if not sem_stage or not opt_stage:
+            raise KeyError("Failed to find SEM and optical stages")
+
+        # Move to the overview position first
+        f = main_data.chamber.moveAbs({"pressure": overview_pressure})
+        f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        # Reference the (optical) stage
+        logger.debug("Reference the (optical) stage...")
+        f = opt_stage.reference({"x", "y"})
+        f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        logger.debug("Reference the focus...")
+        f = main_data.focus.reference({"z"})
+        f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        # SEM stage to (0,0)
+        logger.debug("Move to the center of SEM stage...")
+        f = sem_stage.moveAbs({"x": 0, "y": 0})
+        f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        # Calculate offset approximation
+        try:
+            logger.debug("Starting lens alignment...")
+            future.lens_alignment_f = LensAlignment(main_data.overview_ccd, sem_stage)
+            position = future.lens_alignment_f.result()
+            logger.debug("SEM position after lens alignment: %s", position)
+        except Exception:
+            raise IOError("Lens alignment failed.")
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        # Update progress of the future
+        future.set_progress(end=time.time() + 17 * 60)
+
+        # Just to check if move makes sense
+        f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
+        f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        # Move to SEM
+        f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
+        f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        # Update progress of the future
+        future.set_progress(end=time.time() + 15.5 * 60)
+
+        if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
 
         # Detect the holes/markers of the sample holder
         try:
-            logging.debug("Detect the holes/markers of the sample holder...")
-            future._hole_detectionf = HoleDetection(detector, escan, sem_stage,
-                                                    ebeam_focus, known_focus)
-            first_hole, second_hole, hole_focus = future._hole_detectionf.result()
-            logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
+            logger.debug("Detect the holes/markers of the sample holder...")
+            future.hole_detectionf = HoleDetection(main_data.bsd, main_data.ebeam, sem_stage,
+                                                   main_data.ebeam_focus)
+            htop, hbot, hfoc = future.hole_detectionf.result()
+            # update known values
+            calib_values["top_hole"] = htop
+            calib_values["bottom_hole"] = hbot
+            calib_values["hole_focus"] = hfoc
+            logger.debug("First hole: %s (m,m) Second hole: %s (m,m)", htop, hbot)
+            logger.debug("Measured SEM focus on hole: %f", hfoc)
         except Exception:
-            raise IOError("Conversion update failed to find sample holder holes.")
+            raise IOError("Failed to find sample holder holes.")
 
-        # TODO: move focus to good_focus = _hole_focus - GOOD_FOCUS_OFFSET ?
+        # expected good focus value when focusing on the glass
+        good_focus = hfoc - GOOD_FOCUS_OFFSET
 
-        # TODO: when is this called with first_insertion==False? In such case,
-        # almost the whole algorithm is different => either remove or put in a
-        # different function.
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
 
-        # Check if the sample holder is inserted for the first time
-        if first_insertion is True:
-            if future._conversion_update_state == CANCELLED:
-                raise CancelledError()
-
-            # Update progress of the future
-            future.set_progress(end=time.time() +
-                                estimateConversionTime(first_insertion) * (3 / 4))
-            logging.debug("Move SEM stage to expected offset...")
-            f = sem_stage.moveAbs({"x": sem_position[0], "y": sem_position[1]})
+        # Update progress of the future
+        future.set_progress(end=time.time() + 11.5 * 60)
+        logger.debug("Move SEM stage to expected offset...")
+        f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
+        f.result()
+        # Due to stage lack of precision we have to double check that we
+        # reached the desired position
+        reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
+        vector = [a - b for a, b in zip(reached_pos, position)]
+        dist = math.hypot(*vector)
+        logger.debug("Distance from required position after lens alignment: %f", dist)
+        if dist >= 10e-06:
+            logger.debug("Retry to reach position..")
+            f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
             f.result()
-            # Due to stage lack of precision we have to double check that we
-            # reached the desired position
             reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
-            vector = [a - b for a, b in zip(reached_pos, sem_position)]
+            vector = [a - b for a, b in zip(reached_pos, position)]
             dist = math.hypot(*vector)
-            logging.debug("Distance from required position after lens alignment: %f", dist)
-            if dist >= 10e-06:
-                logging.debug("Retry to reach position..")
-                f = sem_stage.moveAbs({"x": sem_position[0], "y": sem_position[1]})
-                f.result()
-                reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
-                vector = [a - b for a, b in zip(reached_pos, sem_position)]
-                dist = math.hypot(*vector)
-                logging.debug("New distance from required position: %f", dist)
-            logging.debug("Move objective stage to (0,0)...")
-            f = opt_stage.moveAbs({"x": 0, "y": 0})
-            f.result()
-            # Set min fov
-            # We want to be as close as possible to the center when we are zoomed in
-            escan.horizontalFoV.value = escan.horizontalFoV.range[0]
+            logger.debug("New distance from required position: %f", dist)
+        logger.debug("Move objective stage to (0,0)...")
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
+        f.result()
+        # Set min fov
+        # We want to be as close as possible to the center when we are zoomed in
+        main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
 
-            logging.debug("Initial calibration to align and calculate the offset...")
-            try:
-                future._align_offsetf = AlignAndOffset(ccd, detector, escan, sem_stage,
-                                                       opt_stage, focus)
-                offset = future._align_offsetf.result()
-            except Exception:
-                raise IOError("Conversion update failed to align and calculate offset.")
-            center_focus = focus.position.value.get('z')
+        logger.debug("Initial calibration to align and calculate the offset...")
+        try:
+            future.align_offsetf = AlignAndOffset(main_data.ccd, main_data.bsd,
+                                                  main_data.ebeam, sem_stage,
+                                                  opt_stage, main_data.focus)
+            offset = future.align_offsetf.result()
+        except Exception:
+            raise IOError("Failed to align and calculate offset.")
+        center_focus = main_data.focus.position.value.get('z')
+        logger.debug("Measured optical focus on spot: %f", center_focus)
 
-            if future._conversion_update_state == CANCELLED:
-                raise CancelledError()
-            # Update progress of the future
-            future.set_progress(end=time.time() +
-                                estimateConversionTime(first_insertion) * (2 / 4))
-            logging.debug("Calculate rotation and scaling...")
-            try:
-                future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
-                                                               opt_stage, focus, offset)
-                acc_offset, rotation, scaling = future._rotation_scalingf.result()
-            except Exception:
-                raise IOError("Conversion update failed to calculate rotation and scaling.")
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
 
-            # Update progress of the future
-            future.set_progress(end=time.time() +
-                                estimateConversionTime(first_insertion) * (1 / 4))
-            logging.debug("Calculate shift parameters...")
-            try:
-                # Compute spot shift percentage
-                future._spot_shiftf = SpotShiftFactor(ccd, detector, escan, focus)
-                spotshift = future._spot_shiftf.result()
-
-                # Compute resolution-related values
-                future._resolution_shiftf = ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
-                resa, resb = future._resolution_shiftf.result()
-
-                # Compute HFW-related values
-                future._hfw_shiftf = HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
-                hfwa = future._hfw_shiftf.result()
-            except Exception:
-                raise IOError("Conversion update failed to calculate shift parameters.")
-
-            # Now we can return. There is no need to update the convert stage
-            # metadata as the current sample holder will be unloaded
+        # Update progress of the future
+        future.set_progress(end=time.time() + 10 * 60)
+        logger.debug("Calculate rotation and scaling...")
+        try:
+            future.rotation_scalingf = RotationAndScaling(main_data.ccd, main_data.bsd,
+                                                          main_data.ebeam, sem_stage,
+                                                          opt_stage, main_data.focus,
+                                                          offset)
+            pure_offset, srot, sscale = future.rotation_scalingf.result()
             # Offset is divided by scaling, since Convert Stage applies scaling
             # also in the given offset
-            pure_offset = acc_offset
-            offset = ((acc_offset[0] / scaling[0]), (acc_offset[1] / scaling[1]))
+            strans = ((pure_offset[0] / sscale[0]), (pure_offset[1] / sscale[1]))
+            calib_values["stage_trans"] = strans
+            calib_values["stage_scaling"] = sscale
+            calib_values["stage_rotation"] = srot
+            logger.debug("Stage Offset: %s (m,m) Rotation: %f (rad) Scaling: %s", strans, srot, sscale)
+        except Exception:
+            raise IOError("Failed to calculate rotation and scaling.")
 
-            # Return to the center so fine overlay can be executed just after calibration
-            f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
-            f.result()
-            f = opt_stage.moveAbs({"x": 0, "y": 0})
-            f.result()
-            f = focus.moveAbs({"z": center_focus})
-            f.result()
+        # Update progress of the future
+        future.set_progress(end=time.time() + 7.5 * 60)
+        logger.debug("Calculate shift parameters...")
+        try:
+            # Compute spot shift percentage
+            future.spot_shiftf = SpotShiftFactor(main_data.ccd, main_data.bsd,
+                                                 main_data.ebeam, main_data.focus)
+            spotshift = future.spot_shiftf.result()
+            calib_values["spot_shift"] = spotshift
+            logger.debug("Spot shift: %s", spotshift)
 
-            # Focus the CL spot using SEM focus
-            # Configure CCD and e-beam to write CL spots
-            ccd.binning.value = (1, 1)
-            ccd.resolution.value = ccd.resolution.range[1]
-            ccd.exposureTime.value = 900e-03
-            escan.horizontalFoV.value = escan.horizontalFoV.range[0]
-            escan.scale.value = (1, 1)
-            escan.resolution.value = (1, 1)
-            escan.translation.value = (0, 0)
-            escan.rotation.value = 0
-            escan.shift.value = (0, 0)
-            escan.dwellTime.value = 5e-06
-            det_dataflow = detector.data
-            ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            future._autofocus_f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
-            future._autofocus_f.result()
-            if future._conversion_update_state == CANCELLED:
+            # Compute resolution-related values
+            future.resolution_shiftf = ResolutionShiftFactor(main_data.bsd,
+                                                             main_data.ebeam, sem_stage,
+                                                             main_data.ebeam_focus,
+                                                             good_focus)
+            resa, resb = future.resolution_shiftf.result()
+            calib_values["resolution_a"] = resa
+            calib_values["resolution_b"] = resb
+            logger.debug("Resolution A: %s Resolution B: %s", resa, resb)
+
+            # Compute HFW-related values
+            future.hfw_shiftf = HFWShiftFactor(main_data.bsd,
+                                               main_data.ebeam, sem_stage,
+                                               main_data.ebeam_focus,
+                                               good_focus)
+            hfwa = future.hfw_shiftf.result()
+            calib_values["hfw_a"] = hfwa
+            logger.debug("HFW A: %s", hfwa)
+        except Exception:
+            raise IOError("Failed to calculate shift parameters.")
+
+        # Return to the center so fine overlay can be executed just after calibration
+        f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
+        f.result()
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
+        f.result()
+        f = main_data.focus.moveAbs({"z": center_focus})
+        f.result()
+
+        # Focus the CL spot using SEM focus
+        # Configure CCD and e-beam to write CL spots
+        main_data.ccd.binning.value = (1, 1)
+        main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
+        main_data.ccd.exposureTime.value = 900e-03
+        main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
+        main_data.ebeam.scale.value = (1, 1)
+        main_data.ebeam.resolution.value = (1, 1)
+        main_data.ebeam.translation.value = (0, 0)
+        main_data.ebeam.rotation.value = 0
+        main_data.ebeam.shift.value = (0, 0)
+        main_data.ebeam.dwellTime.value = 5e-06
+        det_dataflow = main_data.bsd.data
+        main_data.ccd.binning.value = min((8, 8), main_data.ccd.binning.range[1])
+        future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
+        future.auto_focus_f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+        # Re-apply optical autofocus to be safe in case of inaccuracy
+        future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
+        future.auto_focus_f.result()
+        main_data.ccd.binning.value = (1, 1)
+
+        # Update progress of the future
+        future.set_progress(end=time.time() + 1.5 * 60)
+
+        # Proper hfw for spot grid to be within the ccd fov
+        main_data.ebeam.horizontalFoV.value = 80e-06
+
+        # Run the optical fine alignment
+        # TODO: reuse the exposure time
+        logger.debug("Fine alignment...")
+        try:
+            future.find_overlay_f = FindOverlay((4, 4),
+                                                0.5,  # s, dwell time
+                                                10e-06,  # m, maximum difference allowed
+                                                main_data.ebeam,
+                                                main_data.ccd,
+                                                main_data.bsd,
+                                                skew=True,
+                                                bgsub=True)
+            _, cor_md = future.find_overlay_f.result()
+        except Exception:
+            logger.debug("Fine alignment failed. Retrying to focus...")
+            if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
-            # Re-apply optical autofocus to be safe in case of inaccuracy
-            future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
-            future._autofocus_f.result()
-            ccd.binning.value = (1, 1)
 
-            # TODO also calculate and return Phenom shift parameters
-            # Data returned needs to be filled in the calibration file
-            return first_hole, second_hole, hole_focus, offset, rotation, scaling, resa, resb, hfwa, spotshift
-
-        else:
-            if future._conversion_update_state == CANCELLED:
+            main_data.ccd.binning.value = (1, 1)
+            main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
+            main_data.ccd.exposureTime.value = 900e-03
+            main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
+            main_data.ebeam.scale.value = (1, 1)
+            main_data.ebeam.resolution.value = (1, 1)
+            main_data.ebeam.translation.value = (0, 0)
+            main_data.ebeam.dwellTime.value = 5e-06
+            det_dataflow = main_data.bsd.data
+            future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
+            future.auto_focus_f.result()
+            if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
-            # Update progress of the future
-            future.set_progress(end=time.time() + 1)
-            logging.debug("Calculate extra offset and rotation...")
-            updated_offset, updated_rotation = UpdateOffsetAndRotation(first_hole,
-                                                                       second_hole,
-                                                                       known_first_hole,
-                                                                       known_second_hole,
-                                                                       known_offset,
-                                                                       known_rotation,
-                                                                       known_scaling)
+            main_data.ccd.binning.value = (8, 8)
+            future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
+            future.auto_focus_f.result()
+            main_data.ccd.binning.value = (1, 1)
+            logger.debug("Retry fine alignment...")
+            future.find_overlay_f = FindOverlay((4, 4),
+                                                0.5,  # s, dwell time
+                                                10e-06,  # m, maximum difference allowed
+                                                main_data.ebeam,
+                                                main_data.ccd,
+                                                main_data.bsd,
+                                                skew=True,
+                                                bgsub=True)
+            _, cor_md = future.find_overlay_f.result()
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
 
-            # Update combined stage conversion metadata
-            logging.debug("Update combined stage conversion metadata...")
-            combined_stage.updateMetadata({model.MD_ROTATION_COR: updated_rotation})
-            combined_stage.updateMetadata({model.MD_POS_COR: updated_offset})
-            combined_stage.updateMetadata({model.MD_PIXEL_SIZE_COR: known_scaling})
-            # TODO also return Phenom shift parameters
-            # Data returned should NOT be filled in the calibration file
-            return first_hole, second_hole, hole_focus, updated_offset, updated_rotation,
-            known_scaling, known_resolution_slope, known_resolution_intercept, known_hfw_slope, known_spot_shift
+        trans_md, skew_md = cor_md
+        iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+        if any(s < 0 for s in iscale):
+            raise IOError("Unexpected scaling values calculated during"
+                          " Fine alignment: %s", iscale)
+        irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        ishear = skew_md[model.MD_SHEAR_COR]
+        iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+        calib_values["image_scaling"] = iscale
+        calib_values["image_scaling_scan"] = iscale_xy
+        calib_values["image_rotation"] = irot
+        calib_values["image_shear"] = ishear
+        logger.debug("Image Rotation: %f (rad) Scaling: %s XY Scaling: %s Shear: %f", irot, iscale, iscale_xy, ishear)
 
+        return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
+
+    except Exception as e:
+        # log failure msg
+        logger.error(str(e))
+        # still raise the error
+        raise e
     finally:
-        with future._conversion_lock:
+        # we can now store the calibration file in report
+        _StoreConfig(path, shid, calib_values)
+        # TODO: also cancel the current sub-future
+        with future._delphi_calib_lock:
             future._done.set()
-            if future._conversion_update_state == CANCELLED:
+            if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
-            future._conversion_update_state = FINISHED
-        logging.debug("Conversion update thread ended")
+            future._delphi_calib_state = FINISHED
+        logging.debug("Calibration thread ended.")
+        logger.removeHandler(hdlr_calib)
 
 
-def _CancelUpdateConversion(future):
+def _StoreConfig(path, shid, calib_values):
+        """ Store the calibration data for a given sample holder
+
+        calib_values (dict): calibration data
+
+        """
+        calib_f = open(os.path.join(path, CALIB_CONFIG), 'w')
+        calib_f.write("[delphi-" + format(shid, 'x') + "]\n")
+        for k, v in calib_values.items():
+            if isinstance(v, tuple):
+                calib_f.write(str(k + "_x = %.15f\n" % v[0]))
+                calib_f.write(str(k + "_y = %.15f\n" % v[1]))
+            else:
+                calib_f.write(str(k + " = %.15f\n" % v))
+        calib_f.close()
+
+
+def _CancelDelphiCalibration(future):
     """
-    Canceller of _DoUpdateConversion task.
+    Canceller of _DoDelphiCalibration task.
     """
-    logging.debug("Cancelling conversion update...")
+    logging.debug("Cancelling Delphi calibration...")
 
-    with future._conversion_lock:
-        if future._conversion_update_state == FINISHED:
+    with future._delphi_calib_lock:
+        if future._delphi_calib_state == FINISHED:
             return False
-        future._conversion_update_state = CANCELLED
-        future._hole_detectionf.cancel()
-        future._align_offsetf.cancel()
-        future._rotation_scalingf.cancel()
-        future._hfw_shiftf.cancel()
-        future._resolution_shiftf.cancel()
-        future._spot_shiftf.cancel()
-        future._autofocus_f.cancel()
-        logging.debug("Conversion update cancelled.")
+        future._delphi_calib_state = CANCELLED
+        # Cancel any running futures
+        future.lens_alignment_f.cancel()
+        future.update_conversion_f.cancel()
+        future.find_overlay_f.cancel()
+        future.auto_focus_f.cancel()
+        future.hole_detectionf.cancel()
+        future.align_offsetf.cancel()
+        future.rotation_scalingf.cancel()
+        future.hfw_shiftf.cancel()
+        future.resolution_shiftf.cancel()
+        future.spot_shiftf.cancel()
+        logging.debug("Delphi calibration cancelled.")
 
     # Do not return until we are really done (modulo 10 seconds timeout)
     future._done.wait(10)
     return True
 
 
-def estimateConversionTime(first_insertion):
+def estimateDelphiCalibration():
     """
-    Estimates conversion procedure duration
+    Estimates Delphi calibration procedure duration
     returns (float):  process estimated time #s
     """
     # Rough approximation
-    if first_insertion is True:
-        return 4 * 60
-    else:
-        return 60
+    return 18 * 60  # s
 
 
 def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
@@ -759,7 +884,7 @@ def _discard_data(df, data):
     pass
 
 
-def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None, manual=False):
+def HoleDetection(detector, escan, sem_stage, ebeam_focus, manual=False):
     """
     Wrapper for DoHoleDetection. It provides the ability to check the
     progress of the procedure.
@@ -789,13 +914,13 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None, man
     detection_thread = threading.Thread(target=executeTask,
                                         name="Hole detection",
                                         args=(f, _DoHoleDetection, f, detector, escan, sem_stage, ebeam_focus,
-                                              known_focus, manual))
+                                              manual))
 
     detection_thread.start()
     return f
 
 
-def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focus=None, manual=False):
+def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=False):
     """
     Moves to the expected positions of the holes on the sample holder and
     determines the centers of the holes (acquiring SEM images) with respect to
@@ -805,7 +930,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
-    known_focus (float): Focus used for hole detection (m)
     manual (boolean): if True, will not apply autofocus before detection attempt
     returns:
       first_hole (float, float): position (m,m)
@@ -824,7 +948,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         escan.shift.value = (0, 0)
         escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
         holes_found = []
-        hole_focus = known_focus
+        hole_focus = None
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
@@ -875,16 +999,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 try:
                     hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
                 except IOError:
-                    # Fallback to known focus
-                    if known_focus is not None:
-                        hole_focus = known_focus
-                        f = ebeam_focus.moveAbs({"z": hole_focus})
-                        f.result()
-                    image = detector.data.get(asap=False)
-                    try:
-                        hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
-                    except IOError:
-                        raise IOError("Holes not found.")
+                    raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
             center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
             vector_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]

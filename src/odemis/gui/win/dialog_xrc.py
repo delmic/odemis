@@ -84,9 +84,7 @@ def __init_resources():
         </object>
         <object class="sizeritem">
           <object class="wxStaticText" name="time_txt">
-            <label>Time remaining: 2 hours, 16 minutes and 34 seconds
-            
-            </label>
+            <label>Time remaining: 2 hours, 16 minutes and 34 seconds</label>
             <fg>#FFFFFF</fg>
             <XRCED>
               <assign_var>1</assign_var>
