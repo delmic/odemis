@@ -371,6 +371,7 @@ def _DoDelphiCalibration(future, main_data):
 
         # Run the optical fine alignment
         # TODO: reuse the exposure time
+        logger.debug("Fine alignment...")
         try:
             future.find_overlay_f = FindOverlay((4, 4),
                                                 0.5,  # s, dwell time
@@ -403,6 +404,7 @@ def _DoDelphiCalibration(future, main_data):
             future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
             future.auto_focus_f.result()
             main_data.ccd.binning.value = (1, 1)
+            logger.debug("Retry fine alignment...")
             future.find_overlay_f = FindOverlay((4, 4),
                                                 0.5,  # s, dwell time
                                                 10e-06,  # m, maximum difference allowed
@@ -457,7 +459,7 @@ def _StoreConfig(path, shid, calib_values):
         calib_f = open(os.path.join(path, CALIB_CONFIG), 'w')
         calib_f.write("[delphi-" + format(shid, 'x') + "]\n")
         for k, v in calib_values.items():
-            if type(v) == "tuple":
+            if type(v) == tuple:
                 calib_f.write(str(k + "_x = %.15f\n" % v[0]))
                 calib_f.write(str(k + "_y = %.15f\n" % v[1]))
             else:
