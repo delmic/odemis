@@ -388,14 +388,14 @@ class TestDataArray2RGB(unittest.TestCase):
         numpy.testing.assert_equal(pixel, [255, 255, 255])
 
         # irange at the highest value => all blacks (but the whites)
-        out = img.DataArray2RGB(grey_img, irange=(depth - 2 , depth - 1))
+        out = img.DataArray2RGB(grey_img, irange=(depth - 2, depth - 1))
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 1)
         pixel = out[2, 2]
         numpy.testing.assert_equal(pixel, [0, 0, 0])
 
         # irange at the middle value => black/white/grey (max)
-        out = img.DataArray2RGB(grey_img, irange=(depth // 2 - 1 , depth // 2 + 1))
+        out = img.DataArray2RGB(grey_img, irange=(depth // 2 - 1, depth // 2 + 1))
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 3)
         hist, edges = img.histogram(out[:, :, 0]) # just use one RGB channel
@@ -430,6 +430,7 @@ class TestDataArray2RGB(unittest.TestCase):
         rgb_nc_back = rgb_nc.swapaxes(0, 1)
 
         print("Time fast conversion = %g s, standard = %g s" % (fast_dur, std_dur))
+        self.assertLess(fast_dur, std_dur)
         numpy.testing.assert_almost_equal(rgb, rgb_nc_back, decimal=0)
         numpy.testing.assert_equal(rgb, rgb_nc_back)
 
@@ -501,6 +502,49 @@ class TestDataArray2RGB(unittest.TestCase):
 
         self.assertEqual(out[..., 2].min(), 0)
         self.assertEqual(out[..., 2].max(), 255)
+
+        # Same data, but now mapped between 0->255 => no scaling to do (just duplicate)
+        irange = (0, 255)
+        out = img.DataArray2RGB(data, irange, tint=tint)
+        self.assertTrue(numpy.all(out[..., 0] == 0))
+        numpy.testing.assert_array_equal(data, out[:, :, 2])
+
+    def test_float(self):
+        irange = (0.3, 468.4)
+        shape = (102, 965)
+        tint = (0, 73, 255)
+        grey_img = numpy.zeros(shape, dtype="float") + 15.05
+        grey_img[0, 0] = -15.6
+        grey_img[0, 1] = 500.6
+
+        out = img.DataArray2RGB(grey_img, irange, tint=tint)
+        self.assertTrue(numpy.all(out[..., 0] == 0))
+        self.assertEqual(out[..., 2].min(), 0)
+        self.assertEqual(out[..., 2].max(), 255)
+
+        # irange at the lowest value => all white (but the blacks)
+        out = img.DataArray2RGB(grey_img, irange=(-100, -50))
+        self.assertEqual(out.shape, shape + (3,))
+        self.assertEqual(self.CountValues(out), 1)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(pixel, [255, 255, 255])
+
+        # irange at the highest value => all blacks (but the whites)
+        out = img.DataArray2RGB(grey_img, irange=(5000, 5000.1))
+        self.assertEqual(out.shape, shape + (3,))
+        self.assertEqual(self.CountValues(out), 1)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(pixel, [0, 0, 0])
+
+        # irange at the middle => B&W only
+        out = img.DataArray2RGB(grey_img, irange=(10, 10.1))
+        self.assertEqual(out.shape, shape + (3,))
+        self.assertEqual(self.CountValues(out), 2)
+        hist, edges = img.histogram(out[:, :, 0])  # just use one RGB channel
+        self.assertGreater(hist[0], 0)
+        self.assertEqual(hist[1], 0)
+        self.assertGreater(hist[-1], 0)
+        self.assertEqual(hist[-2], 0)
 
 
 class TestMergeMetadata(unittest.TestCase):

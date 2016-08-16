@@ -28,10 +28,6 @@ import logging
 import math
 import numpy
 from odemis import model
-import scipy.misc
-# Next imprt statement needed under windows, because otherwise scipy.misc.bytescale won't be available
-# See: http://stackoverflow.com/questions/18049687/attributeerror-module-object-scipy-has-no-attribute-why-does-this-error
-import scipy.misc.pilutil
 import scipy.ndimage
 
 
@@ -300,14 +296,20 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     # fit it to 8 bits and update brightness and contrast at the same time
     if irange is None:
         irange = (numpy.nanmin(data), numpy.nanmax(data))
+        if math.isnan(irange[0]):
+            logging.warning("Trying to convert all-NaN data to RGB")
+            data = numpy.nan_to_num(data)
+            irange = (0, 1)
     else:
         # ensure irange is the same type as the data. It ensures we don't get
         # crazy values, and also that numpy doesn't get confused in the
         # intermediary dtype (cf .clip()).
         irange = numpy.array(irange, data.dtype)
         # TODO: warn if irange looks too different from original value?
+        if irange[0] == irange[1]:
+            logging.info("Requested RGB conversion with null-range %s", irange)
 
-    if data.dtype is numpy.uint8 and irange[0] == 0 and irange[1] == 255:
+    if data.dtype == numpy.uint8 and irange[0] == 0 and irange[1] == 255:
         # short-cut when data is already the same type
         # logging.debug("Applying direct range mapping to RGB")
         drescaled = data
@@ -317,12 +319,13 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         if data.dtype.kind in "iu":
             # no need to clip if irange is the whole possible range
             idt = numpy.iinfo(data.dtype)
-            # trick to ensure B&W if there is only one value allowed
+            # Ensure B&W if there is only one value allowed
             if irange[0] >= irange[1]:
                 if irange[0] > idt.min:
-                    irange = (irange[1] - 1, irange[1])
+                    irange = (irange[0] - 1, irange[0])
                 else:
                     irange = (irange[0], irange[0] + 1)
+
             if img_fast:
                 try:
                     # only (currently) supports uint16
@@ -335,24 +338,20 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             if irange[0] > idt.min or irange[1] < idt.max:
                 data = data.clip(*irange)
         else: # floats et al. => always clip
-            # TODO: might not work correctly if range is in middle of data
-            # values trick to ensure B&W image
-            if irange[0] >= irange[1] and irange[0] > numpy.nanmin(data):
-                force_white = True
-            else:
-                force_white = False
-            # img_fast currently doesn't support floats
+            # Ensure B&W if there is just one value allowed
+            if irange[0] >= irange[1]:
+                irange = (irange[0] - 1e-9, irange[0])
             data = data.clip(*irange)
-            if force_white:
-                irange = (irange[1] - 1, irange[1])
 
-        if data.dtype is numpy.uint8:
-            drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
-        else: # bytescale never does anything on a data already in uint8
-            b = 255 / (irange[1] - irange[0])
-            drescaled = data - irange[0]
-            # keep memory and dtype, allowing for a loss of precision
-            numpy.multiply(drescaled, b, out=drescaled, casting="unsafe")
+        dshift = data - irange[0]
+        if data.dtype == numpy.uint8:
+            drescaled = dshift  # re-use memory for the result
+        else:
+            # TODO: could directly use one channel of the 'rgb' variable?
+            drescaled = numpy.empty(data.shape, dtype=numpy.uint8)
+        # Note: just > 255 to compensate for floating-point errors (anything < 256 -> 255 anyway)
+        b = 255.01 / (irange[1] - irange[0])
+        numpy.multiply(dshift, b, out=drescaled, casting="unsafe")
 
     # Now duplicate it 3 times to make it RGB (as a simple approximation of
     # greyscale)
