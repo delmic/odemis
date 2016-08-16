@@ -501,6 +501,32 @@ class VirtualTestSynchronized(object):
         self.ccd.data.unsubscribe(self.receive_ccd_image)
         self.sed.data.unsubscribe(self.receive_sem_data)
 
+    def test_no_data(self):
+        """
+        check the synchronization of CCD prevents it from generating images as
+        long as no event is received.
+        """
+        if not hasattr(self.ccd, "softwareTrigger"):
+            self.skipTest("Camera doesn't support software trigger")
+
+        self.ccd.exposureTime.value = self.ccd.exposureTime.clip(50e-3)  # s
+        self.ccd_left = 10
+
+        try:
+            self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
+        except IOError:
+            self.skipTest("Camera doesn't support synchronisation")
+        self.ccd.data.subscribe(self.receive_ccd_image)
+
+        time.sleep(1)
+        self.ccd.data.unsubscribe(self.receive_ccd_image)
+
+        self.assertEqual(self.ccd_left, 10)
+        self.ccd.data.synchronizedOn(None)
+
+        # check we can still get data normally
+        d = self.ccd.data.get()
+
     def test_basic(self):
         """
         check the synchronization of the SEM with the CCD:
@@ -508,8 +534,8 @@ class VirtualTestSynchronized(object):
         """
         start = time.time()
         # use large binning, to reduce the resolution
-        self.ccd.binning.value = (min(self.ccd.binning.range[1][0], 4),
-                                  self.ccd.binning.range[1][1])
+        if model.hasVA(self.ccd, "binning") and not self.ccd.binning.readonly:
+            self.ccd.binning.value = self.ccd.binning.clip((4, 4))
 
         exp = 50e-3  # s
         # in practice, it takes up to 500ms to take an image of 50 ms exposure
@@ -562,9 +588,13 @@ class VirtualTestSynchronized(object):
         """
         if not hasattr(self.ccd, "softwareTrigger"):
             self.skipTest("Camera doesn't support software trigger")
-        exp = 50e-3 # s
-        self.ccd.exposureTime.value = exp
-        self.ccd.binning.value = (1, 1)
+
+        self.ccd.exposureTime.value = self.ccd.exposureTime.clip(50e-3)  # s
+        exp = self.ccd.exposureTime.value
+
+        if model.hasVA(self.ccd, "binning") and not self.ccd.binning.readonly:
+            self.ccd.binning.value = self.ccd.binning.clip((1, 1))
+
         self.ccd_size = self.ccd.resolution.value
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
         duration = exp + readout # approximate time for one frame
