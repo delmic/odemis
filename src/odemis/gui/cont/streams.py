@@ -1030,7 +1030,7 @@ class StreamBarController(object):
     def addFluo(self, **kwargs):
         """
         Creates a new fluorescence stream and a stream panel in the stream bar
-        returns (StreamPanel): the panel created
+        returns (StreamController): the panel created
         """
         # Find a name not already taken
         names = [s.name.value for s in self._tab_data_model.streams.value]
@@ -1064,7 +1064,7 @@ class StreamBarController(object):
     def addBrightfield(self, **kwargs):
         """
         Creates a new brightfield stream and panel in the stream bar
-        returns (StreamPanel): the stream panel created
+        returns (StreamController): the stream panel created
         """
         s = acqstream.BrightfieldStream(
             "Bright-field",
@@ -1083,7 +1083,7 @@ class StreamBarController(object):
     def addDarkfield(self, **kwargs):
         """
         Creates a new darkfield stream and panel in the stream bar
-        returns (StreamPanel): the stream panel created
+        returns (StreamController): the stream panel created
         """
         # Note: it's also displayed as 'brightfield' stream
         s = acqstream.BrightfieldStream(
@@ -1102,51 +1102,35 @@ class StreamBarController(object):
 
     def addSEMSED(self, **kwargs):
         """ Creates a new SED stream and panel in the stream bar
-
-        :return: (StreamController) The controller created for the SED stream
-
+        return (StreamController) The controller created for the SED stream
         """
-
-        if self._main_data_model.role == "delphi":
-            # For the Delphi, the SEM stream needs to be more "clever" because
-            # it needs to run a simple spot alignment every time the stage has
-            # moved before starting to acquire.
-            s = acqstream.AlignedSEMStream(
-                "Secondary electrons",
-                self._main_data_model.sed,
-                self._main_data_model.sed.data,
-                self._main_data_model.ebeam,
-                self._main_data_model.ccd,
-                self._main_data_model.stage,
-                self._main_data_model.focus,
-                focuser=self._main_data_model.ebeam_focus,
-                shiftebeam=acqstream.MTD_EBEAM_SHIFT
-            )
-            # Select between "Metadata update" and "Stage move"
-            # TODO: use shiftebeam once the phenom driver supports it
-        else:
-            s = acqstream.SEMStream(
-                "Secondary electrons",
-                self._main_data_model.sed,
-                self._main_data_model.sed.data,
-                self._main_data_model.ebeam,
-                focuser=self._main_data_model.ebeam_focus
-            )
-        return self._add_stream(s, **kwargs)
+        return self._add_sem_stream("Secondary electrons",
+                                    self._main_data_model.sed, **kwargs)
 
     def addSEMBSD(self, **kwargs):
         """
         Creates a new backscattered electron stream and panel in the stream bar
         returns (StreamPanel): the panel created
         """
+        return self._add_sem_stream("Backscattered electrons",
+                                    self._main_data_model.bsd, **kwargs)
+
+    def addEBIC(self, **kwargs):
+        """
+        Creates a new EBIC stream and panel in the stream bar
+        returns (StreamPanel): the panel created
+        """
+        return self._add_sem_stream("EBIC", self._main_data_model.ebic, **kwargs)
+
+    def _add_sem_stream(self, name, detector, **kwargs):
         if self._main_data_model.role == "delphi":
             # For the Delphi, the SEM stream needs to be more "clever" because
             # it needs to run a simple spot alignment every time the stage has
             # moved before starting to acquire.
             s = acqstream.AlignedSEMStream(
-                "Backscattered electrons",
-                self._main_data_model.bsd,
-                self._main_data_model.bsd.data,
+                name,
+                detector,
+                detector.data,
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
@@ -1156,26 +1140,21 @@ class StreamBarController(object):
             )
         else:
             s = acqstream.SEMStream(
-                "Backscattered electrons",
-                self._main_data_model.bsd,
-                self._main_data_model.bsd.data,
+                name,
+                detector,
+                detector.data,
                 self._main_data_model.ebeam,
                 focuser=self._main_data_model.ebeam_focus
             )
-        return self._add_stream(s, **kwargs)
 
-    def addEBIC(self, **kwargs):
-        """
-        Creates a new EBIC stream and panel in the stream bar
-        returns (StreamPanel): the panel created
-        """
-        s = acqstream.SEMStream(
-            "EBIC",
-            self._main_data_model.ebic,
-            self._main_data_model.ebic.data,
-            self._main_data_model.ebeam,
-            focuser=self._main_data_model.ebeam_focus
-        )
+        # If the detector already handles brightness and contrast, don't do it by default
+        # TODO: check if it has .applyAutoContrast() instead (once it's possible)
+        if (s.intensityRange.range == (0, 255) and
+            model.hasVA(detector, "contrast") and
+            model.hasVA(detector, "brightness")):
+            self.auto_bc.value = False
+            self.intensityRange.value = (0, 255)
+
         return self._add_stream(s, **kwargs)
 
     def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):

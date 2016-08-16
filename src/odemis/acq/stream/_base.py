@@ -160,12 +160,6 @@ class Stream(object):
         self.intensityRange.clip_on_range = True
         self._updateDRange()
 
-        if self._drange == (0, 255): # 8 bits
-            # It's so similar to RBG, the data doesn't need scaling by default
-            self.intensityRange.value = (0, 255)
-            self.auto_bc.value = False
-            self.auto_bc_outliers.value = 0
-
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
         self.histogram = model.VigilantAttribute(numpy.empty(0), readonly=True)
