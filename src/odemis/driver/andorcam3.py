@@ -4,7 +4,7 @@ Created on 6 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2013 Éric Piel, Delmic
+Copyright © 2012-2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -28,7 +28,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from Pyro4.core import oneway
 import collections
 from ctypes import *
 import gc
@@ -36,7 +35,7 @@ import glob
 import logging
 import numpy
 from odemis import model, util
-from odemis.model import HwError
+from odemis.model import HwError, oneway
 import os
 import re
 import threading
