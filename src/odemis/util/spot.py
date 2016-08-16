@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import logging
 import numpy
 from odemis import model
 from odemis.util import img
@@ -103,8 +104,12 @@ def SpotIntensity(data, background=None):
 
     # center of mass
     offset = FindCenterCoordinates(data0)
-    im_center = (data0.shape[1] / 2, data0.shape[0] / 2)
-    center = tuple(a + b for a, b in zip(im_center, offset))
+    center = (int(round((data0.shape[1] - 1) / 2 + offset[0])),
+              int(round((data0.shape[0] - 1) / 2 + offset[1])))
+    # clip
+    center = (max(1, center[0]),
+              min(int(center[1]), data0.shape[0] - 3))
+    # Take the 3x3 image around the center
     neighborhood = data0[(center[1] - 1):(center[1] + 2),
                          (center[0] - 1):(center[0] + 2)]
     intens = neighborhood.sum() / total
@@ -126,8 +131,8 @@ def FindCenterCoordinates(image):
     Detects the center of the contained spot.
     It assumes there is only one spot.
     subimages (model.DataArray): 2D arrays containing pixel intensity
-    returns (float, float): Position of the spot center (from the upper left),
-      possibly with sub-pixel resolution.
+    returns (float, float): Position of the spot center in px (from the center
+      of the image), possibly with sub-pixel resolution.
     """
     # Input might be integer
     # TODO Dummy, change the way that you handle the array e.g. convolution
@@ -175,8 +180,13 @@ def FindCenterCoordinates(image):
     # Weighting: weight by square of gradient magnitude and inverse distance to gradient intensity centroid.
     dI2 = dIdu * dIdu + dIdv * dIdv
     sdI2 = numpy.sum(dI2[:])
-    x0 = numpy.sum(dI2[:] * xk[:]) / sdI2
-    y0 = numpy.sum(dI2[:] * yk[:]) / sdI2
+    if sdI2 == 0:
+        # We could raise LookupError, but the caller would probably end-up doing
+        # the same thing, and technically, center could be anywhere.
+        logging.debug("Cannot get the center on a flat image")
+        return (0, 0)  # Just pretend to be at the center
+    x0 = numpy.sum(dI2 * xk) / sdI2
+    y0 = numpy.sum(dI2 * yk) / sdI2
     w = dI2 / (0.05 + numpy.sqrt((xk - x0) * (xk - x0) + (yk - y0) * (yk - y0)))
 
     # Make the edges zero, because of the filter
@@ -186,11 +196,11 @@ def FindCenterCoordinates(image):
     w[:, w.shape[1] - 1] = 0
 
     # Find radial center
-    swa2 = numpy.sum(w[:] * a[:] * a[:])
-    swab = numpy.sum(w[:] * a[:] * b[:])
-    swb2 = numpy.sum(w[:] * b[:] * b[:])
-    swac = numpy.sum(w[:] * a[:] * c[:])
-    swbc = numpy.sum(w[:] * b[:] * c[:])
+    swa2 = numpy.sum(w * a * a)
+    swab = numpy.sum(w * a * b)
+    swb2 = numpy.sum(w * b * b)
+    swac = numpy.sum(w * a * c)
+    swbc = numpy.sum(w * b * c)
     det = swa2 * swb2 - swab * swab
     xc = (swab * swbc - swb2 * swac) / det
     yc = (swab * swac - swa2 * swbc) / det
