@@ -206,7 +206,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 15 * 60)
+        future.set_progress(end=time.time() + 17 * 60)
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -221,7 +221,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 13.5 * 60)
+        future.set_progress(end=time.time() + 15.5 * 60)
 
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
@@ -237,6 +237,7 @@ def _DoDelphiCalibration(future, main_data):
             calib_values["bottom_hole"] = hbot
             calib_values["hole_focus"] = hfoc
             logger.debug("First hole: %s (m,m) Second hole: %s (m,m)", htop, hbot)
+            logger.debug("Measured SEM focus on hole: %f", hfoc)
         except Exception:
             raise IOError("Failed to find sample holder holes.")
 
@@ -281,6 +282,7 @@ def _DoDelphiCalibration(future, main_data):
         except Exception:
             raise IOError("Failed to align and calculate offset.")
         center_focus = main_data.focus.position.value.get('z')
+        logger.debug("Measured optical focus on spot: %f", center_focus)
 
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
@@ -300,6 +302,7 @@ def _DoDelphiCalibration(future, main_data):
             calib_values["stage_trans"] = strans
             calib_values["stage_scaling"] = sscale
             calib_values["stage_rotation"] = srot
+            logger.debug("Stage Offset: %s (m,m) Rotation: %f (rad) Scaling: %s", strans, srot, sscale)
         except Exception:
             raise IOError("Failed to calculate rotation and scaling.")
 
@@ -312,6 +315,7 @@ def _DoDelphiCalibration(future, main_data):
                                                  main_data.ebeam, main_data.focus)
             spotshift = future.spot_shiftf.result()
             calib_values["spot_shift"] = spotshift
+            logger.debug("Spot shift: %s", spotshift)
 
             # Compute resolution-related values
             future.resolution_shiftf = ResolutionShiftFactor(main_data.bsd,
@@ -321,6 +325,7 @@ def _DoDelphiCalibration(future, main_data):
             resa, resb = future.resolution_shiftf.result()
             calib_values["resolution_a"] = resa
             calib_values["resolution_b"] = resb
+            logger.debug("Resolution A: %s Resolution B: %s", resa, resb)
 
             # Compute HFW-related values
             future.hfw_shiftf = HFWShiftFactor(main_data.bsd,
@@ -329,6 +334,7 @@ def _DoDelphiCalibration(future, main_data):
                                                good_focus)
             hfwa = future.hfw_shiftf.result()
             calib_values["hfw_a"] = hfwa
+            logger.debug("HFW A: %s", hfwa)
         except Exception:
             raise IOError("Failed to calculate shift parameters.")
 
@@ -429,6 +435,7 @@ def _DoDelphiCalibration(future, main_data):
         calib_values["image_scaling_scan"] = iscale_xy
         calib_values["image_rotation"] = irot
         calib_values["image_shear"] = ishear
+        logger.debug("Image Rotation: %f (rad) Scaling: %s XY Scaling: %s Shear: %f", irot, iscale, iscale_xy, ishear)
 
         return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
@@ -459,7 +466,7 @@ def _StoreConfig(path, shid, calib_values):
         calib_f = open(os.path.join(path, CALIB_CONFIG), 'w')
         calib_f.write("[delphi-" + format(shid, 'x') + "]\n")
         for k, v in calib_values.items():
-            if type(v) == tuple:
+            if isinstance(v, tuple):
                 calib_f.write(str(k + "_x = %.15f\n" % v[0]))
                 calib_f.write(str(k + "_y = %.15f\n" % v[1]))
             else:
@@ -501,7 +508,7 @@ def estimateDelphiCalibration():
     returns (float):  process estimated time #s
     """
     # Rough approximation
-    return 16 * 60  # s
+    return 18 * 60  # s
 
 
 def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
