@@ -35,7 +35,7 @@ def _SubtractBackground(data, background=None):
             noise_max = 1.3 * data.metadata[model.MD_BASELINE]
         except (AttributeError, KeyError):
             # Fallback: take average of the four corner pixels
-            noise_max = 1.3 * (data[0, 0] + data[0, -1] + data[-1, 0] + data[-1, -1]) / 4
+            noise_max = 1.3 * numpy.mean((data[0, 0], data[0, -1], data[-1, 0], data[-1, -1]))
 
     noise_max = data.dtype.type(noise_max)  # ensure we don't change the dtype
     data0 = img.Subtract(data, noise_max)
