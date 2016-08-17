@@ -21,17 +21,9 @@ else
     MODEL=("$MODEL") # Convert into an array of one
 fi
 
-# Add the latest overlay-report if it's possibly related (ie, less than a day old)
-LAST_OVERLAY_REP=$(ls -dt ~/odemis-overlay-report/* | head -1)
-if [ -n "$LAST_OVERLAY_REP" ]; then
-    if [ $(find "$LAST_OVERLAY_REP" -maxdepth 0 -mtime +1 | wc -l) -gt 0 ]; then
-       LAST_OVERLAY_REP="" # Too old
-    fi
-fi
-
 
 # Compress in background
-zip -jr $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf /var/log/syslog "$LAST_OVERLAY_REP" &
+zip -jr $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf /var/log/syslog &
 
 
 # Take a screenshot if the GUI is there
@@ -90,8 +82,27 @@ if [ "$ret" -eq 1 ]; then # cancelled
     exit
 fi
 
-# Add the description (no quotes for hwfn and scfn so that they become nothing when they are nothing)
-file-roller --add "$descfn" $hwfn $scfn --add-to "$fn"
+
+# Add the latest overlay-report if it's possibly related (ie, less than a day old)
+LAST_OVERLAY_REP=$(ls -dt ~/odemis-overlay-report/* | head -1)
+if [ -n "$LAST_OVERLAY_REP" ]; then
+    if [ $(find "$LAST_OVERLAY_REP" -maxdepth 0 -mtime +1 | wc -l) -gt 0 ]; then
+       LAST_OVERLAY_REP="" # Too old
+    fi
+fi
+
+# Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
+LAST_DELPHI_CALIB_REP=$(ls -dt ~/delphi-calibration-report/* | head -1)
+if [ -n "$LAST_DELPHI_CALIB_REP" ]; then
+    if [ $(find "$LAST_DELPHI_CALIB_REP" -maxdepth 0 -mtime +1 | wc -l) -gt 0 ]; then
+       LAST_DELPHI_CALIB_REP="" # Too old
+    fi
+fi
+
+# Add the description, other files generated during entry, and folders (which are
+# add recursively, and not added at all if they don't exist)
+# (no quotes for the variables which could be empty so they become nothing)
+file-roller --add "$descfn" $hwfn $scfn ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP --add-to "$fn"
 
 zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
 
