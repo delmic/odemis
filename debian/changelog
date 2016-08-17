@@ -1,3 +1,37 @@
+odemis (2.5.0-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5
+  * Main new features:
+    - Report in the GUI when the SEM stream is being aligned, and when it's not aligned (DELPHI)
+    - Report in the GUI when the hardware is moving to change the optical path (SPARC)
+    - Export line spectra to PNG, TIFF or CSV (SPARC)
+    - Add support for Picoquant PicoHarp time-correlator
+    - Add support for IDS uEye USB cameras
+    - Support for SPARCcompact, which doesn't have an AR camera
+    - Support for shutter on spectrograph with multiple cameras
+  * Main improvements and bugs fixed:
+    - Reduce memory usage
+    - Handle Andor Zyla deconnection/reconnection
+    - Do not show streams which are known to be mis-aligned (DELPHI)
+    - Include calibration and fine alignment logs in bug report (DELPHI)
+    - Fix view in SECOM/DELPHI acquisition sometimes having a very large HFW
+    - Improve DELPHI calibration robustness
+    - Autofocusing the spectrograph, does so for each grating (SPARC)
+    - Avoid warnings about wrong wavelength in GUI when wavelength is near 0nm (SPARC)
+  * Improvements also present in stable v2.4 branch:
+    - Windows updater knows about the new website URL
+    - Fix (disabled) post-processing export of 16 bits data with interpolation
+    - Don't try to load the sample if the door is closed without sample (DELPHI)
+    - Fix some (rare) GUI crashes after autofocus (SECOM/DELPHI)
+    - Only use Phenom high-refresh rate with very latest Phenom v4.4.2+ (DELPHI)
+    - Better rotation correction when doing fine alignment on DELPHI
+    - Very long CCD acquisitions (>60s) could sometimes fail (SPARC)
+    - Andor spectographs with two detectors configured could be set in wrong offset (SPARC)
+    - Optical path could be incorrect if the optical stream wasn't played live before acquisition (SPARC)
+    - Changing spectrum stream bandwidth manually caused it to become 0 (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 12 Sep 2016 16:17:50 +0200
+
 odemis (2.4-1ubuntu1) precise; urgency=low
 
   * New version: 2.4
