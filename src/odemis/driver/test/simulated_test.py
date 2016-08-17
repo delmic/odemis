@@ -55,6 +55,18 @@ class ActuatorTest(object):
     def tearDown(self):
         self.dev.terminate()
 
+    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
+        """
+        Asserts that two stage positions have almost equal coordinates.
+        """
+        try:
+            if expected.viewkeys() != actual.viewkeys():
+                raise AssertionError("Dimensions of coordinates do not match")
+            for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
+                self.assertAlmostEqual(actual[dim_act], expected[dim_exp], places=6)
+        except AssertionError as exc:
+            raise AssertionError(exc.message)
+
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -96,7 +108,7 @@ class ActuatorTest(object):
             move[axis] = (rng[0] + rng[1]) / 2
         f = self.dev.moveAbs(move)
         f.result() # wait
-        self.assertDictEqual(move, self.dev.position.value,
+        self.assertPosAlmostEqual(move, self.dev.position.value,
                              "Actuator didn't move to the requested position")
 
     def test_moveRel(self):
@@ -112,8 +124,9 @@ class ActuatorTest(object):
 
         f = self.dev.moveRel(move)
         f.result() # wait
-        self.assertDictEqual(expected_pos, self.dev.position.value,
-                             "Actuator didn't move to the requested position")
+        self.assertPosAlmostEqual(expected_pos, self.dev.position.value,
+                             "Actuator didn't move to the requested position: %s != %s" %
+                             (expected_pos, self.dev.position.value))
 
     def test_stop(self):
         self.dev.stop()
