@@ -24,15 +24,15 @@ from __future__ import division
 
 import logging
 import math
+from odemis import model
+import odemis
+from odemis.driver import simulated, tmcm
+from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator
+from odemis.util import test
 import os
 import time
 import unittest
 
-from odemis import model
-import odemis
-from odemis.driver import simulated
-from odemis.util import test
-from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator
 import simulated_test
 
 
@@ -51,12 +51,9 @@ class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
         self.child1 = simulated.Stage("sstage1", "test", {"a", "b"})
         self.child2 = simulated.Stage("sstage2", "test", {"cccc", "ddd"})
         self.dev = self.actuator_type("stage", "stage",
-                                      {"x": self.child1, "y": self.child2},
-                                      {"x": "a", "y": "ddd"})
-
-    # force to not use the default method from TestCase
-    def tearDown(self):
-        super(MultiplexTest, self).tearDown()
+                                      children={"x": self.child1, "y": self.child2},
+                                      axes_map={"x": "a", "y": "ddd"},
+                                      )
 
     def test_speed(self):
         self.dev.speed.value = {"x": 0.1, "y": 0.1}
@@ -66,6 +63,25 @@ class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
         sc2["ddd"] = 2
         self.child2.speed.value = sc2
         self.assertEqual(self.dev.speed.value["y"], 2)
+
+
+class MultiplexOneTest(unittest.TestCase, simulated_test.ActuatorTest):
+
+    actuator_type = MultiplexActuator
+
+    def setUp(self):
+        self.child = tmcm.TMCLController(name="test", role="test",
+                                         port="/dev/fake3",
+                                         axes=["a", "b"],
+                                         ustepsize=[5.9e-9, 5.8e-9],
+                                         refproc="Standard")
+        self.dev = self.actuator_type("stage", "stage",
+                                      children={"x": self.child, "y": self.child},
+                                      axes_map={"x": "a", "y": "b"},
+                                      ref_on_init={"x": 0.0001},
+                                    )
+        # Wait for the init move to be over
+        self.dev.moveRel({"x": 1e-8, "y": 1e-8}).result()
 
 
 class FixedPositionsTest(unittest.TestCase):

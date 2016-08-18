@@ -47,7 +47,9 @@ class MultiplexActuator(model.Actuator):
         role (string)
         children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
-        ref_on_init (list): axes to be referenced during initialization
+        ref_on_init (None, list or dict (str -> float or None)): axes to be referenced during
+          initialization. If it's a dict, it will go the indicated position
+          after referencing, otherwise, it'll stay where it is.
         """
         if not children:
             raise ValueError("MultiplexActuator needs children")
@@ -55,7 +57,10 @@ class MultiplexActuator(model.Actuator):
         if set(children.keys()) != set(axes_map.keys()):
             raise ValueError("MultiplexActuator needs the same keys in children and axes_map")
 
-        ref_on_init = ref_on_init or []
+        # Convert ref_on_init list to dict with no explicit move after
+        if isinstance(ref_on_init, list):
+            ref_on_init = {a: None for a in ref_on_init}
+        self._ref_on_init = ref_on_init or {}
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         self._position = {}
         self._speed = {}
@@ -126,6 +131,7 @@ class MultiplexActuator(model.Actuator):
                 except KeyError:
                     logging.error("Child %s is not reporting speed of axis %s (%s): %s", cname, a, ca, value)
                 self._updateSpeed()
+
             c.speed.subscribe(update_speed_per_child)
             self._subfun.append(update_speed_per_child)
 
@@ -140,27 +146,34 @@ class MultiplexActuator(model.Actuator):
                 except KeyError:
                     logging.error("Child %s is not reporting reference of axis %s (%s)", cname, a, ca)
                 self._updateReferenced()
+
             c.referenced.subscribe(update_ref_per_child)
             self._subfun.append(update_ref_per_child)
 
-        self._axes_referencing = []
-        for axis in ref_on_init:
+        for axis, pos in self._ref_on_init.items():
             # If the axis can be referenced => do it now (and move to a known position)
-            if not self._referenced.get(axis, True):
-                # The initialisation will not fail if the referencing fails
-                f = self.reference({axis})
-                self._axes_referencing.append(axis)
-                f.add_done_callback(self._on_referenced)
+            if axis not in self._referenced:
+                raise ValueError("Axis '%s' cannot be referenced, while should be referenced at init" % (axis,))
+            if not self._referenced[axis]:
+                # The initialisation will not fail if the referencing fails, but
+                # the state of the component will be updated
+                def _on_referenced(future, axis=axis):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        c, ca = self._axis_to_child[axis]
+                        c.stop({ca})  # prevent any move queued
+                        self.state._set_value(e, force_write=True)
+                        logging.exception(e)
 
-    def _on_referenced(self, future):
-        try:
-            future.result()
-        except Exception as e:
-            for ax in self._axes_referencing:
-                c, ca = self._axis_to_child[ax]
-                c.stop({ca})  # prevent any move queued
-            self.state._set_value(e, force_write=True)
-            logging.exception(e)
+                f = self.reference({axis})
+                f.add_done_callback(_on_referenced)
+
+            # If already referenced => directly move
+            # otherwise => put move on the queue, so that any move by client will
+            # be _after_ the init position.
+            if pos is not None:
+                self.moveAbs({axis: pos})
 
     def _updatePosition(self):
         """
