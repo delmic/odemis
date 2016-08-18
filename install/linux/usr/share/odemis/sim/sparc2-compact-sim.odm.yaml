@@ -156,7 +156,7 @@ SPARC2: {
 #     class: ueye.Camera,
 #     role: ccd,
 #     init: {
-#        device: null, # Any one found will do 
+#        device: null, # Any one found will do
 #     },
 # }
 
