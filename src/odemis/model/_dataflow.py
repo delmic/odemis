@@ -31,11 +31,11 @@ import inspect
 import logging
 import numpy
 from odemis.model import _metadata
+from odemis.util.weak import WeakMethod, WeakRefLostError
+import os
 import threading
 import time
 import zmq
-
-from odemis.util.weak import WeakMethod, WeakRefLostError
 
 from . import _core
 
@@ -320,7 +320,7 @@ class DataFlow(DataFlowBase):
                 assert callable(listener)
                 self._listeners.add(WeakMethod(listener))
 
-            logging.debug("Listener %r subscribed, now %d subscribers", listener, self._count_listeners())
+            logging.debug("Listener %r subscribed, now %d subscribers on %s", listener, self._count_listeners(), self._global_name)
             if count_before == 0:
                 self.start_generate()
 
@@ -334,7 +334,7 @@ class DataFlow(DataFlowBase):
                 self._listeners.discard(WeakMethod(listener))
 
             count_after = self._count_listeners()
-            logging.debug("Listener %r unsubscribed, now %d subscribers", listener, count_after)
+            logging.debug("Listener %r unsubscribed, now %d subscribers on %s", listener, count_after, self._global_name)
             if count_before > 0 and count_after == 0:
                 self.stop_generate()
 
@@ -382,6 +382,8 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         """
         Pyro4.Proxy.__init__(self, uri)
         self._global_name = uri.sockname + "@" + uri.object
+        # Should be unique among all the subscribers of the real DataFlow
+        self._proxy_name = "%x/%x" % (os.getpid(), id(self))
         DataFlowBase.__init__(self)
         self.max_discard = max_discard
 
@@ -400,6 +402,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         _core.load_roattributes(self, roattributes)
 
         self._global_name = self._pyroUri.sockname + "@" + self._pyroUri.object
+        self._proxy_name = "%x/%x" % (os.getpid(), id(self))
         DataFlowBase.__init__(self)
 
         self._ctx = None
@@ -430,11 +433,11 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         # send subscription to the actual dataflow
         # a bit tricky because the underlying method gets created on the fly
 #        Pyro4.Proxy.subscribe(self, self._global_name)
-        Pyro4.Proxy.__getattr__(self, "subscribe")(self._global_name)
+        Pyro4.Proxy.__getattr__(self, "subscribe")(self._proxy_name)
 
     def stop_generate(self):
         # stop the remote subscription
-        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
+        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
         self._commands.send("UNSUB") # asynchronous (necessary to not deadlock)
 
     def __del__(self):
@@ -447,7 +450,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
                             logging.debug("Stopping subscription while there "
                                           "are still subscribers because dataflow '%s' is going out of context",
                                           self._global_name)
-                        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
+                        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
                     self._commands.send("STOP")
                     self._thread.join(1)
                 self._commands.close()
