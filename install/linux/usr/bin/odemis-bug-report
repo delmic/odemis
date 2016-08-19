@@ -43,7 +43,7 @@ odemis-cli --check
 status=$?
 if [ $status -eq 0 -o $status -eq 3 ] ; then
     hwfn="/tmp/odemis-hw-status.txt"
-    odemis-cli --list-prop '*' > "$hwfn"
+    timeout -k 10 60 odemis-cli --list-prop '*' > "$hwfn" &
 else
     hwfn=""
 fi
