@@ -2092,7 +2092,9 @@ class Reader(Accesser):
         try:
             self.buf = numpy.fromfile(self.file, dtype=self.dtype, count=self.count)
             logging.debug("read took %g s", time.time() - self._begin)
-            # Kernel 4.4 (and maybe before) requires to cancel reading
+            # Kernel 4.4+ requires to cancel reading (it's also possible to try
+            # to read further and get a EOF, but if the device has extra data,
+            # it can take more time)
             comedi.cancel(self._device, self._subdevice)
         except IOError:
             # might be due to a cancel
