@@ -1,10 +1,16 @@
 # Force the Trinamic TMCM devices connected via a Serial/USB connection to 
 # appear under a specific name.
 # By default, they appear as a standard ttyACM* device.
+# To avoid them being probed by the modemmanager, we add ID_MM_DEVICE_IGNORE attribute to the parent.
 
 # TMCM-3110
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="06cc", ATTRS{idVendor}=="16d0", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
+ATTRS{idProduct}=="06cc", ATTRS{idVendor}=="16d0", ENV{ID_MM_DEVICE_IGNORE}="1"
+
 # TMCM-6110
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="0650", ATTRS{idVendor}=="16d0", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
-# TMCM-6110 v1.35
+ATTRS{idProduct}=="0650", ATTRS{idVendor}=="16d0", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+# TMCM-x110 with new firmware
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="0100", ATTRS{idVendor}=="2a3c", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
+ATTRS{idProduct}=="0100", ATTRS{idVendor}=="2a3c", ENV{ID_MM_DEVICE_IGNORE}="1"
