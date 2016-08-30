@@ -230,8 +230,24 @@ An emitter that scan a set of points repetitively.
         *(VA, float, unit=A)* probe current of the e-beam (which is typically
         affecting the spot size linearly).
 
-If there is a blanker available, it should be automatically set whenever no scanning
-is needed, and automatically disabled when a scanning takes place.
+    .. py:attribute:: blanker
+
+        *(VA, choice of True, False or None)* whether the blanker is enabled
+        (True), disabled (False), or automatically enabled whenever a scanning
+        takes place (None).
+
+        If this attribute is not provided, and there is a blanker available,
+        it should be automatically set whenever no scanning is needed, and
+        automatically disabled when a scanning takes place.
+
+    .. py:attribute:: external
+
+        *(VA, choice of True, False or None)* whether the "external" signal, to
+        indicate that Odemis is taking control of the scanning, is enabled
+        (True), disabled (False), or automatically enabled whenever a scanning
+        takes place (None). When it's disabled, the standard user interface of
+        the SEM controls the scanning.
+
 
 Detector
 ========
@@ -258,6 +274,12 @@ example, a secondary electron detector, the CCD of a camera.
     .. py:attribute:: pixelSize
     
         *(RO VA, tuple of floats, unit=m)* property representing the size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels (for each dimension).
+
+    .. py:attribute:: softwareTrigger
+
+        *(Event)* Event provided for convenience (and low latency) to synchronise
+        the DataFlow of the detector. After having requested the DataFlow to
+        be synchronised on that event, call ``.notify()`` to start one acquisition.
 
 DigitalCamera
 =============

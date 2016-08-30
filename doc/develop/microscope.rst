@@ -53,14 +53,20 @@ Typical detectors found in a microscope can be of the following roles:
  * ccd: the main optical camera
  * se-detector: secondary electron detector of the SEM
  * bs-detector: backscattered electron detector of the SEM
+ * ebic-detector: EBIC detector of the SEM
+ * cl-detector: a catholumincesence detector, synchronised with the e-beam
  * spectrometer: A spectrometer. 
    It provides the same interface as a DigitalCamera,
    but the Y dimension of the shape is 1.
    If it can change of centre wavelength, it should have a child, 
    with role "spectrograph" that provide a "wavelength" axis and 
    possibly a "grating" axis.
+ * spectrometer-integrated: same as the spectrometer, but the detector is also
+   used as a 'ccd'.
  * overview-ccd: a (optical) view of the whole sample from above
  * chamber-ccd: a (optical) view of the inside chamber
+ * time-correlator: a one-dimension detector with "T", the time, as dimension.
+   It reports the energy emission over time (from a specific event).
 
 Typical emitters can be of the following roles:
  * light: controls the excitation light of the fluorescence microscope
@@ -80,7 +86,10 @@ Typical actuators found can be of the following roles:
  * filter: Emission filter on the fluorescence microscope or the filter on the 
    optical path of the SPARC. It must have a "band" axis.
  * spectrograph: See the spectrometer
+ * spectrograph-dedicated: Same as a spectrograph, but must be accessed via optical
+   fiber.
  * chamber: manages the pressure and/or sample loading.
    It must have a "pressure" axis.
  * lens-switch: Switch between lens on/off for the SPARC
  * ar-spec-selector: Selector between AR/Spectrometer for the SPARC
+ * fiber-aligner: To move optical fiber, typically with axes "x" and "y".

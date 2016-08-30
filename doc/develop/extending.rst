@@ -27,7 +27,7 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 12.04 (x86 32 or 64 bits)
+ * `Ubuntu <http://www.ubuntu.com>`_ 12.04 or 16.04 (x86 32 or 64 bits)
  * Eclipse + PyDev plug-in + Pylint
  * XRCed (package python-wxtools) for GUI edition
 
@@ -42,11 +42,11 @@ needed. In this case, it can run in a virtual machine.
 Detailed instructions
 ---------------------
 
-Download Ubuntu 12.04 at this address:
-http://www.ubuntu.com/download/desktop/thank-you?release=lts&bits=64&distro=desktop&status=zeroc
+Download Ubuntu 16.04 at this address:
+http://www.ubuntu.com/download/desktop/contribute?version=16.04.1&architecture=amd64
 
 Install it by which ever way you prefer, following these instructions:
-http://www.ubuntu.com/download/desktop/install-desktop-long-term-support
+http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
 
 Once logged into your newly installed Ubuntu system, do the following steps.
 
@@ -106,16 +106,16 @@ Type the following commands::
     cd ~
     mkdir usr
     cd usr
-    wget http://download.eclipse.org/technology/epp/downloads/release/luna/R/eclipse-standard-luna-R-linux-gtk-x86_64.tar.gz
-    tar xf eclipse-standard-luna-R-linux-gtk-x86_64.tar.gz
+    wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/neon/R/eclipse-java-neon-R-linux-gtk-x86_64.tar.gz&mirror_id=1099
+    tar xf eclipse-java-neon-R-linux-gtk-x86_64.tar.gz
     ~/usr/eclipse/eclipse
 
 Go to *Help/Marketplace...*. Search for PyDev, and install it.
-Optionally, you can also install *Eclipse Color Theme* and *hunspell4eclipse*.
+Optionally, you can also install *Eclipse Color Theme*, *hunspell4eclipse*, and *ReST Editor*.
 
 In the Eclipse preference window, go to *PyDev/PyLint* and as location of the 
 pylint executable, indicate your lint.py, which is approximately at this place:
-``/usr/local/lib/python2.7/dist-packages/pylint-1.0.0-py2.7.egg/pylint/lint.py``
+``/usr/bin/pylint``
 
 Optionally, if you want to edit the microscope configuration files (``*.odm.yaml``),
 add a file association with the Python editor. For this, in the preference 
@@ -123,7 +123,7 @@ window, go to *General/Editors/File Association* and add a file type "``*.yaml``
 default editor, add the Python editor.
 
 Edit Odemis with Eclipse
-"""""""""""""""""""""""""
+""""""""""""""""""""""""
 
 1. Click on *File/New/PyDev Project*.
 
@@ -137,7 +137,7 @@ Edit Odemis with Eclipse
 
 Learning Python
 """""""""""""""
-Allmost all Odemis is written in Python. If you are not familliar with this
+Almost all Odemis is written in Python. If you are not familiar with this
 programming language, it is recommended you first have a look at a tutorial.
 For instance, read 
 `A Crash Course in Python for Scientists <http://nbviewer.ipython.org/gist/rpmuller/5920182>`_.
@@ -353,7 +353,7 @@ In console panel (PyCrust) of the inspection window, type:
 From now on, all log messages are displayed and recorded in the log file.
 
 Speed optimization
-===================
+==================
 First, you need to profile the code to see where is the bottleneck. One option is 
 to use the cProfile. This allows to run the cProfile on the GUI::
 
