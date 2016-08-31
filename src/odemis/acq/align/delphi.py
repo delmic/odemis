@@ -243,6 +243,8 @@ def _DoDelphiCalibration(future, main_data):
 
         # expected good focus value when focusing on the glass
         good_focus = hfoc - GOOD_FOCUS_OFFSET
+        f = main_data.ebeam_focus.moveAbs({"z": good_focus})
+        f.result()
 
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
@@ -318,10 +320,13 @@ def _DoDelphiCalibration(future, main_data):
             logger.debug("Spot shift: %s", spotshift)
 
             # Compute resolution-related values
+            # We measure the shift in the area just behind the hole where there
+            # are always some features plus the edge of the sample carrier. For
+            # that reason we use the focus measured in the hole detection step
             future.resolution_shiftf = ResolutionShiftFactor(main_data.bsd,
                                                              main_data.ebeam, sem_stage,
                                                              main_data.ebeam_focus,
-                                                             good_focus)
+                                                             hfoc)
             resa, resb = future.resolution_shiftf.result()
             calib_values["resolution_a"] = resa
             calib_values["resolution_b"] = resb
@@ -331,7 +336,7 @@ def _DoDelphiCalibration(future, main_data):
             future.hfw_shiftf = HFWShiftFactor(main_data.bsd,
                                                main_data.ebeam, sem_stage,
                                                main_data.ebeam_focus,
-                                               good_focus)
+                                               hfoc)
             hfwa = future.hfw_shiftf.result()
             calib_values["hfw_a"] = hfwa
             logger.debug("HFW A: %s", hfwa)
@@ -345,29 +350,21 @@ def _DoDelphiCalibration(future, main_data):
         f.result()
         f = main_data.focus.moveAbs({"z": center_focus})
         f.result()
+        f = main_data.ebeam_focus.moveAbs({"z": good_focus})
+        f.result()
 
         # Focus the CL spot using SEM focus
         # Configure CCD and e-beam to write CL spots
         main_data.ccd.binning.value = (1, 1)
         main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
         main_data.ccd.exposureTime.value = 900e-03
-        main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
         main_data.ebeam.scale.value = (1, 1)
-        main_data.ebeam.resolution.value = (1, 1)
         main_data.ebeam.translation.value = (0, 0)
         main_data.ebeam.rotation.value = 0
         main_data.ebeam.shift.value = (0, 0)
         main_data.ebeam.dwellTime.value = 5e-06
-        det_dataflow = main_data.bsd.data
-        main_data.ccd.binning.value = min((8, 8), main_data.ccd.binning.range[1])
-        future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
-        future.auto_focus_f.result()
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
-        # Re-apply optical autofocus to be safe in case of inaccuracy
-        future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
-        future.auto_focus_f.result()
-        main_data.ccd.binning.value = (1, 1)
 
         # Update progress of the future
         future.set_progress(end=time.time() + 1.5 * 60)
@@ -946,7 +943,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         escan.translation.value = (0, 0)
         escan.rotation.value = 0
         escan.shift.value = (0, 0)
-        escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
         holes_found = []
         hole_focus = None
 
@@ -962,11 +958,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
             f.result()
             # Set the FoV to almost 2mm
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
-            # Apply autocontrast
-            detector.data.subscribe(_discard_data)  # unblank the beam
-            f = detector.applyAutoContrast()
-            f.result()
-            detector.data.unsubscribe(_discard_data)
 
             # Apply the given sem focus value for a good initial focus level
             if hole_focus is not None:
@@ -974,27 +965,49 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
                 f.result()
 
             # For the first hole apply autofocus anyway
-            if (pos == EXPECTED_HOLES[0]) and (manual is False):
-                escan.horizontalFoV.value = 250e-06  # m
-                escan.scale.value = (2, 2)
+            if not manual and pos == EXPECTED_HOLES[0]:
+                escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
+                escan.horizontalFoV.value = 400e-06  # m
+                escan.scale.value = (8, 8)
+                detector.data.subscribe(_discard_data)  # unblank the beam
+                f = detector.applyAutoContrast()
+                f.result()
+                detector.data.unsubscribe(_discard_data)
                 future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
                 hole_focus, fm_level = future._autofocus_f.result()
-                escan.horizontalFoV.value = escan.horizontalFoV.range[1]
-                escan.scale.value = (1, 1)
 
             if future._hole_detection_state == CANCELLED:
                 raise CancelledError()
             # From SEM image determine hole position relative to the center of
             # the SEM
+            escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+            escan.scale.value = (1, 1)
+            escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
+            detector.data.subscribe(_discard_data)  # unblank the beam
+            f = detector.applyAutoContrast()
+            f.result()
+            detector.data.unsubscribe(_discard_data)
             image = detector.data.get(asap=False)
             try:
                 hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
-                escan.horizontalFoV.value = 200e-06  # m
+                escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
+                escan.horizontalFoV.value = 250e-06  # m
+                escan.scale.value = (8, 8)
+                detector.data.subscribe(_discard_data)  # unblank the beam
+                f = detector.applyAutoContrast()
+                f.result()
+                detector.data.unsubscribe(_discard_data)
                 future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
                 hole_focus, fm_level = future._autofocus_f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+                escan.scale.value = (1, 1)
+                escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
+                detector.data.subscribe(_discard_data)  # unblank the beam
+                f = detector.applyAutoContrast()
+                f.result()
+                detector.data.unsubscribe(_discard_data)
                 image = detector.data.get(asap=False)
                 try:
                     hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
@@ -1307,6 +1320,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
                 shift_pxs = CalculateDrift(smaller_image, resampled_image, 10)
                 pixelSize = smaller_image.metadata[model.MD_PIXEL_SIZE]
                 shift = (shift_pxs[0] * pixelSize[0], shift_pxs[1] * pixelSize[1])
+                logging.debug("Shift detected between HFW of %f and %f is: %s (m, m)", cur_hfw, cur_hfw / zoom_f, shift)
                 # Cummulative sum
                 new_shift = (sum([sh[0] for sh in shift_values]) + shift[0],
                              sum([sh[1] for sh in shift_values]) + shift[1])
