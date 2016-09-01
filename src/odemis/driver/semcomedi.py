@@ -747,9 +747,9 @@ class SEMComedi(model.HwComponent):
         # (next) acquisition is starting.
         with self._acquisition_init_lock:
             logging.debug("Setting to rest position at %s", pos)
-            for i, p in enumerate(pos):
-                comedi.data_write(self._device, self._ao_subdevice, channels[i],
-                                  ranges[i], comedi.AREF_GROUND, int(p))
+            for p, c, r in zip(pos, channels, ranges):
+                comedi.data_write(self._device, self._ao_subdevice, c, r,
+                                  comedi.AREF_GROUND, int(p))
             logging.debug("Rest position set")
 
     def _prepare_command(self, cmd):
@@ -1712,8 +1712,8 @@ class SEMComedi(model.HwComponent):
                         gc.collect()  # TODO: if scan is long enough, during scan
                         last_gc = time.time()
                 else:  # nothing to acquire => rest
-                    # TODO: only change the state after a little while, if it doesn't
-                    # need scanning again, to avoid too fast switch.
+                    # Delay the state change to avoid too fast switch in case
+                    # a new acquisition starts soon after.
                     self._scanner.indicate_scan_state(False, delay=0.1)
                     self.set_to_resting_position()
                     gc.collect()
@@ -2503,7 +2503,7 @@ class Writer(Accesser):
                 # there forever... until we unblock it.
                 # I don't know of any 'clean' way to unblock a write. The less
                 # horrible is to do a new write. What to write? Rest position
-                # sounds like a good possible value. Note: writting one channel
+                # sounds like a good possible value. Note: writing one channel
                 # is sufficient, but for being sure we set a good rest position,
                 # we write both channels.
                 time.sleep(0.01)  # necessary, for even less clear reasons
@@ -2514,9 +2514,9 @@ class Writer(Accesser):
                     if not self.thread.isAlive():
                         return
                     logging.debug("Cancelling by setting to rest position at %s", pos)
-                    for i, p in enumerate(pos):
+                    for p, c, r in zip(pos, channels, ranges):
                         comedi.data_write(self._device, self._subdevice,
-                                channels[i], ranges[i], comedi.AREF_GROUND, int(p))
+                                          c, r, comedi.AREF_GROUND, int(p))
 
                     self.thread.join(0.1)
                 else:
@@ -2615,7 +2615,7 @@ class Scanner(model.Emitter):
         # write limits as Y/X, for compatibility with numpy
         # check the limits are reachable
         self._limits = limits[::-1]
-        for i, channel in enumerate(channels):
+        for i, channel in enumerate(self._channels):
             data_lim = self._limits[i]
             try:
                 comedi.find_range(parent._device, parent._ao_subdevice,
@@ -2627,14 +2627,7 @@ class Scanner(model.Emitter):
         # Can't blank the beam, but at least, put it somewhere far away
         if park is None:
             park = limits[0][0], limits[1][0]
-        else:
-            for i, channel in enumerate(channels):
-                try:
-                    comedi.find_range(parent._device, parent._ao_subdevice,
-                                      channel, comedi.UNIT_volt, park[i], park[i])
-                except comedi.ComediError:
-                    raise ValueError("Park voltage %g V is too high for hardware." %
-                                     (park[i],))
+        self._resting_data = self._get_point_data(park[::-1])
 
         self._scanning_ttl = {}
         self._ttl_setters = []  # To hold the partial VA setters
@@ -2727,7 +2720,7 @@ class Scanner(model.Emitter):
 
         # Allow the user to modify the value, to copy it from the SEM software
         mag = 1e3 # pretty random value which could be real
-        self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
+        self.magnification = model.FloatContinuous(mag, range=(1, 1e9), unit="")
         self.magnification.subscribe(self._onMagnification)
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
@@ -2741,8 +2734,8 @@ class Scanner(model.Emitter):
 
         # (float, float) in px => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
-                    (self._shape[0] / 2, self._shape[1] / 2)]
+        tran_rng = ((-self._shape[0] / 2, -self._shape[1] / 2),
+                    (self._shape[0] / 2, self._shape[1] / 2))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="px",
                                               setter=self._setTranslation)
@@ -2750,7 +2743,7 @@ class Scanner(model.Emitter):
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
         resolution = (256, int(256 * self._shape[1] / self._shape[0]))
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
+        self.resolution = model.ResolutionVA(resolution, ((1, 1), self._shape),
                                              setter=self._setResolution)
         self._resolution = resolution
 
@@ -2758,14 +2751,14 @@ class Scanner(model.Emitter):
         # it basically works the same as binning, but can be float
         # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
-        self.scale = model.TupleContinuous(self._scale, [(1, 1), self._shape],
+        self.scale = model.TupleContinuous(self._scale, ((1, 1), self._shape),
                                            cls=(int, long, float),
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True) # to update metadata
 
         # (float) in rad => rotation of the image compared to the original axes
         # TODO: for now it's readonly because no rotation is supported
-        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
+        self.rotation = model.FloatContinuous(0, (0, 2 * math.pi), unit="rad",
                                               readonly=True)
 
         min_dt, self._osr, self._dpr = parent._min_dt_config[0]
@@ -2780,7 +2773,6 @@ class Scanner(model.Emitter):
         # the beam settling time or when put to rest.
         self.newPosition = model.Event()
 
-        self._resting_data = self._get_point_data((park[1], park[0]))
         self._prev_settings = [None, None, None, None] # resolution, scale, translation, margin
         self._scan_array = None # last scan array computed
 
@@ -2921,17 +2913,22 @@ class Scanner(model.Emitter):
     def _get_point_data(self, pos):
         """
         Returns all the data needed to set the beam to a nice resting position
+        pos (2 floats): Y/X voltage
         returns: array (1D numpy.ndarray), channels (list of int), ranges (list of int):
-            array is 2 raw values (X and Y positions)
+            array is 2 raw values (Y and X positions)
             channels: the output channels to use
             ranges: the range index of each output channel
         """
         ranges = []
         for i, channel in enumerate(self._channels):
-            best_range = comedi.find_range(self.parent._device,
-                                           self.parent._ao_subdevice,
-                                           channel, comedi.UNIT_volt,
-                                           pos[i], pos[i])
+            try:
+                best_range = comedi.find_range(self.parent._device,
+                                               self.parent._ao_subdevice,
+                                               channel, comedi.UNIT_volt,
+                                               pos[i], pos[i])
+            except comedi.ComediError:
+                raise ValueError("Voltage %g V is too high for hardware." %
+                                 (pos[i],))
             ranges.append(best_range)
 
         # computes the position in raw values
@@ -3125,7 +3122,7 @@ class Scanner(model.Emitter):
         shape (list of 2 int): H/W=Y/X of the scanning area (slow, fast axis)
         scale (tuple of 2 float): scaling of the pixels
         translation (tuple of 2 float): shift from the center
-        margin (0<=int): number of additional pixels to add at the begginning of
+        margin (0<=int): number of additional pixels to add at the beginning of
             each scanned line
         Warning: the dimensions follow the numpy convention, so opposite of user API
         returns nothing, but update ._scan_array and ._ranges.
@@ -3134,7 +3131,7 @@ class Scanner(model.Emitter):
         # adapt limits according to the scale and translation so that if scale
         # == 1,1 and translation == 0,0 , the area is centered and a pixel is
         # the size of pixelSize
-        roi_limits = [] # min/max for X/Y in V
+        roi_limits = []  # min/max for Y/X in V
         for i, lim in enumerate(self._limits):
             center = (lim[0] + lim[1]) / 2
             width = lim[1] - lim[0]
