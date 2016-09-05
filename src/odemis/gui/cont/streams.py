@@ -1368,20 +1368,29 @@ class StreamBarController(object):
         Prepare and activate the given stream.
         stream (Stream): the stream to prepare and activate.
         """
+        # Cancel the previous preparation in case it's still trying
+        self.preparation_future.cancel()
         if updated:
             self._main_data_model.is_preparing.value = True
             self.preparation_future = stream.prepare()
+            cb_on_prepare = functools.partial(self._canActivate, stream)
+            self.preparation_future.add_done_callback(cb_on_prepare)
         else:
-            self.preparation_future.cancel()
-        self.preparation_future.stream_to_update = stream
-        self.preparation_future.updated = updated
-        self.preparation_future.add_done_callback(self._canActivate)
+            stream.is_active.value = False
 
     @call_in_wx_main
-    def _canActivate(self, future):
+    def _canActivate(self, stream, future):
         self._main_data_model.is_preparing.value = False
-        logging.debug("Can now activate/deactivate %s", future.stream_to_update.name.value)
-        future.stream_to_update.is_active.value = future.updated
+        if future.cancelled():
+            logging.debug("Not activating %s as its preparation was cancelled", stream.name.value)
+        elif not stream.should_update.value:
+            logging.debug("Not activating %s as it is now paused", stream.name.value)
+        else:
+            logging.debug("Preparation of %s completed, will activate it", stream.name.value)
+            stream.is_active.value = True
+
+        # Mostly to avoid keeping ref to the stream (hold in the callback)
+        self.preparation_future = model.InstantaneousFuture()
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
