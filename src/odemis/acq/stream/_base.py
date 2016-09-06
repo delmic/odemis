@@ -19,6 +19,7 @@ from __future__ import division
 
 import collections
 import functools
+import gc
 import logging
 import math
 import numbers
@@ -26,11 +27,11 @@ import numpy
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
+from odemis.model import isasync
 from odemis.util import img
 import threading
 import time
 import weakref
-from odemis.model import isasync
 
 
 # Contains the base of the streams. Can be imported from other stream modules.
@@ -740,6 +741,7 @@ class Stream(object):
 
         try:
             stream = wstream()
+            name = stream.name.value
             im_needs_recompute = stream._im_needs_recompute
             # Only hold a weakref to allow the stream to be garbage collected
             # On GC, trigger im_needs_recompute so that the thread can end too
@@ -752,7 +754,8 @@ class Stream(object):
                 stream = wstream()
 
                 if stream is None:
-                    logging.debug("Stream disappeared so ending image update thread")
+                    logging.debug("Stream %s disappeared so ending image update thread", name)
+                    gc.collect()
                     return
 
                 tnow = time.time()

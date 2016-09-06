@@ -247,6 +247,13 @@ class AcquisitionTask(object):
             if not raw_images:
                 raise
             exp = e
+        finally:
+            # Don't hold references to the streams once it's over
+            self._streams = []
+            self._streamTimes = {}
+            self._streams_left.clear()
+            self._current_stream = None
+            self._current_future = None
 
         # merge all the raw data (= list of DataArrays) into one long list
         ret = sum(raw_images.values(), [])

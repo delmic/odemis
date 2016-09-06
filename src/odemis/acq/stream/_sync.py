@@ -114,6 +114,9 @@ class MultipleDetectorStream(Stream):
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
 
+    def __del__(self):
+        logging.debug("MDStream %s unreferenced" % (self.name.value,))
+
     @property
     def streams(self):
         return self._streams
@@ -888,6 +891,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
         finally:
             self._main_stream._unlinkHwVAs()
             self._rep_stream._unlinkHwVAs()
+            self._dc_estimator = None
+            self._current_future = None
             del self._main_data  # regain a bit of memory
             self._acq_done.set()
 

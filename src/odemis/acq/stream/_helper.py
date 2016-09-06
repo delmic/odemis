@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from abc import abstractmethod
+from concurrent.futures._base import CancelledError
 from functools import wraps
 import logging
 import math
@@ -35,7 +36,6 @@ import time
 
 from ._base import Stream, UNDEFINED_ROI
 from ._live import LiveStream
-from concurrent.futures._base import CancelledError
 
 
 class RepetitionStream(LiveStream):
