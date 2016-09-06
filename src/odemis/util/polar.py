@@ -95,9 +95,26 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     phi_data = numpy.sin(phi) * theta
 
     # Interpolation into 2d array
-#    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-#    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-#    qz = mlab.griddata(phi_data.flat, theta_data.flat, omega_data.flat, xi, yi, interp="linear")
+    # FIXME: griddata() uses a 3x less memory (and especially, doesn't leak),
+    # but it's 5x slower
+#     grid_x, grid_y = numpy.mgrid[-h_output_size:h_output_size:output_size * 1j,
+#                                  - h_output_size:h_output_size:output_size * 1j]
+#
+#     #One way possible to increase the speed is to discard points too close from
+#     #each other. Everything < 1 px apart is pretty useless. As they are
+#     #spatially ordered, it's shouldn't be too costly to check
+#     #See kmeans clustering maybe?
+#     #nt, np, no = [theta_data[0, 0]], [phi_data[0, 0]], [omega_data[0, 0]]
+#     #for t, p, o in zip(theta_data.flat, phi_data.flat, omega_data.flat):
+#     #    if math.hypot(t - nt[-1], p - np[-1]) > 0.9:
+#     #        nt.append(t)
+#     #        np.append(p)
+#     #        no.append(o)
+#     #logging.warning("Reduce size to %d", len(no))
+#     #qz = griddata((nt, np), no, (grid_x, grid_y), method='linear', fill_value=0)
+#     qz = griddata((theta_data.flat, phi_data.flat), omega_data.flat, (grid_x, grid_y),
+#                   method='linear', fill_value=0)
+#     qz = qz[:, ::-1]
 
     # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
     # interpolation by 3 ?!
@@ -105,13 +122,21 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
         # Some points might be so close that they are identical (within float
         # precision). It's fine, no need to generate a warning.
         warnings.simplefilter("ignore", DuplicatePointWarning)
-        triang = Triangulation(theta_data.flat, phi_data.flat)
-        # TODO use the standard matplotlib.tri.Triangulation
-        # + matplotlib.tri.LinearTriInterpolator
+        triang = Triangulation(theta_data.flat, phi_data.flat)  # FIXME: Leaks memory when run in a separate thread
     interp = triang.linear_interpolator(omega_data.flat, default_value=0)
     qz = interp[-h_output_size:h_output_size:complex(0, output_size),  # Y
                 - h_output_size:h_output_size:complex(0, output_size)]  # X
     qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
+
+# TODO use the standard matplotlib.tri.Triangulation, but it uses 3x more memory
+# also leaks, and is slower!
+#     triang = Triangulation(phi_data.flat, theta_data.flat)
+#     interp = LinearTriInterpolator(triang, omega_data.flat)
+#     xi, yi = numpy.meshgrid(numpy.linspace(-h_output_size, h_output_size, output_size),
+#                             numpy.linspace(-h_output_size, h_output_size, output_size))
+#     qz = interp(xi, yi)
+#     qz = qz[:, ::-1]
+
     result = model.DataArray(qz, data.metadata)
 
     return result
