@@ -441,7 +441,8 @@ class AndorCam2(model.DigitalCamera):
         emgains (list of (0<float, 0<float, 1 <= int <=300)): Look-up table for
          the EMCCD real gain. Readout rate, Gain, Real Gain.
         shutter_times (float, float): time (in s) for the opening and closing
-          of the shutter. Default is 0 s for both.
+          of the shutter. Default is 0 s for both. It also forces the shutter
+          support (for external shutter).
         image (str or None): only useful for simulated device, the path to a file
           to use as fake image.
         Raise an exception if the device cannot be opened.
@@ -604,7 +605,7 @@ class AndorCam2(model.DigitalCamera):
         # 0 => shutter always auto
         # > 0 => shutter auto if exp time + readout > period, otherwise opened
         # big value => shutter always opened
-        if self.hasShutter():
+        if self.hasShutter(shutter_times is not None):
             if shutter_times is None:
                 shutter_times = (0, 0)
             elif not all(0 <= s < 10 for s in shutter_times):
@@ -1163,13 +1164,19 @@ class AndorCam2(model.DigitalCamera):
         """
         return bool(self.GetCapabilities().GetFunctions & function)
 
-    def hasShutter(self):
+    def hasShutter(self, force=False):
         """
+        force (bool): If True, it will consider any camera with shutter feature
+          to have a shutter and raise an error if the camera doesn't support
+          shutter at all.
         return (bool): False if the camera has no shutter, True if it potentially
           has a shutter.
+        raise ValueError: if force=True and no shutter feature supported
         """
         feat = self.GetCapabilities().Features
         if feat & (AndorCapabilities.FEATURES_SHUTTER | AndorCapabilities.FEATURES_SHUTTEREX):
+            if force:
+                return True
             # The iXon can detect if it has an internal shutter.
             # We consider that if there is no internal shutter, there is no shutter.
             try:
@@ -1181,6 +1188,9 @@ class AndorCam2(model.DigitalCamera):
                     logging.exception("Failed to check whether the camera has an internal shutter")
 
             return True
+
+        if force:
+            raise ValueError("Camera doesn't support shutter control")
 
         return False
 
