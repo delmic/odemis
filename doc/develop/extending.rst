@@ -354,8 +354,9 @@ From now on, all log messages are displayed and recorded in the log file.
 
 Speed optimization
 ==================
-First, you need to profile the code to see where is the bottleneck. One option is 
-to use the cProfile. This allows to run the cProfile on the GUI::
+To speed up the code, first, you need to profile the code to see where is the 
+bottleneck. One option is to use the cProfile.
+This allows to run the cProfile on the GUI::
 
     PYTHONPATH=./src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
     
@@ -377,3 +378,47 @@ Then you have to add the @profile decorator to the functions that you want to pr
 detailed profile statistics for the decorated functions within your module::
 
     kernprof.py -l -v your_module.py
+
+
+Memory optimization
+===================
+The main thing to look at is memory leaks. That is to say, data which is not used
+anymore but still hold in memory. In Python, there are mostly three reasons for
+data to stay in memory while not used anymore:
+
+* Some object still in use has a reference to the data. For example, if a
+  temporary result is hold as an attribute ``self._temp``, that object will not be
+  dereferenced until self is unreferenced, or ``self._temp`` is replaced.
+* Some objects have cyclic dependencies, and one of them has a ``__del__`` method.
+  Python 2 is not able to garbage collect any of these objects.
+* A C library has not free'd some data.
+ 
+
+Only a few memory profilers are able to detect C library memory leakage. One of
+them is ``memory_profile``. You can install with::
+
+   sudo easy_install -U memory_profiler
+
+In order to find the leaks, it's possible to then add a decorator ``@profile`` 
+to the suspect methods, and then run::
+ 
+   python -m memory_profiler program.py
+
+It will list line-per-line the change of memory usage.
+
+Another possibility is to use ``pympler``, which allows to list the biggest objects
+that were recently created. You can add in your program, or in the Python console
+of the Odemis GUI:
+
+.. code-block:: python
+
+   from pympler import tracker
+   tr = tracker.SummaryTracker()
+
+   # After every interesting call
+   tr.print_diff()
+
+As it will not detect C library memory allocations, if no new large object has
+appeared and the Python process uses more memory, then it's likely a C library
+memory leak.
+

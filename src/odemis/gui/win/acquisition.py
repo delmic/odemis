@@ -505,6 +505,9 @@ class AcquisitionDialog(xrcfr_acq):
         # re-enable estimation time updates
         self._view.lastUpdate.subscribe(self.on_streams_changed)
 
+        self.acq_future = None  # To avoid holding the ref in memory
+        self._acq_future_connector = None
+
         try:
             data, exp = future.result(1) # timeout is just for safety
         except CancelledError:

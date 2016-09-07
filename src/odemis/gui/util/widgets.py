@@ -299,6 +299,11 @@ class ProgressiveFutureConnector(object):
         elif self._label is None:
             self._bar.SetToolTipString("Cancelled")
 
+        # Drop references to avoid holding the object in memory
+        self._future = None
+        self._bar = None
+        self._label = None
+
     def _update_progress(self):
         """ Update the progression controls """
         now = time.time()

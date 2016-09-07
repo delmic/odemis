@@ -736,6 +736,8 @@ class SparcAcquiController(object):
         """
         self.btn_cancel.Disable()
         self._main_data_model.is_acquiring.value = False
+        self.acq_future = None  # To avoid holding the ref in memory
+        self._acq_future_connector = None
 
         try:
             future.result()
@@ -816,6 +818,7 @@ class FineAlignController(object):
 
         tab_panel.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
         self._fa_btn_label = self._tab_panel.btn_fine_align.Label
+        self._acq_future = None
         self._faf_connector = None
 
         # Make sure to reset the correction metadata if lens move
@@ -953,6 +956,9 @@ class FineAlignController(object):
     def _on_fa_done(self, future):
         logging.debug("End of overlay procedure")
         main_data = self._main_data_model
+        self._acq_future = None  # To avoid holding the ref in memory
+        self._faf_connector = None
+
         try:
             trans_val, cor_md = future.result()
             opt_md, sem_md = cor_md

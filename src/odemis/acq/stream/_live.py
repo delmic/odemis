@@ -21,18 +21,19 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import collections
+from concurrent.futures.thread import ThreadPoolExecutor
+import gc
 import logging
 import numpy
 from odemis import model
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
+from odemis.model import isasync
 from odemis.util import img, conversion, fluo
 import threading
 import time
 import weakref
-from odemis.model import isasync
-from concurrent.futures.thread import ThreadPoolExecutor
 
 from ._base import Stream, UNDEFINED_ROI
 
@@ -59,7 +60,6 @@ class LiveStream(Stream):
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
-        # TODO: kill the thread when the stream is dereferenced
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
                                          args=(weakref.ref(self),),
@@ -153,6 +153,7 @@ class LiveStream(Stream):
         """
         try:
             stream = wstream()
+            name = stream.name.value
             ht_needs_recompute = stream._ht_needs_recompute
             # Only hold a weakref to allow the stream to be garbage collected
             # On GC, trigger im_needs_recompute so that the thread can end too
@@ -163,8 +164,10 @@ class LiveStream(Stream):
                 ht_needs_recompute.wait()  # wait until a new image is available
                 stream = wstream()
                 if stream is None:
-                    logging.debug("Stream disappeared so ending histrogram update thread")
+                    logging.debug("Stream %s disappeared so ending histrogram update thread", name)
+                    gc.collect()
                     return
+
                 tstart = time.time()
                 ht_needs_recompute.clear()
                 stream._updateHistogram()

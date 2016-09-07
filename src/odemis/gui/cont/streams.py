@@ -1345,6 +1345,7 @@ class StreamBarController(object):
                 self._prepareAndActivate(stream, True)
         elif self._sched_policy == SCHED_ALL:
             # All streams with should_update are active
+            # TODO: there is probably no way it works as-is (and it's never used anyway)
             self._prepareAndActivate(stream, updated)
         else:
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
@@ -1797,6 +1798,8 @@ class SparcStreamsController(StreamBarController):
             if s not in streams:
                 logging.debug("Removing %s from repetition content subscriptions", s)
                 del self._repct_listeners[s]  # automatically unsubscribed
+
+        gc.collect()  # To help reclaiming some memory
 
     def _getAffectingSpectrograph(self, comp):
         """
