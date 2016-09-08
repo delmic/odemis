@@ -297,6 +297,8 @@ class StreamController(object):
 
         self.entries = OrderedDict()
 
+        gc.collect()
+
     def _on_stream_visible(self, evt):
         """ Show or hide a stream in the focussed view if the visibility button is clicked """
         view = self.tab_data_model.focussedView.value

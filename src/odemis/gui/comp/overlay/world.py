@@ -1181,12 +1181,18 @@ class PointsOverlay(WorldOverlay):
         self.b_hover_box = None
 
     def set_point(self, point_va):
-        """ Set the available points and connect to the given point VA """
+        """
+        Set the available points and connect to the given point VA
+        point_va (VA of tuple of float, or None)
+        """
         # Connect the provided VA to the overlay
         self.point = point_va
-        self.point.subscribe(self._on_point_selected)
-        self._calc_choices()
-        self.cnvs.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+        if self.point:
+            self.point.subscribe(self._on_point_selected)
+            self._calc_choices()
+            self.cnvs.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+        else:
+            self.cnvs.microscope_view.mpp.unsubscribe(self._on_mpp)
 
     def _on_point_selected(self, _):
         """ Update the overlay when a point has been selected """

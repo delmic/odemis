@@ -292,6 +292,8 @@ class StaticARStream(StaticStream):
                 else:
                     dtype = None # just let the function use the best one
 
+                # 2 x size of original image (on smallest axis) and at most
+                # the size of a full-screen canvas
                 size = min(min(data.shape) * 2, 1134)
 
                 # TODO: First compute quickly a low resolution and then
@@ -306,9 +308,11 @@ class StaticARStream(StaticStream):
                 else:
                     data0 = img.Subtract(data, bg_data) # metadata from data
 
-                # 2 x size of original image (on smallest axis) and at most
-                # the size of a full-screen canvas
+                # Warning: allocates lot of memory, which will not be free'd until
+                # the current thread is terminated.
                 polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
+
+                # TODO: don't hold too many of them in cache (eg, max 3 * 1134**2)
                 self._polar[pos] = polard
             except Exception:
                 logging.exception("Failed to convert to azimuthal projection")
@@ -333,7 +337,7 @@ class StaticARStream(StaticStream):
                 self.image.value = None
             else:
                 polard = self._project2Polar(pos)
-                # update the histrogram
+                # update the histogram
                 # TODO: cache the histogram per image
                 # FIXME: histogram should not include the black pixels outside
                 # of the circle. => use a masked array?
