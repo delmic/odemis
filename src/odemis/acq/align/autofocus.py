@@ -412,7 +412,11 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
 
-        step = dof / 2
+        # Based on our measurements on spot detection, a spot is visible within
+        # a margin of ~30microns around its best focus position. Such a step
+        # (i.e. ~ 6microns) ensures that we will eventually be able to notice a
+        # difference compared to the focus levels measured so far.
+        step = 8 * dof
         lower_bound, upper_bound = rng
         # start moving upwards until we reach the upper bound or we find some
         # significant deviation in focus level
@@ -431,7 +435,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             if len(focus_levels) >= 10 and AssessFocus(focus_levels):
                 # trigger binary search on if significant deviation was
                 # found in current position
-                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - dof, best_pos + dof))
+                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
@@ -451,14 +455,14 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             if len(focus_levels) >= 10 and AssessFocus(focus_levels):
                 # trigger binary search on if significant deviation was
                 # found in current position
-                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - dof, best_pos + dof))
+                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
 
         logging.debug("No significant focus level was found so far, thus we just move to the best position found %f", best_pos)
         focus.moveAbsSync({"z": best_pos})
-        return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - dof, best_pos + dof))
+        return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - 2 * step, best_pos + 2 * step))
 
     except CancelledError:
         # Go to the best position known so far
