@@ -57,6 +57,26 @@ def _convertRBGToGrayscale(image):
     return gray
 
 
+def AssessFocus(levels):
+    """
+    Given a list of focus levels, it decides if there is any significant value
+    or it only contains noise.
+    levels (list of floats): List of focus levels
+    returns (boolean): True if there is significant deviation
+    """
+    max_l = max(levels)
+    levels.remove(max_l)
+    std_l = numpy.std(levels)
+    avg_l = numpy.mean(levels)
+    logging.debug("Current standard deviation in focus levels: %f", std_l)
+    l_diff = max_l - avg_l
+    logging.debug("Difference between maximum and average focus level %f", l_diff)
+    if (l_diff >= 15 * std_l):
+        logging.debug("Significant focus level deviation was found")
+        return True
+    return False
+
+
 def MeasureSEMFocus(image):
     """
     Given an image, focus measure is calculated using the standard deviation of
@@ -118,7 +138,7 @@ def _discard_data(df, data):
     pass
 
 
-def _DoAutoFocus(future, detector, emt, focus, dfbkg, good_focus):
+def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
     """
     Iteratively acquires an optical image, measures its focus level and adjusts
     the optical focus with respect to the focus level.
@@ -129,6 +149,8 @@ def _DoAutoFocus(future, detector, emt, focus, dfbkg, good_focus):
     dfbkg (model.DataFlow): dataflow of se- or bs- detector
     good_focus (float): if provided, an already known good focus position to be
       taken into consideration while autofocusing
+    rng_focus (tuple): if provided, the search of the best focus position is limited
+      within this range
     returns:
         (float): Focus position (m)
         (float): Focus level
@@ -149,7 +171,7 @@ def _DoAutoFocus(future, detector, emt, focus, dfbkg, good_focus):
     #   focus levels (due to noise and sample degradation)
     # * if the focus actuator is not precise (eg, open loop), it's hard to
     #   even go back to the same focus position when wanted
-    logging.debug("Starting Autofocus...")
+    logging.debug("Starting Binary Autofocus...")
 
     try:
         # use the .depthOfField on detector or emitter as maximum stepsize
@@ -170,7 +192,11 @@ def _DoAutoFocus(future, detector, emt, focus, dfbkg, good_focus):
         logging.debug("Depth of field is %f", dof)
         min_step = dof / 2
 
+        # adjust to rng_focus if provided
         rng = focus.axes["z"].range
+        if rng_focus:
+            rng = (max(rng[0], rng_focus[0]), min(rng[1], rng_focus[1]))
+
         max_step = (rng[1] - rng[0]) / 2
         if max_step <= 0:
             raise ValueError("Unexpected focus range %s" % (rng,))
@@ -317,9 +343,137 @@ def _DoAutoFocus(future, detector, emt, focus, dfbkg, good_focus):
             future._autofocus_state = FINISHED
 
 
+def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
+    """
+    Moves the optical focus through the whole given range, measures the focus
+    level on each position and ends up where the best focus level was found. In
+    case a significant deviation was found while going through the range, it
+    stops and limits the search within a smaller range around this position.
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    detector: model.DigitalCamera or model.Detector
+    emt (None or model.Emitter): In case of a SED this is the scanner used
+    focus (model.Actuator): The optical focus
+    dfbkg (model.DataFlow): dataflow of se- or bs- detector
+    good_focus (float): if provided, an already known good focus position to be
+      taken into consideration while autofocusing
+    rng_focus (tuple): if provided, the search of the best focus position is limited
+      within this range
+    returns:
+        (float): Focus position (m)
+        (float): Focus level
+    raises:
+            CancelledError if cancelled
+            IOError if procedure failed
+    """
+    logging.debug("Starting Exhaustive Autofocus...")
+
+    try:
+        # use the .depthOfField on detector or emitter as maximum stepsize
+        avail_depths = (detector, emt)
+        if model.hasVA(emt, "dwellTime"):
+            # Hack in case of using the e-beam with a DigitalCamera detector.
+            # All the digital cameras have a depthOfField, which is updated based
+            # on the optical lens properties... but the depthOfField in this
+            # case depends on the e-beam lens.
+            avail_depths = (emt, detector)
+        for c in avail_depths:
+            if model.hasVA(c, "depthOfField"):
+                dof = c.depthOfField.value
+                break
+        else:
+            logging.debug("No depth of field info found")
+            dof = 1e-6  # m, not too bad value
+        logging.debug("Depth of field is %f", dof)
+
+        # Pick measurement method based on the heuristics that SEM detectors
+        # are typically just a point (ie, shape == data depth).
+        # TODO: is this working as expected? Alternatively, we could check
+        # MD_DET_TYPE.
+        if len(detector.shape) > 1:
+            logging.debug("Using Optical method to estimate focus")
+            Measure = MeasureOpticalFocus
+        else:
+            logging.debug("Using SEM method to estimate focus")
+            Measure = MeasureSEMFocus
+
+        # adjust to rng_focus if provided
+        rng = focus.axes["z"].range
+        if rng_focus:
+            rng = (max(rng[0], rng_focus[0]), min(rng[1], rng_focus[1]))
+
+        if good_focus:
+            focus.moveAbsSync({"z": good_focus})
+
+        focus_levels = []  # list with focus levels measured so far
+        best_pos = orig_pos = focus.position.value['z']
+        best_fm = 0
+        logging.debug("Focus level at %f is %f", best_pos, best_fm)
+
+        if future._autofocus_state == CANCELLED:
+            raise CancelledError()
+
+        step = dof / 2
+        lower_bound, upper_bound = rng
+        # start moving upwards until we reach the upper bound or we find some
+        # significant deviation in focus level
+        # we know that upper_bound is excluded but: 1. realistically the best focus
+        # position would not be there 2. the upper_bound - orig_pos range is not
+        # expected to be precisely a multiple of the step anyway
+        for next_pos in numpy.arange(orig_pos, upper_bound, step):
+            focus.moveAbsSync({"z": next_pos})
+            image = AcquireNoBackground(detector, dfbkg)
+            new_fm = Measure(image)
+            focus_levels.append(new_fm)
+            logging.debug("Focus level at %f is %f", next_pos, new_fm)
+            if new_fm >= best_fm:
+                best_fm = new_fm
+                best_pos = next_pos
+            if len(focus_levels) >= 10 and AssessFocus(focus_levels):
+                # trigger binary search on if significant deviation was
+                # found in current position
+                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - dof, best_pos + dof))
+
+        if future._autofocus_state == CANCELLED:
+            raise CancelledError()
+
+        # if nothing was found return to original position and start going
+        # downwards
+        focus.moveAbsSync({"z": orig_pos})
+        for next_pos in numpy.arange(orig_pos - step, lower_bound, -step):
+            focus.moveAbsSync({"z": next_pos})
+            image = AcquireNoBackground(detector, dfbkg)
+            new_fm = Measure(image)
+            focus_levels.append(new_fm)
+            logging.debug("Focus level at %f is %f", next_pos, new_fm)
+            if new_fm >= best_fm:
+                best_fm = new_fm
+                best_pos = next_pos
+            if len(focus_levels) >= 10 and AssessFocus(focus_levels):
+                # trigger binary search on if significant deviation was
+                # found in current position
+                return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - dof, best_pos + dof))
+
+        if future._autofocus_state == CANCELLED:
+            raise CancelledError()
+
+        logging.debug("No significant focus level was found so far, thus we just move to the best position found %f", best_pos)
+        focus.moveAbsSync({"z": best_pos})
+        return _DoBinaryFocus(future, detector, emt, focus, dfbkg, best_pos, (best_pos - dof, best_pos + dof))
+
+    except CancelledError:
+        # Go to the best position known so far
+        focus.moveAbsSync({"z": best_pos})
+    finally:
+        # Only used if for some reason the binary focus is not called (e.g. cancellation)
+        with future._autofocus_lock:
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
+            future._autofocus_state = FINISHED
+
+
 def _CancelAutoFocus(future):
     """
-    Canceller of _DoAutoFocus task.
+    Canceller of AutoFocus task.
     """
     logging.debug("Cancelling autofocus...")
 
@@ -340,7 +494,7 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     return steps * exposure_time
 
 
-def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
+def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None, method='binary'):
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
     procedure or even cancel it.
@@ -354,6 +508,10 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
      performed.
     good_focus (float): if provided, an already known good focus position to be
       taken into consideration while autofocusing
+    rng_focus (tuple): if provided, the search of the best focus position is limited
+      within this range
+    method (str): focusing method, if 'binary' we follow a binary method while in
+      case of 'exhaustive' we iterate through the whole provided range
     returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
             Focus position (m)
             Focus level
@@ -377,10 +535,17 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
     f.task_canceller = _CancelAutoFocus
 
     # Run in separate thread
+    if method == "exhaustive":
+        autofocus_fn = _DoExhaustiveFocus
+    elif method == "binary":
+        autofocus_fn = _DoBinaryFocus
+    else:
+        raise ValueError("Unknown autofocus method")
+
     autofocus_thread = threading.Thread(target=executeTask,
                                         name="Autofocus",
-                                        args=(f, _DoAutoFocus, f, detector, emt,
-                                              focus, dfbkg, good_focus))
+                                        args=(f, autofocus_fn, f, detector, emt,
+                                              focus, dfbkg, good_focus, rng_focus))
 
     autofocus_thread.start()
     return f
