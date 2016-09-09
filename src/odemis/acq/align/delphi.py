@@ -209,7 +209,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 17 * 60)
+        future.set_progress(end=time.time() + 19 * 60)
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -224,7 +224,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 15.5 * 60)
+        future.set_progress(end=time.time() + 17.5 * 60)
 
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
@@ -253,7 +253,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 11.5 * 60)
+        future.set_progress(end=time.time() + 13.5 * 60)
         logger.debug("Move SEM stage to expected offset...")
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
@@ -509,7 +509,7 @@ def estimateDelphiCalibration():
     returns (float):  process estimated time #s
     """
     # Rough approximation
-    return 18 * 60  # s
+    return 20 * 60  # s
 
 
 def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
