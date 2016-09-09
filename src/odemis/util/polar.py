@@ -97,6 +97,7 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     # Interpolation into 2d array
     # FIXME: griddata() uses a 3x less memory (and especially, doesn't leak),
     # but it's 5x slower
+    # => create a cpython function calling libqhull directly?
 #     grid_x, grid_y = numpy.mgrid[-h_output_size:h_output_size:output_size * 1j,
 #                                  - h_output_size:h_output_size:output_size * 1j]
 #
@@ -116,6 +117,8 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
 #                   method='linear', fill_value=0)
 #     qz = qz[:, ::-1]
 
+    # Warning: Uses a lot of memory, which is not recovered until the thread is
+    # ended. Every thread will use a different memory pool.
     # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
     # interpolation by 3 ?!
     with warnings.catch_warnings():

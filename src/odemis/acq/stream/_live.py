@@ -164,9 +164,8 @@ class LiveStream(Stream):
                 ht_needs_recompute.wait()  # wait until a new image is available
                 stream = wstream()
                 if stream is None:
-                    logging.debug("Stream %s disappeared so ending histrogram update thread", name)
-                    gc.collect()
-                    return
+                    logging.debug("Stream %s disappeared so ending histogram update thread", name)
+                    break
 
                 tstart = time.time()
                 ht_needs_recompute.clear()
@@ -183,7 +182,9 @@ class LiveStream(Stream):
                     # stream is not active (but that can happen even without this).
                     stream._shouldUpdateImage()
         except Exception:
-            logging.exception("histrogram update thread failed")
+            logging.exception("histogram update thread failed")
+
+        gc.collect()
 
     def _onNewData(self, dataflow, data):
         old_drange = self._drange

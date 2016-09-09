@@ -24,9 +24,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import pkg_resources
 import collections
 from concurrent.futures import CancelledError
+import gc
 import logging
 import math
 import numpy
@@ -52,18 +52,20 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
+import pkg_resources
+import time
 import weakref
+import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
-import wx
 import wx.html
 
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
+import odemis.gui.cont.export as exportcont
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
-import odemis.gui.cont.export as exportcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
@@ -1688,11 +1690,9 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.ar_cal.value)
                 self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
-        # Update the visible views if they've changed
-        for vold, vnew in zip(self.tab_data_model.visible_views.value, new_visible_views):
-            if vold != vnew:
-                self.tab_data_model.visible_views.value = new_visible_views
-                break
+        self.tab_data_model.visible_views.value = new_visible_views
+
+        gc.collect()
 
     def _connect_stream_to_pixeloverlay(self, spec_stream, viewports):
         for viewport in viewports:
@@ -1730,7 +1730,7 @@ class AnalysisTab(Tab):
             for strm in ar_strms:
                 strm.background.value = cdata
 
-        except Exception, err:
+        except Exception as err:
             logging.info("Failed using file %s as AR background", fn, exc_info=True)
             msg = "File '%s' not suitable as angle-resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
@@ -1766,7 +1766,7 @@ class AnalysisTab(Tab):
             for strm in spec_strms:
                 strm.background.value = cdata
 
-        except Exception, err:  # pylint: disable=W0703
+        except Exception as err:
             logging.info("Failed using file %s as spectrum background", fn, exc_info=True)
             msg = "File '%s' not suitable for spectrum background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
@@ -1802,7 +1802,7 @@ class AnalysisTab(Tab):
             for strm in spec_strms:
                 strm.efficiencyCompensation.value = cdata
 
-        except Exception, err:  #pylint: disable=W0703
+        except Exception as err:
             logging.info("Failed using file %s as spec eff coef", fn, exc_info=True)
             msg = "File '%s' not suitable for spectrum efficiency compensation:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,

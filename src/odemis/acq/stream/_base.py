@@ -755,8 +755,7 @@ class Stream(object):
 
                 if stream is None:
                     logging.debug("Stream %s disappeared so ending image update thread", name)
-                    gc.collect()
-                    return
+                    break
 
                 tnow = time.time()
 
@@ -770,6 +769,8 @@ class Stream(object):
                 stream._updateImage()
         except Exception:
             logging.exception("image update thread failed")
+
+        gc.collect()
 
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
