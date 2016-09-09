@@ -60,7 +60,10 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
 SHIFT_DETECTION = {"x":0, "y":11.7e-03}  # Use holder hole images to measure the shift
-SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
+SEM_KNOWN_FOCUS = 0.007386  # Fallback sem focus position for the first insertion
+# TODO: This has to be precisely measured and integrated to focus component
+# instead of hardcoded here
+FOCUS_RANGE = (-0.25e-03, 0.35e-03)  # Roughly the optical focus stage range
 
 
 def DelphiCalibration(main_data):
@@ -404,7 +407,8 @@ def _DoDelphiCalibration(future, main_data):
             if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
             main_data.ccd.binning.value = (8, 8)
-            future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
+            future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, None, main_data.focus, dfbkg=det_dataflow,
+                                                      rng_focus=FOCUS_RANGE, method="exhaustive")
             future.auto_focus_f.result()
             main_data.ccd.binning.value = (1, 1)
             logger.debug("Retry fine alignment...")
@@ -588,7 +592,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
         try:
             image = ccd.data.get(asap=False)
             # Move the sem_stage instead of objective lens
-            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
+            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
             dist, vector = future_spot.result()
             # Almost done
             future.set_progress(end=time.time() + 1)
@@ -599,7 +603,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             f = focus.moveRel({"z": 0.0007})
             f.result()
             try:
-                future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
+                future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
                 dist, vector = future_spot.result()
                 # Almost done
                 future.set_progress(end=time.time() + 1)
@@ -620,7 +624,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                     tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
                     f = sem_stage.moveRel({"x":-tab[0], "y":tab[1]})
                     f.result()
-                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
+                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
                     dist, vector = future_spot.result()
                     # Almost done
                     future.set_progress(end=time.time() + 1)
@@ -791,7 +795,8 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                 except ValueError:
                     # If failed to find spot, try first to focus
                     ccd.binning.value = min((8, 8), ccd.binning.range[1])
-                    future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+                    future._autofocus_f = autofocus.AutoFocus(ccd, None, focus, dfbkg=det_dataflow,
+                                                              rng_focus=FOCUS_RANGE, method="exhaustive")
                     future._autofocus_f.result()
                     if future._rotation_scaling_state == CANCELLED:
                         raise CancelledError()
@@ -948,6 +953,8 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
+        init_spot_size = escan.spotSize.value  # store current spot size
+        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         detector.data.unsubscribe(_discard_data)
 
         for pos in EXPECTED_HOLES:
@@ -967,7 +974,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
             # For the first hole apply autofocus anyway
             if not manual and pos == EXPECTED_HOLES[0]:
                 escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
-                escan.horizontalFoV.value = 400e-06  # m
+                escan.horizontalFoV.value = 250e-06  # m
                 escan.scale.value = (8, 8)
                 detector.data.subscribe(_discard_data)  # unblank the beam
                 f = detector.applyAutoContrast()
@@ -1027,6 +1034,10 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         return first_hole, second_hole, hole_focus
 
     finally:
+        try:
+            escan.spotSize.value = init_spot_size
+        except Exception:
+            pass  # no spot size available
         with future._detection_lock:
             future._done.set()
             if future._hole_detection_state == CANCELLED:
@@ -1289,6 +1300,8 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
+        init_spot_size = escan.spotSize.value  # store current spot size
+        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
@@ -1343,6 +1356,10 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         return c_x, c_y
 
     finally:
+        try:
+            escan.spotSize.value = init_spot_size
+        except Exception:
+            pass  # no spot size available
         with future._hfw_shift_lock:
             if future._hfw_shift_state == CANCELLED:
                 raise CancelledError()
@@ -1449,6 +1466,8 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
+        init_spot_size = escan.spotSize.value  # store current spot size
+        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
@@ -1505,6 +1524,10 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         return (a_x, a_y), (b_x, b_y)
 
     finally:
+        try:
+            escan.spotSize.value = init_spot_size
+        except Exception:
+            pass  # no spot size available
         with future._resolution_shift_lock:
             if future._resolution_shift_state == CANCELLED:
                 raise CancelledError()
@@ -1616,7 +1639,8 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         except ValueError:
             # If failed to find spot, try first to focus
             ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+            future._autofocus_f = autofocus.AutoFocus(ccd, None, focus, dfbkg=det_dataflow,
+                                                      rng_focus=FOCUS_RANGE, method="exhaustive")
             future._autofocus_f.result()
             ccd.binning.value = (1, 1)
             image = AcquireNoBackground(ccd, det_dataflow)
@@ -1636,7 +1660,8 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         except ValueError:
             # If failed to find spot, try first to focus
             ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+            future._autofocus_f = autofocus.AutoFocus(ccd, None, focus, dfbkg=det_dataflow,
+                                                      rng_focus=FOCUS_RANGE, method="exhaustive")
             future._autofocus_f.result()
             ccd.binning.value = (1, 1)
             image = AcquireNoBackground(ccd, det_dataflow)
