@@ -64,6 +64,7 @@ SEM_KNOWN_FOCUS = 0.007386  # Fallback sem focus position for the first insertio
 # TODO: This has to be precisely measured and integrated to focus component
 # instead of hardcoded here
 FOCUS_RANGE = (-0.25e-03, 0.35e-03)  # Roughly the optical focus stage range
+HFW_SHIFT_KNOWN = -0.97, -0.045  # Fallback values in case calculation goes wrong
 
 
 def DelphiCalibration(main_data):
@@ -315,6 +316,17 @@ def _DoDelphiCalibration(future, main_data):
         future.set_progress(end=time.time() + 7.5 * 60)
         logger.debug("Calculate shift parameters...")
         try:
+            # Move back to the center for the shift calculation to make sure
+            # the spot is as sharp as possible since this is where the center_focus
+            # value corresponds to
+            f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
+            f.result()
+            f = opt_stage.moveAbs({"x": 0, "y": 0})
+            f.result()
+            f = main_data.focus.moveAbs({"z": center_focus})
+            f.result()
+            f = main_data.ebeam_focus.moveAbs({"z": good_focus})
+            f.result()
             # Compute spot shift percentage
             future.spot_shiftf = SpotShiftFactor(main_data.ccd, main_data.bsd,
                                                  main_data.ebeam, main_data.focus)
@@ -600,7 +612,8 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             sem_pos = sem_stage.position.value
         except IOError:
             # In case of failure try with another initial focus value
-            f = focus.moveRel({"z": 0.0007})
+            new_pos = numpy.mean(FOCUS_RANGE)
+            f = focus.moveRel({"z": new_pos})
             f.result()
             try:
                 future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
@@ -1334,6 +1347,11 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
                 pixelSize = smaller_image.metadata[model.MD_PIXEL_SIZE]
                 shift = (shift_pxs[0] * pixelSize[0], shift_pxs[1] * pixelSize[1])
                 logging.debug("Shift detected between HFW of %f and %f is: %s (m, m)", cur_hfw, cur_hfw / zoom_f, shift)
+                # FIXME: Check with Lennard's measurements when we should actually consider a measurement extreme,
+                # 10e-06 is a pretty rough estimation
+                if any(s >= 10e-06 for s in shift):
+                    logging.debug("Some extreme values where measured, better return the fallback values to be safe...")
+                    return HFW_SHIFT_KNOWN
                 # Cummulative sum
                 new_shift = (sum([sh[0] for sh in shift_values]) + shift[0],
                              sum([sh[1] for sh in shift_values]) + shift[1])
