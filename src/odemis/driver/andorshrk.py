@@ -24,6 +24,7 @@ from odemis import model
 import odemis
 from odemis.driver import andorcam2
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+from odemis import util
 from odemis.util import driver
 import os
 import signal
@@ -44,7 +45,7 @@ SLITWIDTHMIN = 10
 SLITWIDTHMAX = 2500
 # SHAMROCK_I24SLITWIDTHMAX 24000
 SHUTTERMODEMIN = 0
-SHUTTERMODEMAX = 1
+SHUTTERMODEMAX = 2  # Note: 1 is max on SR303, 2 is max on SR193
 # SHAMROCK_DET_OFFSET_MIN -240000
 # SHAMROCK_DET_OFFSET_MAX 240000
 # SHAMROCK_GRAT_OFFSET_MIN -20000
@@ -69,6 +70,11 @@ DIRECT_PORT = 0
 SIDE_PORT = 1
 
 ERRORLENGTH = 64
+
+# A couple of handy constants
+SHUTTER_CLOSE = 0
+SHUTTER_OPEN = 1
+SHUTTER_BNC = 2  # = driven by external signal
 
 
 class ShamrockError(Exception):
@@ -234,7 +240,8 @@ class Shamrock(model.Actuator):
     Note: we don't handle changing turret (live).
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
-                 slits=None, bands=None, fstepsize=1e-6, **kwargs):
+                 slits=None, bands=None, fstepsize=1e-6, drives_shutter=None,
+                 **kwargs):
         """
         device (0<=int or str): if int, device number, if str serial number or
           "fake" to use the simulator
@@ -251,6 +258,9 @@ class Shamrock(model.Actuator):
         fstepsize (0<float): size of one step on the focus actuator. Not very
           important, mostly useful for providing to the user a rough idea of how
           much the image will change after a move.
+        drives_shutter (list of float): flip-out angles for which the shutter
+          should be set to BNC (external) mode. Otherwise, the shutter is left
+          opened.
         """
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
@@ -382,13 +392,6 @@ class Shamrock(model.Actuator):
                 else:
                     logging.info("Slit %d (%s) is not present", i, slitn)
 
-            # TODO: allow more clever shutter management? eg, only opened when acquiring?
-            if self.ShutterIsPresent():
-                self.SetShutter(1)  # 1 = open
-                logging.info("Opening shutter (all the time)")
-            else:
-                logging.info("No shutter is present")
-
             if self.FlipperMirrorIsPresent(OUTPUT_FLIPPER):
                 # The position values are arbitrary, but these are the one we
                 # typically use in Odemis for switching between two positions
@@ -400,6 +403,41 @@ class Shamrock(model.Actuator):
             else:
                 logging.info("Out mirror flipper is not present")
             # TODO: support INPUT_FLIPPER
+
+            # Associate the output port to the shutter position
+            # TODO: have a RO VA to represent the position of the shutter?
+            # Or a VA to allow overriding the state?
+            if drives_shutter is None:
+                drives_shutter = []
+            self._drives_shutter = set()
+
+            # "Convert" the roughly correct position values to the exact values
+            for pos in drives_shutter:
+                if "flip-out" in axes:
+                    allowed_pos = axes["flip-out"].choices
+                else:
+                    # No flipper => only allow position 0 = direct port
+                    allowed_pos = {0}
+                closest = util.find_closest(pos, allowed_pos)
+                if util.almost_equal(closest, pos, rtol=1e-3):
+                    self._drives_shutter.add(closest)
+                else:
+                    raise ValueError("drives_shutter position %g not in %s" % (
+                                     pos, allowed_pos))
+
+            if self.ShutterIsPresent():
+                if drives_shutter and not self.IsModePossible(SHUTTER_BNC):
+                    raise ValueError("Device doesn't support BNC mode for shutter")
+                if "flip-out" in axes:
+                    val = self.GetFlipperMirror(OUTPUT_FLIPPER)
+                    userv = [k for k, v in FLIPPER_TO_PORT.items() if v == val][0]
+                else:
+                    userv = 0
+                self._updateShutterMode(userv)
+            else: # No shutter
+                if drives_shutter:
+                    raise ValueError("Device has no shutter, but drives_shutter provided")
+                logging.info("No shutter is present")
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
@@ -947,9 +985,13 @@ class Shamrock(model.Actuator):
         return offset.value
 
     # Shutter management
+    # Note: as of SDK 2.101.30005, the documentation states that shutter is only
+    # supported on SR303, but actually, it also work on SR193, with three modes:
+    # Open, Close, BNC.
     def SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
         with self._hw_access:
+            logging.info("Setting shutter to mode %d", mode)
             self._dll.ShamrockSetShutter(self._device, mode)
 
     def GetShutter(self):
@@ -963,7 +1005,7 @@ class Shamrock(model.Actuator):
         possible = c_int()
 
         with self._hw_access:
-            self._dll.ShamrockIsModePossible(self._device, byref(possible))
+            self._dll.ShamrockIsModePossible(self._device, mode, byref(possible))
         return (possible.value != 0)
 
     def ShutterIsPresent(self):
@@ -990,26 +1032,15 @@ class Shamrock(model.Actuator):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         assert(0 <= port <= 1)
 
-        # Sometimes, the SR-193 gets a bit confused and if changing to the same
-        # value, it will move the focus. So avoid changing to the current value.
-        checkfocus = False and "focus" in self.axes  # Set to True if need debugging #DEBUG
+        # If focus position is different for each flipper position, the SR-193
+        # gets a bit confused and if changing to the same value, it will move
+        # the focus. So avoid changing to the current value. (Reported 20160801)
         if self.GetFlipperMirror(flipper) == port:
-            if checkfocus:
-                cf = self.GetFocusMirror()
-            else:
-                logging.info("Not changing again flipper %d to current pos %d", flipper, port)
-                return
-        else:
-            checkfocus = False
+            logging.info("Not changing again flipper %d to current pos %d", flipper, port)
+            return
 
         with self._hw_access:
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
-
-        if checkfocus:
-            nf = self.GetFocusMirror()
-            if cf != nf:
-                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
-                                "going from %d to %d steps", flipper, port, cf, nf)
 
     def GetFlipperMirror(self, flipper):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
@@ -1371,6 +1402,8 @@ class Shamrock(model.Actuator):
         """
         v = FLIPPER_TO_PORT[pos]
         self.SetFlipperMirror(flipper, v)
+        if flipper == OUTPUT_FLIPPER:
+            self._updateShutterMode(pos)
         # Note: That function _only_ changes the mirror position.
         # It doesn't update the turret position, based on the (new) detector offset
         # => Force it by moving an "empty" move
@@ -1380,6 +1413,16 @@ class Shamrock(model.Actuator):
         except ShamrockError:
             logging.warning("Failed to update turret position, detector offset might be incorrect", exc_info=True)
         self._updatePosition()
+
+    def _updateShutterMode(self, pos):
+        """
+        Update the state of the shutter depending on the detector used.
+        pos (float): (user) position of the output flipper mirror
+        """
+        if pos in self._drives_shutter:
+            self.SetShutter(SHUTTER_BNC)
+        else:
+            self.SetShutter(SHUTTER_OPEN)
 
     def stop(self, axes=None):
         """
@@ -1394,6 +1437,9 @@ class Shamrock(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
+        if self.ShutterIsPresent():
+            self.SetShutter(SHUTTER_CLOSE)
 
         if self._device is not None:
             logging.debug("Shutting down the spectrograph")
@@ -1526,6 +1572,8 @@ class FakeShamrockDLL(object):
 
         # just for simulating the limitation of the iDus
         self._ccd = ccd
+
+        self._shutter_mode = SHUTTER_CLOSE
 
         # offsets
         # gratting number -> offset (int)
@@ -1712,7 +1760,21 @@ class FakeShamrockDLL(object):
 
     def ShamrockShutterIsPresent(self, device, p_present):
         present = _deref(p_present, c_int)
-        present.value = 0  # no!
+        present.value = 1
+
+    def ShamrockSetShutter(self, device, mode):
+        self._shutter_mode = _val(mode)
+
+    def ShamrockGetShutter(self, device, p_mode):
+        mode = _deref(p_mode, c_int)
+        mode.value = self._shutter_mode
+
+    def ShamrockIsModePossible(self, device, mode, p_possible):
+        possible = _deref(p_possible, c_int)
+        if SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX:
+            possible.value = 1
+        else:
+            possible.value = 0
 
     def ShamrockFlipperMirrorIsPresent(self, device, flipper, p_present):
         present = _deref(p_present, c_int)

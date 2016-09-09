@@ -31,7 +31,10 @@ Light: {
 "Camera": {
     class: andorcam2.AndorCam2,
     role: ccd,
-    init: {device: 0} # 0 is almost always correct
+    init: {
+        device: 0, # 0 is almost always correct
+        # shutter_times: [10.e-3, 10.e-3], # s, opening/closing times (also forces)
+    }
 }
 
 "FakeRedStoneStage": {
