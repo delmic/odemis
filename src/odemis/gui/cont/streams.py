@@ -1151,11 +1151,11 @@ class StreamBarController(object):
 
         # If the detector already handles brightness and contrast, don't do it by default
         # TODO: check if it has .applyAutoContrast() instead (once it's possible)
-        if (s.intensityRange.range == (0, 255) and
+        if (s.intensityRange.range == ((0, 0), (255, 255)) and
             model.hasVA(detector, "contrast") and
             model.hasVA(detector, "brightness")):
-            self.auto_bc.value = False
-            self.intensityRange.value = (0, 255)
+            s.auto_bc.value = False
+            s.intensityRange.value = (0, 255)
 
         return self._add_stream(s, **kwargs)
 
