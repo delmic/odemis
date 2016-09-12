@@ -2624,11 +2624,6 @@ class Scanner(model.Emitter):
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (data_lim[0], data_lim[1]))
 
-        # Can't blank the beam, but at least, put it somewhere far away
-        if park is None:
-            park = limits[0][0], limits[1][0]
-        self._resting_data = self._get_point_data(park[::-1])
-
         self._scanning_ttl = {}
         self._ttl_setters = []  # To hold the partial VA setters
         self._ttl_lock = threading.Lock()  # Acquire to change the hw TTL state
@@ -2673,6 +2668,11 @@ class Scanner(model.Emitter):
 
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        # Can't blank the beam, but at least, put it somewhere far away
+        if park is None:
+            park = limits[0][0], limits[1][0]
+        self._resting_data = self._get_point_data(park[::-1])
 
         # TODO: if fast park is required, we can only allow the same ranges as
         # for the standard scanning, but we don't handle it now as it's more a
