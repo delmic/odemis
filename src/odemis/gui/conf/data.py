@@ -82,6 +82,11 @@ HW_SETTINGS_CONFIG = {
             ("readoutRate", {}),
             ("shutterMinimumPeriod", { # Will be displayed here on the SPARC
                 "control_type": odemis.gui.CONTROL_NONE,
+                "scale": "cubic",
+                "range": (0, 500.0),
+                "accuracy": 2,
+                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
+                            u"Lower exposure times will force the shutter to stay open."),
             }),
             ("temperature", {}),
             # what we don't want to display:
@@ -205,6 +210,11 @@ HW_SETTINGS_CONFIG = {
             ("readoutRate", {}),
             ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
                 "control_type": odemis.gui.CONTROL_NONE,
+                "scale": "cubic",
+                "range": (0, 500.0),
+                "accuracy": 2,
+                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
+                            u"Lower exposure times will force the shutter to stay open."),
             }),
             ("temperature", {}),
             # what we don't want to display:
@@ -247,6 +257,11 @@ HW_SETTINGS_CONFIG = {
             ("readoutRate", {}),
             ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
                 "control_type": odemis.gui.CONTROL_NONE,
+                "scale": "cubic",
+                "range": (0, 500.0),
+                "accuracy": 2,
+                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
+                            u"Lower exposure times will force the shutter to stay open."),
             }),
             ("temperature", {}),
             # what we don't want to display:
@@ -299,7 +314,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
-            "shutterMinimumPeriod": {  # Only on the SPARC, for AMOLF
+            "shutterMinimumPeriod": {  # Only on the SPARC
                 "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
@@ -321,7 +336,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
-            "shutterMinimumPeriod": {  # Only on the SPARC, for AMOLF
+            "shutterMinimumPeriod": {  # Only on the SPARC
                 "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
@@ -337,6 +352,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Read-only because cropping is useless for the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
+            },
+            "shutterMinimumPeriod": {  # Only on the SPARC
+                "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
         "e-beam":
@@ -356,6 +374,15 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Read-only it shouldn't be changed by the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
+            },
+            "shutterMinimumPeriod": {  # Only on the SPARC
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            },
+        },
+        "spectrometer-integrated":
+        {
+            "shutterMinimumPeriod": {  # Only on the SPARC
+                "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
     },
