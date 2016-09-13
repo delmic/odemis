@@ -57,10 +57,10 @@ def MeasureSNR(image):
     if (ms <= 0) or (sdn <= 0):
         return 0
     snr = ms / sdn
-    
+
     return snr
 
-def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None):
+def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=None, method_f="binary"):
     """
     Wrapper for DoAlignSpot. It provides the ability to check the progress of
     spot mode procedure or even cancel it.
@@ -71,6 +71,8 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None):
     type (string): Type of move in order to align
     dfbkg (model.DataFlow): dataflow of se- or bs- detector for background
       subtraction
+    rng_f (tuple of floats): range to apply Autofocus on if needed
+    method_f (str): method of Autofocus to be applied if needed
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns (float):    Final distance to the center (m)
@@ -93,12 +95,12 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None):
     # Run in separate thread
     alignment_thread = threading.Thread(target=executeTask,
                   name="Spot alignment",
-                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type, dfbkg))
+                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f))
 
     alignment_thread.start()
     return f
 
-def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg):
+def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f):
     """
     Adjusts settings until we have a clear and well focused optical spot image,
     detects the spot and manipulates the stage so as to move the spot center to
@@ -111,6 +113,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg):
     focus (model.Actuator): The optical focus
     type (string): Type of move in order to align
     dfbkg (model.DataFlow): dataflow of se- or bs- detector
+    rng_f (tuple of floats): range to apply Autofocus on if needed
+    method_f (str): method of Autofocus to be applied if needed
     returns (float):    Final distance to the center #m
     raises:
             CancelledError() if cancelled
@@ -168,7 +172,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg):
             try:
                 # When Autofocus set binning 8 if possible
                 ccd.binning.value = min((8, 8), ccd.binning.range[1])
-                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg)
+                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=method_f)
                 lens_pos, fm_level = future._autofocusf.result()
                 # Update progress of the future
                 future.set_progress(end=time.time() +
