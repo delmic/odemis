@@ -247,6 +247,10 @@ class MainGUIData(object):
             # hasn't specified anything (yet).
             self.fineAlignDwellTime = FloatContinuous(0.1, range=(1e-9, 100),
                                                       unit="s")
+            if microscope.role == "delphi":
+                # On the Delphi, during grid pattern, the dwell time is fixed, at ~0.2s.
+                # So the fine alignment dwell time should be at least 0.2 s.
+                self.fineAlignDwellTime.value = 0.5
 
             # There are two kinds of SEM (drivers): the one that are able to
             # control the magnification, and the one that cannot. The former ones
