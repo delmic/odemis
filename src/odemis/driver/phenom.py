@@ -502,14 +502,14 @@ class Scanner(model.Emitter):
             self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
-        # When we change voltage while SEM stream is off
-        # beam is unblanked. Thus we keep and reset the
-        # last known source tilt
+        # When the voltage changes, the tilt values are updated.
+        # As we (used to) use tilt to blank the beam, if the voltage is changed
+        # while acquisition is not running, the beam would be unblanked.
+        # Thus we keep and reset the last known source tilt
         current_tilt = self.parent._device.GetSEMSourceTilt()
         self.parent._device.SEMSetHighTension(-volt)
         if not self.parent._blank_supported:
             new_tilt = self.parent._device.GetSEMSourceTilt()
-            # This should never happen
             if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
                 self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
                 logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
@@ -530,7 +530,6 @@ class Scanner(model.Emitter):
                 current_tilt = self.parent._device.GetSEMSourceTilt()
                 self.parent._device.SEMSetSpotSize(value)
                 new_tilt = self.parent._device.GetSEMSourceTilt()
-                # This should never happen
                 if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
                     self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
                     logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
@@ -721,8 +720,12 @@ class Detector(model.Detector):
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
 
-        # Updated by the chamber pressure
-        self._tilt_unblank = None
+        # On (old) Phenom which don't support blanking, we emulate the blanking
+        # by setting a large tilt.
+        # This is the last tilt value when unblanked.
+        # Note the tilt value is per spot size and voltage. So changes of these
+        # values will reset the tilt (to the original calibrated values).
+        self._tilt_unblank = None  # Updated by the chamber pressure
 
         # Start dedicated connection for acquisition stream
         acq_client = Client(self.parent._host + "?om", location=self.parent._host,
