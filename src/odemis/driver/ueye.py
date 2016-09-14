@@ -24,6 +24,8 @@ import logging
 import numpy
 from odemis import model
 from odemis.model import HwError, oneway
+import subprocess
+import sys
 import threading
 import time
 
@@ -681,6 +683,7 @@ class Camera(model.DigitalCamera):
                 logging.warning("This driver is only tested for monochrome sensors")
                 # TODO: also support RGB cameras
 
+            # TODO: if transpose, inverse axes on the hardware
             self._set_static_settings()
 
             self._prev_settings = (None,)  # sync, TODO: put res and binning
@@ -1351,6 +1354,34 @@ class Camera(model.DigitalCamera):
         return hcam
 
     @classmethod
+    def _check_ueye_daemon_status(cls):
+        """
+        Check the status of the UEye daemon _and_ automatically restart it if
+        it's not running.
+        return (bool): True if the daemon was stopped and was restarted successfully
+        """
+        if not sys.platform.startswith("linux"):
+            logging.debug("Daemon check not working outside of Linux")
+            return False
+
+        ds_str = subprocess.check_output(["/etc/init.d/ueyeusbdrc", "status"])
+        logging.debug("Daemon status is '%s'", ds_str.strip())
+        if "not" in ds_str:
+            logging.info("Attempting to restart the daemon")
+            ret = subprocess.call(["sudo", "/usr/sbin/service", "ueyeusbdrc", "stop"])
+            if ret != 0:
+                logging.warning("Stopping the daemon returned %d", ret)
+            ret = subprocess.call(["sudo", "/usr/sbin/service", "ueyeusbdrc", "start"])
+            if ret != 0:
+                logging.warning("Starting the daemon returned %d", ret)
+                return False
+            else:
+                logging.info("Starting the daemon succeeded")
+            return True
+        else:
+            return False
+
+    @classmethod
     def _get_camera_list(cls, dll):
         """
         return UEYE_CAMERA_LIST or None
@@ -1358,6 +1389,12 @@ class Camera(model.DigitalCamera):
         num_cams = c_int()
         dll.is_GetNumberOfCameras(byref(num_cams))
         logging.debug("Found %d cameras", num_cams.value)
+        if num_cams.value == 0:
+            if cls._check_ueye_daemon_status():
+                # Try again
+                dll.is_GetNumberOfCameras(byref(num_cams))
+                logging.debug("Found %d cameras", num_cams.value)
+
         if num_cams.value == 0:
             return None
 
