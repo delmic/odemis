@@ -39,6 +39,7 @@ from odemis.util.img import Subtract
 # than this, one image per spot will be taken.
 SPOT_SIZE = 1.5e-6 # m
 
+# TODO: move to find_overlay
 
 class GridScanner(object):
     def __init__(self, repetitions, dwell_time, escan, ccd, detector, bgsub=False):
@@ -104,6 +105,7 @@ class GridScanner(object):
         """
         Receives the Spot image data
         """
+        # TODO: also subtract background data. Or why don't we do that?
         self._spot_images.append(data)
         self._ccd_done.set()
         logging.debug("Got Spot image!")

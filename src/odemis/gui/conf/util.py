@@ -89,12 +89,13 @@ def resolution_from_range_plus_point(comp, va, conf):
 MIN_RES = 128 * 128  # px, minimum amount of pixels to consider it acceptable
 
 
-def binning_1d_from_2d(comp, va, _):
+def binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings available in one dimension
 
     We assume pixels are always square. The binning provided by a camera is normally a 2-tuple of
     integers.
 
+    Note: conf can have a special parameter "range_1d" to limit the choices generated
     """
     cur_val = va.value
     if len(cur_val) != 2:
@@ -105,6 +106,10 @@ def binning_1d_from_2d(comp, va, _):
         choices = {cur_val[0]}
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
+        if "range_1d" in conf:
+            conf_rng = conf["range_1d"]
+            minbin = max(conf_rng[0], minbin)
+            maxbin = min(conf_rng[1], maxbin)
 
         # add up to 5 binnings
         b = int(math.ceil(minbin))  # in most cases, that's 1
@@ -396,13 +401,23 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             choices &= setting_va.choices
         elif hasattr(setting_va, "choices") and isinstance(setting_va.choices, collections.Mapping):  # dicts
             # Only keep the items of va.choices which are also choices
-            choices = {x: setting_va.choices[x] for x in setting_va.choices if x in choices}
+            choices = {k: v for k, v in setting_va.choices.items() if k in choices}
         elif hasattr(setting_va, "range") and isinstance(setting_va.range, collections.Iterable):
             # Ensure that each choice is within the range
+            # TODO: handle iterables
             rng = setting_va.range
             choices = set(c for c in choices if rng[0] <= c <= rng[1])
     except (AttributeError, NotApplicableError), e:
         pass
+
+    # Ensure the choices are within the range (if both are given)
+    # TODO: handle iterables
+    if choices is not None and None not in (minv, maxv) and not isinstance(minv, collections.Iterable):
+        logging.debug("Restricting choices %s to range %s->%s", choices, minv, maxv)
+        if isinstance(choices, collections.Mapping):  # dicts
+            choices = {k: v for k, v in choices.items() if minv <= k <= maxv}
+        else:
+            choices = set(c for c in choices if minv <= c <= maxv)
 
     # Ensure the choices contain the current value
     if choices is not None and setting_va.value not in choices:
@@ -451,7 +466,7 @@ def format_choices(choices, uniformat=True, si=None):
         elif si is not None:
             fmt, choices_si_prefix = utun.si_scale_list(choices, si)
             choices_formatted = zip(choices, [u"%g" % c for c in fmt])
-        elif len(choices) > 1 and all([isinstance(c, numbers.Real) for c in choices]):
+        elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
             try:
                 # TODO: does it matter? Can't we always do non-uniform?
                 # Or just guess based on the magnitude between the lowest and biggest value?

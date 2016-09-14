@@ -115,6 +115,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             CancelledError if cancelled
             ValueError if procedure failed
     """
+    # TODO: drop the "skew" argument (to always True) once we are convinced it
+    # works fine
     logging.debug("Starting Overlay...")
 
     try:
@@ -192,8 +194,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             #    closest spot. Should be more precise than previous estimation.
             p1 = optical_coordinates[0]
             def dist_to_p1(p):
-                diff = [a - b for a, b in zip(p1, p)]
-                return math.hypot(*diff)
+                return math.hypot(p1[0] - p[0], p1[1] - p[1])
             optical_dist = min(dist_to_p1(p) for p in optical_coordinates[1:])
             scale = electron_scale[0] / optical_dist
 
@@ -306,8 +307,12 @@ def estimateOverlayTime(dwell_time, repetitions):
 
 def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=False):
     """
-    Returns the transform metadata for the optical image based on the
-    transformation values
+    Converts the transformation values into metadata format
+    Returns:
+        opt_md (dict of MD_ -> values): metadata for the optical image with
+         ROTATION_COR, POS_COR, and PIXEL_SIZE_COR set
+        skew_md (dict of MD_ -> values): metadata for SEM image with
+         SHEAR_COR and PIXEL_SIZE_COR set
     """
     escan_pxs = escan.pixelSize.value
     logging.debug("Ebeam pixel size: %g ", escan_pxs[0])

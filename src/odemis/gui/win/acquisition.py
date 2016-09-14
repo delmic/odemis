@@ -123,8 +123,6 @@ class AcquisitionDialog(xrcfr_acq):
                 elif isinstance(s, OpticalStream):
                     opt_det = s.detector
             self._ovrl_stream = stream.OverlayStream("Fine alignment", opt_det, em_emt, em_det)
-            if self._main_data_model.role == "delphi":
-                self._main_data_model.fineAlignDwellTime.value = 0.5
             self._ovrl_stream.dwellTime.value = self._main_data_model.fineAlignDwellTime.value
         else:
             self.chkbox_fine_align.Show(False)

@@ -961,14 +961,11 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         escan.translation.value = (0, 0)
         escan.rotation.value = 0
         escan.shift.value = (0, 0)
-        holes_found = []
-        hole_focus = None
-
-        detector.data.subscribe(_discard_data)  # unblank the beam
-        escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
+        escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         init_spot_size = escan.spotSize.value  # store current spot size
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
-        detector.data.unsubscribe(_discard_data)
+        holes_found = []
+        hole_focus = None
 
         for pos in EXPECTED_HOLES:
             if future._hole_detection_state == CANCELLED:
@@ -1047,10 +1044,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         return first_hole, second_hole, hole_focus
 
     finally:
-        try:
-            escan.spotSize.value = init_spot_size
-        except Exception:
-            pass  # no spot size available
+        escan.spotSize.value = init_spot_size
         with future._detection_lock:
             future._done.set()
             if future._hole_detection_state == CANCELLED:
@@ -1298,6 +1292,9 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.dwellTime.value = 7.5e-07  # s
+        escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
+        init_spot_size = escan.spotSize.value  # store current spot size
+        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
@@ -1312,9 +1309,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         zoom_f = 2  # zoom factor
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
-        init_spot_size = escan.spotSize.value  # store current spot size
-        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
@@ -1374,10 +1368,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         return c_x, c_y
 
     finally:
-        try:
-            escan.spotSize.value = init_spot_size
-        except Exception:
-            pass  # no spot size available
+        escan.spotSize.value = init_spot_size
         with future._hfw_shift_lock:
             if future._hfw_shift_state == CANCELLED:
                 raise CancelledError()
@@ -1469,6 +1460,9 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         escan.translation.value = (0, 0)
         escan.rotation.value = 0
         escan.shift.value = (0, 0)
+        escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
+        init_spot_size = escan.spotSize.value  # store current spot size
+        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
 
         # Move Phenom sample stage to the first expected hole position
@@ -1483,9 +1477,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         resolution_values = []
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
-        init_spot_size = escan.spotSize.value  # store current spot size
-        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
@@ -1542,10 +1533,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         return (a_x, a_y), (b_x, b_y)
 
     finally:
-        try:
-            escan.spotSize.value = init_spot_size
-        except Exception:
-            pass  # no spot size available
+        escan.spotSize.value = init_spot_size
         with future._resolution_shift_lock:
             if future._resolution_shift_state == CANCELLED:
                 raise CancelledError()
