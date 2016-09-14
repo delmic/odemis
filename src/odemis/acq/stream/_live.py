@@ -967,6 +967,8 @@ class RGBCameraStream(CameraStream):
             logging.warning("RGBCameraStream expects detector with shape of "
                             "length 4, but shape is %s", detector.shape)
 
+        self.auto_bc.value = False  # Typically, it should be displayed as-is
+
     # TODO: handle brightness and contrast VAs
     def _onAutoBC(self, enabled):
         pass
