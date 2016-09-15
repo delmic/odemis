@@ -4,3 +4,7 @@ ALL    ALL = (root) NOPASSWD: /usr/bin/odemisd
 # these 2 are also needed to start/stop cleanly
 ALL    ALL = (root) NOPASSWD: /usr/bin/cgcreate -a \:odemis -g memory\:odemisd
 ALL    ALL = (root) NOPASSWD: /usr/bin/odemis-stop ""
+
+# To restart the UEye daemon if it has crashed
+ALL    ALL = (root) NOPASSWD: /usr/sbin/service ueyeusbdrc start
+ALL    ALL = (root) NOPASSWD: /usr/sbin/service ueyeusbdrc stop
