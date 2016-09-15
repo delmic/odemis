@@ -89,19 +89,6 @@ class OdemisThread(threading.Thread):
         self.proc.kill()
 
 
-def test_sleep(t):
-    """ Sleep for t seconds """
-    try:
-        print ""
-        for s in range(t):
-            sys.stdout.write("  Sleeping for {0} seconds...\r".format(t - s))
-            sys.stdout.flush()
-            time.sleep(1)
-        print
-    except KeyboardInterrupt:
-        print "\n  Sleep interrupted..."
-
-
 def wait_backend_ready():
     """ Wait until the backend is ready of clearly failed
     return (bool): True if the backend is ready, False if it failed to start
@@ -110,7 +97,7 @@ def wait_backend_ready():
 
     tstart = time.time()
     # First, wait a bit to make sure the backend is started
-    sys.stdout.write("  Sleeping for {0} seconds...\r".format(left))
+    logging.info("Sleeping for %g seconds...", left)
     time.sleep(5)
 
     left -= 5
@@ -125,8 +112,6 @@ def wait_backend_ready():
     try:
         while left > 0:
             left -= 1
-            sys.stdout.flush()
-            sys.stdout.write("  Sleeping for {0} seconds...\r".format(left))
             time.sleep(1)
 
             # TODO: detect the backend stopped
@@ -138,10 +123,9 @@ def wait_backend_ready():
                 # Allow to wait 3 s more per component started
                 left += 3 * (prev_nghosts - nghosts)
 
-        print
         logging.info("Back-end took %d s to start", time.time() - tstart)
     except KeyboardInterrupt:
-        print "\n  Sleep interrupted..."
+        logging.info("Sleep interrupted...")
 
     return True
 
@@ -186,7 +170,8 @@ def test_config(sim_conf, path_root, logpath):
         gui.start()
 
         # Wait for the GUI to load
-        test_sleep(10)
+        logging.info("Waiting for 10s for the GUI to run")
+        time.sleep(10)
 
         # TODO: do typical "stuff" in the GUI (based on the microscope type)
 
@@ -214,6 +199,8 @@ def test_config(sim_conf, path_root, logpath):
                 logging.error("Found %d %s in back-end log of %s, see %s",
                               odemisd_log.count(lbl), lbl, sim_conf_fn, dlog_path)
                 passed = False
+    else:
+        logging.warning("Backend log file not found: %s", dlog_path)
 
     if gui and gui.returncode != 143:  # SIGTERM return code
         if gui.returncode == 255:
@@ -227,6 +214,8 @@ def test_config(sim_conf, path_root, logpath):
                 logging.error("%s found in GUI log of %s, see %s", lbl, sim_conf_fn, guilog_path)
                 passed = False
                 break
+    else:
+        logging.warning("GUI log file not found: %s", guilog_path)
 
     return passed
 
