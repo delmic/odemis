@@ -3,7 +3,7 @@
 # It should also have ../mic-odm-yaml/ directory, which contains all the microscopes files.
 # Ex:
 # cd odemis-testing/
-# ../odemis/util/runtests.sh | tee test-$(date +%Y%m%d).log
+# ../odemis/util/runtests.sh 2>&1 | tee test-$(date +%Y%m%d).log
 #
 # The global result is saved in test-XXX.log
 # It will generate one file and one directory:
