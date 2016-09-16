@@ -207,46 +207,6 @@ def apply_flip(ctx, flip, b_im_rect):
         ctx.translate(-flip_x, -flip_y)
 
 
-def fit_to_content(images, client_size):
-    """
-    Adapt the scale to fit to the current content
-
-    images (list of model.DataArray)
-    client_size (wx._core.Size)
-
-    returns (tuple of floats): scale to fit
-    """
-
-    # Find bounding box of all the content
-    bbox = [None, None, None, None]  # ltrb in wu
-    for im in images:
-        if im is None:
-            continue
-        im_scale = im.metadata['dc_scale']
-        w, h = im.shape[1] * im_scale[0], im.shape[0] * im_scale[1]
-        c = im.metadata['dc_center']
-        bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
-        if bbox[0] is None:
-            bbox = bbox_im
-        else:
-            bbox = (min(bbox[0], bbox_im[0]), min(bbox[1], bbox_im[1]),
-                    max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
-
-    if bbox[0] is None:
-        return  # no image => nothing to do
-
-    # compute mpp so that the bbox fits exactly the visible part
-    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # wu
-    if w == 0 or h == 0:
-        logging.warning("Weird image size of %fx%f wu", w, h)
-        return  # no image
-    cw = max(1, client_size[0])  # px
-    ch = max(1, client_size[1])  # px
-    scale = min(ch / h, cw / w)  # pick the dimension which is shortest
-
-    return scale
-
-
 def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
     """
     Create list of tick labels for AR polar representation
@@ -264,6 +224,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
     # Calculate the characteristic values
     center_x = client_size[0] / 2
     center_y = client_size[1] / 2
+    font_size = max(3, client_size[0] // 50)
     inner_radius = min(center_x, center_y)
     radius = inner_radius + (ticksize / 1.5)
     ticks = []
@@ -291,7 +252,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
         label = Label(
             text=u"%d°" % (deg + 90),
             pos=(lx, ly),
-            font_size=12,
+            font_size=font_size,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
             colour=(0, 0, 0),
@@ -799,11 +760,10 @@ def ar_to_export_data(streams, raw=False):
         if sim is None:
             raise LookupError("Stream %s has no data selected" % (s.name.value,))
         wim = format_rgba_darray(sim)
-        # image is always centered, fitting the whole canvass
+        # image is always centered, fitting the whole canvas, with scale 1
         images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value, None, None)])
         ar_margin = int(0.2 * sim.shape[0])
         ar_size = sim.shape[0] + ar_margin, sim.shape[1] + ar_margin
-        scale = fit_to_content(images, sim.shape)
 
         # Make surface based on the maximum resolution
         data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
@@ -813,8 +773,7 @@ def ar_to_export_data(streams, raw=False):
 
         im = images[0]
         buffer_center = (-ar_margin / 2, ar_margin / 2)
-        buffer_scale = (im.metadata['dc_scale'][0] / scale,
-                        im.metadata['dc_scale'][1] / scale)
+        buffer_scale = (1.0, 1.0)
         buffer_size = sim.shape[0], sim.shape[1]
 
         draw_image(
@@ -825,7 +784,7 @@ def ar_to_export_data(streams, raw=False):
             buffer_scale,
             buffer_size,
             1.0,
-            im_scale=im.metadata['dc_scale'],
+            # im_scale=(1.0, 1.0),
             rotation=im.metadata['dc_rotation'],
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
@@ -833,7 +792,7 @@ def ar_to_export_data(streams, raw=False):
             interpolate_data=False
         )
 
-        font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
+        font_name = "Sans"
         tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
@@ -959,7 +918,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
 
 
 def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
-               fill_colour, unit, scale_width, font_size=None, scale_label=None, mirror=False):
+               fill_colour, unit, scale_width, font_size, scale_label=None, mirror=False):
     """
     Draws horizontal and vertical scale bars
 
@@ -985,11 +944,8 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
     # TODO use always client_size instead of scale_width
 
     # Set Font
-    font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-
-    ctx.select_font_face(font.GetFaceName(), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-    if font_size is None:
-        font_size = font.GetPointSize()
+    font_name = "Sans"
+    ctx.select_font_face(font_name, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
     ctx.set_font_size(font_size)
 
     ctx.set_source_rgb(*fill_colour)
@@ -1222,7 +1178,7 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
             scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_HEIGHT)
         ctx = cairo.Context(surface)
         draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
-                   fill_colour, unit, SPEC_SCALE_HEIGHT, font_size, "wavelength")
+                   fill_colour, unit, SPEC_SCALE_HEIGHT, font_size, "Wavelength")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
 
         # Draw top horizontal scale legend
@@ -1245,7 +1201,7 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
             scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
         ctx = cairo.Context(surface)
         draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
-                   fill_colour, None, SPEC_SCALE_WIDTH, font_size, "intensity")
+                   fill_colour, None, SPEC_SCALE_WIDTH, font_size, "Intensity")
 
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bars attached
@@ -1336,7 +1292,7 @@ def line_to_export_data(spectrum, raw, unit, spectrum_range):
             scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_HEIGHT)
         ctx = cairo.Context(surface)
         draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
-                   text_colour, unit, SPEC_SCALE_HEIGHT, font_size, "wavelength")
+                   text_colour, unit, SPEC_SCALE_HEIGHT, font_size, "Wavelength")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
 
         # Top
@@ -1361,7 +1317,7 @@ def line_to_export_data(spectrum, raw, unit, spectrum_range):
         ctx = cairo.Context(surface)
         unit = "m"
         draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
-                   text_colour, unit, SPEC_SCALE_WIDTH, font_size, "distance from origin")
+                   text_colour, unit, SPEC_SCALE_WIDTH, font_size, "Distance from origin")
 
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bar attached
