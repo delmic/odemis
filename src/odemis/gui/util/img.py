@@ -1930,8 +1930,14 @@ def images_to_export_data(streams, view_hfw, view_pos,
     legend_surface = cairo.ImageSurface.create_for_data(
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
     legend_ctx = cairo.Context(legend_surface)
+    if raw:
+        date = last_image.metadata['date']
+    else:
+        # Take the newest date (as in the GUI)
+        date = max(im.metadata['date'] for im in images + [last_image])
+
     draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale,
-                       view_hfw[0], last_image.metadata['date'], streams_data, last_image.metadata['stream'] if raw else None, logo=logo)
+                       view_hfw[0], date, streams_data, last_image.metadata['stream'] if raw else None, logo=logo)
     if raw:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
