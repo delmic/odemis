@@ -271,12 +271,13 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
     max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
     for step in xrange(MAX_STEPS_NUMBER):
         # Calculate nearest point
-        estimated_coordinates, index1, e_wrong_points, o_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates,
-                                                                                                        optical_coordinates,
-                                                                                                        electron_coordinates)
-
-        if not estimated_coordinates:
-            logging.warning("Failed to get any coordinate match")
+        try:
+            (estimated_coordinates, index1, e_wrong_points,
+             o_wrong_points, total_shift) = _MatchAndCalculate(transformed_coordinates,
+                                                               optical_coordinates,
+                                                               electron_coordinates)
+        except LookupError as ex:
+            logging.warning("Failed to get any coordinate match (%s)", ex)
             return [], []
 
         # Calculate successful
@@ -297,7 +298,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
 
         if (max_diff < max_allowed_diff
             and sum(e_wrong_points) <= max_wrong_points
-            and total_shift <= max_allowed_diff):
+            and total_shift <= max_allowed_diff
+           ):
             break
 
         transformed_coordinates = estimated_coordinates
@@ -376,6 +378,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
             e_wrong_points (List of booleans): Electron coordinates that have no proper match
             o_wrong_points (List of booleans): Optical coordinates that have no proper match
             total_shift (float): Calculated total shift
+    raises LookupError: if no match can be found
     """
     index1 = _KNNsearch(transformed_coordinates, electron_coordinates)
     # Sort optical coordinates based on the _KNNsearch output index
@@ -398,10 +401,8 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     e_wrong_points = [i != r for i, r in zip(e_index, electron_range)]
     e_match_points = [not i for i in e_wrong_points]
 
-    if (all(o_wrong_points) or all(e_wrong_points)):
-        # TODO: raise exception?
-        logging.warning("Cannot perform matching.")
-        return [], [], [], []
+    if all(o_wrong_points) or all(e_wrong_points):
+        raise LookupError("Cannot perform matching.")
 
     # Calculate the transform parameters for the correct electron_coordinates
     move1, scale1, rotation1 = transform.CalculateTransform(
@@ -496,9 +497,8 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     index2 = _KNNsearch(electron_coordinates, estimated_coordinates)
     e_index = [index2[i] for i in index1]
     e_wrong_points = [i != r for i, r in zip(e_index, electron_range)]
-    if (all(e_wrong_points) or index1.count(index1[0]) == len(index1)):
-        logging.warning("Cannot perform matching..")
-        return [], [], [], []
+    if all(e_wrong_points) or index1.count(index1[0]) == len(index1):
+        raise LookupError("Cannot perform matching.")
 
     return estimated_coordinates, index1, e_wrong_points, o_wrong_points, total_shift
 
