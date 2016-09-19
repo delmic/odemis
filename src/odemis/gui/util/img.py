@@ -29,15 +29,15 @@ import logging
 import math
 import numpy
 from odemis import model
-from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo
+from odemis.util import intersect, fluo, conversion
 from odemis.util import polar, img
 from odemis.util import units
 import time
 import wx
 
+import odemis.acq.stream as acqstream
 import odemis.gui.img as guiimg
 
 
@@ -67,6 +67,7 @@ LINE_THICKNESS = 0.0016
 ARC_RADIUS = 0.002
 ARC_LEFT_MARGIN = 0.01
 ARC_TOP_MARGIN = 0.0104
+TINT_SIZE = 0.0155
 
 
 # @profile
@@ -1351,12 +1352,20 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
                        hfw=None, date=None, streams_data=None, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
+    stream (None or Stream): if provided, the text corresponding to this stream
+      will be indicated by a bullet before the name
     """
+    # TODO: get a "raw" parameter to know whether to display in RGB or greyscale
+    # TODO: get a better argument (name) than "stream"
+    # TODO: compute what to show in the legend here, no need to get it from streams_data
+    # TODO: return a DataArray, instead of writing in legend_ctx
+
     init_x_pos = buffer_size[0] * CELL_MARGIN
     large_font = buffer_size[0] * LARGE_FONT  # used for general data
     medium_font = buffer_size[0] * MEDIUM_FONT
     small_font = buffer_size[0] * SMALL_FONT  # used for stream data
     arc_radius = buffer_size[0] * ARC_RADIUS
+    tint_box_size = buffer_size[0] * TINT_SIZE
     n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
     big_cell_height = buffer_size[0] * MAIN_LAYER
@@ -1473,24 +1482,30 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
     legend_y_pos = big_cell_height
     sorted_data = sorted(streams_data.items(), key=lambda d: (d[1][0], hash(d[0])))
     for s, (_, data) in sorted_data:
-        legend_ctx.set_font_size(small_font)
         if s == stream:
-            # in case of multifile, spot this particular stream with a
+            # in case of multifile/raw, spot this particular stream with a
             # circle next to the stream name
-            legend_x_pos = ARC_LEFT_MARGIN * buffer_size[0]
-            legend_y_pos += ARC_TOP_MARGIN * buffer_size[0]
-            legend_ctx.move_to(legend_x_pos, legend_y_pos)
-            legend_ctx.arc(legend_x_pos, legend_y_pos, arc_radius, 0, 2 * math.pi)
+            legend_ctx.arc(ARC_LEFT_MARGIN * buffer_size[0],
+                           legend_y_pos + ARC_TOP_MARGIN * buffer_size[0],
+                           arc_radius, 0, 2 * math.pi)
             legend_ctx.fill()
             legend_ctx.stroke()
-            legend_x_pos = init_x_pos
-            legend_y_pos += (SUB_UPPER * buffer_size[0] - ARC_TOP_MARGIN * buffer_size[0])
-            legend_ctx.move_to(legend_x_pos, legend_y_pos)
-        else:
-            legend_x_pos = init_x_pos
-            legend_y_pos += SUB_UPPER * buffer_size[0]
-            legend_ctx.move_to(legend_x_pos, legend_y_pos)
+
+        legend_x_pos = init_x_pos
+        legend_y_pos += SUB_UPPER * buffer_size[0]
+        legend_ctx.move_to(legend_x_pos, legend_y_pos)
         legend_ctx.show_text(s.name.value)
+
+        # If stream has tint, draw the colour in a little square next to the name
+        if stream is None and isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+            tint = s.tint.value
+            legend_ctx.set_source_rgb(*conversion.rgb_to_frgb(tint))
+            legend_ctx.rectangle(legend_x_pos + cell_x_step - tint_box_size - small_font,
+                                 legend_y_pos - small_font,
+                                 tint_box_size, tint_box_size)
+            legend_ctx.fill()
+            legend_ctx.set_source_rgb(1, 1, 1)
+
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
         for i, d in enumerate(data[:-1]):
@@ -1498,7 +1513,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
             legend_ctx.show_text(d)
             if (i % 2 == 1):
                 legend_x_pos += cell_x_step
-                legend_y_pos -= (SUB_LOWER - SUB_UPPER) * buffer_size[0]
+                legend_y_pos = legend_y_pos_store
             else:
                 legend_y_pos += (SUB_LOWER - SUB_UPPER) * buffer_size[0]
         legend_y_pos = (legend_y_pos_store + (small_cell_height - SUB_UPPER * buffer_size[0]))
@@ -1547,9 +1562,9 @@ def get_ordered_images(streams, raw=False):
         # Sometimes sem streams contain the dt value as exposure time metadata.
         # In that case handle it in special way
         sem_stream = False
-        if isinstance(s, stream.OpticalStream):
+        if isinstance(s, acqstream.OpticalStream):
             images_opt.append((data, BLEND_SCREEN, s))
-        elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
+        elif isinstance(s, (acqstream.SpectrumStream, acqstream.CLStream)):
             images_spc.append((data, BLEND_DEFAULT, s))
         else:
             sem_stream = True
@@ -1583,12 +1598,12 @@ def get_ordered_images(streams, raw=False):
                     stream_data.append(u"Emission: %s" % (out_wl,))
                 else:
                     stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
-            if isinstance(s, stream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
+            if isinstance(s, acqstream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
                 stream_data.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
         except Exception:
             logging.exception("Failed to export metadata fully")
 
-        if isinstance(s, stream.OpticalStream):
+        if isinstance(s, acqstream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
             baseline = numpy.min(data_raw)
@@ -1656,6 +1671,7 @@ def convert_streams_to_images(streams, raw=False):
 
     images = set_images(ims)
 
+    # TODO: just return an OderedDict of image->stream (and don't computer streams_data yet)
     return images, streams_data, im_min_type
 
 
@@ -1734,6 +1750,10 @@ def images_to_export_data(streams, view_hfw, view_pos,
     images, streams_data, im_min_type = convert_streams_to_images(streams, raw)
     if not images:
         raise LookupError("There is no stream data to be exported")
+
+    if interpolate_data and im_min_type != numpy.uint8:
+        logging.debug("Disabling interpolation as data is not 8 bits")
+        interpolate_data = False
 
     # Find min pixel size
     min_pxs = min(im.metadata['dc_scale'] for im in images)
@@ -1828,7 +1848,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=(interpolate_data and im_min_type == numpy.uint8)
+            interpolate_data=interpolate_data
         )
         if raw:
             # Create legend
@@ -1879,7 +1899,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
         shear=last_image.metadata['dc_shear'],
         flip=last_image.metadata['dc_flip'],
         blend_mode=last_image.metadata['blend_mode'],
-        interpolate_data=(interpolate_data and im_min_type == numpy.uint8)
+        interpolate_data=interpolate_data
     )
     # Create legend
     legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
