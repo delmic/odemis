@@ -45,9 +45,10 @@ BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 SPEC_PLOT_SIZE = 1024
-SPEC_SCALE_WIDTH = 120  # ticks + text vertically
-SPEC_SCALE_HEIGHT = 70  # ticks + text horizontally
+SPEC_SCALE_WIDTH = 150  # ticks + text vertically
+SPEC_SCALE_HEIGHT = 100  # ticks + text horizontally
 SMALL_SCALE_WIDTH = 10  # just ticks
+SPEC_FONT_SIZE = 0.03  # Ratio of the whole output width
 # legend ratios
 CELL_WIDTH = 0.2
 MAIN_LAYER = 0.05
@@ -70,7 +71,6 @@ ARC_TOP_MARGIN = 0.0104
 TINT_SIZE = 0.0155
 
 
-# @profile
 # TODO: rename to *_bgra_*
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
@@ -208,7 +208,7 @@ def apply_flip(ctx, flip, b_im_rect):
         ctx.translate(-flip_x, -flip_y)
 
 
-def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
+def ar_create_tick_labels(client_size, ticksize, num_ticks, margin=0):
     """
     Create list of tick labels for AR polar representation
 
@@ -219,13 +219,12 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
             (tuple of floats): center
             (float): inner radius
             (float): radius
-            (float): tau
     """
 
     # Calculate the characteristic values
     center_x = client_size[0] / 2
     center_y = client_size[1] / 2
-    font_size = max(3, client_size[0] // 50)
+    font_size = max(3, client_size[0] * SPEC_FONT_SIZE)
     inner_radius = min(center_x, center_y)
     radius = inner_radius + (ticksize / 1.5)
     ticks = []
@@ -234,7 +233,7 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
     for i in range(num_ticks):
         # phi needs to be rotated 90 degrees counter clockwise, otherwise
         # 0 degrees will be at the right side of the circle
-        phi = (tau / num_ticks * i) - (math.pi / 2)
+        phi = (2 * math.pi / num_ticks * i) - (math.pi / 2)
         deg = round(math.degrees(phi))
 
         cos = math.cos(phi)
@@ -395,7 +394,7 @@ def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_he
     ctx.restore()
 
 
-def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau):
+def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_radius, radius):
     """
     Draws AR frame on the given context
 
@@ -407,20 +406,19 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     center_y (float): center y axis
     inner_radius (float): inner radius
     radius (float): radius
-    tau (float): tau
     """
     # Draw frame that covers everything outside the center circle
     ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
     ctx.set_source_rgb(1, 1, 1)
 
     ctx.rectangle(0, 0, client_size[0], client_size[1])
-    ctx.arc(center_x, center_y, inner_radius, 0, tau)
+    ctx.arc(center_x, center_y, inner_radius, 0, 2 * math.pi)
     ctx.fill()
 
     # Draw Azimuth degree circle
     ctx.set_line_width(2)
     ctx.set_source_rgb(0.5, 0.5, 0.5)
-    ctx.arc(center_x, center_y, radius, 0, tau)
+    ctx.arc(center_x, center_y, radius, 0, 2 * math.pi)
     ctx.stroke()
 
     # Draw Azimuth degree ticks
@@ -435,7 +433,7 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
         write_label(ctx, label, font_name)
 
 
-def draw_ar_spiderweb(ctx, center_x, center_y, radius, tau):
+def draw_ar_spiderweb(ctx, center_x, center_y, radius):
     """
     Draws AR spiderweb on the given context
 
@@ -443,37 +441,40 @@ def draw_ar_spiderweb(ctx, center_x, center_y, radius, tau):
     center_x (float): center x axis
     center_y (float): center y axis
     radius (float): radius
-    tau (float): tau
     """
 
-    # Draw inner degree circles, we assume the exterior one is already there as
-    # part of the frame
-    ctx.set_line_width(1.2)
-    ctx.set_source_rgb(0.5, 0.5, 0.5)
-    ctx.stroke()
-    ctx.arc(center_x, center_y, (2 / 3) * radius, 0, tau)
-    ctx.stroke()
-    ctx.arc(center_x, center_y, (1 / 3) * radius, 0, tau)
-    ctx.stroke()
+    # First draw a dark semi-transparent "shadow" then a grey line
+    lines = ((2.5, (0, 0, 0, 0.5)), (1.25, (0.5, 0.5, 0.5, 1.0)))
+    for lw, lc in lines:
+        ctx.set_line_width(lw)
+        ctx.set_source_rgba(*lc)
 
-    # Finds lines ending points
-    n_ends = 12
-    ends = []
-    for i in range(n_ends):
-        phi = (tau / n_ends * i) - (math.pi / 2)
-        cos = math.cos(phi)
-        sin = math.sin(phi)
+        # Draw inner degree circles, we assume the exterior one is already there as
+        # part of the frame
+        ctx.new_path()
+        ctx.arc(center_x, center_y, (2 / 3) * radius, 0, 2 * math.pi)
+        ctx.stroke()
+        ctx.arc(center_x, center_y, (1 / 3) * radius, 0, 2 * math.pi)
+        ctx.stroke()
 
-        # Tick start and end point (outer and inner)
-        ox = center_x + radius * cos
-        oy = center_y + radius * sin
-        ends.append((ox, oy))
-    # Draw lines
-    n_lines = n_ends // 2
-    for i in range(n_lines):
-        ctx.move_to(ends[i][0], ends[i][1])
-        ctx.line_to(ends[i + n_lines][0], ends[i + n_lines][1])
-    ctx.stroke()
+        # Finds lines ending points
+        n_ends = 12
+        ends = []
+        for i in range(n_ends):
+            phi = (2 * math.pi / n_ends * i) - (math.pi / 2)
+            cos = math.cos(phi)
+            sin = math.sin(phi)
+
+            # Tick start and end point (outer and inner)
+            ox = center_x + radius * cos
+            oy = center_y + radius * sin
+            ends.append((ox, oy))
+        # Draw lines
+        n_lines = n_ends // 2
+        for i in range(n_lines):
+            ctx.move_to(ends[i][0], ends[i][1])
+            ctx.line_to(ends[i + n_lines][0], ends[i + n_lines][1])
+        ctx.stroke()
 
 
 def set_images(im_args):
@@ -794,13 +795,12 @@ def ar_to_export_data(streams, raw=False):
         )
 
         font_name = "Sans"
-        tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
-        ticks_info = ar_create_tick_labels(streams[0].image.value.shape, ticksize, num_ticks, tau, ar_margin / 2)
+        ticks_info = ar_create_tick_labels(streams[0].image.value.shape, ticksize, num_ticks, ar_margin / 2)
         ticks, (center_x, center_y), inner_radius, radius = ticks_info
-        draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
-        draw_ar_spiderweb(ctx, center_x, center_y, radius, tau)
+        draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius)
+        draw_ar_spiderweb(ctx, center_x, center_y, radius)
         ar_plot = model.DataArray(data_to_draw)
         ar_plot.metadata[model.MD_DIMS] = 'YXC'
         return ar_plot
@@ -1172,7 +1172,7 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         value_range = (spectrum_range[0], spectrum_range[-1])
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
-        font_size = SPEC_PLOT_SIZE // 50
+        font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
         scale_x_draw = numpy.empty((SPEC_SCALE_HEIGHT, client_size.x, 4), dtype=numpy.uint8)
         scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
@@ -1286,7 +1286,7 @@ def line_to_export_data(spectrum, raw, unit, spectrum_range):
         value_range = (spectrum_range[0], spectrum_range[-1])
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
-        font_size = SPEC_PLOT_SIZE // 50
+        font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
         scale_x_draw = numpy.empty((SPEC_SCALE_HEIGHT, client_size.x, 4), dtype=numpy.uint8)
         scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
