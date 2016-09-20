@@ -22,12 +22,14 @@ This file is part of Odemis.
 
 from __future__ import division
 
+from collections import OrderedDict
 import logging
-from odemis import model
+from odemis import model, dataio
 from odemis.dataio import get_converter
 from odemis.gui.comp import popup
+from odemis.gui.conf import get_acqui_conf
 from odemis.gui.util import formats_to_wildcards
-from odemis.gui.util import get_picture_folder, call_in_wx_main
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, images_to_export_data, line_to_export_data
 import os
 import time
@@ -61,15 +63,16 @@ class ExportController(object):
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
         self._tab_panel = tab_panel
+        self._conf = get_acqui_conf()
 
         # Listen to "acquire image" button
-        self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.start_export_as_viewport)
+        self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.on_export)
 
         self._viewports = viewports.keys()
 
         wx.EVT_MENU(self._main_frame,
                     self._main_frame.menu_item_export_as.GetId(),
-                    self.start_export_as_viewport)
+                    self.on_export)
         self._main_frame.menu_item_export_as.Enable(False)
 
         # subscribe to get notified about tab changes
@@ -91,8 +94,12 @@ class ExportController(object):
         self._main_frame.menu_item_export_as.Enable(enabled)
         self._tab_panel.btn_secom_export.Enable(enabled)
 
-    def start_export_as_viewport(self, event):
-        """ Wrapper to run export_viewport in a separate thread."""
+    def on_export(self, event):
+        """
+        Runs the whole export process, from asking the user to pick a file, to
+        showing the file has been successfully exported.
+        Must be run in GUI main thread
+        """
         filepath, export_format, export_type = self._get_export_info()
         if filepath is not None:
             # TODO: run the real export function in a future, and based on the
@@ -105,20 +112,37 @@ class ExportController(object):
           Full filename is None if cancelled by user
         """
         # Set default to the first of the list
-        export_type = self.get_export_type(self._data_model.focussedView.value)
+        view = self._data_model.focussedView.value
+        export_type = self.get_export_type(view)
         formats = EXPORTERS[export_type]
-        default_exporter = get_converter(formats[0][0])
+        if self._conf.export_raw:
+            default_exporter = get_converter(formats[1][0])
+        else:
+            default_exporter = get_converter(formats[0][0])
         extension = default_exporter.EXTENSIONS[0]
-        # TODO: default to the same path/filename as current file (but different extension)
-        basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-        filepath = os.path.join(get_picture_folder(), basename + extension)
-        # filepath will be None if cancelled by user
-        filepath, export_format, export_type = self.ShowExportFileDialog(filepath, default_exporter)
-        # get rid of the prefix before you ask for the exporter
-        if any(prefix in export_format.split(' ') for prefix in (PR_PREFIX, PP_PREFIX)):
-            export_format = export_format.split(' ', 1)[1]
 
-        return filepath, export_format, export_type
+        # Suggested name= current file name + view name + extension of default format
+        fi = self._data_model.acq_fileinfo.value
+        if fi is not None and fi.file_name:
+            basename = os.path.basename(fi.file_name)
+            # Remove the extension
+            formats_to_ext = dataio.get_available_formats()
+            all_exts = sum(formats_to_ext.values(), [])
+            fexts = sorted(ext for ext in all_exts if basename.endswith(ext))
+            if fexts:
+                # Remove the biggest extension
+                basename = basename[:-len(fexts[-1])]
+            else:
+                # Try to remove whichever extension there is
+                basename, _ = os.path.splitext(basename)
+            basename += " " + view.name.value.lower()
+        else:
+            basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+
+        filepath = os.path.join(self._conf.last_export_path, basename + extension)
+
+        # filepath will be None if cancelled by user
+        return self.ShowExportFileDialog(filepath, default_exporter)
 
     @call_in_wx_main
     def export_viewport(self, filepath, export_format, export_type):
@@ -131,6 +155,9 @@ class ExportController(object):
         try:
             exporter = get_converter(export_format)
             raw = export_format in EXPORTERS[export_type][1]
+            self._conf.export_raw = raw
+            self._conf.last_export_path = os.path.dirname(filepath)
+
             exported_data = self.export(export_type, raw)
             # record everything to a file
             exporter.export(filepath, exported_data)
@@ -245,18 +272,20 @@ class ExportController(object):
 
         # current filename
         path, base = os.path.split(filename)
-        wildcards, formats = formats_to_wildcards(formats_to_ext, suffix="")
+        uformats_to_ext = OrderedDict(formats_to_ext.values())
+        wildcards, uformats = formats_to_wildcards(uformats_to_ext, suffix="")
         dialog = wx.FileDialog(self._main_frame,
                                message="Choose a filename and destination",
                                defaultDir=path,
                                defaultFile="",
-                               style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+                               style=wx.FD_SAVE,  # | wx.FD_OVERWRITE_PROMPT,
                                wildcard=wildcards)
 
-        # just default to the first format in EXPORTS[export_type]
+        # Select the default format
         default_fmt = default_exporter.FORMAT
         try:
-            idx = formats.index(default_fmt)
+            uf = formats_to_ext[default_fmt][0]
+            idx = uformats.index(uf)
         except ValueError:
             idx = 0
         dialog.SetFilterIndex(idx)
@@ -276,12 +305,19 @@ class ExportController(object):
         path = dialog.GetDirectory()
 
         # Store the format
-        fmt = formats[dialog.GetFilterIndex()]
+        ufmt = uformats[dialog.GetFilterIndex()]
+        for f, (uf, _) in formats_to_ext.items():
+            if uf == ufmt:
+                fmt = f
+                break
+        else:
+            logging.debug("Failed to link %s to a known format", ufmt)
+            fmt = default_fmt
 
         # Check the filename has a good extension, or add the default one
         fn = dialog.GetFilename()
         ext = None
-        for extension in formats_to_ext[fmt]:
+        for extension in formats_to_ext[fmt][1]:
             if fn.endswith(extension) and len(extension) > len(ext or ""):
                 ext = extension
 
@@ -292,30 +328,44 @@ class ExportController(object):
                 # the default one.
                 ext = default_exporter.EXTENSIONS[0]
             else:
-                ext = formats_to_ext[fmt][0]  # default extension
+                ext = formats_to_ext[fmt][1][0]  # default extension
             fn += ext
 
-        return os.path.join(path, fn), fmt, export_type
+        fullfn = os.path.join(path, fn)
+        # As we strip the extension from the filename, the normal dialog cannot
+        # detect we'd overwrite an existing file => show our own warning
+        if os.path.exists(fullfn):
+            dlg = wx.MessageDialog(self._main_frame,
+                                   "A file named \"%s\" already exists.\n"
+                                   "Do you want to replace it?" % (fn,),
+                                   "File already exists",
+                                   wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
+            ret = dlg.ShowModal()
+            dlg.Destroy()
+            if ret == wx.ID_NO:
+                return None, default_fmt, export_type
+
+        return fullfn, fmt, export_type
 
     def get_export_formats(self, export_type):
         """
         Find the available file formats for the given export_type
         export_type (string): spatial, AR, spectrum or spectrum-line
-        return (dict string -> list of strings): name of each format -> list of
-            extensions.
+        return (dict string -> (string, list of strings)):
+             name of each format -> nice name of the format, list of extensions.
         """
         pr_formats, pp_formats = EXPORTERS[export_type]
 
-        export_formats = {}
+        export_formats = OrderedDict()
         # Look dynamically which format is available
         # First the print-ready formats
         for format_data in pr_formats:
             exporter = get_converter(format_data)
-            export_formats[PR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
+            export_formats[exporter.FORMAT] = (PR_PREFIX + " " + exporter.FORMAT, exporter.EXTENSIONS)
         # Now for post-processing formats
         for format_data in pp_formats:
             exporter = get_converter(format_data)
-            export_formats[PP_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
+            export_formats[exporter.FORMAT] = (PP_PREFIX + " " + exporter.FORMAT, exporter.EXTENSIONS)
 
         if not export_formats:
             logging.error("No file converter found!")
