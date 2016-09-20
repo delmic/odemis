@@ -102,18 +102,30 @@ fi
 # Add the description, other files generated during entry, and folders (which are
 # add recursively, and not added at all if they don't exist)
 # (no quotes for the variables which could be empty so they become nothing)
-file-roller --add "$descfn" $hwfn $scfn ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP --add-to "$fn"
+# On 16.04, with the latest file-roller, you can just do this:
+#file-roller --add "$descfn" $hwfn $scfn ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP --add-to "$fn"
 
-zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
+# Adds each directory into the root of the archive
+pushd .
+for d in ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP; do
+    cd $(dirname $d)
+    zip -r $fn $(basename $d)
+done
+popd
+file-roller --add "$descfn" $hwfn $scfn  --add-to "$fn"
 
 
-
-# Open wetransfer
 # TODO: any way to automatically send the file?
 # See https://github.com/predat/wetransferpy
 
-# Encode the (first 30 lines of) description into URL encoding for passing it also as message
-msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
+zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
+if [ $? == 0 ]; then # User pressed OK (and not closed the window)
+    # Open wetransfer
 
-firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
+    # Encode the (first 30 lines of) description into URL encoding for passing it also as message
+    msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
+
+    firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
+fi
+
 
