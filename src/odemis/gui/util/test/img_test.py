@@ -120,15 +120,14 @@ class TestARExport(unittest.TestCase):
         ctx = cairo.Context(surface)
         app = wx.App()  # needed for the gui font name
         font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
-        tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
-        ticks_info = img.ar_create_tick_labels(img_size, ticksize, num_ticks, tau, ar_margin / 2)
+        ticks_info = img.ar_create_tick_labels(img_size, ticksize, num_ticks, ar_margin / 2)
         ticks, (center_x, center_y), inner_radius, radius = ticks_info
         # circle expected just on the center of the frame
         self.assertEqual((center_x, center_y), (ar_size[0] / 2, ar_size[1] / 2))
         self.assertLess(radius, ar_size[0] / 2)  # circle radius within limits
-        img.draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
+        img.draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius)
         self.assertEqual(data_to_draw.shape[:2], ar_size)  # frame includes the margin
 
     def test_ar_raw(self):

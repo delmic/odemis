@@ -1348,17 +1348,24 @@ def line_to_export_data(spectrum, raw, unit, spectrum_range):
         return line_img
 
 
-def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
-                       hfw=None, date=None, streams_data=None, stream=None, logo=None):
+def draw_export_legend(images, buffer_size, buffer_scale,
+                       hfw, date, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
     stream (None or Stream): if provided, the text corresponding to this stream
       will be indicated by a bullet before the name
+    return (ndarray of 3 dims Y,X,4) : the legend in RGB
     """
     # TODO: get a "raw" parameter to know whether to display in RGB or greyscale
     # TODO: get a better argument (name) than "stream"
-    # TODO: compute what to show in the legend here, no need to get it from streams_data
-    # TODO: return a DataArray, instead of writing in legend_ctx
+
+    n = len(images)
+    full_shape = (n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4)
+    legend_rgb = numpy.zeros(full_shape, dtype=numpy.uint8)
+    legend_surface = cairo.ImageSurface.create_for_data(
+                        legend_rgb, cairo.FORMAT_ARGB32,
+                        legend_rgb.shape[1], legend_rgb.shape[0])
+    legend_ctx = cairo.Context(legend_surface)
 
     init_x_pos = buffer_size[0] * CELL_MARGIN
     large_font = buffer_size[0] * LARGE_FONT  # used for general data
@@ -1366,7 +1373,6 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
     small_font = buffer_size[0] * SMALL_FONT  # used for stream data
     arc_radius = buffer_size[0] * ARC_RADIUS
     tint_box_size = buffer_size[0] * TINT_SIZE
-    n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
     big_cell_height = buffer_size[0] * MAIN_LAYER
     small_cell_height = buffer_size[0] * SUB_LAYER
@@ -1480,9 +1486,11 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
     # Write stream data, sorted by acquisition date (and fallback on stable order)
     legend_ctx.set_font_size(small_font)
     legend_y_pos = big_cell_height
-    sorted_data = sorted(streams_data.items(), key=lambda d: (d[1][0], hash(d[0])))
-    for s, (_, data) in sorted_data:
-        if s == stream:
+
+    sorted_im = sorted(images, key=lambda im: im.metadata['date'])
+    for im in sorted_im:
+        s = im.metadata['stream']
+        if s is stream:
             # in case of multifile/raw, spot this particular stream with a
             # circle next to the stream name
             legend_ctx.arc(ARC_LEFT_MARGIN * buffer_size[0],
@@ -1508,7 +1516,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
 
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
-        for i, d in enumerate(data[:-1]):
+        for i, d in enumerate(_get_stream_legend_text(s)):
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
             legend_ctx.show_text(d)
             if (i % 2 == 1):
@@ -1518,18 +1526,65 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale,
                 legend_y_pos += (SUB_LOWER - SUB_UPPER) * buffer_size[0]
         legend_y_pos = (legend_y_pos_store + (small_cell_height - SUB_UPPER * buffer_size[0]))
 
+    return legend_rgb
+
+
+def _get_stream_legend_text(s):
+    """
+    st (Stream)
+    return (list of str): Small pieces of text to display, ordered
+    """
+    captions = []
+
+    if not hasattr(s, "image") or s.image.value is None:
+        return captions
+
+    # FluoStreams are merged using the "Screen" method that handles colour
+    # merging without decreasing the intensity.
+    data_raw = s.raw[0]
+
+    try:
+        if data_raw.metadata.get(model.MD_EXP_TIME, None):
+            if isinstance(s, acqstream.EMStream):
+                captions.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+            else:
+                captions.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
+            captions.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s", sig=3))
+        if data_raw.metadata.get(model.MD_LENS_MAG, None):
+            captions.append(u"%s x" % units.readable_str(data_raw.metadata[model.MD_LENS_MAG], sig=2))
+        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
+            captions.append(data_raw.metadata[model.MD_FILTER_NAME])
+        if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
+            captions.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
+        if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
+            captions.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
+        if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
+            captions.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
+        if data_raw.metadata.get(model.MD_IN_WL, None):
+            captions.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
+        if data_raw.metadata.get(model.MD_OUT_WL, None):
+            out_wl = data_raw.metadata[model.MD_OUT_WL]
+            if isinstance(out_wl, basestring):
+                captions.append(u"Emission: %s" % (out_wl,))
+            else:
+                captions.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
+        if isinstance(s, acqstream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
+            captions.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
+    except Exception:
+        logging.exception("Failed to export metadata fully")
+
+    return captions
+
 
 def get_ordered_images(streams, raw=False):
     """ Return the list of images to display, ordered bottom to top (=last to draw)
 
     The last image of the list will have the merge ratio applied (as opacity)
-
     """
-
     images_opt = []
     images_spc = []
     images_std = []
-    streams_data = {}
 
     im_min_type = numpy.uint8
     for s in streams:
@@ -1552,65 +1607,16 @@ def get_ordered_images(streams, raw=False):
                 im_min_type = min_type(data_raw)
 
             # Split the bits in R,G,B,A
-            data = model.DataArray(numpy.zeros((data_raw.shape[0], data_raw.shape[1], 4), dtype=numpy.uint8),
-                                   data_raw.metadata)
-            data[:, :, 0] = numpy.right_shift(data_raw[:, :], 8) & 255
-            data[:, :, 1] = data_raw[:, :] & 255
-            data[:, :, 2] = numpy.right_shift(data_raw[:, :], 16) & 255
-            data[:, :, 3] = numpy.right_shift(data_raw[:, :], 24) & 255
+            data = _pack_data_into_rgba(data_raw)
 
         # Sometimes sem streams contain the dt value as exposure time metadata.
         # In that case handle it in special way
-        sem_stream = False
         if isinstance(s, acqstream.OpticalStream):
             images_opt.append((data, BLEND_SCREEN, s))
         elif isinstance(s, (acqstream.SpectrumStream, acqstream.CLStream)):
             images_spc.append((data, BLEND_DEFAULT, s))
         else:
-            sem_stream = True
             images_std.append((data, BLEND_DEFAULT, s))
-
-        # metadata useful for the legend
-        stream_data = []
-        try:
-            if data_raw.metadata.get(model.MD_EXP_TIME, None):
-                if sem_stream:
-                    stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
-                else:
-                    stream_data.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
-            if data_raw.metadata.get(model.MD_DWELL_TIME, None):
-                stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s", sig=3))
-            if data_raw.metadata.get(model.MD_LENS_MAG, None):
-                stream_data.append(u"%s x" % units.readable_str(data_raw.metadata[model.MD_LENS_MAG], sig=2))
-            if data_raw.metadata.get(model.MD_FILTER_NAME, None):
-                stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
-            if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
-                stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
-            if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
-                stream_data.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
-            if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
-                stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
-            if data_raw.metadata.get(model.MD_IN_WL, None):
-                stream_data.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
-            if data_raw.metadata.get(model.MD_OUT_WL, None):
-                out_wl = data_raw.metadata[model.MD_OUT_WL]
-                if isinstance(out_wl, basestring):
-                    stream_data.append(u"Emission: %s" % (out_wl,))
-                else:
-                    stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
-            if isinstance(s, acqstream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
-                stream_data.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
-        except Exception:
-            logging.exception("Failed to export metadata fully")
-
-        if isinstance(s, acqstream.OpticalStream):
-            baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
-        else:
-            baseline = numpy.min(data_raw)
-        stream_data.append(baseline)
-        # date used just for sorting
-        date = data_raw.metadata.get(model.MD_ACQ_DATE, 0)
-        streams_data[s] = date, stream_data
 
     # Sort by size, so that the biggest picture is first drawn (no opacity)
     def get_area(d):
@@ -1625,7 +1631,7 @@ def get_ordered_images(streams, raw=False):
     if images_opt:
         images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2])
 
-    return images_opt + images_std + images_spc, streams_data, im_min_type
+    return images_opt + images_std + images_spc, im_min_type
 
 
 def physical_to_world_pos(phy_pos):
@@ -1651,7 +1657,7 @@ def convert_streams_to_images(streams, raw=False):
         im_min_type (numpy.dtype): data type for the output data (common for all the
           DataArrays)
     """
-    images, streams_data, im_min_type = get_ordered_images(streams, raw)
+    images, im_min_type = get_ordered_images(streams, raw)
 
     # add the images in order
     ims = []
@@ -1671,8 +1677,8 @@ def convert_streams_to_images(streams, raw=False):
 
     images = set_images(ims)
 
-    # TODO: just return an OderedDict of image->stream (and don't computer streams_data yet)
-    return images, streams_data, im_min_type
+    # TODO: just return an OderedDict of image->stream
+    return images, im_min_type
 
 
 def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
@@ -1747,11 +1753,14 @@ def images_to_export_data(streams, view_hfw, view_pos,
     return (list of DataArray)
     raise LookupError: if no data visible in the selected FoV
     """
-    images, streams_data, im_min_type = convert_streams_to_images(streams, raw)
+    images, im_min_type = convert_streams_to_images(streams, raw)
     if not images:
         raise LookupError("There is no stream data to be exported")
 
     if interpolate_data and im_min_type != numpy.uint8:
+        # TODO: make interpolation work also with 16 bits and higher data type
+        # For now, as Cairo is convinced it's RGB, it computes wrong data.
+        # cf util.img.rescale_hq() before casting to RGB?
         logging.debug("Disabling interpolation as data is not 8 bits")
         interpolate_data = False
 
@@ -1832,9 +1841,6 @@ def images_to_export_data(streams, view_hfw, view_pos,
         else:
             merge_ratio = 1 - i / n
 
-        # TODO: make interpolation work also with 16 bits and higher data type
-        # For now, as Cairo is convinced it's RGB, it computes wrong data.
-        # cf util.img.rescale_hq() before casting to RGB?
         draw_image(
             ctx,
             im,
@@ -1852,26 +1858,13 @@ def images_to_export_data(streams, view_hfw, view_pos,
         )
         if raw:
             # Create legend
-            legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
-            legend_surface = cairo.ImageSurface.create_for_data(
-                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
-            legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale,
-                               view_hfw[0], last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
+            legend_rgb = draw_export_legend(images + [last_image], buffer_size, buffer_scale,
+                                                view_hfw[0], last_image.metadata['date'],
+                                                im.metadata['stream'], logo=logo)
 
-            new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
-            new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
-            new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 0], 16, dtype=numpy.uint32)
-            new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 3], 24, dtype=numpy.uint32)
-            new_data_to_draw = new_data_to_draw.astype(im_min_type)
-            # Turn legend to grayscale
-            new_legend_to_draw = legend_to_draw[:, :, 0] + legend_to_draw[:, :, 1] + legend_to_draw[:, :, 2]
-            new_legend_to_draw = new_legend_to_draw.astype(im_min_type)
-            new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
-            data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
-            # Clip background to baseline
-            baseline = im_min_type(streams_data[im.metadata['stream']][1][-1])
-            data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
+            legend_as_raw = _adapt_rgb_to_raw(legend_rgb, im.metadata['stream'], im_min_type)
+            new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
+            data_with_legend = numpy.append(new_data_to_draw, legend_as_raw, axis=0)
 
             md = {model.MD_DESCRIPTION: im.metadata['name']}
             data_to_export.append(model.DataArray(data_with_legend, md))
@@ -1902,40 +1895,82 @@ def images_to_export_data(streams, view_hfw, view_pos,
         interpolate_data=interpolate_data
     )
     # Create legend
-    legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
-    legend_surface = cairo.ImageSurface.create_for_data(
-        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
-    legend_ctx = cairo.Context(legend_surface)
     if raw:
         date = last_image.metadata['date']
     else:
         # Take the newest date (as in the GUI)
         date = max(im.metadata['date'] for im in images + [last_image])
 
-    draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale,
-                       view_hfw[0], date, streams_data, last_image.metadata['stream'] if raw else None, logo=logo)
+    legend_rgb = draw_export_legend(images + [last_image], buffer_size, buffer_scale,
+                                        view_hfw[0], date,
+                                        last_image.metadata['stream'] if raw else None,
+                                        logo=logo)
     if raw:
-        new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
-        new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
-        new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 0], 16, dtype=numpy.uint32)
-        new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 3], 24, dtype=numpy.uint32)
-        new_data_to_draw = new_data_to_draw.astype(im_min_type)
+        new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
         # Turn legend to grayscale
-        new_legend_to_draw = legend_to_draw[:, :, 0] + legend_to_draw[:, :, 1] + legend_to_draw[:, :, 2]
-        new_legend_to_draw = new_legend_to_draw.astype(im_min_type)
-        new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
-        data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
-        # Clip background to baseline
-        baseline = im_min_type(streams_data[last_image.metadata['stream']][1][-1])
-        data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
+        legend_as_raw = _adapt_rgb_to_raw(legend_rgb, last_image.metadata['stream'], im_min_type)
+        data_with_legend = numpy.append(new_data_to_draw, legend_as_raw, axis=0)
         md = {model.MD_DESCRIPTION: last_image.metadata['name']}
     else:
-        data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
+        data_with_legend = numpy.append(data_to_draw, legend_rgb, axis=0)
         data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
         md = {model.MD_DIMS: 'YXC'}
     data_to_export.append(model.DataArray(data_with_legend, md))
 
     return data_to_export
+
+
+def _adapt_rgb_to_raw(imrgb, stream, dtype):
+    """
+    imrgb (ndarray Y,X,4): RGB image to convert to a greyscale
+    stream: corresponding stream: for the raw data
+    dtype: data type of the ouptut data
+    return (ndarray Y,X)
+    """
+
+    data_raw = stream.raw[0]
+    if isinstance(stream, acqstream.OpticalStream):
+        blkval = data_raw.metadata.get(model.MD_BASELINE, 0)
+    else:
+        blkval = numpy.min(data_raw)
+
+    a = (numpy.max(data_raw) - blkval) / 255
+    im_as_raw = imrgb[:, :, 0].astype(dtype)
+    numpy.multiply(im_as_raw, a, out=im_as_raw, casting="unsafe")
+    im_as_raw += dtype(blkval)
+
+    return im_as_raw
+
+
+def _pack_data_into_rgba(data_raw):
+    """
+    Convert a "raw" data (as in "greyscale") into data pretending to be RGBA 8-bit
+    data_raw (ndarray Y,X)
+    return (ndrarray Y,X,4)
+    """
+    data = numpy.empty((data_raw.shape[0], data_raw.shape[1], 4), dtype=numpy.uint8)
+    # TODO: why in this order?? due to RGBA -> BGRA after?
+    data[:, :, 0] = numpy.right_shift(data_raw[:, :], 8) & 255
+    data[:, :, 1] = data_raw[:, :] & 255
+    data[:, :, 2] = numpy.right_shift(data_raw[:, :], 16) & 255
+    data[:, :, 3] = numpy.right_shift(data_raw[:, :], 24) & 255
+    return model.DataArray(data, data_raw.metadata)
+
+
+def _unpack_raw_data(imrgb, dtype):
+    """
+    Convert back the "raw" (as in "greyscale with lots of bits") data from data
+      pretending to be RGBA 8-bit
+
+    imrgb (ndarray Y,X,4)
+    dtype: type of the output data (should be some uint <= 64 bits)
+    return (ndrarray Y,X)
+    """
+    imraw = (numpy.left_shift(imrgb[:, :, 2], 8, dtype=numpy.uint32)
+             | imrgb[:, :, 1]
+             | numpy.left_shift(imrgb[:, :, 0], 16, dtype=numpy.uint32)
+             | numpy.left_shift(imrgb[:, :, 3], 24, dtype=numpy.uint32))
+    return imraw.astype(dtype)
 
 
 def add_alpha_byte(im_darray, alpha=255):
