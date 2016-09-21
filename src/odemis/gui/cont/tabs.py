@@ -1553,20 +1553,11 @@ class AnalysisTab(Tab):
                    self.panel.vp_inspection_br]:
             vp.canvas.fit_view_to_next_image = True
 
-        # Fetch the acquisition date
-        acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
-
-        # Add each data as a stream of the correct type
-        for d in data:
-            # Get the earliest acquisition date
-            try:
-                im_acq_date = d.metadata[model.MD_ACQ_DATE]
-                acq_date = min(acq_date or im_acq_date, im_acq_date)
-            except KeyError:  # no MD_ACQ_DATE
-                pass  # => don't update the acq_date
-
-        if acq_date:
-            fi.metadata[model.MD_ACQ_DATE] = acq_date
+        # Update the acquisition date to the newest image present (so that if
+        # several acquisitions share one old image, the date is still different)
+        acq_dates = [d.metadata[model.MD_ACQ_DATE] for d in data if model.MD_ACQ_DATE in d.metadata]
+        if acq_dates:
+            fi.metadata[model.MD_ACQ_DATE] = max(acq_dates)
         self.tab_data_model.acq_fileinfo.value = fi
 
         # Create streams from data
