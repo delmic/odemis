@@ -326,7 +326,8 @@ class TestSpatialExport(unittest.TestCase):
                     'Output wavelength range': (6.990000000000001e-07, 7.01e-07)}
         image = model.DataArray(data, metadata)
         fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
-        fluo_stream.image.value = model.DataArray(dataRGB, metadata)
+        #fluo_stream.image.value = model.DataArray(dataRGB, metadata)
+
         data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
         dataRGB = numpy.zeros((1024, 1024, 4))
         metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
@@ -336,9 +337,49 @@ class TestSpatialExport(unittest.TestCase):
                     'Shear': 0.003274715695854}
         image = model.DataArray(data, metadata)
         sem_stream = stream.StaticSEMStream(metadata['Description'], image)
-        sem_stream.image.value = model.DataArray(dataRGB, metadata)
+        #sem_stream.image.value = model.DataArray(dataRGB, metadata)
         self.streams = [fluo_stream, sem_stream]
         self.min_res = (623, 432)
+
+        # Spectrum stream
+        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] *= 3
+        data[2, :, :, :, :] = range(300)
+        data[200, 0, 0, 2] = range(300)
+        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "Spectrum",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_PIXEL_SIZE: (2e-6, 2e-6), # m/px
+             model.MD_POS: (-0.001203511795256, -0.000295338300158), # m
+             model.MD_EXP_TIME: 0.2, # s
+             model.MD_LENS_MAG: 60, # ratio
+             model.MD_WL_LIST: wld,
+            }
+        spec_data = model.DataArray(data, md)
+        self.spec_stream = stream.StaticSpectrumStream("test spec", spec_data)
+
+        # Wait for all the streams to get an RGB image
+        time.sleep(0.5)
+
+    def test_spec_pr(self):
+        view_hfw = (0.00025158414075691866, 0.00017445320835792754)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        streams = [self.streams[1], self.spec_stream]
+        exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(exp_data[0].shape, (3379, 4199, 4))  # RGB
+
+    def test_spec_pp(self):
+        view_hfw = (0.00025158414075691866, 0.00017445320835792754)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        streams = [self.streams[1], self.spec_stream]
+        exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (3379, 4199))  # greyscale
 
     def test_no_crop_need(self):
         """
@@ -349,6 +390,11 @@ class TestSpatialExport(unittest.TestCase):
         draw_merge_ratio = 0.3
         exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(exp_data[0].shape, (1226, 1576, 4))  # RGB
+        self.assertEqual(len(exp_data), 1)
+
+        # TODO: test also raw export
+        exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (1226, 1576))  # greyscale
 
     def test_crop_need(self):
         """
@@ -399,6 +445,9 @@ class TestSpatialExport(unittest.TestCase):
         with self.assertRaises(LookupError):
             img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
 
+        with self.assertRaises(LookupError):
+            img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
+
     def test_thin_column(self):
         """
         Test that minimum width limit is fulfilled in case only a very thin
@@ -410,6 +459,11 @@ class TestSpatialExport(unittest.TestCase):
         exp_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(len(exp_data), 1)
         self.assertEqual(len(exp_data[0].shape), 3)  # RGB
+        self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
+
+        exp_data = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data), len(self.streams))
+        self.assertEqual(len(exp_data[0].shape), 2)  # greyscale
         self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
 
 

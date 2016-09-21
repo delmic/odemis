@@ -206,6 +206,12 @@ class AcquisitionConfig(Config):
         self.default.set("acquisition", "last_format", tiff.FORMAT)
         self.default.set("acquisition", "last_extension", tiff.EXTENSIONS[0])
 
+        self.default.add_section("export")
+        self.default.set("export", "last_path", ACQUI_PATH)
+        # Cannot save the format, as it depends on the type, but at least remember
+        # whether it was "raw" (= post-processing) or not.
+        self.default.set("export", "raw", "False")
+
     @property
     def last_path(self):
         lp = self.get("acquisition", "last_path")
@@ -233,6 +239,27 @@ class AcquisitionConfig(Config):
     @last_extension.setter
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
+
+    @property
+    def last_export_path(self):
+        lp = self.get("export", "last_path")
+        # Check that it (still) exists, and if not, fallback to the default
+        if not os.path.isdir(lp):
+            lp = ACQUI_PATH
+        return lp
+
+    @last_export_path.setter
+    def last_export_path(self, last_path):
+        self.set("export", "last_path", last_path)
+
+    @property
+    def export_raw(self):
+        return self.get("export", "raw").lower() == "true"
+
+    @export_raw.setter
+    def export_raw(self, value):
+        strval = "True" if value else "False"
+        self.set("export", "raw", strval)
 
 
 class CalibrationConfig(Config):
