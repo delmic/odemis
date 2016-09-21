@@ -1572,13 +1572,25 @@ def get_ordered_images(streams, raw=False):
 
         # FluoStreams are merged using the "Screen" method that handles colour
         # merging without decreasing the intensity.
-        data_raw = s.raw[0]
         if not raw:
             data = s.image.value
         else:
-            # Pretend to be rgb
+            data_raw = s.raw[0]
+
+            # Pretend to be RGB for the drawing by cairo
             if numpy.can_cast(im_min_type, min_type(data_raw)):
                 im_min_type = min_type(data_raw)
+
+            if data_raw.ndim > 2:
+                # It's not (just) spatial => need to project it
+                if isinstance(s, acqstream.SpectrumStream):
+                    # TODO: The stream should give us the projection by itself
+                    spec_range = s._get_bandwidth_in_pixel()
+                    av_data = numpy.mean(data_raw[spec_range[0]:spec_range[1] + 1], axis=0)
+                    data_raw = img.ensure2DImage(av_data).astype(data_raw.dtype)
+                else:
+                    logging.warning("Doesn't know how to export data of %s spatial raw", s.name.value)
+                    continue
 
             # Split the bits in R,G,B,A
             data = model.DataArray(numpy.zeros((data_raw.shape[0], data_raw.shape[1], 4), dtype=numpy.uint8),
