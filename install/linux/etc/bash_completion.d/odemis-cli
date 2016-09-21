@@ -14,7 +14,7 @@ _odemis_cli()
             local components=$(odemis-cli --list --machine | cut -f1)
             local roles=$(odemis-cli --list --machine | cut -f2 | cut -f2 -d : | grep -v "^None$")
             local IFS=$'\n'
-            SCOMPREPLY=($(compgen -W "$components$roles" -- "$cur"))
+            SCOMPREPLY=($(compgen -W "$components $roles" -- "$cur"))
             if [ -n "$SCOMPREPLY" ]; then
                 COMPREPLY=($(printf "%q\n" "${SCOMPREPLY[@]}")) # escape spaces
             fi
