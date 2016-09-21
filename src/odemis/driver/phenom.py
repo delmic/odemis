@@ -737,8 +737,7 @@ class Detector(model.Detector):
         self._nrOfFrames = None
         self._center = None
         self._scale = None
-        self._resolution_width = None
-        self._resolution_height = None
+        self._resolution = None
 
     @isasync
     def applyAutoContrast(self):
@@ -932,13 +931,12 @@ class Detector(model.Detector):
         if (self._nrOfFrames != scanParams.nrOfFrames or
             self._center != (scanParams.center.x, scanParams.center.y) or
             self._scale != scanParams.scale or
-            self._resolution_width != scanParams.resolution.width or
-            self._resolution_height != scanParams.resolution.height):
+            self._resolution != (scanParams.resolution.width, scanParams.resolution.height)
+           ):
             self._nrOfFrames = scanParams.nrOfFrames
             self._center = (scanParams.center.x, scanParams.center.y)
             self._scale = scanParams.scale
-            self._resolution_width = scanParams.resolution.width
-            self._resolution_height = scanParams.resolution.height
+            self._resolution = (scanParams.resolution.width, scanParams.resolution.height)
             return True
         else:
             return False
