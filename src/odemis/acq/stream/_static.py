@@ -678,7 +678,7 @@ class StaticSpectrumStream(StaticStream):
                     datasum += spec2d[:, py, px]
 
         mean = datasum / n
-        return mean.astype(spec2d.dtype)
+        return model.DataArray(mean.astype(spec2d.dtype))
 
     def get_line_spectrum(self):
         """ Return the 1D spectrum representing the (average) spectrum

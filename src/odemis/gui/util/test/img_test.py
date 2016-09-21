@@ -23,7 +23,6 @@ from __future__ import division
 
 import cairo
 import logging
-import math
 import numpy
 import os
 import time
