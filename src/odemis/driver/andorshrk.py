@@ -1451,6 +1451,8 @@ class Shamrock(model.Actuator):
         Update the state of the shutter depending on the detector used.
         pos (float): (user) position of the output flipper mirror
         """
+        if not self.ShutterIsPresent():
+            return
         if pos in self._drives_shutter:
             self.SetShutter(SR193_SHUTTER_BNC)
         else:
