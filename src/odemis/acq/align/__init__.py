@@ -76,29 +76,32 @@ def FindEbeamCenter(ccd, detector, escan):
 
         exp = 0.1  # start value
         prev_img = None
-        bg_image = None
         while exp < 2:  # above 2 s it means something went wrong
             ccd.exposureTime.value = exp
 
-            img = ccd.data.get(False)
+            img = ccd.data.get(asap=False)
             if prev_img is not None:
                 img += prev_img  # accumulate, to increase the signal
 
             try:
                 coord = FindSpot(img, sensitivity_limit=10)
             except ValueError:
-                # if spot was not found, subtract background and try again
-                if bg_image is None:
-                    detector.data.unsubscribe(discard_data)
-                    bg_image = ccd.data.get(asap=False)
-                    detector.data.subscribe(discard_data)
+                # spot was not found, subtract background and try again
+                logging.debug("Subtracting background image")
+                detector.data.unsubscribe(discard_data)
+                bg_image = ccd.data.get(asap=False)
+                detector.data.subscribe(discard_data)
                 img = Subtract(img, bg_image)
-            else:
-                # found a spot! => convert position to meters from center
-                return _ConvertCoordinates(coord, img)
-            # try longer exposure time
-            prev_img = img
-            exp *= 2
+                try:
+                    coord = FindSpot(img, sensitivity_limit=10)
+                except ValueError:
+                    # try again with longer exposure time
+                    prev_img = img
+                    exp *= 2
+                    continue
+
+            # found a spot! => convert position to meters from center
+            return _ConvertCoordinates(coord, img)
 
     finally:
         detector.data.unsubscribe(discard_data)
