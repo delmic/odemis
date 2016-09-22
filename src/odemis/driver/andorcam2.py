@@ -898,13 +898,22 @@ class AndorCam2(model.DigitalCamera):
 
     def GetTemperature(self):
         """
-        returns (int) the current temperature of the captor in C
+        returns (int): the current temperature of the captor in °C
         """
         temp = c_int()
         # It returns the status of the temperature via error code (stable,
         # not yet reached...) but we don't care
         status = self.atcore.GetTemperature(byref(temp))
+        logging.debug("Temperature status is: %s", AndorV2DLL.ok_code[status])
         return temp.value
+
+    def GetTECStatus(self):
+        """
+        return (bool): True if the thermal electric cooler has overheated
+        """
+        tripped = c_int()
+        self.atcore.GetTECStatus(byref(tripped))
+        return tripped.value == 1
 
     def IsInternalMechanicalShutter(self):
         """
