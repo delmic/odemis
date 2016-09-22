@@ -1132,18 +1132,21 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
     Creates either raw or WYSIWYG representation for the spectrum data plot
 
     spectrum (list of float): spectrum values
-    client_size (wx._core.Size)
     raw (boolean): if True returns raw representation
     unit (string): wavelength unit
     spectrum_range (list of float): spectrum range
 
     returns (model.DataArray)
     """
+    # TODO: CSV (raw) export needs MD_WL_LIST in metadata (to get spectrum_range)
+    # => just keep in metadata all the time, and do not pass by argument?
 
     if raw:
+        if unit == "m":
+            spectrum.metadata[model.MD_WL_LIST] = spectrum_range
         return spectrum
     else:
-        # Draw spectrumbar plot
+        # Draw spectrum bar plot
         data = zip(spectrum_range, spectrum)
         fill_colour = BAR_PLOT_COLOUR
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
@@ -1246,6 +1249,8 @@ def line_to_export_data(spectrum, raw, unit, spectrum_range):
 
     if raw:
         data = spectrum[:, :, 0]
+        if unit == "m":
+            data.metadata[model.MD_WL_LIST] = spectrum_range
         return numpy.fliplr(data.T)
     else:
         images = set_images([(spectrum, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None)])

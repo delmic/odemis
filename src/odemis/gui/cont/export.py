@@ -226,10 +226,7 @@ class ExportController(object):
             spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
             exported_data = spectrum_to_export_data(spectrum, raw, unit, spectrum_range)
         elif export_type == 'spectrum-line':
-            spectrum_md = vp.stream.get_pixel_spectrum().metadata
             spectrum = vp.stream.get_line_spectrum()
-            # copy only non existed values (we mainly care about MD_WL_*)
-            spectrum.metadata.update({k: v for k, v in spectrum_md.iteritems() if k not in spectrum.metadata})
             spectrum_range, unit = vp.stream.get_spectrum_range()
             spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
             exported_data = line_to_export_data(spectrum, raw, unit, spectrum_range)
