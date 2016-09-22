@@ -39,6 +39,7 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CONFIG_DET0 = {"name": "APD0", "role": "cl-detector"}
 CONFIG_DET1 = {"name": "APD1", "role": "cl-detector2"}
 CONFIG_PH = {"name": "HP300", "role": "time-correlator", "device": None,
+             "disc_volt": [0.1, 0.1], "zero_cross": [1e-3, 1e-3],
              "children": {"detector0": CONFIG_DET0, "detector1": CONFIG_DET1}
             }
 
@@ -125,27 +126,20 @@ class TestPH300(unittest.TestCase):
         self.dev.dwellTime.value = dt
         df = self.dev.data
 
-        tres_b_one = None
+        tres_rng = self.dev.pixelDuration.range
 
         for i in range(1, 5):
-            self.dev.binning.value = (i, 1)
-            b = self.dev.binning.value
-            self.assertGreaterEqual(i, b[0])
+            self.dev.pixelDuration.value = tres_rng[0] * i
+            pxd = self.dev.pixelDuration.value
+            self.assertGreaterEqual(pxd, tres_rng[0])
 
             so = -10e-9 * i
             self.dev.syncOffset.value = so
             self.assertAlmostEqual(self.dev.syncOffset.value, so)
 
             data = df.get()
-            exp_shape = self.dev.shape[1] / b[1], self.dev.shape[0] / b[0]
-            self.assertEqual(data.shape, exp_shape)
             self.assertEqual(data.metadata[model.MD_DWELL_TIME], dt)
-            self.assertEqual(data.metadata[model.MD_BINNING], b)
-            if tres_b_one is None and b[0] == 1:
-                self.assertGreater(data.metadata[model.MD_PIXEL_DUR], 0)
-                tres_b_one = data.metadata[model.MD_PIXEL_DUR]
-            else:
-                self.assertEqual(data.metadata[model.MD_PIXEL_DUR], tres_b_one * b[0])
+            self.assertEqual(data.metadata[model.MD_PIXEL_DUR], pxd)
 
     def test_acquire_rawdet(self):
         for i in range(3):

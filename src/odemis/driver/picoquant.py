@@ -186,11 +186,15 @@ class PH300(model.Detector):
     Represents a PicoQuant PicoHarp 300.
     """
 
-    def __init__(self, name, role, device=None, children=None, daemon=None, **kwargs):
+    def __init__(self, name, role, device=None, children=None, daemon=None,
+                 disc_volt=None, zero_cross=None, **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
-        children
+        children (dict str -> kwargs): the names of the detectors (detector0 and
+         detector1 are valid) to the arguments.
+        disc_volt (2 (0 <= float <= 0.8)): discriminator voltage for the APD 0 and 1 (in V)
+        zero_cross (2 (0 <= float <= 2e-3)): zero cross voltage for the APD0 and 1 (in V)
         """
         if children is None:
             children = {}
@@ -201,6 +205,11 @@ class PH300(model.Detector):
         else:
             self._dll = PHDLL()
         self._idx = self._openDevice(device)
+
+        if disc_volt is None:
+            disc_volt = [0, 0]
+        if zero_cross is None:
+            zero_cross = [0, 0]
 
         super(PH300, self).__init__(name, role, daemon=daemon, **kwargs)
 
@@ -248,27 +257,24 @@ class PH300(model.Detector):
         self._metadata[model.MD_DIMS] = "XT"
         self._shape = (HISTCHAN, 1, 2**16) # Histogram is 32 bits, but only return 16 bits info
 
-        # TODO: allow to change the CFD parameters (per channel)
-        self.SetInputCFD(0, 100, 10)
-        self.SetInputCFD(1, 100, 10)
+        # Set the CFD parameters (in mV)
+        for i, (dv, zc) in enumerate(zip(disc_volt, zero_cross)):
+            self.SetInputCFD(i, int(dv * 1000), int(zc * 1000))
 
-        # binning = resolution / base resolution
         tresbase, bs = self.GetBaseResolution()
         tres = self.GetResolution()
-        self._curbin = int(tres / tresbase)
-        b = max(1, self._curbin)
-        bin_rng = ((1, 1), (2**(BINSTEPSMAX - 1), 1))
-        self.binning = model.ResolutionVA((b, 1), bin_rng, setter=self._setBinning)
+        pxd_rng = (tresbase * 1e-12, 2 ** (BINSTEPSMAX - 1) * tresbase * 1e-12)
+        self.pixelDuration = model.FloatContinuous(tres, pxd_rng, unit="s",
+                                                   setter=self._setPixelDuration)
+        self._metadata[model.MD_PIXEL_DUR] = tres
 
         res = self._shape[:2]
-        min_res = (res[0] // bin_rng[1][0], res[1])
-        self.resolution = model.ResolutionVA(res, (min_res, res), readonly=True)
+        self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
         self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-9, SYNCOFFSMAX * 1e-9),
                                                 unit="s", setter=self._setSyncOffset)
 
         # Make sure the device is synchronised and metadata is updated
-        self._setBinning(self.binning.value)
         self._setSyncOffset(self.syncOffset.value)
 
         # Wrapper for the dataflow
@@ -482,20 +488,11 @@ class PH300(model.Detector):
         block (0<=int): only useful if routing
         return numpy.array of shape (1, res): the histogram
         """
-        # Can't find any better way to know how many useful bins will be returned
-        # Maybe we could just use self._curbin
-        tresbase, bs = self.GetBaseResolution()
-        tres = self.GetResolution()
-        count = int(math.ceil(HISTCHAN * tresbase / tres))
-
-        # TODO: for optimization, we could use always the same buffer, and copy
-        # into a smaller buffer (of uint16).
-        # Seems GetHistogram() always write the whole HISTCHAN, even if not all is used
         buf = numpy.empty((1, HISTCHAN), dtype=numpy.uint32)
 
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
         self._dll.PH_GetHistogram(self._idx, buf_ct, block)
-        return buf[:, :count]
+        return buf
 
     def GetElapsedMeasTime(self):
         """
@@ -537,28 +534,27 @@ class PH300(model.Detector):
         # TODO: if it's really smaller (eg, 0), copy the data to avoid holding all the mem
         return buf[:nactual.value]
 
-    def _setBinning(self, binning):
+    def _setPixelDuration(self, pxd):
         # TODO: delay until the end of an acquisition
 
+        tresbase, bs = self.GetBaseResolution()
+        b = int(pxd * 1e12 / tresbase)
         # Only accept a power of 2
-        bs = int(math.log(binning[0], 2))
+        bs = int(math.log(b, 2))
         self.SetBinning(bs)
 
-        # Update resolution
+        # Update metadata
         b = 2 ** bs
-        self._curbin = b
-        res = self._shape[0] // b, self._shape[1]
-        self.resolution._set_value(res, force_write=True)
+        pxd = tresbase * b
+        pxd = self.GetResolution() * 1e-12  # ps -> s
+        self._metadata[model.MD_PIXEL_DUR] = pxd
 
-        self._metadata[model.MD_BINNING] = (b, 1)
-        self._metadata[model.MD_PIXEL_DUR] = self.GetResolution() * 1e-9  # ps -> s
-
-        return (b, 1)
+        return pxd
 
     def _setSyncOffset(self, offset):
-        offset_ps = int(offset * 1e9)
+        offset_ps = int(offset * 1e12)
         self.SetSyncOffset(offset_ps)
-        offset = offset_ps * 1e-9  # convert the round-down in ps back to s
+        offset = offset_ps * 1e-12  # convert the round-down in ps back to s
         self._metadata[model.MD_TIME_OFFSET] = offset
         return offset
 
@@ -725,6 +721,7 @@ class PH300(model.Detector):
 class PH300RawDetector(model.Detector):
     """
     Represents a raw detector (eg, APD) accessed via PicoQuant PicoHarp 300.
+    Cannot be directly created. It must be done via PH300 child.
     """
 
     def __init__(self, name, role, channel, parent, **kwargs):
