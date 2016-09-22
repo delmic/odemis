@@ -118,19 +118,20 @@ class SimpleStreamFuture(futures.Future):
         raises CancelledError if the acquisition was cancelled
         """
         estt = self._stream.estimateAcquisitionTime()
-        # start stream
-        self._startt = time.time()
-        self._stream.image.subscribe(self._image_listener)
-        self._stream.is_active.value = True
 
         # call prepare explicitly just to make sure that the preparation is
         # already done once we start waiting for the acquisition
         f = self._stream.prepare()
         f.result()
 
+        # start stream
+        self._startt = time.time()
+        self._stream.image.subscribe(self._image_listener)
+        self._stream.is_active.value = True
+
         # wait until one image acquired or cancelled
         if not self._acq_over.wait(10 * estt + 5):
-            raise IOError("Acquisition of stream %s timeed out after %f s" %
+            raise IOError("Acquisition of stream %s timed out after %f s" %
                           (self._stream.name.value, 10 * estt + 5))
 
         with self._condition:

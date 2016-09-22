@@ -466,8 +466,13 @@ class Stream(object):
                 raise AttributeError("Detector has not VA %s" % (vaname,))
             return hwva
 
-    @isasync
     def prepare(self):
+        if self.is_active.value:
+            logging.warning("Prepare of stream %s called while already active")
+            # TODO: raise an error
+        return self._prepare()
+
+    def _prepare(self):
         """
         Take care of any action required to be taken before the stream becomes
         active.
