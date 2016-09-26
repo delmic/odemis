@@ -85,7 +85,8 @@ class LiveStream(Stream):
         # Make sure the stream is prepared before really activate it
         if active:
             if not self._prepared:
-                self._prep_future = self.prepare()
+                logging.debug("Preparing stream before activating it as it wasn't prepared")
+                self._prep_future = self._prepare()
                 self._prep_future.add_done_callback(self._startAcquisition)
             else:
                 self._startAcquisition()
@@ -449,8 +450,7 @@ class AlignedSEMStream(SEMStream):
         logging.debug("Update metadata for SEM image shift")
         self._detector.updateMetadata({MD_POS_COR: self._shift})
 
-    @isasync
-    def prepare(self):
+    def _prepare(self):
         """
         Perform calibration if needed
         """
@@ -514,6 +514,7 @@ class AlignedSEMStream(SEMStream):
                 self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
                 # logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
+                self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
                 logging.exception("Failure while looking for the ebeam center")
             else:
                 self._setStatus(None)
@@ -529,8 +530,9 @@ class AlignedSEMStream(SEMStream):
             self._shift = shift
             self._compensateShift()
 
-    def _onActive(self, active):
-        super(AlignedSEMStream, self)._onActive(active)
+#     def _onActive(self, active):
+#         # TODO: if preparing (ie, executor has a futures running) => wait
+#         super(AlignedSEMStream, self)._onActive(active)
 
 
 class SpotSEMStream(LiveStream):

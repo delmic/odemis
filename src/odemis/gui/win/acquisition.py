@@ -529,8 +529,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Handle the case acquisition failed "a bit"
         if exp:
-            logging.error("Acquisition failed (after %d streams): %s",
-                          len(data), exp)
+            logging.warning("Acquisition failed (after %d streams): %s",
+                            len(data), exp)
 
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
