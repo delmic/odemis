@@ -72,9 +72,11 @@ SIDE_PORT = 1
 ERRORLENGTH = 64
 
 # A couple of handy constants
-SHUTTER_CLOSE = 0
-SHUTTER_OPEN = 1
-SHUTTER_BNC = 2  # = driven by external signal
+SR303_SHUTTER_CLOSE = 0
+SR303_SHUTTER_OPEN = 1
+SR193_SHUTTER_OPEN = 0  # No comment...
+SR193_SHUTTER_CLOSE = 1
+SR193_SHUTTER_BNC = 2  # = driven by external signal
 
 
 class ShamrockError(Exception):
@@ -229,6 +231,10 @@ SLIT_NAMES = {INPUT_SLIT_SIDE: "slit-in-side",  # Note: previously it was called
 FLIPPER_TO_PORT = {0: DIRECT_PORT,
                    math.radians(90): SIDE_PORT}
 
+MODEL_SR193 = "SR-193i"
+MODEL_SR303 = "SR-303"
+
+
 class Shamrock(model.Actuator):
     """
     Component representing the spectrograph part of the Andor Shamrock
@@ -299,6 +305,16 @@ class Shamrock(model.Actuator):
                     raise HwError("Failed to find Andor Shamrock (%s) as device %s" %
                                   (name, device))
                 self._device = device
+
+            # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
+            fl, ad, ft = self.EepromGetOpticalParams()
+            if 0.19 <= fl <= 0.2:
+                self._model = MODEL_SR193
+            elif 0.3 <= fl <= 0.31:
+                self._model = MODEL_SR303
+            else:
+                self._model = None
+                logging.warning("Untested spectrograph with focus length %d mm", fl * 1000)
 
             if accessory is not None and not self.AccessoryIsPresent():
                 raise ValueError("Accessory set to '%s', but no accessory connected"
@@ -426,7 +442,7 @@ class Shamrock(model.Actuator):
                                      pos, allowed_pos))
 
             if self.ShutterIsPresent():
-                if drives_shutter and not self.IsModePossible(SHUTTER_BNC):
+                if drives_shutter and not self._model == MODEL_SR193:
                     raise ValueError("Device doesn't support BNC mode for shutter")
                 if "flip-out" in axes:
                     val = self.GetFlipperMirror(OUTPUT_FLIPPER)
@@ -444,9 +460,7 @@ class Shamrock(model.Actuator):
 
             # set HW and SW version
             self._swVersion = "%s" % (odemis.__version__)
-            # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
             sn = self.GetSerialNumber()
-            fl, ad, ft = self.EepromGetOpticalParams()
             self._hwVersion = ("%s (s/n: %s, focal length: %d mm)" %
                                ("Andor Shamrock", sn, round(fl * 1000)))
 
@@ -987,11 +1001,28 @@ class Shamrock(model.Actuator):
     # Shutter management
     # Note: as of SDK 2.101.30005, the documentation states that shutter is only
     # supported on SR303, but actually, it also work on SR193, with three modes:
-    # Open, Close, BNC.
+    # Open, Close, BNC... however the values for open/close are inverted.
+
     def SetShutter(self, mode):
+        """
+        Wrapper function with mode following the SR193 convention, and based on
+        the actual device, it will adapt the value
+        mode (SR193_SHUTTER_*)
+        """
+        logging.info("Setting shutter to mode %d", mode)
+        if self._model == MODEL_SR303:
+            mode = {SR193_SHUTTER_CLOSE: SR303_SHUTTER_CLOSE,
+                    SR193_SHUTTER_OPEN: SR303_SHUTTER_OPEN}[mode]
+        elif self._model == MODEL_SR193:
+            pass
+        else:
+            logging.warning("Spectrograph model not known to support shutter")
+
+        self._SetShutter(mode)
+
+    def _SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
         with self._hw_access:
-            logging.info("Setting shutter to mode %d", mode)
             self._dll.ShamrockSetShutter(self._device, mode)
 
     def GetShutter(self):
@@ -1004,6 +1035,7 @@ class Shamrock(model.Actuator):
     def IsModePossible(self, mode):
         possible = c_int()
 
+        # Note: mode = 2 causes a "Invalid argument" error. Reported 2016-09-16.
         with self._hw_access:
             self._dll.ShamrockIsModePossible(self._device, mode, byref(possible))
         return (possible.value != 0)
@@ -1419,10 +1451,12 @@ class Shamrock(model.Actuator):
         Update the state of the shutter depending on the detector used.
         pos (float): (user) position of the output flipper mirror
         """
+        if not self.ShutterIsPresent():
+            return
         if pos in self._drives_shutter:
-            self.SetShutter(SHUTTER_BNC)
+            self.SetShutter(SR193_SHUTTER_BNC)
         else:
-            self.SetShutter(SHUTTER_OPEN)
+            self.SetShutter(SR193_SHUTTER_OPEN)
 
     def stop(self, axes=None):
         """
@@ -1439,7 +1473,7 @@ class Shamrock(model.Actuator):
             self._executor = None
 
         if self.ShutterIsPresent():
-            self.SetShutter(SHUTTER_CLOSE)
+            self.SetShutter(SR193_SHUTTER_CLOSE)
 
         if self._device is not None:
             logging.debug("Shutting down the spectrograph")
@@ -1573,7 +1607,7 @@ class FakeShamrockDLL(object):
         # just for simulating the limitation of the iDus
         self._ccd = ccd
 
-        self._shutter_mode = SHUTTER_CLOSE
+        self._shutter_mode = SR193_SHUTTER_CLOSE
 
         # offsets
         # gratting number -> offset (int)
@@ -1604,13 +1638,13 @@ class FakeShamrockDLL(object):
         nodevices.value = 1
 
     def ShamrockGetSerialNumber(self, device, serial):
-        serial.value = "SR303fake"
+        serial.value = "SR193fake"
 
     def ShamrockEepromGetOpticalParams(self, device, p_fl, p_ad, p_ft):
         fl = _deref(p_fl, c_float)
         ad = _deref(p_ad, c_float)
         ft = _deref(p_ft, c_float)
-        fl.value = 0.301  # m
+        fl.value = 0.194  # m
         ad.value = 2.3 # °
         ft.value = -2.1695098876953125  # °
 

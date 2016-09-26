@@ -898,13 +898,22 @@ class AndorCam2(model.DigitalCamera):
 
     def GetTemperature(self):
         """
-        returns (int) the current temperature of the captor in C
+        returns (int): the current temperature of the captor in °C
         """
         temp = c_int()
         # It returns the status of the temperature via error code (stable,
         # not yet reached...) but we don't care
         status = self.atcore.GetTemperature(byref(temp))
+        logging.debug("Temperature status is: %s", AndorV2DLL.ok_code[status])
         return temp.value
+
+    def GetTECStatus(self):
+        """
+        return (bool): True if the thermal electric cooler has overheated
+        """
+        tripped = c_int()
+        self.atcore.GetTECStatus(byref(tripped))
+        return tripped.value == 1
 
     def IsInternalMechanicalShutter(self):
         """
@@ -922,17 +931,17 @@ class AndorCam2(model.DigitalCamera):
         Note: it automatically uses Shutter() or ShutterEx() when needed. It's
         also fine to call if the camera doesn't support shutter config at all.
         typ (0 or 1): 0 = TTL low when opening, 1 = TTL high when opening
-        mode (0 < int): 0 = auto, 1 = opened, 2 = closed... cf doc for more
+        mode (0 <= int): 0 = auto, 1 = opened, 2 = closed... cf doc for more
         cltime (0 <= float): time in second it takes to close the shutter
         optime (0 <= float): time in second it takes to open the shutter
-        extmode (None or 0 < int): same as mode, but for external shutter.
-          Must be None if the camera doesn't support ShutterEx. None is auto.
+        extmode (None or 0 <= int): same as mode, but for external shutter.
+          Must be None if the camera doesn't support ShutterEx. None is same as mode.
         """
         cltime = int(cltime * 1e3)  # ms
         optime = int(optime * 1e3)  # ms
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
             if extmode is None:
-                extmode = 0
+                extmode = mode
             self.atcore.SetShutterEx(typ, mode, cltime, optime, extmode)
         elif self.hasFeature(AndorCapabilities.FEATURES_SHUTTER):
             self.atcore.SetShutter(typ, mode, cltime, optime)
@@ -1822,6 +1831,7 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
             gc.collect()
+            # TODO: close the shutter if it was opened?
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
 

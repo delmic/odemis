@@ -428,6 +428,7 @@ class Detector(model.Detector):
         metadata.update(self._metadata)
 
         with self._acquisition_init_lock:
+            logging.debug("Simulating an image")
             pxs = scanner.pixelSize.value  # m/px
 
             pxs_pos = scanner.translation.value
@@ -457,7 +458,7 @@ class Detector(model.Detector):
             if bpp < 16:
                 mind, maxd = sim_img.min(), sim_img.max()
                 maxf = 2 ** bpp - 1
-                b = maxf / (maxd - mind)
+                b = maxf / max(1, (maxd - mind))
                 # Multiply by a float and drop to the original dtype
                 numpy.multiply(sim_img - mind, b, out=sim_img, casting="unsafe")
                 if bpp <= 8:
