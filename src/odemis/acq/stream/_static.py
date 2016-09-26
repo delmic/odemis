@@ -567,59 +567,71 @@ class StaticSpectrumStream(StaticStream):
         assert low_px <= high_px
         return low_px, high_px
 
-    def _projectSpec2XY(self, data):
+    def get_spatial_spectrum(self, data=None, raw=False):
         """
         Project a spectrum cube (CYX) to XY space in RGB, by averaging the
           intensity over all the wavelengths (selected by the user)
-        data (DataArray)
-        return (DataArray): 3D DataArray
+        data (DataArray or None): if provided, will use the cube, otherwise,
+          will use the whole data from the stream.
+        raw (bool): if True, will return the "raw" values (ie, same data type as
+          the original data). Otherwise, it will return a RGB image.
+        return (DataArray YXC of uint8 or YX of same data type as data): average
+          intensity over the selected wavelengths
         """
-        irange = self._getDisplayIRange() # will update histogram if not yet present
+        if data is None:
+            data = self._calibrated
+        md = self._find_metadata(data.metadata)
 
         # pick only the data inside the bandwidth
         spec_range = self._get_bandwidth_in_pixel()
         logging.debug("Spectrum range picked: %s px", spec_range)
 
-        if not self.fitToRGB.value:
-            # TODO: use better intermediary type if possible?, cf semcomedi
+        if raw:
             av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
-            av_data = img.ensure2DImage(av_data)
-            rgbim = img.DataArray2RGB(av_data, irange)
+            av_data = img.ensure2DImage(av_data).astype(data.dtype)
+            return model.DataArray(av_data, md)
         else:
-            # Note: For now this method uses three independent bands. To give
-            # a better sense of continuum, and be closer to reality when using
-            # the visible light's band, we should take a weighted average of the
-            # whole spectrum for each band. But in practice, that would be less
-            # useful.
+            irange = self._getDisplayIRange() # will update histogram if not yet present
 
-            # divide the range into 3 sub-ranges (BRG) of almost the same length
-            len_rng = spec_range[1] - spec_range[0] + 1
-            brange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
-            grange = [brange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
-            rrange = [grange[1] + 1, spec_range[1]]
-            # ensure each range contains at least one pixel
-            brange[1] = max(brange)
-            grange[1] = max(grange)
-            rrange[1] = max(rrange)
+            if not self.fitToRGB.value:
+                # TODO: use better intermediary type if possible?, cf semcomedi
+                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                rgbim = img.DataArray2RGB(av_data, irange)
+            else:
+                # Note: For now this method uses three independent bands. To give
+                # a better sense of continuum, and be closer to reality when using
+                # the visible light's band, we should take a weighted average of the
+                # whole spectrum for each band. But in practice, that would be less
+                # useful.
 
-            # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
-            av_data = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
-            av_data = img.ensure2DImage(av_data)
-            rgbim = img.DataArray2RGB(av_data, irange)
-            av_data = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
-            av_data = img.ensure2DImage(av_data)
-            gim = img.DataArray2RGB(av_data, irange)
-            rgbim[:, :, 1] = gim[:, :, 0]
-            av_data = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
-            av_data = img.ensure2DImage(av_data)
-            bim = img.DataArray2RGB(av_data, irange)
-            rgbim[:, :, 2] = bim[:, :, 0]
+                # divide the range into 3 sub-ranges (BRG) of almost the same length
+                len_rng = spec_range[1] - spec_range[0] + 1
+                brange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
+                grange = [brange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
+                rrange = [grange[1] + 1, spec_range[1]]
+                # ensure each range contains at least one pixel
+                brange[1] = max(brange)
+                grange[1] = max(grange)
+                rrange[1] = max(rrange)
 
-        rgbim.flags.writeable = False
-        md = self._find_metadata(data.metadata)
-        md[model.MD_DIMS] = "YXC" # RGB format
+                # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
+                av_data = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                rgbim = img.DataArray2RGB(av_data, irange)
+                av_data = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                gim = img.DataArray2RGB(av_data, irange)
+                rgbim[:, :, 1] = gim[:, :, 0]
+                av_data = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                bim = img.DataArray2RGB(av_data, irange)
+                rgbim[:, :, 2] = bim[:, :, 0]
 
-        return model.DataArray(rgbim, md)
+            rgbim.flags.writeable = False
+            md[model.MD_DIMS] = "YXC" # RGB format
+
+            return model.DataArray(rgbim, md)
 
     def get_spectrum_range(self):
         """ Return the wavelength for each pixel of a (complete) spectrum
@@ -680,15 +692,17 @@ class StaticSpectrumStream(StaticStream):
         mean = datasum / n
         return model.DataArray(mean.astype(spec2d.dtype))
 
-    def get_line_spectrum(self):
+    def get_line_spectrum(self, raw=False):
         """ Return the 1D spectrum representing the (average) spectrum
 
-        See get_spectrum_range() to know the wavelength values for each index of the spectrum
-        dimension.
-
+        Call get_spectrum_range() to know the wavelength values for each index
+          of the spectrum dimension.
+        raw (bool): if True, will return the "raw" values (ie, same data type as
+          the original data). Otherwise, it will return a RGB image.
         return (None or DataArray with 3 dimensions): first axis (Y) is spatial
-          (along the line), second axis (X) is spectrum, third axis (RGB) is
-          colour (always greyscale).
+          (along the line), second axis (X) is spectrum. If not raw, third axis
+          is colour (RGB, but actually always greyscale). Note: when not raw,
+          the beginning of the line (Y) is at the "bottom".
           MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
           If the selected_line is not valid, it will return None
         """
@@ -744,16 +758,25 @@ class StaticSpectrumStream(StaticStream):
             spec1d = spec1d_w.mean(axis=0).astype(spec2d.dtype)
         assert spec1d.shape == (n, spec2d.shape[0])
 
-        # Scale and convert to RGB image
-        hist, edges = img.histogram(spec1d)
-        irange = img.findOptimalRange(hist, edges, 1 / 256)
-        rgb8 = img.DataArray2RGB(spec1d, irange)
-
         # Use metadata to indicate spatial distance between pixel
         pxs_data = self._calibrated.metadata[MD_PIXEL_SIZE]
         pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
         md = {MD_PIXEL_SIZE: (None, pxs)}  # for the spectrum, use get_spectrum_range()
-        return model.DataArray(rgb8, md)
+
+        if raw:
+            return model.DataArray(spec1d[::-1, :], md)
+        else:
+            # Scale and convert to RGB image
+            if self.auto_bc.value:
+                hist, edges = img.histogram(spec1d)
+                irange = img.findOptimalRange(hist, edges,
+                                              self.auto_bc_outliers.value / 100)
+            else:
+                # use the values requested by the user
+                irange = sorted(self.intensityRange.value)
+            rgb8 = img.DataArray2RGB(spec1d, irange)
+
+            return model.DataArray(rgb8, md)
 
     # TODO: have an "area=None" argument which allows to specify the 2D region
     # within which the spectrum should be computed
@@ -783,7 +806,7 @@ class StaticSpectrumStream(StaticStream):
             data = self._calibrated
             if data is None: # can happen during __init__
                 return
-            self.image.value = self._projectSpec2XY(data)
+            self.image.value = self.get_spatial_spectrum(data)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
@@ -867,6 +890,24 @@ class StaticSpectrumStream(StaticStream):
         """
         # 0D and/or 1D spectrum will need updates
         self._force_selected_spectrum_update()
+
+    def _onAutoBC(self, enabled):
+        super(StaticSpectrumStream, self)._onAutoBC(enabled)
+        # if changing to auto, need to recompute line spectrum
+        if enabled:
+            self._force_selected_spectrum_update()
+
+    def _onOutliers(self, outliers):
+        super(StaticSpectrumStream, self)._onOutliers(outliers)
+        # if changing outliers while in auto, need to recompute line spectrum
+        if self.auto_bc.value:
+            self._force_selected_spectrum_update()
+
+    def _onIntensityRange(self, irange):
+        super(StaticSpectrumStream, self)._onIntensityRange(irange)
+        # If auto_bc is active, it will not affect the line spectrum directly
+        if not self.auto_bc.value:
+            self._force_selected_spectrum_update()
 
     def onFitToRGB(self, value):
         """

@@ -72,7 +72,7 @@ def export(filename, data):
             logging.debug("Exporting spectrum-line data to CSV")
 
             # attach wavelength as first column
-            wavelength_lin = numpy.linspace(spectrum_range[0], spectrum_range[-1], data.shape[0])
+            wavelength_lin = numpy.array(spectrum_range)
             qz_masked = numpy.append(wavelength_lin.reshape(data.shape[0], 1), data, axis=1)
             # attach distance as first row
             line_length = data.shape[1] * data.metadata[model.MD_PIXEL_SIZE][1]
