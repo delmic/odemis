@@ -239,14 +239,39 @@ class TestARExport(unittest.TestCase):
 class TestSpectrumExport(unittest.TestCase):
 
     def setUp(self):
-        self.spectrum = model.DataArray(numpy.linspace(0, 750, 200),
-                                        metadata={model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM})
-        self.spectrum_range = numpy.linspace(4.7e-07, 1.02e-06, 200)
-        self.unit = "m"
-        self.app = wx.App()  # needed for the gui font name
+        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] *= 3
+        data[:, 0, 0, 1, 3] = range(251)
+        data[2, 0, 0, :, :] = range(300)
+        data[200, 0, 0, 2, :] = range(300)
+        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "Spectrum",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_PIXEL_SIZE: (2e-6, 2e-6),  # m/px
+             model.MD_POS: (-0.001203511795256, -0.000295338300158),  # m
+             model.MD_EXP_TIME: 0.2,  # s
+             model.MD_LENS_MAG: 60,  # ratio
+             model.MD_WL_LIST: wld,
+            }
+        self.spec_data = model.DataArray(data, md)
+        self.spec_stream = stream.StaticSpectrumStream("test spec", self.spec_data)
+        self.spec_stream.selected_pixel.value = (3, 1)
+        # self.app = wx.App()  # needed for the gui font name
 
     def test_spectrum_ready(self):
-        exported_data = img.spectrum_to_export_data(self.spectrum, False, self.unit, self.spectrum_range)
+        self.spec_stream.selectionWidth.value = 1
+        exported_data = img.spectrum_to_export_data(self.spec_stream, False)
+        self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
+        self.assertEqual(exported_data.shape[:2],
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
+
+        self.spec_stream.selectionWidth.value = 4
+        exported_data = img.spectrum_to_export_data(self.spec_stream, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
                          (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
@@ -256,8 +281,19 @@ class TestSpectrumExport(unittest.TestCase):
 
         filename = "test-spec-spot.csv"
 
-        exported_data = img.spectrum_to_export_data(self.spectrum, True, self.unit, self.spectrum_range)
-        self.assertEqual(exported_data.shape[0], len(self.spectrum_range))  # exported image includes only raw data
+        self.spec_stream.selectionWidth.value = 1
+        exported_data = img.spectrum_to_export_data(self.spec_stream, True)
+        self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])  # exported image includes only raw data
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exported_data)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 10)
+
+        self.spec_stream.selectionWidth.value = 3
+        exported_data = img.spectrum_to_export_data(self.spec_stream, True)
+        self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])  # exported image includes only raw data
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
@@ -275,15 +311,39 @@ class TestSpectrumExport(unittest.TestCase):
 class TestSpectrumLineExport(unittest.TestCase):
 
     def setUp(self):
-        self.spectrum = model.DataArray(numpy.zeros(shape=(5, 1340, 3)),
-                                        metadata={model.MD_PIXEL_SIZE: (None, 4.2e-06),
-                                                  model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM})
-        self.spectrum_range = numpy.linspace(4.7e-07, 1.02e-06, 200)
-        self.unit = "m"
+        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] *= 3
+        data[:, 0, 0, 1, 3] = range(251)
+        data[2, :, :, :, :] = range(300)
+        data[200, 0, 0, 2] = range(300)
+        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "Spectrum",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_PIXEL_SIZE: (2e-6, 2e-6),  # m/px
+             model.MD_POS: (-0.001203511795256, -0.000295338300158),  # m
+             model.MD_EXP_TIME: 0.2,  # s
+             model.MD_LENS_MAG: 60,  # ratio
+             model.MD_WL_LIST: wld,
+            }
+        self.spec_data = model.DataArray(data, md)
+        self.spec_stream = stream.StaticSpectrumStream("test spec", self.spec_data)
+        self.spec_stream.selected_line.value = ((3, 1), (235, 65))
         self.app = wx.App()  # needed for the gui font name
 
     def test_line_ready(self):
-        exported_data = img.line_to_export_data(self.spectrum, False, self.unit, self.spectrum_range)
+        self.spec_stream.selectionWidth.value = 1
+        exported_data = img.line_to_export_data(self.spec_stream, False)
+        self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
+        self.assertEqual(exported_data.shape[:2],
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
+
+        self.spec_stream.selectionWidth.value = 3
+        exported_data = img.line_to_export_data(self.spec_stream, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
                          (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
@@ -292,9 +352,21 @@ class TestSpectrumLineExport(unittest.TestCase):
     def test_line_raw(self):
         filename = "test-spec-line.csv"
 
-        exported_data = img.line_to_export_data(self.spectrum, True, self.unit, self.spectrum_range)
-        self.assertEqual(exported_data.shape[0], self.spectrum.shape[1])
-        self.assertEqual(exported_data.shape[1], self.spectrum.shape[0])
+        self.spec_stream.selectionWidth.value = 1
+        exported_data = img.line_to_export_data(self.spec_stream, True)
+        self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])
+        self.assertGreater(exported_data.shape[1], 64)  # at least 65-1 px
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exported_data)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 100)
+
+        self.spec_stream.selectionWidth.value = 4
+        exported_data = img.line_to_export_data(self.spec_stream, True)
+        self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])
+        self.assertGreater(exported_data.shape[1], 64)  # at least 65-1 px
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
@@ -344,6 +416,7 @@ class TestSpatialExport(unittest.TestCase):
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
         data[:, 0, 0, :, 3] = range(200)
         data[:, 0, 0, :, 3] *= 3
+        data[:, 0, 0, 1, 3] = range(251)
         data[2, :, :, :, :] = range(300)
         data[200, 0, 0, 2] = range(300)
         wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9

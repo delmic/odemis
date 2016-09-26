@@ -756,6 +756,7 @@ def ar_to_export_data(streams, raw=False):
             except KeyError:
                 logging.info("Skipping DataArray without known position")
         raw_ar = calculate_raw_ar(sempos[pos], s.background.value)
+        raw_ar.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
         return raw_ar
     else:
         sim = s.image.value  # TODO: check that it's up to date (and not None)
@@ -1127,23 +1128,24 @@ def bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, 
     ctx.fill()
 
 
-def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
+def spectrum_to_export_data(stream, raw):
     """
     Creates either raw or WYSIWYG representation for the spectrum data plot
 
-    spectrum (list of float): spectrum values
+    stream (SpectrumStream): spectrum stream
     raw (boolean): if True returns raw representation
-    unit (string): wavelength unit
-    spectrum_range (list of float): spectrum range
 
     returns (model.DataArray)
     """
-    # TODO: CSV (raw) export needs MD_WL_LIST in metadata (to get spectrum_range)
-    # => just keep in metadata all the time, and do not pass by argument?
+    spectrum = stream.get_pixel_spectrum()
+    if spectrum is None:
+        raise LookupError("No pixel selected to pick a spectrum")
+    spectrum_range, unit = stream.get_spectrum_range()
 
     if raw:
         if unit == "m":
             spectrum.metadata[model.MD_WL_LIST] = spectrum_range
+        spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return spectrum
     else:
         # Draw spectrum bar plot
@@ -1165,6 +1167,8 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         data_width = max_x - min_x
         range_y = (min_y, max_y)
         data_height = max_y - min_y
+        if data_height == 0:
+            data_height = max_y
         bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
@@ -1235,23 +1239,26 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         return spec_plot
 
 
-def line_to_export_data(spectrum, raw, unit, spectrum_range):
+def line_to_export_data(stream, raw):
     """
     Creates either raw or WYSIWYG representation for the spectrum line data
 
-    spectrum (model.DataArray): spectrum line data
+    stream (SpectrumStream)
     raw (boolean): if True returns raw representation
-    unit (string): wavelength unit
-    spectrum_range (list of float): spectrum range
 
     returns (model.DataArray)
     """
+    spectrum = stream.get_line_spectrum(raw)
+    if spectrum is None:
+        raise LookupError("No line selected to pick a spectrum")
+    spectrum_range, unit = stream.get_spectrum_range()
 
     if raw:
-        data = spectrum[:, :, 0]
+        data = spectrum.T  # switch axes
         if unit == "m":
             data.metadata[model.MD_WL_LIST] = spectrum_range
-        return numpy.fliplr(data.T)
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        return data
     else:
         images = set_images([(spectrum, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None)])
         # TODO: just use a standard tuple, instead of wx.Size
@@ -1615,10 +1622,7 @@ def get_ordered_images(streams, raw=False):
             if data_raw.ndim > 2:
                 # It's not (just) spatial => need to project it
                 if isinstance(s, acqstream.SpectrumStream):
-                    # TODO: The stream should give us the projection by itself
-                    spec_range = s._get_bandwidth_in_pixel()
-                    av_data = numpy.mean(data_raw[spec_range[0]:spec_range[1] + 1], axis=0)
-                    data_raw = img.ensure2DImage(av_data).astype(data_raw.dtype)
+                    data_raw = s.get_spatial_spectrum(raw=raw)
                 else:
                     logging.warning("Doesn't know how to export data of %s spatial raw", s.name.value)
                     continue

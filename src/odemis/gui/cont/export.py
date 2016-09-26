@@ -215,21 +215,11 @@ class ExportController(object):
         vp = self.get_viewport_by_view(fview)
         streams = fview.getStreams()
         if export_type == 'AR':
-            # TODO: set MD_ACQ_TYPE in stream code
-            for i, _ in enumerate(streams):
-                for r in streams[i].raw:
-                    r.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
             exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':
-            spectrum = vp.stream.get_pixel_spectrum()
-            spectrum_range, unit = vp.stream.get_spectrum_range()
-            spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
-            exported_data = spectrum_to_export_data(spectrum, raw, unit, spectrum_range)
+            exported_data = spectrum_to_export_data(vp.stream, raw)
         elif export_type == 'spectrum-line':
-            spectrum = vp.stream.get_line_spectrum()
-            spectrum_range, unit = vp.stream.get_spectrum_range()
-            spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
-            exported_data = line_to_export_data(spectrum, raw, unit, spectrum_range)
+            exported_data = line_to_export_data(vp.stream, raw)
         else:
             export_type = 'spatial'
             view_px = tuple(vp.canvas.ClientSize)
@@ -252,7 +242,7 @@ class ExportController(object):
         for vp in self._viewports:
             if vp.microscope_view == view:
                 return vp
-        raise IndexError("No ViewPort found for view %s" % view)
+        raise LookupError("No ViewPort found for view %s" % view)
 
     def ShowExportFileDialog(self, filename, default_exporter):
         """
