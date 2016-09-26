@@ -53,7 +53,6 @@ from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
 import pkg_resources
-import time
 import weakref
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
@@ -3183,6 +3182,8 @@ class Sparc2AlignTab(Tab):
                 if s and d.name == s.detector.name:
                     # The stream takes care of configuring its detector, so no need
                     continue
+                # TODO: is that good settings? Maybe bigger exposure times help
+                # binning 2,1 also helps sometimes
                 if model.hasVA(d, "binning"):
                     d.binning.value = (1, 1)
                 if model.hasVA(d, "exposureTime"):
