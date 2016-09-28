@@ -34,11 +34,9 @@ from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
-                                    EllipsisAnimator
+from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
 from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
-from odemis import util
 import threading
 import time
 import wx
@@ -654,10 +652,6 @@ class SecomStateController(MicroscopeStateController):
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
 
-        # Empty the stage history, as the interesting locations on the previous
-        # sample have probably nothing in common with this new sample
-        self._tab_data.stage_history.value = []
-
     def _on_vacuum(self, future):
         pass
 
@@ -886,10 +880,6 @@ class DelphiStateController(SecomStateController):
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
 
-        # Empty the stage history, as the interesting locations on the previous
-        # sample have probably nothing in common with this new sample
-        self._tab_data.stage_history.value = []
-
         self._chamber_pump_future.add_done_callback(self._on_vacuum)
 
     @call_in_wx_main
@@ -926,6 +916,7 @@ class DelphiStateController(SecomStateController):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
         # position), so that referencing will be faster on next load.
         # We just need to be careful that the axis is referenced
+        # TODO: just move "stage" instead, to make the position update properly
         referenced = self._main_data.aligner.referenced.value
         pos = {"x": 0, "y": 0}
         for a in pos.keys():
@@ -1205,7 +1196,6 @@ class DelphiStateController(SecomStateController):
     # * 5 s for referencing the optical stage
     # * 1 s for focusing the overview
     # * 2 s for overview acquisition
-    # * 10 sec for alignment and overview acquisition
     # * 65 sec from NavCam to SEM
     DELPHI_LOADING_TIMES = (5, 2, 1, 5, 1, 2, 65)  # s
 

@@ -719,7 +719,7 @@ class DichotomyOverlay(base.ViewOverlay):
 
     def on_sequence_change(self, seq):
 
-        if not all([0 <= v <= 3 for v in seq]):
+        if not all(0 <= v <= 3 for v in seq):
             raise ValueError("Illegal quadrant values in sequence!")
 
         rect = 0, 0, self.view_width, self.view_height
@@ -1362,7 +1362,7 @@ class HistoryOverlay(base.ViewOverlay):
     # TODO: might need rate limiter (but normally stage position is changed rarely)
     # TODO: Make the update of the canvas image the responsibility of the viewport
     def _on_history_update(self, _):
-        self.cnvs.update_drawing()
+        wx.CallAfter(self.cnvs.request_drawing_update)
 
     def draw(self, ctx, scale=None, shift=None):
         """

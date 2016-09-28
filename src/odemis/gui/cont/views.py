@@ -28,6 +28,7 @@ from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
 from odemis.gui.evt import EVT_KNOB_PRESS
+from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
 from odemis.model import MD_PIXEL_SIZE
 import wx
@@ -295,28 +296,34 @@ class OverviewController(object):
 
         if tab_data.main.overview_stage:
             tab_data.main.overview_stage.position.subscribe(self.on_stage_pos_change, init=True)
+            tab_data.main.chamberState.subscribe(self._on_chamber_state)
 
-    @call_in_wx_main
     def on_stage_pos_change(self, p_pos):
         """ Store the new position in the overview history when the stage moves """
 
         p_size = self.calc_stream_size()
         p_center = (p_pos['x'], p_pos['y'])
+        stage_history = self._data_model.stage_history.value
 
-        # If the 'new' position is identical to the last one in the history, ignore
-        # TODO: do not care about the p_size, and override,
-        if (
-                self._data_model.stage_history.value and
-                (p_center, p_size) == self._data_model.stage_history.value[-1]
-        ):
-            return
+        # If the new position is at the same place as the latest one, replace it
+        if stage_history and p_center == stage_history[-1][0]:
+            stage_history.pop()
 
         # If max length reached, remove the oldest
-        while len(self._data_model.stage_history.value) > 2000:
+        while len(stage_history) > 2000:
             logging.info("Discarding old stage position")
-            self._data_model.stage_history.value.pop(0)
+            stage_history.pop(0)
 
-        self._data_model.stage_history.value.append((p_center, p_size))
+        stage_history.append((p_center, p_size))
+        self._data_model.stage_history.value = stage_history
+
+    def _on_chamber_state(self, state):
+        # We don't wait for CHAMBER_VACUUM, as the optical stream can already
+        # be used as soon as the sample is inserted
+        if state == CHAMBER_PUMPING:
+            # Empty the stage history, as the interesting locations on the previous
+            # sample have probably nothing in common with this new sample
+            self._data_model.stage_history.value = self._data_model.stage_history.value[-1:]
 
     def calc_stream_size(self):
         """ Calculate the physical size of the current view """
