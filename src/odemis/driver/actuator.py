@@ -732,6 +732,16 @@ class AntiBacklashActuator(model.Actuator):
         for an, ax in self._child.axes.items():
             axes_def[an] = copy.deepcopy(ax)
             axes_def[an].canUpdate = True
+            if an in backlash and hasattr(ax, "range"):
+                # Restrict the range to have some margin for the anti-backlash move
+                rng = ax.range
+                if rng[1] - rng[0] < abs(backlash[an]):
+                    raise ValueError("Backlash of %g m is bigger than range %s",
+                                     backlash[an], rng)
+                if backlash[an] > 0:
+                    axes_def[an].range = (rng[0] + backlash[an], rng[1])
+                else:
+                    axes_def[an].range = (rng[0], rng[1] + backlash[an])
 
         # Whether currently a backlash shift is applied on an axis
         # If True, moving the axis by the backlash value would restore its expected position
