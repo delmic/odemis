@@ -294,8 +294,8 @@ class OverviewController(object):
         self._data_model = tab_data
         self.overview_canvas = overview_canvas
 
-        if tab_data.main.overview_stage:
-            tab_data.main.overview_stage.position.subscribe(self.on_stage_pos_change, init=True)
+        if tab_data.main.stage:
+            tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
             tab_data.main.chamberState.subscribe(self._on_chamber_state)
 
     def on_stage_pos_change(self, p_pos):
