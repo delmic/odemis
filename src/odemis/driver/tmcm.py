@@ -115,7 +115,7 @@ class TMCLController(model.Actuator):
     Represents one Trinamic TMCL-compatible controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, axes, ustepsize, address=None,
+    def __init__(self, name, role, port, axes, ustepsize, rng=None, address=None,
                  refproc=None, refswitch=None, temp=False,
                  minpower=10.8, **kwargs):
         """
@@ -128,6 +128,10 @@ class TMCLController(model.Actuator):
           If an axis is not connected, put a "".
         ustepsize (list of float): size of a microstep in m (the smaller, the
           bigger will be a move for a given distance in m)
+        rng (list of tuples of 2 floats or None): min/max position allowed for
+          each axis. 0 must be part of the range.
+          Note: if the axis is not referenced, the range is doubled. If the axis
+          is inverted, the values provided will be inverted too.
         refswitch (dict str -> int): if an axis needs to have its reference
           switch turn on during referencing, the digital output port is
           indicated by the number.
@@ -153,6 +157,10 @@ class TMCLController(model.Actuator):
         # TODO: allow to specify the unit of the axis
 
         self._name_to_axis = {}  # str -> int: name -> axis number
+        if rng is None:
+            rng = []
+        rng += [None] * (len(axes) - len(rng)) # ensure it's long enough
+
         for i, n in enumerate(axes):
             if not n:  # skip this non-connected axis
                 continue
@@ -233,12 +241,18 @@ class TMCLController(model.Actuator):
             sz = ustepsize[i]
             if modl == 3110:
                 # Mov abs supports ±2³¹ but the actual position is only within ±2²³
-                rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
+                # TODO: hardware seems to actually allow further
+                phy_rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
             else:
-                rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
-            # Probably not that much, but there is no info unless the axis has
-            # limit switches and we run a referencing
-            axes_def[n] = model.Axis(range=rng, unit="m")
+                phy_rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
+
+            sw_rng = rng[i]
+            if sw_rng is not None:
+                if not sw_rng[0] <= 0 <= sw_rng[1]:
+                    raise ValueError("Range of axis %d doesn't include 0: %s" % (i, sw_rng))
+                phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
+
+            axes_def[n] = model.Axis(range=phy_rng, unit="m")
             self._init_axis(i)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -1349,16 +1363,76 @@ class TMCLController(model.Actuator):
             if axes is None or an in axes:
                 self.MotorStop(aid)
 
+    def _checkMoveRelFull(self, shift):
+        """
+        Check that the argument passed to moveRel() is within range
+        shift (dict string -> float): the shift for a moveRel(), in user coordinates
+        raise ValueError: if the argument is incorrect
+        """
+        cur_pos = self.position.value
+        refd = self.referenced.value
+        for axis, val in shift.items():
+            axis_def = self.axes[axis]
+            if not hasattr(axis_def, "range"):
+                continue
+
+            tgt_pos = cur_pos[axis] + val
+            rng = axis_def.range
+            if not refd.get(axis, False):
+                # Double the range as we don't know where the axis started
+                rng_mid = (rng[0] + rng[1]) / 2
+                rng_width = rng[1] - rng[0]
+                rng = (rng_mid - rng_width, rng_mid + rng_width)
+
+            if not rng[0] <= tgt_pos <= rng[1]:
+                # TODO: if it's already outside, then allow to go back
+                rng = axis_def.range
+                raise ValueError("Position %s for axis %s outside of range %f->%f"
+                                 % (val, axis, rng[0], rng[1]))
+
+    def _checkMoveAbs(self, pos):
+        """
+        Check that the argument passed to moveAbs() is (potentially) correct
+        Same as super(), but allows to go 2x the range if the axis is not referenced
+        pos (dict string -> float): the new position for a moveAbs()
+        raise ValueError: if the argument is incorrect
+        """
+        refd = self.referenced.value
+        for axis, val in pos.items():
+            if axis in self.axes:
+                axis_def = self.axes[axis]
+                if hasattr(axis_def, "choices") and val not in axis_def.choices:
+                    raise ValueError("Unsupported position %s for axis %s"
+                                     % (val, axis))
+                elif hasattr(axis_def, "range"):
+                    rng = axis_def.range
+                    # TODO: do we really need to allow this? Absolute move without
+                    # referencing is not recommended anyway.
+                    if not refd.get(axis, False):
+                        # Double the range as we don't know where the axis started
+                        rng_mid = (rng[0] + rng[1]) / 2
+                        rng_width = rng[1] - rng[0]
+                        rng = (rng_mid - rng_width, rng_mid + rng_width)
+
+                    if not rng[0] <= val <= rng[1]:
+                        raise ValueError("Position %s for axis %s outside of range %f->%f"
+                                         % (val, axis, rng[0], rng[1]))
+            else:
+                raise ValueError("Unknown axis %s" % (axis,))
+
     def _doMoveRel(self, future, pos):
         """
         Blocking and cancellable relative move
         future (Future): the future it handles
         pos (dict str -> float): axis name -> relative target position
         raise:
-            PIGCSError: if the controller reported an error
+            ValueError: if the target position is
+            TMCLError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
+            self._checkMoveRelFull(self._applyInversion(pos))
+
             end = 0 # expected end
             moving_axes = set()
             for an, v in pos.items():
@@ -1380,7 +1454,7 @@ class TMCLController(model.Actuator):
         future (Future): the future it handles
         pos (dict str -> float): axis name -> absolute target position
         raise:
-            PIGCSError: if the controller reported an error
+            TMCLError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:

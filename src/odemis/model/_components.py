@@ -888,6 +888,7 @@ class Actuator(HwComponent):
                                      % (val, axis))
                 elif (hasattr(axis_def, "range") and not
                       axis_def.range[0] <= val <= axis_def.range[1]):
+                    # TODO: if not referenced, double the range
                     rng = axis_def.range
                     raise ValueError("Position %s for axis %s outside of range %f->%f"
                                      % (val, axis, rng[0], rng[1]))
