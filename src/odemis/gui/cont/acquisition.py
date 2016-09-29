@@ -349,7 +349,8 @@ class SecomAcquiController(object):
         # Disable the "acquire image" button while preparation is in progress
         self._main_data_model.is_preparing.subscribe(self.on_preparation)
 
-    def on_stream_chamber(self, unused):
+    @call_in_wx_main
+    def on_stream_chamber(self, _):
         """
         Called when chamber state or streams change.
         Used to update the acquire button state
