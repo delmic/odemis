@@ -13,7 +13,15 @@ if [ -z "$MODEL" -a -n "MODEL_SELECTOR" ]; then
     fi
 fi
 
-pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY GTK_MODULES=$GTK_MODULES DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS gedit "$MODEL"
+# TODO use gedit version (3.10 != 3.18) instead of Ubuntu?
+uver="$(lsb_release -r -s)" # Ubuntu version
+if [ "$uver" = "12.04" ]; then
+	# On 12.04, copying DBUS_SESSION_BUS_ADDRESS prevents gedit to show up
+	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY gedit "$MODEL"
+else
+	# On 16.04, without DBUS_SESSION_BUS_ADDRESS, there is no menubar
+	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY GTK_MODULES=$GTK_MODULES DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS gedit "$MODEL"
+fi
 
 # TODO: validate the new microscope file even if backend is running
 odemisd --validate "$MODEL"
