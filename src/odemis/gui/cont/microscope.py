@@ -29,6 +29,7 @@ from odemis import model
 from odemis.acq import _futures
 from odemis.acq import align, stream
 from odemis.acq._futures import executeTask
+from odemis.acq.align import delphi
 from odemis.gui import img
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
@@ -36,7 +37,6 @@ from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
     EllipsisAnimator
-from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
 import threading
 import time
@@ -654,10 +654,16 @@ class DelphiStateController(SecomStateController):
 
     cls_streams_involved = stream.Stream
 
-    def __init__(self, *args, **kwargs):
-        super(DelphiStateController, self).__init__(*args, **kwargs)
-        self._main_frame = self._tab_panel.Parent
+    def __init__(self, tab_data, tab_panel, *args, **kwargs):
         self._calibconf = get_calib_conf()
+        self._main_frame = tab_panel.Parent
+
+        # Known focus values, from the calibration config
+        self._hole_focus = None
+        self.good_focus = None
+        self.good_optical_focus = None
+
+        super(DelphiStateController, self).__init__(tab_data, tab_panel, *args, **kwargs)
 
         # Display the panel with the loading progress indicators
         self._tab_panel.pnl_hw_info.Show()
@@ -681,7 +687,6 @@ class DelphiStateController(SecomStateController):
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
-        self.good_focus = None
         if ch_pos.value["pressure"] == self._vacuum_pressure:
             # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done. Otherwise request
@@ -966,8 +971,9 @@ class DelphiStateController(SecomStateController):
         # locate the top and bottom holes of the sample holder, using
         # the SEM. So once the sample is fully loaded, new and more
         # precise calibration will be set.
-        htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib
+        htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib
         self._hole_focus = hfoc
+        self.good_optical_focus = ofoc
 
         # update metadata to stage
         self._main_data.stage.updateMetadata({
@@ -1193,7 +1199,7 @@ class DelphiStateController(SecomStateController):
     def _run_full_calibration(self, shid):
         # TODO: once the hole focus is not fixed, save it in the config too
         # Perform calibration and update the progress dialog
-        calib_dialog = CalibrationProgressDialog(
+        calib_dialog = windelphi.CalibrationProgressDialog(
             self._main_frame,
             self._main_data,
             self._calibconf,
@@ -1286,6 +1292,10 @@ class DelphiStateController(SecomStateController):
             future._delphi_load_state = f
             f.result()
 
+            f = self._main_data.focus.reference({"z"})
+            future._delphi_load_state = f
+            f.result()
+
             if future._delphi_load_state == CANCELLED:
                 return
             # Load calibration values (and move the slave stage to wherever
@@ -1330,12 +1340,26 @@ class DelphiStateController(SecomStateController):
             future._delphi_load_state = pf
             pf.add_update_callback(self._update_load_time)
             pf.result()
+
             # We know that a good initial focus value is a bit lower than the
             # one found while focusing on the holes
+            ff = None
             if self._hole_focus is not None:
-                self.good_focus = self._hole_focus - align.GOOD_FOCUS_OFFSET
+                self.good_focus = self._hole_focus - delphi.GOOD_FOCUS_OFFSET
                 ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
+
+            of = None
+            if self.good_optical_focus is not None:
+                if self._main_data.focus.referenced.value.get("z", False):
+                    of = self._main_data.focus.moveAbs({"z": self.good_optical_focus})
+                else:
+                    logging.warning("Focus axis is not referenced, so cannot be set to a known focus position")
+
+            if ff:
                 ff.result()
+            if of:
+                of.result()
+
             ccd_md = self._main_data.ccd.getMetadata()
             good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
             self._main_data.ebeam.horizontalFoV.value = good_hfw

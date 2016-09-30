@@ -31,7 +31,7 @@ from numpy import array, ones, linalg
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.acq.align import transform, spot, GOOD_FOCUS_OFFSET
+from odemis.acq.align import transform, spot
 from odemis.acq.drift import CalculateDrift
 import os
 from scipy.ndimage import zoom
@@ -61,9 +61,18 @@ EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
 SHIFT_DETECTION = {"x":0, "y":11.7e-03}  # Use holder hole images to measure the shift
 SEM_KNOWN_FOCUS = 0.007386  # Fallback sem focus position for the first insertion
-# TODO: This has to be precisely measured and integrated to focus component
-# instead of hardcoded here
+# Offset from hole focus value in Delphi calibration.
+# Since the e-beam focus value found in the calibration file was determined by
+# focusing on the hole surface of the sample carrier, we expect the good focus
+# value when focusing on the glass to have an offset. This offset was measured
+# after experimenting with several carriers.
+GOOD_FOCUS_OFFSET = 200e-06
+
+# TODO: Once all the Delphi YAML files are updated with rng information,
+# remove all rng_focus=FOCUS_RANGE references
 FOCUS_RANGE = (-0.25e-03, 0.35e-03)  # Roughly the optical focus stage range
+OPTICAL_KNOWN_FOCUS = 0.20e-3  # Fallback optical focus value
+
 HFW_SHIFT_KNOWN = -0.97, -0.045  # Fallback values in case calculation goes wrong
 
 
@@ -114,6 +123,7 @@ def _DoDelphiCalibration(future, main_data):
     returns (tuple of floats): Hole top
             (tuple of floats): Hole bottom
             (float): Focus used for hole detection
+            (float): Focus used for optical image
             (tuple of floats): Stage translation
             (tuple of floats): Stage scale
             (float): Stage rotation
@@ -279,6 +289,10 @@ def _DoDelphiCalibration(future, main_data):
         # We want to be as close as possible to the center when we are zoomed in
         main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
 
+        # Start at a potentially good optical focus (just as starting point for
+        # the first auto-focus run)
+        main_data.focus.moveAbsSync({"z": OPTICAL_KNOWN_FOCUS})
+
         logger.debug("Initial calibration to align and calculate the offset...")
         try:
             future.align_offsetf = AlignAndOffset(main_data.ccd, main_data.bsd,
@@ -287,8 +301,9 @@ def _DoDelphiCalibration(future, main_data):
             offset = future.align_offsetf.result()
         except Exception:
             raise IOError("Failed to align and calculate offset.")
-        center_focus = main_data.focus.position.value.get('z')
-        logger.debug("Measured optical focus on spot: %f", center_focus)
+        ofoc = main_data.focus.position.value.get('z')
+        calib_values["optical_focus"] = ofoc
+        logger.debug("Measured optical focus on spot: %f", ofoc)
 
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
@@ -317,13 +332,13 @@ def _DoDelphiCalibration(future, main_data):
         logger.debug("Calculate shift parameters...")
         try:
             # Move back to the center for the shift calculation to make sure
-            # the spot is as sharp as possible since this is where the center_focus
+            # the spot is as sharp as possible since this is where the optical focus
             # value corresponds to
             f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
             f.result()
             f = opt_stage.moveAbs({"x": 0, "y": 0})
             f.result()
-            f = main_data.focus.moveAbs({"z": center_focus})
+            f = main_data.focus.moveAbs({"z": ofoc})
             f.result()
             f = main_data.ebeam_focus.moveAbs({"z": good_focus})
             f.result()
@@ -363,7 +378,7 @@ def _DoDelphiCalibration(future, main_data):
         f.result()
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        f = main_data.focus.moveAbs({"z": center_focus})
+        f = main_data.focus.moveAbs({"z": ofoc})
         f.result()
         f = main_data.ebeam_focus.moveAbs({"z": good_focus})
         f.result()
@@ -422,6 +437,9 @@ def _DoDelphiCalibration(future, main_data):
             future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, None, main_data.focus, dfbkg=det_dataflow,
                                                       rng_focus=FOCUS_RANGE, method="exhaustive")
             future.auto_focus_f.result()
+            ofoc = main_data.focus.position.value["z"]
+            calib_values["optical_focus"] = ofoc
+            logger.debug("Updated optical focus to %g", ofoc)
             main_data.ccd.binning.value = (1, 1)
             logger.debug("Retry fine alignment...")
             future.find_overlay_f = FindOverlay((4, 4),
@@ -450,7 +468,7 @@ def _DoDelphiCalibration(future, main_data):
         calib_values["image_shear"] = ishear
         logger.debug("Image Rotation: %f (rad) Scaling: %s XY Scaling: %s Shear: %f", irot, iscale, iscale_xy, ishear)
 
-        return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
+        return htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
     except Exception as e:
         # log failure msg

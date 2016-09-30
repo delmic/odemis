@@ -522,8 +522,10 @@ class SecomStreamsTab(Tab):
                     f = det.applyAutoContrast()
                     f.result()
                     # Use the good initial focus value if known
-                    if hasattr(self._state_controller, "good_focus"):
-                        init_focus = self._state_controller.good_focus
+                    init_focus = self._state_controller.good_focus
+
+                    # TODO: for the DELPHI, it should also be possible to use the
+                    # opt_focus value from calibration as a "good value"
                 else:
                     if model.hasVA(det, "binning"):
                         self.orig_binning = det.binning.value
