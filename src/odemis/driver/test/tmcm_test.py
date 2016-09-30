@@ -40,7 +40,8 @@ else:
 CLASS = tmcm.TMCLController
 KWARGS = dict(name="test", role="stage", port=PORT,
               axes=["", "x", "y"],
-              ustepsize=[0, 5.9e-9, 5.8e-9],
+              ustepsize=[None, 5.9e-9, 5.8e-9],
+              rng=[None, [-40.e-3, 30.e-3], [-10.e-3, 10.e-3]],  # m, min/max
               # For the Delphi:
               # refproc="2xFinalForward",
               # temp=True,
