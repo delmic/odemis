@@ -3184,7 +3184,7 @@ class Sparc2AlignTab(Tab):
                     # The stream takes care of configuring its detector, so no need
                     continue
                 if model.hasVA(d, "binning"):
-                    d.binning.value = (1, 1)
+                    d.binning.value = d.binning.clip((2, 2))
                 if model.hasVA(d, "exposureTime"):
                     d.exposureTime.value = d.exposureTime.clip(0.2)
 
@@ -3228,6 +3228,13 @@ class Sparc2AlignTab(Tab):
             try:
                 d = model.getComponent(role=r)
             except LookupError:
+                continue
+            if r == "sp-ccd" and d.shape[1] == 1:
+                # Currently, the autofocus doesn't work correctly on spectrum
+                # (ie, resolution of X x 1), so skip it, and hope the focus is
+                # already correct.
+                # TODO: make the autofocus work also in such case.
+                logging.info("Will not focus on %s as it is 1D", d.name)
                 continue
             if d.name in focuser.affects.value:
                 dets.append(d)
