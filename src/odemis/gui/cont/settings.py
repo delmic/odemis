@@ -76,6 +76,8 @@ class SettingsController(object):
         self.num_entries = 0
         self.entries = []  # list of SettingEntry
 
+        self._subscriptions = []
+
     def hide_panel(self):
         self.show_panel(False)
 
@@ -270,10 +272,11 @@ class SettingsController(object):
         # Connect various events to the auto adjust button
 
         def on_chamber_state(state, btn=btn_autoadjust):
-            btn.Enable(state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM))
+            wx.CallAfter(btn.Enable, state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM))
+
         # We keep a reference to keep the subscription active.
-        self._on_chamber_state = on_chamber_state
-        self.tab_data.main.chamberState.subscribe(self._on_chamber_state, init=True)
+        self._subscriptions.append(on_chamber_state)
+        self.tab_data.main.chamberState.subscribe(on_chamber_state, init=True)
 
         def adjust_done(_):
             """ Callback that enables and untoggles the 'auto adjust' contrast button """

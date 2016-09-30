@@ -29,7 +29,6 @@ from odemis import model
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
-from odemis.model import isasync
 from odemis.util import img, conversion, fluo
 import threading
 import time
@@ -75,6 +74,7 @@ class LiveStream(Stream):
 
         if self._forcemd:
             simpl_md.update(self._forcemd)
+            img.mergeMetadata(simpl_md)
 
         return simpl_md
 

@@ -35,10 +35,9 @@ from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
-                                    EllipsisAnimator
+    EllipsisAnimator
 from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
-from odemis import util
 import threading
 import time
 import wx
@@ -654,10 +653,6 @@ class SecomStateController(MicroscopeStateController):
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
 
-        # Empty the stage history, as the interesting locations on the previous
-        # sample have probably nothing in common with this new sample
-        self._tab_data.stage_history.value = []
-
     def _on_vacuum(self, future):
         pass
 
@@ -886,10 +881,6 @@ class DelphiStateController(SecomStateController):
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
 
-        # Empty the stage history, as the interesting locations on the previous
-        # sample have probably nothing in common with this new sample
-        self._tab_data.stage_history.value = []
-
         self._chamber_pump_future.add_done_callback(self._on_vacuum)
 
     @call_in_wx_main
@@ -926,6 +917,7 @@ class DelphiStateController(SecomStateController):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
         # position), so that referencing will be faster on next load.
         # We just need to be careful that the axis is referenced
+        # TODO: just move "stage" instead, to make the position update properly
         referenced = self._main_data.aligner.referenced.value
         pos = {"x": 0, "y": 0}
         for a in pos.keys():
@@ -975,12 +967,19 @@ class DelphiStateController(SecomStateController):
             model.MD_ROTATION_COR: srot
         })
 
-        # also update the invert stage used in overview navigation
-        self._main_data.overview_stage.updateMetadata({
-            model.MD_POS_COR: (-strans[0], -strans[1]),
+        # The overview image has metadata in SEM coordinates => convert to optical
+        # stage coordinates.
+        # In practice, the overview camera and the internal SEM position of the
+        # Phenom are not perfectly aligned anyway. The Phenom calibration only
+        # allow to correct for translation. As the scale and rotation correction
+        # for optical-> SEM stage are normally tiny, it's unlikely to really help.
+        # They are here mostly only for the sake of making the code look right.
+        ovs = self._get_overview_stream()
+        ovs._forcemd = {
+            model.MD_POS_COR: strans,
             model.MD_PIXEL_SIZE_COR: (1 / sscale[0], 1 / sscale[1]),
-            model.MD_ROTATION_COR:-srot
-        })
+            model.MD_ROTATION_COR: srot,
+        }
 
         # use image scaling as scaling correction metadata to ccd
         self._main_data.ccd.updateMetadata({
@@ -1205,7 +1204,6 @@ class DelphiStateController(SecomStateController):
     # * 5 s for referencing the optical stage
     # * 1 s for focusing the overview
     # * 2 s for overview acquisition
-    # * 10 sec for alignment and overview acquisition
     # * 65 sec from NavCam to SEM
     DELPHI_LOADING_TIMES = (5, 2, 1, 5, 1, 2, 65)  # s
 
@@ -1262,7 +1260,7 @@ class DelphiStateController(SecomStateController):
             if future._delphi_load_state == CANCELLED:
                 return
 
-            # _on_overview_position() will take care of going further
+            # Move to overview (NavCam) mode
             future._actions_time.pop(0)
             pf = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
             future._delphi_load_state = pf
