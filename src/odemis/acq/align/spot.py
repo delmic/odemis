@@ -133,6 +133,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
 
         # Configure CCD and set ebeam to spot mode
         logging.debug("Configure CCD and set ebeam to spot mode...")
+        # TODO: start with binning 2x2 for rough spot centering?
         ccd.binning.value = (1, 1)
         ccd.resolution.value = ccd.resolution.range[1]
         ccd.exposureTime.value = 600e-03
@@ -143,7 +144,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
             raise CancelledError()
         logging.debug("Adjust exposure time...")
         if dfbkg is None:
-            # Strong exposure time for background subtraction
+            # Long exposure time to compensate for no background subtraction
             ccd.exposureTime.value = 1100e-03
         else:
             # Estimate noise and adjust exposure time based on "Rose criterion"
@@ -159,7 +160,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
 
-        image = AcquireNoBackground(ccd, dfbkg)
+        # image = AcquireNoBackground(ccd, dfbkg)
         logging.debug("Trying to find spot...")
         future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
         dist, vector = future._centerspotf.result()
@@ -171,13 +172,13 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
             logging.debug("Spot not found, try to autofocus...")
             try:
                 # When Autofocus set binning 8 if possible
-                ccd.binning.value = min((8, 8), ccd.binning.range[1])
+                ccd.binning.value = ccd.binning.clip((8, 8))
                 future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=method_f)
                 lens_pos, fm_level = future._autofocusf.result()
                 # Update progress of the future
                 future.set_progress(end=time.time() +
                                     estimateAlignmentTime(et, dist, 1))
-                ccd.binning.value=(1, 1)
+                ccd.binning.value = (1, 1)
             except IOError:
                 raise IOError('Spot alignment failure. AutoFocus failed.')
             if future._spot_alignment_state == CANCELLED:
@@ -191,9 +192,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
         # Update progress of the future
         future.set_progress(end=time.time() +
                             estimateAlignmentTime(et, dist, 1))
+        logging.debug("After rough alignment, spot center is at %s m", vector)
 
-        image = AcquireNoBackground(ccd, dfbkg)
-        # Limitate FoV to save time
+        # image = AcquireNoBackground(ccd, dfbkg)
+        # Limit FoV to save time
         logging.debug("Crop FoV...")
         CropFoV(ccd, dfbkg)
         image = AcquireNoBackground(ccd, dfbkg)
@@ -214,6 +216,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
         dist, vector = future._centerspotf.result()
         if dist is None:
             raise IOError('Spot alignment failure. Cannot reach the center.')
+        logging.debug("After fine alignment, spot center is at %s m", vector)
         return dist, vector
     finally:
         ccd.binning.value = init_binning
@@ -226,6 +229,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
             if future._spot_alignment_state == CANCELLED:
                 raise CancelledError()
             future._spot_alignment_state = FINISHED
+
 
 def _CancelAlignSpot(future):
     """
@@ -264,7 +268,8 @@ def FindSpot(image, sensitivity_limit=100):
     similar to the ones that are used in Fine alignment.
     image (model.DataArray): Optical image
     sensitivity_limit (int): Limit of sensitivity in spot detection
-    returns (tuple of floats):    The spot center coordinates
+    returns (tuple of floats):    Position of the spot center in px (from the
+       left-top corner of the image), possibly with sub-pixel resolution.
     raises:
             ValueError() if spot was not found
     """
@@ -324,7 +329,8 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None):
      performed.
     returns (model.ProgressiveFuture):    Progress of _DoCenterSpot,
                                          whose result() will return:
-            returns (float):    Final distance to the center #m 
+                (float):    Final distance to the center #m
+                (2 floats): vector to the spot from the center (m, m)
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -360,19 +366,12 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
      order to do background subtraction. If None, no background subtraction is
      performed.
     returns (float or None):    Final distance to the center (m)
+            (2 floats): vector to the spot from the center (m, m)
     raises:
             CancelledError() if cancelled
     """
     try:
         logging.debug("Aligning spot...")
-        image = ccd.data.get(asap=False)
-        # Center of optical image
-        pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-        center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-        # Epsilon distance below which the lens is considered centered. The worse of:
-        # * 1.5 pixels (because the CCD resolution cannot give us better)
-        # * 1 µm (because that's the best resolution of our actuators)
-        err_mrg = max(1.5 * pixelSize[0], 1e-06)  # m
         steps = 0
         # Stop once spot is found on the center of the optical image
         dist = None
@@ -389,8 +388,19 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
                 spot_pxs = FindSpot(image)
             except ValueError:
                 return None, None
+
+            # Center of optical image
+            pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+            center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+            # Epsilon distance below which the lens is considered centered. The worse of:
+            # * 1.5 pixels (because the CCD resolution cannot give us better)
+            # * 1 µm (because that's the best resolution of our actuators)
+            err_mrg = max(1.5 * pixelSize[0], 1e-06)  # m
+
+            # FIXME: spot_pxs is _already_ compared to the center of the image
             tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
             tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
+            logging.debug("Found spot @ %s px", spot_pxs)
             dist = math.hypot(*tab)
             # If we are already there, stop
             if dist <= err_mrg:
@@ -416,6 +426,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
             if future._spot_center_state == CANCELLED:
                 raise CancelledError()
             future._spot_center_state = FINISHED
+
 
 def _CancelCenterSpot(future):
     """

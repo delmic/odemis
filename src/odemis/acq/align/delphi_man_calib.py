@@ -34,44 +34,48 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import argparse
 import collections
 import logging
 import math
 from odemis import model
 from odemis.acq import align
+from odemis.acq.align import spot
 from odemis.gui.conf import get_calib_conf
 import sys
-import tty
-import termios
 import threading
-import signal
+import tty
+
 import odemis.acq.align.delphi as aligndelphi
+import termios
 
-
-logging.getLogger().setLevel(logging.WARNING)
 
 YES_CHARS = {"Y", "y", ''}
 YES_NO_CHARS = {"Y", "y", "N", "n", ''}
 TIMEOUT = 1
 
 
-def interrupted(signum, frame):
-    logging.debug("read_input timed out")
-signal.signal(signal.SIGALRM, interrupted)
-
-
 def getch():
     """
-    Get character from keyboard
+    Get character from keyboard, handling (a bit) ANSI escape codes
     """
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(sys.stdin.fileno())
-        ch = sys.stdin.read(3)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":  # ANSI escape sequence => get another 2 chars
+            ch += sys.stdin.read(2)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
+
+
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
 
 
 class ArrowFocus():
@@ -106,43 +110,37 @@ class ArrowFocus():
                 f.result()
 
     def focusByArrow(self, rollback_position=None):
-        target = self._move_focus
-        self._focus_thread = threading.Thread(target=target,
-                name="Arrow focus thread")
+        self._focus_thread = threading.Thread(target=self._move_focus,
+                                              name="Arrow focus thread")
         self._focus_thread.start()
-        while True:
-            signal.alarm(TIMEOUT)
-            try:
+        try:
+            while True:
                 c = getch()
-            except:
-                # just timed out
-                continue
-            signal.alarm(0)
-            if c in {'R', 'r'} and (rollback_position is not None):
-                f = self.sem_stage.moveAbs({'x': rollback_position[0],
-                                            'y': rollback_position[1]})
-                f.result()
-            if c == '\x1b[A':
-                self._moves_opt.append(self.opt_stepsize)
-            elif c == '\x1b[B':
-                self._moves_opt.append(-self.opt_stepsize)
-            elif c == '\x1b[C':
-                self._moves_ebeam.append(self.ebeam_stepsize)
-            elif c == '\x1b[D':
-                self._moves_ebeam.append(-self.ebeam_stepsize)
-            # break when Enter is pressed
-            elif ord(c) == 13:
-                self._move_must_stop.set()
-                self._focus_thread.join(10)
-                break
+                if c in ('R', 'r') and rollback_position is not None:
+                    f = self.sem_stage.moveAbs({'x': rollback_position[0],
+                                                'y': rollback_position[1]})
+                    f.result()
+                elif c == '\x1b[A':
+                    self._moves_opt.append(self.opt_stepsize)
+                elif c == '\x1b[B':
+                    self._moves_opt.append(-self.opt_stepsize)
+                elif c == '\x1b[C':
+                    self._moves_ebeam.append(self.ebeam_stepsize)
+                elif c == '\x1b[D':
+                    self._moves_ebeam.append(-self.ebeam_stepsize)
+                # break when Enter is pressed
+                elif c in ("\n", "\r"):
+                    break
+                elif c == "\x03":  # Ctrl+C
+                    raise KeyboardInterrupt()
+                else:
+                    logging.debug("Unhandled key: %s", c.encode('string_escape'))
+        finally:
+            self._move_must_stop.set()
+            self._focus_thread.join(10)
 
 
-def main(args):
-    """
-    Handles the command line arguments
-    args is the list of arguments passed
-    return (int): value to return to the OS as program exit code
-    """
+def man_calib():
     try:
         escan = None
         detector = None
@@ -197,7 +195,7 @@ def main(args):
         else:
             first_hole, second_hole, hole_focus, opt_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib_values
             force_calib = False
-        print '\033[1;36m'
+        print "\033[1;36m"
         print "**Delphi Manual Calibration steps**"
         print "1.Sample holder hole detection"
         print "    Current values: 1st hole: " + str(first_hole)
@@ -327,7 +325,8 @@ def main(args):
                 escan.scale.value = (1, 1)
                 escan.resolution.value = (1, 1)
                 escan.translation.value = (0, 0)
-                escan.rotation.value = 0
+                if not escan.rotation.readonly:
+                    escan.rotation.value = 0
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
@@ -335,11 +334,17 @@ def main(args):
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                 if not force_calib:
                     print "\033[1;33mIf you cannot see the whole source background (bright circle) you may try to move to the already known offset position. \nTo do this press the R key at any moment.\033[1;m"
+                    rollback_pos = (offset[0] * scaling[0], offset[1] * scaling[1])
+                else:
+                    rollback_pos = None
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
-                ar.focusByArrow(rollback_position=(offset[0] * scaling[0], offset[1] * scaling[1]))
+                ar.focusByArrow(rollback_pos)
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
                 try:
+                    # TODO: the first point (at 0,0) isn't different from the next 4 points,
+                    # excepted it might be a little harder to focus.
+                    # => use the same code for all of them
                     align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
                                                                opt_stage, focus)
                     align_offset = align_offsetf.result()
@@ -392,6 +397,7 @@ def main(args):
                 else:
                     f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
                     f.result()
+
                 try:
                     # Compute spot shift percentage
                     # Configure CCD and e-beam to write CL spots
@@ -401,7 +407,8 @@ def main(args):
                     escan.scale.value = (1, 1)
                     escan.resolution.value = (1, 1)
                     escan.translation.value = (0, 0)
-                    escan.rotation.value = 0
+                    if not escan.rotation.readonly:
+                        escan.rotation.value = 0
                     escan.shift.value = (0, 0)
                     escan.dwellTime.value = 5e-06
                     detector.data.subscribe(_discard_data)
@@ -409,7 +416,15 @@ def main(args):
                     print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                     ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                     ar.focusByArrow()
-                    print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
+
+                    # Center (roughly) the spot on the CCD
+                    f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
+                    dist, vect = f.result()
+                    if dist is None:
+                        logging.warning("Failed to find a spot, twin stage calibration might have failed")
+
+                    print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
+
                     detector.data.unsubscribe(_discard_data)
                     spot_shiftf = aligndelphi.SpotShiftFactor(ccd, detector, escan, focus)
                     new_spotshift = spot_shiftf.result()
@@ -476,7 +491,8 @@ def main(args):
                 escan.scale.value = (1, 1)
                 escan.resolution.value = (1, 1)
                 escan.translation.value = (0, 0)
-                escan.rotation.value = 0
+                if not escan.rotation.readonly:
+                    escan.rotation.value = 0
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
@@ -484,6 +500,13 @@ def main(args):
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                 ar.focusByArrow()
+
+                # Center (roughly) the spot on the CCD
+                f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
+                dist, vect = f.result()
+                if dist is None:
+                    logging.warning("Failed to find a spot, twin stage calibration might have failed")
+
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
                 try:
@@ -525,24 +548,48 @@ def main(args):
 
         # Update calibration file
         print "\033[1;30mUpdating calibration file is done, now ejecting, please wait...\033[1;m"
+
+    finally:
+        # TODO: restore SEM scan settings
+
+        # Eject the sample holder
+        f = chamber.moveAbs({"pressure": vented_pressure})
+        f.result()
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+    # arguments handling
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                         default=0, help="set verbosity level (0-2, default = 0)")
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    # TODO: allow to put logging level so low that nothing is ever output
+    loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        man_calib()
     except KeyboardInterrupt:
         logging.warning("Manual calibration procedure was cancelled.")
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
-    finally:
-        # Eject the sample holder
-        f = chamber.moveAbs({"pressure": vented_pressure})
-        f.result()
 
     return 0
 
-
-def _discard_data(df, data):
-    """
-    Does nothing, just discard the SEM data received (for spot mode)
-    """
-    pass
 
 if __name__ == '__main__':
     ret = main(sys.argv)
