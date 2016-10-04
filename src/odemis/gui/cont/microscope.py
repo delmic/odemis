@@ -251,26 +251,6 @@ class SecomStateController(MicroscopeStateController):
         # is impossible.
         self._press_btn = getattr(tab_panel, btn_prefix + "press")
 
-        # To update the stream status
-        self._status_prev_streams = []
-        tab_data.streams.subscribe(self._subscribe_current_stream_status)
-        self._ellipsis_animator = None  # animator for messages containing ellipsis character
-
-        # Last stage and focus move time
-        self._last_pos = self._main_data.stage.position.value.copy()
-        self._last_pos.update(self._main_data.focus.position.value)
-        self._move_time = time.time()
-        self._main_data.stage.position.subscribe(self._on_move, init=True)
-        self._main_data.focus.position.subscribe(self._on_move, init=True)
-
-        # To listen to change in play/pause
-        self._active_prev_stream = None
-
-        # To update the display/hide the stream status according to visibility
-        self._views_list = []
-        self._views_prev_list = []
-        tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
-
         # Turn off the light, but set the power to a nice default value
         # TODO: do the same with the brightlight and backlight
         light = self._main_data.light
@@ -282,6 +262,9 @@ class SecomStateController(MicroscopeStateController):
             except AttributeError:
                 # No emission ? => turn off the power as only way to stop light
                 light.power.value = 0
+
+        # To listen to change in play/pause
+        self._active_prev_stream = None
 
         # E-beam management
         # The SEM driver should do the right thing in most cases (ie, turn on
@@ -340,20 +323,6 @@ class SecomStateController(MicroscopeStateController):
         # disable optical and SEM buttons while there is a preparation process running
         self._main_data.is_preparing.subscribe(self.on_preparation)
 
-    def _on_move(self, pos):
-        """
-        Called when the stage or focus moves (changes position)
-        pos (dict): new position
-        """
-        # Check if the position has really changed, as some stage tend to
-        # report "new" position even when no actual move has happened
-        if self._last_pos == pos:
-            return
-        self._last_pos.update(pos)
-        self._move_time = time.time()
-        self._remove_misaligned()
-        self.decide_status()
-
     @call_in_wx_main
     def on_preparation(self, is_preparing):
         # Make sure cannot switch stream during preparation
@@ -395,137 +364,6 @@ class SecomStateController(MicroscopeStateController):
             # acquisition tab)
             logging.debug("No acquisition, setting SEM external mode to auto")
             self._main_data.ebeam.external.value = None
-
-    def _subscribe_current_stream_status(self, streams):
-        """ Find all the streams that have a status or calibrated VA and
-        subscribe to them in order to decide what status message needs to be
-        displayed.
-        """
-        # First unsubscribe from the previous streams
-        if len(self._status_prev_streams) != 0:
-            for s in self._status_prev_streams:
-                s.status.unsubscribe(self.decide_status)
-                if model.hasVA(s, "calibrated"):
-                    s.calibrated.unsubscribe(self.decide_status)
-
-        for s in streams:
-            s.status.subscribe(self.decide_status)
-            # status is actually only used to inform about the spot alignment
-            # progress, not when the stream goes misaligned (to decide this
-            # message we use decide_status). For this the calibrated VA is used
-            # by AlignedSEMStream
-            if model.hasVA(s, "calibrated"):
-                s.calibrated.subscribe(self.decide_status)
-
-        # just to initialize
-        self.decide_status()
-
-        self._status_prev_streams = streams
-
-    def _subscribe_current_view_visibility(self, views):
-        """
-        Subscribe to the list of visible streams of each view.
-        """
-        if len(self._views_prev_list) != 0:
-            for v in self._views_prev_list:
-                v.stream_tree.flat.unsubscribe(self.decide_status)
-
-        self._views_list = views
-        for v in self._views_list:
-            v.stream_tree.flat.subscribe(self.decide_status, init=True)
-
-        self._views_prev_list = self._views_list
-
-    @call_in_wx_main
-    def decide_status(self, _=None):
-        """
-        Decide the status displayed based on the visible and calibrated streams.
-        If the message contains the special character … (ellipsis), it will be
-         animated.
-        """
-        if self._ellipsis_animator:
-            # cancel if there is an ellipsis animator updating the status message
-            self._ellipsis_animator.cancel()
-            self._ellipsis_animator = None
-
-        action = None
-        lvl = None
-        msg = ""
-
-        misaligned = False
-        for s in self._tab_data.streams.value:
-            if None not in s.status.value:
-                lvl, msg = s.status.value
-                if not isinstance(msg, basestring):
-                    # it seems it also contains an action
-                    msg, action = msg
-
-        visible_streams = set()
-        for v in self._tab_data.views.value:
-            if v.name.value != "Overview":
-                for s in v.stream_tree.flat.value:
-                    stream_img = s.image.value
-                    if not s.should_update.value and stream_img is None:
-                        continue
-                    else:
-                        visible_streams.add(s)
-                    if ((stream_img is not None and model.hasVA(s, "calibrated") and not s.calibrated.value) or
-                            self._is_misaligned(s)):
-                        misaligned = True
-
-        # If there is a stream status we will display it anyway
-        if lvl is None:
-            msg = ""
-            # If there is just one or no stream displayed, there is no need to
-            # show any status
-            if len(visible_streams) > 1 and misaligned:
-                lvl = logging.WARNING
-                msg = u"Displayed streams might be misaligned"
-                action = u"Update any stream acquired in old position"
-
-        if action is None:
-            action = ""
-        self._show_status_icons(lvl, action)
-        self._tab_panel.lbl_stream_status.SetToolTipString(action)
-        if u"…" in msg:
-            self._ellipsis_animator = EllipsisAnimator(msg, self._tab_panel.lbl_stream_status)
-            self._ellipsis_animator.start()
-        else:
-            self._tab_panel.lbl_stream_status.SetLabel(msg)
-
-    @call_in_wx_main
-    def _remove_misaligned(self):
-        # hide all the misaligned streams
-        for s in self._tab_data.streams.value:
-            if ((model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
-                    self._is_misaligned(s)):
-                for v in self._tab_data.views.value:
-                    # Never hide an active stream
-                    if s in v.stream_tree.flat.value and not s.should_update.value:
-                        v.removeStream(s)
-
-    def _is_misaligned(self, stream):
-        return (not stream.should_update.value and ((stream.image.value is not None) and
-                stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._move_time))
-
-    def _show_status_icons(self, lvl, action=None):
-        self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
-        self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
-        self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
-        self._tab_panel.pnl_hw_info.Layout()
-        if action is not None:
-            self._tab_panel.pnl_hw_info.SetToolTipString(action)
-
-    def _show_progress_indicators(self, show_load, show_status):
-        """
-        Show or hide the loading progress indicators for the chamber and sample holder
-
-        The stream status text will be hidden if the progress indicators are shown.
-        """
-        assert not (show_load and show_status), "Cannot display both simultaneously"
-        self._tab_panel.pnl_load_status.Show(show_load)
-        self._tab_panel.pnl_stream_status.Show(show_status)
-        self._tab_panel.pnl_hw_info.Layout()
 
     def _set_ebeam_power(self, on):
         """ Set the ebeam power (if there is an ebeam that can be controlled)
@@ -823,6 +661,23 @@ class DelphiStateController(SecomStateController):
         # Display the panel with the loading progress indicators
         self._tab_panel.pnl_hw_info.Show()
 
+        # To update the stream status
+        self._status_prev_streams = []
+        tab_data.streams.subscribe(self._subscribe_current_stream_status)
+        self._ellipsis_animator = None  # animator for messages containing ellipsis character
+
+        # Last stage and focus move time
+        self._last_pos = self._main_data.stage.position.value.copy()
+        self._last_pos.update(self._main_data.focus.position.value)
+        self._move_time = time.time()
+        self._main_data.stage.position.subscribe(self._on_move, init=True)
+        self._main_data.focus.position.subscribe(self._on_move, init=True)
+
+        # To update the display/hide the stream status according to visibility
+        self._views_list = []
+        self._views_prev_list = []
+        tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
+
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
         self.good_focus = None
@@ -855,6 +710,160 @@ class DelphiStateController(SecomStateController):
 
         # Progress dialog for calibration
         self._dlg = None
+
+    def _on_move(self, pos):
+        """
+        Called when the stage or focus moves (changes position)
+        pos (dict): new position
+        """
+        # Check if the position has really changed, as some stage tend to
+        # report "new" position even when no actual move has happened
+        if self._last_pos == pos:
+            return
+        self._last_pos.update(pos)
+        self._move_time = time.time()
+        self._remove_misaligned()
+        self.decide_status()
+
+    def _subscribe_current_view_visibility(self, views):
+        """
+        Subscribe to the list of visible streams of each view.
+        """
+        if len(self._views_prev_list) != 0:
+            for v in self._views_prev_list:
+                v.stream_tree.flat.unsubscribe(self.decide_status)
+
+        self._views_list = views
+        for v in self._views_list:
+            v.stream_tree.flat.subscribe(self.decide_status, init=True)
+
+        self._views_prev_list = self._views_list
+
+    def _subscribe_current_stream_status(self, streams):
+        """ Find all the streams that have a status or calibrated VA and
+        subscribe to them in order to decide what status message needs to be
+        displayed.
+        """
+        # First unsubscribe from the previous streams
+        if len(self._status_prev_streams) != 0:
+            for s in self._status_prev_streams:
+                s.status.unsubscribe(self.decide_status)
+                if model.hasVA(s, "calibrated"):
+                    s.calibrated.unsubscribe(self.decide_status)
+
+        for s in streams:
+            s.status.subscribe(self.decide_status)
+            # status is actually only used to inform about the spot alignment
+            # progress, not when the stream goes misaligned (to decide this
+            # message we use decide_status). For this the calibrated VA is used
+            # by AlignedSEMStream
+            if model.hasVA(s, "calibrated"):
+                s.calibrated.subscribe(self.decide_status)
+
+        # just to initialize
+        self.decide_status()
+
+        self._status_prev_streams = streams
+
+    @call_in_wx_main
+    def decide_status(self, _=None):
+        """
+        Decide the status displayed based on the visible and calibrated streams.
+        If the message contains the special character … (ellipsis), it will be
+         animated.
+        """
+        if self._ellipsis_animator:
+            # cancel if there is an ellipsis animator updating the status message
+            self._ellipsis_animator.cancel()
+            self._ellipsis_animator = None
+
+        action = None
+        lvl = None
+        msg = ""
+
+        misaligned = False
+        for s in self._tab_data.streams.value:
+            if None not in s.status.value:
+                lvl, msg = s.status.value
+                if not isinstance(msg, basestring):
+                    # it seems it also contains an action
+                    msg, action = msg
+
+        visible_streams = set()
+        for v in self._tab_data.views.value:
+            if v.name.value != "Overview":
+                for s in v.stream_tree.flat.value:
+                    stream_img = s.image.value
+                    if not s.should_update.value and stream_img is None:
+                        continue
+                    else:
+                        visible_streams.add(s)
+                    if ((stream_img is not None and model.hasVA(s, "calibrated") and not s.calibrated.value) or
+                            self._is_misaligned(s)):
+                        misaligned = True
+
+        # If there is a stream status we will display it anyway
+        if lvl is None:
+            msg = ""
+            # If there is just one or no stream displayed, there is no need to
+            # show any status
+            if len(visible_streams) > 1 and misaligned:
+                lvl = logging.WARNING
+                msg = u"Displayed streams might be misaligned"
+                action = u"Update any stream acquired in old position"
+
+        if action is None:
+            action = ""
+        self._show_status_icons(lvl, action)
+        self._tab_panel.lbl_stream_status.SetToolTipString(action)
+        if u"…" in msg:
+            self._ellipsis_animator = EllipsisAnimator(msg, self._tab_panel.lbl_stream_status)
+            self._ellipsis_animator.start()
+        else:
+            self._tab_panel.lbl_stream_status.SetLabel(msg)
+
+    @call_in_wx_main
+    def _remove_misaligned(self):
+        # TODO: this work on the DELPHI because the stage is open-loop.
+        # So when there is no user-requested move, the position doesn't change.
+        # However, if the stage was closed-loop, the position would keep slightly
+        # updating (because of drift, encoder error, etc.). This would cause any
+        # stream not currently playing to automatically hide.
+        # That's why that code _cannot_ be used as-is on a SECOM. Anyway, on the
+        # SECOM, a stage move doesn't move the lenses, so the misalignment is
+        # much less significant.
+
+        # Hide all the misaligned streams
+        for s in self._tab_data.streams.value:
+            if ((model.hasVA(s, "calibrated") and (not s.calibrated.value)) or
+                    self._is_misaligned(s)):
+                for v in self._tab_data.views.value:
+                    # Never hide an active stream
+                    if s in v.stream_tree.flat.value and not s.should_update.value:
+                        v.removeStream(s)
+
+    def _is_misaligned(self, stream):
+        return (not stream.should_update.value and ((stream.image.value is not None) and
+                stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._move_time))
+
+    def _show_status_icons(self, lvl, action=None):
+        self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
+        self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
+        self._tab_panel.pnl_hw_info.Layout()
+        if action is not None:
+            self._tab_panel.pnl_hw_info.SetToolTipString(action)
+
+    def _show_progress_indicators(self, show_load, show_status):
+        """
+        Show or hide the loading progress indicators for the chamber and sample holder
+
+        The stream status text will be hidden if the progress indicators are shown.
+        """
+        assert not (show_load and show_status), "Cannot display both simultaneously"
+        self._tab_panel.pnl_load_status.Show(show_load)
+        self._tab_panel.pnl_stream_status.Show(show_status)
+        self._tab_panel.pnl_hw_info.Layout()
 
     def _start_chamber_pumping(self):
         """
