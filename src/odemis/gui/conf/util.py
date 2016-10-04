@@ -476,7 +476,7 @@ def format_choices(choices, uniformat=True, si=None):
                 else:
                     fmt = []
                     for choice in choices:
-                        fmt.append(to_string_si_prefix(choice))
+                        fmt.append(to_string_si_prefix(choice, sig=3))
                     return zip(choices, fmt), choices_si_prefix
             except Exception:
                 logging.exception("Formatting error!")
