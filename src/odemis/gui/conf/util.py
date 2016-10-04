@@ -169,19 +169,34 @@ def hfw_choices(comp, va, conf):
 
     If the VA has predefined choices, return those. Otherwise calculate the choices using the range
     of the VA.
-
     """
-
     try:
         choices = va.choices
     except (NotApplicableError, AttributeError):
-        mi, ma, = va.range
-        choices = [mi]
-        step = 1
-        while choices[-1] < ma:
-            choices.append(mi * 10 ** step)
-            step += 1
-        choices[-1] = ma
+        # Pick every x2, x5, x10, starting from the min value
+        factors = (2, 5, 10)
+        mn, mx = va.range
+        choices = [mn]
+
+        # starting point (might be even less than mn)
+        base = 10 ** int(math.log10(mn) - 1)
+
+        while base < mx and choices[-1] < mx:
+            for f in factors:
+                v = base * f
+                if mn < v < mx:
+                    choices.append(v)
+                elif v >= mx:
+                    break
+
+            base *= 10
+
+        choices.append(mx)
+
+        # We don't add the current value, as it's a range, so anyway any other
+        # value can also happen so the GUI must be able to handle well any other
+        # value.
+
     return choices
 
 
@@ -442,14 +457,11 @@ def process_setting_metadata(hw_comp, setting_va, conf):
     return minv, maxv, choices, unit
 
 
-def format_choices(choices, uniformat=True, si=None):
+def format_choices(choices):
     """ Transform the given choices into an ordered list of (value, formatted value) tuples
 
     Args:
         choices (Iterable): The choices to be formatted or None
-        uniformat (bool): If True, all the values will be formatted using the same SI prefix
-        si (bool): si unit to format the choice values to.
-          This argument takes precedence over the `uniformat` argument.
 
     Returns:
         ([(value, formatted value)], si prefix) or (None, None)
@@ -463,23 +475,20 @@ def format_choices(choices, uniformat=True, si=None):
         if isinstance(choices, dict):
             # In this case we assume that the values are already formatted
             choices_formatted = choices.items()
-        elif si is not None:
-            fmt, choices_si_prefix = utun.si_scale_list(choices, si)
-            choices_formatted = zip(choices, [u"%g" % c for c in fmt])
         elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
             try:
-                # TODO: does it matter? Can't we always do non-uniform?
-                # Or just guess based on the magnitude between the lowest and biggest value?
-                if uniformat:
+                choices = sorted(choices)
+                # Can we fit them (more or less) all with the same unit prefix?
+                mn_non0 = min(c for c in choices if c != 0)
+                if abs(choices[-1] / mn_non0) < 1000:
                     fmt, choices_si_prefix = utun.si_scale_list(choices)
-                    choices_formatted = zip(choices, [u"%g" % c for c in fmt])
+                    fmt = [utun.round_significant(c, 3) for c in fmt]
+                    choices_formatted = zip(choices, fmt)
                 else:
-                    fmt = []
-                    for choice in choices:
-                        fmt.append(to_string_si_prefix(choice, sig=3))
-                    return zip(choices, fmt), choices_si_prefix
+                    fmt = [to_string_si_prefix(c, sig=3) for c in choices]
+                    return zip(choices, fmt), None
             except Exception:
-                logging.exception("Formatting error!")
+                logging.exception("Formatting error for %s", choices)
                 choices_formatted = [(c, choice_to_str(c)) for c in choices]
         else:
             choices_formatted = [(c, choice_to_str(c)) for c in choices]
@@ -559,9 +568,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     # Get the range and choices
     min_val, max_val, choices, unit = process_setting_metadata(hw_comp, va, conf)
     # Format the provided choices
-    si = conf.get('si', None)
-    si_unif = conf.get('si_unif', True)
-    choices_formatted, choices_si_prefix = format_choices(choices, uniformat=si_unif, si=si)
+    choices_formatted, choices_si_prefix = format_choices(choices)
     # Determine the control type to use, either from config or some 'smart' default
     control_type = determine_control_type(hw_comp, va, choices_formatted, conf)
 
