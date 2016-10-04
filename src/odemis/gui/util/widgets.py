@@ -383,6 +383,7 @@ class EllipsisAnimator(RepeatingTimer):
     def start(self):
         """ Starts ellipsis animation """
         super(EllipsisAnimator, self).start()
+        logging.debug("Will animate message \"%s\"", self._status_msg)
         self._updateStatus()
 
     @call_in_wx_main
