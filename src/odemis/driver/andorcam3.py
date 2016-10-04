@@ -1518,13 +1518,15 @@ class AndorCam3(model.DigitalCamera):
             if isinstance(exp, HwError) or exp.errno in (10, 17):  # ERR_CONNECTION, ERR_COMM
                 logging.warning("Camera seems not responding, will let acquisition thread try to reconnect")
             else:
+                logging.error("Camera is already acquiring while starting acquisition")
+                self.acquisition_lock.release()
                 raise
 
         # Set up thread
         logging.debug("Starting acq thread")
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
-               name="andorcam acquire flow thread",
-               args=(callback,))
+                                               name="andorcam acquire flow thread",
+                                               args=(callback,))
         self.acquire_thread.start()
 
     GC_PERIOD = 10 # how often the garbage collector should run (in number of buffers)
