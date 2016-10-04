@@ -734,11 +734,7 @@ class Detector(model.Detector):
         self._acq_device = acq_client.service
 
         # Store current scan params
-        self._nrOfFrames = None
-        self._center = None
-        self._scale = None
-        self._resolution_width = None
-        self._resolution_height = None
+        self._last_view_params = None
 
     @isasync
     def applyAutoContrast(self):
@@ -787,14 +783,14 @@ class Detector(model.Detector):
             try:
                 self.parent._device.SetSEMContrast(contr)
             except suds.WebFault:
-                logging.debug("Setting SEM contrast may be unsuccesful")
+                logging.debug("Setting SEM contrast may be unsuccessful")
 
     def _onBrightness(self, value):
         with self.parent._acq_progress_lock:
             try:
                 self.parent._device.SetSEMBrightness(value)
             except suds.WebFault:
-                logging.debug("Setting SEM brightness may be unsuccesful")
+                logging.debug("Setting SEM brightness may be unsuccessful")
 
     def _updateContrast(self):
         """
@@ -819,6 +815,8 @@ class Detector(model.Detector):
         self.brightness.notify(bright)
 
     def update_parameters(self):
+        self._last_view_params = None  # Force to write them again next time
+
         # Update stage and focus position
         self.parent._stage._updatePosition()
         self.parent._focus._updatePosition()
@@ -929,18 +927,35 @@ class Detector(model.Detector):
             self._acquisition_must_stop.clear()
 
     def _needResetParams(self, scanParams):
-        if (self._nrOfFrames != scanParams.nrOfFrames or
-            self._center != (scanParams.center.x, scanParams.center.y) or
-            self._scale != scanParams.scale or
-            self._resolution_width != scanParams.resolution.width or
-            self._resolution_height != scanParams.resolution.height):
-            self._nrOfFrames = scanParams.nrOfFrames
-            self._center = (scanParams.center.x, scanParams.center.y)
-            self._scale = scanParams.scale
-            self._resolution_width = scanParams.resolution.width
-            self._resolution_height = scanParams.resolution.height
+        """
+        Check whether the latest view parameters set are identical to the one
+          needed. Setting the view params can take a long time, so it's useful
+          to avoid doing it when not necessary.
+        scanParams: the new scan parameters needed
+        return (bool): True if the view parameter must be set again
+        """
+        new_params = (scanParams.nrOfFrames,
+                      (scanParams.center.x, scanParams.center.y),
+                      scanParams.scale,
+                      (scanParams.resolution.width, scanParams.resolution.height))
+
+        if self._last_view_params != new_params:
+            self._last_view_params = new_params
             return True
         else:
+#             # DEBUG: To check it's indeed what we expect, in practice, it seems
+#             # the main reason it's unsynchronised is if the sample goes out of
+#             # SEM mode.
+#             act_scan_params = self._acq_device.GetSEMViewingMode().parameters
+#             if (act_scan_params.nrOfFrames != scanParams.nrOfFrames or
+#                 (act_scan_params.center.x, act_scan_params.center.y) != (scanParams.center.x, scanParams.center.y) or
+#                 act_scan_params.scale != scanParams.scale or
+#                 (act_scan_params.resolution.width, act_scan_params.resolution.height) != (scanParams.resolution.width, scanParams.resolution.height)):
+#                 logging.error("Scan params are not as expected: %s, %s, %s, %s",
+#                               act_scan_params.nrOfFrames,
+#                               (act_scan_params.center.x, act_scan_params.center.y),
+#                               act_scan_params.scale,
+#                               (act_scan_params.resolution.width, act_scan_params.resolution.height))
             return False
 
     def _acquire_image(self):
@@ -997,7 +1012,7 @@ class Detector(model.Detector):
                 logging.debug("Returning fake SEM image for spot")
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
             elif res[0] <= 128 or res[1] <= 128:
-                # Scan spot by spot (as fast a possible)
+                # Scan spot by spot (as fast as possible)
                 logging.debug("Grid scanning of %s...", res)
 
                 # FoV (0->1) is: (full_FoV * res_ratio) - 1 px
@@ -1021,11 +1036,12 @@ class Detector(model.Detector):
                         raise CancelledError()
                     try:
                         if self._needResetParams(scan_params_view):
-                            # In practice this takes ~0.2 s
                             self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                     except suds.WebFault:
                         logging.warning("Spot scan failure.")
-                    # No sleep, just go as fast as possible (which is not really fast)
+                    # No sleep, just go as fast as possible, which is not really
+                    # fast as this takes ~0.2 s (probably because the whole
+                    # 456x456 px needs to be scanned.
 
                 logging.debug("Returning fake SEM image of res=%s", res)
                 return model.DataArray(numpy.zeros(res[::-1], dtype=dataType), metadata)
@@ -1036,8 +1052,8 @@ class Detector(model.Detector):
                 AX, AY = md_bsd.get(model.MD_RESOLUTION_SLOPE, (0, 0))
                 BX, BY = md_bsd.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
                 CX, CY = md_bsd.get(model.MD_HFW_SLOPE, (0, 0))
-                self._scanParams.center.x = trans[0] - (1 / (2 * math.pi) * numpy.arctan(-AX / (res[0] + BX)) + CX / 100)
-                self._scanParams.center.y = trans[1] - (1 / (2 * math.pi) * numpy.arctan(-AY / (res[1] + BY)) + CY / 100)
+                self._scanParams.center.x = trans[0] - (1 / (2 * math.pi) * math.atan(-AX / (res[0] + BX)) + CX / 100)
+                self._scanParams.center.y = trans[1] - (1 / (2 * math.pi) * math.atan(-AY / (res[1] + BY)) + CY / 100)
 
                 self._scanParams.scale = 1
                 self._scanParams.resolution.width = res[0]
