@@ -333,26 +333,27 @@ def _DoDelphiCalibration(future, main_data):
         # Update progress of the future
         future.set_progress(end=time.time() + 7.5 * 60)
         logger.info("Calculating shift parameters...")
+
+        # Move back to the center for the shift calculation to make sure
+        # the spot is as sharp as possible since this is where the optical focus
+        # value corresponds to
+        f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
+        f.result()
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
+        f.result()
+        f = main_data.focus.moveAbs({"z": ofoc})
+        f.result()
+        f = main_data.ebeam_focus.moveAbs({"z": good_focus})
+        f.result()
+
+        # Center (roughly) the spot on the CCD
+        f = spot.CenterSpot(main_data.ccd, sem_stage, main_data.ebeam,
+                            spot.ROUGH_MOVE, spot.STAGE_MOVE, main_data.bsd.data)
+        dist, vect = f.result()
+        if dist is None:
+            logging.warning("Failed to find a spot, twin stage calibration might have failed")
+
         try:
-            # Move back to the center for the shift calculation to make sure
-            # the spot is as sharp as possible since this is where the optical focus
-            # value corresponds to
-            f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
-            f.result()
-            f = opt_stage.moveAbs({"x": 0, "y": 0})
-            f.result()
-            f = main_data.focus.moveAbs({"z": ofoc})
-            f.result()
-            f = main_data.ebeam_focus.moveAbs({"z": good_focus})
-            f.result()
-
-            # Center (roughly) the spot on the CCD
-            f = spot.CenterSpot(main_data.ccd, sem_stage, main_data.ebeam,
-                                spot.ROUGH_MOVE, spot.STAGE_MOVE, main_data.bsd.data)
-            dist, vect = f.result()
-            if dist is None:
-                logging.warning("Failed to find a spot, twin stage calibration might have failed")
-
             # Compute spot shift percentage
             future.spot_shiftf = SpotShiftFactor(main_data.ccd, main_data.bsd,
                                                  main_data.ebeam, main_data.focus)
@@ -360,14 +361,19 @@ def _DoDelphiCalibration(future, main_data):
             calib_values["spot_shift"] = spotshift
             logger.debug("Spot shift: %s", spotshift)
 
-            # Compute resolution-related values
+            # Compute resolution-related values.
             # We measure the shift in the area just behind the hole where there
             # are always some features plus the edge of the sample carrier. For
             # that reason we use the focus measured in the hole detection step
+            f = sem_stage.moveAbs(SHIFT_DETECTION)
+            f.result()
+
+            f = main_data.ebeam_focus.moveAbs({"z": hfoc})
+            f.result()
+
             future.resolution_shiftf = ResolutionShiftFactor(main_data.bsd,
                                                              main_data.ebeam, sem_stage,
-                                                             main_data.ebeam_focus,
-                                                             hfoc)
+                                                             main_data.ebeam_focus)
             resa, resb = future.resolution_shiftf.result()
             calib_values["resolution_a"] = resa
             calib_values["resolution_b"] = resb
@@ -376,25 +382,29 @@ def _DoDelphiCalibration(future, main_data):
             # Compute HFW-related values
             future.hfw_shiftf = HFWShiftFactor(main_data.bsd,
                                                main_data.ebeam, sem_stage,
-                                               main_data.ebeam_focus,
-                                               hfoc)
+                                               main_data.ebeam_focus)
             hfwa = future.hfw_shiftf.result()
             calib_values["hfw_a"] = hfwa
             logger.debug("HFW A: %s", hfwa)
         except Exception:
             raise IOError("Failed to calculate shift parameters.")
 
-#         # TODO: why moving? It should already be at the right place, with the
-#         # right/improved focus
-#         # Return to the center so fine overlay can be executed just after calibration
-#         f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
-#         f.result()
-#         f = opt_stage.moveAbs({"x": 0, "y": 0})
-#         f.result()
-#         f = main_data.focus.moveAbs({"z": ofoc})
-#         f.result()
-#         f = main_data.ebeam_focus.moveAbs({"z": good_focus})
-#         f.result()
+        # Return to the center so fine overlay can be executed just after calibration
+        f = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
+        f.result()
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
+        f.result()
+        f = main_data.focus.moveAbs({"z": ofoc})
+        f.result()
+        f = main_data.ebeam_focus.moveAbs({"z": good_focus})
+        f.result()
+
+        # Center (roughly) the spot on the CCD
+        f = spot.CenterSpot(main_data.ccd, sem_stage, main_data.ebeam,
+                            spot.ROUGH_MOVE, spot.STAGE_MOVE, main_data.bsd.data)
+        dist, vect = f.result()
+        if dist is None:
+            logging.warning("Failed to find a spot, twin stage calibration might have failed")
 
         # Focus the CL spot using SEM focus
         # Configure CCD and e-beam to write CL spots
@@ -1268,7 +1278,7 @@ def estimateLensAlignmentTime():
     return 1  # s
 
 
-def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
+def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus):
     """
     Wrapper for DoHFWShiftFactor. It provides the ability to check the
     progress of the procedure.
@@ -1276,7 +1286,6 @@ def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOW
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
-    known_focus (float): Focus for shift calibration, output from hole detection #m
     returns (ProgressiveFuture): Progress DoHFWShiftFactor
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -1293,14 +1302,13 @@ def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOW
     # Run in separate thread
     hfw_shift_thread = threading.Thread(target=executeTask,
                                         name="HFW Shift Factor",
-                                        args=(f, _DoHFWShiftFactor, f, detector, escan, sem_stage, ebeam_focus,
-                                              known_focus))
+                                        args=(f, _DoHFWShiftFactor, f, detector, escan, sem_stage, ebeam_focus))
 
     hfw_shift_thread.start()
     return f
 
 
-def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
+def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
     """
     Acquires SEM images of several HFW values (from smallest to largest) and
     detects the shift between them using phase correlation. To this end, it has
@@ -1314,7 +1322,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
-    known_focus (float): Focus for shift calibration, output from hole detection #m
     returns (tuple of floats): slope of linear fit
     raises:
         CancelledError() if cancelled
@@ -1332,10 +1339,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         init_spot_size = escan.spotSize.value  # store current spot size
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
 
-        # Move Phenom sample stage to the first expected hole position
-        # to ensure there are some features for the phase correlation
-        f = sem_stage.moveAbs(SHIFT_DETECTION)
-        f.result()
         # Start with smallest FoV
         max_hfw = 1200e-06  # m
         min_hfw = 37.5e-06  # m
@@ -1349,9 +1352,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         f.result()
         detector.data.unsubscribe(_discard_data)
 
-        # Apply the given sem focus value for a good focus level
-        f = ebeam_focus.moveAbs({"z": known_focus})
-        f.result()
         smaller_image = None
         larger_image = None
         crop_res = (escan.resolution.value[0] / zoom_f,
@@ -1436,7 +1436,7 @@ def estimateHFWShiftFactorTime(et):
     return dur  # s
 
 
-def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
+def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus):
     """
     Wrapper for DoResolutionShiftFactor. It provides the ability to check the
     progress of the procedure.
@@ -1444,7 +1444,6 @@ def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=S
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
-    known_focus (float): Focus for shift calibration, output from hole detection #m
     returns (ProgressiveFuture): Progress DoResolutionShiftFactor
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -1463,13 +1462,13 @@ def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=S
                                                name="Resolution Shift Factor",
                                                args=(f, _DoResolutionShiftFactor,
                                                      f, detector, escan, sem_stage,
-                                                     ebeam_focus, known_focus))
+                                                     ebeam_focus))
 
     resolution_shift_thread.start()
     return f
 
 
-def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
+def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
     """
     Acquires SEM images of several resolution values (from largest to smallest)
     and detects the shift between each image and the largest one using phase
@@ -1482,7 +1481,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
-    known_focus (float): Focus for shift calibration, output from hole detection #m
     returns (tuple of floats): slope of linear fit
             (tuple of floats): intercept of linear fit
     raises:
@@ -1501,10 +1499,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
 
-        # Move Phenom sample stage to the first expected hole position
-        # to ensure there are some features for the phase correlation
-        f = sem_stage.moveAbs(SHIFT_DETECTION)
-        f.result()
         # Start with largest resolution
         max_resolution = 2048  # pixels
         min_resolution = 256  # pixels
@@ -1516,10 +1510,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
-
-        # Apply the given sem focus value for a good focus level
-        f = ebeam_focus.moveAbs({"z": known_focus})
-        f.result()
 
         smaller_image = None
         largest_image = None

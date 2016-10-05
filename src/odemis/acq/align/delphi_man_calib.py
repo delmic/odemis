@@ -304,8 +304,10 @@ def man_calib():
 
         if hole_focus is not None:
             good_focus = hole_focus - aligndelphi.GOOD_FOCUS_OFFSET
-            f = ebeam_focus.moveAbs({"z": good_focus})
-            f.result()
+        else:
+            good_focus = aligndelphi.SEM_KNOWN_FOCUS - aligndelphi.GOOD_FOCUS_OFFSET
+        f = ebeam_focus.moveAbs({"z": good_focus})
+        f.result()
 
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
@@ -421,6 +423,8 @@ def man_calib():
                     ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                     ar.focusByArrow()
 
+                    good_focus = ebeam_focus.position.value["z"]
+
                     # Center (roughly) the spot on the CCD
                     f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
                     dist, vect = f.result()
@@ -434,12 +438,21 @@ def man_calib():
                     new_spotshift = spot_shiftf.result()
 
                     print "\033[1;30mCalculating resolution and HFW shift, please wait...\033[1;m"
-                    # Compute resolution-related values
-                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, good_focus)
+                    # Compute resolution-related values.
+                    # We measure the shift in the area just behind the hole where there
+                    # are always some features plus the edge of the sample carrier. For
+                    # that reason we use the focus measured in the hole detection step
+                    f = sem_stage.moveAbs(aligndelphi.SHIFT_DETECTION)
+                    f.result()
+
+                    f = ebeam_focus.moveAbs({"z": hole_focus})
+                    f.result()
+
+                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus)
                     new_resa, new_resb = resolution_shiftf.result()
 
                     # Compute HFW-related values
-                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, good_focus)
+                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus)
                     new_hfwa = hfw_shiftf.result()
 
                     print '\033[1;36m'
@@ -483,6 +496,8 @@ def man_calib():
                     f.result()
 
                 f = focus.moveAbs({"z": opt_focus})
+                f.result()
+                f = ebeam_focus.moveAbs({"z": good_focus})
                 f.result()
 
                 # Run the optical fine alignment
