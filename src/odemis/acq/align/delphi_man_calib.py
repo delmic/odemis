@@ -251,6 +251,10 @@ def man_calib():
         f = chamber.moveAbs({"pressure": vacuum_pressure})
         f.result()
 
+        # Set basic e-beam settings
+        escan.spotSize.value = 2.7
+        escan.accelVoltage.value = 5300  # V
+
         while True:
             ans = None
             while ans not in YES_NO_CHARS:

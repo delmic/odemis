@@ -236,11 +236,12 @@ def _DoDelphiCalibration(future, main_data):
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
 
+        # Set basic e-beam settings
+        main_data.ebeam.spotSize.value = 2.7
+        main_data.ebeam.accelVoltage.value = 5300  # V
+
         # Update progress of the future
         future.set_progress(end=time.time() + 17.5 * 60)
-
-        if future._delphi_calib_state == CANCELLED:
-            raise CancelledError()
 
         # Detect the holes/markers of the sample holder
         try:
@@ -1548,22 +1549,29 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
                 # Ignore value between 2048 and 1024
                 cur_resolution = cur_resolution - 1024
 
+        logging.debug("Computed shift of %s for resolutions %s", shift_values, resolution_values)
         # Linear fit
         coefficients_x = array([resolution_values, ones(len(resolution_values))])
-        [a_nx, b_nx] = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0]  # obtaining the slope and intercept in x axis
+        a_nx, b_nx = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0]  # obtaining the slope and intercept in x axis
         coefficients_y = array([resolution_values, ones(len(resolution_values))])
-        [a_ny, b_ny] = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
+        a_ny, b_ny = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
+        logging.debug("Computed NX linear reg as %s, %s and NY as %s, %s", a_nx, b_nx, a_ny, b_ny)
+
         a_x = -1 / a_nx
         if math.isnan(a_x):
+            logging.warning("a_x is NaN, rounding up to 0")
             a_x = 0
         b_x = b_nx / a_nx
         if math.isnan(b_x):
+            logging.warning("b_x is NaN, rounding up to 0")
             b_x = 0
         a_y = -1 / a_ny
         if math.isnan(a_y):
+            logging.warning("a_y is NaN, rounding up to 0")
             a_y = 0
         b_y = b_ny / a_ny
         if math.isnan(b_y):
+            logging.warning("b_y is NaN, rounding up to 0")
             b_y = 0
         return (a_x, a_y), (b_x, b_y)
 
