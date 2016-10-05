@@ -1,3 +1,24 @@
+odemis (2.5.1-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5.1
+  * Main improvemnets and bugs fixed:
+    - Reuse name of current file and store current path for export file names
+    - Show the date of the file as the data of the _latest_ acquisition
+    - Show the tint of the filtered stream in legend of print-ready export (SECOM/DELPHI)
+    - Increase font size of spectra and AR print-ready exports (SPARC)
+    - Fix post-processable spatial export of spectra (SPARC)
+    - Fix export of spectra with pixel width > 1 (SPARC)
+    - Fix post-processable line-spectrum export (SPARC)
+    - Fix SEM stream doing twice alignement during high-quality acquisition (DELPHI)
+    - Fix shutter handling on SR193 (SPARC)
+    - Avoid potential GUI crashes when sample holder loading is completed (DELPHI)
+    - Fix editing the microscope file not showing the editor
+    - Don't attempt to autofocus CCDs with 1D (SPARC)
+    - Don't hide streams automatically on stage move (SECOM)
+    - Change Picoharp driver to provide pixelDuration VA instead of binning
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 05 Oct 2016 10:39:51 +0200
+
 odemis (2.5.0-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5
