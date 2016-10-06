@@ -1825,6 +1825,32 @@ class SparcStreamsController(StreamBarController):
         # view (and not on the current view)
         return super(SparcStreamsController, self).addEBIC(add_to_view=True, **kwargs)
 
+    def _add_sem_stream(self, name, detector, **kwargs):
+
+        # Only put some local VAs, the rest should be global on the SE stream
+        emtvas = get_local_vas(self._main_data_model.ebeam)
+        emtvas &= {"resolution", "dwellTime", "scale"}
+
+        s = acqstream.SEMStream(
+            name,
+            detector,
+            detector.data,
+            self._main_data_model.ebeam,
+            focuser=self._main_data_model.ebeam_focus,
+            emtvas=emtvas,
+            detvas=get_local_vas(detector),
+        )
+
+        # If the detector already handles brightness and contrast, don't do it by default
+        # TODO: check if it has .applyAutoContrast() instead (once it's possible)
+        if (s.intensityRange.range == ((0, 0), (255, 255)) and
+            model.hasVA(detector, "contrast") and
+            model.hasVA(detector, "brightness")):
+            s.auto_bc.value = False
+            s.intensityRange.value = (0, 255)
+
+        return self._add_stream(s, **kwargs)
+
     def _addRepStream(self, stream, mdstream, vas, axes, **kwargs):
         """
         Display and connect a new RepetitionStream to the GUI
