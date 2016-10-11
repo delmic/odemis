@@ -1008,7 +1008,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
-        init_spot_size = escan.spotSize.value  # store current spot size
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         holes_found = []
         hole_focus = None
@@ -1090,7 +1089,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         return first_hole, second_hole, hole_focus
 
     finally:
-        escan.spotSize.value = init_spot_size
         with future._detection_lock:
             future._done.set()
             if future._hole_detection_state == CANCELLED:
@@ -1336,7 +1334,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         escan.shift.value = (0, 0)
         escan.dwellTime.value = 7.5e-07  # s
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
-        init_spot_size = escan.spotSize.value  # store current spot size
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
 
         # Start with smallest FoV
@@ -1404,7 +1401,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         return c_x, c_y
 
     finally:
-        escan.spotSize.value = init_spot_size
         with future._hfw_shift_lock:
             if future._hfw_shift_state == CANCELLED:
                 raise CancelledError()
@@ -1495,7 +1491,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
-        init_spot_size = escan.spotSize.value  # store current spot size
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
 
@@ -1566,7 +1561,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         return (a_x, a_y), (b_x, b_y)
 
     finally:
-        escan.spotSize.value = init_spot_size
         with future._resolution_shift_lock:
             if future._resolution_shift_state == CANCELLED:
                 raise CancelledError()

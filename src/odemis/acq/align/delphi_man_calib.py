@@ -42,8 +42,10 @@ from odemis import model
 from odemis.acq import align
 from odemis.acq.align import spot
 from odemis.gui.conf import get_calib_conf
+import os
 import sys
 import threading
+import time
 import tty
 
 import odemis.acq.align.delphi as aligndelphi
@@ -140,37 +142,74 @@ class ArrowFocus():
             self._focus_thread.join(10)
 
 
-def man_calib():
-    try:
-        escan = None
-        detector = None
-        ccd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                escan = c
-            elif c.role == "bs-detector":
-                detector = c
-            elif c.role == "ccd":
-                ccd = c
-            elif c.role == "sem-stage":
-                sem_stage = c
-            elif c.role == "align":
-                opt_stage = c
-            elif c.role == "ebeam-focus":
-                ebeam_focus = c
-            elif c.role == "overview-focus":
-                navcam_focus = c
-            elif c.role == "focus":
-                focus = c
-            elif c.role == "overview-ccd":
-                overview_ccd = c
-            elif c.role == "chamber":
-                chamber = c
-        if not all([escan, detector, ccd]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+def list_hw_settings(escan, ccd):
 
+    et = ccd.exposureTime.value
+    cbin = ccd.binning.value
+    cres = ccd.resolution.value
+
+    eres = escan.resolution.value
+    scale = escan.scale.value
+    trans = escan.translation.value
+    dt = escan.dwellTime.value
+    av = escan.accelVoltage.value
+    sptsz = escan.spotSize.value
+
+    return (et, cbin, cres, eres, scale, trans, dt, av, sptsz)
+
+
+def resume_hw_settings(escan, ccd, hw_settings):
+    et, cbin, cres, eres, scale, trans, dt, av, sptsz = hw_settings
+
+    # order matters!
+    ccd.binning.value = cbin
+    ccd.resolution.value = cres
+
+    ccd.exposureTime.value = et
+
+    # order matters!
+    escan.scale.value = scale
+    escan.resolution.value = eres
+    escan.translation.value = trans
+
+    escan.dwellTime.value = dt
+    escan.accelVoltage.value = av
+    escan.spotSize.value = sptsz
+
+
+def man_calib():
+    escan = None
+    detector = None
+    ccd = None
+    # find components by their role
+    for c in model.getComponents():
+        if c.role == "e-beam":
+            escan = c
+        elif c.role == "bs-detector":
+            detector = c
+        elif c.role == "ccd":
+            ccd = c
+        elif c.role == "sem-stage":
+            sem_stage = c
+        elif c.role == "align":
+            opt_stage = c
+        elif c.role == "ebeam-focus":
+            ebeam_focus = c
+        elif c.role == "overview-focus":
+            navcam_focus = c
+        elif c.role == "focus":
+            focus = c
+        elif c.role == "overview-ccd":
+            overview_ccd = c
+        elif c.role == "chamber":
+            chamber = c
+    if not all([escan, detector, ccd]):
+        logging.error("Failed to find all the components")
+        raise KeyError("Not all components found")
+
+    hw_settings = list_hw_settings(escan, ccd)
+
+    try:
         # Get pressure values
         pressures = chamber.axes["pressure"].choices
         vacuum_pressure = min(pressures.keys())
@@ -422,6 +461,7 @@ def man_calib():
                     print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                     ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                     ar.focusByArrow()
+                    detector.data.unsubscribe(_discard_data)
 
                     good_focus = ebeam_focus.position.value["z"]
 
@@ -433,7 +473,6 @@ def man_calib():
 
                     print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
 
-                    detector.data.unsubscribe(_discard_data)
                     spot_shiftf = aligndelphi.SpotShiftFactor(ccd, detector, escan, focus)
                     new_spotshift = spot_shiftf.result()
 
@@ -519,7 +558,9 @@ def man_calib():
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                 ar.focusByArrow()
+                detector.data.unsubscribe(_discard_data)
 
+                # TODO: restore CCD settings (as the GUI/user might have changed them)
                 # Center (roughly) the spot on the CCD
                 f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
                 dist, vect = f.result()
@@ -527,7 +568,6 @@ def man_calib():
                     logging.warning("Failed to find a spot, twin stage calibration might have failed")
 
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
-                detector.data.unsubscribe(_discard_data)
                 try:
                     escan.horizontalFoV.value = 80e-06
                     f = align.FindOverlay((4, 4),
@@ -569,10 +609,10 @@ def man_calib():
         print "\033[1;30mUpdating calibration file is done, now ejecting, please wait...\033[1;m"
 
     finally:
-        # TODO: restore SEM scan settings
-
         # Eject the sample holder
         f = chamber.moveAbs({"pressure": vented_pressure})
+
+        resume_hw_settings(escan, ccd, hw_settings)
         f.result()
 
 
@@ -594,10 +634,25 @@ def main(args):
     if options.loglev < 0:
         logging.error("Log-level must be positive.")
         return 127
-    # TODO: allow to put logging level so low that nothing is ever output
+
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
-    logging.getLogger().setLevel(loglev)
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)  # To always pass all the messages to the handlers
+
+    # Show the log messages both on the console...
+    logging.basicConfig(format="%(levelname)s: %(message)s")
+    logger.handlers[0].setLevel(loglev)
+
+    # ...and also store them in the special file
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    path = os.path.join(os.path.expanduser(u"~"), aligndelphi.CALIB_DIRECTORY,
+                        time.strftime(u"%Y%m%d-%H%M%S"))
+    os.makedirs(path)
+    hdlr_calib = logging.FileHandler(os.path.join(path, aligndelphi.CALIB_LOG))
+    hdlr_calib.setFormatter(formatter)
+    hdlr_calib.setLevel(logging.DEBUG)  # Store always all the messages
+    logging.getLogger().addHandler(hdlr_calib)
 
     try:
         man_calib()
