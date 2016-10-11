@@ -39,6 +39,9 @@ To *clone* it, type::
 Note that Odemis can run in fully simulated mode, where no actual hardware is
 needed. In this case, it can run in a virtual machine.
 
+Odemis can also run partially (ie, the data manipulation part) on Windows. See
+the next section to install Odemis on this operating system.
+
 Detailed instructions
 ---------------------
 
@@ -150,33 +153,168 @@ this tool, it is better to first learning its basics before going further. Refer
 to tutorials such as `Pro Git <http://git-scm.com/book>`_ or
 `Easy Version Control with Git <http://code.tutsplus.com/tutorials/easy-version-control-with-git--net-7449>`_.
 
-Fixing a bug
-============
 
-Like every complex piece of software, Odemis contains bugs, even though we do
-our best to minimize their amount. In the event you are facing a bug, we advise
-you first to report it to us (bugreport@delmic.com). We might have already solved it
-or might be able to fix it for you. If neither of these two options work out,
-you can try to fix it yourself. When reporting a bug, please include a
-description of what is happening compared to what you expect to happen, the log
-files and screen-shots if relevant.
+Setting up the development environment on Windows
+=================================================
 
-If you try to solve a bug by yourself, the first step is to locate the bug. 
-Have a look at the log files:
+This section describes how to get the development version Odemis GUI working on
+MS Windows, so it can be used as an image viewer. It will also explain how to
+create an installer for easy distribution.
 
-* ``/var/log/odemis.log`` contains the logs of the back-end (odemisd)
-* ``~/odemis-gui.log`` contains the logs of the GUI (odemis-gui)
+Creating the Odemis environment
+-------------------------------
 
-It is also possible to run each part of Odemis independently. To get the maximum
-information, add ``--log-level=2`` as a start-up parameter of any of the Odemis 
-parts. By running a part from Eclipse, it's possible to use the visual debugger
-to observe the internal state of the python processes and place breakpoints.
-In order to avoid the container separation in the back-end, which prevents 
-debugging of the drivers, launch with the ``--debug`` parameter.
+First we create a base installation of Python 2.7:
 
-Once the bug fixed, commit your code using ``git add ...`` and ``git commit -a``.
-Export the patch with ``git format-patch -1`` and send it to us 
-(bugreport@delmic.com) for inclusion in the next version of Odemis.
+#.  Install the latest Python 2.7 32-bit release
+#.  Install setuptools using instructions from
+    https://pypi.python.org/pypi/setuptools
+#.  Download and run https://raw.github.com/pypa/pip/master/contrib/get-pip.py
+    to install pip
+#.  Use pip to install Virtualenv: `pip install virtualenv`.
+
+Additionally, virtualenv wrappers might be installed, which will make it a bit
+easier to work with in Windows Powershell or the regular command prompt.
+
+The next step is to create a virtualenv for Odemis and start installing the
+required packages into it.
+
+..Note: Pip cannot always be used, because some packages need to compile (parts
+of) themselves. In this case we need to download the relevant Windows installer
+and use `easy_install` (which is part of `setuptools`) to install the package.
+
+#.  Git clone https://github.com/delmic/odemis.git into the project directory of
+    the Odemis virtualenv.
+#.  Install wheel, so we can install binary packages using pip:
+    `pip install wheel`.
+#.  Install futures using `pip install futures`
+#.  Install Yaml using `pip install pyaml`
+#.  Install 0MQ using `pip install pyzmq`
+#.  Install the decorator module using `pip install decorator`
+
+#.  Install Delmic's special version of Pyro4:
+    `pip install git+https://github.com/delmic/Pyro4.git`
+#.  Install Numpy using `pip install "numpy-1.9.2+mkl-cp27-none-win32.whl"`,
+    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy
+#.  Install wxPython3.0 using
+    `pip install wxPython_common-3.0.2.0-py2-none-any.whl` followed by
+    `pip install wxPython-3.0.2.0-cp27-none-win32.whl`, downloaded from
+    http://www.lfd.uci.edu/~gohlke/pythonlibs/#wxpython
+#.  Install using `pip install libtiff-0.4.0-cp27-none-win32.whl`, downloaded
+    from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
+#.  `pip install scipy-0.15.1-cp27-none-win32.whl`, downloaded from
+    http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy
+#.  Install OpenCV using `pip install opencv_python-2.4.11-cp27-none-win32.whl`,
+    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
+#.  Install H5py using `pip install h5py-2.5.0-cp27-none-win32.whl`, downloaded
+    from http://www.lfd.uci.edu/~gohlke/pythonlibs/#h5py
+#.  Install Matplotlib using `pip install matplotlib-1.4.3-cp27-none-win32.whl`,
+    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#matplotlib
+#.  Download PyCairo from http://wxpython.org/cairo/ (The Wheel packages are not
+    suitable for use with wxPython). We also need `libcairo-2.dll`,
+    `freetype6.dll`, `libexpat-1.dll`, `libfontconfig-1.dll`, `libpng14-14.dll`
+    and `zlib1.dll` from this location.
+#.  Install PyCairo using `easy_install -Z py2cairo-1.10.0.win32-py2.7.exe` and
+    copy all DLL files to %Windows%/SysWOW64
+#.  Install Pillow, a repackaged version of PIL: `pip install Pillow`
+
+Building Cython module(s)
+-------------------------
+
+Some parts of Odemis are written with Cython, for optimization reasons. To build these modules on
+MS Windows, first install Visual Studio for Python 2.7, which can be found here:
+
+https://www.microsoft.com/en-us/download/details.aspx?id=44266
+
+This is a simple compiler distribution from Microsoft, specifically made for Python.
+
+After installation, use the `setup.py` file from the `install/windows` folder to
+build the `*.pyd` files:
+
+`python setup.py build_ext --inplace`
+
+**IMPORTANT**: It will be necessary to update the `productdir` path in the `setup.py` file!
+
+Installing PyInstaller
+----------------------
+
+#. Add the Odemis root path to the `virtualenv_path_extensions.pth` file in the virtualenv:
+   `<path to Odemis>\src`
+#. Install PyWin32: `easy_install pywin32-219.win32-py2.7.exe`
+#. Install PyInstaller: `pip install pyinstaller` or
+   `pip install git+git://github.com/pyinstaller/pyinstaller.git@develop` if pymzq is causing is
+   causing problems.
+#. Install MSVCP90.dll redistribution by running `vcredist_x86.exe`, otherwise Pyinstaller won't be
+   able to find and package it.
+
+Building the stand-alone Odemis viewer
+--------------------------------------
+
+`pyinstaller -y viewer.spec`
+
+Building Windows installer
+--------------------------
+
+Install Nsis and runL
+
+`"C:\Program Files (x86)\NSIS\makensis" setup.nsi`
+
+
+Setting up a data analysis environment on Windows
+=================================================
+
+For users which don't want to actually modify Odemis, but only rely on it as a
+Python module for data analysis, it's possible to set-up an environment in a
+relatively straight-forward way.
+
+
+Installing Odemis Viewer
+------------------------
+
+This is an optional step, which allows you to open and analyse acquisitions files
+straight into the same graphical interface as the acquisition software.
+
+Download the Odemis viewer from http://www.delmic.com/odemis. In case your
+browser warns you about potential thread, confirm you are willing to download
+the file. Then run the executable, and Odemis viewer will be available as a
+standard software.
+
+
+Installing Python environment
+-----------------------------
+
+This allows you to manipulate the data in Python, either by writing Python
+scripts, or via a command-line interface.
+
+#. Install Anaconda from https://www.continuum.io/downloads. Pick the Python 2.7
+version, with the right architecture for your computer (most likely 64-bit).
+
+#. Install Delmic's special version of Pyro4:
+   `pip install git+https://github.com/delmic/Pyro4.git`
+
+#. Install using `pip install libtiff-0.4.0-cp27-none-win64.whl` (or `-win32`),
+   downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
+
+#. Download the ZIP file of the latest release of Odemis from:
+   https://github.com/delmic/odemis/releases
+
+#. Extract the Odemis release into `C:\\Program Files\\Odemis` (or any folder of
+   your preference).
+
+#. Create an empty text file `odemis.pth` in the Anaconda Python installation folder:
+   `C:\\Users\\YOURUSERNAME\\Anaconda2\\Lib\\site-packages`. Make sure the file does
+   not have a `.txt` extension. Edit that file and enter the full path to the
+   Odemis source code, such as: `C:\\Program Files\\Odemis\\src\\`.
+
+You can now use Python via the "Spyder" interface. To read an acquisition file
+you can use code such as:
+
+.. code-block:: python
+
+    from odemis.dataio import hdf5
+    das = hdf5.read_data("C:\\Path\\to\\the\\acquistion.h5")
+    print das
+    print das[0].metadata
 
 
 Automating the acquisition of data
@@ -277,6 +415,36 @@ at 10 different dwell times, and save them in one HDF5 file.
 
 Alternatively you may want to add the automated task as one option to the GUI.
 See later section about extending the GUI.
+
+
+Fixing a bug
+============
+
+Like every complex piece of software, Odemis contains bugs, even though we do
+our best to minimize their amount. In the event you are facing a bug, we advise
+you first to report it to us (bugreport@delmic.com). We might have already solved it
+or might be able to fix it for you. If neither of these two options work out,
+you can try to fix it yourself. When reporting a bug, please include a
+description of what is happening compared to what you expect to happen, the log
+files and screen-shots if relevant.
+
+If you try to solve a bug by yourself, the first step is to locate the bug. 
+Have a look at the log files:
+
+* ``/var/log/odemis.log`` contains the logs of the back-end (odemisd)
+* ``~/odemis-gui.log`` contains the logs of the GUI (odemis-gui)
+
+It is also possible to run each part of Odemis independently. To get the maximum
+information, add ``--log-level=2`` as a start-up parameter of any of the Odemis 
+parts. By running a part from Eclipse, it's possible to use the visual debugger
+to observe the internal state of the python processes and place breakpoints.
+In order to avoid the container separation in the back-end, which prevents 
+debugging of the drivers, launch with the ``--debug`` parameter.
+
+Once the bug fixed, commit your code using ``git add ...`` and ``git commit -a``.
+Export the patch with ``git format-patch -1`` and send it to us 
+(bugreport@delmic.com) for inclusion in the next version of Odemis.
+
 
 Supporting new hardware
 =======================
