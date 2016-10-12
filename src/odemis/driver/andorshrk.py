@@ -72,11 +72,9 @@ SIDE_PORT = 1
 ERRORLENGTH = 64
 
 # A couple of handy constants
-SR303_SHUTTER_CLOSE = 0
-SR303_SHUTTER_OPEN = 1
-SR193_SHUTTER_OPEN = 0  # No comment...
-SR193_SHUTTER_CLOSE = 1
-SR193_SHUTTER_BNC = 2  # = driven by external signal
+SHUTTER_CLOSE = 0
+SHUTTER_OPEN = 1
+SHUTTER_BNC = 2  # = driven by external signal
 
 
 class ShamrockError(Exception):
@@ -999,29 +997,9 @@ class Shamrock(model.Actuator):
         return offset.value
 
     # Shutter management
-    # Note: as of SDK 2.101.30005, the documentation states that shutter is only
-    # supported on SR303, but actually, it also work on SR193, with three modes:
-    # Open, Close, BNC... however the values for open/close are inverted.
-
     def SetShutter(self, mode):
-        """
-        Wrapper function with mode following the SR193 convention, and based on
-        the actual device, it will adapt the value
-        mode (SR193_SHUTTER_*)
-        """
-        logging.info("Setting shutter to mode %d", mode)
-        if self._model == MODEL_SR303:
-            mode = {SR193_SHUTTER_CLOSE: SR303_SHUTTER_CLOSE,
-                    SR193_SHUTTER_OPEN: SR303_SHUTTER_OPEN}[mode]
-        elif self._model == MODEL_SR193:
-            pass
-        else:
-            logging.warning("Spectrograph model not known to support shutter")
-
-        self._SetShutter(mode)
-
-    def _SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
+        logging.info("Setting shutter to mode %d", mode)
         with self._hw_access:
             self._dll.ShamrockSetShutter(self._device, mode)
 
@@ -1454,9 +1432,9 @@ class Shamrock(model.Actuator):
         if not self.ShutterIsPresent():
             return
         if pos in self._drives_shutter:
-            self.SetShutter(SR193_SHUTTER_BNC)
+            self.SetShutter(SHUTTER_BNC)
         else:
-            self.SetShutter(SR193_SHUTTER_OPEN)
+            self.SetShutter(SHUTTER_OPEN)
 
     def stop(self, axes=None):
         """
@@ -1473,7 +1451,7 @@ class Shamrock(model.Actuator):
             self._executor = None
 
         if self.ShutterIsPresent():
-            self.SetShutter(SR193_SHUTTER_CLOSE)
+            self.SetShutter(SHUTTER_CLOSE)
 
         if self._device is not None:
             logging.debug("Shutting down the spectrograph")
@@ -1607,7 +1585,7 @@ class FakeShamrockDLL(object):
         # just for simulating the limitation of the iDus
         self._ccd = ccd
 
-        self._shutter_mode = SR193_SHUTTER_CLOSE
+        self._shutter_mode = SHUTTER_CLOSE
 
         # offsets
         # gratting number -> offset (int)
