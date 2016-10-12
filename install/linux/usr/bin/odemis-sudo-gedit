@@ -1,0 +1,13 @@
+#!/bin/bash
+# Open gedit with root permisions. It surprisingly difficult to do.
+
+# TODO use gedit version (3.10 != 3.18) instead of Ubuntu?
+uver="$(lsb_release -r -s)" # Ubuntu version
+if [ "$uver" = "12.04" ]; then
+	# On 12.04, copying DBUS_SESSION_BUS_ADDRESS prevents gedit to show up
+	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY gedit "$@"
+else
+	# On 16.04, without DBUS_SESSION_BUS_ADDRESS, there is no menu
+	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY GTK_MODULES=$GTK_MODULES DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS gedit "$@"
+fi
+

@@ -2,7 +2,7 @@
 Name=Edit odemis.conf
 Comment=Edit main Odemis configuration file as root
 Keywords=odemis.conf
-Exec=sh -c "pkexec env DISPLAY\=\$DISPLAY XAUTHORITY\=\$XAUTHORITY GTK_MODULES\=\$GTK_MODULES DBUS_SESSION_BUS_ADDRESS\=\$DBUS_SESSION_BUS_ADDRESS gedit /etc/odemis.conf"
+Exec=odemis-sudo-gedit /etc/odemis.conf
 Type=Application
 StartupNotify=true
 Icon=accessories-text-editor
