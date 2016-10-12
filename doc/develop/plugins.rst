@@ -204,7 +204,7 @@ before the window is displayed). However, it is possible to find them in the
 odemis-gui.log file. It's also possible to look for such errors by simply loading
 the plugin with python. For instance, do a in terminal:
 
-``python ~/.local/usr/share/odemis/plugins/Myplugin.py``
+``python ~/.local/share/odemis/plugins/Myplugin.py``
 
 This shouldn't display anything, unless there are errors.
 
