@@ -635,7 +635,8 @@ class PH300(model.Detector):
                 while True:
                     tacq = self.dwellTime.value
                     tstart = time.time()
-                    tend = tstart + tacq * 3 + 1  # Give a big margin for timeout
+                    tend = tstart + tacq
+                    ttimeout = tstart + tacq * 3 + 1  # Give a big margin for timeout
 
                     # TODO: only allow to update the setting here (not during acq)
                     md = self._metadata.copy()
@@ -656,7 +657,7 @@ class PH300(model.Detector):
                     must_stop = False
                     try:
                         now = tstart
-                        while now < tend:
+                        while now < ttimeout:
                             twait = max(1e-3, min((tend - now) / 2, tacq / 2))
                             logging.debug("Waiting for %g s", twait)
                             if self._acq_should_stop(twait):
@@ -665,11 +666,11 @@ class PH300(model.Detector):
 
                             # Is the data ready?
                             if self.CTCStatus():
-                                logging.debug("acq still running")
+                                logging.debug("Acq complete")
                                 break
                             now = time.time()
                         else:
-                            logging.error("Acquisition timeout after %g s", tend - tstart)
+                            logging.error("Acquisition timeout after %g s", now - tstart)
                             # TODO: try to reset the hardware?
                             continue
                     finally:
