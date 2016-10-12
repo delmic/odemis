@@ -1155,11 +1155,11 @@ class SEMComedi(model.HwComponent):
                                         rranges, period / dpr, osr, wdata, ss,
                                         rest=(islast and self._scanner.fast_park))
                 # decimate into intermediary buffer
-                px_rbuf[d] = numpy.sum(rbuf, axis=0, dtype=adtype) / (osr * dpr)
+                px_rbuf[d] = numpy.sum(rbuf, axis=0, dtype=adtype)
 
             # decimate into each buffer
             for i, b in enumerate(buf):
-                self._scan_raw_to_pixel(rshape, margin, 1, dpr, x, y,
+                self._scan_raw_to_pixel(rshape, margin, osr, dpr, x, y,
                                         px_rbuf[..., i], b, adtype)
 
         return buf
