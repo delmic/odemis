@@ -179,7 +179,7 @@ easier to work with in Windows Powershell or the regular command prompt.
 The next step is to create a virtualenv for Odemis and start installing the
 required packages into it.
 
-..Note: Pip cannot always be used, because some packages need to compile (parts
+Note: Pip cannot always be used, because some packages need to compile (parts
 of) themselves. In this case we need to download the relevant Windows installer
 and use `easy_install` (which is part of `setuptools`) to install the package.
 
@@ -191,7 +191,6 @@ and use `easy_install` (which is part of `setuptools`) to install the package.
 #.  Install Yaml using `pip install pyaml`
 #.  Install 0MQ using `pip install pyzmq`
 #.  Install the decorator module using `pip install decorator`
-
 #.  Install Delmic's special version of Pyro4:
     `pip install git+https://github.com/delmic/Pyro4.git`
 #.  Install Numpy using `pip install "numpy-1.9.2+mkl-cp27-none-win32.whl"`,
@@ -215,7 +214,7 @@ and use `easy_install` (which is part of `setuptools`) to install the package.
     `freetype6.dll`, `libexpat-1.dll`, `libfontconfig-1.dll`, `libpng14-14.dll`
     and `zlib1.dll` from this location.
 #.  Install PyCairo using `easy_install -Z py2cairo-1.10.0.win32-py2.7.exe` and
-    copy all DLL files to %Windows%/SysWOW64
+    copy all DLL files to `%Windows%\\SysWOW64`
 #.  Install Pillow, a repackaged version of PIL: `pip install Pillow`
 
 Building Cython module(s)
@@ -257,7 +256,7 @@ Building Windows installer
 
 Install Nsis and runL
 
-`"C:\Program Files (x86)\NSIS\makensis" setup.nsi`
+`"C:\\Program Files (x86)\\NSIS\\makensis" setup.nsi`
 
 
 Setting up a data analysis environment on Windows
@@ -287,7 +286,7 @@ This allows you to manipulate the data in Python, either by writing Python
 scripts, or via a command-line interface.
 
 #. Install Anaconda from https://www.continuum.io/downloads. Pick the Python 2.7
-version, with the right architecture for your computer (most likely 64-bit).
+   version, with the right architecture for your computer (most likely 64-bit).
 
 #. Install Delmic's special version of Pyro4:
    `pip install git+https://github.com/delmic/Pyro4.git`
@@ -303,7 +302,7 @@ version, with the right architecture for your computer (most likely 64-bit).
 
 #. Create an empty text file `odemis.pth` in the Anaconda Python installation folder:
    `C:\\Users\\YOURUSERNAME\\Anaconda2\\Lib\\site-packages`. Make sure the file does
-   not have a `.txt` extension. Edit that file and enter the full path to the
+   *not* have a `.txt` extension. Edit that file and enter the full path to the
    Odemis source code, such as: `C:\\Program Files\\Odemis\\src\\`.
 
 You can now use Python via the "Spyder" interface. To read an acquisition file
