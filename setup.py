@@ -89,6 +89,7 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-cycle',
                'install/linux/usr/bin/odemis-relay',
                'install/linux/usr/bin/odemis-bug-report',
+               'install/linux/usr/bin/odemis-sudo-gedit',
                'install/linux/usr/bin/odemis-edit-mic',
                'install/linux/usr/bin/odemis-hw-status',
                'install/linux/usr/bin/odemis-live-view',
