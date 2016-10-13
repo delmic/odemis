@@ -55,8 +55,10 @@ LENS_RADIUS = 0.0024  # Expected lens radius
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
 # Positions to scan for rotation and scaling calculation
-ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
-                  {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
+# In theory, the range of the optical stage is about 4mm in every direction,
+# but that can be a little shifted, so we have a 0.5 mm margin.
+ROTATION_SPOTS = ({"x":3.5e-3, "y":0}, {"x":-3.5e-3, "y":0},
+                  {"x":0, "y":3.5e-3}, {"x":0, "y":-3.5e-3})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
 SHIFT_DETECTION = {"x":0, "y":11.7e-03}  # Use holder hole images to measure the shift
