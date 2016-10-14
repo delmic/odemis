@@ -1,3 +1,15 @@
+odemis (2.5.2-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5.2
+  * Main improvements and bugs fixed:
+    - Fix GUI initialisation on DELPHI
+    - Limit stage positions during Twin stage calibration to improve reliability (DELPHI)
+    - Fix reduced precision when SEM dwell time > 12s (SPARC)
+    - Fix "edit odemis.conf" not having any effect
+    - Try to handle better acquisition errors of uEye cameras (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 14 Oct 2016 18:08:58 +0200
+
 odemis (2.5.1-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5.1
