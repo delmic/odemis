@@ -653,8 +653,9 @@ class DelphiStateController(SecomStateController):
 
     cls_streams_involved = stream.Stream
 
-    def __init__(self, *args, **kwargs):
-        super(DelphiStateController, self).__init__(*args, **kwargs)
+    def __init__(self, tab_data, tab_panel, *args, **kwargs):
+        super(DelphiStateController, self).__init__(tab_data, tab_panel, *args, **kwargs)
+
         self._main_frame = self._tab_panel.Parent
         self._calibconf = get_calib_conf()
 
