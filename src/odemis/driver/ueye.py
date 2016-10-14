@@ -415,10 +415,10 @@ class UEyeDLL(CDLL):
             # Note: is_GetError() return the specific error state for a given camera
             if result in UEyeDLL.err_code:
                 raise UEyeError(result, "Call to %s failed with error %s (%d)" %
-                               (fn, UEyeDLL.err_code[result], result))
+                                (fn, UEyeDLL.err_code[result], result))
             else:
                 raise UEyeError(result, "Call to %s failed with error %d" %
-                               (fn, result))
+                                (fn, result))
         return result
 
     def __getitem__(self, name):
@@ -1145,7 +1145,7 @@ class Camera(model.DigitalCamera):
                             # indicate to be live but asking again can fail => wait
                             try:
                                 if self._dll.is_CaptureVideo(self._hcam, GET_LIVE):
-                                    self.StopLiveVideo(wait=False)
+                                    self.StopLiveVideo()
                             except UEyeError as ex:
                                 logging.warning("Failed to stop video (%s), will try again", ex)
                                 self._check_capture_status()
@@ -1171,7 +1171,17 @@ class Camera(model.DigitalCamera):
 
                         # Start acquisition
                         if not sync:
-                            self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
+                            try:
+                                self._dll.is_CaptureVideo(self._hcam, DONT_WAIT)
+                            except UEyeError as ex:
+                                # Sometimes it raises NO_SUCCESS/CAPTURE_RUNNING
+                                # (for instance when the camera got disconnected)
+                                # => try again
+                                logging.warning("Failed to start video (%s), will try again", ex)
+                                self._check_capture_status()
+                                time.sleep(1)
+                                need_reinit = True
+                                continue
                         need_reinit = False
 
                     # Acquire an image
@@ -1197,15 +1207,29 @@ class Camera(model.DigitalCamera):
                         logging.debug("Waiting for %g s", timeout)
                         mem, imid = self.WaitForNextImage(timeout)
                     except UEyeError as ex:
-                        # Note: generates error 3 (CANT_OPEN_DEVICE) sometimes just after updating settings
                         num_errors += 1
-                        if num_errors > 5:
-                            logging.error("%d errors in a row, cancelling acquisition", num_errors)
-                            return
-                        logging.warning("Failure during acquisition, will retry: %s", ex)
                         self._check_capture_status()
-                        time.sleep(1)
+                        if num_errors > 5:
+                            logging.error("%d errors in a row, stopping acquisition", num_errors)
+                            return
+                        logging.warning("Failure during acquisition: %s. Will retry.", ex)
+                        if ex.errno == 3 and num_errors == 0:  # CANT_OPEN_DEVICE
+                            # Error CANT_OPEN_DEVICE often happens just after
+                            # updating settings, and from time to time, coupled
+                            # with USB_TRANSFER_FAILED in the status. Just trying
+                            # again is enough.
+                            continue
+
+                        # TODO: also handle 122 (TIMED_OUT), need_reinit doesn't seem to help... but stopping/starting the acquisition does
+                        # => StopLiveVideo()?
+
+                        # Let's just wait a bit, and restart the acquisition
+                        time.sleep(0.2)
                         need_reinit = True
+                        try:
+                            self.StopLiveVideo()
+                        except UEyeError:
+                            logging.warning("Failed to stop video (%s), will continue anyway", ex)
                         continue
                     else:
                         num_errors = 0
