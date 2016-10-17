@@ -1,3 +1,11 @@
+odemis (2.5.3-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5.3
+  * Bug fixed:
+    - Fix display of SEM stream alignment message (DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 17 Oct 2016 12:38:58 +0200
+
 odemis (2.5.2-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5.2
