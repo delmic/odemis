@@ -283,9 +283,10 @@ def FindSpot(image, sensitivity_limit=100):
     max_intensity = 0
     max_pos = optical_coordinates[0]
     for i in optical_coordinates:
-        if image[i[1], i[0]] >= max_intensity:
+        x, y = int(round(i[1])), int(round(i[0]))
+        if image[x, y] >= max_intensity:
             max_pos = i
-            max_intensity = image[i[1], i[0]]
+            max_intensity = image[x, y]
     return max_pos
 
 
