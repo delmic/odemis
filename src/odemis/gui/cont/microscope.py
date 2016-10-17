@@ -34,7 +34,8 @@ from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
+    EllipsisAnimator
 from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
 import threading
