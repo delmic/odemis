@@ -24,6 +24,7 @@ import glob
 import logging
 from odemis import dataio, model, acq
 from odemis.acq import drift
+from odemis.acq.align import autofocus
 import os
 import sys
 
@@ -56,23 +57,25 @@ def read_timelapse(infn, emfn, fmfn):
             das = reader.read_data(infl)
             
             # Read the metadata (we expect one fluo image and one SEM image)
-            fmpos = empos = emda = fmda = None
+            fmpos = empos = emda = fmda = fmfoc = emfoc = None
             for da in das:
                 if model.MD_IN_WL in da.metadata: # Fluo image
                     fmpos = da.metadata[model.MD_POS] # this one has the overlay translation included
                     fmdate = da.metadata[model.MD_ACQ_DATE]
                     fmda = da
                     fmpxs = da.metadata[model.MD_PIXEL_SIZE]
+                    fmfoc = autofocus.MeasureOpticalFocus(da)
                 else: # SEM
                     empos = da.metadata[model.MD_POS]
                     emdate = da.metadata[model.MD_ACQ_DATE]
                     emda = da
                     empxs = da.metadata[model.MD_PIXEL_SIZE]
+                    emfoc = autofocus.MeasureSEMFocus(da)
             
             # Overlay translation
             ovlpos = fmpos[0] - empos[0], fmpos[1] - empos[1]
 
-            # Compute drfit from first image and previous image
+            # Compute drift from first image and previous image
             if i == 0:
                 emda0 = emda
                 fmda0 = fmda
@@ -97,8 +100,8 @@ def read_timelapse(infn, emfn, fmfn):
                 fmpdriftm = fmpdrift[0] * fmpxs[0], fmpdrift[1] * fmpxs[1]
                 logging.info("Computed previous FM drift of %s px = %s m", fmpdrift, fmpdriftm)
 
-            emdata[emdate] = (empos[0], empos[1], ovlpos[0], ovlpos[1], emdriftm[0], emdriftm[1], empdriftm[0], empdriftm[1])
-            fmdata[fmdate] = (fmpos[0], fmpos[1], fmdriftm[0], fmdriftm[1], fmpdriftm[0], fmpdriftm[1])
+            emdata[emdate] = (empos[0], empos[1], ovlpos[0], ovlpos[1], emdriftm[0], emdriftm[1], empdriftm[0], empdriftm[1], emfoc)
+            fmdata[fmdate] = (fmpos[0], fmpos[1], fmdriftm[0], fmdriftm[1], fmpdriftm[0], fmpdriftm[1], fmfoc)
 
             emda_prev = emda
             fmda_prev = fmda
@@ -110,8 +113,8 @@ def read_timelapse(infn, emfn, fmfn):
 
     # export the data
     logging.info("Exporting the data...")
-    export_csv(emdata, emfn, "timestamp, posx, posy, overlay x, overlay y, total drift x, total drift y, prev drift x, prev drift y")
-    export_csv(fmdata, fmfn, "timestamp, posx, posy, total drift x, total drift y, prev drift x, prev drift y")
+    export_csv(emdata, emfn, "timestamp, posx, posy, overlay x, overlay y, total drift x, total drift y, prev drift x, prev drift y, focus level\n")
+    export_csv(fmdata, fmfn, "timestamp, posx, posy, total drift x, total drift y, prev drift x, prev drift y, focus level\n")
 
     return 0
 
