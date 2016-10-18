@@ -1193,6 +1193,7 @@ class DelphiStateController(SecomStateController):
             self._calibconf,
             shid
         )
+        calib_dialog.Title = "Sample holder automatic calibration"
         calib_dialog.Center()
         calib_dialog.ShowModal()
 

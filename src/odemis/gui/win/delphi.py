@@ -149,20 +149,19 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.info_txt.SetLabel("Calibration of the sample holder in progress")
-        self.Fit()
-        # self.Layout()  # to put the gauge at the right place
         self.calib_future = DelphiCalibration(main_data)
         self._calib_future_connector = ProgressiveFutureConnector(self.calib_future,
                                                                   self.gauge,
                                                                   self.time_txt)
         self.calib_future.add_done_callback(self.on_calib_done)
-        # self.calib_future.add_update_callback(self.on_calib_update)
+        self.Fit()
 
-    # def update_calibration_time(self, time):
-    #     txt = "Time remaining: {}"
-    #     txt = txt.format(units.readable_time(time))
-    #
-    #     self.time_txt.SetLabel(txt)
+    def Fit(self):
+        # On a wxFrame, it typically does nothing => adjust to panel
+        child = self.Children[0]
+        child.Layout()
+        child.Fit()
+        self.ClientSize = child.BestSize
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
@@ -171,9 +170,6 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             msg = "Cancelling calibration due to closing the calibration window"
             logging.info(msg)
             self.calib_future.cancel()
-
-        if self.cancel_btn.GetLabel() == "Run":
-            ManualCalibration()
 
         self.Destroy()
 
@@ -187,46 +183,46 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.calib_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
+    def on_run_manual(self, evt):
+        """
+        Handle the "Run" manual calibration button
+        """
+        ManualCalibration()
+        self.Destroy()
+
     @call_in_wx_main
     def on_calib_done(self, future):
         """ Callback called when the calibration is finished (either successfully or cancelled) """
         # bind button back to direct closure
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_close)
         try:
-            htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
+            shcalib = future.result(1)  # timeout is just for safety
         except CancelledError:
             # hide progress bar (+ put pack estimated time)
             self.time_txt.SetLabel("Calibration cancelled.")
             self.cancel_btn.SetLabel("Close")
             self.gauge.Hide()
-            self.Layout()
+            self.Fit()
             return
         except Exception as e:
             # Suggest to the user to run the semi-manual calibration
             self.calib_future.cancel()
-            self.time_txt.SetLabel("Automatic calibration failed.\n"
-                                   + str(e) + "\n"
+            self.time_txt.SetLabel("Automatic calibration failed:\n"
+                                   "%s\n\n"
                                    "Please follow the manual calibration procedure. \n"
-                                   "Press Run to start.")
+                                   "Press Run to start." % (e,))
             self.cancel_btn.SetLabel("Run")
-            # leave the gauge, to give a hint on what went wrong.
+            self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_run_manual)
+            self.Fit()
             return
 
         # Update the calibration file
-        self._calibconf.set_sh_calib(self._shid, htop, hbot, hfoc, strans,
-                                     sscale, srot, iscale, irot, iscale_xy, ishear,
-                                     resa, resb, hfwa, spotshift)
+        self._calibconf.set_sh_calib(self._shid, *shcalib)
 
         # self.update_calibration_time(0)
         self.time_txt.SetLabel("Calibration completed.")
         # As the action is complete, rename "Cancel" to "Close"
         self.cancel_btn.SetLabel("Close")
-
-    # @call_in_wx_main
-    # @ignore_dead
-    # def on_calib_update(self, future, past, left):
-    #     """ Callback called when the calibration time is updated (either successfully or cancelled) """
-    #     self.update_calibration_time(left)
 
 
 def ManualCalibration():
@@ -240,4 +236,5 @@ def ManualCalibration():
 def _threadManualCalib():
     logging.info("Starting manual calibration for sample holder")
     ret = subprocess.call(["gnome-terminal", "-e", "python -m odemis.acq.align.delphi_man_calib"])
-    logging.info("Manual calibration returned %d", ret)
+    if ret != 0:
+        logging.error("Manual calibration returned %d", ret)
