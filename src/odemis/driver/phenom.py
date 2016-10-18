@@ -182,9 +182,7 @@ class SEM(model.HwComponent):
         # source tilt or we can just access the blanking Phenom API methods
         phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
         logging.debug("Methods available in Phenom host: %s", phenom_methods)
-        self._blank_supported = False
-        if "SEMBlankBeam" in phenom_methods:
-            self._blank_supported = True
+        self._blank_supported = ("SEMBlankBeam" in phenom_methods)
         self._device = client.service
 
         # check Phenom's state and raise HwError if it reports error mode
