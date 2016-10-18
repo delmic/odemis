@@ -126,7 +126,6 @@ class GridScanner(object):
         Perform acquisition spot per spot.
         Slow, but works even if SEM FoV is small
         """
-        # TODO support background substraction also in spot per spot scanning
         escan = self.escan
         ccd = self.ccd
         detector = self.detector

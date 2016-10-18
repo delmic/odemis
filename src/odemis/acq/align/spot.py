@@ -28,13 +28,12 @@ import logging
 import math
 import numpy
 from odemis import model
-import odemis.util.spot as uspot
 from odemis.acq._futures import executeTask
+from odemis.acq.align import coordinates
+from odemis.acq.align.autofocus import AcquireNoBackground
+from odemis.util.spot import FindCenterCoordinates
 import threading
 import time
-
-from autofocus import AcquireNoBackground
-import coordinates
 
 from . import autofocus
 
@@ -59,6 +58,7 @@ def MeasureSNR(image):
     snr = ms / sdn
 
     return snr
+
 
 def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=None, method_f="binary"):
     """
@@ -136,7 +136,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
         # TODO: start with binning 2x2 for rough spot centering?
         ccd.binning.value = (1, 1)
         ccd.resolution.value = ccd.resolution.range[1]
-        ccd.exposureTime.value = 600e-03
+        ccd.exposureTime.value = 0.6
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
 
@@ -145,13 +145,13 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, method_f)
         logging.debug("Adjust exposure time...")
         if dfbkg is None:
             # Long exposure time to compensate for no background subtraction
-            ccd.exposureTime.value = 1100e-03
+            ccd.exposureTime.value = 1.1
         else:
             # Estimate noise and adjust exposure time based on "Rose criterion"
             image = AcquireNoBackground(ccd, dfbkg)
             snr = MeasureSNR(image)
-            while (snr < 5 and ccd.exposureTime.value < 900e-03):
-                ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
+            while snr < 5 and ccd.exposureTime.value < 0.9:
+                ccd.exposureTime.value = ccd.exposureTime.value + 0.1
                 image = AcquireNoBackground(ccd, dfbkg)
                 snr = MeasureSNR(image)
         et = ccd.exposureTime.value
@@ -277,7 +277,7 @@ def FindSpot(image, sensitivity_limit=100):
     if subimages == []:
         raise ValueError("No spot detected")
 
-    spot_coordinates = [uspot.FindCenterCoordinates(i) for i in subimages]
+    spot_coordinates = [FindCenterCoordinates(i) for i in subimages]
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
     # Too many spots detected
@@ -397,7 +397,6 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
             # * 1 µm (because that's the best resolution of our actuators)
             err_mrg = max(1.5 * pixelSize[0], 1e-06)  # m
 
-            # FIXME: spot_pxs is _already_ compared to the center of the image
             tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
             tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
             logging.debug("Found spot @ %s px", spot_pxs)

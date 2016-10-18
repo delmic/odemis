@@ -415,7 +415,6 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
                                            list(compress(optical_coordinates, o_match_points)))
 
     # Average between the two parameters
-    # TODO: use numpy.mean()
     avg_move = ((move1[0] + move2[0]) / 2, (move1[1] + move2[1]) / 2)
     avg_scale = ((scale1[0] + scale2[0]) / 2, (scale1[1] + scale2[1]) / 2)
     avg_rotation = (rotation1 + rotation2) / 2

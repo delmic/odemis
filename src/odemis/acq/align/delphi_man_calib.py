@@ -43,6 +43,7 @@ from odemis.acq import align
 from odemis.acq.align import spot
 from odemis.gui.conf import get_calib_conf
 import os
+import shutil
 import sys
 import threading
 import time
@@ -50,6 +51,7 @@ import tty
 
 import odemis.acq.align.delphi as aligndelphi
 import termios
+from sys import exc_info
 
 
 YES_CHARS = {"Y", "y", ''}
@@ -142,42 +144,7 @@ class ArrowFocus():
             self._focus_thread.join(10)
 
 
-def list_hw_settings(escan, ccd):
-
-    et = ccd.exposureTime.value
-    cbin = ccd.binning.value
-    cres = ccd.resolution.value
-
-    eres = escan.resolution.value
-    scale = escan.scale.value
-    trans = escan.translation.value
-    dt = escan.dwellTime.value
-    av = escan.accelVoltage.value
-    sptsz = escan.spotSize.value
-
-    return (et, cbin, cres, eres, scale, trans, dt, av, sptsz)
-
-
-def resume_hw_settings(escan, ccd, hw_settings):
-    et, cbin, cres, eres, scale, trans, dt, av, sptsz = hw_settings
-
-    # order matters!
-    ccd.binning.value = cbin
-    ccd.resolution.value = cres
-
-    ccd.exposureTime.value = et
-
-    # order matters!
-    escan.scale.value = scale
-    escan.resolution.value = eres
-    escan.translation.value = trans
-
-    escan.dwellTime.value = dt
-    escan.accelVoltage.value = av
-    escan.spotSize.value = sptsz
-
-
-def man_calib():
+def man_calib(logpath):
     escan = None
     detector = None
     ccd = None
@@ -207,7 +174,7 @@ def man_calib():
         logging.error("Failed to find all the components")
         raise KeyError("Not all components found")
 
-    hw_settings = list_hw_settings(escan, ccd)
+    hw_settings = aligndelphi.list_hw_settings(escan, ccd)
 
     try:
         # Get pressure values
@@ -280,7 +247,7 @@ def man_calib():
             f = aligndelphi.LensAlignment(overview_ccd, sem_stage)
             position = f.result()
         except Exception:
-            raise IOError("Lens alignment failed.")
+            raise IOError("Failed to locate the optical lens in the NavCam view.")
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -294,14 +261,13 @@ def man_calib():
         escan.spotSize.value = 2.7
         escan.accelVoltage.value = 5300  # V
 
+        # Detect the holes/markers of the sample holder
         while True:
             ans = None
             while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
                 ans = raw_input(msg)
             if ans in YES_CHARS or force_calib:
-                # Compute stage calibration values
-                # Detect the holes/markers of the sample holder
                 # Move Phenom sample stage to expected hole position
                 f = sem_stage.moveAbs(aligndelphi.EXPECTED_HOLES[0])
                 f.result()
@@ -314,7 +280,6 @@ def man_calib():
                     hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
                                                                 ebeam_focus, manual=True)
                     new_first_hole, new_second_hole, new_hole_focus = hole_detectionf.result()
-                    new_hole_focus = ebeam_focus.position.value.get('z')
                     print '\033[1;36m'
                     print "Values computed: 1st hole: " + str(new_first_hole)
                     print "                 2st hole: " + str(new_second_hole)
@@ -384,8 +349,8 @@ def man_calib():
                     rollback_pos = None
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                 ar.focusByArrow(rollback_pos)
-                print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
+                print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 try:
                     # TODO: the first point (at 0,0) isn't different from the next 4 points,
                     # excepted it might be a little harder to focus.
@@ -395,9 +360,25 @@ def man_calib():
                     align_offset = align_offsetf.result()
                     new_opt_focus = focus.position.value.get('z')
 
-                    rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
-                                                                       opt_stage, focus, align_offset, manual=True)
-                    acc_offset, new_rotation, new_scaling = rotation_scalingf.result()
+                    def ask_user_to_focus(n):
+                        detector.data.subscribe(_discard_data)
+                        msg = ("\033[1;34mAbout to calculate rotation and scaling (%d/4). "
+                               "Please turn on the Optical stream, "
+                               "set Power to 0 Watt and focus the image using the mouse "
+                               "so you have a clearly visible spot. \n"
+                               "If you do not see a spot nor the source background, "
+                               "move the sem-stage from the command line by steps of 200um "
+                               "in x and y until you can see the source background at the center. \n"
+                               "Then turn off the stream and press Enter ...\033[1;m" %
+                               (n + 1,))
+                        raw_input(msg)  # TODO: use ArrowFocus() too?
+                        print "\033[1;30mCalculating rotation and scaling (%d/4), please wait...\033[1;m" % (n + 1,)
+                        detector.data.unsubscribe(_discard_data)
+
+                    f = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
+                                                       opt_stage, focus, align_offset,
+                                                       manual=ask_user_to_focus)
+                    acc_offset, new_rotation, new_scaling = f.result()
 
                     # Offset is divided by scaling, since Convert Stage applies scaling
                     # also in the given offset
@@ -445,10 +426,7 @@ def man_calib():
 
                 try:
                     # Compute spot shift percentage
-                    # Configure CCD and e-beam to write CL spots
-                    ccd.binning.value = (1, 1)
-                    ccd.resolution.value = ccd.resolution.range[1]
-                    ccd.exposureTime.value = 900e-03
+                    # Configure e-beam to write CL spots
                     escan.scale.value = (1, 1)
                     escan.resolution.value = (1, 1)
                     escan.translation.value = (0, 0)
@@ -462,9 +440,12 @@ def man_calib():
                     ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                     ar.focusByArrow()
                     detector.data.unsubscribe(_discard_data)
-
                     good_focus = ebeam_focus.position.value["z"]
 
+                    # restore CCD settings (as the GUI/user might have changed them)
+                    ccd.binning.value = (1, 1)
+                    ccd.resolution.value = ccd.resolution.range[1]
+                    ccd.exposureTime.value = 900e-03
                     # Center (roughly) the spot on the CCD
                     f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
                     dist, vect = f.result()
@@ -541,10 +522,7 @@ def man_calib():
 
                 # Run the optical fine alignment
                 # TODO: reuse the exposure time
-                # Configure CCD and e-beam to write CL spots
-                ccd.binning.value = (1, 1)
-                ccd.resolution.value = ccd.resolution.range[1]
-                ccd.exposureTime.value = 900e-03
+                # Configure e-beam to write CL spots
                 escan.horizontalFoV.value = escan.horizontalFoV.range[0]
                 escan.scale.value = (1, 1)
                 escan.resolution.value = (1, 1)
@@ -560,7 +538,10 @@ def man_calib():
                 ar.focusByArrow()
                 detector.data.unsubscribe(_discard_data)
 
-                # TODO: restore CCD settings (as the GUI/user might have changed them)
+                # restore CCD settings (as the GUI/user might have changed them)
+                ccd.binning.value = (1, 1)
+                ccd.resolution.value = ccd.resolution.range[1]
+                ccd.exposureTime.value = 900e-03
                 # Center (roughly) the spot on the CCD
                 f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
                 dist, vect = f.result()
@@ -612,7 +593,14 @@ def man_calib():
         # Eject the sample holder
         f = chamber.moveAbs({"pressure": vented_pressure})
 
-        resume_hw_settings(escan, ccd, hw_settings)
+        aligndelphi.restore_hw_settings(escan, ccd, hw_settings)
+
+        # Store the final version of the calibration file
+        try:
+            shutil.copy(calibconf.file_path, logpath)
+        except Exception:
+            logging.info("Failed to log calibration file", exc_info=True)
+
         f.result()
 
 
@@ -626,7 +614,7 @@ def main(args):
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
-                         default=0, help="set verbosity level (0-2, default = 0)")
+                        default=0, help="set verbosity level (0-2, default = 0)")
 
     options = parser.parse_args(args[1:])
 
@@ -646,16 +634,16 @@ def main(args):
 
     # ...and also store them in the special file
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    path = os.path.join(os.path.expanduser(u"~"), aligndelphi.CALIB_DIRECTORY,
-                        time.strftime(u"%Y%m%d-%H%M%S"))
-    os.makedirs(path)
-    hdlr_calib = logging.FileHandler(os.path.join(path, aligndelphi.CALIB_LOG))
+    logpath = os.path.join(os.path.expanduser(u"~"), aligndelphi.CALIB_DIRECTORY,
+                           time.strftime(u"%Y%m%d-%H%M%S"))
+    os.makedirs(logpath)
+    hdlr_calib = logging.FileHandler(os.path.join(logpath, aligndelphi.CALIB_LOG))
     hdlr_calib.setFormatter(formatter)
     hdlr_calib.setLevel(logging.DEBUG)  # Store always all the messages
     logging.getLogger().addHandler(hdlr_calib)
 
     try:
-        man_calib()
+        man_calib(logpath)
     except KeyboardInterrupt:
         logging.warning("Manual calibration procedure was cancelled.")
     except:
