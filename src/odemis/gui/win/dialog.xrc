@@ -40,7 +40,7 @@
         </object>
         <object class="sizeritem">
           <object class="wxButton" name="cancel_btn">
-            <label>Cancel </label>
+            <label>Cancel</label>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -54,5 +54,6 @@
     <centered>1</centered>
     <icon>../img/odemis.ico</icon>
     <bg>#4D4D4D</bg>
+    <style>wxDEFAULT_DIALOG_STYLE</style>
   </object>
 </resource>
