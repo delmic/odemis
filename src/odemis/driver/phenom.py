@@ -182,9 +182,7 @@ class SEM(model.HwComponent):
         # source tilt or we can just access the blanking Phenom API methods
         phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
         logging.debug("Methods available in Phenom host: %s", phenom_methods)
-        self._blank_supported = False
-        if "SEMBlankBeam" in phenom_methods:
-            self._blank_supported = True
+        self._blank_supported = ("SEMBlankBeam" in phenom_methods)
         self._device = client.service
 
         # check Phenom's state and raise HwError if it reports error mode
@@ -506,8 +504,11 @@ class Scanner(model.Emitter):
         # As we (used to) use tilt to blank the beam, if the voltage is changed
         # while acquisition is not running, the beam would be unblanked.
         # Thus we keep and reset the last known source tilt
-        current_tilt = self.parent._device.GetSEMSourceTilt()
+        if not self.parent._blank_supported:
+            current_tilt = self.parent._device.GetSEMSourceTilt()
+
         self.parent._device.SEMSetHighTension(-volt)
+
         if not self.parent._blank_supported:
             new_tilt = self.parent._device.GetSEMSourceTilt()
             if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
@@ -537,7 +538,7 @@ class Scanner(model.Emitter):
                 if (current_tilt.aX, current_tilt.aY) == TILT_BLANK:
                     self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
         except suds.WebFault:
-            logging.debug("Cannot set Spot Size when the sample is not in SEM.", exc_info=True)
+            logging.debug("Cannot set spot size (is the sample in SEM position?)", exc_info=True)
             return self.spotSize.value
 
         return value
@@ -696,7 +697,7 @@ class Detector(model.Detector):
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # 16 or 8 bits image
-        self.bpp = model.IntEnumerated(8, {8, 16}, unit="", setter=self._setBpp)
+        self.bpp = model.IntEnumerated(8, {8, 16}, unit="")
 
         # HW contrast and brightness
         self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
@@ -772,9 +773,6 @@ class Detector(model.Detector):
         # Update with the new values after automatic procedure is completed
         self._updateContrast()
         self._updateBrightness()
-
-    def _setBpp(self, value):
-        return value
 
     def _onContrast(self, value):
         with self.parent._acq_progress_lock:
