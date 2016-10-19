@@ -147,7 +147,6 @@ from abc import ABCMeta, abstractmethod
 import cairo
 from decorator import decorator
 import logging
-import math
 from odemis import util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
