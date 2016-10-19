@@ -95,7 +95,7 @@ def __init_resources():
         </object>
         <object class="sizeritem">
           <object class="wxButton" name="cancel_btn">
-            <label>Cancel </label>
+            <label>Cancel</label>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -109,6 +109,7 @@ def __init_resources():
     <centered>1</centered>
     <icon>___img_odemis_ico</icon>
     <bg>#4D4D4D</bg>
+    <style>wxDEFAULT_DIALOG_STYLE</style>
   </object>
 </resource>'''
 
