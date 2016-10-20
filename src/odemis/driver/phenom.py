@@ -1106,6 +1106,7 @@ class Detector(model.Detector):
         Dataflow.
         """
         try:
+            self._last_view_params = None  # Force waiting for full image
             while not self._acquisition_must_stop.is_set():
                 with self._acquisition_init_lock:
                     if self._acquisition_must_stop.is_set():
