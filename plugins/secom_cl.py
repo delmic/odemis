@@ -11,7 +11,7 @@ Can also be used as a plugin.
 
 
 run as:
-./secom_cl --xres 45 --yres 5 --prefix filename-prefix
+./secom_cl --xrep 45 --yrep 5 --prefix filename-prefix
 
 --prefix indicates the beginning of the filename.
 The files are saved in TIFF, with the y, x positions (in nm) in the name.
@@ -35,6 +35,7 @@ from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import img
 import os.path
 import sys
+import threading
 import time
 
 
@@ -216,11 +217,35 @@ class GridAcquirer(object):
 
         self._must_stop = False
 
+        self._ccd_data = []
+        self._ccd_data_received = threading.Event()
+        self._sem_data = []
+        self._sem_data_received = threading.Event()
+
+        self._hw_settings = None
+
+    def save_hw_settings(self):
+
+        res = self.escan.resolution.value
+        scale = self.escan.scale.value
+        trans = self.escan.translation.value
+        dt = self.escan.dwellTime.value
+        self._hw_settings = (res, scale, trans, dt)
+
+    def resume_hw_settings(self):
+        res, scale, trans, dt = self._hw_settings
+
+        # order matters!
+        self.escan.scale.value = scale
+        self.escan.resolution.value = res
+        self.escan.translation.value = trans
+        self.escan.dwellTime.value = dt
+
     def calc_xy_pos(self):
         """
         Compute the X and Y positions of the ebeam
-        returns: xps (list of float): X positions in the ebeam coordinates
-                 yps (list of float): Y positions in the ebeam coordinates
+        Note: contrarily to usual, the Y is scanned fast, and X slowly
+        returns: xyps (list of float,float): X/Y positions in the ebeam coordinates
                  pixelsize (float, float): pixelsize in m
         """
         # position is expressed in pixels, within the .translation ranges
@@ -282,6 +307,9 @@ class GridAcquirer(object):
         It should already be started in spot mode
         x, y (floats): X, Y position
         """
+        self._sem_data = []
+        self._sem_data_received.clear()
+
         # Move the spot
         self.escan.translation.value = (x, y)
         # checks the hardware has accepted it
@@ -305,12 +333,28 @@ class GridAcquirer(object):
 
     def _receive_sem_data(self, df, data):
         """
-        Does nothing, just discard the data received (for spot mode)
+        Store SEM data (when scanning spot mode typically)
         """
-        pass
+        self._sem_data.append(data)
+        self._sem_data_received.set()
 
     def stop_acquisition(self):
         self._must_stop = True
+
+    def start_ccd(self):
+        self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
+        self.ccd.data.subscribe(self._receive_ccd_data)
+
+    def stop_ccd(self):
+        self.ccd.data.unsubscribe(self._receive_ccd_data)
+        self.ccd.data.synchronizedOn(None)
+
+    def _receive_ccd_data(self, df, data):
+        """
+        Store CCD data
+        """
+        self._ccd_data.append(data)
+        self._ccd_data_received.set()
 
     def acquire_ar(self, x, y, ccd_roi_idx):
         """
@@ -322,10 +366,27 @@ class GridAcquirer(object):
         """
         self.move_spot(x, y)
 
-        # TODO: use synchronization
-        d = self.ccd.data.get()
-        d = d[ccd_roi_idx]
-        return d
+        # Start next CCD acquisition
+        self._ccd_data = []
+        self._ccd_data_received.clear()
+        self.ccd.softwareTrigger.notify()
+
+        # Wait for the CCD
+        expt = self.ccd.exposureTime.value
+        if not self._ccd_data_received.wait(expt * 2 + 2):
+            raise IOError("Timed out: No CCD data received in time")
+
+        if len(self._ccd_data) != 1:
+            logging.warning("Received %d CCD data, while expected 1", len(self._ccd_data))
+        d = self._ccd_data[0]
+        d = d[ccd_roi_idx]  # crop
+
+        if not self._sem_data_received.wait(3):
+            logging.warning("No SEM data received, 3s after the CCD data")
+        if len(self._sem_data) > 1:
+            logging.warning("Received %d SEM data, while expected just 1", len(self._sem_data))
+
+        return d, self._sem_data[0]
 
     def acquire_grid(self, fn_prefix):
         """
@@ -333,6 +394,8 @@ class GridAcquirer(object):
         """
         xyps, stepsizem = self.calc_xy_pos()
         logging.debug("Will scan on X/Y positions %s", xyps)
+
+        self.save_hw_settings()
 
         # Uses the whole FoV of the CCD (and later we will crop it)
         # TODO: use translation and resolution to do the cropping
@@ -347,24 +410,42 @@ class GridAcquirer(object):
         ccd_roi_idx = (slice(ccd_roi[1], ccd_roi[3] + 1),
                        slice(ccd_roi[0], ccd_roi[2] + 1))  # + 1 to include the corners of the ROI
 
+        sed_linear = []
         self.start_spot()
+        self.start_ccd()
         n_pos = 0
-        for x, y in xyps:
-            xm, ym = self.convert_xy_pos_to_m(x, y)
-            logging.info("Acquiring at position (%+f, %+f)", xm * 1e9, ym * 1e9)
+        try:
+            for x, y in xyps:
+                xm, ym = self.convert_xy_pos_to_m(x, y)
+                logging.info("Acquiring at position (%+f, %+f)", xm * 1e9, ym * 1e9)
 
-            startt = time.time()
-            d = self.acquire_ar(x, y, ccd_roi_idx)
-            endt = time.time()
-            logging.debug("Took %g s (expected = %g s)", endt - startt, expt)
+                startt = time.time()
+                d, sed = self.acquire_ar(x, y, ccd_roi_idx)
+                endt = time.time()
+                logging.debug("Took %g s (expected = %g s)", endt - startt, expt)
 
-            self.save_data(d, prefix=fn_prefix, xres=self.res[0], yres=self.res[1],
-                           stepsize=stepsizem[0] * 1e9, idx=n_pos)
-            n_pos += 1
-            if self._must_stop:
-                logging.info("Stopping on request, after %d acquisitions", n_pos)
-                return
-        self.stop_spot()
+                sed_linear.append(sed)
+                self.save_data(d, prefix=fn_prefix, xres=self.res[0], yres=self.res[1],
+                               stepsize=stepsizem[0] * 1e9, idx=n_pos)
+                n_pos += 1
+                if self._must_stop:
+                    logging.info("Stopping on request, after %d acquisitions", n_pos)
+                    return
+        finally:
+            self.stop_ccd()
+            self.stop_spot()
+            self.resume_hw_settings()
+
+        logging.debug("Assembling SEM data")
+        fullsed = numpy.array(sed_linear)
+        fullsed.shape = self.res  # numpy scans the last dim first
+        fullsed = fullsed.T  # Get X as last dim, which is the numpy/Odemis convention
+        md = sed_linear[0].metadata.copy()
+        # md[model.MD_POS] # TODO: compute the center of the ROI
+        md[model.MD_PIXEL_SIZE] = stepsizem
+        fullsed = model.DataArray(fullsed, md)
+        self.save_data(fullsed, prefix=fn_prefix + "_sem", xres=self.res[0], yres=self.res[1],
+                       stepsize=stepsizem[0] * 1e9, idx=0)
 
     def save_data(self, data, **kwargs):
         """
@@ -499,15 +580,19 @@ class CLAcqPlugin(Plugin):
     def _acquire(self, dlg):
         acquirer = GridAcquirer((self.xres.value, self.yres.value))
 
-        estt = self.xres.value * self.yres.value * acquirer.ccd.exposureTime.value
+        estt = self.xres.value * self.yres.value * (acquirer.ccd.exposureTime.value + 0.1) * 1.1
         f = model.ProgressiveFuture(end=time.time() + estt)
         f.task_canceller = lambda f: acquirer.stop_acquisition()  # To allow cancelling while it's running
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(f)
 
         fn_prefix, fn_ext = os.path.splitext(self.filename.value)
-        acquirer.acquire_grid(fn_prefix)
-        f.set_result(None)  # Indicate it's over
+        try:
+            acquirer.acquire_grid(fn_prefix)
+        except Exception:
+            logging.exception("Failed to acquire the data")
+        finally:
+            f.set_result(None)  # Indicate it's over
 
         dlg.Destroy()
 
@@ -523,9 +608,9 @@ def main(args):
     parser = argparse.ArgumentParser(description=
                          "Automated CL acquisition at multiple spot locations")
 
-    parser.add_argument("--xres", "-x", dest="xres", type=int, required=True,
+    parser.add_argument("--xrep", "-x", dest="xrep", type=int, required=True,
                         help="number of spots horizontally")
-    parser.add_argument("--yres", "-y", dest="yres", type=int, required=True,
+    parser.add_argument("--yrep", "-y", dest="yrep", type=int, required=True,
                         help="number of spots vertically")
     parser.add_argument("--prefix", "-p", dest="prefix", required=True,
                         help="prefix for the name of the files")
@@ -534,11 +619,11 @@ def main(args):
 
     options = parser.parse_args(args[1:])
     fn_prefix = options.prefix
-    xres = options.xres
-    yres = options.yres
+    xrep = options.xrep
+    yrep = options.yrep
 
     try:
-        acquirer = GridAcquirer((xres, yres))
+        acquirer = GridAcquirer((xrep, yrep))
         # configure CCD
         acquirer.ccd.exposureTime.value = EXP_TIME
         acquirer.ccd.binning.value = BINNING
