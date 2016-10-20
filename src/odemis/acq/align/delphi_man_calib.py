@@ -442,6 +442,10 @@ def man_calib(logpath):
                     detector.data.unsubscribe(_discard_data)
                     good_focus = ebeam_focus.position.value["z"]
 
+                    # Resetting shift parameters, to not take them into account during calib
+                    blank_md = dict.fromkeys(aligndelphi.MD_CALIB_SEM, (0, 0))
+                    escan.updateMetadata(blank_md)
+
                     # restore CCD settings (as the GUI/user might have changed them)
                     ccd.binning.value = (1, 1)
                     ccd.resolution.value = ccd.resolution.range[1]
@@ -472,7 +476,7 @@ def man_calib(logpath):
                     new_resa, new_resb = resolution_shiftf.result()
 
                     # Compute HFW-related values
-                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus)
+                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan)
                     new_hfwa = hfw_shiftf.result()
 
                     print '\033[1;36m'

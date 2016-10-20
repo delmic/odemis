@@ -75,8 +75,9 @@ GOOD_FOCUS_OFFSET = 200e-06
 FOCUS_RANGE = (-0.25e-03, 0.35e-03)  # Roughly the optical focus stage range
 OPTICAL_KNOWN_FOCUS = 0.20e-3  # Fallback optical focus value
 
-HFW_SHIFT_KNOWN = -0.97, 0  # Fallback values in case calculation goes wrong
+HFW_SHIFT_KNOWN = (-0.5, 0)  # % FoV, fallback values in case calculation goes wrong
 
+MD_CALIB_SEM = (model.MD_SPOT_SHIFT, model.MD_HFW_SLOPE, model.MD_RESOLUTION_SLOPE, model.MD_RESOLUTION_INTERCEPT)
 
 def list_hw_settings(escan, ccd):
     """
@@ -95,14 +96,19 @@ def list_hw_settings(escan, ccd):
     sptsz = escan.spotSize.value
     rot = escan.rotation.value
 
-    return (et, cbin, cres, eres, scale, trans, dt, av, sptsz, rot)
+    mdsem = escan.getMetadata()
+    for k in mdsem.keys():
+        if k not in MD_CALIB_SEM:
+            del mdsem[k]
+
+    return (et, cbin, cres, eres, scale, trans, dt, av, sptsz, rot, mdsem)
 
 
 def restore_hw_settings(escan, ccd, hw_settings):
     """
     Restore all the hardware settings as there were recorded
     """
-    et, cbin, cres, eres, scale, trans, dt, av, sptsz, rot = hw_settings
+    et, cbin, cres, eres, scale, trans, dt, av, sptsz, rot, mdsem = hw_settings
 
     # order matters!
     ccd.binning.value = cbin
@@ -121,6 +127,8 @@ def restore_hw_settings(escan, ccd, hw_settings):
 
     if not escan.rotation.readonly:
         escan.rotation.value = rot
+
+    escan.updateMetadata(mdsem)
 
 
 def DelphiCalibration(main_data):
@@ -371,6 +379,10 @@ def _DoDelphiCalibration(future, main_data):
         future.set_progress(end=time.time() + 7.5 * 60)
         logger.info("Calculating shift parameters...")
 
+        # Resetting shift parameters, to not take them into account during calib
+        blank_md = dict.fromkeys(MD_CALIB_SEM, (0, 0))
+        main_data.ebeam.updateMetadata(blank_md)
+
         # Move back to the center for the shift calculation to make sure
         # the spot is as sharp as possible since this is where the optical focus
         # value corresponds to
@@ -417,9 +429,7 @@ def _DoDelphiCalibration(future, main_data):
             logger.debug("Resolution A: %s Resolution B: %s", resa, resb)
 
             # Compute HFW-related values
-            future.running_subf = HFWShiftFactor(main_data.bsd,
-                                                 main_data.ebeam, sem_stage,
-                                                 main_data.ebeam_focus)
+            future.running_subf = HFWShiftFactor(main_data.bsd, main_data.ebeam)
             hfwa = future.running_subf.result()
             calib_values["hfw_a"] = hfwa
             logger.debug("HFW A: %s", hfwa)
@@ -1282,14 +1292,12 @@ def estimateLensAlignmentTime():
     return 1  # s
 
 
-def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus):
+def HFWShiftFactor(detector, escan):
     """
     Wrapper for DoHFWShiftFactor. It provides the ability to check the
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
-    sem_stage (model.Actuator): The SEM stage
-    ebeam_focus (model.Actuator): EBeam focus
     returns (ProgressiveFuture): Progress DoHFWShiftFactor
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -1306,13 +1314,13 @@ def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus):
     # Run in separate thread
     hfw_shift_thread = threading.Thread(target=executeTask,
                                         name="HFW Shift Factor",
-                                        args=(f, _DoHFWShiftFactor, f, detector, escan, sem_stage, ebeam_focus))
+                                        args=(f, _DoHFWShiftFactor, f, detector, escan))
 
     hfw_shift_thread.start()
     return f
 
 
-def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
+def _DoHFWShiftFactor(future, detector, escan):
     """
     Acquires SEM images of several HFW values (from smallest to largest) and
     detects the shift between them using phase correlation. To this end, it has
@@ -1324,13 +1332,20 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
-    sem_stage (model.Actuator): The SEM stage
-    ebeam_focus (model.Actuator): EBeam focus
-    returns (tuple of floats): slope of linear fit
+    returns (tuple of floats): slope of linear fit = percentage of the FoV to
+     shift.
     raises:
         CancelledError() if cancelled
         IOError if shift cannot be estimated
     """
+    # We are just looking for the fixed-point when zooming in
+    # It's near the center, but not precisely there (especially in X).
+    # Normally, the position of this "zoom center" is the same for
+    # any HFW, in the FoV ratio.
+    # => Measure the shift between two HFW
+    # => compute where is the fixed-point
+    # => repeat for many HFWs, and get an average
+
     logging.debug("Starting HFW-related shift calculation...")
     try:
         escan.scale.value = (1, 1)
@@ -1343,11 +1358,10 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
 
         # Start with smallest FoV
-        max_hfw = 1200e-06  # m
         min_hfw = 37.5e-06  # m
+        max_hfw = 1200e-06  # m
         cur_hfw = min_hfw
         shift_values = []
-        hfw_values = []
         zoom_f = 2  # zoom factor
 
         detector.data.subscribe(_discard_data)  # unblank the beam
@@ -1357,8 +1371,8 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
 
         smaller_image = None
         larger_image = None
-        crop_res = (escan.resolution.value[0] / zoom_f,
-                    escan.resolution.value[1] / zoom_f)
+        crop_res = (escan.resolution.value[0] // zoom_f,
+                    escan.resolution.value[1] // zoom_f)
 
         while cur_hfw <= max_hfw:
             if future._hfw_shift_state == CANCELLED:
@@ -1369,42 +1383,40 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
             # If not the first iteration
             if smaller_image is not None:
                 # Crop the part of the larger image that corresponds to the
-                # smaller image Fov
-                cropped_image = larger_image[(crop_res[0] / 2):3 * (crop_res[0] / 2),
-                                             (crop_res[1] / 2):3 * (crop_res[1] / 2)]
-                # Resample the cropped image to fit the resolution of the smaller
-                # image
+                # smaller image FoV, and resample it to have them the same size
+                cropped_image = larger_image[crop_res[1] // 2: 3 * crop_res[1] // 2,
+                                             crop_res[0] // 2: 3 * crop_res[0] // 2]
                 resampled_image = zoom(cropped_image, zoom=zoom_f)
                 # Apply phase correlation
-                shift_pxs = CalculateDrift(smaller_image, resampled_image, 10)
-                pixelSize = smaller_image.metadata[model.MD_PIXEL_SIZE]
-                shift = (shift_pxs[0] * pixelSize[0], shift_pxs[1] * pixelSize[1])
-                logging.debug("Shift detected between HFW of %f and %f is: %s (m, m)", cur_hfw, cur_hfw / zoom_f, shift)
-                # FIXME: Check with Lennard's measurements when we should actually consider a measurement extreme,
-                # 10e-06 is a pretty rough estimation
-                if any(s >= 10e-6 for s in shift):
-                    logging.debug("Some extreme values where measured, better return the fallback values to be safe...")
-                    return HFW_SHIFT_KNOWN
-                # Cumulative sum
-                new_shift = (sum(sh[0] for sh in shift_values) + shift[0],
-                             sum(sh[1] for sh in shift_values) + shift[1])
-                shift_values.append(new_shift)
-                hfw_values.append(cur_hfw)
+                shift_px = CalculateDrift(smaller_image, resampled_image, 10)
+                # tiff.export("hfw_comp_%g_um.tiff" % (cur_hfw * 1e6,), [smaller_image, model.DataArray(resampled_image)])
 
-            # Zoom out to the double hfw
-            cur_hfw = zoom_f * cur_hfw
+                shift_fov = (shift_px[0] / smaller_image.shape[1],
+                             shift_px[1] / smaller_image.shape[0])
+                fp_fov = shift_fov[0] / (zoom_f - 1), shift_fov[1] / (zoom_f - 1)
+                logging.debug("Shift detected between HFW of %f and %f is: %s px == %s %%",
+                              cur_hfw, cur_hfw / zoom_f, shift_px, shift_fov)
+
+                # We expect a lot more shift horizontally than vertically
+                if abs(shift_fov[0]) >= 0.1 or abs(shift_fov[1]) >= 0.05:
+                    logging.warning("Some extreme values where measured %s px, not using measurement at HFW %s.",
+                                    shift_px, cur_hfw)
+                    continue
+                shift_values.append(fp_fov)
+
+            # Zoom out
+            cur_hfw *= zoom_f
             smaller_image = larger_image
 
-        # Linear fit
-        coefficients_x = array([hfw_values, ones(len(hfw_values))])
-        c_x = 100 * linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0][0]  # obtaining the slope in x axis
-        coefficients_y = array([hfw_values, ones(len(hfw_values))])
-        c_y = 100 * linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0][0]  # obtaining the slope in y axis
-        if math.isnan(c_x):
-            c_x = 0
-        if math.isnan(c_y):
-            c_y = 0
-        return c_x, c_y
+        if not shift_values:
+            logging.warning("No HFW shift successfully measured, will use fallback values")
+            return HFW_SHIFT_KNOWN
+
+        # TODO: warn/remove outliers?
+        # Take the average shift measured, and convert to percentage
+        shift_fov_mn = (100 * numpy.mean([v[0] for v in shift_values]),
+                        100 * numpy.mean([v[1] for v in shift_values]))
+        return shift_fov_mn
 
     finally:
         with future._hfw_shift_lock:
@@ -1518,27 +1530,29 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         while cur_resolution >= min_resolution:
             if future._resolution_shift_state == CANCELLED:
                 raise CancelledError()
+
             # SEM image of current resolution
             escan.resolution.value = (cur_resolution, cur_resolution)
             # Retain the same overall exposure time
             escan.dwellTime.value = et / numpy.prod(escan.resolution.value)  # s
             smaller_image = detector.data.get(asap=False)
-            # If not the first iteration
-            if largest_image is not None:
-                # Resample the smaller image to fit the resolution of the larger
-                # image
-                resampled_image = zoom(smaller_image,
-                                       zoom=(max_resolution / escan.resolution.value[0]))
-                # Apply phase correlation
-                shift_pxs = CalculateDrift(largest_image, resampled_image, 10)
-                shift_values.append(((1 / numpy.tan(2 * math.pi * shift_pxs[0] / max_resolution)),
-                                     (1 / numpy.tan(2 * math.pi * shift_pxs[1] / max_resolution))))
-                resolution_values.append(cur_resolution)
-                cur_resolution = cur_resolution - 64
-            else:
+
+            # First iteration is special
+            if largest_image is None:
                 largest_image = smaller_image
                 # Ignore value between 2048 and 1024
-                cur_resolution = cur_resolution - 1024
+                cur_resolution -= 1024
+                continue
+
+            # Resample the smaller image to fit the resolution of the larger image
+            resampled_image = zoom(smaller_image, max_resolution / smaller_image.shape[0])
+            # Apply phase correlation
+            shift_pxs = CalculateDrift(largest_image, resampled_image, 10)
+            # FIXME: a shift of 0 will cause infinity, which prevents the regression to return anything
+            shift_values.append(((1 / numpy.tan(2 * math.pi * shift_pxs[0] / max_resolution)),
+                                 (1 / numpy.tan(2 * math.pi * shift_pxs[1] / max_resolution))))
+            resolution_values.append(cur_resolution)
+            cur_resolution -= 64
 
         logging.debug("Computed shift of %s for resolutions %s", shift_values, resolution_values)
         # Linear fit
