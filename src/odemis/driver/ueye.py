@@ -1179,6 +1179,7 @@ class Camera(model.DigitalCamera):
                                 # => try again
                                 logging.warning("Failed to start video (%s), will try again", ex)
                                 self._check_capture_status()
+                                self._check_ueye_daemon_status()
                                 time.sleep(1)
                                 need_reinit = True
                                 continue
@@ -1219,9 +1220,6 @@ class Camera(model.DigitalCamera):
                             # with USB_TRANSFER_FAILED in the status. Just trying
                             # again is enough.
                             continue
-
-                        # TODO: also handle 122 (TIMED_OUT), need_reinit doesn't seem to help... but stopping/starting the acquisition does
-                        # => StopLiveVideo()?
 
                         # Let's just wait a bit, and restart the acquisition
                         time.sleep(0.2)
