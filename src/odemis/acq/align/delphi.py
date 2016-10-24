@@ -24,7 +24,6 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
-import cv2
 import logging
 import math
 from numpy import array, ones, linalg
@@ -33,12 +32,14 @@ from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform, spot
 from odemis.acq.drift import CalculateDrift
+from odemis.dataio import tiff
 import os
 from scipy.ndimage import zoom
 import threading
 import time
 
 from autofocus import AcquireNoBackground
+import cv2
 
 from . import FindOverlay
 from . import autofocus
@@ -185,10 +186,10 @@ def _DoDelphiCalibration(future, main_data):
 
     # handler storing the messages related to delphi calibration
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    path = os.path.join(os.path.expanduser(u"~"), CALIB_DIRECTORY,
+    logpath = os.path.join(os.path.expanduser(u"~"), CALIB_DIRECTORY,
                         time.strftime(u"%Y%m%d-%H%M%S"))
-    os.makedirs(path)
-    hdlr_calib = logging.FileHandler(os.path.join(path, CALIB_LOG))
+    os.makedirs(logpath)
+    hdlr_calib = logging.FileHandler(os.path.join(logpath, CALIB_LOG))
     hdlr_calib.setFormatter(formatter)
     hdlr_calib.addFilter(logging.Filter())
     logger.addHandler(hdlr_calib)
@@ -421,15 +422,15 @@ def _DoDelphiCalibration(future, main_data):
             f.result()
 
             future.running_subf = ResolutionShiftFactor(main_data.bsd,
-                                                        main_data.ebeam, sem_stage,
-                                                        main_data.ebeam_focus)
+                                                        main_data.ebeam,
+                                                        logpath)
             resa, resb = future.running_subf.result()
             calib_values["resolution_a"] = resa
             calib_values["resolution_b"] = resb
             logger.debug("Resolution A: %s Resolution B: %s", resa, resb)
 
             # Compute HFW-related values
-            future.running_subf = HFWShiftFactor(main_data.bsd, main_data.ebeam)
+            future.running_subf = HFWShiftFactor(main_data.bsd, main_data.ebeam, logpath)
             hfwa = future.running_subf.result()
             calib_values["hfw_a"] = hfwa
             logger.debug("HFW A: %s", hfwa)
@@ -545,7 +546,7 @@ def _DoDelphiCalibration(future, main_data):
     finally:
         restore_hw_settings(main_data.ebeam, main_data.ccd, hw_settings)
         # we can now store the calibration file in report
-        _StoreConfig(path, shid, calib_values)
+        _StoreConfig(logpath, shid, calib_values)
         with future._delphi_calib_lock:
             future._done.set()
             if future._delphi_calib_state == CANCELLED:
@@ -1292,12 +1293,14 @@ def estimateLensAlignmentTime():
     return 1  # s
 
 
-def HFWShiftFactor(detector, escan):
+def HFWShiftFactor(detector, escan, logpath=None):
     """
     Wrapper for DoHFWShiftFactor. It provides the ability to check the
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
+    logpath (string or None): if not None, will store the acquired SEM images
+      in the directory.
     returns (ProgressiveFuture): Progress DoHFWShiftFactor
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -1314,13 +1317,13 @@ def HFWShiftFactor(detector, escan):
     # Run in separate thread
     hfw_shift_thread = threading.Thread(target=executeTask,
                                         name="HFW Shift Factor",
-                                        args=(f, _DoHFWShiftFactor, f, detector, escan))
+                                        args=(f, _DoHFWShiftFactor, f, detector, escan, logpath))
 
     hfw_shift_thread.start()
     return f
 
 
-def _DoHFWShiftFactor(future, detector, escan):
+def _DoHFWShiftFactor(future, detector, escan, logpath=None):
     """
     Acquires SEM images of several HFW values (from smallest to largest) and
     detects the shift between them using phase correlation. To this end, it has
@@ -1332,6 +1335,8 @@ def _DoHFWShiftFactor(future, detector, escan):
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
+    logpath (string or None): if not None, will store the acquired SEM images
+      in the directory.
     returns (tuple of floats): slope of linear fit = percentage of the FoV to
      shift.
     raises:
@@ -1389,7 +1394,9 @@ def _DoHFWShiftFactor(future, detector, escan):
                 resampled_image = zoom(cropped_image, zoom=zoom_f)
                 # Apply phase correlation
                 shift_px = CalculateDrift(smaller_image, resampled_image, 10)
-                # tiff.export("hfw_comp_%g_um.tiff" % (cur_hfw * 1e6,), [smaller_image, model.DataArray(resampled_image)])
+                if logpath:
+                    tiff.export(os.path.join(logpath, "hfw_shift_%d_um.tiff" % (cur_hfw * 1e6,)),
+                                [smaller_image, model.DataArray(resampled_image)])
 
                 shift_fov = (shift_px[0] / smaller_image.shape[1],
                              shift_px[1] / smaller_image.shape[0])
@@ -1450,14 +1457,14 @@ def estimateHFWShiftFactorTime(et):
     return dur  # s
 
 
-def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus):
+def ResolutionShiftFactor(detector, escan, logpath=None):
     """
     Wrapper for DoResolutionShiftFactor. It provides the ability to check the
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
-    sem_stage (model.Actuator): The SEM stage
-    ebeam_focus (model.Actuator): EBeam focus
+    logpath (string or None): if not None, will store the acquired SEM images
+      in the directory.
     returns (ProgressiveFuture): Progress DoResolutionShiftFactor
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -1475,14 +1482,13 @@ def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus):
     resolution_shift_thread = threading.Thread(target=executeTask,
                                                name="Resolution Shift Factor",
                                                args=(f, _DoResolutionShiftFactor,
-                                                     f, detector, escan, sem_stage,
-                                                     ebeam_focus))
+                                                     f, detector, escan, logpath))
 
     resolution_shift_thread.start()
     return f
 
 
-def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
+def _DoResolutionShiftFactor(future, detector, escan, logpath):
     """
     Acquires SEM images of several resolution values (from largest to smallest)
     and detects the shift between each image and the largest one using phase
@@ -1493,8 +1499,8 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
-    sem_stage (model.Actuator): The SEM stage
-    ebeam_focus (model.Actuator): EBeam focus
+    logpath (string or None): if not None, will store the acquired SEM images
+      in the directory.
     returns (tuple of floats): slope of linear fit
             (tuple of floats): intercept of linear fit
     raises:
@@ -1524,9 +1530,10 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
         f.result()
         detector.data.unsubscribe(_discard_data)
 
+        largest_image = None  # reference image
         smaller_image = None
-        largest_image = None
 
+        images = []
         while cur_resolution >= min_resolution:
             if future._resolution_shift_state == CANCELLED:
                 raise CancelledError()
@@ -1536,6 +1543,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
             # Retain the same overall exposure time
             escan.dwellTime.value = et / numpy.prod(escan.resolution.value)  # s
             smaller_image = detector.data.get(asap=False)
+            images.append(smaller_image)
 
             # First iteration is special
             if largest_image is None:
@@ -1547,12 +1555,16 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus):
             # Resample the smaller image to fit the resolution of the larger image
             resampled_image = zoom(smaller_image, max_resolution / smaller_image.shape[0])
             # Apply phase correlation
-            shift_pxs = CalculateDrift(largest_image, resampled_image, 10)
+            shift_px = CalculateDrift(largest_image, resampled_image, 10)
+            logging.debug("Computed resolution shift of %s px @ res=%d", shift_px, cur_resolution)
             # FIXME: a shift of 0 will cause infinity, which prevents the regression to return anything
-            shift_values.append(((1 / numpy.tan(2 * math.pi * shift_pxs[0] / max_resolution)),
-                                 (1 / numpy.tan(2 * math.pi * shift_pxs[1] / max_resolution))))
+            shift_values.append(((1 / numpy.tan(2 * math.pi * shift_px[0] / max_resolution)),
+                                 (1 / numpy.tan(2 * math.pi * shift_px[1] / max_resolution))))
             resolution_values.append(cur_resolution)
             cur_resolution -= 64
+
+        if logpath:
+            tiff.export(os.path.join(logpath, "res_shift.tiff"), images)
 
         logging.debug("Computed shift of %s for resolutions %s", shift_values, resolution_values)
         # Linear fit

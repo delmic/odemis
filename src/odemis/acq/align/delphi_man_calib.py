@@ -51,7 +51,6 @@ import tty
 
 import odemis.acq.align.delphi as aligndelphi
 import termios
-from sys import exc_info
 
 
 YES_CHARS = {"Y", "y", ''}
@@ -472,11 +471,11 @@ def man_calib(logpath):
                     f = ebeam_focus.moveAbs({"z": hole_focus})
                     f.result()
 
-                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus)
+                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, logpath)
                     new_resa, new_resb = resolution_shiftf.result()
 
                     # Compute HFW-related values
-                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan)
+                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, logpath)
                     new_hfwa = hfw_shiftf.result()
 
                     print '\033[1;36m'
