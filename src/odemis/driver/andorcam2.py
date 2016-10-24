@@ -1688,6 +1688,7 @@ class AndorCam2(model.DigitalCamera):
         # Set up thread
         if self.data._sync_event:
             # need synchronized acquisition
+            self._late_events.clear()
             target = self._acquire_thread_synchronized
         else:
             # no event (now, and hopefully not during the acquisition)
