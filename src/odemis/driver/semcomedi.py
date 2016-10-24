@@ -1672,7 +1672,9 @@ class SEMComedi(model.HwComponent):
 
                 self._check_cmd_q(block=False)
 
-                detectors = tuple(self._acq_wait_detectors_ready())  # ordered
+                # Ensures we don't wait _again_ for synchronised DataFlows on error
+                if nfailures == 0:
+                    detectors = tuple(self._acq_wait_detectors_ready())  # ordered
                 if detectors:
                     self._scanner.indicate_scan_state(True)
                     # write and read the raw data
