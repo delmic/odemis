@@ -26,7 +26,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
-from numpy import array, ones, linalg
+from numpy import array, linalg
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
@@ -1160,9 +1160,10 @@ def FindCircleCenter(image, radius, max_diff):
     pixelSize = image.metadata[model.MD_PIXEL_SIZE]
 
     # search for circles of radius with "max_diff" number of pixels precision
-    min, max = int((radius / pixelSize[0]) - max_diff), int((radius / pixelSize[0]) + max_diff)
-    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=20, param1=50,
-                               param2=15, minRadius=min, maxRadius=max)
+    mn = int((radius / pixelSize[0]) - max_diff)
+    mx = int((radius / pixelSize[0]) + max_diff)
+    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=20,
+                               param1=50, param2=15, minRadius=mn, maxRadius=mx)
 
     # Do not change the sequence of conditions
     if circles is None:
@@ -1494,8 +1495,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
     and detects the shift between each image and the largest one using phase
     correlation. To this end, it has to resample the smaller resolution image to
     larger’s image resolution in order to feed it to the phase correlation. Then
-    it does linear fit for these shift values. From the linear fit we just return
-    both the slope and the intercept of the line.
+    it does linear fit for tangent of these shift values.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
@@ -1557,39 +1557,53 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
             # Apply phase correlation
             shift_px = CalculateDrift(largest_image, resampled_image, 10)
             logging.debug("Computed resolution shift of %s px @ res=%d", shift_px, cur_resolution)
-            # FIXME: a shift of 0 will cause infinity, which prevents the regression to return anything
-            shift_values.append(((1 / numpy.tan(2 * math.pi * shift_px[0] / max_resolution)),
-                                 (1 / numpy.tan(2 * math.pi * shift_px[1] / max_resolution))))
+
+            # Fit the 1st order RC circuit model, to be linear
+            if shift_px[0] != 0:
+                smx = 1 / math.tan(2 * math.pi * shift_px[0] / max_resolution)
+            else:
+                smx = None  # shift
+            if shift_px[1] != 0:
+                smy = 1 / math.tan(2 * math.pi * shift_px[1] / max_resolution)
+            else:
+                smy = None  # shift
+
+            shift_values.append((smx, smy))
             resolution_values.append(cur_resolution)
             cur_resolution -= 64
 
+        logging.debug("Computed shift of %s for resolutions %s", shift_values, resolution_values)
         if logpath:
             tiff.export(os.path.join(logpath, "res_shift.tiff"), images)
 
-        logging.debug("Computed shift of %s for resolutions %s", shift_values, resolution_values)
         # Linear fit
-        coefficients_x = array([resolution_values, ones(len(resolution_values))])
-        a_nx, b_nx = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0]  # obtaining the slope and intercept in x axis
-        coefficients_y = array([resolution_values, ones(len(resolution_values))])
-        a_ny, b_ny = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
-        logging.debug("Computed NX linear reg as %s, %s and NY as %s, %s", a_nx, b_nx, a_ny, b_ny)
+        smxs, smys, rx, ry = [], [], [], []
+        for r, (smx, smy) in zip(resolution_values, shift_values):
+            if smx is not None:
+                smxs.append(smx)
+                rx.append(r)
+            if smy is not None:
+                smys.append(smy)
+                ry.append(r)
 
-        a_x = -1 / a_nx
-        if math.isnan(a_x):
-            logging.warning("a_x is NaN, rounding up to 0")
-            a_x = 0
-        b_x = b_nx / a_nx
-        if math.isnan(b_x):
-            logging.warning("b_x is NaN, rounding up to 0")
-            b_x = 0
-        a_y = -1 / a_ny
-        if math.isnan(a_y):
-            logging.warning("a_y is NaN, rounding up to 0")
-            a_y = 0
-        b_y = b_ny / a_ny
-        if math.isnan(b_y):
-            logging.warning("b_y is NaN, rounding up to 0")
-            b_y = 0
+        a_x, b_x = 0, 0
+        if smxs:
+            coef_x = array([rx, [1] * len(rx)])
+            a_nx, b_nx = linalg.lstsq(coef_x.T, smxs)[0]
+            logging.debug("Computed linear reg NX as %s, %s", a_nx, b_nx)
+            if a_nx != 0:
+                a_x = -1 / a_nx
+                b_x = b_nx / a_nx
+
+        a_y, b_y = 0, 0
+        if smys:
+            coef_y = array([ry, [1] * len(ry)])
+            a_ny, b_ny = linalg.lstsq(coef_y.T, smys)[0]
+            logging.debug("Computed linear reg NY as %s, %s", a_ny, b_ny)
+            if a_ny != 0:
+                a_y = -1 / a_ny
+                b_y = b_ny / a_ny
+
         return (a_x, a_y), (b_x, b_y)
 
     finally:
