@@ -29,20 +29,21 @@ from odemis.util import test
 import os
 import unittest
 
-
-# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-DELPHI_CONFIG = CONFIG_PATH + "sim/delphi-sim.odm.yaml"
+if TEST_NOHW:
+    CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+    DELPHI_CONFIG = CONFIG_PATH + "sim/delphi-sim.odm.yaml"
+else:
+    # You need to have the DELPHI ready, and with a blank sample inserted
+    DELPHI_CONFIG = "/usr/share/odemis/delphi.odm.yaml"
 
-# @unittest.skip("skip")
+TEST_IMAGE_PATH = os.path.dirname(__file__)
+
 class TestCalibration(unittest.TestCase):
     """
     Test calibration methods
@@ -68,11 +69,11 @@ class TestCalibration(unittest.TestCase):
         cls.ccd = model.getComponent(role="ccd")
         cls.sem_stage = model.getComponent(role="sem-stage")
         cls.opt_stage = model.getComponent(role="align")
-        cls.ebeam_focus = model.getComponent(role="ebeam-focus")
+        cls.efocus = model.getComponent(role="ebeam-focus")
         cls.focus = model.getComponent(role="focus")
         cls.light = model.getComponent(role="light")
-        cls.light_filter = model.getComponent(role="filter")
-        cls.combined_stage = model.getComponent(role="stage")
+        cls.stage = model.getComponent(role="stage")
+        cls.chamber = model.getComponent(role="chamber")
 
     @classmethod
     def tearDownClass(cls):
@@ -84,6 +85,12 @@ class TestCalibration(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
+    def _move_to_vacuum(self):
+        pressures = self.chamber.axes["pressure"].choices
+        vacuum_pressure = min(pressures.keys())
+        f = self.chamber.moveAbs({"pressure": vacuum_pressure})
+        f.result()
+
     # @unittest.skip("skip")
     def test_find_hole_center(self):
         """
@@ -91,7 +98,7 @@ class TestCalibration(unittest.TestCase):
         """
         # Note: this hole image has a better contrast and less noise than typical
         # hole images on the DELPHI
-        data = hdf5.read_data("sem_hole.h5")
+        data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "sem_hole.h5"))
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
@@ -104,7 +111,7 @@ class TestCalibration(unittest.TestCase):
         """
         Test FindCircleCenter for lenses
         """
-        data = hdf5.read_data("navcam-calib2.h5")
+        data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "navcam-calib2.h5"))
         Z, Y, X = data[0].shape
 
         lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 6)
@@ -116,28 +123,27 @@ class TestCalibration(unittest.TestCase):
         """
         Test FindCircleCenter raises exception
         """
-        data = hdf5.read_data("blank_image.h5")
+        data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "blank_image.h5"))
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
         self.assertRaises(IOError, delphi.FindCircleCenter, data[0], 0.02032, 3)
 
-if not TEST_NOHW:
     def test_hole_detection(self):
         """
         Test HoleDetection
         """
-        detector = self.sed
-        escan = self.ebeam
-        sem_stage = self.sem_stage
-        ebeam_focus = self.ebeam_focus
-        f = delphi.HoleDetection(detector, escan, sem_stage, ebeam_focus)
+        if TEST_NOHW:
+            self.skipTest("Cannot test hole detection on simulator")
+        self._move_to_vacuum()
+        f = delphi.HoleDetection(self.sed, self.ebeam, self.sem_stage, self.efocus)
         holes_found = f.result()
+        self.assertEqual(len(holes_found), 2)
 
     # @unittest.skip("skip")
-    def test_calculate_extra(self):
+    def test_update_offset_rot(self):
         """
-        Test CalculateExtraOffset
+        Test UpdateOffsetAndRotation
         """
 
         updated_offset, updated_rotation = delphi.UpdateOffsetAndRotation((1, 0),
@@ -150,47 +156,75 @@ if not TEST_NOHW:
         numpy.testing.assert_almost_equal(updated_offset, (0.5, 0))
         numpy.testing.assert_almost_equal(updated_rotation, 0)
 
-if not TEST_NOHW:
-    def test_rotation_calculation(self):
-        """
-        Test RotationAndScaling
-        """
-        ccd = self.ccd
-        detector = self.sed
-        escan = self.ebeam
-        sem_stage = self.sem_stage
-        opt_stage = self.opt_stage
-        focus = self.focus
-        f = delphi.RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, (1e-06, 1e-06))
-        rotation, scaling = f.result()
-
-if not TEST_NOHW:
     def test_align_offset(self):
         """
         Test AlignAndOffset
         """
-        ccd = self.ccd
-        detector = self.sed
-        escan = self.ebeam
-        sem_stage = self.sem_stage
-        opt_stage = self.opt_stage
-        focus = self.focus
-        f = delphi.AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus)
-        offset = f.result()
+        self._move_to_vacuum()
+        try:
+            f = delphi.AlignAndOffset(self.ccd, self.sed, self.ebeam,
+                                      self.sem_stage, self.opt_stage, self.focus)
+            offset = f.result()
+            self.assertEqual(len(offset), 2)
+        except IOError as ex:
+            if TEST_NOHW:
+                logging.info("Got exception %s, which is fine on simulator", ex)
+            else:
+                raise
 
-if not TEST_NOHW:
-    def test_scan_pattern(self):
+    def test_rotation_calculation(self):
         """
-        Test PatternDetection
+        Test RotationAndScaling
         """
-        ccd = self.ccd
-        detector = self.sed
-        escan = self.ebeam
-        opt_stage = self.opt_stage
-        focus = self.focus
-        pat = numpy.random.randint(2, size=(21, 21))
-        scanner = pattern.PatternScanner(ccd, detector, escan, opt_stage, focus, pat)
-        scanner.DoPattern()
+        self._move_to_vacuum()
+        try:
+            f = delphi.RotationAndScaling(self.ccd, self.sed, self.ebeam,
+                                          self.sem_stage, self.opt_stage, self.focus,
+                                          (1e-06, 1e-06))  # Should be result from AlignAndOffset
+            offset, rotation, scaling = f.result()
+        except IOError as ex:
+            if TEST_NOHW:
+                logging.info("Got exception %s, which is fine on simulator", ex)
+            else:
+                raise
+
+    def test_hfw_shift(self):
+
+        self.sem_stage.moveAbs(delphi.SHIFT_DETECTION).result()
+
+        blank_md = dict.fromkeys(delphi.MD_CALIB_SEM, (0, 0))
+        self.ebeam.updateMetadata(blank_md)
+
+        # It should always return _some_ value (uses fallback values in the worse case)
+        f = delphi.HFWShiftFactor(self.sed, self.ebeam, logpath="./")
+        hfw_shift = f.result()
+        self.assertEqual(len(hfw_shift), 2)
+
+    def test_res_shift(self):
+
+        self.sem_stage.moveAbs(delphi.SHIFT_DETECTION).result()
+        blank_md = dict.fromkeys(delphi.MD_CALIB_SEM, (0, 0))
+        self.ebeam.updateMetadata(blank_md)
+
+        f = delphi.ResolutionShiftFactor(self.sed, self.ebeam, logpath="./")
+        res_sa, res_sb = f.result()
+        self.assertEqual(len(res_sa), 2)
+        self.assertEqual(len(res_sb), 2)
+
+# Code is unused, so no test either
+# if not TEST_NOHW:
+#     def test_scan_pattern(self):
+#         """
+#         Test PatternDetection
+#         """
+#         ccd = self.ccd
+#         detector = self.sed
+#         escan = self.ebeam
+#         opt_stage = self.opt_stage
+#         focus = self.focus
+#         pat = numpy.random.randint(2, size=(21, 21))
+#         scanner = pattern.PatternScanner(ccd, detector, escan, opt_stage, focus, pat)
+#         scanner.DoPattern()
 
 if __name__ == '__main__':
     unittest.main()

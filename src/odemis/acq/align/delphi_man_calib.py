@@ -242,11 +242,14 @@ def man_calib(logpath):
 
         # Calculate offset approximation
         try:
-            # TODO: report failure in a nicer way
             f = aligndelphi.LensAlignment(overview_ccd, sem_stage)
             position = f.result()
-        except Exception:
-            raise IOError("Failed to locate the optical lens in the NavCam view.")
+        except IOError:
+            if not force_calib:
+                position = (offset[0] * scaling[0], offset[1] * scaling[1])
+                logging.warning("Failed to locate the optical lens, will used previous value %s", position)
+            else:
+                raise IOError("Failed to locate the optical lens in the NavCam view.")
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})

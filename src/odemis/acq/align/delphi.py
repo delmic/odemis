@@ -664,7 +664,8 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
-    escan.rotation.value = 0
+    if not escan.rotation.readonly:
+        escan.rotation.value = 0
     escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
 
@@ -831,7 +832,8 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
-    escan.rotation.value = 0
+    if not escan.rotation.readonly:
+        escan.rotation.value = 0
     escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
     det_dataflow = detector.data
@@ -1026,7 +1028,8 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
-        escan.rotation.value = 0
+        if not escan.rotation.readonly:
+            escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
@@ -1360,9 +1363,10 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
-        escan.rotation.value = 0
+        if not escan.rotation.readonly:
+            escan.rotation.value = 0
         escan.shift.value = (0, 0)
-        escan.dwellTime.value = 7.5e-07  # s
+        escan.dwellTime.value = escan.dwellTime.clip(7.5e-7)  # s
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
 
@@ -1515,7 +1519,8 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         escan.scale.value = (1, 1)
         escan.horizontalFoV.value = 1200e-06  # m
         escan.translation.value = (0, 0)
-        escan.rotation.value = 0
+        if not escan.rotation.readonly:
+            escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
