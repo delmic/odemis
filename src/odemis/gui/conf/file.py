@@ -271,7 +271,7 @@ class CalibrationConfig(Config):
     def _get_section_name(shid):
         return "delphi-%x" % shid
 
-    def set_sh_calib(self, shid, htop, hbot, hfoc, strans, sscale, srot,
+    def set_sh_calib(self, shid, htop, hbot, hfoc, ofoc, strans, sscale, srot,
                      iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift):
         """ Store the calibration data for a given sample holder
 
@@ -279,6 +279,7 @@ class CalibrationConfig(Config):
         htop (2 floats): position of the top hole
         hbot (2 floats): position of the bottom hole
         hfoc (float): focus used for hole detection
+        ofoc (float): focus used for the optical image
         strans (2 floats): stage translation
         sscale (2 floats > 0): stage scaling
         srot (float): stage rotation (rad)
@@ -305,6 +306,7 @@ class CalibrationConfig(Config):
             ("bottom_hole_x", "%.15f" % hbot[0]),
             ("bottom_hole_y", "%.15f" % hbot[1]),
             ("hole_focus", "%.15f" % hfoc),
+            ("optical_focus", "%.15f" % ofoc),
             ("stage_trans_x", "%.15f" % strans[0]),
             ("stage_trans_y", "%.15f" % strans[1]),
             ("stage_scaling_x", "%.15f" % sscale[0]),
@@ -349,6 +351,7 @@ class CalibrationConfig(Config):
             htop (2 floats): position of the top hole
             hbot (2 floats): position of the bottom hole
             hfoc (float): focus used for hole detection
+            ofoc (float): focus used for the optical image
             strans (2 floats): stage translation
             sscale (2 floats > 0): stage scaling
             srot (float): stage rotation
@@ -372,6 +375,12 @@ class CalibrationConfig(Config):
                     hfoc = self.config.getfloat(sec, "hole_focus")
                 except Exception:
                     hfoc = delphi.SEM_KNOWN_FOCUS
+
+                try:
+                    ofoc = self.config.getfloat(sec, "optical_focus")
+                except Exception:
+                    ofoc = delphi.OPTICAL_KNOWN_FOCUS
+
                 strans = self._get_tuple(sec, "stage_trans")
 
                 sscale = self._get_tuple(sec, "stage_scaling")
@@ -412,7 +421,7 @@ class CalibrationConfig(Config):
                     hfwa = (0, 0)
                     spotshift = (0.035, 0)  # Rough approximation used until the calibration
 
-                return (htop, hbot, hfoc, strans, sscale, srot, iscale, irot,
+                return (htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot,
                         iscale_xy, ishear, resa, resb, hfwa, spotshift)
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",

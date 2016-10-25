@@ -195,7 +195,7 @@ def main(args):
             print "\033[1;31mCalibration values missing! All the steps will be performed anyway...\033[1;m"
             force_calib = True
         else:
-            first_hole, second_hole, hole_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib_values
+            first_hole, second_hole, hole_focus, opt_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib_values
             force_calib = False
         print '\033[1;36m'
         print "**Delphi Manual Calibration steps**"
@@ -207,6 +207,7 @@ def main(args):
         print "    Current values: offset: " + str(offset)
         print "                    scaling: " + str(scaling)
         print "                    rotation: " + str(rotation)
+        print "                    optical focus: " + str(opt_focus)
         print "3.SEM image calibration"
         print "    Current values: resolution-a: " + str(resa)
         print "                    resolution-b: " + str(resb)
@@ -284,7 +285,7 @@ def main(args):
                         ans = raw_input(msg)
                     if ans in YES_CHARS or force_calib:
                         first_hole, second_hole, hole_focus = new_first_hole, new_second_hole, new_hole_focus
-                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
+                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, spotshift)
                     break
@@ -293,14 +294,14 @@ def main(args):
             else:
                 break
 
-        f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
+        f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
 
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
 
         if hole_focus is not None:
-            good_focus = hole_focus - align.GOOD_FOCUS_OFFSET
+            good_focus = hole_focus - aligndelphi.GOOD_FOCUS_OFFSET
             f = ebeam_focus.moveAbs({"z": good_focus})
             f.result()
 
@@ -308,7 +309,10 @@ def main(args):
         # We want to be as close as possible to the center when we are zoomed in
         escan.horizontalFoV.value = escan.horizontalFoV.range[0]
         pure_offset = None
-        center_focus = None
+
+        # Start with the best optical focus known so far
+        f = focus.moveAbs({"z": opt_focus})
+        f.result()
 
         while True:
             ans = None
@@ -339,7 +343,7 @@ def main(args):
                     align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
                                                                opt_stage, focus)
                     align_offset = align_offsetf.result()
-                    center_focus = focus.position.value.get('z')
+                    new_opt_focus = focus.position.value.get('z')
 
                     rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                                        opt_stage, focus, align_offset, manual=True)
@@ -354,14 +358,15 @@ def main(args):
                     print "Values computed: offset: " + str(new_offset)
                     print "                 scaling: " + str(new_scaling)
                     print "                 rotation: " + str(new_rotation)
+                    print "                 optical focus: " + str(new_opt_focus)
                     print '\033[1;m'
                     ans = None
                     while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
                     if ans in YES_CHARS or force_calib:
-                        offset, scaling, rotation = new_offset, new_scaling, new_rotation
-                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
+                        offset, scaling, rotation, opt_focus = new_offset, new_scaling, new_rotation, new_opt_focus
+                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, spotshift)
                     break
@@ -386,9 +391,6 @@ def main(args):
                     f.result()
                 else:
                     f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
-                    f.result()
-                if center_focus is not None:
-                    f = focus.moveAbs({"z": center_focus})
                     f.result()
                 try:
                     # Compute spot shift percentage
@@ -433,7 +435,7 @@ def main(args):
                         ans = raw_input(msg)
                     if ans in YES_CHARS or force_calib:
                         resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
-                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
+                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, spotshift)
                     break
@@ -460,9 +462,9 @@ def main(args):
                 else:
                     f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
                     f.result()
-                if center_focus is not None:
-                    f = focus.moveAbs({"z": center_focus})
-                    f.result()
+
+                f = focus.moveAbs({"z": opt_focus})
+                f.result()
 
                 # Run the optical fine alignment
                 # TODO: reuse the exposure time
@@ -512,7 +514,7 @@ def main(args):
                         ans = raw_input(msg)
                     if ans in YES_CHARS or force_calib:
                         iscale, irot, iscale_xy, ishear = new_iscale, new_irot, new_iscale_xy, new_ishear
-                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
+                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, spotshift)
                     break

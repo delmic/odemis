@@ -31,13 +31,6 @@ from .spot import AlignSpot, FindSpot
 from odemis.util.img import Subtract
 from odemis.dataio import hdf5
 
-# Offset from hole focus value in Delphi calibration.
-# Since the e-beam focus value found in the calibration file was determined by
-# focusing on the hole surface of the sample carrier, we expect the good focus
-# value when focusing on the glass to have an offset. This offset was measured
-# after experimenting with several carriers.
-GOOD_FOCUS_OFFSET = 200e-06
-
 
 def FindEbeamCenter(ccd, detector, escan):
     """

@@ -159,6 +159,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         htop = (-0.5, 1e-6)
         hbot = (5e9, -1.55158e-6)
         hfoc = 0.006
+        ofoc = -0.001e-6
         strans = (5.468e-3, -365e-6)
         sscale = (1.1, 0.9)
         srot = 0.1
@@ -171,7 +172,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         hfwa = (-0.953, -0.009)
         spotshift = (0.029, -2.90e-05)
 
-        orig_calib = (htop, hbot, hfoc, strans, sscale, srot, iscale, irot,
+        orig_calib = (htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot,
                       iscale_xy, ishear, resa, resb, hfwa, spotshift)
         conf.set_sh_calib(shid, *orig_calib)
 
