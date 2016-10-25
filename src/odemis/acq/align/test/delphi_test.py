@@ -89,14 +89,15 @@ class TestCalibration(unittest.TestCase):
         """
         Test FindCircleCenter for holes
         """
+        # Note: this hole image has a better contrast and less noise than typical
+        # hole images on the DELPHI
         data = hdf5.read_data("sem_hole.h5")
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        hole_coordinates = delphi.FindCircleCenter(data[0], 0.02032, 3)
-        expected_coordinates = (390.5, 258.5)
+        hole_coordinates = delphi.FindCircleCenter(data[0], 0.02032, 6, darkest=True)
+        expected_coordinates = (391.5, 257.5)
         numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
-
 
     # @unittest.skip("skip")
     def test_find_lens_center(self):
@@ -109,7 +110,6 @@ class TestCalibration(unittest.TestCase):
         lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 6)
         expected_coordinates = (450.5, 445.5)
         numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
-
 
     # @unittest.skip("skip")
     def test_no_hole(self):

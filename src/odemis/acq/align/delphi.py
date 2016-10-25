@@ -1070,7 +1070,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
             detector.data.unsubscribe(_discard_data)
             image = detector.data.get(asap=False)
             try:
-                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
+                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6, darkest=True)
             except IOError:
                 logging.debug("Hole was not found, autofocusing and will retry detection")
                 escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
@@ -1091,7 +1091,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
                 detector.data.unsubscribe(_discard_data)
                 image = detector.data.get(asap=False)
                 try:
-                    hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
+                    hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6, darkest=True)
                 except IOError:
                     raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
@@ -1146,12 +1146,14 @@ def estimateHoleDetectionTime(et, dist=None):
     return steps * (et + 2)  # s
 
 
-def FindCircleCenter(image, radius, max_diff):
+def FindCircleCenter(image, radius, max_diff, darkest=False):
     """
     Detects the center of a circle contained in an image.
     image (model.DataArray): image
     radius (float): radius of circle #m
     max_diff (float): precision of radius in pixels
+    darkest (bool): if True, and several holes are found, it will pick the darkest
+      one. Handy to look for holes.
     returns (tuple of floats): Coordinates of circle center
     raises:
         IOError if circle not found
@@ -1160,25 +1162,26 @@ def FindCircleCenter(image, radius, max_diff):
     pixelSize = image.metadata[model.MD_PIXEL_SIZE]
 
     # search for circles of radius with "max_diff" number of pixels precision
-    mn = int((radius / pixelSize[0]) - max_diff)
-    mx = int((radius / pixelSize[0]) + max_diff)
-    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=20,
+    radius_px = radius / pixelSize[0]
+    mn = int(radius_px - max_diff)
+    mx = int(radius_px + max_diff)
+    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=mn,
                                param1=50, param2=15, minRadius=mn, maxRadius=mx)
 
     # Do not change the sequence of conditions
     if circles is None:
         raise IOError("Circle not found.")
+    elif circles.shape[1] > 1:
+        logging.debug("Found %d circles, will pick one", circles.shape[1])
 
-    cntr = circles[0, 0][0], circles[0, 0][1]
-    # If searching for a hole, pick circle with darkest center
-    if radius == HOLE_RADIUS:
-        intensity = image[circles[0, 0][1], circles[0, 0][0]]
-        for i in circles[0, :]:
-            if image[i[1], i[0]] < intensity:
-                cntr = i[0], i[1]
-                intensity = image[i[1], i[0]]
+    if darkest:
+        # darkest = the one with the lowest intensity at the center
+        cntr = min(circles[0, :], key=lambda c: image[int(round(c[1])), int(round(c[0]))])
+    else:
+        # TODO: pick the one with the closest radius (3rd dim)?
+        cntr = circles[0, 0]
 
-    return cntr
+    return cntr[0], cntr[1]  # convert numpy array to float
 
 
 def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole,
