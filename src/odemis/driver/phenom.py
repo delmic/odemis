@@ -328,11 +328,6 @@ class Scanner(model.Emitter):
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
         self.last_fov = self.horizontalFoV.value
 
-        # Reduces the FoV by the given ratio. Directly passed to the Phenom.
-        # The same value is used for both dimensions.
-        # Needed only for calibration of spot mode, otherwise use horizontalFoV
-        self.fovScale = model.FloatContinuous(1, (0, 1), unit="")
-
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
         self.pixelSize = model.VigilantAttribute((0, 0), unit="m", readonly=True)
@@ -374,9 +369,10 @@ class Scanner(model.Emitter):
 
         # (float, float) as a ratio => how big is a pixel, compared to pixelSize
         # it basically works the same as binning, but can be float
+        # With scale < 1, it's not possible to scan the whole area
         # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
-        self.scale = model.TupleContinuous(self._scale, [(1, 1), self._shape],
+        self.scale = model.TupleContinuous(self._scale, ((0, 0), self._shape),
                                            cls=(int, long, float),
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
@@ -594,22 +590,28 @@ class Scanner(model.Emitter):
 
     def _setScale(self, value):
         """
-        value (1 < float, 1 < float): increase of size between pixels compared to
+        value (0 < float, 0 < float): increase of size between pixels compared to
          the original pixel size. It will adapt the resolution to
          have the same ROI (just different amount of pixels scanned)
-        return the actual value used
+        return (float, float): the actual value used
         """
+        # Only scales with the same values on X and Y are accepted. => just use X
+        # For values between 0 and 1, max res is 2048, and pixels get closer
+        # from each other => directly the same meaning as the .scale of the
+        # Phenom scan params
         prev_scale = self._scale
-        self._scale = value
+        self._scale = value[0], value[0]
 
         # adapt resolution so that the ROI stays the same
         change = (prev_scale[0] / self._scale[0],
                   prev_scale[1] / self._scale[1])
         old_resolution = self.resolution.value
-        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
-                          max(int(round(old_resolution[1] * change[1])), 1))
+        new_res = (int(round(old_resolution[0] * change[0])),
+                   int(round(old_resolution[1] * change[1])))
+        new_res = (max(1, min(new_res[0], self._shape[0])),
+                   max(1, min(new_res[1], self._shape[0])))
 
-        self.resolution.value = new_resolution  # will call _setResolution()
+        self.resolution.value = new_res  # will call _setResolution()
 
         return value
 
@@ -619,16 +621,13 @@ class Scanner(model.Emitter):
          resolution is not possible, it will pick the most fitting one.
         returns the actual value used
         """
-        # In case of resolution 1,1 store the current fov and set the spot mode
-        # if value == (1, 1) and self._resolution != (1, 1):
-        #    self.last_fov = self.horizontalFoV.value
-        #    self.horizontalFoV.value = self.horizontalFoV.range[0]
-        # If we are going back from spot mode to normal scanning, reset fov
-        # elif self._resolution == (1, 1):
-        #    self.horizontalFoV.value = self.last_fov
+        if self._scale[0] < 1:
+            max_size = self._shape
+        else:
+            max_size = (int(self._shape[0] / self._scale[0]),
+                        int(self._shape[1] / self._scale[1]))
 
-        max_size = (int(self._shape[0] // self._scale[0]),
-                    int(self._shape[1] // self._scale[1]))
+        # TODO: ensure for resolution > 128, it is an even number
 
         # at least one pixel, and at most the whole area
         size = (max(min(value[0], max_size[0]), 1),
@@ -969,6 +968,7 @@ class Detector(model.Detector):
         with self.parent._acq_progress_lock:
             res = self.parent._scanner.resolution.value
             trans = self.parent._scanner._trans
+            scale = self.parent._scanner._scale
             # Set dataType based on current bpp value
             bpp = self.bpp.value
             if bpp == 16:
@@ -1020,7 +1020,6 @@ class Detector(model.Detector):
                 logging.debug("Grid scanning of %s...", res)
 
                 # FoV (0->1) is: (full_FoV * res_ratio) - 1 px
-                scale = self.parent._scanner._scale
                 shape = self.parent._scanner.shape
                 fov = ((1 - (1 / res[0])) * (scale[0] * res[0] / shape[0]),
                        (1 - (1 / res[1])) * (scale[1] * res[1] / shape[1]))
@@ -1061,7 +1060,13 @@ class Detector(model.Detector):
                 res_hfw_shift = self._get_res_hfw_shift(res)
                 shift = (trans[0] + res_hfw_shift[0],
                          trans[1] + res_hfw_shift[1])
-                fovscale = self.parent._scanner.fovScale.value
+                fovscale = res[0] * scale[0] / self.parent._scanner._shape[0]
+                if fovscale > 0.999:
+                    fovscale = 1  # To keep from the floating errors
+                else:
+                    # There is no compensation for the shift induced by scale < 1
+                    logging.info("Using FoV scale %f, which should be used only for calibration", fovscale)
+
                 scan_params, need_set = self._get_viewing_mode(res, nframes, shift, fovscale)
                 scan_params.HDR = (bpp == 16)
                 scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
