@@ -1049,9 +1049,9 @@ class Detector(model.Detector):
                 # SEM image shift correction parameters
                 AX, AY = md_bsd.get(model.MD_RESOLUTION_SLOPE, (0, 0))
                 BX, BY = md_bsd.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
-                CX, CY = md_bsd.get(model.MD_HFW_SLOPE, (0, 0))
-                self._scanParams.center.x = trans[0] - (1 / (2 * math.pi) * math.atan(-AX / (res[0] + BX)) + CX / 100)
-                self._scanParams.center.y = trans[1] - (1 / (2 * math.pi) * math.atan(-AY / (res[1] + BY)) + CY / 100)
+                CX, CY = md_bsd.get(model.MD_HFW_SLOPE, (0, 0))  # % of the FoV
+                self._scanParams.center.x = trans[0] - ((1 / (2 * math.pi)) * math.atan(-AX / (res[0] + BX)) + CX / 100)
+                self._scanParams.center.y = trans[1] - ((1 / (2 * math.pi)) * math.atan(-AY / (res[1] + BY)) + CY / 100)
 
                 self._scanParams.scale = 1
                 self._scanParams.resolution.width = res[0]
