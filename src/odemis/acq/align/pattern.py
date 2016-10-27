@@ -28,14 +28,25 @@ import logging
 import numpy
 import threading
 
-SCANNING_FOV = 1020e-06  # SEM FoV used for the pattern scanning
-DETECTION_FOV = (220e-06, 220e-06)   #CCD FoV that guarantees at least one  
-                                    #complete subpattern is observed #m 
-SUBPATTERNS = (7,7) #Dimensions of pattern in terms of subpatterns
-SPOT_DIST = 20e-06  #Distance between spots in subpattern #m
-SUBPATTERN_DIMS = (3,3) #Dimensions of subpattern in terms of spots
-SUBPATTERN_DIST = 160e-06  #Distance between 2 neighboor subpatterns 
-                            #(from center to center) #m
+# The goal is to align roughly the SEM and optical lenses. By drawing CL spots
+# with the e-beam at a very large FoV, we can observe some of them in the CCD.
+# By checking which sub-pattern is visible in the CCD, it's possible to determine
+# where is the optical lens compared to the e-beam.
+
+# Note: this is currently UNUSED. On the DELPHI, we rely on placing roughly
+# the lens using the NavCam view. On the SECOM, we provide "dichotomy search".
+
+
+# SEM FoV used for the pattern scanning
+SCANNING_FOV = 1020e-06
+# CCD FoV that guarantees at least one complete subpattern is observed (m)
+DETECTION_FOV = (220e-06, 220e-06)
+SUBPATTERNS = (7, 7)  # Dimensions of pattern in terms of subpatterns
+SPOT_DIST = 20e-06  # Distance between spots in subpattern #m
+SUBPATTERN_DIMS = (3, 3)  # Dimensions of subpattern in terms of spots
+# Distance between 2 neighboor subpatterns (from center to center, in m)
+SUBPATTERN_DIST = 160e-06
+
 class PatternScanner(object):
     def __init__(self, ccd, detector, escan, opt_stage, focus, pattern):
         self.ccd = ccd
@@ -80,12 +91,12 @@ class PatternScanner(object):
         Does nothing, just discard the SEM data received (for spot mode)
         """
         pass
-    
+
     def DoPattern(self):
         """
-        Given an SH Calibration Pattern, it first scans the required spots, acquires 
-        the CCD image, detects the combination of the spots observed and moves 
-        accordingly. It repeats this process until the CCD image contains the center 
+        Given an SH Calibration Pattern, it first scans the required spots, acquires
+        the CCD image, detects the combination of the spots observed and moves
+        accordingly. It repeats this process until the CCD image contains the center
         pattern.
         ccd (model.DigitalCamera): The ccd
         detector (model.Detector): The se-detector
@@ -93,16 +104,16 @@ class PatternScanner(object):
         opt_stage (model.Actuator): The objective stage
         focus (model.Actuator): Focus of objective lens
         pattern (model.DataArray): 21x21 array containing the spot
-                                    pattern in binary data. Needs to 
-                                    be divided in 3x3 sub-arrays to 
+                                    pattern in binary data. Needs to
+                                    be divided in 3x3 sub-arrays to
                                     get the actual information
-        raises:    
+        raises:
             CancelledError() if cancelled
             IOError if pattern not found
         """
         self._save_hw_settings()
         self._pattern_state = RUNNING
-        
+
         escan = self.escan
         ccd = self.ccd
         detector = self.detector
@@ -175,5 +186,5 @@ class PatternScanner(object):
                 return False
             self._pattern_state = CANCELLED
             logging.debug("Pattern scan cancelled.")
-    
+
         return True

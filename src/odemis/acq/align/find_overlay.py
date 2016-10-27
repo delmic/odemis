@@ -186,12 +186,11 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
 
             optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
 
-            # TODO: Make function for scale calculation
-            # Estimate the scale by measuring the distance between the first
+            # Estimate the scale by measuring the distance between the closest
             # two spots in optical and electron coordinates.
             #  * For electrons, it's easy as we've placed them.
             #  * For optical, we pick one spot, and measure the distance to the
-            #    closest spot. Should be more precise than previous estimation.
+            #    closest spot.
             p1 = optical_coordinates[0]
             def dist_to_p1(p):
                 return math.hypot(p1[0] - p[0], p1[1] - p[1])

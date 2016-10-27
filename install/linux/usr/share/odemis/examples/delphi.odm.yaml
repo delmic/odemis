@@ -193,6 +193,7 @@ DELPHI: {
         axes: ["x", "y", "z"],
         ustepsize: [5.9e-9, 5.9e-9, 0.302e-9], # m/µstep
         # Note: the hardware has even a further limit: |(X,Y)| < 4mm
+        # The calibration requires at least 4 mm on the axes.
         rng: [[-4.0e-3, 4.0e-3], [-4.0e-3, 4.0e-3], [-0.35e-3, 0.35e-3]], # m, min/max
         #refproc: "Standard", # referencing procedure for simulator
         refproc: "2xFinalForward", # official referencing procedure for the Delphi

@@ -24,16 +24,18 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import copy
 import logging
+import math
 import numpy
 from odemis import model
 from odemis import util
 from odemis.util import TimeoutError
 from odemis.util import img
-import threading
-import math
-import copy
 from odemis.util.img import Subtract
+import threading
+import time
+
 
 # Approximate size of a (big) CL spot. If the distance between spots is smaller
 # than this, one image per spot will be taken.
@@ -50,6 +52,7 @@ class GridScanner(object):
         self.detector = detector
         self.bgsub = bgsub
         self.bg_image = None
+        self._min_acq_time = float("inf")
 
         self._acq_state = FINISHED
         self._acq_lock = threading.Lock()
@@ -94,6 +97,13 @@ class GridScanner(object):
         """
         Receives the CCD data
         """
+        try:
+            if data.metadata[model.MD_ACQ_DATE] < self._min_acq_time:
+                logging.debug("Received a CCD image too early")
+                return
+        except KeyError:
+            pass
+
         if self.bgsub:
             self._optical_image = Subtract(data, self.bg_image)
         else:
@@ -105,7 +115,8 @@ class GridScanner(object):
         """
         Receives the Spot image data
         """
-        # TODO: also subtract background data. Or why don't we do that?
+        if self.bgsub:
+            data = Subtract(data, self.bg_image)
         self._spot_images.append(data)
         self._ccd_done.set()
         logging.debug("Got Spot image!")
@@ -115,7 +126,6 @@ class GridScanner(object):
         Perform acquisition spot per spot.
         Slow, but works even if SEM FoV is small
         """
-        # TODO support background substraction also in spot per spot scanning
         escan = self.escan
         ccd = self.ccd
         detector = self.detector
@@ -138,6 +148,9 @@ class GridScanner(object):
                    electron_coordinates[-1][1] / sem_shape[1] + 0.5)
         ccd_roi = self.sem_roi_to_ccd(sem_roi)
         self.configure_ccd(ccd_roi)
+
+        if self.bgsub:
+            self.bg_image = ccd.data.get(asap=False)
 
         et = dwell_time
         ccd.exposureTime.value = et  # s
@@ -211,6 +224,7 @@ class GridScanner(object):
             if self.bgsub:
                 self.bg_image = ccd.data.get(asap=False)
             detector.data.subscribe(self._discard_data)
+            self._min_acq_time = time.time()
             ccd.data.subscribe(self._onCCDImage)
             logging.debug("Scanning spot grid...")
 
