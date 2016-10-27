@@ -265,11 +265,11 @@ def man_calib(logpath):
 
         # Detect the holes/markers of the sample holder
         while True:
-            ans = None
+            ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in YES_CHARS or force_calib:
+            if ans in YES_CHARS:
                 # Move Phenom sample stage to expected hole position
                 f = sem_stage.moveAbs(aligndelphi.EXPECTED_HOLES[0])
                 f.result()
@@ -287,11 +287,11 @@ def man_calib(logpath):
                     print "                 2st hole: " + str(new_second_hole)
                     print "                 hole focus: " + str(new_hole_focus)
                     print '\033[1;m'
-                    ans = None
+                    ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in YES_CHARS or force_calib:
+                    if ans in YES_CHARS:
                         first_hole, second_hole, hole_focus = new_first_hole, new_second_hole, new_hole_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -325,11 +325,11 @@ def man_calib(logpath):
         f.result()
 
         while True:
-            ans = None
+            ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the twin stage calibration? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in YES_CHARS or force_calib:
+            if ans in YES_CHARS:
                 # Configure CCD and e-beam to write CL spots
                 ccd.binning.value = (1, 1)
                 ccd.resolution.value = ccd.resolution.range[1]
@@ -393,11 +393,11 @@ def man_calib(logpath):
                     print "                 rotation: " + str(new_rotation)
                     print "                 optical focus: " + str(new_opt_focus)
                     print '\033[1;m'
-                    ans = None
+                    ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in YES_CHARS or force_calib:
+                    if ans in YES_CHARS:
                         offset, scaling, rotation, opt_focus = new_offset, new_scaling, new_rotation, new_opt_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -409,75 +409,36 @@ def man_calib(logpath):
                 break
 
         while True:
-            ans = None
+            ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the SEM image calibration? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in YES_CHARS or force_calib:
-                f = opt_stage.moveAbs({"x": 0, "y": 0})
-                f.result()
-                if pure_offset is not None:
-                    f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
-                    f.result()
-                elif offset is not None:
-                    f = sem_stage.moveAbs({"x":offset[0] * scaling[0], "y":offset[1] * scaling[1]})
-                    f.result()
-                else:
-                    f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
-                    f.result()
+            if ans in YES_CHARS:
+                # Resetting shift parameters, to not take them into account during calib
+                blank_md = dict.fromkeys(aligndelphi.MD_CALIB_SEM, (0, 0))
+                escan.updateMetadata(blank_md)
 
+                # We measure the shift in the area just behind the hole where there
+                # are always some features plus the edge of the sample carrier. For
+                # that reason we use the focus measured in the hole detection step
+                f = sem_stage.moveAbs(aligndelphi.SHIFT_DETECTION)
+                f.result()
+
+                f = ebeam_focus.moveAbs({"z": hole_focus})
+                f.result()
                 try:
                     # Compute spot shift percentage
-                    # Configure e-beam to write CL spots
-                    escan.scale.value = (1, 1)
-                    escan.resolution.value = (1, 1)
-                    escan.translation.value = (0, 0)
-                    if not escan.rotation.readonly:
-                        escan.rotation.value = 0
-                    escan.shift.value = (0, 0)
-                    escan.dwellTime.value = 5e-06
-                    detector.data.subscribe(_discard_data)
-                    print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
-                    print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
-                    ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
-                    ar.focusByArrow()
-                    detector.data.unsubscribe(_discard_data)
-                    good_focus = ebeam_focus.position.value["z"]
-
-                    # Resetting shift parameters, to not take them into account during calib
-                    blank_md = dict.fromkeys(aligndelphi.MD_CALIB_SEM, (0, 0))
-                    escan.updateMetadata(blank_md)
-
-                    # restore CCD settings (as the GUI/user might have changed them)
-                    ccd.binning.value = (1, 1)
-                    ccd.resolution.value = ccd.resolution.range[1]
-                    ccd.exposureTime.value = 900e-03
-                    # Center (roughly) the spot on the CCD
-                    f = spot.CenterSpot(ccd, sem_stage, escan, spot.ROUGH_MOVE, spot.STAGE_MOVE, detector.data)
-                    dist, vect = f.result()
-                    if dist is None:
-                        logging.warning("Failed to find a spot, twin stage calibration might have failed")
-
                     print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
+                    f = aligndelphi.ScaleShiftFactor(detector, escan, logpath)
+                    new_spotshift = f.result()
 
-                    spot_shiftf = aligndelphi.SpotShiftFactor(ccd, detector, escan, focus)
-                    new_spotshift = spot_shiftf.result()
-
-                    print "\033[1;30mCalculating resolution and HFW shift, please wait...\033[1;m"
                     # Compute resolution-related values.
-                    # We measure the shift in the area just behind the hole where there
-                    # are always some features plus the edge of the sample carrier. For
-                    # that reason we use the focus measured in the hole detection step
-                    f = sem_stage.moveAbs(aligndelphi.SHIFT_DETECTION)
-                    f.result()
-
-                    f = ebeam_focus.moveAbs({"z": hole_focus})
-                    f.result()
-
+                    print "\033[1;30mCalculating resolution shift, please wait...\033[1;m"
                     resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, logpath)
                     new_resa, new_resb = resolution_shiftf.result()
 
                     # Compute HFW-related values
+                    print "\033[1;30mCalculating HFW shift, please wait...\033[1;m"
                     hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, logpath)
                     new_hfwa = hfw_shiftf.result()
 
@@ -487,11 +448,11 @@ def man_calib(logpath):
                     print "                 hfw-a: " + str(new_hfwa)
                     print "                 spot shift: " + str(new_spotshift)
                     print '\033[1;m'
-                    ans = None
+                    ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in YES_CHARS or force_calib:
+                    if ans in YES_CHARS:
                         resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -503,11 +464,11 @@ def man_calib(logpath):
                 break
 
         while True:
-            ans = None
+            ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the fine alignment? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in YES_CHARS or force_calib:
+            if ans in YES_CHARS:
                 # Return to the center so fine alignment can be executed just after calibration
                 f = opt_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
@@ -577,11 +538,11 @@ def man_calib(logpath):
                     print "                 scale-xy: " + str(new_iscale_xy)
                     print "                 shear: " + str(new_ishear)
                     print '\033[1;m'
-                    ans = None
+                    ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in YES_CHARS or force_calib:
+                    if ans in YES_CHARS:
                         iscale, irot, iscale_xy, ishear = new_iscale, new_irot, new_iscale_xy, new_ishear
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
