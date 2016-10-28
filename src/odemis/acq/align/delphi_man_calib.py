@@ -270,9 +270,9 @@ def man_calib(logpath):
                 msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
                 ans = raw_input(msg)
             if ans in YES_CHARS:
-                # Move Phenom sample stage to expected hole position
-                f = sem_stage.moveAbs(aligndelphi.EXPECTED_HOLES[0])
-                f.result()
+                # Move Phenom sample stage next to expected hole position
+                sem_stage.moveAbsSync(aligndelphi.SHIFT_DETECTION)
+                ebeam_focus.moveAbsSync(hole_focus)
                 # Set the FoV to almost 2mm
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 msg = "\033[1;34mPlease turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ...\033[1;m"
@@ -554,9 +554,10 @@ def man_calib(logpath):
                 break
 
         # Update calibration file
-        print "\033[1;30mUpdating calibration file is done, now ejecting, please wait...\033[1;m"
+        print "\033[1;30mUpdating calibration file is done\033[1;m"
 
     finally:
+        print "\033[1;30mCalibration ended, now ejecting sample, please wait...\033[1;m"
         # Eject the sample holder
         f = chamber.moveAbs({"pressure": vented_pressure})
 

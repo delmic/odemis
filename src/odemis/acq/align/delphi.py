@@ -74,12 +74,15 @@ GOOD_FOCUS_OFFSET = 200e-06
 # TODO: Once all the Delphi YAML files are updated with rng information,
 # remove all rng_focus=FOCUS_RANGE references
 FOCUS_RANGE = (-0.25e-03, 0.35e-03)  # Roughly the optical focus stage range
-OPTICAL_KNOWN_FOCUS = 0.20e-3  # Fallback optical focus value
+OPTICAL_KNOWN_FOCUS = 0.10e-3  # Fallback optical focus value
 
 HFW_SHIFT_KNOWN = (-0.5, 0)  # % FoV, fallback values in case calculation goes wrong
-SPOT_SHIFT_KNOWN = (-0.04, 0)  # ratio of FoV, fallback values in case calculation goes wrong
+SPOT_SHIFT_KNOWN = (-0.05, 0)  # ratio of FoV, fallback values in case calculation goes wrong
 
 MD_CALIB_SEM = (model.MD_SPOT_SHIFT, model.MD_HFW_SLOPE, model.MD_RESOLUTION_SLOPE, model.MD_RESOLUTION_INTERCEPT)
+
+SPOT_RES = (256, 256)  # Resolution used during spot mode
+
 
 def list_hw_settings(escan, ccd):
     """
@@ -654,11 +657,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
     """
     logging.debug("Starting alignment and offset calculation...")
 
-    # Configure CCD and e-beam to write CL spots
-    # TODO: all the CCD values are overridden by AlignSpot() anyway...
-    ccd.binning.value = (1, 1)
-    ccd.resolution.value = ccd.resolution.range[1]
-    ccd.exposureTime.value = 900e-03
+    # Configure e-beam to write CL spots
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
@@ -684,44 +683,37 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             if future._task_state == CANCELLED:
                 raise CancelledError()
 
-            # In case of failure try with another initial focus value
-            f = focus.moveRel({"z": 0})
+            # TODO: also try the current stage offset, if there is already one
+
+            # Maybe the spot is on the edge or just outside the FoV.
+            # Try to move to the source background.
+            logging.info("Failed to find a spot, will to reach the source by moving the SEM stage...")
+            f = focus.moveAbs({"z": start_pos})
+            f.result()
+            image = ccd.data.get(asap=False)
+            brightest = numpy.unravel_index(image.argmax(), image.shape)
+            pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+            center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+            tab_pxs = [a - b for a, b in zip(brightest, center_pxs)]
+            tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
+            f = sem_stage.moveRel({"x":-tab[0], "y":tab[1]})
             f.result()
             try:
                 future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
                 dist, vector = future_spot.result()
             except IOError:
-                if future._task_state == CANCELLED:
-                    raise CancelledError()
-
-                # Maybe the spot is on the edge or just outside the FoV.
-                # Try to move to the source background.
-                logging.debug("Trying to reach the source...")
-                f = focus.moveAbs({"z": start_pos})
-                f.result()
-                image = ccd.data.get(asap=False)
-                brightest = numpy.unravel_index(image.argmax(), image.shape)
-                pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-                center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-                tab_pxs = [a - b for a, b in zip(brightest, center_pxs)]
-                tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-                f = sem_stage.moveRel({"x":-tab[0], "y":tab[1]})
-                f.result()
-                try:
-                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
-                    dist, vector = future_spot.result()
-                except IOError:
-                    raise IOError("Failed to align stages and calculate offset.")
+                raise IOError("Failed to align stages and calculate offset.")
 
         # Almost done
         future.set_progress(end=time.time() + 0.1)
-        # image = ccd.data.get(asap=False) # TODO: why was it there? Is it still useful?
         sem_pos = sem_stage.position.value
 
         # Since the optical stage is at its origin, the final SEM stage position
         # and the position of the spot gives the offset
         offset = (-(sem_pos["x"] + vector[0]), -(sem_pos["y"] + vector[1]))
 
+        # Mostly to handle cases during manual calibration when the user moved
+        # the stage
         opt_pos = opt_stage.position.value
         if (opt_pos["x"], opt_pos["y"]) != (0, 0):
             logging.warning("Optical stage not at it's origin as expected, will compensate offset")
@@ -1018,7 +1010,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         CancelledError() if cancelled
         IOError if holes not found
     """
-    logging.debug("Starting hole detection...")
+    logging.info("Starting hole detection...")
     try:
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
@@ -1031,32 +1023,33 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         holes_found = []
         hole_focus = None
 
+        # Before anything, adjust the focus
+        if manual:
+            hole_focus = ebeam_focus.position.value.get('z')
+        else:
+            sem_stage.moveAbsSync(SHIFT_DETECTION)  # Next to the 1st hole, but not _on_ it
+            escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
+            escan.horizontalFoV.value = 250e-06  # m
+            escan.scale.value = (8, 8)
+            detector.data.subscribe(_discard_data)  # unblank the beam
+            f = detector.applyAutoContrast()
+            f.result()
+            detector.data.unsubscribe(_discard_data)
+            future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
+            hole_focus, fm_level = future._autofocus_f.result()
+
         for pos in EXPECTED_HOLES:
             if future._task_state == CANCELLED:
                 raise CancelledError()
             # Move Phenom sample stage to expected hole position
-            f = sem_stage.moveAbs(pos)
-            f.result()
+            sem_stage.moveAbsSync(pos)
             # Set the FoV to almost 2mm
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
 
-            # For the first hole apply autofocus anyway
-            if hole_focus is None:
-                if manual:
-                    hole_focus = ebeam_focus.position.value.get('z')
-                else:
-                    escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
-                    escan.horizontalFoV.value = 250e-06  # m
-                    escan.scale.value = (8, 8)
-                    detector.data.subscribe(_discard_data)  # unblank the beam
-                    f = detector.applyAutoContrast()
-                    f.result()
-                    detector.data.unsubscribe(_discard_data)
-                    future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
-                    hole_focus, fm_level = future._autofocus_f.result()
-
             if future._task_state == CANCELLED:
                 raise CancelledError()
+
+            logging.debug("Looking for hole at %s", pos)
             # From SEM image determine hole position relative to the center of
             # the SEM
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
@@ -1197,7 +1190,7 @@ def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole
     returns (float): updated_rotation #radians
             (tuple of floats): updated_offset
     """
-    logging.debug("Starting extra offset calculation...")
+    logging.info("Starting extra offset calculation...")
 
     # Extra offset and rotation
     e_offset, unused, e_rotation = transform.CalculateTransform([new_first_hole, new_second_hole],
@@ -1247,7 +1240,7 @@ def _DoLensAlignment(future, navcam, sem_stage):
         CancelledError() if cancelled
         IOError If objective lens not found
     """
-    logging.debug("Starting lens alignment...")
+    logging.info("Starting lens alignment...")
     try:
         if future._task_state == CANCELLED:
             raise CancelledError()
@@ -1347,7 +1340,7 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
     # => compute where is the fixed-point
     # => repeat for many HFWs, and get an average
 
-    logging.debug("Starting HFW-related shift calculation...")
+    logging.info("Starting HFW-related shift calculation...")
     try:
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
@@ -1485,7 +1478,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         CancelledError() if cancelled
         IOError if shift cannot be estimated
     """
-    logging.debug("Starting Resolution-related shift calculation...")
+    logging.info("Starting Resolution-related shift calculation...")
     try:
         escan.scale.value = (1, 1)
         escan.horizontalFoV.value = 1200e-06  # m
@@ -1621,9 +1614,9 @@ def ScaleShiftFactor(detector, escan, logpath=None):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
+    et = 7.5e-07 * numpy.prod(SPOT_RES)
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateHFWShiftFactorTime(et))
+                                end=est_start + 4 * et + 1)
     f._task_state = RUNNING
 
     # Task to run
@@ -1660,7 +1653,7 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
     # We are just looking for the fixed-point when "zooming" in by reducing the
     # scale of the FoV. It's pretty much exactly the same as HFW, but for fovScale
 
-    logging.debug("Starting calculation of scale-related shift during spot mode...")
+    logging.info("Starting calculation of scale-related shift during spot mode...")
     try:
         escan.horizontalFoV.value = 1200e-06  # m
         escan.translation.value = (0, 0)
@@ -1671,7 +1664,6 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         max_res = escan.resolution.range[1]
-        SPOT_RES = (256, 256)  # Same as spot mode
 
         # Start with smallest FoV
         max_scale = 1  # m
@@ -1745,7 +1737,7 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
             future._task_state = FINISHED
 
 
-# Unused
+# Unused as ScaleShiftFactor() seems to give much better results
 def SpotShiftFactor(ccd, detector, escan, focus):
     """
     Wrapper for DoSpotShiftFactor. It provides the ability to check the
@@ -1798,7 +1790,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         CancelledError() if cancelled
         IOError if CL spot not found
     """
-    logging.debug("Spot shift calculation...")
+    logging.info("Spot shift calculation...")
 
     # Keep current rotation
     cur_rot = escan.rotation.value
@@ -1815,11 +1807,6 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
     det_dataflow = detector.data
-
-    # TODO: check if this is the right way to measure the spot shit.
-    # It seems that on some system, even having a spot that is not moving when
-    # rotating can still bring a relatively large shift when using spot to align
-    # the whole SEM image.
 
     try:
         if future._task_state == CANCELLED:
