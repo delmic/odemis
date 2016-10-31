@@ -369,9 +369,10 @@ class Scanner(model.Emitter):
 
         # (float, float) as a ratio => how big is a pixel, compared to pixelSize
         # it basically works the same as binning, but can be float
+        # With scale < 1, it's not possible to scan the whole area
         # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
-        self.scale = model.TupleContinuous(self._scale, [(1, 1), self._shape],
+        self.scale = model.TupleContinuous(self._scale, ((0, 0), self._shape),
                                            cls=(int, long, float),
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
@@ -589,22 +590,28 @@ class Scanner(model.Emitter):
 
     def _setScale(self, value):
         """
-        value (1 < float, 1 < float): increase of size between pixels compared to
+        value (0 < float, 0 < float): increase of size between pixels compared to
          the original pixel size. It will adapt the resolution to
          have the same ROI (just different amount of pixels scanned)
-        return the actual value used
+        return (float, float): the actual value used
         """
+        # Only scales with the same values on X and Y are accepted. => just use X
+        # For values between 0 and 1, max res is 2048, and pixels get closer
+        # from each other => directly the same meaning as the .scale of the
+        # Phenom scan params
         prev_scale = self._scale
-        self._scale = value
+        self._scale = value[0], value[0]
 
         # adapt resolution so that the ROI stays the same
         change = (prev_scale[0] / self._scale[0],
                   prev_scale[1] / self._scale[1])
         old_resolution = self.resolution.value
-        new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
-                          max(int(round(old_resolution[1] * change[1])), 1))
+        new_res = (int(round(old_resolution[0] * change[0])),
+                   int(round(old_resolution[1] * change[1])))
+        new_res = (max(1, min(new_res[0], self._shape[0])),
+                   max(1, min(new_res[1], self._shape[0])))
 
-        self.resolution.value = new_resolution  # will call _setResolution()
+        self.resolution.value = new_res  # will call _setResolution()
 
         return value
 
@@ -614,16 +621,13 @@ class Scanner(model.Emitter):
          resolution is not possible, it will pick the most fitting one.
         returns the actual value used
         """
-        # In case of resolution 1,1 store the current fov and set the spot mode
-        # if value == (1, 1) and self._resolution != (1, 1):
-        #    self.last_fov = self.horizontalFoV.value
-        #    self.horizontalFoV.value = self.horizontalFoV.range[0]
-        # If we are going back from spot mode to normal scanning, reset fov
-        # elif self._resolution == (1, 1):
-        #    self.horizontalFoV.value = self.last_fov
+        if self._scale[0] < 1:
+            max_size = self._shape
+        else:
+            max_size = (int(self._shape[0] / self._scale[0]),
+                        int(self._shape[1] / self._scale[1]))
 
-        max_size = (int(self._shape[0] // self._scale[0]),
-                    int(self._shape[1] // self._scale[1]))
+        # TODO: ensure for resolution > 128, it is an even number
 
         # at least one pixel, and at most the whole area
         size = (max(min(value[0], max_size[0]), 1),
@@ -705,13 +709,6 @@ class Detector(model.Detector):
         self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
         self.brightness.subscribe(self._onBrightness)
 
-        # setup detector
-        self._scanParams = self.parent._objects.create('ns0:scanParams')
-
-        # use all detector segments
-        detectorMode = 'SEM-DETECTOR-MODE-ALL'
-        self._scanParams.detector = detectorMode
-
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
@@ -733,9 +730,6 @@ class Detector(model.Detector):
                         username=self.parent._username, password=self.parent._password,
                         timeout=SOCKET_TIMEOUT)
         self._acq_device = acq_client.service
-
-        # Store current scan params
-        self._last_view_params = None
 
     @isasync
     def applyAutoContrast(self):
@@ -813,8 +807,6 @@ class Detector(model.Detector):
         self.brightness.notify(bright)
 
     def update_parameters(self):
-        self._last_view_params = None  # Force to write them again next time
-
         # Update stage and focus position
         self.parent._stage._updatePosition()
         self.parent._focus._updatePosition()
@@ -924,46 +916,59 @@ class Detector(model.Detector):
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
 
-    def _needResetParams(self, scanParams):
+    def _get_viewing_mode(self, res, nframes, center, scale):
         """
-        Check whether the latest view parameters set are identical to the one
-          needed. Setting the view params can take a long time, so it's useful
-          to avoid doing it when not necessary.
-        scanParams: the new scan parameters needed
-        return (bool): True if the view parameter must be set again
+        Construct the scan parameters for the viewing mode, and check whether
+         the SEM already uses them or not.
+        res (int, int): resolution
+        nframes (int): number of frames to accumulate
+        center (float, float): ratio of the FoV (-0.5 -> 0.5)
+        scale (0<=float<=1)
+        returns (scan_params, bool): scan parameters to be sent, and whether the
+          SEM needs to be reconfigure by getting these new params
         """
-        new_params = (scanParams.nrOfFrames,
-                      (scanParams.center.x, scanParams.center.y),
-                      scanParams.scale,
-                      (scanParams.resolution.width, scanParams.resolution.height))
-
-        if self._last_view_params != new_params:
-            self._last_view_params = new_params
-            return True
+        scan_params = self._acq_device.GetSEMViewingMode().parameters
+        prev_params = ((scan_params.resolution.width, scan_params.resolution.height),
+                       scan_params.nrOfFrames,
+                       (scan_params.center.x, scan_params.center.y),
+                       scan_params.scale)
+        if prev_params == (res, nframes, center, scale):
+            return scan_params, False
         else:
-#             # DEBUG: To check it's indeed what we expect, in practice, it seems
-#             # the main reason it's unsynchronised is if the sample goes out of
-#             # SEM mode.
-#             act_scan_params = self._acq_device.GetSEMViewingMode().parameters
-#             if (act_scan_params.nrOfFrames != scanParams.nrOfFrames or
-#                 (act_scan_params.center.x, act_scan_params.center.y) != (scanParams.center.x, scanParams.center.y) or
-#                 act_scan_params.scale != scanParams.scale or
-#                 (act_scan_params.resolution.width, act_scan_params.resolution.height) != (scanParams.resolution.width, scanParams.resolution.height)):
-#                 logging.error("Scan params are not as expected: %s, %s, %s, %s",
-#                               act_scan_params.nrOfFrames,
-#                               (act_scan_params.center.x, act_scan_params.center.y),
-#                               act_scan_params.scale,
-#                               (act_scan_params.resolution.width, act_scan_params.resolution.height))
-            return False
+            scan_params.resolution.width = res[0]
+            scan_params.resolution.height = res[1]
+            scan_params.nrOfFrames = nframes
+            scan_params.center.x = center[0]
+            scan_params.center.y = center[1]
+            scan_params.scale = scale
+            return scan_params, True
 
-    def _acquire_image(self):
+    def _get_res_hfw_shift(self, res):
+        """
+        return (float, float): shift in FoV ratio (-0.5 -> 0.5)
+        """
+        md_bsd = self.getMetadata()
+        # SEM image shift correction parameters
+        AX, AY = md_bsd.get(model.MD_RESOLUTION_SLOPE, (0, 0))
+        BX, BY = md_bsd.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
+        CX, CY = md_bsd.get(model.MD_HFW_SLOPE, (0, 0))  # % of the FoV
+
+        # No need to know the FoV for C, as shift is relative to the FoV
+        shift = (- ((1 / (2 * math.pi)) * math.atan(-AX / (res[0] + BX)) + CX / 100),
+                 - ((1 / (2 * math.pi)) * math.atan(-AY / (res[1] + BY)) + CY / 100))
+        return shift
+
+    def _acquire_image(self, is_first):
         """
         Acquires the SEM image based on the resolution and
         current drift.
+        is_first (bool): True if previously no image was being acquired (and so
+          prevent fast live view update)
         """
         with self.parent._acq_progress_lock:
             res = self.parent._scanner.resolution.value
             trans = self.parent._scanner._trans
+            scale = self.parent._scanner._scale
             # Set dataType based on current bpp value
             bpp = self.bpp.value
             if bpp == 16:
@@ -971,36 +976,37 @@ class Detector(model.Detector):
             else:
                 dataType = numpy.uint8
 
-            self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
-            self._scanParams.HDR = bpp == 16
-
-            md_bsd = self.getMetadata()
-            spot_shift = md_bsd.get(model.MD_SPOT_SHIFT, (0, 0))
-
             # update changed metadata
-            metadata = dict(self.parent._metadata)
+            metadata = self.parent._metadata.copy()
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
 
-            # For the Phenom GUI, always put a res > 456, as below, the GUI will crash
-            # => spot is achieved by setting a scale = 0
-            scan_params_view = self._acq_device.GetSEMViewingMode().parameters
-            scan_params_view.resolution.width = 456
-            scan_params_view.resolution.height = 456
-            scan_params_view.nrOfFrames = 1
+            # Spot is achieved by setting a scale = 0
+            # The Phenom needs _some_ resolution. Smaller is better because
+            # the acquisition finishes sooner, so it can be changed sooner.
+            # However at resolutions < 256, the Phenom tends to compute the
+            # position of the image at really weird/unpredictable places.
+            # Moreover, to compute the spot shift, we use SEM image correlation
+            # at different FoV scales, so the image must be big enough to
+            # correlate it relatively precisely (although _maybe_ the shift is
+            # stable in px, so any resolution would be fine to use).
+            # Note: earlier versions of the Phenom GUI would crash with res < 456
+            SPOT_RES = (256, 256)  # changing this will change spot shift required
+            spot_shift = metadata.get(model.MD_SPOT_SHIFT, (0, 0))
             if res == (1, 1):
                 # Do simple spot mode
                 logging.debug("Setting the SEM to spot mode")
                 # Set scale so the FoV is reduced to something really small
                 # even if the current HFW is the maximum
-                scan_params_view.scale = 0
-                scan_params_view.center.x = trans[0] + spot_shift[0]
-                scan_params_view.center.y = trans[1] + spot_shift[1]
+                res_hfw_shift = self._get_res_hfw_shift(SPOT_RES)
+                shift = (trans[0] + spot_shift[0] + res_hfw_shift[0],
+                         trans[1] + spot_shift[1] + res_hfw_shift[1])
+                scan_params, need_set = self._get_viewing_mode(SPOT_RES, 1, shift, 0)
 
                 if self._acquisition_must_stop.is_set():
                     raise CancelledError()
-                if self._needResetParams(scan_params_view):
-                    self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                if need_set:
+                    self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
                 # HACK: Ideally we'd sleep the dwell time, but the dwell time
                 # range is very small which would cause lots of (fake) data sent
                 # to the client. => Hard code sleep time to something useful
@@ -1014,7 +1020,6 @@ class Detector(model.Detector):
                 logging.debug("Grid scanning of %s...", res)
 
                 # FoV (0->1) is: (full_FoV * res_ratio) - 1 px
-                scale = self.parent._scanner._scale
                 shape = self.parent._scanner.shape
                 fov = ((1 - (1 / res[0])) * (scale[0] * res[0] / shape[0]),
                        (1 - (1 / res[1])) * (scale[1] * res[1] / shape[1]))
@@ -1022,62 +1027,66 @@ class Detector(model.Detector):
                 coordinates = (numpy.linspace(-bound[0], bound[0], res[0]),
                                numpy.linspace(-bound[1], bound[1], res[1]))
 
+                res_hfw_shift = self._get_res_hfw_shift(SPOT_RES)
+                shift = (trans[0] + spot_shift[0] + res_hfw_shift[0],
+                         trans[1] + spot_shift[1] + res_hfw_shift[1])
+                scan_params, _ = self._get_viewing_mode(SPOT_RES, 1, shift, 0)
                 # Inverse dims, as numpy goes through the dims from last to first
                 # and it's customary to scan X fast, Y slow.
                 for i in numpy.ndindex(res[::-1]):
                     pos = coordinates[0][i[1]], coordinates[1][i[0]]
                     logging.debug("Positioning spot at %s", pos)
-                    scan_params_view.scale = 0
-                    scan_params_view.center.x = trans[0] + pos[0] + spot_shift[0]
-                    scan_params_view.center.y = trans[1] + pos[1] + spot_shift[1]
+                    scan_params.center.x = shift[0] + pos[0]
+                    scan_params.center.y = shift[1] + pos[1]
                     if self._acquisition_must_stop.is_set():
                         raise CancelledError()
                     try:
-                        if self._needResetParams(scan_params_view):
-                            self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                        self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
                     except suds.WebFault:
                         logging.warning("Spot scan failure.")
                     # No sleep, just go as fast as possible, which is not really
-                    # fast as this takes ~0.2 s (probably because the whole
-                    # 456x456 px needs to be scanned.
+                    # fast as this takes ~0.05 s, because the whole 256x256 px
+                    # need to be scanned.
 
                 logging.debug("Returning fake SEM image of res=%s", res)
                 return model.DataArray(numpy.zeros(res[::-1], dtype=dataType), metadata)
             else:
+                nframes = self.parent._scanner._nr_frames
                 logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
-                              res, bpp, self._scanParams.nrOfFrames)
-                # SEM image shift correction parameters
-                AX, AY = md_bsd.get(model.MD_RESOLUTION_SLOPE, (0, 0))
-                BX, BY = md_bsd.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
-                CX, CY = md_bsd.get(model.MD_HFW_SLOPE, (0, 0))  # % of the FoV
-                self._scanParams.center.x = trans[0] - ((1 / (2 * math.pi)) * math.atan(-AX / (res[0] + BX)) + CX / 100)
-                self._scanParams.center.y = trans[1] - ((1 / (2 * math.pi)) * math.atan(-AY / (res[1] + BY)) + CY / 100)
+                              res, bpp, nframes)
+                if res[0] < 256 or res[1] < 256:
+                    logging.warning("Scanning at resolution < 256 %s, which is unsupported.", res)
 
-                self._scanParams.scale = 1
-                self._scanParams.resolution.width = res[0]
-                self._scanParams.resolution.height = res[1]
-                # TODO: why changing this if not used?
-#                 if self._scan_params_view.scale != 1:
-#                     self._scan_params_view.scale = 1
-#                     # Move back to the center
-#                     self._scan_params_view.center.x = 0
-#                     self._scan_params_view.center.y = 0
+                res_hfw_shift = self._get_res_hfw_shift(res)
+                shift = (trans[0] + res_hfw_shift[0],
+                         trans[1] + res_hfw_shift[1])
+                fovscale = res[0] * scale[0] / self.parent._scanner._shape[0]
+                if fovscale > 0.999:
+                    fovscale = 1  # To keep from the floating errors
+                else:
+                    # There is no compensation for the shift induced by scale < 1
+                    logging.info("Using FoV scale %f, which should be used only for calibration", fovscale)
+
+                scan_params, need_set = self._get_viewing_mode(res, nframes, shift, fovscale)
+                scan_params.HDR = (bpp == 16)
+                scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
+
                 # last check before we initiate the actual acquisition
                 if self._acquisition_must_stop.is_set():
                     raise CancelledError()
-                if self._needResetParams(self._scanParams):
-                    self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                if need_set or is_first:
+                    self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
                     # Just to wait long enough before we get a frame with the new
                     # parameters applied. In the meantime, it can be the case that
                     # Phenom generates semi-created frames that we want to avoid.
-                    img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
+                    img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
                 else:
-                    if self._high_fr:
+                    if self._high_fr and bpp == 8:
                         img_str = self._acq_device.SEMGetLiveImageCopy(0)
                     else:
                         # This is to avoid using high frame rate in Phenom versions
                         # that misbehave with frequent SEMGetLiveImageCopy calls
-                        img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
+                        img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
 
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
@@ -1085,8 +1094,8 @@ class Detector(model.Detector):
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
-                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
-                                                 img_str.aAcqState.pixelHeight)
+                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth * fovscale,
+                                                 img_str.aAcqState.pixelHeight * fovscale)
                 metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
 
                 # image to ndarray
@@ -1094,7 +1103,7 @@ class Detector(model.Detector):
                                            dtype=dataType)
                 sem_img.shape = res[::-1]
                 logging.debug("Returning SEM image of %s with %d bpp and %d frames",
-                              res, bpp, self._scanParams.nrOfFrames)
+                              res, bpp, nframes)
                 return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
@@ -1104,12 +1113,13 @@ class Detector(model.Detector):
         Dataflow.
         """
         try:
-            self._last_view_params = None  # Force waiting for full image
+            is_first = True
             while not self._acquisition_must_stop.is_set():
                 with self._acquisition_init_lock:
                     if self._acquisition_must_stop.is_set():
                         break
-                callback(self._acquire_image())
+                callback(self._acquire_image(is_first))
+                is_first = False
         except CancelledError:
             logging.debug("Acquisition thread cancelled")
         except Exception:
