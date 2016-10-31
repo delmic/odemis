@@ -309,7 +309,7 @@ def determine_control_type(hw_comp, va, choices_formatted, conf):
             logging.warn("Radio control changed to combo box because of number of choices!")
         else:
             # choices names too long => combo
-            max_len = max([len(f) for _, f in choices_formatted])
+            max_len = max(len(f) for _, f in choices_formatted)
             if max_len > 6:
                 control_type = odemis.gui.CONTROL_COMBO
                 logging.warn("Radio control changed to combo box because of max value length!")
@@ -482,7 +482,7 @@ def format_choices(choices):
                 mn_non0 = min(c for c in choices if c != 0)
                 if abs(choices[-1] / mn_non0) < 1000:
                     fmt, choices_si_prefix = utun.si_scale_list(choices)
-                    fmt = [utun.round_significant(c, 3) for c in fmt]
+                    fmt = [utun.to_string_pretty(c, 3) for c in fmt]
                     choices_formatted = zip(choices, fmt)
                 else:
                     fmt = [to_string_si_prefix(c, sig=3) for c in choices]
