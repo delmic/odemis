@@ -77,6 +77,7 @@ FOCUS_RANGE = (-0.25e-03, 0.35e-03)  # Roughly the optical focus stage range
 OPTICAL_KNOWN_FOCUS = 0.20e-3  # Fallback optical focus value
 
 HFW_SHIFT_KNOWN = (-0.5, 0)  # % FoV, fallback values in case calculation goes wrong
+SPOT_SHIFT_KNOWN = (-0.04, 0)  # ratio of FoV, fallback values in case calculation goes wrong
 
 MD_CALIB_SEM = (model.MD_SPOT_SHIFT, model.MD_HFW_SLOPE, model.MD_RESOLUTION_SLOPE, model.MD_RESOLUTION_INTERCEPT)
 
@@ -143,11 +144,11 @@ def DelphiCalibration(main_data):
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateDelphiCalibration())
-    f._delphi_calib_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
     f.task_canceller = _CancelDelphiCalibration
-    f._delphi_calib_lock = threading.Lock()
+    f._task_lock = threading.Lock()
     f._done = threading.Event()
     f.running_subf = model.InstantaneousFuture()
 
@@ -210,7 +211,7 @@ def _DoDelphiCalibration(future, main_data):
     else:
         raise IOError("Failed to find the overview pressure in %s" % (pressures,))
 
-    if future._delphi_calib_state == CANCELLED:
+    if future._task_state == CANCELLED:
         raise CancelledError()
 
     try:
@@ -233,27 +234,27 @@ def _DoDelphiCalibration(future, main_data):
         # Move to the overview position first
         f = main_data.chamber.moveAbs({"pressure": overview_pressure})
         f.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Reference the (optical) stage
         logger.debug("Reference the (optical) stage...")
         f = opt_stage.reference({"x", "y"})
         f.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         logger.debug("Reference the focus...")
         f = main_data.focus.reference({"z"})
         f.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # SEM stage to (0,0)
         logger.debug("Move to the center of SEM stage...")
         future.running_subf = sem_stage.moveAbs({"x": 0, "y": 0})
         future.running_subf.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Calculate offset approximation
@@ -264,7 +265,7 @@ def _DoDelphiCalibration(future, main_data):
             logger.debug("SEM position after lens alignment: %s", position)
         except Exception:
             raise IOError("Lens alignment failed.")
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Update progress of the future
@@ -273,13 +274,13 @@ def _DoDelphiCalibration(future, main_data):
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Move to SEM
         f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
         f.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Set basic e-beam settings
@@ -309,7 +310,7 @@ def _DoDelphiCalibration(future, main_data):
         future.running_subf = main_data.ebeam_focus.moveAbs({"z": good_focus})
         future.running_subf.result()
 
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Update progress of the future
@@ -354,7 +355,7 @@ def _DoDelphiCalibration(future, main_data):
         calib_values["optical_focus"] = ofoc
         logger.debug("Measured optical focus on spot: %f", ofoc)
 
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Update progress of the future
@@ -404,23 +405,20 @@ def _DoDelphiCalibration(future, main_data):
             logging.warning("Failed to find a spot, twin stage calibration might have failed")
 
         try:
-            # Compute spot shift percentage
-            future.running_subf = SpotShiftFactor(main_data.ccd, main_data.bsd,
-                                                  main_data.ebeam, main_data.focus)
+            # We measure the shift in the area just behind the hole where there
+            # are always some features plus the edge of the sample carrier. For
+            # that reason we use the focus measured in the hole detection step
+            sem_stage.moveAbs(SHIFT_DETECTION).result()
+            main_data.ebeam_focus.moveAbsSync({"z": hfoc})
+
+            # Compute spot shift ratio
+            future.running_subf = ScaleShiftFactor(main_data.bsd, main_data.ebeam,
+                                                   logpath)
             spotshift = future.running_subf.result()
             calib_values["spot_shift"] = spotshift
             logger.debug("Spot shift: %s", spotshift)
 
             # Compute resolution-related values.
-            # We measure the shift in the area just behind the hole where there
-            # are always some features plus the edge of the sample carrier. For
-            # that reason we use the focus measured in the hole detection step
-            f = sem_stage.moveAbs(SHIFT_DETECTION)
-            f.result()
-
-            f = main_data.ebeam_focus.moveAbs({"z": hfoc})
-            f.result()
-
             future.running_subf = ResolutionShiftFactor(main_data.bsd,
                                                         main_data.ebeam,
                                                         logpath)
@@ -457,7 +455,7 @@ def _DoDelphiCalibration(future, main_data):
         main_data.ebeam.rotation.value = 0
         main_data.ebeam.shift.value = (0, 0)
         main_data.ebeam.dwellTime.value = 5e-06
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Center (roughly) the spot on the CCD
@@ -486,7 +484,7 @@ def _DoDelphiCalibration(future, main_data):
             _, cor_md = future.running_subf.result()
         except Exception:
             logger.info("Fine alignment failed. Retrying to focus...")
-            if future._delphi_calib_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
 
             main_data.ccd.binning.value = (1, 1)
@@ -500,7 +498,7 @@ def _DoDelphiCalibration(future, main_data):
             det_dataflow = main_data.bsd.data
             future.running_subf = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
             future.running_subf.result()
-            if future._delphi_calib_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             main_data.ccd.binning.value = (8, 8)
             future.running_subf = autofocus.AutoFocus(main_data.ccd, None, main_data.focus, dfbkg=det_dataflow,
@@ -518,7 +516,7 @@ def _DoDelphiCalibration(future, main_data):
                                               skew=True,
                                               bgsub=True)
             _, cor_md = future.running_subf.result()
-        if future._delphi_calib_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         trans_md, skew_md = cor_md
@@ -547,11 +545,11 @@ def _DoDelphiCalibration(future, main_data):
         restore_hw_settings(main_data.ebeam, main_data.ccd, hw_settings)
         # we can now store the calibration file in report
         _StoreConfig(logpath, shid, calib_values)
-        with future._delphi_calib_lock:
+        with future._task_lock:
             future._done.set()
-            if future._delphi_calib_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._delphi_calib_state = FINISHED
+            future._task_state = FINISHED
         logging.debug("Calibration thread ended.")
         logger.removeHandler(hdlr_calib)
 
@@ -579,10 +577,10 @@ def _CancelDelphiCalibration(future):
     """
     logging.debug("Cancelling Delphi calibration...")
 
-    with future._delphi_calib_lock:
-        if future._delphi_calib_state == FINISHED:
+    with future._task_lock:
+        if future._task_state == FINISHED:
             return False
-        future._delphi_calib_state = CANCELLED
+        future._task_state = CANCELLED
         # Cancel any running futures
         future.running_subf.cancel()
         logging.debug("Delphi calibration cancelled.")
@@ -616,11 +614,11 @@ def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateOffsetTime(ccd.exposureTime.value))
-    f._align_offset_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
     f.task_canceller = _CancelAlignAndOffset
-    f._offset_lock = threading.Lock()
+    f._task_lock = threading.Lock()
 
     # Create autofocus and centerspot module
     f._alignspotf = model.InstantaneousFuture()
@@ -670,7 +668,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
     escan.dwellTime.value = 5e-06
 
     try:
-        if future._align_offset_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # TODO: AlignSpot tries too hard to align the spot using the SEM stage
@@ -683,7 +681,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
             dist, vector = future_spot.result()
         except IOError:
-            if future._align_offset_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
 
             # In case of failure try with another initial focus value
@@ -693,7 +691,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                 future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
                 dist, vector = future_spot.result()
             except IOError:
-                if future._align_offset_state == CANCELLED:
+                if future._task_state == CANCELLED:
                     raise CancelledError()
 
                 # Maybe the spot is on the edge or just outside the FoV.
@@ -732,10 +730,10 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
         return offset
 
     finally:
-        with future._offset_lock:
-            if future._align_offset_state == CANCELLED:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._align_offset_state = FINISHED
+            future._task_state = FINISHED
 
 
 def _CancelAlignAndOffset(future):
@@ -744,10 +742,10 @@ def _CancelAlignAndOffset(future):
     """
     logging.debug("Cancelling align and offset calculation...")
 
-    with future._offset_lock:
-        if future._align_offset_state == FINISHED:
+    with future._task_lock:
+        if future._task_state == FINISHED:
             return False
-        future._align_offset_state = CANCELLED
+        future._task_state = CANCELLED
         future._alignspotf.cancel()
         logging.debug("Align and offset calculation cancelled.")
 
@@ -785,11 +783,11 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateRotationAndScalingTime(ccd.exposureTime.value))
-    f._rotation_scaling_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
     f.task_canceller = _CancelRotationAndScaling
-    f._rotation_lock = threading.Lock()
+    f._task_lock = threading.Lock()
     f._done = threading.Event()
 
     f._autofocus_f = model.InstantaneousFuture()
@@ -839,7 +837,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
     det_dataflow = detector.data
 
     try:
-        if future._rotation_scaling_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Already one known point: at 0, 0
@@ -847,7 +845,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         opt_spots = [(0, 0)]
         # Move Phenom sample stage to each spot
         for pos_ind, pos in enumerate(ROTATION_SPOTS):
-            if future._rotation_scaling_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             of = opt_stage.moveAbs(pos)
             # Transform to coordinates in the reference frame of the SEM stage
@@ -868,7 +866,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             steps = 0
             while True:
                 steps += 1
-                if future._rotation_scaling_state == CANCELLED:
+                if future._task_state == CANCELLED:
                     raise CancelledError()
                 image = AcquireNoBackground(ccd, det_dataflow)
                 try:
@@ -879,7 +877,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                     future._autofocus_f = autofocus.AutoFocus(ccd, None, focus, dfbkg=det_dataflow,
                                                               rng_focus=FOCUS_RANGE, method="exhaustive")
                     future._autofocus_f.result()
-                    if future._rotation_scaling_state == CANCELLED:
+                    if future._task_state == CANCELLED:
                         raise CancelledError()
                     ccd.binning.value = (1, 1)
                     image = AcquireNoBackground(ccd, det_dataflow)
@@ -921,11 +919,11 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         det_dataflow.unsubscribe(_discard_data)
         raise
     finally:
-        with future._rotation_lock:
+        with future._task_lock:
             future._done.set()
-            if future._rotation_scaling_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._rotation_scaling_state = FINISHED
+            future._task_state = FINISHED
         logging.debug("Rotation and scaling thread ended.")
 
 
@@ -935,10 +933,10 @@ def _CancelRotationAndScaling(future):
     """
     logging.debug("Cancelling rotation and scaling calculation...")
 
-    with future._rotation_lock:
-        if future._rotation_scaling_state == FINISHED:
+    with future._task_lock:
+        if future._task_state == FINISHED:
             return False
-        future._rotation_scaling_state = CANCELLED
+        future._task_state = CANCELLED
         future._autofocus_f.cancel()
         logging.debug("Rotation and scaling calculation cancelled.")
 
@@ -985,22 +983,19 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, manual=False):
     et = 6e-06 * numpy.prod(escan.resolution.range[1])
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateHoleDetectionTime(et))
-    f._hole_detection_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
     f.task_canceller = _CancelHoleDetection
-    f._detection_lock = threading.Lock()
+    f._task_lock = threading.Lock()
     f._done = threading.Event()
-
     f._autofocus_f = model.InstantaneousFuture()
 
     # Run in separate thread
-    detection_thread = threading.Thread(target=executeTask,
-                                        name="Hole detection",
-                                        args=(f, _DoHoleDetection, f, detector, escan, sem_stage, ebeam_focus,
-                                              manual))
-
-    detection_thread.start()
+    t = threading.Thread(target=executeTask, name="Hole detection",
+                         args=(f, _DoHoleDetection, f, detector, escan,
+                               sem_stage, ebeam_focus, manual))
+    t.start()
     return f
 
 
@@ -1037,7 +1032,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         hole_focus = None
 
         for pos in EXPECTED_HOLES:
-            if future._hole_detection_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             # Move Phenom sample stage to expected hole position
             f = sem_stage.moveAbs(pos)
@@ -1060,7 +1055,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
                     future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
                     hole_focus, fm_level = future._autofocus_f.result()
 
-            if future._hole_detection_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             # From SEM image determine hole position relative to the center of
             # the SEM
@@ -1109,11 +1104,11 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         return holes_found[0], holes_found[1], hole_focus
 
     finally:
-        with future._detection_lock:
+        with future._task_lock:
             future._done.set()
-            if future._hole_detection_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._hole_detection_state = FINISHED
+            future._task_state = FINISHED
         logging.debug("Hole detection thread ended.")
 
 
@@ -1123,10 +1118,10 @@ def _CancelHoleDetection(future):
     """
     logging.debug("Cancelling hole detection...")
 
-    with future._detection_lock:
-        if future._hole_detection_state == FINISHED:
+    with future._task_lock:
+        if future._task_state == FINISHED:
             return False
-        future._hole_detection_state = CANCELLED
+        future._task_state = CANCELLED
         future._autofocus_f.cancel()
         logging.debug("Hole detection cancelled.")
 
@@ -1213,8 +1208,6 @@ def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole
     return updated_offset, updated_rotation
 
 
-# LensAlignment is called by the GUI after the objective stage is referenced and
-# SEM stage to (0,0).
 def LensAlignment(navcam, sem_stage):
     """
     Wrapper for DoLensAlignment. It provides the ability to check the progress
@@ -1227,11 +1220,11 @@ def LensAlignment(navcam, sem_stage):
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateLensAlignmentTime())
-    f._lens_alignment_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelLensAlignment
-    f._lens_lock = threading.Lock()
+    f.task_canceller = _CancelFuture
+    f._task_lock = threading.Lock()
 
     # Run in separate thread
     lens_thread = threading.Thread(target=executeTask,
@@ -1256,7 +1249,7 @@ def _DoLensAlignment(future, navcam, sem_stage):
     """
     logging.debug("Starting lens alignment...")
     try:
-        if future._lens_alignment_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
         # Detect lens with navcam
         image = navcam.data.get(asap=False)
@@ -1271,25 +1264,10 @@ def _DoLensAlignment(future, navcam, sem_stage):
 
         return (sem_stage.position.value["x"] + vector[0], sem_stage.position.value["y"] - vector[1])
     finally:
-        with future._lens_lock:
-            if future._lens_alignment_state == CANCELLED:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._lens_alignment_state = FINISHED
-
-
-def _CancelLensAlignment(future):
-    """
-    Canceller of _DoLensAlignment task.
-    """
-    logging.debug("Cancelling lens alignment...")
-
-    with future._lens_lock:
-        if future._lens_alignment_state == FINISHED:
-            return False
-        future._lens_alignment_state = CANCELLED
-        logging.debug("Lens alignment cancelled.")
-
-    return True
+            future._task_state = FINISHED
 
 
 def estimateLensAlignmentTime():
@@ -1315,19 +1293,32 @@ def HFWShiftFactor(detector, escan, logpath=None):
     et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateHFWShiftFactorTime(et))
-    f._hfw_shift_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelHFWShiftFactor
-    f._hfw_shift_lock = threading.Lock()
+    f.task_canceller = _CancelFuture
+    f._task_lock = threading.Lock()
 
     # Run in separate thread
-    hfw_shift_thread = threading.Thread(target=executeTask,
-                                        name="HFW Shift Factor",
-                                        args=(f, _DoHFWShiftFactor, f, detector, escan, logpath))
-
-    hfw_shift_thread.start()
+    t = threading.Thread(target=executeTask, name="HFW Shift Factor",
+                         args=(f, _DoHFWShiftFactor, f, detector, escan, logpath))
+    t.start()
     return f
+
+
+def _CancelFuture(future):
+    """
+    Canceller of task running in a future
+    """
+    logging.debug("Cancelling calculation...")
+
+    with future._task_lock:
+        if future._task_state == FINISHED:
+            return False
+        future._task_state = CANCELLED
+        logging.debug("Calculation cancelled.")
+
+    return True
 
 
 def _DoHFWShiftFactor(future, detector, escan, logpath=None):
@@ -1335,17 +1326,15 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
     Acquires SEM images of several HFW values (from smallest to largest) and
     detects the shift between them using phase correlation. To this end, it has
     to crop the corresponding FoV of each larger image and resample it to smaller
-    one’s resolution in order to feed it to the phase correlation. Then it
-    calculates the cummulative sum of shift between each image and the smallest
-    one and does linear fit for these shift values. From the linear fit we just
-    return the slope of the line as the intercept is expected to be 0.
+    one’s resolution in order to feed it to the phase correlation.  Then based on
+    the shift, it calculates the position of the fixed-point for each two pair
+    of images, and then report the average.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
     logpath (string or None): if not None, will store the acquired SEM images
       in the directory.
-    returns (tuple of floats): slope of linear fit = percentage of the FoV to
-     shift.
+    returns (tuple of floats): _percentage_ of the FoV to shift
     raises:
         CancelledError() if cancelled
         IOError if shift cannot be estimated
@@ -1388,7 +1377,7 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
                     escan.resolution.value[1] // zoom_f)
 
         while cur_hfw <= max_hfw:
-            if future._hfw_shift_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             # SEM image of current hfw
             escan.horizontalFoV.value = cur_hfw
@@ -1416,8 +1405,8 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
                 if abs(shift_fov[0]) >= 0.1 or abs(shift_fov[1]) >= 0.05:
                     logging.warning("Some extreme values where measured %s px, not using measurement at HFW %s.",
                                     shift_px, cur_hfw)
-                    continue
-                shift_values.append(fp_fov)
+                else:
+                    shift_values.append(fp_fov)
 
             # Zoom out
             cur_hfw *= zoom_f
@@ -1434,25 +1423,10 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
         return shift_fov_mn
 
     finally:
-        with future._hfw_shift_lock:
-            if future._hfw_shift_state == CANCELLED:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._hfw_shift_state = FINISHED
-
-
-def _CancelHFWShiftFactor(future):
-    """
-    Canceller of _DoHFWShiftFactor task.
-    """
-    logging.debug("Cancelling HFW-related shift calculation...")
-
-    with future._hfw_shift_lock:
-        if future._hfw_shift_state == FINISHED:
-            return False
-        future._hfw_shift_state = CANCELLED
-        logging.debug("HFW-related shift calculation cancelled.")
-
-    return True
+            future._task_state = FINISHED
 
 
 def estimateHFWShiftFactorTime(et):
@@ -1480,19 +1454,16 @@ def ResolutionShiftFactor(detector, escan, logpath=None):
     et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateResolutionShiftFactorTime(et))
-    f._resolution_shift_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelResolutionShiftFactor
-    f._resolution_shift_lock = threading.Lock()
+    f.task_canceller = _CancelFuture
+    f._task_lock = threading.Lock()
 
     # Run in separate thread
-    resolution_shift_thread = threading.Thread(target=executeTask,
-                                               name="Resolution Shift Factor",
-                                               args=(f, _DoResolutionShiftFactor,
-                                                     f, detector, escan, logpath))
-
-    resolution_shift_thread.start()
+    t = threading.Thread(target=executeTask, name="Resolution Shift Factor",
+                         args=(f, _DoResolutionShiftFactor, f, detector, escan, logpath))
+    t.start()
     return f
 
 
@@ -1527,7 +1498,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
 
         # Start with largest resolution
-        max_resolution = 2048  # pixels
+        max_resolution = escan.resolution.range[1][0]  # pixels
         min_resolution = 256  # pixels
         cur_resolution = max_resolution
         shift_values = []
@@ -1543,13 +1514,16 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
 
         images = []
         while cur_resolution >= min_resolution:
-            if future._resolution_shift_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
 
             # SEM image of current resolution
+            scale = max_resolution / cur_resolution
+            escan.scale.value = (scale, scale)
             escan.resolution.value = (cur_resolution, cur_resolution)
             # Retain the same overall exposure time
             escan.dwellTime.value = et / numpy.prod(escan.resolution.value)  # s
+
             smaller_image = detector.data.get(asap=False)
             images.append(smaller_image)
 
@@ -1566,18 +1540,22 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
             shift_px = CalculateDrift(largest_image, resampled_image, 10)
             logging.debug("Computed resolution shift of %s px @ res=%d", shift_px, cur_resolution)
 
-            # Fit the 1st order RC circuit model, to be linear
-            if shift_px[0] != 0:
-                smx = 1 / math.tan(2 * math.pi * shift_px[0] / max_resolution)
+            if abs(shift_px[0]) > 400 or abs(shift_px[1]) > 100:
+                logging.warning("Skipping extreme shift of %s px", shift_px)
             else:
-                smx = None  # shift
-            if shift_px[1] != 0:
-                smy = 1 / math.tan(2 * math.pi * shift_px[1] / max_resolution)
-            else:
-                smy = None  # shift
+                # Fit the 1st order RC circuit model, to be linear
+                if shift_px[0] != 0:
+                    smx = 1 / math.tan(2 * math.pi * shift_px[0] / max_resolution)
+                else:
+                    smx = None  # shift
+                if shift_px[1] != 0:
+                    smy = 1 / math.tan(2 * math.pi * shift_px[1] / max_resolution)
+                else:
+                    smy = None  # shift
 
-            shift_values.append((smx, smy))
-            resolution_values.append(cur_resolution)
+                shift_values.append((smx, smy))
+                resolution_values.append(cur_resolution)
+
             cur_resolution -= 64
 
         logging.debug("Computed shift of %s for resolutions %s", shift_values, resolution_values)
@@ -1615,25 +1593,10 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         return (a_x, a_y), (b_x, b_y)
 
     finally:
-        with future._resolution_shift_lock:
-            if future._resolution_shift_state == CANCELLED:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._resolution_shift_state = FINISHED
-
-
-def _CancelResolutionShiftFactor(future):
-    """
-    Canceller of _DoResolutionShiftFactor task.
-    """
-    logging.debug("Cancelling Resolution-related shift calculation...")
-
-    with future._resolution_shift_lock:
-        if future._resolution_shift_state == FINISHED:
-            return False
-        future._resolution_shift_state = CANCELLED
-        logging.debug("Resolution-related shift calculation cancelled.")
-
-    return True
+            future._task_state = FINISHED
 
 
 def estimateResolutionShiftFactorTime(et):
@@ -1646,6 +1609,143 @@ def estimateResolutionShiftFactorTime(et):
     return dur  # s
 
 
+def ScaleShiftFactor(detector, escan, logpath=None):
+    """
+    Wrapper for DoHFWShiftFactor. It provides the ability to check the
+    progress of the procedure.
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    logpath (string or None): if not None, will store the acquired SEM images
+      in the directory.
+    returns (ProgressiveFuture): Progress DoHFWShiftFactor
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateHFWShiftFactorTime(et))
+    f._task_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelFuture
+    f._task_lock = threading.Lock()
+
+    # Run in separate thread
+    t = threading.Thread(target=executeTask, name="Scale Shift Factor",
+                         args=(f, _DoScaleShiftFactor, f, detector, escan, logpath))
+    t.start()
+    return f
+
+
+def _DoScaleShiftFactor(future, detector, escan, logpath=None):
+    """
+    Estimates the spot shift based on the "FoV scale" method. As normal SEM
+    images are always acquired with an FoV scale of 1, and the spot with an FoV
+    scale of 0, it attempts to locate the position of the fixed-point of "zoom"
+    when decreasing the FoV scale. This fixed-point is the spot shift.
+    The measurement of the fixed-point is done the same was as the HFW shift,
+    but using FoV scale to "zoom" instead of the HFW.
+    Note that this works correctly only if the scanning resolution is the same
+    as the scanning resolution used during spot mode, because
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    logpath (string or None): if not None, will store the acquired SEM images
+      in the directory.
+    returns (tuple of floats): ratio of the FoV to shift
+    raises:
+        CancelledError() if cancelled
+        IOError if shift cannot be estimated
+    """
+    # We are just looking for the fixed-point when "zooming" in by reducing the
+    # scale of the FoV. It's pretty much exactly the same as HFW, but for fovScale
+
+    logging.debug("Starting calculation of scale-related shift during spot mode...")
+    try:
+        escan.horizontalFoV.value = 1200e-06  # m
+        escan.translation.value = (0, 0)
+        if not escan.rotation.readonly:
+            escan.rotation.value = 0
+        escan.shift.value = (0, 0)
+        escan.dwellTime.value = escan.dwellTime.clip(7.5e-7)  # s
+        escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
+        escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
+        max_res = escan.resolution.range[1]
+        SPOT_RES = (256, 256)  # Same as spot mode
+
+        # Start with smallest FoV
+        max_scale = 1  # m
+        min_scale = max_scale / 8
+        cur_scale = min_scale
+        shift_values = []
+        zoom_f = 2  # zoom factor
+
+        detector.data.subscribe(_discard_data)  # unblank the beam
+        f = detector.applyAutoContrast()
+        f.result()
+        detector.data.unsubscribe(_discard_data)
+
+        smaller_image = None
+        larger_image = None
+        crop_res = (SPOT_RES[0] // zoom_f, SPOT_RES[1] // zoom_f)
+
+        while cur_scale <= max_scale:
+            if future._task_state == CANCELLED:
+                raise CancelledError()
+            # Adapts the scale for the fixed resolution, and reset the resolution
+            # as it's adapted after setting the scale
+            escan.scale.value = (max_res[0] * cur_scale / SPOT_RES[0],
+                                 max_res[1] * cur_scale / SPOT_RES[1])
+            escan.resolution.value = SPOT_RES
+
+            larger_image = detector.data.get(asap=False)
+            # If not the first iteration
+            if smaller_image is not None:
+                # Crop the part of the larger image that corresponds to the
+                # smaller image FoV, and resample it to have them the same size
+                cropped_image = larger_image[crop_res[1] // 2: 3 * crop_res[1] // 2,
+                                             crop_res[0] // 2: 3 * crop_res[0] // 2]
+                resampled_image = zoom(cropped_image, zoom=zoom_f)
+                # Apply phase correlation
+                shift_px = CalculateDrift(smaller_image, resampled_image, 10)
+                if logpath:
+                    tiff.export(os.path.join(logpath, "scale_shift_%f_um.tiff" % (cur_scale,)),
+                                [smaller_image, model.DataArray(resampled_image)])
+
+                shift_fov = (shift_px[0] / smaller_image.shape[1],
+                             shift_px[1] / smaller_image.shape[0])
+                fp_fov = shift_fov[0] / (zoom_f - 1), shift_fov[1] / (zoom_f - 1)
+                logging.debug("Shift detected between scale of %f and %f is: %s px == %s %%",
+                              cur_scale, cur_scale / zoom_f, shift_px, shift_fov)
+
+                # We expect a lot more shift horizontally than vertically
+                if abs(shift_fov[0]) >= 0.15 or abs(shift_fov[1]) >= 0.05:
+                    logging.warning("Some extreme values where measured %s px, not using measurement at scale %s.",
+                                    shift_px, cur_scale)
+                else:
+                    shift_values.append(fp_fov)
+
+            # Zoom out
+            cur_scale *= zoom_f
+            smaller_image = larger_image
+
+        if not shift_values:
+            logging.warning("No scale shift successfully measured, will use fallback values")
+            return SPOT_SHIFT_KNOWN
+
+        # Take the average shift measured, and convert to percentage
+        shift_fov_mn = (numpy.mean([v[0] for v in shift_values]),
+                        numpy.mean([v[1] for v in shift_values]))
+        return shift_fov_mn
+
+    finally:
+        with future._task_lock:
+            if future._task_state == CANCELLED:
+                raise CancelledError()
+            future._task_state = FINISHED
+
+
+# Unused
 def SpotShiftFactor(ccd, detector, escan, focus):
     """
     Wrapper for DoSpotShiftFactor. It provides the ability to check the
@@ -1659,11 +1759,11 @@ def SpotShiftFactor(ccd, detector, escan, focus):
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateSpotShiftFactor(ccd.exposureTime.value))
-    f._spot_shift_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
     f.task_canceller = _CancelSpotShiftFactor
-    f._spot_shift_lock = threading.Lock()
+    f._task_lock = threading.Lock()
     f._done = threading.Event()
 
     f._autofocus_f = model.InstantaneousFuture()
@@ -1679,6 +1779,7 @@ def SpotShiftFactor(ccd, detector, escan, focus):
 
 def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     """
+    Estimates the spot shift using the "rotation center method".
     We assume that the stages are already aligned and the CL spot is within the
     CCD FoV. It first acquires an optical image with the current rotation applied
     and detects the spot position. Then, it rotates by 180 degrees, acquires an
@@ -1686,6 +1787,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     is calculated and the average is returned as the offset from the center of
     the SEM image (it is also divided by the current HFW in order to get a
     ratio).
+    WARNING: this is known to _not_ give the right measure of the spot shift
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The ccd
     escan (model.Emitter): The e-beam scanner
@@ -1720,7 +1822,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     # the whole SEM image.
 
     try:
-        if future._spot_shift_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         image = AcquireNoBackground(ccd, det_dataflow)
@@ -1739,7 +1841,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
             except ValueError:
                 raise IOError("CL spot not found.")
 
-        if future._spot_shift_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Now rotate and re-acquire
@@ -1758,11 +1860,11 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         return shift
     finally:
         escan.rotation.value = cur_rot
-        with future._spot_shift_lock:
+        with future._task_lock:
             future._done.set()
-            if future._spot_shift_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._spot_shift_state = FINISHED
+            future._task_state = FINISHED
         logging.debug("Spot shift thread ended.")
 
 
@@ -1772,10 +1874,10 @@ def _CancelSpotShiftFactor(future):
     """
     logging.debug("Cancelling spot shift calculation...")
 
-    with future._spot_shift_lock:
-        if future._spot_shift_state == FINISHED:
+    with future._task_lock:
+        if future._task_state == FINISHED:
             return False
-        future._spot_shift_state = CANCELLED
+        future._task_state = CANCELLED
         future._autofocus_f.cancel()
         logging.debug("Spot shift calculation cancelled.")
 
