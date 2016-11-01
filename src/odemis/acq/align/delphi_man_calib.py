@@ -242,7 +242,7 @@ def man_calib(logpath):
 
         # Calculate offset approximation
         try:
-            f = aligndelphi.LensAlignment(overview_ccd, sem_stage)
+            f = aligndelphi.LensAlignment(overview_ccd, sem_stage, logpath)
             position = f.result()
         except IOError:
             if not force_calib:
@@ -280,7 +280,7 @@ def man_calib(logpath):
                 print "\033[1;30mTrying to detect the holes/markers, please wait...\033[1;m"
                 try:
                     hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
-                                                                ebeam_focus, manual=True)
+                                                                ebeam_focus, manual=True, logpath=logpath)
                     new_first_hole, new_second_hole, new_hole_focus = hole_detectionf.result()
                     print '\033[1;36m'
                     print "Values computed: 1st hole: " + str(new_first_hole)
@@ -358,7 +358,7 @@ def man_calib(logpath):
                     # excepted it might be a little harder to focus.
                     # => use the same code for all of them
                     align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
-                                                               opt_stage, focus)
+                                                               opt_stage, focus, logpath)
                     align_offset = align_offsetf.result()
                     new_opt_focus = focus.position.value.get('z')
 
@@ -379,7 +379,7 @@ def man_calib(logpath):
 
                     f = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                        opt_stage, focus, align_offset,
-                                                       manual=ask_user_to_focus)
+                                                       manual=ask_user_to_focus, logpath=logpath)
                     acc_offset, new_rotation, new_scaling = f.result()
 
                     # Offset is divided by scaling, since Convert Stage applies scaling

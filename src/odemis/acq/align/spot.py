@@ -271,18 +271,18 @@ def FindSpot(image, sensitivity_limit=100):
     returns (tuple of floats):    Position of the spot center in px (from the
        left-top corner of the image), possibly with sub-pixel resolution.
     raises:
-            ValueError() if spot was not found
+            LookupError() if spot was not found
     """
     subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20, sensitivity_limit)
     if subimages == []:
-        raise ValueError("No spot detected")
+        raise LookupError("No spot detected")
 
     spot_coordinates = [FindCenterCoordinates(i) for i in subimages]
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
     # Too many spots detected
     if len(optical_coordinates) > 10:
-        raise ValueError("Too many spots detected")
+        raise LookupError("Too many spots detected")
 
     # Pick the brightest one
     max_intensity = 0
@@ -386,7 +386,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
             image = AcquireNoBackground(ccd, dfbkg)
             try:
                 spot_pxs = FindSpot(image)
-            except ValueError:
+            except LookupError:
                 return None, None
 
             # Center of optical image

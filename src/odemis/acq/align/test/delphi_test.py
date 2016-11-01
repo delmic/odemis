@@ -24,10 +24,11 @@ import numpy
 from odemis import model
 import odemis
 from odemis.acq.align import delphi, pattern
-from odemis.dataio import hdf5
+from odemis.dataio import hdf5, tiff
 from odemis.util import test
 import os
 import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -103,7 +104,18 @@ class TestCalibration(unittest.TestCase):
         data[0].shape = Y, X
 
         hole_coordinates = delphi.FindCircleCenter(data[0], 0.02032, 6, darkest=True)
-        expected_coordinates = (391.5, 257.5)
+        expected_coordinates = (0.0052705, -0.0018415)  # (391.5, 257.5) px
+        numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
+
+    def test_find_sh_hole_center(self):
+        """
+        Test FindCircleCenter for holes
+        """
+        # Real image from the DELPHI
+        data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "sh_hole_up.tiff"))
+        hole_coordinates = delphi.FindCircleCenter(data[0], delphi.HOLE_RADIUS, 6, darkest=True)
+        # FIXME: it fails (but not that important for calibration)
+        expected_coordinates = (-0.00014212, 9.405e-05)  # about: 888, 934 = -0.00014212, 9.405e-05
         numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
 
     # @unittest.skip("skip")
@@ -114,8 +126,8 @@ class TestCalibration(unittest.TestCase):
         data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "navcam-calib2.h5"))
         Z, Y, X = data[0].shape
 
-        lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 6)
-        expected_coordinates = (450.5, 445.5)
+        lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 5)
+        expected_coordinates = (-5.9703947e-05, 1.5257675e-04)  # (451.5, 445.5) px
         numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
 
     # @unittest.skip("skip")
@@ -127,7 +139,7 @@ class TestCalibration(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        self.assertRaises(IOError, delphi.FindCircleCenter, data[0], 0.02032, 3)
+        self.assertRaises(LookupError, delphi.FindCircleCenter, data[0], 0.02032, 3)
 
     def test_hole_detection(self):
         """
@@ -147,12 +159,12 @@ class TestCalibration(unittest.TestCase):
         """
 
         updated_offset, updated_rotation = delphi.UpdateOffsetAndRotation((1, 0),
-                                                                           (1, 1),
-                                                                           (0, 0),
-                                                                           (0, 1),
-                                                                           (1, 0),
-                                                                           0,
-                                                                           (2, 2))
+                                                                          (1, 1),
+                                                                          (0, 0),
+                                                                          (0, 1),
+                                                                          (1, 0),
+                                                                          0,
+                                                                          (2, 2))
         numpy.testing.assert_almost_equal(updated_offset, (0.5, 0))
         numpy.testing.assert_almost_equal(updated_rotation, 0)
 
@@ -163,7 +175,8 @@ class TestCalibration(unittest.TestCase):
         self._move_to_vacuum()
         try:
             f = delphi.AlignAndOffset(self.ccd, self.sed, self.ebeam,
-                                      self.sem_stage, self.opt_stage, self.focus)
+                                      self.sem_stage, self.opt_stage, self.focus,
+                                      logpath="./")
             offset = f.result()
             self.assertEqual(len(offset), 2)
         except IOError as ex:
@@ -180,7 +193,8 @@ class TestCalibration(unittest.TestCase):
         try:
             f = delphi.RotationAndScaling(self.ccd, self.sed, self.ebeam,
                                           self.sem_stage, self.opt_stage, self.focus,
-                                          (1e-06, 1e-06))  # Should be result from AlignAndOffset
+                                          (1e-06, 1e-06),  # Should be result from AlignAndOffset
+                                          logpath="./")
             offset, rotation, scaling = f.result()
         except IOError as ex:
             if TEST_NOHW:
