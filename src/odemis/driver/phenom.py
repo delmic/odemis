@@ -24,22 +24,22 @@ from __future__ import division
 from abc import abstractmethod, ABCMeta
 import base64
 import collections
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
 import functools
 import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+import re
+import subprocess
 import suds
 from suds.client import Client
 import threading
 import time
 import weakref
-import re
-import subprocess
-from odemis.model import HwError
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
+
 
 # The Phenom API relies on the SOAP protocol. One good thing is that the standard
 # Phenom GUI uses it. So anything the GUI can do can be performed via the
@@ -96,8 +96,6 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 #       error instead of a clear 403 message. A fork of SUDS by "jurko" fixes a
 #       lot of such problems and might be worth to use if the standard SUDS
 #       version gets really too much annoying.
-
-
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
@@ -1239,13 +1237,12 @@ class Stage(model.Actuator):
         with self.parent._acq_progress_lock:
             self._stagePos.x = pos.get("x", self._position["x"])
             self._stagePos.y = pos.get("y", self._position["y"])
+            logging.debug("Requesting absolute move to %g, %g", self._stagePos.x, self._stagePos.y)
             self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
             # This is mainly in order to keep the correct position in case the
-            # move we tried to perform was greater than the maximum possible
-            # one.
-            # with self.parent._acq_progress_lock:
+            # move we tried to perform was greater than the maximum possible one.
             self._updatePosition()
 
     def _doMoveRel(self, shift):
@@ -1254,13 +1251,12 @@ class Stage(model.Actuator):
         """
         with self.parent._acq_progress_lock:
             self._stageRel.x, self._stageRel.y = shift.get("x", 0), shift.get("y", 0)
+            logging.debug("Requesting relative move by %g, %g", self._stageRel.x, self._stageRel.y)
             self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
             # This is mainly in order to keep the correct position in case the
-            # move we tried to perform was greater than the maximum possible
-            # one.
-            # with self.parent._acq_progress_lock:
+            # move we tried to perform was greater than the maximum possible one.
             self._updatePosition()
 
     @isasync
@@ -1268,8 +1264,8 @@ class Stage(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-
         shift = self._applyInversion(shift)
+
         return self._executor.submit(self._doMoveRel, shift)
 
     @isasync
@@ -1279,7 +1275,6 @@ class Stage(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
 
-        # self._doMove(pos)
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
