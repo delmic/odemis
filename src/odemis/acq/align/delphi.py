@@ -33,6 +33,7 @@ from odemis.acq._futures import executeTask
 from odemis.acq.align import transform, spot
 from odemis.acq.drift import CalculateDrift
 from odemis.dataio import tiff
+from odemis.util import img
 import os
 from scipy.ndimage import zoom
 import threading
@@ -290,6 +291,9 @@ def _DoDelphiCalibration(future, main_data):
         main_data.ebeam.spotSize.value = 2.7
         main_data.ebeam.accelVoltage.value = 5300  # V
 
+        # Start with some roughly correct focus
+        main_data.ebeam_focus.moveAbsSync({"z": SEM_KNOWN_FOCUS})
+
         # Update progress of the future
         future.set_progress(end=time.time() + 17.5 * 60)
 
@@ -326,7 +330,7 @@ def _DoDelphiCalibration(future, main_data):
         reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
         vector = [a - b for a, b in zip(reached_pos, position)]
         dist = math.hypot(*vector)
-        logger.debug("Distance from required position after lens alignment: %f", dist)
+        logger.debug("Distance from required position: %f", dist)
         if dist >= 10e-06:
             logger.info("Retrying to reach requested SEM stage position...")
             f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -335,6 +339,7 @@ def _DoDelphiCalibration(future, main_data):
             vector = [a - b for a, b in zip(reached_pos, position)]
             dist = math.hypot(*vector)
             logger.debug("New distance from required position: %f", dist)
+
         logger.info("Moving objective stage to (0,0)...")
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -382,17 +387,7 @@ def _DoDelphiCalibration(future, main_data):
         except Exception:
             raise IOError("Failed to calculate rotation and scaling.")
 
-        # Update progress of the future
-        future.set_progress(end=time.time() + 7.5 * 60)
-        logger.info("Calculating shift parameters...")
-
-        # Resetting shift parameters, to not take them into account during calib
-        blank_md = dict.fromkeys(MD_CALIB_SEM, (0, 0))
-        main_data.ebeam.updateMetadata(blank_md)
-
-        # Move back to the center for the shift calculation to make sure
-        # the spot is as sharp as possible since this is where the optical focus
-        # value corresponds to
+        # Return to the center so fine overlay can be executed
         future.running_subf = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
         future.running_subf.result()
         future.running_subf = opt_stage.moveAbs({"x": 0, "y": 0})
@@ -402,12 +397,99 @@ def _DoDelphiCalibration(future, main_data):
         future.running_subf = main_data.ebeam_focus.moveAbs({"z": good_focus})
         future.running_subf.result()
 
+        # Focus the CL spot using SEM focus
+        # Configure CCD and e-beam to write CL spots
+        main_data.ccd.binning.value = main_data.ccd.binning.clip((8, 8))
+        main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
+        main_data.ccd.exposureTime.value = 900e-03
+        main_data.ebeam.scale.value = (1, 1)
+        main_data.ebeam.resolution.value = (1, 1)
+        main_data.ebeam.translation.value = (0, 0)
+        main_data.ebeam.shift.value = (0, 0)
+        main_data.ebeam.dwellTime.value = 5e-06
+        if future._task_state == CANCELLED:
+            raise CancelledError()
+
         # Center (roughly) the spot on the CCD
         future.running_subf = spot.CenterSpot(main_data.ccd, sem_stage, main_data.ebeam,
-                            spot.ROUGH_MOVE, spot.STAGE_MOVE, main_data.bsd.data)
+                                              spot.ROUGH_MOVE, spot.STAGE_MOVE, main_data.bsd.data)
         dist, vect = future.running_subf.result()
         if dist is None:
+            # TODO: try to refocus first?
             logger.warning("Failed to find a spot, twin stage calibration might have failed")
+
+        # Update progress of the future
+        future.set_progress(end=time.time() + 7.5 * 60)
+
+        # Proper hfw for spot grid to be within the ccd fov
+        main_data.ebeam.horizontalFoV.value = 80e-06
+
+        # Run the optical fine alignment
+        # TODO: reuse the exposure time
+        logger.info("Fine alignment...")
+        main_data.ccd.binning.value = (1, 1)
+        try:
+            future.running_subf = FindOverlay((4, 4), 0.5, 10e-06,
+                                              main_data.ebeam,
+                                              main_data.ccd,
+                                              main_data.bsd,
+                                              skew=True,
+                                              bgsub=True)
+            _, cor_md = future.running_subf.result()
+        except Exception:
+            logger.info("Fine alignment failed. Retrying to focus...")
+            if future._task_state == CANCELLED:
+                raise CancelledError()
+
+            main_data.ccd.binning.value = main_data.ccd.binning.clip((8, 8))
+            main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
+            main_data.ccd.exposureTime.value = 0.9
+            det_dataflow = main_data.bsd.data
+            if future._task_state == CANCELLED:
+                raise CancelledError()
+            future.running_subf = autofocus.AutoFocus(main_data.ccd, None, main_data.focus, dfbkg=det_dataflow,
+                                                      rng_focus=FOCUS_RANGE, method="exhaustive")
+            future.running_subf.result()
+            ofoc = main_data.focus.position.value["z"]
+            calib_values["optical_focus"] = ofoc
+            logger.debug("Updated optical focus to %g", ofoc)
+            main_data.ccd.binning.value = (1, 1)
+            logger.debug("Retrying fine alignment...")
+            future.running_subf = FindOverlay((4, 4), 0.5, 10e-06,  # m, maximum difference allowed
+                                              main_data.ebeam,
+                                              main_data.ccd,
+                                              main_data.bsd,
+                                              skew=True,
+                                              bgsub=True)
+            _, cor_md = future.running_subf.result()
+        if future._task_state == CANCELLED:
+            raise CancelledError()
+
+        trans_md, skew_md = cor_md
+        iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+        if any(s < 0 for s in iscale):
+            raise IOError("Unexpected scaling values calculated during"
+                          " fine alignment: %s", iscale)
+        irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        irot_abs = abs((irot + math.pi) % (2 * math.pi) - math.pi)
+        if irot_abs > math.radians(10):
+            raise IOError("Unexpected rotation value calculated during"
+                          " fine alignment: %s", irot)
+        ishear = skew_md[model.MD_SHEAR_COR]
+        iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+        calib_values["image_scaling"] = iscale
+        calib_values["image_scaling_scan"] = iscale_xy
+        calib_values["image_rotation"] = irot
+        calib_values["image_shear"] = ishear
+        logger.debug("Image Rotation: %f (rad) Scaling: %s XY Scaling: %s Shear: %f", irot, iscale, iscale_xy, ishear)
+
+        # Update progress of the future
+        future.set_progress(end=time.time() + 5 * 60)
+        logger.info("Calculating shift parameters...")
+
+        # Resetting shift parameters, to not take them into account during calib
+        blank_md = dict.fromkeys(MD_CALIB_SEM, (0, 0))
+        main_data.ebeam.updateMetadata(blank_md)
 
         try:
             # We measure the shift in the area just behind the hole where there
@@ -439,104 +521,6 @@ def _DoDelphiCalibration(future, main_data):
             logger.debug("HFW A: %s", hfwa)
         except Exception:
             raise IOError("Failed to calculate shift parameters.")
-
-        # Return to the center so fine overlay can be executed just after calibration
-        future.running_subf = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
-        future.running_subf.result()
-        future.running_subf = opt_stage.moveAbs({"x": 0, "y": 0})
-        future.running_subf.result()
-        future.running_subf = main_data.focus.moveAbs({"z": ofoc})
-        future.running_subf.result()
-        future.running_subf = main_data.ebeam_focus.moveAbs({"z": good_focus})
-        future.running_subf.result()
-
-        # Focus the CL spot using SEM focus
-        # Configure CCD and e-beam to write CL spots
-        main_data.ccd.binning.value = (1, 1)
-        main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
-        main_data.ccd.exposureTime.value = 900e-03
-        main_data.ebeam.scale.value = (1, 1)
-        main_data.ebeam.translation.value = (0, 0)
-        main_data.ebeam.rotation.value = 0
-        main_data.ebeam.shift.value = (0, 0)
-        main_data.ebeam.dwellTime.value = 5e-06
-        if future._task_state == CANCELLED:
-            raise CancelledError()
-
-        # Center (roughly) the spot on the CCD
-        future.running_subf = spot.CenterSpot(main_data.ccd, sem_stage, main_data.ebeam,
-                            spot.ROUGH_MOVE, spot.STAGE_MOVE, main_data.bsd.data)
-        dist, vect = future.running_subf.result()
-        if dist is None:
-            logger.warning("Failed to find a spot, twin stage calibration might have failed")
-
-        # Update progress of the future
-        future.set_progress(end=time.time() + 1.5 * 60)
-
-        # Proper hfw for spot grid to be within the ccd fov
-        main_data.ebeam.horizontalFoV.value = 80e-06
-
-        # Run the optical fine alignment
-        # TODO: reuse the exposure time
-        logger.info("Fine alignment...")
-        try:
-            future.running_subf = FindOverlay((4, 4), 0.5, 10e-06,
-                                              main_data.ebeam,
-                                              main_data.ccd,
-                                              main_data.bsd,
-                                              skew=True,
-                                              bgsub=True)
-            _, cor_md = future.running_subf.result()
-        except Exception:
-            logger.info("Fine alignment failed. Retrying to focus...")
-            if future._task_state == CANCELLED:
-                raise CancelledError()
-
-            main_data.ccd.binning.value = (1, 1)
-            main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
-            main_data.ccd.exposureTime.value = 900e-03
-            main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
-            main_data.ebeam.scale.value = (1, 1)
-            main_data.ebeam.resolution.value = (1, 1)
-            main_data.ebeam.translation.value = (0, 0)
-            main_data.ebeam.dwellTime.value = 5e-06
-            det_dataflow = main_data.bsd.data
-            future.running_subf = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
-            future.running_subf.result()
-            if future._task_state == CANCELLED:
-                raise CancelledError()
-            main_data.ccd.binning.value = (8, 8)
-            future.running_subf = autofocus.AutoFocus(main_data.ccd, None, main_data.focus, dfbkg=det_dataflow,
-                                                      rng_focus=FOCUS_RANGE, method="exhaustive")
-            future.running_subf.result()
-            ofoc = main_data.focus.position.value["z"]
-            calib_values["optical_focus"] = ofoc
-            logger.debug("Updated optical focus to %g", ofoc)
-            main_data.ccd.binning.value = (1, 1)
-            logger.debug("Retrying fine alignment...")
-            future.running_subf = FindOverlay((4, 4), 0.5, 10e-06,  # m, maximum difference allowed
-                                              main_data.ebeam,
-                                              main_data.ccd,
-                                              main_data.bsd,
-                                              skew=True,
-                                              bgsub=True)
-            _, cor_md = future.running_subf.result()
-        if future._task_state == CANCELLED:
-            raise CancelledError()
-
-        trans_md, skew_md = cor_md
-        iscale = trans_md[model.MD_PIXEL_SIZE_COR]
-        if any(s < 0 for s in iscale):
-            raise IOError("Unexpected scaling values calculated during"
-                          " Fine alignment: %s", iscale)
-        irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
-        ishear = skew_md[model.MD_SHEAR_COR]
-        iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
-        calib_values["image_scaling"] = iscale
-        calib_values["image_scaling_scan"] = iscale_xy
-        calib_values["image_rotation"] = irot
-        calib_values["image_shear"] = ishear
-        logger.debug("Image Rotation: %f (rad) Scaling: %s XY Scaling: %s Shear: %f", irot, iscale, iscale_xy, ishear)
 
         return htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
@@ -1069,7 +1053,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         def find_focus():
             escan.dwellTime.value = escan.dwellTime.range[0]  # to focus as fast as possible
             escan.horizontalFoV.value = 250e-06  # m
-            escan.scale.value = (8, 8)
+            escan.scale.value = (4, 4)
             detector.data.subscribe(_discard_data)  # unblank the beam
             f = detector.applyAutoContrast()
             f.result()
@@ -1199,6 +1183,63 @@ def FindCircleCenter(image, radius, max_diff, darkest=False):
     return diff_m
 
 
+def FindRingCenter(image):
+    """
+    Detects the center of a ring (ie, a one-colour round made of an inner and
+      an outer circle) contained in an image.
+    It's more reliable than FindCircleCenter(), but the whole image must easily
+      segmented into two colours.
+    image (model.DataArray): image
+    threshold (int): value to differentiate the circle form the rest
+    returns (tuple of floats): Coordinates of circle center in m, from the image center
+    raises:
+        LookupError if circle not found
+    """
+    # TODO: take as argument expected radius of inner and outer circles to check
+    # the circles found are the right ones?
+
+    # Convert the image into black & white
+    # For the threshold, we don't use the mean, which is too much affected by
+    # the thickness of the circle in the image.
+    threshold = numpy.mean([image.min(), image.max()])
+    logger.debug("Picked threshold %s to separate ring in image", threshold)
+    edge_image = (image > threshold).astype(numpy.uint8) * 255
+    edge_image = cv2.medianBlur(edge_image, 5)
+
+    # tiff.export("test_contour.tiff", model.DataArray(edge_image))
+
+    # Convert the edges into points
+    contours, _ = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        # TODO: try a different threshold?
+        raise LookupError("Failed to find any contours of the circle")
+    # Pick the two biggest contours = external/internal circles
+    points = sorted([c[:, 0, :] for c in contours], key=lambda d: d.shape[0])
+
+    # Fit an ellipse to the points. Note: not _all_ points will be inside it.
+    ellipse_pars = cv2.fitEllipse(points[-1])
+    cntr = ellipse_pars[0]
+    radius_ext = numpy.mean(ellipse_pars[1]) / 2
+    logger.debug("Found ext circle @ %s px with %g px radius", cntr, radius_ext)
+
+    if len(points) > 1:
+        ellipse_pars = cv2.fitEllipse(points[-2])
+        cntr_int = ellipse_pars[0]
+        radius_int = numpy.mean(ellipse_pars[1]) / 2
+        logger.debug("Found int circle @ %s px with %g px radius", cntr_int, radius_int)
+        cntr = ((cntr[0] + cntr_int[0]) / 2,
+                (cntr[1] + cntr_int[1]) / 2)
+
+    pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+    imcenter_px = (image.shape[1] / 2, image.shape[0] / 2)
+    diff_px = [a - b for a, b in zip(cntr[0:2], imcenter_px)]
+    diff_m = (diff_px[0] * pixelSize[0], -diff_px[1] * pixelSize[1])  # physical Y is inverted
+
+    logger.info("Found circle @ %s px = %s m", cntr, diff_m)
+
+    return diff_m
+
+
 def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole,
                             expected_second_hole, offset, rotation, scaling):
     """
@@ -1272,13 +1313,12 @@ def _DoLensAlignment(future, navcam, sem_stage, logpath):
             raise CancelledError()
         # Detect lens with navcam
         image = navcam.data.get(asap=False)
-        try:
-            lens_shift = FindCircleCenter(image[:, :, 0], LENS_RADIUS, 5)
-        except LookupError:
-            raise IOError("Lens not found.")
-
         if logpath:
             tiff.export(os.path.join(logpath, "overview_lens.tiff"), [image])
+        try:
+            lens_shift = FindRingCenter(img.RGB2Greyscale(image))
+        except LookupError:
+            raise IOError("Lens not found.")
 
         return (sem_stage.position.value["x"] + lens_shift[0], sem_stage.position.value["y"] + lens_shift[1])
     finally:

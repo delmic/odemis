@@ -25,7 +25,7 @@ from odemis import model
 import odemis
 from odemis.acq.align import delphi, pattern
 from odemis.dataio import hdf5, tiff
-from odemis.util import test
+from odemis.util import test, img
 import os
 import unittest
 
@@ -121,13 +121,15 @@ class TestCalibration(unittest.TestCase):
     # @unittest.skip("skip")
     def test_find_lens_center(self):
         """
-        Test FindCircleCenter for lenses
+        Test FindRingCenter for lenses
         """
         data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "navcam-calib2.h5"))
-        Z, Y, X = data[0].shape
+        imgs = img.RGB2Greyscale(img.ensureYXC(data[0]))
 
-        lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 5)
-        expected_coordinates = (-5.9703947e-05, 1.5257675e-04)  # (451.5, 445.5) px
+        # lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 5)
+        # expected_coordinates = (-5.9703947e-05, 1.5257675e-04)  # (451.5, 445.5) px
+        lens_coordinates = delphi.FindRingCenter(imgs)
+        expected_coordinates = (-1.6584835e-05, 1.3084411e-04)  # 454.75, 446.1) px
         numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
 
     # @unittest.skip("skip")
