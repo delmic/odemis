@@ -487,13 +487,6 @@ class Scanner(model.Emitter):
         # Calculate number of frames
         self._nr_frames = int(math.ceil(dt / DWELL_TIME))
         new_dt = DWELL_TIME * self._nr_frames
-
-        # Abort current scanning when dwell time is changed
-        try:
-            self.parent._device.SEMAbortImageAcquisition()
-        except suds.WebFault:
-            logging.debug("No acquisition in progress to be aborted.")
-
         return new_dt
 
     def _onRotation(self, rot):
@@ -552,11 +545,6 @@ class Scanner(model.Emitter):
 #             return value
 
     def _onScale(self, s):
-        # Abort current scanning when scale is changed
-        try:
-            self.parent._device.SEMAbortImageAcquisition()
-        except suds.WebFault:
-            logging.debug("No acquisition in progress to be aborted.")
         self._updatePixelSize()
 
     def _updatePixelSize(self):
