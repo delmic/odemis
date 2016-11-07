@@ -46,8 +46,11 @@ def executeTask(future, fn, *args, **kwargs):
         # cancelled via the future (while running) => it's all already handled
         pass
     except BaseException:
-        e = sys.exc_info()[1]
-        future.set_exception(e)
+        e, tb = sys.exc_info()[1:]
+        try:
+            future.set_exception_info(e, tb)
+        except AttributeError:  # Old futures (<v3) only had the non-traceback version
+            future.set_exception(e)
     else:
         future.set_result(result)
 
