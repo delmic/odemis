@@ -62,7 +62,7 @@ MAX_STEPS = 10  # To reach the hole
 ROTATION_SPOTS = ({"x":3.5e-3, "y":0}, {"x":-3.5e-3, "y":0},
                   {"x":0, "y":3.5e-3}, {"x":0, "y":-3.5e-3})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
-                                        #lens alignment failure 
+                                        #lens alignment failure
 SHIFT_DETECTION = {"x":0, "y":11.7e-03}  # Use holder hole images to measure the shift
 SEM_KNOWN_FOCUS = 0.007386  # Fallback sem focus position for the first insertion
 # Offset from hole focus value in Delphi calibration.
@@ -267,8 +267,11 @@ def _DoDelphiCalibration(future, main_data):
             future.running_subf = LensAlignment(main_data.overview_ccd, sem_stage, logpath)
             position = future.running_subf.result()
             logger.debug("SEM position after lens alignment: %s", position)
-        except Exception:
-            raise IOError("Lens alignment failed.")
+        except CancelledError:
+            raise
+        except Exception as ex:
+            logger.exception("Failure while looking for lens in overview")
+            raise IOError("Failed to locate lens in overview (%s)." % (ex,))
         if future._task_state == CANCELLED:
             raise CancelledError()
 
@@ -309,8 +312,11 @@ def _DoDelphiCalibration(future, main_data):
             calib_values["hole_focus"] = hfoc
             logger.debug("First hole: %s (m,m) Second hole: %s (m,m)", htop, hbot)
             logger.debug("Measured SEM focus on hole: %f", hfoc)
-        except Exception:
-            raise IOError("Failed to find sample holder holes.")
+        except CancelledError:
+            raise
+        except Exception as ex:
+            logger.exception("Failure while looking for sample holder holes")
+            raise IOError("Failed to find sample holder holes (%s)." % (ex,))
 
         # expected good focus value when focusing on the glass
         good_focus = hfoc - GOOD_FOCUS_OFFSET
@@ -358,8 +364,12 @@ def _DoDelphiCalibration(future, main_data):
                                                  opt_stage, main_data.focus,
                                                  logpath=logpath)
             offset = future.running_subf.result()
-        except Exception:
-            raise IOError("Failed to align and calculate offset.")
+        except CancelledError:
+            raise
+        except Exception as ex:
+            logger.exception("Failure during twin stage translation calibration")
+            raise IOError("Failed to measure twin stage translation (%s)." % (ex,))
+
         ofoc = main_data.focus.position.value.get('z')
         calib_values["optical_focus"] = ofoc
         logger.debug("Measured optical focus on spot: %f", ofoc)
@@ -384,8 +394,11 @@ def _DoDelphiCalibration(future, main_data):
             calib_values["stage_scaling"] = sscale
             calib_values["stage_rotation"] = srot
             logger.debug("Stage Offset: %s (m,m) Rotation: %f (rad) Scaling: %s", strans, srot, sscale)
-        except Exception:
-            raise IOError("Failed to calculate rotation and scaling.")
+        except CancelledError:
+            raise
+        except Exception as ex:
+            logger.exception("Failure during twin stage rotation and scaling calibration")
+            raise IOError("Failed to measure twin stage rotation and scaling calibration (%s)." % (ex,))
 
         # Return to the center so fine overlay can be executed
         future.running_subf = sem_stage.moveAbs({"x": pure_offset[0], "y": pure_offset[1]})
@@ -436,8 +449,10 @@ def _DoDelphiCalibration(future, main_data):
                                               skew=True,
                                               bgsub=True)
             _, cor_md = future.running_subf.result()
+        except CancelledError:
+            raise
         except Exception:
-            logger.info("Fine alignment failed. Retrying to focus...")
+            logger.info("Fine alignment failed. Retrying to focus...", exc_info=True)
             if future._task_state == CANCELLED:
                 raise CancelledError()
 
@@ -519,8 +534,11 @@ def _DoDelphiCalibration(future, main_data):
             hfwa = future.running_subf.result()
             calib_values["hfw_a"] = hfwa
             logger.debug("HFW A: %s", hfwa)
-        except Exception:
-            raise IOError("Failed to calculate shift parameters.")
+        except CancelledError:
+            raise
+        except Exception as ex:
+            logger.exception("Failure during SEM image calibration")
+            raise IOError("Failed to measure SEM image calibration (%s)." % (ex,))
 
         return htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
 
@@ -669,8 +687,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
             if future._task_state == CANCELLED:
                 raise CancelledError()
 
-            # TODO: also try the current stage offset + optical focus, if there are already some
-
+            logger.info("Failed to find a spot, will try harder...", exc_info=True)
             # Maybe the spot is on the edge or just outside the FoV.
             # Try to move to the source background by shifting half the FoV in
             # the direction of the brightest point
@@ -697,6 +714,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
                 future.running_subf = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
                 dist, vector = future.running_subf.result()
             except IOError:
+                logging.info("Failure during align and offset", exc_info=True)
                 raise IOError("Failed to align stages and calculate offset.")
 
         # Almost done
@@ -1157,8 +1175,7 @@ def FindCircleCenter(image, radius, max_diff, darkest=False):
     circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=mn,
                                param1=50, param2=15, minRadius=mn, maxRadius=mx)
 
-    # FIXME: not reliable. hole on SEM image returns ~50 circles! On Navcam image,
-    # also very noisy results
+    # TODO: not reliable. hole on SEM image returns ~50 circles!
 
     # Do not change the sequence of conditions
     if circles is None:
@@ -1773,12 +1790,12 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
                              shift_px[1] / smaller_image.shape[0])
                 fp_fov = shift_fov[0] / (zoom_f - 1), shift_fov[1] / (zoom_f - 1)
                 logger.debug("Shift detected between scale of %f and %f is: %s px == %s %%",
-                              cur_scale, cur_scale / zoom_f, shift_px, shift_fov)
+                             cur_scale, cur_scale / zoom_f, shift_px, shift_fov)
 
                 # We expect a lot more shift horizontally than vertically
                 if abs(shift_fov[0]) >= 0.15 or abs(shift_fov[1]) >= 0.05:
                     logger.warning("Some extreme values where measured %s px, not using measurement at scale %s.",
-                                    shift_px, cur_scale)
+                                   shift_px, cur_scale)
                 else:
                     shift_values.append(fp_fov)
 
