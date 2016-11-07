@@ -681,7 +681,8 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
         # Apply spot alignment
         try:
             # Move the sem_stage instead of objective lens
-            future.running_subf = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
+            future.running_subf = spot.AlignSpot(ccd, sem_stage, escan, focus,
+                                                 type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE)
             dist, vector = future.running_subf.result()
         except IOError:
             if future._task_state == CANCELLED:
@@ -692,8 +693,14 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
             # Try to move to the source background by shifting half the FoV in
             # the direction of the brightest point
             f = focus.moveAbs({"z": start_pos})
+            detector.data.subscribe(_discard_data)  # spot mode, for more CL
+            ccd.binning.value = ccd.binning.clip((8, 8))
+            ccd.resolution.value = ccd.resolution.range[1]
+            ccd.exposureTime.value = 1  # s
             f.result()
+
             image = ccd.data.get(asap=False)
+            detector.data.unsubscribe(_discard_data)
             if logpath:
                 tiff.export(os.path.join(logpath, "twin_stage_spot_0_failed.tiff"), [image])
 
@@ -711,7 +718,8 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
             logger.info("Failed to find a spot, will to reach the source by moving the SEM stage to %s...",
                         sem_stage.position.value)
             try:
-                future.running_subf = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE, method_f="exhaustive")
+                future.running_subf = spot.AlignSpot(ccd, sem_stage, escan, focus,
+                                                     type=spot.STAGE_MOVE, dfbkg=detector.data, rng_f=FOCUS_RANGE)
                 dist, vector = future.running_subf.result()
             except IOError:
                 logging.info("Failure during align and offset", exc_info=True)
