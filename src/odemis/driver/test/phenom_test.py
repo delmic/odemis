@@ -24,13 +24,15 @@ import Pyro4
 import copy
 from odemis import model
 from odemis.driver import phenom
+from odemis.model import HwError
+from odemis.util import test
 import os
 import pickle
 import threading
 import time
 import unittest
 from unittest.case import skip
-from odemis.model import HwError
+
 
 # If no hardware, we pretty much cannot test anything :-(
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
@@ -397,12 +399,12 @@ class TestSEM(unittest.TestCase):
         Check it's possible to change the focus
         """
         pos = self.focus.position.value
-        f = self.focus.moveRel({"z":0.1e-3})  # 1 mm
+        f = self.focus.moveRel({"z":0.1e-3})
         f.result()
         self.assertNotEqual(self.focus.position.value, pos)
 #         self.sed.data.get()
 
-        f = self.focus.moveRel({"z":-0.3e-3})  # 10 mm
+        f = self.focus.moveRel({"z":-0.3e-3})
         f.result()
         self.assertNotEqual(self.focus.position.value, pos)
 #         self.sed.data.get()
@@ -420,11 +422,14 @@ class TestSEM(unittest.TestCase):
         pos = self.stage.position.value
         f = self.stage.moveRel({"x":-100e-6, "y":-100e-6})  # 1 mm
         f.result()
-        self.assertTupleAlmostEqual(self.stage.position.value, pos)
+
+        # FIXME: this should fail
+        self.assertNotEqual(self.stage.position.value, pos)
+
         time.sleep(1)
         f = self.stage.moveRel({"x":100e-6, "y":100e-6})  # 1 mm
         f.result()
-        self.assertTupleAlmostEqual(self.stage.position.value, pos)
+        test.assert_pos_almost_equal(self.stage.position.value, pos)
 
 #     @skip("skip")
     def test_navcam(self):
@@ -452,7 +457,8 @@ class TestSEM(unittest.TestCase):
         # restore original position
         f = self.navcam_focus.moveAbs(pos)
         f.result()
-        self.assertAlmostEqual(self.navcam_focus.position.value, pos)
+
+        test.assert_pos_almost_equal(self.navcam_focus.position.value, pos)
 
 #     @skip("skip")
     def test_pressure(self):

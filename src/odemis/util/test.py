@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
-from odemis import model
+from odemis import model, util
 import odemis
 from odemis.util import driver
 import os
@@ -104,3 +104,16 @@ def stop_backend():
 
     if status != driver.BACKEND_STOPPED:
         raise IOError("Backend failed to stop, now %s" % status)
+
+
+def assert_pos_almost_equal(actual, expected, *args, **kwargs):
+    """
+    Asserts that two stage positions have almost equal coordinates.
+    """
+    if set(expected.keys()) != set(actual.keys()):
+        raise AssertionError("Dimensions of position do not match: %s != %s" %
+                             (actual.keys(), expected.keys()))
+
+    for k in expected.keys():
+        if not util.almost_equal(actual[k], expected[k], *args, **kwargs):
+            raise AssertionError("Position %s != %s" % (actual, expected))
