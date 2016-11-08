@@ -50,10 +50,14 @@ OBJECTIVE_MOVE = "Objective lens move"
 def MeasureSNR(image):
     # Estimate noise
     bl = image.metadata.get(model.MD_BASELINE, 0)
+    if image.max() < bl * 2:
+        return 0  # nothing looks like signal
+
     sdn = numpy.std(image[image < (bl * 2)])
     ms = numpy.mean(image[image >= (bl * 2)]) - bl
+
     # Guarantee no negative snr
-    if (ms <= 0) or (sdn <= 0):
+    if ms <= 0 or sdn <= 0:
         return 0
     snr = ms / sdn
 
@@ -124,6 +128,11 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
     init_scale = escan.scale.value
     init_eres = escan.resolution.value
 
+    # TODO: allow to pass the precision as argument. As for the Delphi, we don't
+    # need such an accuracy on the alignment (as it's just for twin stage calibration).
+
+    # TODO: take logpath as argument, to store images later on
+
     logging.debug("Starting Spot alignment...")
     try:
         if future._spot_alignment_state == CANCELLED:
@@ -145,6 +154,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
             # Long exposure time to compensate for no background subtraction
             ccd.exposureTime.value = 1.1
         else:
+            # TODO: all this code to decide whether to pick exposure 0.6 or 0.9?!
+            # => KISS! Use always 0.9... or allow up to 5s?
             # Estimate noise and adjust exposure time based on "Rose criterion"
             image = AcquireNoBackground(ccd, dfbkg)
             snr = MeasureSNR(image)
