@@ -5,7 +5,7 @@ import odemis
 
 
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
-pyi_command = ["pyinstaller", "-y", "viewer.spec"]
+pyi_command = ["pyinstaller", "--clean", "-y", "viewer.spec"]
 nsis_command = [
     r"C:\Program Files (x86)\NSIS\makensis",
     "/DPRODUCT_VERSION=" + '.'.join(odemis._get_version().split('-')[:2]),
