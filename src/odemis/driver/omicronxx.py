@@ -275,7 +275,7 @@ class DevxX(object):
         if devid in (19, 20):  # LEDMOD, LedHUB => led
             # The wavelength range is not precisely provided by the hardware,
             # but it's usually around 20 nm
-            self.wavelength = (wl - 20e-9, wl - 10e-9, wl, wl + 10e-9, wl + 20e-9)
+            self.wavelength = (wl - 10e-9, wl - 3e-9, wl, wl + 3e-9, wl + 10e-9)
         else:
             # Lasers => spectrum is almost just one wl, but make it 2 nm wide
             # to avoid a bandwidth of exactly 0.
