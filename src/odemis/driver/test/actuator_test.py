@@ -200,13 +200,13 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-06, "y": 2e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -217,13 +217,13 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 1e-05, "y": 2e-05})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-05, "y": 2e-05})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -234,13 +234,13 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": -2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-2e-06, "y": 1e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -251,18 +251,18 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveRel({"x": 0, "y": 0})  # synchronize stages again
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": -1e-06, "y": -2e-06})
+        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-06, "y":-2e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": -1e-06, "y": -2e-06})
+        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-06, "y":-2e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -273,13 +273,13 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": -1e-05, "y": -2e-05})
+        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-05, "y":-2e-05})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -301,8 +301,8 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-06, "y": 2e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
 
         # scaling
@@ -311,8 +311,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 1e-05, "y": 2e-05})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-05, "y": 2e-05})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
 
         # rotation
@@ -321,8 +321,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": -2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-2e-06, "y": 1e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
 
         # offset
@@ -331,8 +331,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
 
         # offset + scaling
@@ -341,27 +341,15 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(align.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(sem_stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": -1e-06, "y": -2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
 
-    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
-        """
-        Asserts that two stage positions have almost equal coordinates.
-        """
-        try:
-            if expected.viewkeys() != actual.viewkeys():
-                raise AssertionError("Dimensions of coordinates do not match")
-            for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
-                self.assertAlmostEqual(actual[dim_act], expected[dim_exp], places=6)
-        except AssertionError as exc:
-            raise AssertionError(exc.message)
-
     def assertXYAlmostEqual(self, actual, expected, *args, **kwargs):
         pos = {"x": actual["x"], "y": actual["y"]}
-        self.assertPosAlmostEqual(pos, expected, *args, **kwargs)
+        test.assert_pos_almost_equal(pos, expected, *args, **kwargs)
 
     def test_reference(self):
         """
@@ -375,7 +363,7 @@ class TestCoupledStage(unittest.TestCase):
             f = self.stage.reference({a})
             f.result()
             self.assertTrue(self.stage.referenced.value[a])
-            # The following is not true if the master is not referenciable, in
+            # The following is not true if the master is not referenceable, in
             # which case the final position will be the same as the original
             # position
             # self.assertAlmostEqual(self.stage.position.value[a], 0)
@@ -401,13 +389,13 @@ class TestConvertStage(unittest.TestCase):
 
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"a": -2.1213203435596424e-06,
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"a":-2.1213203435596424e-06,
                                                          "b": 7.071067811865477e-07})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"a": 0, "b": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"a": 0, "b": 0})
 
     # @skip("skip")
     def test_move_rel(self):
@@ -415,68 +403,68 @@ class TestConvertStage(unittest.TestCase):
 
         # no transformation
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"])
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # scaling
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              scale=(10, 10))
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 10e-06, "y": 20e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # rotation
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              rotation=math.pi / 2)
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         self.assertEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": -2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # offset
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # offset + scaling
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              translation=(1e-06, 2e-06),
                              scale=(10, 10))
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 10e-06, "y": 20e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
     # @skip("skip")
     def test_move_abs(self):
@@ -484,73 +472,64 @@ class TestConvertStage(unittest.TestCase):
 
         # no transformation
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"])
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # scaling
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              scale=(10, 10))
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-05, "y": 2e-05})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-05, "y": 2e-05})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # rotation
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              rotation=math.pi / 2)
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": -2e-06, "y": 1e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # offset
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
         # offset + scaling
         stage = ConvertStage("conv", "align", {"orig": child}, axes=["x", "y"],
                              translation=(1e-06, 2e-06),
                              scale=(10, 10))
-        self.assertPosAlmostEqual(stage.position.value, {"x": -1e-06, "y": -2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-05, "y": 2e-05})
-
-    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
-        """
-        Asserts that two stage positions have almost equal coordinates.
-        """
-        if expected.keys() != actual.keys():
-            raise AssertionError("Dimensions of coordinates do not match")
-        for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
-            self.assertAlmostEqual(actual[dim_act], expected[dim_exp])
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-05, "y": 2e-05})
 
 
 class TestAntiBacklashActuator(unittest.TestCase):
@@ -562,34 +541,34 @@ class TestAntiBacklashActuator(unittest.TestCase):
 
         # moves should just go the same positions
         # abs
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": -23e-06, "y": -15e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": -23e-06, "y": -15e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": -23e-06, "y": -15e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x":-23e-06, "y":-15e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x":-23e-06, "y":-15e-06})
 
         # rel
         f = stage.moveAbs({"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": 0, "y": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"x": 0, "y": 0})
-        self.assertPosAlmostEqual(child.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        test.assert_pos_almost_equal(child.position.value, {"x": 0, "y": 0})
 
     def test_limited_backlash(self):
         """
@@ -601,39 +580,39 @@ class TestAntiBacklashActuator(unittest.TestCase):
 
         # moves should just go the same positions
         # abs
-        self.assertPosAlmostEqual(stage.position.value, {"a": 0, "b": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
         f = stage.moveAbs({"a": 1e-06, "b": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveAbs({"b": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": 1e-06, "b": 0})
-        self.assertPosAlmostEqual(child.position.value, {"a": 1e-06, "b": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 0})
+        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 0})
         f = stage.moveAbs({"a": -23e-06, "b": -15e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": -23e-06, "b": -15e-06})
-        self.assertPosAlmostEqual(child.position.value, {"a": -23e-06, "b": -15e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"a":-23e-06, "b":-15e-06})
+        test.assert_pos_almost_equal(child.position.value, {"a":-23e-06, "b":-15e-06})
         f = stage.moveAbs({"a": -20e-06}) # negative position but positive move
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": -20e-06, "b": -15e-06})
-        self.assertPosAlmostEqual(child.position.value, {"a": -20e-06, "b": -15e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"a":-20e-06, "b":-15e-06})
+        test.assert_pos_almost_equal(child.position.value, {"a":-20e-06, "b":-15e-06})
 
         # rel
         f = stage.moveAbs({"a": 0})
         f = stage.moveAbs({"b": 0})
         f = stage.moveRel({"a": 1e-06, "b": 2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveRel({"a": 0, "b": 0})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        self.assertPosAlmostEqual(child.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
+        test.assert_pos_almost_equal(child.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveRel({"a": -1e-06, "b": -2e-06})
         f.result()
-        self.assertPosAlmostEqual(stage.position.value, {"a": 0, "b": 0})
-        self.assertPosAlmostEqual(child.position.value, {"a": 0, "b": 0})
+        test.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
+        test.assert_pos_almost_equal(child.position.value, {"a": 0, "b": 0})
 
     def test_error(self):
         child = simulated.Stage("stage", "test", axes=["a", "b"])
@@ -677,21 +656,12 @@ class TestAntiBacklashActuator(unittest.TestCase):
         # see ~ 16 moves. If only an antibacklash at the last move
         # (or integrated in last move), we should see 11 or 12 moves.
         self.assertLessEqual(self.called, 12)
-        self.assertPosAlmostEqual(child.position.value, orig_pos)
+        test.assert_pos_almost_equal(child.position.value, orig_pos)
         stage.terminate()
 
     def _on_position(self, pos):
         self.assertIsInstance(pos, dict)
         self.called += 1
-
-    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
-        """
-        Asserts that two stage positions have almost equal coordinates.
-        """
-        if expected.keys() != actual.keys():
-            raise AssertionError("Dimensions of coordinates do not match")
-        for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
-            self.assertAlmostEqual(actual[dim_act], expected[dim_exp])
 
 
 if __name__ == "__main__":
