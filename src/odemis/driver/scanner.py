@@ -54,7 +54,8 @@ class CompositedScanner(model.Emitter):
         intnl = children["internal"]
         if not isinstance(intnl, ComponentBase):
             raise ValueError("Child internal is not a component.")
-        if not model.hasVA(intnl, "pixelSize"):
+        if not hasattr(intnl, "shape"):
+            # Note: the internal component doesn't need to provide pixelSize
             raise ValueError("Child internal is not a Emitter component.")
         self._internal = intnl
         self.children.value.add(intnl)
@@ -72,17 +73,29 @@ class CompositedScanner(model.Emitter):
         if model.hasVA(self._internal, "horizontalFoV"):
             self.horizontalFoV = self._internal.horizontalFoV
             # Create read-only magnification VA
-            mag = self._external.HFWNoMag / self.horizontalFoV.value
-            self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
+            # TODO: why not just using the magnification VA from the internal?
+            self.magnification = model.VigilantAttribute(1, unit="", readonly=True)
             self.horizontalFoV.subscribe(self._updateMagnification, init=True)
         elif model.hasVA(self._external, "magnification"):
             self.magnification = self._external.magnification
 
         # TODO: just pick every VAs which are not yet on self?
-        for vaname in ("accelVoltage", "power", "probeCurrent"):
+        for vaname in ("accelVoltage", "probeCurrent", "depthOfField", "spotSize"):
             if model.hasVA(self._internal, vaname):
                 va = getattr(self._internal, vaname)
                 setattr(self, vaname, va)
+
+        # VAs that could be both on internal or external. If on both, pick internal
+        for vaname in ("power", "blanker", "external"):
+            if model.hasVA(self._internal, vaname):
+                va = getattr(self._internal, vaname)
+                setattr(self, vaname, va)
+            elif model.hasVA(self._external, vaname):
+                va = getattr(self._external, vaname)
+                setattr(self, vaname, va)
+
+        # TODO: if blanker has True/False (only), add a None (=auto), which
+        # automatically put the underlying value based on the detector acquisition.
 
     def _updateMagnification(self, hfw):
         new_mag = self._external.HFWNoMag / hfw
