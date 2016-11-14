@@ -194,7 +194,9 @@ def man_calib(logpath):
         if calib_values is None:
             first_hole = second_hole = offset = resa = resb = hfwa = spotshift = (0, 0)
             scaling = iscale = iscale_xy = (1, 1)
-            hole_focus = rotation = irot = ishear = 0
+            rotation = irot = ishear = 0
+            hole_focus = aligndelphi.SEM_KNOWN_FOCUS
+            opt_focus = aligndelphi.OPTICAL_KNOWN_FOCUS
             print "\033[1;31mCalibration values missing! All the steps will be performed anyway...\033[1;m"
             force_calib = True
         else:
@@ -245,11 +247,11 @@ def man_calib(logpath):
             f = aligndelphi.LensAlignment(overview_ccd, sem_stage, logpath)
             position = f.result()
         except IOError:
+            logging.warning("Failed to locate the optical lens, will used previous value %s", position)
             if not force_calib:
                 position = (offset[0] * scaling[0], offset[1] * scaling[1])
-                logging.warning("Failed to locate the optical lens, will used previous value %s", position)
             else:
-                raise IOError("Failed to locate the optical lens in the NavCam view.")
+                position = (0, 0)
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
