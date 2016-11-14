@@ -1,3 +1,15 @@
+odemis (2.5.4-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5.4
+  * Bugs fixed:
+    - HFW values were not ordered (DELPHI)
+    - Viewer fails to start on Windows 7
+    - First image acquired from Phenom could be showing old data (DELPHI)
+    - In case of automatic calibration failure, it was impossible not to run the manual calibration (DELPHI)
+    - Bandwidth reported by omicronxx driver was 2x bigger than when opening back an image (DELPHI/SECOM)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 14 Nov 2016 09:50:34 +0100
+
 odemis (2.5.3-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5.3
