@@ -381,6 +381,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
 
     return rgb
 
+
 def ensure2DImage(data):
     """
     Reshape data to make sure it's 2D by trimming all the low dimensions (=1).
@@ -398,7 +399,28 @@ def ensure2DImage(data):
 
     return d
 
-# TODO: add test
+
+def RGB2Greyscale(data):
+    """
+    Converts an RGB image to a greyscale image.
+    Note: it currently adds the 3 channels together, but this should not be
+      assumed to hold true.
+    data (ndarray of YX3 uint8): RGB image (alpha channel can be on the 4th channel)
+    returns (ndarray of YX uint16): a greyscale representation.
+    """
+    if data.shape[-1] not in {3, 4}:
+        raise ValueError("Data passed has %d colour channels, which is not RGB" %
+                         (data.shape[-1],))
+    if data.dtype != numpy.uint8:
+        logging.warning("RGB data should be uint8, but is %s type", data.dtype)
+
+    imgs = data[:, :, 0].astype(numpy.uint16)
+    imgs += data[:, :, 1]
+    imgs += data[:, :, 2]
+
+    return imgs
+
+
 def ensureYXC(data):
     """
     Ensure that a RGB image is in YXC order in memory, to fit RGB24 or RGB32
@@ -421,8 +443,8 @@ def ensureYXC(data):
     if not dims == "YXC":
         raise NotImplementedError("Don't know how to handle dim order %s" % (dims,))
 
-    if not data.shape[-1] in {3, 4}:
-        logging.warning("RGB data should has C dimension of length %d", data.shape[-1])
+    if data.shape[-1] not in {3, 4}:
+        logging.warning("RGB data has C dimension of length %d, instead of 3 or 4", data.shape[-1])
 
     if data.dtype != numpy.uint8:
         logging.warning("RGB data should be uint8, but is %s type", data.dtype)
@@ -430,6 +452,7 @@ def ensureYXC(data):
     data = numpy.ascontiguousarray(data) # force memory placement
     md[model.MD_DIMS] = dims
     return model.DataArray(data, md)
+
 
 # FIXME: test it
 def rescale_hq(data, shape):
@@ -478,6 +501,7 @@ def rescale_hq(data, shape):
 
     return out
 
+
 def Subtract(a, b):
     """
     Subtract 2 images, with clipping if needed
@@ -509,6 +533,7 @@ def Average(images, rect, mpp, merge=0.5):
     raise NotImplementedError()
 
 # TODO: add operator Screen
+
 
 def mergeMetadata(current, correction=None):
     """

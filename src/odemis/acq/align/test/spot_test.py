@@ -36,13 +36,12 @@ import unittest
 import weakref
 
 
-# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"  # 4x4
+
+TEST_IMAGE_PATH = os.path.dirname(__file__)
 
 class TestSpotAlignment(unittest.TestCase):
     """
@@ -85,7 +84,7 @@ class TestSpotAlignment(unittest.TestCase):
         test.stop_backend()
 
     def setUp(self):
-        self.data = hdf5.read_data("one_spot.h5")
+        self.data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "one_spot.h5"))
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.fake_img = self.data[0]
@@ -123,7 +122,7 @@ class FakeCCD(model.HwComponent):
     def __init__(self, testCase, align):
         """
         Fake CCD is given a good clear image as base image
-        align (Component): stage with axes a and b, used read the shift to simulate 
+        align (Component): stage with axes a and b, used read the shift to simulate
         """
         super(FakeCCD, self).__init__("ccdshift", "ccd")
         self.testCase = testCase

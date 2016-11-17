@@ -599,6 +599,7 @@ class TestMergeMetadata(unittest.TestCase):
         for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
             self.assertNotIn(k, simpl_md)
 
+
 class TestEnsureYXC(unittest.TestCase):
 
     def test_simple(self):
@@ -640,7 +641,43 @@ class TestEnsureYXC(unittest.TestCase):
         self.assertEqual(newim.shape, (512, 256, 3))
         self.assertEqual(newim.metadata[model.MD_DIMS], "YXC")
 
-# TODO: test isClipping()
+
+class TestIsClipping(unittest.TestCase):
+
+    def test_no_clip(self):
+        im = numpy.zeros((512, 256), dtype=numpy.uint8)
+        im = model.DataArray(im)
+        self.assertFalse(img.isClipping(im))
+        self.assertFalse(img.isClipping(im, (0, 36)))
+
+        im[1, 1] = 254
+        self.assertFalse(img.isClipping(im))
+        self.assertFalse(img.isClipping(im, (0, 255)))
+
+    def test_clip(self):
+        im = numpy.zeros((512, 256), dtype=numpy.uint8)
+        im = model.DataArray(im)
+        im[1, 1] = 255
+        self.assertTrue(img.isClipping(im))
+
+        im[1, 1] = 36
+        self.assertTrue(img.isClipping(im, (0, 36)))
+
+
+class TestRGB2Greyscale(unittest.TestCase):
+
+    def test_simple(self):
+        rgbim = numpy.zeros((512, 256, 3), dtype=numpy.uint8)
+        rgbim = model.DataArray(rgbim)
+        gsim = img.RGB2Greyscale(rgbim)
+        self.assertEqual(gsim.shape, rgbim.shape[0:2])
+        numpy.testing.assert_array_equal(gsim, rgbim[:, :, 0])
+
+        rgbim[1, 1, 1] = 254
+        gsim = img.RGB2Greyscale(rgbim)
+        self.assertEqual(gsim.shape, rgbim.shape[0:2])
+        self.assertEqual(gsim[1, 1], 254)
+
 
 # TODO: test guessDRange()
 

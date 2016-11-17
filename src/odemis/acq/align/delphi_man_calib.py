@@ -194,7 +194,9 @@ def man_calib(logpath):
         if calib_values is None:
             first_hole = second_hole = offset = resa = resb = hfwa = spotshift = (0, 0)
             scaling = iscale = iscale_xy = (1, 1)
-            hole_focus = rotation = irot = ishear = 0
+            rotation = irot = ishear = 0
+            hole_focus = aligndelphi.SEM_KNOWN_FOCUS
+            opt_focus = aligndelphi.OPTICAL_KNOWN_FOCUS
             print "\033[1;31mCalibration values missing! All the steps will be performed anyway...\033[1;m"
             force_calib = True
         else:
@@ -211,16 +213,16 @@ def man_calib(logpath):
         print "                    scaling: " + str(scaling)
         print "                    rotation: " + str(rotation)
         print "                    optical focus: " + str(opt_focus)
-        print "3.SEM image calibration"
-        print "    Current values: resolution-a: " + str(resa)
-        print "                    resolution-b: " + str(resb)
-        print "                    hfw-a: " + str(hfwa)
-        print "                    spot shift: " + str(spotshift)
-        print "4.Fine alignment"
+        print "3.Fine alignment"
         print "    Current values: scale: " + str(iscale)
         print "                    rotation: " + str(irot)
         print "                    scale-xy: " + str(iscale_xy)
         print "                    shear: " + str(ishear)
+        print "4.SEM image calibration"
+        print "    Current values: resolution-a: " + str(resa)
+        print "                    resolution-b: " + str(resb)
+        print "                    hfw-a: " + str(hfwa)
+        print "                    spot shift: " + str(spotshift)
         print '\033[1;m'
         print "\033[1;33mNote that you should not perform any stage move during the process. \nInstead, you may zoom in/out while focusing.\033[1;m"
         print "\033[1;30mNow initializing, please wait...\033[1;m"
@@ -242,14 +244,14 @@ def man_calib(logpath):
 
         # Calculate offset approximation
         try:
-            f = aligndelphi.LensAlignment(overview_ccd, sem_stage)
+            f = aligndelphi.LensAlignment(overview_ccd, sem_stage, logpath)
             position = f.result()
         except IOError:
+            logging.warning("Failed to locate the optical lens, will used previous value %s", position)
             if not force_calib:
                 position = (offset[0] * scaling[0], offset[1] * scaling[1])
-                logging.warning("Failed to locate the optical lens, will used previous value %s", position)
             else:
-                raise IOError("Failed to locate the optical lens in the NavCam view.")
+                position = (0, 0)
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -270,9 +272,9 @@ def man_calib(logpath):
                 msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
                 ans = raw_input(msg)
             if ans in YES_CHARS:
-                # Move Phenom sample stage to expected hole position
-                f = sem_stage.moveAbs(aligndelphi.EXPECTED_HOLES[0])
-                f.result()
+                # Move Phenom sample stage next to expected hole position
+                sem_stage.moveAbsSync(aligndelphi.SHIFT_DETECTION)
+                ebeam_focus.moveAbsSync(hole_focus)
                 # Set the FoV to almost 2mm
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 msg = "\033[1;34mPlease turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ...\033[1;m"
@@ -280,7 +282,7 @@ def man_calib(logpath):
                 print "\033[1;30mTrying to detect the holes/markers, please wait...\033[1;m"
                 try:
                     hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
-                                                                ebeam_focus, manual=True)
+                                                                ebeam_focus, manual=True, logpath=logpath)
                     new_first_hole, new_second_hole, new_hole_focus = hole_detectionf.result()
                     print '\033[1;36m'
                     print "Values computed: 1st hole: " + str(new_first_hole)
@@ -358,7 +360,7 @@ def man_calib(logpath):
                     # excepted it might be a little harder to focus.
                     # => use the same code for all of them
                     align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
-                                                               opt_stage, focus)
+                                                               opt_stage, focus, logpath)
                     align_offset = align_offsetf.result()
                     new_opt_focus = focus.position.value.get('z')
 
@@ -379,7 +381,7 @@ def man_calib(logpath):
 
                     f = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                        opt_stage, focus, align_offset,
-                                                       manual=ask_user_to_focus)
+                                                       manual=ask_user_to_focus, logpath=logpath)
                     acc_offset, new_rotation, new_scaling = f.result()
 
                     # Offset is divided by scaling, since Convert Stage applies scaling
@@ -405,61 +407,6 @@ def man_calib(logpath):
                     break
                 except IOError:
                     print "\033[1;31mTwin stage calibration failed.\033[1;m"
-            else:
-                break
-
-        while True:
-            ans = "Y" if force_calib else None
-            while ans not in YES_NO_CHARS:
-                msg = "\033[1;35mDo you want to execute the SEM image calibration? [Y/n]\033[1;m"
-                ans = raw_input(msg)
-            if ans in YES_CHARS:
-                # Resetting shift parameters, to not take them into account during calib
-                blank_md = dict.fromkeys(aligndelphi.MD_CALIB_SEM, (0, 0))
-                escan.updateMetadata(blank_md)
-
-                # We measure the shift in the area just behind the hole where there
-                # are always some features plus the edge of the sample carrier. For
-                # that reason we use the focus measured in the hole detection step
-                f = sem_stage.moveAbs(aligndelphi.SHIFT_DETECTION)
-                f.result()
-
-                f = ebeam_focus.moveAbs({"z": hole_focus})
-                f.result()
-                try:
-                    # Compute spot shift percentage
-                    print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
-                    f = aligndelphi.ScaleShiftFactor(detector, escan, logpath)
-                    new_spotshift = f.result()
-
-                    # Compute resolution-related values.
-                    print "\033[1;30mCalculating resolution shift, please wait...\033[1;m"
-                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, logpath)
-                    new_resa, new_resb = resolution_shiftf.result()
-
-                    # Compute HFW-related values
-                    print "\033[1;30mCalculating HFW shift, please wait...\033[1;m"
-                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, logpath)
-                    new_hfwa = hfw_shiftf.result()
-
-                    print '\033[1;36m'
-                    print "Values computed: resolution-a: " + str(new_resa)
-                    print "                 resolution-b: " + str(new_resb)
-                    print "                 hfw-a: " + str(new_hfwa)
-                    print "                 spot shift: " + str(new_spotshift)
-                    print '\033[1;m'
-                    ans = "Y" if force_calib else None
-                    while ans not in YES_NO_CHARS:
-                        msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
-                        ans = raw_input(msg)
-                    if ans in YES_CHARS:
-                        resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
-                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
-                               scaling, rotation, iscale, irot, iscale_xy, ishear,
-                               resa, resb, hfwa, spotshift)
-                    break
-                except IOError:
-                    print "\033[1;31mSEM image calibration failed.\033[1;m"
             else:
                 break
 
@@ -553,10 +500,66 @@ def man_calib(logpath):
             else:
                 break
 
+        while True:
+            ans = "Y" if force_calib else None
+            while ans not in YES_NO_CHARS:
+                msg = "\033[1;35mDo you want to execute the SEM image calibration? [Y/n]\033[1;m"
+                ans = raw_input(msg)
+            if ans in YES_CHARS:
+                # Resetting shift parameters, to not take them into account during calib
+                blank_md = dict.fromkeys(aligndelphi.MD_CALIB_SEM, (0, 0))
+                escan.updateMetadata(blank_md)
+
+                # We measure the shift in the area just behind the hole where there
+                # are always some features plus the edge of the sample carrier. For
+                # that reason we use the focus measured in the hole detection step
+                f = sem_stage.moveAbs(aligndelphi.SHIFT_DETECTION)
+                f.result()
+
+                f = ebeam_focus.moveAbs({"z": hole_focus})
+                f.result()
+                try:
+                    # Compute spot shift percentage
+                    print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
+                    f = aligndelphi.ScaleShiftFactor(detector, escan, logpath)
+                    new_spotshift = f.result()
+
+                    # Compute resolution-related values.
+                    print "\033[1;30mCalculating resolution shift, please wait...\033[1;m"
+                    resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, logpath)
+                    new_resa, new_resb = resolution_shiftf.result()
+
+                    # Compute HFW-related values
+                    print "\033[1;30mCalculating HFW shift, please wait...\033[1;m"
+                    hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, logpath)
+                    new_hfwa = hfw_shiftf.result()
+
+                    print '\033[1;36m'
+                    print "Values computed: resolution-a: " + str(new_resa)
+                    print "                 resolution-b: " + str(new_resb)
+                    print "                 hfw-a: " + str(new_hfwa)
+                    print "                 spot shift: " + str(new_spotshift)
+                    print '\033[1;m'
+                    ans = "Y" if force_calib else None
+                    while ans not in YES_NO_CHARS:
+                        msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
+                        ans = raw_input(msg)
+                    if ans in YES_CHARS:
+                        resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
+                        calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
+                               scaling, rotation, iscale, irot, iscale_xy, ishear,
+                               resa, resb, hfwa, spotshift)
+                    break
+                except IOError:
+                    print "\033[1;31mSEM image calibration failed.\033[1;m"
+            else:
+                break
+
         # Update calibration file
-        print "\033[1;30mUpdating calibration file is done, now ejecting, please wait...\033[1;m"
+        print "\033[1;30mUpdating calibration file is done\033[1;m"
 
     finally:
+        print "\033[1;30mCalibration ended, now ejecting sample, please wait...\033[1;m"
         # Eject the sample holder
         f = chamber.moveAbs({"pressure": vented_pressure})
 

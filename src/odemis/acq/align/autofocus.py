@@ -171,7 +171,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
     #   focus levels (due to noise and sample degradation)
     # * if the focus actuator is not precise (eg, open loop), it's hard to
     #   even go back to the same focus position when wanted
-    logging.debug("Starting Binary Autofocus...")
+    logging.debug("Starting binary autofocus on detector %s...", detector.name)
 
     try:
         # use the .depthOfField on detector or emitter as maximum stepsize
@@ -365,7 +365,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             CancelledError if cancelled
             IOError if procedure failed
     """
-    logging.debug("Starting Exhaustive Autofocus...")
+    logging.debug("Starting exhaustive autofocus on detector %s...", detector.name)
 
     try:
         # use the .depthOfField on detector or emitter as maximum stepsize
@@ -407,7 +407,6 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         focus_levels = []  # list with focus levels measured so far
         best_pos = orig_pos = focus.position.value['z']
         best_fm = 0
-        logging.debug("Focus level at %f is %f", best_pos, best_fm)
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()

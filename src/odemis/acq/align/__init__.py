@@ -29,7 +29,6 @@ from .autofocus import AutoFocus, AutoFocusSpectrometer
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
 from odemis.util.img import Subtract
-from odemis.dataio import hdf5
 
 
 def FindEbeamCenter(ccd, detector, escan):
@@ -78,7 +77,7 @@ def FindEbeamCenter(ccd, detector, escan):
 
             try:
                 coord = FindSpot(img, sensitivity_limit=10)
-            except ValueError:
+            except LookupError:
                 # spot was not found, subtract background and try again
                 logging.debug("Subtracting background image")
                 detector.data.unsubscribe(discard_data)
@@ -87,7 +86,7 @@ def FindEbeamCenter(ccd, detector, escan):
                 img = Subtract(img, bg_image)
                 try:
                     coord = FindSpot(img, sensitivity_limit=10)
-                except ValueError:
+                except LookupError:
                     # try again with longer exposure time
                     prev_img = img
                     exp *= 2
