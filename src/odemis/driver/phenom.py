@@ -219,8 +219,6 @@ class SEM(model.HwComponent):
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
 
-        self._imagingDevice = self._objects.create('ns0:imagingDevice')
-
         # create the scanner child
         try:
             kwargs = children["scanner"]
@@ -1180,7 +1178,6 @@ class Stage(model.Actuator):
         # TODO: only one object needed?
         self._stagePos = parent._objects.create('ns0:position')
         self._stageRel = parent._objects.create('ns0:position')
-        self._navAlgorithm = parent._objects.create('ns0:navigationAlgorithm')
         self._navAlgorithm = 'NAVIGATION-BACKLASH-ONLY'
 
         axes_def = {}
@@ -1266,9 +1263,16 @@ class Stage(model.Actuator):
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
+        # HACK: the cancel() will wait until the current future/move is over.
+        # => Stop() in anycase, and then cancel() to remove the queued futures.
+        # TODO: make the futures cancellable, so that this hack is not necessary
+        self.parent._device.Stop()
+
         # Empty the queue for the given axes
         self._executor.cancel()
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+
+        self.parent._device.Stop()
+        logging.info("Stopping axes: %s", ", ".join(self.axes))
 
     def terminate(self):
         if self._executor:
@@ -1379,7 +1383,7 @@ class PhenomFocus(model.Actuator):
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        logging.info("Cannot stop focus axes: %s.%s", self.name, ", ".join(self.axes))
 
     def terminate(self):
         if self._executor:
@@ -1830,7 +1834,7 @@ class ChamberPressure(model.Actuator):
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
-        logging.info("Stopping all axes: %s", ", ".join(self.axes))
+        logging.warning("Not able to stop axes: %s", ", ".join(self.axes))
 
     def terminate(self):
         if self._executor:
