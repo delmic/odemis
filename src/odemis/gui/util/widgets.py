@@ -335,7 +335,7 @@ class ProgressiveFutureConnector(object):
             self._last_update = now
 
         # progress bar: past / past+left
-        logging.debug("updating the progress bar to %f/%f", past, past + left)
+        # logging.debug("updating the progress bar to %f/%f", past, past + left)
         self._bar.Range = 100 * (past + left)
         self._bar.Value = 100 * past
 

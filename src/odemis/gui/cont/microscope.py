@@ -696,6 +696,7 @@ class DelphiStateController(SecomStateController):
                 ccd_md = self._main_data.ccd.getMetadata()
                 good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
                 self._main_data.ebeam.horizontalFoV.value = good_hfw
+                self._show_progress_indicators(False, True)
             except ValueError:
                 dlg = wx.MessageDialog(self._main_frame,
                                        "Sample holder is loaded while there is no calibration information. "
@@ -705,7 +706,6 @@ class DelphiStateController(SecomStateController):
                 dlg.ShowModal()
                 dlg.Destroy()
                 self._main_data.chamberState.value = CHAMBER_VENTING
-            self._show_progress_indicators(False, True)
 
         # Connect the Delphi recalibration to the menu item
         wx.EVT_MENU(
@@ -820,13 +820,12 @@ class DelphiStateController(SecomStateController):
 
         if action is None:
             action = ""
-        self._show_status_icons(lvl, action)
-        self._tab_panel.lbl_stream_status.SetToolTipString(action)
         if u"…" in msg:
             self._ellipsis_animator = EllipsisAnimator(msg, self._tab_panel.lbl_stream_status)
             self._ellipsis_animator.start()
         else:
             self._tab_panel.lbl_stream_status.SetLabel(msg)
+        self._show_status_icons(lvl, action)
 
     @call_in_wx_main
     def _remove_misaligned(self):
@@ -852,13 +851,16 @@ class DelphiStateController(SecomStateController):
         return (not stream.should_update.value and ((stream.image.value is not None) and
                 stream.image.value.metadata.get(model.MD_ACQ_DATE, time.time()) < self._move_time))
 
-    def _show_status_icons(self, lvl, action=None):
+    def _show_status_icons(self, lvl, action):
+        """
+        lvl (None or int): level of the message. None => no icon shown
+        action (str): the tooltip on the message (explaining what to do to fix the error)
+        """
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
         self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
         self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
+        self._tab_panel.pnl_stream_status.SetToolTipString(action)
         self._tab_panel.pnl_hw_info.Layout()
-        if action is not None:
-            self._tab_panel.pnl_hw_info.SetToolTipString(action)
 
     def _show_progress_indicators(self, show_load, show_status):
         """
@@ -867,6 +869,7 @@ class DelphiStateController(SecomStateController):
         The stream status text will be hidden if the progress indicators are shown.
         """
         assert not (show_load and show_status), "Cannot display both simultaneously"
+        logging.debug("Load shown: %s, status shown: %s", show_load, show_status)
         self._tab_panel.pnl_load_status.Show(show_load)
         self._tab_panel.pnl_stream_status.Show(show_status)
         self._tab_panel.pnl_hw_info.Layout()

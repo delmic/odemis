@@ -24,14 +24,14 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError
 import logging
+from odemis.acq.align.delphi import DelphiCalibration
+from odemis.gui import model
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 import subprocess
 import threading
 import wx
-
-from odemis.acq.align.delphi import DelphiCalibration
 
 
 # code based on the wxPython demo TestDialog class
@@ -194,7 +194,12 @@ class CalibrationProgressDialog(xrcprogress_dialog):
     def on_calib_done(self, future):
         """ Callback called when the calibration is finished (either successfully or cancelled) """
         # bind button back to direct closure
+        self.info_txt.SetLabel("Calibration of the sample holder ended")
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_close)
+
+        # Eject the sample holder
+        self._main_data.chamberState.value = model.CHAMBER_VENTING
+
         try:
             shcalib = future.result(1)  # timeout is just for safety
         except CancelledError:
