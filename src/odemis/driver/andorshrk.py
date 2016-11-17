@@ -936,7 +936,7 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
         return (present.value != 0)
 
-    # Note: the following 4 functions are not documented (altough advertised in
+    # Note: the following 4 functions are not documented (although advertised in
     # the changelog and in the include file)
     # Available since SDK 2.100, but not documented, and raise a "Not available"
     # error with the SR-193i
