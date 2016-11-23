@@ -26,11 +26,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from Pyro4.core import isasync
 import collections
 import math
 from numpy.polynomial import polynomial
 from odemis import model
+from odemis.model import isasync
 import odemis
 
 

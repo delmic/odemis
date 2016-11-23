@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-from odemis.model._metadata import MD_PIXEL_SIZE
+from odemis.model import MD_PIXEL_SIZE
 
 from .autofocus import AutoFocus, AutoFocusSpectrometer
 from .find_overlay import FindOverlay

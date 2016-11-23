@@ -17,12 +17,11 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from Pyro4.core import isasync
 import glob
 import logging
 from odemis import model
 import odemis
-from odemis.model import CancellableThreadPoolExecutor, HwError
+from odemis.model import CancellableThreadPoolExecutor, HwError, isasync
 from odemis.util import driver
 import os
 import re

@@ -26,7 +26,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from Pyro4.core import isasync
 import collections
 from concurrent import futures
 from concurrent.futures import CancelledError

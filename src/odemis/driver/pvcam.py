@@ -28,16 +28,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from Pyro4.core import oneway
 import collections
 from ctypes import *
 import gc
 import logging
 import math
 import numpy
-from odemis import model, util
 import odemis
-from odemis.model._components import HwError
+from odemis import model, util
+from odemis.model import HwError, oneway
 import os
 import threading
 import time
