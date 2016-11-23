@@ -231,6 +231,10 @@ class Instantiator(object):
                 if child_name == name:
                     raise SemanticError("Error in microscope file: "
                                         "component %s is child of itself." % name)
+                if child_name not in self.ast:
+                    raise SemanticError("Error in microscope file: "
+                                        "component %s references unknown child %s." %
+                                        (name, child_name))
 
                 if "parents" not in self.ast[child_name].keys():
                     self.ast[child_name]["parents"] = []
