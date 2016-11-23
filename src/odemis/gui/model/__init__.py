@@ -855,14 +855,14 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_va=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
         :param stream_classes (None, or tuple of classes): all subclasses that the
           streams in this view is allowed to show.
-        :param fov_va (None or FloatVA): horizontal field of view VA to which
-          the mpp * widget size should be connected. Mostly used
+        :param fov_hw (None or Component): Component with a .horizontalFoV VA and
+          a .shape. If not None, the view mpp (=mag) will be linked to that FoV.
         """
 
         super(StreamView, self).__init__(name)
@@ -873,7 +873,7 @@ class StreamView(View):
             self.stream_classes = stream_classes
         self._stage = stage
 
-        self.fov_va = fov_va
+        self.fov_hw = fov_hw
 
         # Will be created on the first time it's needed
         self._focus_thread = {}  # Focuser -> thread
@@ -1313,3 +1313,6 @@ class OverviewView(StreamView):
 
         self.show_crosshair.value = False
         self.interpolate_content.value = False
+
+        self.mpp.value = 10e-6
+        self.mpp.range = (10e-6, 1e-3)

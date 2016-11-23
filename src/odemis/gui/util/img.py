@@ -1748,8 +1748,8 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     # Make sure that the rectangle fits inside the image
     l = max(0, unsc_rnd_rect[0])
     t = max(0, unsc_rnd_rect[1])
-    r = min(max(1, unsc_rnd_rect[0] + unsc_rnd_rect[2]), im_w - 1)
-    b = min(max(1, unsc_rnd_rect[1] + unsc_rnd_rect[3]), im_h - 1)
+    r = min(max(0, unsc_rnd_rect[0] + unsc_rnd_rect[2]), im_w - 1)
+    b = min(max(0, unsc_rnd_rect[1] + unsc_rnd_rect[3]), im_h - 1)
 
     # New top left origin in buffer coordinates to account for the clipping
     b_new = ((l * total_scale[0]) + b_im_rect[0],
@@ -1757,7 +1757,7 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
 
     # We need to copy the data, since cairo.ImageSurface.create_for_data expects a single
     # segment buffer object (i.e. the data must be contiguous)
-    im_data = im_data[t:b, l:r].copy()
+    im_data = im_data[t:b + 1, l:r + 1].copy()
 
     return im_data, b_new
 

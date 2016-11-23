@@ -134,7 +134,7 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Horizontal Field Width",
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.hfw_choices,
-                "accuracy": 2,
+                "accuracy": 3,
             }),
             ("magnification", {
                 # Depends whether it is readonly or not

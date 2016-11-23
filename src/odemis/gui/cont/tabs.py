@@ -488,7 +488,7 @@ class SecomStreamsTab(Tab):
         if main_data.ebeamControlsMag:
             for vp, v in vpv.items():
                 if v.get("stream_classes") == EMStream:
-                    v["fov_va"] = main_data.ebeam.horizontalFoV
+                    v["fov_hw"] = main_data.ebeam
                     vp.canvas.fit_view_to_next_image = False
 
         return vpv
@@ -781,7 +781,7 @@ class SparcAcquisitionTab(Tab):
         ])
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
-            vpv[viewports[0]]["fov_va"] = main_data.ebeam.horizontalFoV
+            vpv[viewports[0]]["fov_hw"] = main_data.ebeam
             viewports[0].canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
@@ -2615,7 +2615,7 @@ class Sparc2AlignTab(Tab):
         ))
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
-            vpv[self.panel.vp_moi]["fov_va"] = main_data.ebeam.horizontalFoV
+            vpv[self.panel.vp_moi]["fov_hw"] = main_data.ebeam
             self.panel.vp_moi.canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)

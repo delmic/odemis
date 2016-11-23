@@ -281,12 +281,12 @@ class MicroscopeViewport(ViewPort):
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
 
-        if microscope_view.fov_va:
+        if microscope_view.fov_hw:
             logging.info("Tracking mpp on %s" % self)
             # The view FoV changes either when the mpp changes or on resize,  but resize typically
             # causes an update of the mpp (to keep the FoV)  so no need to listen to resize.
             self.microscope_view.mpp.subscribe(self._on_em_view_mpp_change)
-            microscope_view.fov_va.subscribe(self._on_hw_fov_change, init=True)
+            microscope_view.fov_hw.horizontalFoV.subscribe(self._on_hw_fov_change, init=True)
 
     ################################################
     #  Panel control
@@ -426,12 +426,12 @@ class MicroscopeViewport(ViewPort):
         evt.Skip()
 
     def OnSize(self, evt):
-        evt.Skip()  # processed also by the parent
+        # Note: no need to update fov_hw, as when the canvas is resized, it
+        # updates the mpp in a way to ensure the fov_hw stays _constant_
         self.UpdateHFWLabel()
+        evt.Skip()  # processed also by the parent
 
     def OnSliderIconClick(self, evt):
-        evt.Skip()
-
         if self._microscope_view is None or not self.bottom_legend:
             return
 
@@ -446,7 +446,7 @@ class MicroscopeViewport(ViewPort):
 
     # END Event handling
 
-    def _on_hw_fov_change(self, hw_fov):
+    def _on_hw_fov_change(self, hfov):
         """ Set the microscope view's mpp value when the hardware's FoV changes """
 
         # Only change the hfw (and thus indirectly the mpp of the canvas) if:
@@ -456,73 +456,86 @@ class MicroscopeViewport(ViewPort):
         #   viewports in other tabs that are not currently displayed).
         # This way, we prevent mpp/fov setting loops.
         if not self.self_set_fov:
-            logging.debug("FoV VA changed to %s on %s", hw_fov, self)
-            self.set_mpp_from_fov(hw_fov)
+            # Vertical FoV is proportional to the horizontal one, based on the shape
+            shape = self.microscope_view.fov_hw.shape
+            fov = (hfov, hfov * shape[1] / shape[0])
+            logging.debug("FoV VA changed to %s on %s", fov, self)
+            self.set_mpp_from_fov(fov)
         else:
             self.self_set_fov = False
 
     def _on_em_view_mpp_change(self, mpp):
-        """ Set the microscope's hfw when the MicroscopeView's mpp value changes
+        """
+        Set the microscope's hfw when the MicroscopeView's mpp value changes
+         (or the viewport size changes)
 
         The canvas calculates the new hfw value.
         """
-
-        # Only change the fov of the hardware if:
-        # * this Viewport was  *not* responsible for setting the mpp
-        #   (by calling `self.set_horizontal_field_width`)
+        # Only change the FoV of the hardware if:
+        # * this Viewport was *not* responsible for setting the mpp
+        #   (by calling `self.set_mpp_from_fov`)
         # * _and_ if it's displayed on screen (so we don't interfere with
         #   viewports in other tabs that are not currently displayed)
         # This way, we prevent mpp/fov setting loops.
         if not self.self_set_mpp and self.IsShownOnScreen():
             logging.debug("View mpp changed to %s on %s", mpp, self)
-            hfw = self.get_fov_from_mpp()
-            if hfw is None:
+            fov = self.get_fov_from_mpp()
+            if fov is None:
                 return
-            fov_va = self.microscope_view.fov_va
+
+            fov_va = self.microscope_view.fov_hw.horizontalFoV
+            shape = self.microscope_view.fov_hw.shape
+            # Compute the hfov, so that the whole HW FoV just fully fit
+            hfov = min(fov[0], fov[1] * shape[0] / shape[1])
 
             try:
                 # TODO: Test with a simulated SEM that has HFW choices
                 choices = fov_va.choices
                 # Get the choice that matches hfw most closely
-                hfw = util.find_closest(hfw, choices)
+                hfov = util.find_closest(hfov, choices)
             except NotApplicableError:
-                hfw = fov_va.clip(hfw)
+                hfov = fov_va.clip(hfov)
 
             # Indicate that this object was responsible for updating the hardware's HFW, so it won't
             # get updated again in `_on_hw_fov_change`
             self.self_set_fov = True
-            logging.debug("Setting hardware FoV to %s", hfw)
-            fov_va.value = hfw
+            logging.debug("Setting hardware FoV to %s", hfov)
+            fov_va.value = hfov
         else:
             self.self_set_mpp = False
 
     def get_fov_from_mpp(self):
-        """ Return the field width of the canvas in meters
-
-        :return: (None or float) Field width in meters
+        """
+        Return the field of view of the canvas
+        :return: (None or float,float) Field width and height in meters
         """
         # Trick: we actually return the smallest of the FoV dimensions, so
         # that we are sure the microscope image will fit fully (if it's square)
-        smallest_dimension = min(self.canvas.ClientSize)
+        view_size_px = self.canvas.ClientSize
 
-        if self.microscope_view and smallest_dimension > 0:
-            hfw = self.microscope_view.mpp.value * smallest_dimension
-            logging.debug("Getting HFW %s (=%g x %g) using view mpp on %s",
-                          hfw, self.microscope_view.mpp.value, smallest_dimension, self)
-            return hfw
+        if self.microscope_view and all(v > 0 for v in view_size_px):
+            mpp = self.microscope_view.mpp.value
+            fov = (mpp * view_size_px[0], mpp * view_size_px[1])
+            logging.debug("Computed FoV (%g x %s px) = %s on %s",
+                          mpp, view_size_px, fov, self)
+            return fov
 
         return None
 
     def set_mpp_from_fov(self, fov):
-        """ Set the mpp of the microscope view according to the given FoV """
-        # Trick: we use the smallest of the canvas dimensions to be sure the image
-        # will fit.
-        # TODO: return both FoV dimensions, and move this cleverness to the controller, so that it
-        # can do the right thing even if the image is not square.
-        smallest_dimension = min(self.canvas.ClientSize)
+        """
+        Set the mpp of the microscope view according to the given FoV.
+        If the FoV is not the same ratio as the view, it will pick the biggest
+          mpp that ensures the whole FoV is shown.
+        Similar to canvas.fit_to_content(), but doesn't need a content, just the
+          hardware settings.
+        fov (float, float): horizontal/vertical size of the field of view in m.
+        """
+        view_size_px = self.canvas.ClientSize
 
-        if self.microscope_view and smallest_dimension > 0:
-            mpp = self.microscope_view.mpp.clip(fov / smallest_dimension)
+        if self.microscope_view and all(v > 0 for v in view_size_px):
+            mpp = max(phy / px for phy, px in zip(fov, view_size_px))
+            mpp = self.microscope_view.mpp.clip(mpp)
             logging.debug("Setting view mpp to %s using given fov %s for %s", mpp, fov, self)
             self.self_set_mpp = True
             self.microscope_view.mpp.value = mpp
@@ -558,12 +571,6 @@ class OverviewViewport(MicroscopeViewport):
         self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
-        # TODO: this can be avoided by just setting a different minimum mpp
-
-        if self.get_fov_from_mpp() < 10e-3:
-            self.set_mpp_from_fov(10e-3)
-            logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
-
         super(OverviewViewport, self).OnSize(evt)
         self.canvas.fit_view_to_content(True)
 

@@ -131,20 +131,22 @@ class InfoLegend(wx.Panel):
         slider_sizer.Add(
             self.bmp_slider_left, 0,
             border=3,
-            flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+            flag=wx.ALIGN_CENTER | wx.RIGHT)
         slider_sizer.Add(
             self.merge_slider, 1,
-            flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+            flag=wx.ALIGN_CENTER | wx.EXPAND)
         slider_sizer.Add(
             self.bmp_slider_right, 0,
             border=3,
-            flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
+            flag=wx.ALIGN_CENTER | wx.LEFT)
 
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        control_sizer.Add(self.magnification_text, 2, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT
-                                                                      | wx.EXPAND)
-        control_sizer.Add(self.hfw_text, 2, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.scale_win, 3, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.magnification_text, 2, border=10,
+                          flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.hfw_text, 2, border=10,
+                          flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.scale_win, 3, border=10,
+                          flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 
         # legend_panel_sizer is needed to add a border around the legend

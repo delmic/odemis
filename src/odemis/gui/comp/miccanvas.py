@@ -26,6 +26,7 @@ from __future__ import division
 import cairo
 from decorator import decorator
 import logging
+import math
 import numpy
 from odemis import util, model
 from odemis.acq import stream
@@ -548,25 +549,32 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def on_size(self, event):
         new_size = event.Size
-        # TODO: skip if too small?
-        # if any(s <= 1 for s in new_size):
-        #     return
 
-        # Update the mpp, so that the same data will be displayed (ie, keep the HFW)
-        # Note: we use the same trick as in viewport, and actually consider the
-        # smallest FoV dimension
+        # Update the mpp, so that _about_ the same data will be displayed.
         if self.microscope_view and self._previous_size != new_size:
-            try:
-                prev_ss = min(s for s in self._previous_size if s > 0)
-                new_ss = min(s for s in new_size if s > 0)
-            except ValueError:
-                pass  # One of the size has only 0s
+            if self.microscope_view.fov_hw:
+                if all(v > 0 for v in new_size):
+                    # Connected to the HW FoV => ensure that the HW FoV stays constant
+                    # => Do the same as MicroscopeViewport.set_mpp_from_fov()
+                    hfov = self.microscope_view.fov_hw.horizontalFoV.value
+                    shape = self.microscope_view.fov_hw.shape
+                    fov = (hfov, hfov * shape[1] / shape[0])
+                    mpp = max(phy / px for phy, px in zip(fov, new_size))
+                    mpp = self.microscope_view.mpp.clip(mpp)
+                    logging.debug("Updating mpp to %g due to canvas resize to %s, to keep HW FoV to %s m",
+                                  mpp, new_size, fov)
+                    self.microscope_view.mpp.value = mpp
             else:
-                hfw = prev_ss * self.microscope_view.mpp.value
-                logging.debug("Updating mpp due to canvas resize from %s to %s, to keep hfw at %g",
-                              self._previous_size, new_size, hfw)
-                new_mpp = hfw / new_ss
-                self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
+                # Keep the area of the FoV constant
+                prev_area = self._previous_size[0] * self._previous_size[1]
+                new_area = new_size[0] * new_size[1]
+                if prev_area > 0 and new_area > 0:
+                    ratio = math.sqrt(prev_area) / math.sqrt(new_area)
+                    mpp = ratio * self.microscope_view.mpp.value
+                    mpp = self.microscope_view.mpp.clip(mpp)
+                    logging.debug("Updating mpp to %g due to canvas resize from %s to %s, to keep area",
+                                  mpp, self._previous_size, new_size)
+                    self.microscope_view.mpp.value = mpp
         super(DblMicroscopeCanvas, self).on_size(event)
         self._previous_size = new_size
 
