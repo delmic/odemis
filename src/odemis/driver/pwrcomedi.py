@@ -129,11 +129,11 @@ class Light(model.Emitter):
         self.power = model.FloatContinuous(0., (0., max_power), unit="W")
         self.power.subscribe(self._updatePower)
 
-        # ratio of power per device
-        # => if some device don't support max power, clamped before 1
+        # ratio of power per channel
+        # => if some channel don't support max power, clamped before 1
         self.emissions = model.ListVA([0.] * len(self._channels), unit="",
                                       setter=self._setEmissions)
-        # info on what device is which wavelength
+        # info on which channel is which wavelength
         self.spectra = model.ListVA(spect, unit="m", readonly=True)
 
         # make sure everything is off (turning on the HUB will turn on the lights)
@@ -151,12 +151,6 @@ class Light(model.Emitter):
         if self._device:
             comedi.close(self._device)
             self._device = None
-
-#     def _volt_to_power(self, volt, channel):
-#
-#
-#         # TODO
-#         return w
 
     def _power_to_volt(self, power, curve):
         """
@@ -187,6 +181,12 @@ class Light(model.Emitter):
         v = basev + ratio * (endv - basev)
         return v
 
+    def _volt_to_data(self, volt, channel, rngi):
+        maxdata = comedi.get_maxdata(self._device, self._ao_subd, channel)
+        rng = comedi.get_range(self._device, self._ao_subd, channel, rngi)
+        d = comedi.from_phys(volt, rng, maxdata)
+        return d
+
     # from semcomedi
     def getSwVersion(self):
         """
@@ -213,9 +213,7 @@ class Light(model.Emitter):
         for c, r, crv, intens in zip(self._channels, self._ranges, self._pwr_curve, intensities):
             p = min(power * intens, crv[-1][1])
             v = self._power_to_volt(p, crv)
-            maxdata = comedi.get_maxdata(self._device, self._ao_subd, c)
-            rng = comedi.get_range(self._device, self._ao_subd, c, r)
-            d = comedi.from_phys(v, rng, maxdata)
+            d = self._volt_to_data(v, c, r)
             logging.debug("Setting channel %d to %d = %g V = %g W", c, d, v, p)
             comedi.data_write(self._device, self._ao_subd, c, r, comedi.AREF_GROUND, d)
 
@@ -232,7 +230,7 @@ class Light(model.Emitter):
         # clamp intensities which cannot reach the maximum power
         cl_intens = []
         for crv, intens in zip(self._pwr_curve, intensities):
-            cl_intens.append(min(intens, crv[-1][1] / self.power.range[1]))
+            cl_intens.append(min(max(0, intens), crv[-1][1] / self.power.range[1]))
             # TODO: if the intensity is so small that the power would be 0, force
             # it to 0.
 
