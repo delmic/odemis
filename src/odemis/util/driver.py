@@ -49,6 +49,19 @@ def getSerialDriver(name):
         return "Unknown"
 
 
+def get_linux_version():
+    """
+    return (tuple of 3 int): major, minor, micro
+    raise LookupError: if the version fails to find (eg: not a Linux kernel)
+    """
+    try:
+        lv = os.uname()[2]  # version string
+        sv = re.match(r"\d+\.\d+\.\d+", lv).group()  # get the raw version, without -XXX
+        return tuple(int(s) for s in sv.split("."))
+    except AttributeError:  # No uname, or no match
+        raise LookupError("Failed to find Linux version")
+
+
 # From http://code.activestate.com/recipes/286222/
 _SCALE = {'KB': 2 ** 10, 'MB': 2 ** 20}
 

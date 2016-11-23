@@ -1,13 +1,13 @@
 SECOMv2: {
     class: Microscope,
     role: secom,
-    children: ["Light Engine", "SEM E-beam", "White Light",
+    children: ["Light Source", "SEM E-beam", "White Light",
                "Optical Objective", "Optical Emission Filter",
                "Camera", "SEM Detector", # "SEM Focus",
                "Sample Stage", "Objective Stage", "Optical Focus"],
 }
 
-# "Light Engine": {
+# "Light Source": {
 #     class: lle.FakeLLE,
 #     role: light,
 #     init: {
@@ -24,16 +24,58 @@ SECOMv2: {
 #     affects: ["Camera"],
 # }
 
-# LedHub
-"Light Engine": {
-    class: omicronxx.HubxX,
+# Light = LedHub + DAQ board controlled voltage
+
+"Light Source": {
+    class: emitter.MultiplexLight,
     role: light,
+    children: {
+        subsource0: "LedHUB",
+        subsource1: "Rough light",
+    },
+    # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+    affects: ["Camera"],
+}
+
+"LedHUB": {
+    class: omicronxx.HubxX,
+    role: null,
     init: {
         port: "/dev/fakehub",
         #port: "/dev/ttyFTDI*",
     },
-    # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
-    affects: ["Camera"],
+}
+
+# USB-Dux controlled light source
+# To simulate it with comedi_test, run:
+# sudo comedi_config /dev/comedi1 comedi_test 1000,1000
+"Rough light": {
+    class: pwrcomedi.Light,
+    role: null,
+    init: {
+        # device: "/dev/comedi/usbdux", # For real USB-Dux
+        device: "/dev/comedi1", # For simulator
+        channels: [2, 0], # 0-> 3 = pins 9->12 if voltage -4 -> 4V, 22->25 if voltage 0 -> 4V
+        # 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        spectra: [[615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
+                  [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9]],
+        # Relation curve of voltage -> power, as linear segments
+        pwr_curve: [
+            # Source 0
+            {
+                -3: 0, # V -> W
+                3: 100.e-3,
+            },
+            # Source 1
+            {# Missing 0W => 0V -> 0W
+                0.1: 10.e-3,
+                0.3: 20.e-3,
+                0.5: 40.e-3,
+                0.7: 80.e-3,
+                1: 200.e-3,
+            },
+        ]
+    },
 }
 
 "White Light": {

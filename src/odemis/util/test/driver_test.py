@@ -25,7 +25,8 @@ import logging
 from odemis import model
 import odemis
 from odemis.util import test
-from odemis.util.driver import getSerialDriver, speedUpPyroConnect, readMemoryUsage
+from odemis.util.driver import getSerialDriver, speedUpPyroConnect, readMemoryUsage,\
+    get_linux_version
 import os
 import time
 import unittest
@@ -69,6 +70,16 @@ class TestDriver(unittest.TestCase):
     def test_memoryUsage(self):
         m = readMemoryUsage()
         self.assertGreater(m, 1)
+
+    def test_linux_version(self):
+
+        if os.sys.platform.startswith('linux'):
+            v = get_linux_version()
+            self.assertGreaterEqual(v[0], 2)
+            self.assertEqual(len(v), 3)
+        else:
+            with self.assertRaises(LookupError):
+                v = get_linux_version()
 
 
 if __name__ == "__main__":

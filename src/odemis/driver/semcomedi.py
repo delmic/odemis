@@ -34,6 +34,7 @@ from numpy.core import umath
 from odemis import model
 import odemis
 from odemis.model import roattribute, oneway
+from odemis.util import driver
 import os
 import re
 import threading
@@ -130,19 +131,6 @@ def get_best_dtype_for_acc(idtype, count):
     return adtype
 
 
-def _get_linux_version():
-    """
-    return (tuple of 3 int): major, minor, micro
-    raise LookupError: if the version fails to find (eg: not a Linux kernel)
-    """
-    try:
-        lv = os.uname()[2]  # version string
-        sv = re.match(r"\d+\.\d+\.\d+", lv).group()  # get the raw version, without -XXX
-        return tuple(int(s) for s in sv.split("."))
-    except AttributeError:  # No uname, or no match
-        raise LookupError("Failed to find Linux version")
-
-
 class CancelledError(Exception):
     """
     Raised when trying to access the result of a task which was cancelled
@@ -236,7 +224,7 @@ class SEMComedi(model.HwComponent):
         self._writer = Writer(self)
 
         self._metadata = {model.MD_HW_NAME: self.getHwName()}
-        self._lnx_ver = _get_linux_version()
+        self._lnx_ver = driver.get_linux_version()
         self._swVersion = "%s (driver %s, linux %s)" % (odemis.__version__,
                                     self.getSwVersion(),
                                     ".".join("%s" % v for v in self._lnx_ver))
