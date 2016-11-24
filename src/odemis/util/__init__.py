@@ -63,6 +63,7 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     Compares two floats within a margin (to handle rounding errors).
     a (float)
     b (float)
+    atol (float): absolute tolerance
     rtol (float): relative tolerance
     returns (bool): True if a and b are almost equal
     """

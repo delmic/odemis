@@ -26,8 +26,7 @@ import glob
 import logging
 import numpy
 from odemis import model
-from odemis.model import isasync, CancellableThreadPoolExecutor
-from odemis.model._components import HwError
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import serial

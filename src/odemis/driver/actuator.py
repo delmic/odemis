@@ -736,8 +736,8 @@ class AntiBacklashActuator(model.Actuator):
                 # Restrict the range to have some margin for the anti-backlash move
                 rng = ax.range
                 if rng[1] - rng[0] < abs(backlash[an]):
-                    raise ValueError("Backlash of %g m is bigger than range %s",
-                                     backlash[an], rng)
+                    raise ValueError("Backlash of %g m is bigger than range %s" %
+                                     (backlash[an], rng))
                 if backlash[an] > 0:
                     axes_def[an].range = (rng[0] + backlash[an], rng[1])
                 else:

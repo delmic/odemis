@@ -347,12 +347,12 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_EXP_TIME: 1.2, #s
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
-        
+
         data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
-        
+
         # export
         tiff.export(FILENAME, data)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
@@ -360,12 +360,12 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(len(imo.IFD), 1, "Tiff file doesn't contain just one image")
 
         ifd = imo.IFD[0]
-        # check format        
+        # check format
         self.assertEqual(size[2], ifd.get_value("SamplesPerPixel"))
         # BitsPerSample is the actual format, not model.MD_BPP
         self.assertEqual(dtype.itemsize * 8, ifd.get_value("BitsPerSample")[0])
         self.assertEqual(T.SAMPLEFORMAT_UINT, ifd.get_value("SampleFormat")[0])
-        
+
         # check metadata
         self.assertEqual("Odemis " + odemis.__version__, ifd.get_value("Software"))
         self.assertEqual(metadata[model.MD_HW_NAME], ifd.get_value("Make"))
@@ -376,11 +376,11 @@ class TestTiffIO(unittest.TestCase):
         self.assertAlmostEqual(1 / metadata[model.MD_PIXEL_SIZE][1], yres * 100)
         ypos = rational2float(ifd.get_value("YPosition"))
         self.assertAlmostEqual(metadata[model.MD_POS][1], (ypos / 100) - 1)
-        
+
         # check OME-TIFF metadata
         omemd = imo.IFD[0].get_value("ImageDescription")
         self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower()=='<ome')
-        
+
         # remove "xmlns" which is the default namespace and is appended everywhere
         omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                        "", omemd, count=1)
@@ -388,10 +388,10 @@ class TestTiffIO(unittest.TestCase):
 #        ns = {"ome": root.tag.rsplit("}")[0][1:]} # read the default namespace
         roottag = root.tag.split("}")[-1]
         self.assertEqual(roottag.lower(), "ome")
-        
+
         detect_name = root.find("Instrument/Detector").get("Model")
         self.assertEqual(metadata[model.MD_HW_NAME], detect_name)
-        
+
         self.assertEqual(len(root.findall("Image")), 1)
         ime = root.find("Image")
         ifdn = int(ime.find("Pixels/TiffData").get("IFD", "0"))
@@ -402,12 +402,12 @@ class TestTiffIO(unittest.TestCase):
         self.assertAlmostEqual(metadata[model.MD_PIXEL_SIZE][0], psx * 1e-6)
         exp = float(ime.find("Pixels/Plane").get("ExposureTime")) # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], exp)
-        
+
         iwl = float(ime.find("Pixels/Channel").get("ExcitationWavelength")) # nm
         iwl *= 1e-9
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and 
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
                          iwl <= metadata[model.MD_IN_WL][1]))
-        
+
         bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
         self.assertEqual(bin_str, exp_bin)

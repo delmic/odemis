@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
+from __future__ import division
 import array
 import random
 import numpy
-import threading
 
 import wx
 from wx.lib.delayedresult import startWorker
@@ -12,7 +13,7 @@ from wx.lib.delayedresult import startWorker
 
 # THREAD RENDER TEST
 from odemis.gui.win.delphi import CalibrationProgressDialog
-from odemis.model._dataflow import DataArray
+from odemis.model import DataArray
 
 
 class DrawPanelDBT(wx.Panel):

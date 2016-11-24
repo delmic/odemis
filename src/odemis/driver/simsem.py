@@ -22,11 +22,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from Pyro4.core import isasync
 import logging
 import math
 import numpy
 from odemis import model, util, dataio
+from odemis.model import isasync
 from odemis.util import img
 import os
 from scipy import ndimage

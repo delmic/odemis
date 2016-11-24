@@ -21,14 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from Pyro4.core import isasync
 import fcntl
 import glob
 import logging
 from odemis import model
-from odemis.model import ComponentBase, DataFlowBase
-from odemis.model import HwError
-from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.model import ComponentBase, DataFlowBase, isasync, HwError, CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
 import serial

@@ -459,6 +459,7 @@ class PM8742(model.Actuator):
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
+    moveRel.__doc__ = model.Actuator.moveRel.__doc__
 
     @isasync
     def moveAbs(self, pos):
