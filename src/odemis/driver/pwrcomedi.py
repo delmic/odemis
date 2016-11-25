@@ -149,6 +149,9 @@ class Light(model.Emitter):
 
     def terminate(self):
         if self._device:
+            # Make sure everything is powered off
+            self._updateIntensities(0, [0.] * len(self._channels))
+
             comedi.close(self._device)
             self._device = None
 
