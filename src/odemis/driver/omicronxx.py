@@ -30,6 +30,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from abc import ABCMeta, abstractmethod
+import fcntl
 import glob
 import logging
 from odemis import model
@@ -66,7 +67,12 @@ class USBAccesser(object):
     def __init__(self, port):
         """
         port (string): serial port to use
+        raise IOError: if port cannot be used
         """
+        # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use
+        self._file = open(port)  # Open in RO, just to check for lock
+        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # Raises IOError if cannot lock
+
         self.port = port
         self._serial = self._openSerialPort(port)
         self.flushInput() # can have some \x00 bytes at the beginning
@@ -75,6 +81,7 @@ class USBAccesser(object):
     def terminate(self):
         self._serial.close()
         self._serial = None
+        self._file.close()
 
     def _openSerialPort(self, port):
         """

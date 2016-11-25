@@ -175,10 +175,11 @@ class PowerControlUnit(model.PowerSupplier):
             self._executor.cancel()
             self._executor.shutdown()
             self._executor = None
-        with self._ser_access:
-            if self._serial:
+        if self._serial:
+            with self._ser_access:
                 self._serial.close()
                 self._serial = None
+            self._file.close()
 
     def _getIdentification(self):
         return self._sendCommand("*IDN?")
@@ -311,13 +312,14 @@ class PowerControlUnit(model.PowerSupplier):
 
         for n in names:
             try:
-                self._serial = self._openSerialPort(n)
+                self._file = open(n)  # Open in RO, just to check for lock
                 try:
-                    fcntl.flock(self._serial.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except IOError:
                     logging.info("Port %s is busy, will wait and retry", n)
                     time.sleep(11)
-                    fcntl.flock(self._serial.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._serial = self._openSerialPort(n)
 
                 try:
                     idn = self._getIdentification()
@@ -333,6 +335,7 @@ class PowerControlUnit(model.PowerSupplier):
                 return n
             except (IOError, PowerControlError):
                 # not possible to use this port? next one!
+                logging.debug("Skipping port %s which doesn't seem the right device", n)
                 continue
         else:
             raise HwError("Failed to find a Power Control device on ports '%s'. "
