@@ -4,6 +4,15 @@
 
 export PYTHONPATH
 
+# Call the MODEL_SELECTOR if needed
+if [ -z "$MODEL" -a -n "MODEL_SELECTOR" ]; then
+    MODEL="$($MODEL_SELECTOR)"
+    if [ "$?" -ne 0 ]; then
+       read -p "Failed to select microscope file."
+       exit 1
+    fi
+fi
+
 odemis-sudo-gedit "$MODEL"
 
 # TODO: validate the new microscope file even if backend is running
