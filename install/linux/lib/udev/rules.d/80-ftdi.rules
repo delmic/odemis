@@ -10,8 +10,9 @@
 # All we can do is to at least separate them from the other serial-over-USB hw.
 # Currently, the following hardware devices are known to provide these IDs:
 # * Lumencor Light Engine
-# * Omicron xX
+# * Omicron xX  (Manufacturer = "Omicron")
 # * Thorlabs filter wheel
+# * Cobolt DPSS
 
 # => add a symlink ttyFTDIxx with the same number as the ttyUSBxx file
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyFTDI%n", GROUP="odemis"
