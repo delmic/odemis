@@ -121,21 +121,29 @@ class ExportController(object):
             default_exporter = get_converter(formats[0][0])
         extension = default_exporter.EXTENSIONS[0]
 
-        # Suggested name= current file name + view name + extension of default format
+        # Suggested name= current file name + stream/view name + extension of default format
         fi = self._data_model.acq_fileinfo.value
         if fi is not None and fi.file_name:
             basename = os.path.basename(fi.file_name)
             # Remove the extension
             formats_to_ext = dataio.get_available_formats()
             all_exts = sum(formats_to_ext.values(), [])
-            fexts = sorted(ext for ext in all_exts if basename.endswith(ext))
+            fexts = sorted((ext for ext in all_exts if basename.endswith(ext)),
+                           key=lambda s: len(s))
             if fexts:
                 # Remove the biggest extension
                 basename = basename[:-len(fexts[-1])]
             else:
                 # Try to remove whichever extension there is
                 basename, _ = os.path.splitext(basename)
-            basename += " " + view.name.value.lower()
+
+            # Use stream name, if there is just one stream, otherwise use the view name
+            streams = view.getStreams()
+            if len(streams) == 1:
+                basename += " " + streams[0].name.value
+            else:
+                # TODO: remove numbers from the view name?
+                basename += " " + view.name.value
         else:
             basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
 
