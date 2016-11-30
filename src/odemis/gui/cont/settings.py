@@ -490,29 +490,6 @@ class SecomSettingsController(SettingsBarController):
                 self._sem_panel.add_bc_control(det)
 
 
-class LensAlignSettingsController(SettingsBarController):
-
-    def __init__(self, tab_panel, tab_data, highlight_change=False):
-        super(LensAlignSettingsController, self).__init__(tab_data)
-        main_data = tab_data.main
-
-        self._sem_panel = SemSettingsController(tab_panel.fp_lens_sem_settings,
-                                                "No SEM found",
-                                                highlight_change,
-                                                tab_data)
-
-        self._optical_panel = OpticalSettingsController(tab_panel.fp_lens_opt_settings,
-                                                        "No optical microscope found",
-                                                        highlight_change)
-
-        # Add the components based on what is available
-        if main_data.ccd:
-            self.add_hw_component(main_data.ccd, self._optical_panel)
-
-        if main_data.ebeam:
-            self.add_hw_component(main_data.ebeam, self._sem_panel)
-
-
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
 

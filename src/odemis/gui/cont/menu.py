@@ -99,6 +99,7 @@ class MenuController(object):
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_play_stream.GetId(),
                     self._on_play_stream)
+        # FIXME: must be disabled when main_data.is_acquiring
         # FIXME: it seems that even disabled, pressing F6 will toggle/untoggle
         # the entry (but not call _on_play_stream()).
         # Using wx.EVT_UPDATE_UI doesn't seem to help

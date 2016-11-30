@@ -1850,13 +1850,6 @@ class SecomAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.SecomAlignGUIData(main_data)
         super(SecomAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
-
-        # TODO: we should actually display the settings of the streams (...once they have it)
-        self._settings_controller = settings.LensAlignSettingsController(
-            self.panel,
-            self.tab_data_model
-        )
-
         panel.vp_align_sem.ShowLegend(False)
 
         # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 45°)
@@ -1906,17 +1899,60 @@ class SecomAlignTab(Tab):
             vpv
         )
 
-        # TODO: put all the settings as local, so that they don't change when
-        # going to spot mode
+        # Create CCD stream
+        # Force the "temperature" VA to be displayed by making it a hw VA
+        hwdetvas = set()
+        if model.hasVA(main_data.ccd, "temperature"):
+            hwdetvas.add("temperature")
+        ccd_stream = acqstream.CameraStream("Optical CL",
+                                            main_data.ccd,
+                                            main_data.ccd.data,
+                                            # main_data.light,
+                                            emitter=None,
+                                            focuser=main_data.focus,
+                                            hwdetvas=hwdetvas,
+                                            detvas=get_local_vas(main_data.ccd),
+                                            forcemd={model.MD_ROTATION: 0,
+                                                     model.MD_SHEAR: 0}
+                                            )
+        ccd_stream.should_update.value = True
+
+        # Synchronise the fine alignment dwell time with the CCD settings
+        ccd_stream.detExposureTime.value = main_data.fineAlignDwellTime.value
+        ccd_stream.detBinning.value = ccd_stream.detBinning.range[0]
+        ccd_stream.detResolution.value = ccd_stream.detResolution.range[1]
+        ccd_stream.detExposureTime.subscribe(self._update_fa_dt)
+        ccd_stream.detBinning.subscribe(self._update_fa_dt)
+        self.tab_data_model.tool.subscribe(self._update_fa_dt)
+
+        self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
+        self._ccd_stream = ccd_stream
+        # To ensure F6 (play/pause) works: very simple stream scheduler
+        ccd_stream.should_update.subscribe(self._on_ccd_should_update)
+        self._ccd_view = panel.vp_align_ccd.microscope_view
+        self._ccd_view.addStream(ccd_stream)
+        # create CCD stream panel entry
+        ccd_spe = StreamController(self.panel.pnl_opt_streams, ccd_stream, self.tab_data_model)
+        ccd_spe.stream_panel.flatten()  # removes the expander header
+        # force this view to never follow the tool mode (just standard view)
+        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
+
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
         sem_stream = acqstream.SEMStream("SEM", main_data.sed,
-                                         main_data.sed.data, main_data.ebeam)
+                                         main_data.sed.data,
+                                         main_data.ebeam,
+                                         detvas=get_local_vas(main_data.sed),
+                                         emtvas=get_local_vas(main_data.ebeam),
+                                         )
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
         self._sem_stream = sem_stream
         self._sem_view = panel.vp_align_sem.microscope_view
         self._sem_view.addStream(sem_stream)
+
+        sem_spe = StreamController(self.panel.pnl_sem_streams, sem_stream, self.tab_data_model)
+        sem_spe.stream_panel.flatten()  # removes the expander header
 
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
@@ -1931,33 +1967,10 @@ class SecomAlignTab(Tab):
             panel.vp_align_sem.canvas.fit_view_to_next_image = False
             main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
+        self._stream_controllers = (ccd_spe, sem_spe)
+
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
-
-        # TODO: when paused via the shortcut or menu, really pause it
-        #   => use a stream scheduler?
-        # TODO: binning & exposureTime as local setting, so that it's not changed when
-        # going to acquisition tab
-        # create CCD stream
-        ccd_stream = acqstream.CameraStream("Optical CL",
-                                            main_data.ccd,
-                                            main_data.ccd.data,
-                                            main_data.light,
-                                            focuser=main_data.focus,
-                                            forcemd={model.MD_ROTATION: 0,
-                                                     model.MD_SHEAR: 0}
-                                            )
-        ccd_stream.should_update.value = True
-        self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
-        self._ccd_stream = ccd_stream
-        self._ccd_view = panel.vp_align_ccd.microscope_view
-        self._ccd_view.addStream(ccd_stream)
-        # create CCD stream panel entry
-        stream_bar = self.panel.pnl_secom_align_streams
-        ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
-        ccd_spe.stream_panel.flatten()  # removes the expander header
-        # force this view to never follow the tool mode (just standard view)
-        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model, panel, "lens_align_")
@@ -1971,8 +1984,7 @@ class SecomAlignTab(Tab):
         # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
         self._aligner_move = None  # the future of the move (to know if it's over)
-        panel.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
-                                                 self._on_btn_to_center)
+        panel.lens_align_btn_to_center.Bind(wx.EVT_BUTTON, self._on_btn_to_center)
 
         # If SEM pxs changes, A/B or X/Y are actually different values
         main_data.ebeam.pixelSize.subscribe(self._update_to_center)
@@ -1988,13 +2000,11 @@ class SecomAlignTab(Tab):
 
         self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
                                                           panel,
-                                                          main_frame,
-                                                          self._settings_controller)
+                                                          main_frame)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
                                                            self._aligner_xy,
-                                                           panel,
-                                                           self._settings_controller)
+                                                           panel)
 
         # Documentation text on the left panel
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/alignment.html")
@@ -2010,6 +2020,12 @@ class SecomAlignTab(Tab):
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
+    def _on_ccd_should_update(self, update):
+        """
+        Very basic stream scheduler (just one stream)
+        """
+        self._ccd_stream.is_active.value = update
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
@@ -2021,7 +2037,7 @@ class SecomAlignTab(Tab):
             else:
                 s.is_active.value = False
 
-        # update the fine alignment dwell time when CCD settings change
+        # Freeze the stream settings when an alignment is going on
         main_data = self.tab_data_model.main
         if show:
             # as we expect no acquisition active when changing tab, it will always
@@ -2092,42 +2108,37 @@ class SecomAlignTab(Tab):
 
         self._update_to_center()
 
+    @call_in_wx_main
     def _on_acquisition(self, is_acquiring):
-        # A bit tricky because (in theory), could happen in any tab
-        self._subscribe_for_fa_dt(not is_acquiring)
-
-    def _subscribe_for_fa_dt(self, subscribe=True):
-
-        ccd = self.tab_data_model.main.ccd
-        if subscribe:
-            ccd.exposureTime.subscribe(self._update_fa_dt)
-            ccd.binning.subscribe(self._update_fa_dt)
-            self.tab_data_model.tool.subscribe(self._update_fa_dt)
+        """
+        Called when an "acquisition" is going on
+        """
+        # (Un)freeze the stream settings
+        if is_acquiring:
+            for stream_controller in self._stream_controllers:
+                stream_controller.enable(False)
+                stream_controller.pause()
         else:
-            ccd.exposureTime.unsubscribe(self._update_fa_dt)
-            ccd.binning.unsubscribe(self._update_fa_dt)
-            self.tab_data_model.tool.unsubscribe(self._update_fa_dt)
+            for stream_controller in self._stream_controllers:
+                stream_controller.resume()
+                stream_controller.enable(True)
 
     def _update_fa_dt(self, unused=None):
         """
         Called when the fine alignment dwell time must be recomputed (because
         the CCD exposure time or binning has changed. It will only be updated
         if the SPOT mode is active (otherwise the user might be setting for
-        different purpose.
+        different purpose).
         """
-        # Make sure that we don't update fineAlignDwellTime unless:
-        # * The tab is shown
-        # * Acquisition is not going on
-        # * Spot tool is selected
-        # (wouldn't be needed if the binning and exposure time VAs were local)
-        if self.tab_data_model.tool.value != guimod.TOOL_SPOT or not self.IsShown():
+        # Only update fineAlignDwellTime when spot tool is selected
+        if self.tab_data_model.tool.value != guimod.TOOL_SPOT:
             return
 
         # dwell time is the based on the exposure time for the spot, as this is
         # the best clue on what works with the sample.
         main_data = self.tab_data_model.main
-        binning = main_data.ccd.binning.value
-        dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
+        binning = self._ccd_stream.detBinning.value
+        dt = self._ccd_stream.detExposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
     # "Move to center" functions

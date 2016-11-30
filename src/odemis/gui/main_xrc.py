@@ -120,9 +120,8 @@ class xrcpnl_tab_secom_align(wx.Panel):
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
-        self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
-        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
+        self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
+        self.pnl_sem_streams = xrc.XRCCTRL(self, "pnl_sem_streams")
         self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
@@ -1562,31 +1561,30 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_lens_opt_settings">
-                        <label>OPTICAL SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_secom_align_streams">
+                        <object class="StreamBar" name="pnl_opt_streams">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <nocaption>1</nocaption>
+                        <label>OPTICAL SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem" name="fp_lens_sem_settings">
+                      
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_sem_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
                         <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
