@@ -69,10 +69,6 @@ class USBAccesser(object):
         port (string): serial port to use
         raise IOError: if port cannot be used
         """
-        # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use
-        self._file = open(port)  # Open in RO, just to check for lock
-        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # Raises IOError if cannot lock
-
         self.port = port
         self._serial = self._openSerialPort(port)
         self.flushInput() # can have some \x00 bytes at the beginning
@@ -88,9 +84,14 @@ class USBAccesser(object):
         Opens the given serial port the right way for the Omicron xX devices.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         return (serial): the opened serial port
+        raise IOError: if port cannot be used
         """
         if port == "/dev/fakehub":
             return HubxXSimulator(timeout=1)
+
+        # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use
+        self._file = open(port)  # Open in RO, just to check for lock
+        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # Raises IOError if cannot lock
 
         ser = serial.Serial(
             port=port,
