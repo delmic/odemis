@@ -109,8 +109,9 @@ class Tab(object):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item (or ensure it's disabled).
         """
-        if hasattr(self.tab_data_model, 'views') and len(self.tab_data_model.views.value) >= 4:
-            # We assume it has a 2x2 view layout
+        if (guimod.VIEW_LAYOUT_22 in self.tab_data_model.viewLayout.choices and
+            hasattr(self.tab_data_model, 'views') and
+            len(self.tab_data_model.views.value) >= 4):
             def set_22_menu_check(viewlayout):
                 """Called when the view layout changes"""
                 is_22 = viewlayout == guimod.VIEW_LAYOUT_22
@@ -2656,12 +2657,17 @@ class Sparc2AlignTab(Tab):
             ccd_focuser = main_data.focus
         else:
             ccd_focuser = None
+        # Force the "temperature" VA to be displayed by making it a hw VA
+        hwdetvas = set()
+        if model.hasVA(main_data.ccd, "temperature"):
+            hwdetvas.add("temperature")
         ccd_stream = acqstream.BrightfieldStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
                             emitter=None,
                             focuser=ccd_focuser,
+                            hwdetvas=hwdetvas,
                             detvas=get_local_vas(main_data.ccd),
                             forcemd={model.MD_POS: (0, 0)}  # Just in case the stage is there
                             )
