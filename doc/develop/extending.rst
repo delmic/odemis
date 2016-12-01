@@ -171,13 +171,14 @@ First we create a base installation of Python 2.7:
     https://pypi.python.org/pypi/setuptools
 #.  Download and run https://raw.github.com/pypa/pip/master/contrib/get-pip.py
     to install pip
-#.  Use pip to install Virtualenv: `pip install virtualenv`.
+#.  Use pip to install Virtualenv: ``pip install virtualenv``.
 
 Additionally, virtualenv wrappers might be installed, which will make it a bit
 easier to work with in Windows Powershell or the regular command prompt.
 
 The next step is to create a virtualenv for Odemis and start installing the
 required packages into it.
+``mkvirtualenv odemisdev``
 
 Note: Pip cannot always be used, because some packages need to compile (parts
 of) themselves. In this case we need to download the relevant Windows installer
@@ -186,36 +187,36 @@ and use `easy_install` (which is part of `setuptools`) to install the package.
 #.  Git clone https://github.com/delmic/odemis.git into the project directory of
     the Odemis virtualenv.
 #.  Install wheel, so we can install binary packages using pip:
-    `pip install wheel`.
-#.  Install futures using `pip install futures`
-#.  Install Yaml using `pip install pyaml`
-#.  Install 0MQ using `pip install pyzmq`
-#.  Install the decorator module using `pip install decorator`
+    ``pip install wheel``.
+#.  Install futures using ``pip install futures``
+#.  Install Yaml using ``pip install pyaml``
+#.  Install 0MQ using ``pip install pyzmq``
+#.  Install the decorator module using ``pip install decorator``
 #.  Install Delmic's special version of Pyro4:
-    `pip install git+https://github.com/delmic/Pyro4.git`
-#.  Install Numpy using `pip install "numpy-1.9.2+mkl-cp27-none-win32.whl"`,
+    ``pip install git+https://github.com/delmic/Pyro4.git``
+#.  Install Numpy using ``pip install "numpy-1.9.2+mkl-cp27-none-win32.whl"``,
     downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy
 #.  Install wxPython3.0 using
-    `pip install wxPython_common-3.0.2.0-py2-none-any.whl` followed by
-    `pip install wxPython-3.0.2.0-cp27-none-win32.whl`, downloaded from
+    ``pip install wxPython_common-3.0.2.0-py2-none-any.whl`` followed by
+    ``pip install wxPython-3.0.2.0-cp27-none-win32.whl``, downloaded from
     http://www.lfd.uci.edu/~gohlke/pythonlibs/#wxpython
-#.  Install using `pip install libtiff-0.4.0-cp27-none-win32.whl`, downloaded
+#.  Install using ``pip install libtiff-0.4.0-cp27-none-win32.whl``, downloaded
     from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
-#.  `pip install scipy-0.15.1-cp27-none-win32.whl`, downloaded from
+#.  ``pip install scipy-0.15.1-cp27-none-win32.whl``, downloaded from
     http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy
-#.  Install OpenCV using `pip install opencv_python-2.4.11-cp27-none-win32.whl`,
+#.  Install OpenCV using ``pip install opencv_python-2.4.11-cp27-none-win32.whl``,
     downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
-#.  Install H5py using `pip install h5py-2.5.0-cp27-none-win32.whl`, downloaded
+#.  Install H5py using ``pip install h5py-2.5.0-cp27-none-win32.whl``, downloaded
     from http://www.lfd.uci.edu/~gohlke/pythonlibs/#h5py
-#.  Install Matplotlib using `pip install matplotlib-1.4.3-cp27-none-win32.whl`,
+#.  Install Matplotlib using ``pip install matplotlib-1.4.3-cp27-none-win32.whl``,
     downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#matplotlib
 #.  Download PyCairo from http://wxpython.org/cairo/ (The Wheel packages are not
-    suitable for use with wxPython). We also need `libcairo-2.dll`,
-    `freetype6.dll`, `libexpat-1.dll`, `libfontconfig-1.dll`, `libpng14-14.dll`
-    and `zlib1.dll` from this location.
-#.  Install PyCairo using `easy_install -Z py2cairo-1.10.0.win32-py2.7.exe` and
-    copy all DLL files to `%Windows%\\SysWOW64`
-#.  Install Pillow, a repackaged version of PIL: `pip install Pillow`
+    suitable for use with wxPython). We also need ``libcairo-2.dll``,
+    ``freetype6.dll``, ``libexpat-1.dll``, ``libfontconfig-1.dll``, ``libpng14-14.dll``
+    and ``zlib1.dll`` from this location.
+#.  Install PyCairo using ``easy_install -Z py2cairo-1.10.0.win32-py2.7.exe`` and
+    copy all DLL files to ``%Windows%\SysWOW64``
+#.  Install Pillow, a repackaged version of PIL: ``pip install Pillow``
 
 Building Cython module(s)
 -------------------------
@@ -226,37 +227,41 @@ MS Windows, first install Visual Studio for Python 2.7, which can be found here:
 https://www.microsoft.com/en-us/download/details.aspx?id=44266
 
 This is a simple compiler distribution from Microsoft, specifically made for Python.
+You also need to install Cython using ``pip install Cython-0.25.1-cp27-cp27m-win32.whl``,
+downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#cython
 
 After installation, use the `setup.py` file from the `install/windows` folder to
 build the `*.pyd` files:
 
-`python setup.py build_ext --inplace`
+``python setup.py build_ext --inplace``
 
 **IMPORTANT**: It will be necessary to update the `productdir` path in the `setup.py` file!
 
 Installing PyInstaller
 ----------------------
 
-#. Add the Odemis root path to the `virtualenv_path_extensions.pth` file in the virtualenv:
-   `<path to Odemis>\src`
-#. Install PyWin32: `easy_install pywin32-219.win32-py2.7.exe`
+#. Add the Odemis root path to the virtualenv:
+   ``add2virtualenv <path to Odemis>\src``.
+   Alternatively, you can modify the `virtualenv_path_extensions.pth` file.
+#. Install PyWin32: ``easy_install pywin32-219.win32-py2.7.exe``
 #. Install PyInstaller: `pip install pyinstaller` or
-   `pip install git+git://github.com/pyinstaller/pyinstaller.git@develop` if pymzq is causing is
+   ``pip install git+git://github.com/pyinstaller/pyinstaller.git@develop`` if pyzmq is causing is
    causing problems.
-#. Install MSVCP90.dll redistribution by running `vcredist_x86.exe`, otherwise Pyinstaller won't be
-   able to find and package it.
+#. Install MSVCP90.dll redistribution by running `vcredist_x86.exe`, otherwise
+   Pyinstaller won't be able to find and package it. It can be downloaded from
+   https://www.microsoft.com/en-us/download/details.aspx?id=29 .
 
 Building the stand-alone Odemis viewer
 --------------------------------------
 
-`pyinstaller -y viewer.spec`
+``pyinstaller -y viewer.spec``
 
 Building Windows installer
 --------------------------
 
-Install Nsis and runL
+Install Nsis and run:
 
-`"C:\\Program Files (x86)\\NSIS\\makensis" setup.nsi`
+``"C:\Program Files (x86)\NSIS\makensis" setup.nsi``
 
 
 Setting up a data analysis environment on Windows

@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Image
+from PIL import Image
 import libtiff
 import logging
 import numpy
@@ -46,12 +46,12 @@ logging.getLogger().setLevel(logging.DEBUG)
 FILENAME = u"test" + tiff.EXTENSIONS[0]
 class TestTiffIO(unittest.TestCase):
 
-#     def tearDown(self):
-#         # clean up
-#         try:
-#             os.remove(FILENAME)
-#         except Exception:
-#             pass
+    def tearDown(self):
+        # clean up
+        try:
+            os.remove(FILENAME)
+        except Exception:
+            pass
 
     # Be careful: numpy's notation means that the pixel coordinates are Y,X,C
 #    @skip("simple")
@@ -63,10 +63,10 @@ class TestTiffIO(unittest.TestCase):
         white = (12, 52) # non symmetric position
         # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
         data[white[::-1]] = 124
-        
+
         # export
         tiff.export(FILENAME, data)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
@@ -75,6 +75,8 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel(white), 124)
 
+        del im
+        os.remove(FILENAME)
 
     def testUnicodeName(self):
         """Try filename not fitting in ascii"""
@@ -98,8 +100,9 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel(white), 124)
 
+        del im
         os.remove(fn)
-        
+
 #    @skip("simple")
     def testExportMultiPage(self):
         # create a simple greyscale image
@@ -115,19 +118,20 @@ class TestTiffIO(unittest.TestCase):
 
         # export
         tiff.export(FILENAME, ldata)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         im = Image.open(FILENAME)
         self.assertEqual(im.format, "TIFF")
-        
+
         # check the number of pages
         for i in range(num):
             im.seek(i)
             self.assertEqual(im.size, size)
             self.assertEqual(im.getpixel(white), 124)
-            
+
+        del im
         os.remove(FILENAME)
 
 #    @skip("simple")
@@ -147,26 +151,27 @@ class TestTiffIO(unittest.TestCase):
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
         thumbnail[blue[::-1]] = [0, 0, 255]
-        
+
         # export
         tiff.export(FILENAME, ldata, thumbnail)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         im = Image.open(FILENAME)
         self.assertEqual(im.format, "TIFF")
-        
+
         # first page should be thumbnail
         im.seek(0)
         self.assertEqual(im.size, (tshape[1], tshape[0]))
         self.assertEqual(im.getpixel((0,0)), (255,0,0))
         self.assertEqual(im.getpixel(blue), (0,0,255))
-        
+
         # check the number of pages
         for i in range(num):
-            im.seek(i+1)
+            im.seek(i + 1)
             self.assertEqual(im.size, size)
+        del im
 
         # check OME-TIFF metadata
         imo = libtiff.tiff.TIFFfile(FILENAME)
@@ -185,6 +190,7 @@ class TestTiffIO(unittest.TestCase):
             self.assertNotIn(ifd, ifds, "Multiple times the same IFD %d" % ifd)
             self.assertTrue(imo.IFD[ifd], "IFD %d doesn't exists" % ifd)
 
+        imo.close()
 
     def testExportCube(self):
         """
@@ -230,30 +236,29 @@ class TestTiffIO(unittest.TestCase):
         # introduce Time and Z dimension to state the 3rd dim is channel
         data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:] 
         ldata.append(model.DataArray(data3d, metadata3d))
-        
+
         # an additional 2D data, for the sake of it
         ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
 
         # export
         tiff.export(FILENAME, ldata)
-        
+
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         im = Image.open(FILENAME)
         self.assertEqual(im.format, "TIFF")
-        
+
         # check the 3D data (one image per channel)
         for i in range(size3d[2]):
             im.seek(i)
             self.assertEqual(im.size, size3d[0:2])
-            self.assertEqual(im.getpixel((1,1)), i * step)
-            
+            self.assertEqual(im.getpixel((1, 1)), i * step)
+
         # check the 2D data
         im.seek(i + 1)
         self.assertEqual(im.size, size)
-        self.assertEqual(im.getpixel((1,1)), 0)
-
+        self.assertEqual(im.getpixel((1, 1)), 0)
 
     def testExportNoWL(self):
         """
@@ -379,7 +384,7 @@ class TestTiffIO(unittest.TestCase):
 
         # check OME-TIFF metadata
         omemd = imo.IFD[0].get_value("ImageDescription")
-        self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower()=='<ome')
+        self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
 
         # remove "xmlns" which is the default namespace and is appended everywhere
         omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
@@ -411,6 +416,7 @@ class TestTiffIO(unittest.TestCase):
         bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
         self.assertEqual(bin_str, exp_bin)
+        imo.close()
 
 #    @skip("simple")
     def testExportRead(self):
@@ -1086,5 +1092,4 @@ def rational2float(rational):
     return rational["numer"][0] / rational["denom"][0]
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()

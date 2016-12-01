@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-import Image
+from PIL import Image
 import numpy
 from odemis import model
 from odemis.dataio import png
