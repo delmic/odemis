@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Image
+from PIL import Image
 import logging
 import numpy
 from numpy.polynomial import polynomial
@@ -53,7 +53,7 @@ class TestTiffIO(unittest.TestCase):
                 os.remove(fname)
         except Exception:
             pass
-        
+
     # @skip("simple")
     def testExportMultiPage(self):
         # create a simple greyscale image
@@ -74,7 +74,7 @@ class TestTiffIO(unittest.TestCase):
 
         # export
         stiff.export(FILENAME, ldata)
-        
+
         tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 1
         # Iterate through the files generated
@@ -91,6 +91,8 @@ class TestTiffIO(unittest.TestCase):
                 im.seek(i)
                 self.assertEqual(im.size, size)
                 self.assertEqual(im.getpixel(white), 124)
+
+            del im
 
         for file_index in range(self.no_of_images):
             fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
@@ -120,18 +122,18 @@ class TestTiffIO(unittest.TestCase):
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
             fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
-            
+
             fmt_mng = dataio.find_fittest_converter(fname, mode=os.O_RDONLY)
             self.assertEqual(fmt_mng.FORMAT, "TIFF",
                    "For '%s', expected format TIFF but got %s" % (fname, fmt_mng.FORMAT))
             rdata = fmt_mng.read_data(fname)
             # Assert all the DAs are there
             self.assertEqual(len(rdata[file_index]), len(ldata))
-            
+
             rthumbnail = fmt_mng.read_thumbnail(fname)
             # No thumbnail handling for now, so assert that is empty
             self.assertEqual(rthumbnail, [])
-        
+
         self.no_of_images = 1
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
@@ -183,7 +185,7 @@ class TestTiffIO(unittest.TestCase):
         # introduce Time and Z dimension to state the 3rd dim is channel
         data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:] 
         ldata.append(model.DataArray(data3d, metadata3d))
-        
+
         # an additional 2D data, for the sake of it
         ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
 
@@ -203,6 +205,8 @@ class TestTiffIO(unittest.TestCase):
             im.seek(i)
             self.assertEqual(im.size, size3d[0:2])
             self.assertEqual(im.getpixel((1, 1)), i * step)
+
+        del im
 
         fname = tokens[0] + "." + str(1) + "." + tokens[1]
         # check it's here
