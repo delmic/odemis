@@ -154,7 +154,6 @@ class OdemisGUIApp(wx.App):
         self.main_frame = main_xrc.xrcfr_main(None)
 
         self.init_gui()
-        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
         try:
             from odemis.gui.dev.powermate import Powermate
@@ -176,7 +175,6 @@ class OdemisGUIApp(wx.App):
             ib.AddIcon(gui.icon)
             self.main_frame.SetIcons(ib)
             self.main_frame.SetTitle(gui.name)
-
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -288,6 +286,7 @@ class OdemisGUIApp(wx.App):
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
             self.main_data.level.subscribe(self.on_level_va, init=False)
+            log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -331,17 +330,12 @@ class OdemisGUIApp(wx.App):
         """
         self.main_frame.pnl_log.Show(enabled)
 
-        l = logging.getLogger()
-        if enabled:
-            for tab in self.tab_controller.get_tabs():
-                if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.Hide()
-                    # Reset highest log level
-                    self.main_data.level.value = 0
-        else:
-            for tab in self.tab_controller.get_tabs():
-                if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.Show()
+        for tab in self.tab_controller.get_tabs():
+            if hasattr(tab.panel, 'btn_log'):
+                tab.panel.btn_log.Show(not enabled)
+
+        # Reset highest log level
+        self.main_data.level.value = 0
         self.main_frame.Layout()
 
     @call_in_wx_main
