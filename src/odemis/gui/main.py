@@ -176,6 +176,16 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
             self.main_frame.SetTitle(gui.name)
 
+            # IMPORTANT NOTE:
+            # As all tab panels are hidden on start-up, the MinSize attribute
+            # of the main GUI frame will be set to such a low value that most of
+            # the interface will be invisible if the user takes the interface out of
+            # 'full screen' view.
+            # Also, Gnome's GDK library will start spewing error messages, saying
+            # it cannot draw certain images, because the dimensions are 0x0.
+            self.main_frame.SetMinSize((1280, 550))
+            self.main_frame.Maximize()  # must be done before Show()
+
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
@@ -312,7 +322,6 @@ class OdemisGUIApp(wx.App):
                 pis = plugin.load_plugin(p, self.main_data.microscope, self)
                 self.plugins.extend(pis)
 
-            self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
 

@@ -2597,7 +2597,6 @@ class Sparc2AlignTab(Tab):
         vpv = collections.OrderedDict((
             (self.panel.vp_align_lens,
                 {
-                    "cls": guimod.ContentView,
                     "name": "Lens alignment",
                     "stream_classes": acqstream.BrightfieldStream,
                 }
@@ -2615,7 +2614,7 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Center alignment",
-                    "stream_classes": (acqstream.BrightfieldStream, acqstream.RGBStream),
+                    "stream_classes": acqstream.BrightfieldStream,
                 }
             ),
             (self.panel.vp_align_fiber,
@@ -2631,9 +2630,7 @@ class Sparc2AlignTab(Tab):
             self.panel.vp_moi.canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self.panel.vp_align_lens.microscope_view.interpolate_content.value = False
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
-        self.panel.vp_align_center.microscope_view.interpolate_content.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # The streams:
@@ -2651,12 +2648,6 @@ class Sparc2AlignTab(Tab):
 
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
-        # Focuser here too so that it's possible to focus with right mouse button,
-        # and also menu controller believes it's possible to autofocus.
-        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
-            ccd_focuser = main_data.focus
-        else:
-            ccd_focuser = None
         # Force the "temperature" VA to be displayed by making it a hw VA
         hwdetvas = set()
         if model.hasVA(main_data.ccd, "temperature"):
@@ -2666,10 +2657,11 @@ class Sparc2AlignTab(Tab):
                             main_data.ccd,
                             main_data.ccd.data,
                             emitter=None,
-                            focuser=ccd_focuser,
+                            # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
                             hwdetvas=hwdetvas,
                             detvas=get_local_vas(main_data.ccd),
-                            forcemd={model.MD_POS: (0, 0)}  # Just in case the stage is there
+                            forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                     model.MD_ROTATION: 0}  # Force the CCD as-is
                             )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if hasattr(ccd_stream, "detBinning"):
@@ -2690,6 +2682,11 @@ class Sparc2AlignTab(Tab):
         self._autofocus_align_mode = None  # Which mode is autofocus running on
         self._pfc_autofocus = None  # For showing the autofocus progress
 
+        # Focuser on stream so menu controller believes it's possible to autofocus.
+        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
+            ccd_focuser = main_data.focus
+        else:
+            ccd_focuser = None
         # TODO: handle if there are two spectrometers with focus (but for now,
         # there is no such system)
         if ccd_focuser:
@@ -2701,7 +2698,8 @@ class Sparc2AlignTab(Tab):
                                 main_data.brightlight,
                                 focuser=ccd_focuser,
                                 detvas=get_local_vas(main_data.ccd),
-                                forcemd={model.MD_POS: (0, 0)}
+                                forcemd={model.MD_POS: (0, 0),
+                                         model.MD_ROTATION: 0}
                                 )
             speclines.tint.value = (0, 64, 255)  # colour it blue
             # Fixed values, known to work well for autofocus
@@ -2806,6 +2804,12 @@ class Sparc2AlignTab(Tab):
                 logging.warning("Failed to get mirror dimensions: %s", ex)
             mirror_ol.set_hole_position(tab_data.polePositionPhysical)
             self.panel.vp_align_center.show_mirror_overlay()
+
+            # TODO: As this view uses the same stream as lens-align, the view
+            # will be updated also when lens-align is active, which increases
+            # CPU load, without reason. Ideally, the view controller/canvas
+            # should be clever enough to detect this and not actually cause a
+            # redraw.
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
@@ -3056,6 +3060,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_focus.Enable(True)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
+
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -3409,6 +3414,13 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
         # Select the right optical path mode and the plays right stream
         if show:
+            # Reset the zoom level in the Lens alignment view
+            # Mostly to workaround the fact that at start-up the canvas goes
+            # through weird sizes, which can cause the initial zoom level to be
+            # too high. It's also a failsafe, in case the user has moved to a
+            # view position/zoom which could be confusing when coming back.
+            self.panel.vp_align_lens.canvas.fit_view_to_content()
+
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
             main.lens_mover.position.subscribe(self._onLensPos)
@@ -3424,6 +3436,10 @@ class Sparc2AlignTab(Tab):
             main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
                 main.spec_sel.position.unsubscribe(self._onFiberPos)
+
+            # Also fit to content now, so that next time the tab is displayed,
+            # it's ready
+            self.panel.vp_align_lens.canvas.fit_view_to_content()
 
     def terminate(self):
         self._stream_controller.pauseStreams()
@@ -3476,16 +3492,6 @@ class TabBarController(object):
         self._tabs.subscribe(self._on_tab_change)
         # force the switch to the first tab
         self._tabs.notify(self._tabs.value)
-
-        # IMPORTANT NOTE:
-        #
-        # When all tab panels are hidden on start-up, the MinSize attribute
-        # of the main GUI frame will be set to such a low value that most of
-        # the interface will be invisible if the user takes the interface out of
-        # 'full screen' view.
-        # Also, Gnome's GDK library will start spewing error messages, saying
-        # it cannot draw certain images, because the dimensions are 0x0.
-        main_frame.SetMinSize((1280, 550))
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 

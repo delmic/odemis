@@ -1053,7 +1053,6 @@
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_sem_streams">
                           <fg>#7F7F7F</fg>
@@ -2868,16 +2867,17 @@
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
+          <object class="LiveViewport" name="vp_align_lens">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ARLiveViewport" name="vp_align_lens">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
+          
           <object class="ARLiveViewport" name="vp_align_center">
             <size>400,-1</size>
             <XRCED>

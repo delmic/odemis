@@ -231,8 +231,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.gauge_fib_autofocus = xrc.XRCCTRL(self, "gauge_fib_autofocus")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
-        self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
+        self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
         self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -1573,7 +1573,6 @@ def __init_resources():
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_sem_streams">
                           <fg>#7F7F7F</fg>
@@ -3388,16 +3387,17 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
+          <object class="LiveViewport" name="vp_align_lens">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ARLiveViewport" name="vp_align_lens">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
+          
           <object class="ARLiveViewport" name="vp_align_center">
             <size>400,-1</size>
             <XRCED>
