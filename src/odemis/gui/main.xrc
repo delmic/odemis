@@ -1041,31 +1041,29 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_lens_opt_settings">
-                        <label>OPTICAL SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_secom_align_streams">
+                        <object class="StreamBar" name="pnl_opt_streams">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <nocaption>1</nocaption>
+                        <label>OPTICAL SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem" name="fp_lens_sem_settings">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_sem_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
                         <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
@@ -2869,16 +2867,17 @@
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
+          <object class="LiveViewport" name="vp_align_lens">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ARLiveViewport" name="vp_align_lens">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
+          
           <object class="ARLiveViewport" name="vp_align_center">
             <size>400,-1</size>
             <XRCED>

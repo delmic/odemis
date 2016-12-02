@@ -109,8 +109,9 @@ class Tab(object):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item (or ensure it's disabled).
         """
-        if hasattr(self.tab_data_model, 'views') and len(self.tab_data_model.views.value) >= 4:
-            # We assume it has a 2x2 view layout
+        if (guimod.VIEW_LAYOUT_22 in self.tab_data_model.viewLayout.choices and
+            hasattr(self.tab_data_model, 'views') and
+            len(self.tab_data_model.views.value) >= 4):
             def set_22_menu_check(viewlayout):
                 """Called when the view layout changes"""
                 is_22 = viewlayout == guimod.VIEW_LAYOUT_22
@@ -1850,13 +1851,6 @@ class SecomAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.SecomAlignGUIData(main_data)
         super(SecomAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
-
-        # TODO: we should actually display the settings of the streams (...once they have it)
-        self._settings_controller = settings.LensAlignSettingsController(
-            self.panel,
-            self.tab_data_model
-        )
-
         panel.vp_align_sem.ShowLegend(False)
 
         # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 45°)
@@ -1906,17 +1900,60 @@ class SecomAlignTab(Tab):
             vpv
         )
 
-        # TODO: put all the settings as local, so that they don't change when
-        # going to spot mode
+        # Create CCD stream
+        # Force the "temperature" VA to be displayed by making it a hw VA
+        hwdetvas = set()
+        if model.hasVA(main_data.ccd, "temperature"):
+            hwdetvas.add("temperature")
+        ccd_stream = acqstream.CameraStream("Optical CL",
+                                            main_data.ccd,
+                                            main_data.ccd.data,
+                                            # main_data.light,
+                                            emitter=None,
+                                            focuser=main_data.focus,
+                                            hwdetvas=hwdetvas,
+                                            detvas=get_local_vas(main_data.ccd),
+                                            forcemd={model.MD_ROTATION: 0,
+                                                     model.MD_SHEAR: 0}
+                                            )
+        ccd_stream.should_update.value = True
+
+        # Synchronise the fine alignment dwell time with the CCD settings
+        ccd_stream.detExposureTime.value = main_data.fineAlignDwellTime.value
+        ccd_stream.detBinning.value = ccd_stream.detBinning.range[0]
+        ccd_stream.detResolution.value = ccd_stream.detResolution.range[1]
+        ccd_stream.detExposureTime.subscribe(self._update_fa_dt)
+        ccd_stream.detBinning.subscribe(self._update_fa_dt)
+        self.tab_data_model.tool.subscribe(self._update_fa_dt)
+
+        self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
+        self._ccd_stream = ccd_stream
+        # To ensure F6 (play/pause) works: very simple stream scheduler
+        ccd_stream.should_update.subscribe(self._on_ccd_should_update)
+        self._ccd_view = panel.vp_align_ccd.microscope_view
+        self._ccd_view.addStream(ccd_stream)
+        # create CCD stream panel entry
+        ccd_spe = StreamController(self.panel.pnl_opt_streams, ccd_stream, self.tab_data_model)
+        ccd_spe.stream_panel.flatten()  # removes the expander header
+        # force this view to never follow the tool mode (just standard view)
+        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
+
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
         sem_stream = acqstream.SEMStream("SEM", main_data.sed,
-                                         main_data.sed.data, main_data.ebeam)
+                                         main_data.sed.data,
+                                         main_data.ebeam,
+                                         detvas=get_local_vas(main_data.sed),
+                                         emtvas=get_local_vas(main_data.ebeam),
+                                         )
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
         self._sem_stream = sem_stream
         self._sem_view = panel.vp_align_sem.microscope_view
         self._sem_view.addStream(sem_stream)
+
+        sem_spe = StreamController(self.panel.pnl_sem_streams, sem_stream, self.tab_data_model)
+        sem_spe.stream_panel.flatten()  # removes the expander header
 
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
@@ -1931,33 +1968,10 @@ class SecomAlignTab(Tab):
             panel.vp_align_sem.canvas.fit_view_to_next_image = False
             main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
+        self._stream_controllers = (ccd_spe, sem_spe)
+
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
-
-        # TODO: when paused via the shortcut or menu, really pause it
-        #   => use a stream scheduler?
-        # TODO: binning & exposureTime as local setting, so that it's not changed when
-        # going to acquisition tab
-        # create CCD stream
-        ccd_stream = acqstream.CameraStream("Optical CL",
-                                            main_data.ccd,
-                                            main_data.ccd.data,
-                                            main_data.light,
-                                            focuser=main_data.focus,
-                                            forcemd={model.MD_ROTATION: 0,
-                                                     model.MD_SHEAR: 0}
-                                            )
-        ccd_stream.should_update.value = True
-        self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
-        self._ccd_stream = ccd_stream
-        self._ccd_view = panel.vp_align_ccd.microscope_view
-        self._ccd_view.addStream(ccd_stream)
-        # create CCD stream panel entry
-        stream_bar = self.panel.pnl_secom_align_streams
-        ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
-        ccd_spe.stream_panel.flatten()  # removes the expander header
-        # force this view to never follow the tool mode (just standard view)
-        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model, panel, "lens_align_")
@@ -1971,8 +1985,7 @@ class SecomAlignTab(Tab):
         # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
         self._aligner_move = None  # the future of the move (to know if it's over)
-        panel.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
-                                                 self._on_btn_to_center)
+        panel.lens_align_btn_to_center.Bind(wx.EVT_BUTTON, self._on_btn_to_center)
 
         # If SEM pxs changes, A/B or X/Y are actually different values
         main_data.ebeam.pixelSize.subscribe(self._update_to_center)
@@ -1988,13 +2001,11 @@ class SecomAlignTab(Tab):
 
         self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
                                                           panel,
-                                                          main_frame,
-                                                          self._settings_controller)
+                                                          main_frame)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
                                                            self._aligner_xy,
-                                                           panel,
-                                                           self._settings_controller)
+                                                           panel)
 
         # Documentation text on the left panel
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/alignment.html")
@@ -2010,6 +2021,12 @@ class SecomAlignTab(Tab):
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
+    def _on_ccd_should_update(self, update):
+        """
+        Very basic stream scheduler (just one stream)
+        """
+        self._ccd_stream.is_active.value = update
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
@@ -2021,7 +2038,7 @@ class SecomAlignTab(Tab):
             else:
                 s.is_active.value = False
 
-        # update the fine alignment dwell time when CCD settings change
+        # Freeze the stream settings when an alignment is going on
         main_data = self.tab_data_model.main
         if show:
             # as we expect no acquisition active when changing tab, it will always
@@ -2092,42 +2109,37 @@ class SecomAlignTab(Tab):
 
         self._update_to_center()
 
+    @call_in_wx_main
     def _on_acquisition(self, is_acquiring):
-        # A bit tricky because (in theory), could happen in any tab
-        self._subscribe_for_fa_dt(not is_acquiring)
-
-    def _subscribe_for_fa_dt(self, subscribe=True):
-
-        ccd = self.tab_data_model.main.ccd
-        if subscribe:
-            ccd.exposureTime.subscribe(self._update_fa_dt)
-            ccd.binning.subscribe(self._update_fa_dt)
-            self.tab_data_model.tool.subscribe(self._update_fa_dt)
+        """
+        Called when an "acquisition" is going on
+        """
+        # (Un)freeze the stream settings
+        if is_acquiring:
+            for stream_controller in self._stream_controllers:
+                stream_controller.enable(False)
+                stream_controller.pause()
         else:
-            ccd.exposureTime.unsubscribe(self._update_fa_dt)
-            ccd.binning.unsubscribe(self._update_fa_dt)
-            self.tab_data_model.tool.unsubscribe(self._update_fa_dt)
+            for stream_controller in self._stream_controllers:
+                stream_controller.resume()
+                stream_controller.enable(True)
 
     def _update_fa_dt(self, unused=None):
         """
         Called when the fine alignment dwell time must be recomputed (because
         the CCD exposure time or binning has changed. It will only be updated
         if the SPOT mode is active (otherwise the user might be setting for
-        different purpose.
+        different purpose).
         """
-        # Make sure that we don't update fineAlignDwellTime unless:
-        # * The tab is shown
-        # * Acquisition is not going on
-        # * Spot tool is selected
-        # (wouldn't be needed if the binning and exposure time VAs were local)
-        if self.tab_data_model.tool.value != guimod.TOOL_SPOT or not self.IsShown():
+        # Only update fineAlignDwellTime when spot tool is selected
+        if self.tab_data_model.tool.value != guimod.TOOL_SPOT:
             return
 
         # dwell time is the based on the exposure time for the spot, as this is
         # the best clue on what works with the sample.
         main_data = self.tab_data_model.main
-        binning = main_data.ccd.binning.value
-        dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
+        binning = self._ccd_stream.detBinning.value
+        dt = self._ccd_stream.detExposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
     # "Move to center" functions
@@ -2585,7 +2597,6 @@ class Sparc2AlignTab(Tab):
         vpv = collections.OrderedDict((
             (self.panel.vp_align_lens,
                 {
-                    "cls": guimod.ContentView,
                     "name": "Lens alignment",
                     "stream_classes": acqstream.BrightfieldStream,
                 }
@@ -2603,7 +2614,7 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Center alignment",
-                    "stream_classes": (acqstream.BrightfieldStream, acqstream.RGBStream),
+                    "stream_classes": acqstream.BrightfieldStream,
                 }
             ),
             (self.panel.vp_align_fiber,
@@ -2619,9 +2630,7 @@ class Sparc2AlignTab(Tab):
             self.panel.vp_moi.canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self.panel.vp_align_lens.microscope_view.interpolate_content.value = False
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
-        self.panel.vp_align_center.microscope_view.interpolate_content.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # The streams:
@@ -2639,20 +2648,20 @@ class Sparc2AlignTab(Tab):
 
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
-        # Focuser here too so that it's possible to focus with right mouse button,
-        # and also menu controller believes it's possible to autofocus.
-        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
-            ccd_focuser = main_data.focus
-        else:
-            ccd_focuser = None
+        # Force the "temperature" VA to be displayed by making it a hw VA
+        hwdetvas = set()
+        if model.hasVA(main_data.ccd, "temperature"):
+            hwdetvas.add("temperature")
         ccd_stream = acqstream.BrightfieldStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
                             emitter=None,
-                            focuser=ccd_focuser,
+                            # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
+                            hwdetvas=hwdetvas,
                             detvas=get_local_vas(main_data.ccd),
-                            forcemd={model.MD_POS: (0, 0)}  # Just in case the stage is there
+                            forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                     model.MD_ROTATION: 0}  # Force the CCD as-is
                             )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if hasattr(ccd_stream, "detBinning"):
@@ -2673,6 +2682,11 @@ class Sparc2AlignTab(Tab):
         self._autofocus_align_mode = None  # Which mode is autofocus running on
         self._pfc_autofocus = None  # For showing the autofocus progress
 
+        # Focuser on stream so menu controller believes it's possible to autofocus.
+        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
+            ccd_focuser = main_data.focus
+        else:
+            ccd_focuser = None
         # TODO: handle if there are two spectrometers with focus (but for now,
         # there is no such system)
         if ccd_focuser:
@@ -2684,7 +2698,8 @@ class Sparc2AlignTab(Tab):
                                 main_data.brightlight,
                                 focuser=ccd_focuser,
                                 detvas=get_local_vas(main_data.ccd),
-                                forcemd={model.MD_POS: (0, 0)}
+                                forcemd={model.MD_POS: (0, 0),
+                                         model.MD_ROTATION: 0}
                                 )
             speclines.tint.value = (0, 64, 255)  # colour it blue
             # Fixed values, known to work well for autofocus
@@ -2789,6 +2804,12 @@ class Sparc2AlignTab(Tab):
                 logging.warning("Failed to get mirror dimensions: %s", ex)
             mirror_ol.set_hole_position(tab_data.polePositionPhysical)
             self.panel.vp_align_center.show_mirror_overlay()
+
+            # TODO: As this view uses the same stream as lens-align, the view
+            # will be updated also when lens-align is active, which increases
+            # CPU load, without reason. Ideally, the view controller/canvas
+            # should be clever enough to detect this and not actually cause a
+            # redraw.
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
@@ -3039,6 +3060,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_focus.Enable(True)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
+
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -3392,6 +3414,13 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
         # Select the right optical path mode and the plays right stream
         if show:
+            # Reset the zoom level in the Lens alignment view
+            # Mostly to workaround the fact that at start-up the canvas goes
+            # through weird sizes, which can cause the initial zoom level to be
+            # too high. It's also a failsafe, in case the user has moved to a
+            # view position/zoom which could be confusing when coming back.
+            self.panel.vp_align_lens.canvas.fit_view_to_content()
+
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
             main.lens_mover.position.subscribe(self._onLensPos)
@@ -3407,6 +3436,10 @@ class Sparc2AlignTab(Tab):
             main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
                 main.spec_sel.position.unsubscribe(self._onFiberPos)
+
+            # Also fit to content now, so that next time the tab is displayed,
+            # it's ready
+            self.panel.vp_align_lens.canvas.fit_view_to_content()
 
     def terminate(self):
         self._stream_controller.pauseStreams()
@@ -3459,16 +3492,6 @@ class TabBarController(object):
         self._tabs.subscribe(self._on_tab_change)
         # force the switch to the first tab
         self._tabs.notify(self._tabs.value)
-
-        # IMPORTANT NOTE:
-        #
-        # When all tab panels are hidden on start-up, the MinSize attribute
-        # of the main GUI frame will be set to such a low value that most of
-        # the interface will be invisible if the user takes the interface out of
-        # 'full screen' view.
-        # Also, Gnome's GDK library will start spewing error messages, saying
-        # it cannot draw certain images, because the dimensions are 0x0.
-        main_frame.SetMinSize((1280, 550))
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 

@@ -154,7 +154,6 @@ class OdemisGUIApp(wx.App):
         self.main_frame = main_xrc.xrcfr_main(None)
 
         self.init_gui()
-        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
         try:
             from odemis.gui.dev.powermate import Powermate
@@ -177,6 +176,15 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
             self.main_frame.SetTitle(gui.name)
 
+            # IMPORTANT NOTE:
+            # As all tab panels are hidden on start-up, the MinSize attribute
+            # of the main GUI frame will be set to such a low value that most of
+            # the interface will be invisible if the user takes the interface out of
+            # 'full screen' view.
+            # Also, Gnome's GDK library will start spewing error messages, saying
+            # it cannot draw certain images, because the dimensions are 0x0.
+            self.main_frame.SetMinSize((1280, 550))
+            self.main_frame.Maximize()  # must be done before Show()
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -288,6 +296,7 @@ class OdemisGUIApp(wx.App):
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
             self.main_data.level.subscribe(self.on_level_va, init=False)
+            log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -313,7 +322,6 @@ class OdemisGUIApp(wx.App):
                 pis = plugin.load_plugin(p, self.main_data.microscope, self)
                 self.plugins.extend(pis)
 
-            self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
 
@@ -331,17 +339,12 @@ class OdemisGUIApp(wx.App):
         """
         self.main_frame.pnl_log.Show(enabled)
 
-        l = logging.getLogger()
-        if enabled:
-            for tab in self.tab_controller.get_tabs():
-                if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.Hide()
-                    # Reset highest log level
-                    self.main_data.level.value = 0
-        else:
-            for tab in self.tab_controller.get_tabs():
-                if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.Show()
+        for tab in self.tab_controller.get_tabs():
+            if hasattr(tab.panel, 'btn_log'):
+                tab.panel.btn_log.Show(not enabled)
+
+        # Reset highest log level
+        self.main_data.level.value = 0
         self.main_frame.Layout()
 
     @call_in_wx_main

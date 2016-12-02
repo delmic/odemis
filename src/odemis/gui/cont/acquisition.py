@@ -804,17 +804,15 @@ class FineAlignController(object):
     OVRL_MAX_DIFF = 10e-06  # m, don't be too picky
     OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
 
-    def __init__(self, tab_data, tab_panel, main_frame, settings_controller):
+    def __init__(self, tab_data, tab_panel, main_frame):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        tab_panel: (wx.Panel): the tab that containts the viewports
-        settings_controller (SettingController)
+        tab_panel: (wx.Panel): the tab that contains the viewports
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._tab_panel = tab_panel
         self._main_frame = main_frame
-        self._settings_controller = settings_controller
         self._sizer = self._tab_panel.pnl_align_tools.GetSizer()
 
         tab_panel.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
@@ -876,10 +874,6 @@ class FineAlignController(object):
         """
         Pause the settings and the streams of the GUI
         """
-        # save the original settings
-        self._settings_controller.enable(False)
-        self._settings_controller.pause()
-
         self._tab_panel.lens_align_tb.enable(False)
         self._tab_panel.btn_auto_center.Enable(False)
 
@@ -893,9 +887,6 @@ class FineAlignController(object):
             c.abilities -= {CAN_DRAG, CAN_FOCUS}
 
     def _resume(self):
-        self._settings_controller.resume()
-        self._settings_controller.enable(True)
-
         self._tab_panel.lens_align_tb.enable(True)
         self._tab_panel.btn_auto_center.Enable(True)
 
@@ -1016,18 +1007,16 @@ class AutoCenterController(object):
     applied to the microscope
     """
 
-    def __init__(self, tab_data, aligner_xy, tab_panel, settings_controller):
+    def __init__(self, tab_data, aligner_xy, tab_panel):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         aligner_xy (Stage): the stage used to move the objective, with axes X/Y
         tab_panel: (wx.Panel): the tab panel which contains the viewports
-        settings_controller (SettingController)
         """
         self._tab_data_model = tab_data
         self._aligner_xy = aligner_xy
         self._main_data_model = tab_data.main
         self._tab_panel = tab_panel
-        self._settings_controller = settings_controller
         self._sizer = self._tab_panel.pnl_align_tools.GetSizer()
 
         tab_panel.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
@@ -1041,6 +1030,9 @@ class AutoCenterController(object):
         """
         Compute and displays the estimated time for the auto centering
         """
+        if self._main_data_model.is_acquiring.value:
+            return
+
         et = self._main_data_model.ccd.exposureTime.value
         t = align.spot.estimateAlignmentTime(et)
         t = math.ceil(t) # round a bit pessimistic
@@ -1051,10 +1043,6 @@ class AutoCenterController(object):
         """
         Pause the settings and the streams of the GUI
         """
-        # save the original settings
-        self._settings_controller.enable(False)
-        self._settings_controller.pause()
-
         self._tab_panel.lens_align_tb.enable(False)
         self._tab_panel.btn_fine_align.Enable(False)
 
@@ -1068,9 +1056,6 @@ class AutoCenterController(object):
             c.abilities -= {CAN_DRAG, CAN_FOCUS}
 
     def _resume(self):
-        self._settings_controller.resume()
-        self._settings_controller.enable(True)
-
         self._tab_panel.lens_align_tb.enable(True)
         # Spot mode should always be active, so it's fine to directly enable FA
         self._tab_panel.btn_fine_align.Enable(True)

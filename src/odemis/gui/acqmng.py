@@ -175,6 +175,12 @@ def preset_hq(entries):
                 et_value = ret.get(e, e.vigilattr.value)
                 for prevb, newb in zip(prev_val, value):
                     et_value *= prevb / newb
+                try:
+                    # Clip the value (if it's a continuous VA, with a range)
+                    et_value = e.vigilattr.clip(et_value)
+                    # TODO: revert back the binning in such case?
+                except AttributeError:
+                    pass
                 ret[e] = et_value
 
         elif entry.name == "exposureTime":

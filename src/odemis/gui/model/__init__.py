@@ -897,7 +897,7 @@ class StreamView(View):
 
         # current density (meter per pixel, ~ scale/zoom level)
         # 1µm/px => ~large view of the sample (view width ~= 1000 px)
-        self.mpp = FloatContinuous(1e-6, range=(10e-12, 50e-6), unit="m/px")
+        self.mpp = FloatContinuous(1e-6, range=(10e-12, 200e-6), unit="m/px")
         # self.mpp.debug = True
 
         # How much one image is displayed on the other one. Value used by
