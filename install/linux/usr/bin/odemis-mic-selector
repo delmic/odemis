@@ -15,15 +15,16 @@
 
 from __future__ import division, print_function, absolute_import
 
-import argparse
-import logging
-import sys
-import subprocess
-import collections
 import Pyro4
+import argparse
+import collections
+import logging
+from logging.handlers import RotatingFileHandler
 from odemis import model
-from odemis.util import driver
 from odemis.driver import powerctrl
+from odemis.util import driver
+import subprocess
+import sys
 
 
 LSUSB_BIN = "/usr/bin/lsusb"
@@ -116,7 +117,7 @@ def update_tmcm(config, address):
     cmd = [TMCMCONFIG_BIN, "--write", config, "--address", "%d" % address]
     logging.debug("Running command %s", cmd)
     subprocess.check_call(cmd)
-    
+
 
 def main(args):
     """
@@ -131,14 +132,18 @@ def main(args):
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
+    parser.add_argument("--log-target", dest="logtarget", metavar="{stderr,filename}",
+                        default="stderr", help="Specify the log target (stderr, filename)")
     parser.add_argument("--config", "-c", dest="config", nargs="+", action='append',
                         required=True,
-                         metavar=("<configfile>"),  # , "[EEPROM ID]", "[USB:ID]"),
+                        metavar=("<configfile>"),  # , "[EEPROM ID]", "[USB:ID]"),
                         help="Microscope file and EEPROM and/or USB IDs to select it (all of them must match)")
     parser.add_argument("--fallback", "-f", dest="fallback", type=str,
                         help="Microscope file to use if no hardware is detected")
-    # TODO: --tmcm?
-    #
+
+    # TODO: make it more flexible. eg a pattern for file, and conditions to add
+    # a keyword. For each keyword, possible to run extra command
+    # TODO: --tmcm? (to update tmcm config depending on the configuration
 
     options = parser.parse_args(args[1:])
 
@@ -148,7 +153,15 @@ def main(args):
         return 127
     loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+
+    if options.logtarget == "stderr":
+        handler = logging.StreamHandler()
+    else:
+        # Rotate the log, with max 5*50Mb used.
+        handler = RotatingFileHandler(options.logtarget, maxBytes=50 * (2 ** 20), backupCount=5)
     logging.getLogger().setLevel(loglev)
+    handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
+    logging.getLogger().addHandler(handler)
 
     # Parse the config arguments
     config = []
