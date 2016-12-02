@@ -365,9 +365,6 @@ class SecomStreamsTab(Tab):
             self._streambar_controller
         )
 
-        # For remembering which streams are paused when hiding the tab
-        self._streams_to_restart = set()  # set of weakref to the streams
-
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
         if hasattr(tab_data, 'opticalState'):
@@ -662,14 +659,9 @@ class SecomStreamsTab(Tab):
         assert (show != self.IsShown()) # we assume it's only called when changed
         super(SecomStreamsTab, self).Show(show)
 
-        # pause / restart streams when not displayed
-        if show:
-            # TODO: double check the chamber state hasn't changed in between
-            # We should never turn on the streams if the chamber is not in vacuum
-            self._streambar_controller.resumeStreams(self._streams_to_restart)
-        else:
-            paused_st = self._streambar_controller.pauseStreams()
-            self._streams_to_restart = weakref.WeakSet(paused_st)
+        # pause streams when not displayed
+        if not show:
+            self._streambar_controller.pauseStreams()
 
 
 class SparcAcquisitionTab(Tab):
@@ -685,9 +677,6 @@ class SparcAcquisitionTab(Tab):
         # When one new stream is added, it actually creates two streams:
         # * XXXSettingsStream: for the live view and the settings
         # * MDStream: for the acquisition (view)
-
-        # For remembering which streams are paused when hiding the tab
-        self._streams_to_restart = set()  # set of weakref to the streams
 
         # Only put the VAs that do directly define the image as local, everything
         # else should be global. The advantage is double: the global VAs will
@@ -715,7 +704,6 @@ class SparcAcquisitionTab(Tab):
             detvas=get_local_vas(main_data.sed),
         )
 
-        sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
         tab_data.acquisitionView.addStream(sem_stream)  # it should also be saved
 
         # This stream is a bit tricky, because it will play (potentially)
@@ -967,14 +955,9 @@ class SparcAcquisitionTab(Tab):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(SparcAcquisitionTab, self).Show(show)
 
-        # pause / restart streams when not displayed
-        if show:
-            # TODO: double check the chamber state hasn't changed in between
-            # We should never turn on the streams if the chamber is not in vacuum
-            self._stream_controller.resumeStreams(self._streams_to_restart)
-        else:
-            paused_st = self._stream_controller.pauseStreams()
-            self._streams_to_restart = weakref.WeakSet(paused_st)
+        # pause streams when not displayed
+        if not show:
+            self._stream_controller.pauseStreams()
 
     def terminate(self):
         # make sure the streams are stopped
