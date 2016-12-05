@@ -914,9 +914,11 @@ class Detector(model.Detector):
         scan_params = self._acq_device.GetSEMViewingMode().parameters
         prev_params = ((scan_params.resolution.width, scan_params.resolution.height),
                        scan_params.nrOfFrames,
-                       (scan_params.center.x, scan_params.center.y),
                        scan_params.scale)
-        if prev_params == (res, nframes, center, scale):
+        prev_center = (scan_params.center.x, scan_params.center.y)
+        # Center cannot be compared with "==", due to floating point error.
+        if (prev_params == (res, nframes, scale) and
+            all(util.almost_equal(c, p) for c, p in zip(prev_center, center))):
             return scan_params, False
         else:
             scan_params.resolution.width = res[0]
@@ -1063,6 +1065,7 @@ class Detector(model.Detector):
                     # Just to wait long enough before we get a frame with the new
                     # parameters applied. In the meantime, it can be the case that
                     # Phenom generates semi-created frames that we want to avoid.
+                    logging.debug("Acquiring full image accumulation")
                     img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
                 else:
                     if self._high_fr and bpp == 8:
