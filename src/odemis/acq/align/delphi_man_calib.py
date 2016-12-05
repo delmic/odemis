@@ -274,7 +274,7 @@ def man_calib(logpath):
             if ans in YES_CHARS:
                 # Move Phenom sample stage next to expected hole position
                 sem_stage.moveAbsSync(aligndelphi.SHIFT_DETECTION)
-                ebeam_focus.moveAbsSync(hole_focus)
+                ebeam_focus.moveAbsSync({"z": hole_focus})
                 # Set the FoV to almost 2mm
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 msg = "\033[1;34mPlease turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ...\033[1;m"
