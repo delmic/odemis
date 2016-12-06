@@ -1560,9 +1560,9 @@ class SecomStreamsController(StreamBarController):
 
         # Basically one action per type of stream
 
-        # TODO: always display the action (if it's compatible), but update
-        # the disable/enable depending on the state of the chamber (iow if SEM
-        # or optical button is enabled)
+        # TODO: always display the action (if it's compatible), but disable the
+        # play/pause button if the microscope state doesn't allow it (IOW if SEM
+        # or optical button is disabled)
 
         # First: Fluorescent stream (for dyes)
         if (
@@ -1571,7 +1571,6 @@ class SecomStreamsController(StreamBarController):
                 self._main_data_model.ccd
         ):
             def fluor_capable():
-                # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
                 enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
                                                                        guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value

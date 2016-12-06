@@ -53,7 +53,6 @@ from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
 import pkg_resources
-import weakref
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -351,20 +350,6 @@ class SecomStreamsTab(Tab):
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
 
-        self._acquisition_controller = acqcont.SecomAcquiController(tab_data, panel)
-
-        if main_data.role == "delphi":
-            state_controller_cls = DelphiStateController
-        else:
-            state_controller_cls = SecomStateController
-
-        self._state_controller = state_controller_cls(
-            tab_data,
-            panel,
-            "live_btn_",
-            self._streambar_controller
-        )
-
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
         if hasattr(tab_data, 'opticalState'):
@@ -380,11 +365,27 @@ class SecomStreamsTab(Tab):
             else:
                 logging.error("No EM detector found")
 
+        # Create streams before state controller, so based on the chamber state,
+        # the streams will be enabled or not.
+        self._ensure_base_streams()
+
+        self._acquisition_controller = acqcont.SecomAcquiController(tab_data, panel)
+
+        if main_data.role == "delphi":
+            state_controller_cls = DelphiStateController
+        else:
+            state_controller_cls = SecomStateController
+
+        self._state_controller = state_controller_cls(
+            tab_data,
+            panel,
+            "live_btn_",
+            self._streambar_controller
+        )
+
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
         if not main_data.chamber:
             panel.live_btn_press.Hide()
-
-        self._ensure_base_streams()
 
     @property
     def settingsbar_controller(self):
