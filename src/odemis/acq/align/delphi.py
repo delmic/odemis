@@ -1252,6 +1252,10 @@ def FindRingCenter(image):
         cntr_int = ellipse_pars[0]
         radius_int = numpy.mean(ellipse_pars[1]) / 2
         logger.debug("Found int circle @ %s px with %g px radius", cntr_int, radius_int)
+        dist = math.hypot(cntr[0] - cntr_int[0], cntr[1] - cntr_int[1])
+        if dist > 10:
+            logging.warning("External and internal centres do not match: %s vs %s",
+                            cntr, cntr_int)
         cntr = ((cntr[0] + cntr_int[0]) / 2,
                 (cntr[1] + cntr_int[1]) / 2)
 
