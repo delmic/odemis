@@ -99,7 +99,15 @@ class PowerControlUnit(model.PowerSupplier):
         for k, v in init.items():
             if v is None:
                 del init[k]
-        self._doSupply(init, apply_delay=False)
+        try:
+            self._doSupply(init, apply_delay=False)
+        except IOError as ex:
+            # This is in particular to handle some cases where the device resets
+            # when turning on the power. One or more trials and the
+            logging.exception("Failure during turning on initial power.")
+            raise HwError("Device had an error when initialising power: %s. "
+                          "Try again or contact support if the problem persists.",
+                          ex)
 
         self.memoryIDs = model.VigilantAttribute(None, readonly=True, getter=self._getIdentities)
 
@@ -107,8 +115,7 @@ class PowerControlUnit(model.PowerSupplier):
             mem_ids = self.memoryIDs.value
             for eid in ids:
                 if eid not in mem_ids:
-                    raise HwError("EEPROM id %s was not detected. Please make sure "
-                                  "you are using the correct microscope file and "
+                    raise HwError("EEPROM id %s was not detected. Make sure "
                                   "all EEPROM components are connected." % (eid,))
 
     @isasync
