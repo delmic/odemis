@@ -581,6 +581,11 @@ class SparcAcquiController(object):
             self._ellipsis_animator.cancel()
             self._ellipsis_animator = None
 
+        # Don't update estimated time if acquisition is running (as we are
+        # sharing the label with the estimated time-to-completion).
+        if self._main_data_model.is_acquiring.value:
+            return
+
         lvl = None  # icon status shown
         if self._main_data_model.is_preparing.value:
             txt = u"Optical path is being reconfigured…"
