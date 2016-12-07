@@ -1801,7 +1801,7 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
                 shift_fov = (shift_px[0] / smaller_image.shape[1],
                              shift_px[1] / smaller_image.shape[0])
                 fp_fov = shift_fov[0] / (zoom_f - 1), shift_fov[1] / (zoom_f - 1)
-                logger.debug("Shift detected between scale of %f and %f is: %s px == %s %%",
+                logger.debug("Shift detected between scale of %f and %f is: %s px == %s FoV",
                              cur_scale, cur_scale / zoom_f, shift_px, shift_fov)
 
                 # We expect a lot more shift horizontally than vertically
