@@ -380,7 +380,7 @@ def _MakeReport(optical_image, repetitions, magnification, pixel_size, dwell_tim
                  + "\nGrid size:\n" + str(repetitions)
                  + "\n\nMaximum dwell time used:\n" + str(dwell_time)
                  + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
-                 + "\n\nThe optical image of the grid can be seen in OpticalGrid.h5\n\n")
+                 + "\n\nThe optical image of the grid can be seen in OpticalGrid.tiff\n\n")
     report.close()
 
     logging.warning("Failed to find overlay. Please check the failure report in %s.",

@@ -1252,6 +1252,10 @@ def FindRingCenter(image):
         cntr_int = ellipse_pars[0]
         radius_int = numpy.mean(ellipse_pars[1]) / 2
         logger.debug("Found int circle @ %s px with %g px radius", cntr_int, radius_int)
+        dist = math.hypot(cntr[0] - cntr_int[0], cntr[1] - cntr_int[1])
+        if dist > 10:
+            logging.warning("External and internal centres do not match: %s vs %s",
+                            cntr, cntr_int)
         cntr = ((cntr[0] + cntr_int[0]) / 2,
                 (cntr[1] + cntr_int[1]) / 2)
 
@@ -1797,7 +1801,7 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
                 shift_fov = (shift_px[0] / smaller_image.shape[1],
                              shift_px[1] / smaller_image.shape[0])
                 fp_fov = shift_fov[0] / (zoom_f - 1), shift_fov[1] / (zoom_f - 1)
-                logger.debug("Shift detected between scale of %f and %f is: %s px == %s %%",
+                logger.debug("Shift detected between scale of %f and %f is: %s px == %s FoV",
                              cur_scale, cur_scale / zoom_f, shift_px, shift_fov)
 
                 # We expect a lot more shift horizontally than vertically

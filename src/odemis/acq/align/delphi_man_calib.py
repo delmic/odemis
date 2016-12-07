@@ -246,12 +246,13 @@ def man_calib(logpath):
         try:
             f = aligndelphi.LensAlignment(overview_ccd, sem_stage, logpath)
             position = f.result()
-        except IOError:
-            logging.warning("Failed to locate the optical lens, will used previous value %s", position)
+        except IOError as ex:
             if not force_calib:
                 position = (offset[0] * scaling[0], offset[1] * scaling[1])
             else:
                 position = (0, 0)
+            logging.warning("Failed to locate the optical lens (%s), will used previous value %s",
+                            ex, position)
 
         # Just to check if move makes sense
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -274,7 +275,7 @@ def man_calib(logpath):
             if ans in YES_CHARS:
                 # Move Phenom sample stage next to expected hole position
                 sem_stage.moveAbsSync(aligndelphi.SHIFT_DETECTION)
-                ebeam_focus.moveAbsSync(hole_focus)
+                ebeam_focus.moveAbsSync({"z": hole_focus})
                 # Set the FoV to almost 2mm
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 msg = "\033[1;34mPlease turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ...\033[1;m"

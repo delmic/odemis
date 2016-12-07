@@ -140,10 +140,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
 
         # Configure CCD and set ebeam to spot mode
         logging.debug("Configure CCD and set ebeam to spot mode...")
-        # TODO: start with binning 2x2 for rough spot centering?
-        ccd.binning.value = (1, 1)
+        ccd.binning.value = ccd.binning.clip((2, 2))
         ccd.resolution.value = ccd.resolution.range[1]
-        ccd.exposureTime.value = 0.6
+        ccd.exposureTime.value = 0.3
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
 
@@ -154,16 +153,20 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
             # Long exposure time to compensate for no background subtraction
             ccd.exposureTime.value = 1.1
         else:
-            # TODO: all this code to decide whether to pick exposure 0.6 or 0.9?!
-            # => KISS! Use always 0.9... or allow up to 5s?
+            # TODO: all this code to decide whether to pick exposure 0.3 or 1.5?
+            # => KISS! Use always 1s... or allow up to 5s?
             # Estimate noise and adjust exposure time based on "Rose criterion"
             image = AcquireNoBackground(ccd, dfbkg)
             snr = MeasureSNR(image)
-            while snr < 5 and ccd.exposureTime.value < 0.9:
-                ccd.exposureTime.value = ccd.exposureTime.value + 0.1
+            while snr < 5 and ccd.exposureTime.value < 1.5:
+                ccd.exposureTime.value = ccd.exposureTime.value + 0.2
                 image = AcquireNoBackground(ccd, dfbkg)
                 snr = MeasureSNR(image)
-        et = ccd.exposureTime.value
+            logging.debug("Using exposure time of %g s", ccd.exposureTime.value)
+
+        hqet = ccd.exposureTime.value  # exposure time for high-quality (binning == 1x1)
+        if ccd.binning.value == (2, 2):
+            hqet *= 4  # To compensate for smaller binning
 
         # Try to find spot
         if future._spot_alignment_state == CANCELLED:
@@ -187,8 +190,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
                 lens_pos, fm_level = future._autofocusf.result()
                 # Update progress of the future
                 future.set_progress(end=time.time() +
-                                    estimateAlignmentTime(et, dist, 1))
-                ccd.binning.value = (1, 1)
+                                    estimateAlignmentTime(hqet, dist, 1))
             except IOError:
                 raise IOError('Spot alignment failure. AutoFocus failed.')
             if future._spot_alignment_state == CANCELLED:
@@ -199,12 +201,14 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
             if dist is None:
                 raise IOError('Spot alignment failure. Spot not found')
 
+        ccd.binning.value = (1, 1)
+        ccd.exposureTime.value = ccd.exposureTime.clip(hqet)
+
         # Update progress of the future
         future.set_progress(end=time.time() +
-                            estimateAlignmentTime(et, dist, 1))
+                            estimateAlignmentTime(hqet, dist, 1))
         logging.debug("After rough alignment, spot center is at %s m", vector)
 
-        # image = AcquireNoBackground(ccd, dfbkg)
         # Limit FoV to save time
         logging.debug("Crop FoV...")
         CropFoV(ccd, dfbkg)
@@ -215,8 +219,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
 
         # Update progress of the future
         future.set_progress(end=time.time() +
-                            estimateAlignmentTime(et, dist, 0))
-        ccd.binning.value = (1, 1)
+                            estimateAlignmentTime(hqet, dist, 0))
 
         # Center spot
         if future._spot_alignment_state == CANCELLED:
@@ -226,7 +229,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         dist, vector = future._centerspotf.result()
         if dist is None:
             raise IOError('Spot alignment failure. Cannot reach the center.')
-        logging.debug("After fine alignment, spot center is at %s m", vector)
+        logging.info("After fine alignment, spot center is at %s m", vector)
         return dist, vector
     finally:
         ccd.binning.value = init_binning
