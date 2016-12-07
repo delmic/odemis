@@ -385,7 +385,7 @@ class SecomAcquiController(object):
 
         # pause all the live acquisitions
         streambar_controller = secom_live_tab.streambar_controller
-        paused_streams = streambar_controller.pauseStreams()
+        streambar_controller.pauseStreams()
         streambar_controller.pause()
         streambar_controller.enable(False)
 
@@ -398,8 +398,6 @@ class SecomAcquiController(object):
             acq_dialog.Center()
             action = acq_dialog.ShowModal()
         finally:
-            streambar_controller.resumeStreams(paused_streams)
-
             acqmng.apply_preset(orig_settings)
 
             settingsbar_controller.enable(True)
@@ -456,8 +454,6 @@ class SparcAcquiController(object):
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self._acq_future_connector = None
-
-        self._stream_paused = ()
 
         # TODO: share an executor with the whole GUI.
         self._executor = futures.ThreadPoolExecutor(max_workers=2)
@@ -581,6 +577,11 @@ class SparcAcquiController(object):
             self._ellipsis_animator.cancel()
             self._ellipsis_animator = None
 
+        # Don't update estimated time if acquisition is running (as we are
+        # sharing the label with the estimated time-to-completion).
+        if self._main_data_model.is_acquiring.value:
+            return
+
         lvl = None  # icon status shown
         if self._main_data_model.is_preparing.value:
             txt = u"Optical path is being reconfigured…"
@@ -612,8 +613,7 @@ class SparcAcquiController(object):
         """
         Freeze the streams settings and ensure no stream is playing
         """
-        self._stream_paused = self._streambar_controller.pauseStreams()
-
+        self._streambar_controller.pauseStreams()
         self._streambar_controller.pause()
         self._streambar_controller.enable(False)
 
@@ -621,18 +621,6 @@ class SparcAcquiController(object):
         """
         Resume (unfreeze) the stream settings
         """
-        # We don't restart the streams paused, because it's unlikely the user
-        # is again interested it this one, and if the detector is sensitive,
-        # it could even be dangerous. So just start the SEM survey. It also
-        # ensures that the e-beam settings are reasonable for if the GUI is
-        # restarted.
-        # TODO: if acquisition was cancelled => put back streams as they were?
-        self._tab_data_model.tool.value = TOOL_NONE
-        for s in self._tab_data_model.streams.value:
-            if isinstance(s, stream.SEMStream):
-                s.should_update.value = True
-                break
-
         self._streambar_controller.enable(True)
         self._streambar_controller.resume()
 

@@ -487,6 +487,11 @@ class ChamberGUIData(MicroscopyGUIData):
         self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
+        # VA for autofocus procedure mode
+        # It's not really recommended (and there is no toolbar button), but it's
+        # possible to change the focus, and the menu is there, so why not.
+        self.autofocus_active = BooleanVA(False)
+
 
 class AnalysisGUIData(MicroscopyGUIData):
     """

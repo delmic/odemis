@@ -53,7 +53,6 @@ from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
 import pkg_resources
-import weakref
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -351,23 +350,6 @@ class SecomStreamsTab(Tab):
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
 
-        self._acquisition_controller = acqcont.SecomAcquiController(tab_data, panel)
-
-        if main_data.role == "delphi":
-            state_controller_cls = DelphiStateController
-        else:
-            state_controller_cls = SecomStateController
-
-        self._state_controller = state_controller_cls(
-            tab_data,
-            panel,
-            "live_btn_",
-            self._streambar_controller
-        )
-
-        # For remembering which streams are paused when hiding the tab
-        self._streams_to_restart = set()  # set of weakref to the streams
-
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
         if hasattr(tab_data, 'opticalState'):
@@ -383,11 +365,27 @@ class SecomStreamsTab(Tab):
             else:
                 logging.error("No EM detector found")
 
+        # Create streams before state controller, so based on the chamber state,
+        # the streams will be enabled or not.
+        self._ensure_base_streams()
+
+        self._acquisition_controller = acqcont.SecomAcquiController(tab_data, panel)
+
+        if main_data.role == "delphi":
+            state_controller_cls = DelphiStateController
+        else:
+            state_controller_cls = SecomStateController
+
+        self._state_controller = state_controller_cls(
+            tab_data,
+            panel,
+            "live_btn_",
+            self._streambar_controller
+        )
+
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
         if not main_data.chamber:
             panel.live_btn_press.Hide()
-
-        self._ensure_base_streams()
 
     @property
     def settingsbar_controller(self):
@@ -662,14 +660,9 @@ class SecomStreamsTab(Tab):
         assert (show != self.IsShown()) # we assume it's only called when changed
         super(SecomStreamsTab, self).Show(show)
 
-        # pause / restart streams when not displayed
-        if show:
-            # TODO: double check the chamber state hasn't changed in between
-            # We should never turn on the streams if the chamber is not in vacuum
-            self._streambar_controller.resumeStreams(self._streams_to_restart)
-        else:
-            paused_st = self._streambar_controller.pauseStreams()
-            self._streams_to_restart = weakref.WeakSet(paused_st)
+        # pause streams when not displayed
+        if not show:
+            self._streambar_controller.pauseStreams()
 
 
 class SparcAcquisitionTab(Tab):
@@ -685,9 +678,6 @@ class SparcAcquisitionTab(Tab):
         # When one new stream is added, it actually creates two streams:
         # * XXXSettingsStream: for the live view and the settings
         # * MDStream: for the acquisition (view)
-
-        # For remembering which streams are paused when hiding the tab
-        self._streams_to_restart = set()  # set of weakref to the streams
 
         # Only put the VAs that do directly define the image as local, everything
         # else should be global. The advantage is double: the global VAs will
@@ -715,7 +705,6 @@ class SparcAcquisitionTab(Tab):
             detvas=get_local_vas(main_data.sed),
         )
 
-        sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
         tab_data.acquisitionView.addStream(sem_stream)  # it should also be saved
 
         # This stream is a bit tricky, because it will play (potentially)
@@ -967,14 +956,9 @@ class SparcAcquisitionTab(Tab):
         assert (show != self.IsShown())  # we assume it's only called when changed
         super(SparcAcquisitionTab, self).Show(show)
 
-        # pause / restart streams when not displayed
-        if show:
-            # TODO: double check the chamber state hasn't changed in between
-            # We should never turn on the streams if the chamber is not in vacuum
-            self._stream_controller.resumeStreams(self._streams_to_restart)
-        else:
-            paused_st = self._stream_controller.pauseStreams()
-            self._streams_to_restart = weakref.WeakSet(paused_st)
+        # pause streams when not displayed
+        if not show:
+            self._stream_controller.pauseStreams()
 
     def terminate(self):
         # make sure the streams are stopped

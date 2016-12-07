@@ -21,16 +21,17 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import os
-
+import logging
 from odemis import model, gui
 from odemis.acq import stream
 from odemis.gui import DYE_LICENCE
 from odemis.gui.comp import popup
 import odemis.gui.conf
+from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_in_wx_main
 from odemis.util import driver
+import os
 import subprocess
 import sys
 import wx
@@ -99,7 +100,9 @@ class MenuController(object):
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_play_stream.GetId(),
                     self._on_play_stream)
-        # FIXME: must be disabled when main_data.is_acquiring
+
+        main_data.is_acquiring.subscribe(self._on_acquisition)
+        main_data.chamberState.subscribe(self._on_chamber_state)
         # FIXME: it seems that even disabled, pressing F6 will toggle/untoggle
         # the entry (but not call _on_play_stream()).
         # Using wx.EVT_UPDATE_UI doesn't seem to help
@@ -113,8 +116,6 @@ class MenuController(object):
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_auto_focus.GetId(),
                     self._on_auto_focus)
-
-        # TODO: add auto focus to toolbar
 
         # View/fit to content
         wx.EVT_MENU(main_frame,
@@ -255,22 +256,52 @@ class MenuController(object):
                 self._prev_stream.auto_bc.unsubscribe(self._on_stream_autobc)
         self._prev_stream = curr_s
 
-        static = isinstance(curr_s, stream.StaticStream)
-        pp_enable = enable and not static
-        self._main_frame.menu_item_play_stream.Enable(pp_enable)
-        if not pp_enable:
-            self._main_frame.menu_item_play_stream.Check(False)
-
         self._main_frame.menu_item_auto_cont.Enable(enable)
         if not enable:
             self._main_frame.menu_item_auto_cont.Check(False)
 
+        self._update_stream_play_pause(curr_s)
         if curr_s:
             curr_s.should_update.subscribe(self._on_stream_update, init=True)
             if hasattr(curr_s, "auto_bc"):
                 curr_s.auto_bc.subscribe(self._on_stream_autobc, init=True)
         else:
             self._main_frame.menu_item_auto_focus.Enable(False)
+
+    def _update_stream_play_pause(self, curr_s):
+        """
+        Update the play/pause menu entry (ie, enabled & checked)
+        Depends on the current stream, and various global state.
+        Must be called within GUI thread.
+        curr_s (Stream or None): the current stream. None if there is no stream.
+        """
+        main_data = self._main_data
+        # Can play/pause iff:
+        #  * It's a Stream, but not Static
+        #  * The sample is loaded/chamber is under vacuum
+        #    TODO: actually, on the SECOM it's fine to play opt streams when
+        #    chamber is vented. cf StateController.cls_streams_involved
+        #  * No acquisition is active (excepted for the SPARC chamber tab, as
+        #    moving the mirror counts as an "acquisition", but we want to play
+        #    the stream anyway)
+        # TODO: replace the last checks by looking if the stream entry play/pause
+        # button is enabled? or create a VA TabDataModel.PlayableStreams, which
+        # contains the stream classes which are _currently_ playable?
+        can_play = (curr_s is not None and
+                    not isinstance(curr_s, stream.StaticStream) and
+                    ((main_data.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN} and
+                      not main_data.is_acquiring.value) or
+                     main_data.tab.value.name == "sparc_chamber"))
+
+        self._main_frame.menu_item_play_stream.Enable(can_play)
+        if not can_play:
+            self._main_frame.menu_item_play_stream.Check(False)
+
+    def _on_chamber_state(self, _):
+        wx.CallAfter(self._update_stream_play_pause, self._prev_stream)
+
+    def _on_acquisition(self, _):
+        wx.CallAfter(self._update_stream_play_pause, self._prev_stream)
 
     @call_in_wx_main
     def _on_auto_focus_state(self, active):
@@ -309,11 +340,19 @@ class MenuController(object):
         self._main_frame.menu_item_auto_cont.Check(autobc)
 
     def _on_play_stream(self, evt):
+        """
+        Called when the play/pause menu entry is modified (or F6 pressed)
+        """
         try:
             curr_s = self._get_current_stream()
         except LookupError:
             return
 
+        if not self._main_frame.menu_item_play_stream.IsEnabled():
+            logging.warning("Cannot play/pause stream when menu entry is disabled")
+            return
+
+        # TODO: should never happen => remove?
         # StaticStreams have a should_update, but nothing happens
         if isinstance(curr_s, stream.StaticStream):
             return
