@@ -41,7 +41,7 @@ EEPROM_CAPACITY = 512  # Memory space 0h-1ffh
 
 class PowerControlUnit(model.PowerSupplier):
     '''
-    Implements the PowerSupplier class to regulate the power supply of the 
+    Implements the PowerSupplier class to regulate the power supply of the
     components connected to the Power Control Unit board. It also takes care of
     communication with the PCU firmware.
     '''
@@ -67,7 +67,8 @@ class PowerControlUnit(model.PowerSupplier):
         # TODO: catch errors and convert to HwError
         self._ser_access = threading.Lock()
 
-        self._port = self._findDevice(port)  # sets ._serial
+        self._file = None
+        self._port = self._findDevice(port)  # sets ._serial and ._file
         logging.info("Found Power Control device on port %s", self._port)
 
         # Get identification of the Power control device
@@ -182,11 +183,15 @@ class PowerControlUnit(model.PowerSupplier):
             self._executor.cancel()
             self._executor.shutdown()
             self._executor = None
+
         if self._serial:
             with self._ser_access:
                 self._serial.close()
                 self._serial = None
+
+        if self._file:
             self._file.close()
+            self._file = None
 
     def _getIdentification(self):
         return self._sendCommand("*IDN?")
