@@ -1,3 +1,15 @@
+odemis (2.5.5-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5.5
+  * Bugs fixed:
+    - Don't try setting extremely long exposure times in high-quality presets (DELPHI/SECOM)
+    - Zooming a lot on 1x1 px image could fail
+    - Editing the microscope file would fail when using a MODEL_SELECTOR (SPARC)
+  * Improvement:
+    - When exporting just one stream, use the stream name instead of the view name
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 07 Dec 2016 13:11:58 +0100
+
 odemis (2.5.4-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5.4
