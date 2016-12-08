@@ -204,12 +204,15 @@ def main(args):
         return 1
     except ValueError as exp:
         logging.error("%s", exp)
+        print(exp)  # Error message to be displayed to the user
         return 127
     except IOError as exp:
         logging.error("%s", exp)
+        print(exp)  # Error message to be displayed to the user
         return 129
-    except Exception:
-        logging.exception("Unexpected error while performing action.")
+    except Exception as exp:
+        logging.exception("Unexpected error while performing action")
+        print(exp)  # Error message to be displayed to the user
         return 130
 
     return 0

@@ -124,6 +124,7 @@ if "PYTHONPATH" in odemis_config:
 import threading
 import subprocess
 from Pyro4.errors import CommunicationError
+import odemis
 from odemis import model
 from odemis.util import driver
 from odemis.model import ST_RUNNING, ST_UNLOADED
@@ -159,7 +160,8 @@ class BackendStarter(object):
         # self._main_thread = threading.current_thread()
 
     def _create_component_frame(self, micname):
-        frame = wx.Dialog(None, title="Starting Odemis for %s..." % micname, size=(800, 800),
+        frame = wx.Dialog(None, title="Starting Odemis (v%s) for %s..." % (odemis.__version__, micname),
+                          size=(800, 800),
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
         # TODO: use ListCtrl
@@ -209,6 +211,10 @@ class BackendStarter(object):
         frame.CenterOnScreen()
         return frame
 
+    def show_popup(self, summary, message="", icon="dialog-info"):
+        self._notif.update(summary, message, icon)
+        self._notif.show()
+
     def start_backend(self, modelfile):
         """ Start the backend and returns when it's fully instantiated or has failed to do so
 
@@ -218,10 +224,6 @@ class BackendStarter(object):
             modelfile: (str) Path to the model definition Yaml file
 
         """
-
-        self._notif.update("Starting Odemis back-end", "", "dialog-info")
-        self._notif.show()
-
         # install cgroup, for memory protection
         if (
             not os.path.exists("/sys/fs/cgroup/memory/odemisd") and
@@ -236,20 +238,23 @@ class BackendStarter(object):
         # drop its privileges to the odemis group
         # Note: sudo drops all the env variables, so /etc/odemis.conf might be
         # interpreted differently in odemisd than what we've just read
-        error = subprocess.call(
-            ["sudo", "odemisd", "--daemonize",
-             "--log-level", self._config["LOGLEVEL"],
-             "--log-target", self._config["LOGFILE"],
-             modelfile]
-        )
-
-        # If it immediately fails, it's easy
-        if error != 0:
-            # TODO: show a dialog window, with the error message of odemisd
-            self._notif.update("Odemis back-end failed to start",
-                               "For more information type odemis-start in a terminal.",
-                               "dialog-warning")
-            self._notif.show()
+        try:
+            subprocess.check_call(
+                ["sudo", "odemisd", "--daemonize",
+                 "--log-level", self._config["LOGLEVEL"],
+                 "--log-target", self._config["LOGFILE"],
+                 modelfile]
+            )
+        except subprocess.CalledProcessError as ex:
+            # If it immediately fails, it's easy
+            self.show_popup("Odemis back-end failed to start",
+                            "For more information type odemis-start in a terminal.",
+                            "dialog-warning")
+            show_error_box("Error starting Odemis back-end",
+                           "Unexpected error while starting Odemis back-end:\n"
+                           "%s\n\n"
+                           "Try starting Odemis again, and use the \"Report a "
+                           "problem\" function if the issue continues." % ex)
             raise ValueError("Starting back-end failed")
 
     # def _on_sigint(self, signum, frame):
@@ -284,13 +289,12 @@ class BackendStarter(object):
                     raise  # No hope
                 if time.time() > end_time:
                     logging.exception("Timeout waiting for back-end to start")
-                    self._notif.update(
+                    self.show_popup(
                         "Odemis back-end failed to start",
                         ("For more information look at the log messages in %s "
                          "or type odemis-start in a terminal.") % self._config["LOGFILE"],
                         "dialog-warning"
                     )
-                    self._notif.show()
                     raise IOError("Back-end failed to start")
                 else:
                     logging.debug("Waiting a bit more for the backend to appear")
@@ -299,13 +303,12 @@ class BackendStarter(object):
         try:
             self._mic.ghosts.subscribe(self._on_ghosts, init=True)
         except (IOError, CommunicationError):
-            self._notif.update(
+            self.show_popup(
                 "Odemis back-end failed to start",
                 ("For more information look at the log messages in %s "
                  "or type odemis-start in a terminal.") % self._config["LOGFILE"],
                 "dialog-warning"
             )
-            self._notif.show()
             raise IOError("Back-end failed to fully instantiate")
 
         # create a window with the list of the components
@@ -349,24 +352,21 @@ class BackendStarter(object):
         # status = driver.get_backend_status()
         # if status == driver.BACKEND_RUNNING:
         if ret == wx.ID_OK:
-            self._notif.update("Odemis back-end successfully started",
-                               "" if self._nogui else "Graphical interface will now start.",
-                               "dialog-info")
-            self._notif.show()
+            self.show_popup("Odemis back-end successfully started",
+                            "" if self._nogui else "Graphical interface will now start.",
+                            "dialog-info")
         # elif status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
         elif ret == wx.ID_EXIT:
-            self._notif.update(
+            self.show_popup(
                 "Odemis back-end failed to start",
                 ("For more information look at the log messages in %s "
                  "or type odemis-start in a terminal.") % self._config["LOGFILE"],
                 "dialog-warning")
-            self._notif.show()
             raise IOError("Back-end failed to fully instantiate")
         elif ret == wx.ID_CANCEL:
             logging.info("Stopping the backend")
             backend.terminate()
-            self._notif.update("Odemis back-end start cancelled", "", "dialog-info")
-            self._notif.show()
+            self.show_popup("Odemis back-end start cancelled")
             raise ValueError("Back-end start cancelled by the user")
         else:
             logging.warning("Unexpected return code %d", ret)
@@ -556,10 +556,12 @@ def main(args):
                 logging.warning("Back-end is not responding, will restart it...")
                 # subprocess.call(["/usr/bin/pkill", "-f", config["BACKEND"]])
                 subprocess.call(["sudo", "/usr/bin/odemis-stop"])
-                time.sleep(1)
+                time.sleep(3)
 
             try:
                 if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+                    starter.show_popup("Starting Odemis back-end")
+
                     # Get the model file out of the various ways
                     if options.model_conf:
                         modelfile = options.model_conf
@@ -580,9 +582,15 @@ def main(args):
                             modelfile = out[0].strip()
                             logging.info("Will use model %s", modelfile)
                         except subprocess.CalledProcessError as ex:
+                            if ex.output:
+                                output = ":\n%s" % (ex.output.strip(),)
+                            else:
+                                output = "."
                             show_error_box("Error starting Odemis back-end",
-                                           "Failed to pick the microscope file with MODEL_SELECTOR: %s.\n\n"
-                                           "Check all the hardware is connected and try again to start Odemis." % (ex,))
+                                           "Failed to pick the microscope file with MODEL_SELECTOR.\n"
+                                           "The model selector (%s) exited with error %d%s\n\n"
+                                           "Check all the hardware is connected and try again to start Odemis." %
+                                           (ex.cmd[0], ex.returncode, output))
                             raise ValueError("Failed to pick the microscope file: %s" % (ex,))
                     else:
                         raise ValueError("No microscope model specified")
