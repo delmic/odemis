@@ -430,7 +430,7 @@ class AcquisitionDialog(xrcfr_acq):
         Turn on/off the fan of the CCD
         enable (boolean): True to turn on/restore the fan, and False to turn if off
         """
-        if model.hasVA(self._main_data_model.ccd, "fanSpeed"):
+        if not model.hasVA(self._main_data_model.ccd, "fanSpeed"):
             return
 
         fs = self._main_data_model.ccd.fanSpeed
