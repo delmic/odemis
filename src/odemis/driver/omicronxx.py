@@ -75,9 +75,13 @@ class USBAccesser(object):
         self.driver = driver.getSerialDriver(port)
 
     def terminate(self):
-        self._serial.close()
-        self._serial = None
-        self._file.close()
+        if self._serial:
+            self._serial.close()
+            self._serial = None
+
+        if self._file:
+            self._file.close()
+            self._file = None
 
     def _openSerialPort(self, port):
         """
@@ -87,6 +91,7 @@ class USBAccesser(object):
         raise IOError: if port cannot be used
         """
         if port == "/dev/fakehub":
+            self._file = None
             return HubxXSimulator(timeout=1)
 
         # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use

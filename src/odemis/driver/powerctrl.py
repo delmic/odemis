@@ -41,7 +41,7 @@ EEPROM_CAPACITY = 512  # Memory space 0h-1ffh
 
 class PowerControlUnit(model.PowerSupplier):
     '''
-    Implements the PowerSupplier class to regulate the power supply of the 
+    Implements the PowerSupplier class to regulate the power supply of the
     components connected to the Power Control Unit board. It also takes care of
     communication with the PCU firmware.
     '''
@@ -67,7 +67,8 @@ class PowerControlUnit(model.PowerSupplier):
         # TODO: catch errors and convert to HwError
         self._ser_access = threading.Lock()
 
-        self._port = self._findDevice(port)  # sets ._serial
+        self._file = None
+        self._port = self._findDevice(port)  # sets ._serial and ._file
         logging.info("Found Power Control device on port %s", self._port)
 
         # Get identification of the Power control device
@@ -98,7 +99,15 @@ class PowerControlUnit(model.PowerSupplier):
         for k, v in init.items():
             if v is None:
                 del init[k]
-        self._doSupply(init, apply_delay=False)
+        try:
+            self._doSupply(init, apply_delay=False)
+        except IOError as ex:
+            # This is in particular to handle some cases where the device resets
+            # when turning on the power. One or more trials and the
+            logging.exception("Failure during turning on initial power.")
+            raise HwError("Device had an error when initialising power: %s. "
+                          "Try again or contact support if the problem persists.",
+                          ex)
 
         self.memoryIDs = model.VigilantAttribute(None, readonly=True, getter=self._getIdentities)
 
@@ -106,8 +115,7 @@ class PowerControlUnit(model.PowerSupplier):
             mem_ids = self.memoryIDs.value
             for eid in ids:
                 if eid not in mem_ids:
-                    raise HwError("EEPROM id %s was not detected. Please make sure "
-                                  "you are using the correct microscope file and "
+                    raise HwError("EEPROM id %s was not detected. Make sure "
                                   "all EEPROM components are connected." % (eid,))
 
     @isasync
@@ -175,11 +183,15 @@ class PowerControlUnit(model.PowerSupplier):
             self._executor.cancel()
             self._executor.shutdown()
             self._executor = None
+
         if self._serial:
             with self._ser_access:
                 self._serial.close()
                 self._serial = None
+
+        if self._file:
             self._file.close()
+            self._file = None
 
     def _getIdentification(self):
         return self._sendCommand("*IDN?")
