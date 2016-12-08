@@ -5,6 +5,7 @@ odemis (2.5.5-1ubuntu1) precise; urgency=medium
     - Don't try setting extremely long exposure times in high-quality presets (DELPHI/SECOM)
     - Zooming a lot on 1x1 px image could fail
     - Editing the microscope file would fail when using a MODEL_SELECTOR (SPARC)
+    - CCD fan would not automatically stop during high-quality acquisition (DELPHI/SECOM)
   * Improvement:
     - When exporting just one stream, use the stream name instead of the view name
 
