@@ -104,6 +104,8 @@ SPARC2_MODES = {
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # That one will be automatically dropped if it doesn't affect
+                 # spectrometer (eg, with a spectrograph-dedicated)
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                 }),
@@ -142,14 +144,10 @@ SPARC2_MODES = {
                 }),
             'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
-                 # TODO: check this now works
                  # 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
-                 # TODO: focus should be independent from the other modes.
-                 # Needs to be changed after/before grating because the spectrometer
-                 # (SR-193) remembers the focus per grating. Or just remember
-                 # focus per grating + mode.
+                 # Note: focus is store/restore when going to/from this mode
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
@@ -248,6 +246,22 @@ class OpticalPathManager(object):
             except KeyError:
                 pass  # Mode to delete is just not there
 
+        # Handle different focus for chamber-view (in SPARCv2)
+        if "chamber-view" in self._modes:
+            self._focus_in_chamber_view = None
+            self._focus_out_chamber_view = None
+            # Check whether the focus affects the chamber view
+            self._chamber_view_own_focus = False
+            try:
+                chamb_det = self._getComponent(self._modes["chamber-view"][0])
+                focus = self._getComponent("focus")
+                if self.affects(focus.name, chamb_det.name):
+                    self._chamber_view_own_focus = True
+            except LookupError:
+                pass
+            if not self._chamber_view_own_focus:
+                logging.debug("No focus component affecting chamber")
+
         try:
             spec = self._getComponent("spectrometer")
         except LookupError:
@@ -277,6 +291,19 @@ class OpticalPathManager(object):
 
     def __del__(self):
         logging.debug("Ending path manager")
+
+        # Restore the spectrometer focus, so that on next start, this value will
+        # be used again as "out of chamber view".
+        if self._chamber_view_own_focus and self._last_mode == "chamber-view":
+            focus_comp = self._getComponent("focus")
+            if self._focus_out_chamber_view is not None:
+                logging.debug("Restoring focus from before coming to chamber view to %s",
+                              self._focus_out_chamber_view)
+                try:
+                    focus_comp.moveAbsSync(self._focus_out_chamber_view)
+                except IOError as e:
+                    logging.info("Actuator move failed giving the error %s", e)
+
         self._executor.shutdown(wait=False)
 
     def _getComponent(self, role):
@@ -327,8 +354,19 @@ class OpticalPathManager(object):
 
         logging.debug("Going to optical path '%s', with target detector %s.", mode, target)
 
-        modeconf = self._modes[mode][1]
         fmoves = []  # moves in progress
+
+        # Restore the spectrometer focus before any other move, as (on the SR193),
+        # the value is grating/output dependent
+        if self._chamber_view_own_focus and self._last_mode == "chamber-view":
+            focus_comp = self._getComponent("focus")
+            self._focus_in_chamber_view = focus_comp.position.value.copy()
+            if self._focus_out_chamber_view is not None:
+                logging.debug("Restoring focus from before coming to chamber view to %s",
+                              self._focus_out_chamber_view)
+                fmoves.append(focus_comp.moveAbs(self._focus_out_chamber_view))
+
+        modeconf = self._modes[mode][1]
         for comp_role, conf in modeconf.items():
             # Try to access the component needed
             try:
@@ -458,7 +496,22 @@ class OpticalPathManager(object):
             try:
                 f.result()
             except IOError as e:
-                logging.debug("Actuator move failed giving the error %s", e)
+                logging.warning("Actuator move failed giving the error %s", e)
+
+        # When going to chamber view, store the current focus position, and
+        # restore the special focus position for chamber, after _really_ all
+        # the other moves have finished, because the grating/output selector
+        # moves affects the current position of the focus.
+        if self._chamber_view_own_focus and mode == "chamber-view":
+            focus_comp = self._getComponent("focus")
+            self._focus_out_chamber_view = focus_comp.position.value.copy()
+            if self._focus_in_chamber_view is not None:
+                logging.debug("Restoring focus from previous chamber view to %s",
+                              self._focus_in_chamber_view)
+                try:
+                    focus_comp.moveAbsSync(self._focus_in_chamber_view)
+                except IOError as e:
+                    logging.warning("Actuator move failed giving the error %s", e)
 
     def selectorsToPath(self, target):
         """
@@ -470,6 +523,10 @@ class OpticalPathManager(object):
         fmoves = []
         for comp in self._actuators:
             # TODO: pre-cache this as comp/target -> axis/pos
+
+            # TODO: extend the path computation to "for every actuator which _affects_
+            # the target, move if if position known, and update path to that actuator"?
+            # Eg, this would improve path computation on SPARCv2 with fiber aligner
             mv = {}
             for an, ad in comp.axes.items():
                 if hasattr(ad, "choices") and isinstance(ad.choices, dict):
