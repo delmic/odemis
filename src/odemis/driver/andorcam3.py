@@ -296,7 +296,8 @@ class AndorCam3(model.DigitalCamera):
         except NotImplementedError:
             pass
 
-        if self.isImplemented(u"FanSpeed"):
+        if (self.isImplemented(u"FanSpeed") and
+            len(self.GetEnumStringImplemented(u"FanSpeed")) > 1):
             # max speed
             self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
                                                   setter=self.setFanSpeed) # ratio to max speed
@@ -900,9 +901,11 @@ class AndorCam3(model.DigitalCamera):
         # for the Neo and the SimCam. Looks like this for Neo:
         # [u"Off", u"Low", u"On"]
         values = self.GetEnumStringImplemented(u"FanSpeed")
+        if len(values) <= 1:
+            return 0
         speed_index = int(round(speed * (len(values) - 1)))
         self.SetEnumString(u"FanSpeed", values[speed_index])
-        return speed_index / len(values)
+        return speed_index / (len(values) - 1)
 
     def getReadoutRates(self):
         """

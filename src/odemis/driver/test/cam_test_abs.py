@@ -142,6 +142,19 @@ class VirtualTestCam(object):
         self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[0])
 
 #    @unittest.skip("simple")
+    def test_fan(self):
+        if not model.hasVA(self.camera, "fanSpeed"):
+            self.skipTest("Camera doesn't support setting fan speed")
+
+        orig_fs = self.camera.fanSpeed.value
+        self.camera.fanSpeed.value = self.camera.fanSpeed.range[0]
+        self.assertEqual(self.camera.fanSpeed.value, self.camera.fanSpeed.range[0])
+        self.camera.fanSpeed.value = self.camera.fanSpeed.range[1]
+        self.assertEqual(self.camera.fanSpeed.value, self.camera.fanSpeed.range[1])
+        self.camera.fanSpeed.value = orig_fs
+        self.assertEqual(self.camera.fanSpeed.value, orig_fs)
+
+#    @unittest.skip("simple")
     def test_acquire(self):
         self.assertEqual(len(self.camera.shape), 3)
         exposure = 0.1

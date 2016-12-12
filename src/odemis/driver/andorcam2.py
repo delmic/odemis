@@ -1286,7 +1286,7 @@ class AndorCam2(model.DigitalCamera):
             # => queue it for after the end of the acquisition
             if errno == 20072: # DRV_ACQUIRING
                 logging.error("Failed to change fan speed due to acquisition in progress")
-                return self.targetTemperature.value
+                return self.fanSpeed.value
             raise
 
         speed = 1 - (val / max(values))
