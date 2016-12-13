@@ -759,7 +759,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # A big timeout in the wait can cause up to 50 ms latency.
                     # => after waiting the expected time only do small waits
-                    endt = start + rep_time * 4 + 5
+                    endt = start + rep_time * 3 + 5
                     timedout = not self._acq_rep_complete.wait(rep_time + 0.01)
                     if timedout:
                         logging.debug("Waiting more for rep")
@@ -785,7 +785,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             logging.warning("Acquisition of repetition stream for "
                                             "pixel %s timed out after %g s. "
                                             "Memory usage is %d. Will try again",
-                                            i, rep_time * 4 + 5, memu)
+                                            i, rep_time * 3 + 5, memu)
                         else:  # too fast to be possible (< the expected time - 5%)
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)
@@ -1057,7 +1057,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # A big timeout in the wait can cause up to 50 ms latency.
                     # => after waiting the expected time only do small waits
-                    endt = start + rep_time * 4 + 5
+                    endt = start + rep_time * 3 + 5
                     timedout = not self._acq_rep_complete.wait(rep_time + 0.01)
                     if timedout:
                         logging.debug("Waiting more for rep")
@@ -1084,7 +1084,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             logging.warning("Acquisition of repetition stream for "
                                             "pixel %s timed out after %g s. "
                                             "Memory usage is %d. Will try again",
-                                            i, rep_time * 4 + 5, memu)
+                                            i, rep_time * 3 + 5, memu)
                         else:  # too fast to be possible (< the expected time - 5%)
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)
