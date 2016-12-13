@@ -245,6 +245,8 @@ class AcquisitionTask(object):
             # otherwise, the results we got might already be useful
             if not raw_images:
                 raise
+            logging.warning("Exception during acquisition (after some data already acquired)",
+                            exc_info=True)
             exp = e
         finally:
             # Don't hold references to the streams once it's over
