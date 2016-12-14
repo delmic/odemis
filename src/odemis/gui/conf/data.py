@@ -283,7 +283,7 @@ HW_SETTINGS_CONFIG = {
     "spectrograph":
         OrderedDict((
             ("wavelength", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
+                "control_type": odemis.gui.CONTROL_FLT,
                 "accuracy": 3,
             }),
             ("grating", {}),
@@ -475,6 +475,7 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
             }),
             ("wavelength", {
+                "control_type": odemis.gui.CONTROL_FLT,
                 "range": (0.0, 1900e-9),
             }),
             ("grating", {}),
@@ -494,6 +495,7 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_FLT,
             }),
             ("wavelength", {
+                "control_type": odemis.gui.CONTROL_FLT,
                 "range": (0.0, 1900e-9),
             }),
             ("grating", {}),

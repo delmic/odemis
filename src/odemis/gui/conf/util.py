@@ -839,9 +839,21 @@ def create_axis_entry(container, name, comp, conf=None):
     pos = comp.position.value[name]
     unit = ad.unit
 
-    # If axis has .range (continuous) => slider
-    # If axis has .choices (enumerated) => combo box
-    if hasattr(ad, "range"):
+    # Determine control type
+    try:
+        control_type = conf['control_type']
+    except KeyError:
+        # If axis has .range (continuous) => slider
+        # If axis has .choices (enumerated) => combo box
+        if hasattr(ad, "range"):
+            control_type = odemis.gui.CONTROL_SLIDER
+        else:
+            control_type = odemis.gui.CONTROL_COMBO
+
+    if callable(control_type):
+        control_type = control_type(comp, name, conf)
+
+    if control_type == odemis.gui.CONTROL_SLIDER:
         if "range" in conf:
             minv, maxv = conf["range"]
         else:
@@ -862,7 +874,24 @@ def create_axis_entry(container, name, comp, conf=None):
         # widget too early.
         axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                       events=wx.EVT_SCROLL_CHANGED)
-    else:
+    elif control_type == odemis.gui.CONTROL_FLT:
+        if "range" in conf:
+            minv, maxv = conf["range"]
+        else:
+            minv, maxv = ad.range
+
+        ctrl_conf = {
+            'min_val': minv,
+            'max_val': maxv,
+            'unit': unit,
+            'accuracy': conf.get('accuracy', 3),
+        }
+
+        lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
+        axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                      events=wx.EVT_COMMAND_ENTER)
+
+    elif control_type == odemis.gui.CONTROL_COMBO:
         # FIXME: should be readonly, but it fails with GetInsertionPoint (wx.CB_READONLY)
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
 
@@ -921,6 +950,8 @@ def create_axis_entry(container, name, comp, conf=None):
         axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                       pos_2_ctrl=cb_set, ctrl_2_pos=cb_get,
                                       events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+    else:
+        logging.error("Unknown control type %s", control_type)
 
     value_ctrl.SetToolTipString(tooltip)
     lbl_ctrl.SetToolTipString(tooltip)

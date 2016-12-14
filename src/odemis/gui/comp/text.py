@@ -671,8 +671,10 @@ class _NumberTextCtrl(wx.TextCtrl):
             str_val = units.readable_str(self._number_value, sig=self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
 
-    def Enable(self, enable):
+    def Disable(self):
+        self.Enable(False)
 
+    def Enable(self, enable=True):
         # TODO: Find a better way to deal with this hack that was put in place because under
         # MS Windows the background colour cannot (at all?) be set when a control is disabled
         if os.name == 'nt':
