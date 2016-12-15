@@ -40,9 +40,6 @@ import time
 from ._base import Stream, UNDEFINED_ROI
 
 
-# Tile resolution in case of fuzzing
-TILE_SHAPE = (4, 4)
-
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
 # simultaneously because the two optical detectors need the same light, and a
@@ -415,6 +412,7 @@ class MultipleDetectorStream(Stream):
             # FIXME: if sed_trigger, need to notify it again
             return
 
+        # TODO: store all the data received, and average it (to reduce noise)
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
         if not self._acq_main_complete.is_set():
             # only use the first data per pixel
@@ -639,22 +637,30 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # Calculate dwellTime and scale to check if fuzzing could be applied
         fuzzing = (hasattr(self._rep_stream, "fuzzing") and self._rep_stream.fuzzing.value)
         if fuzzing:
-            dt = (exp / numpy.prod(TILE_SHAPE)) / 2
-            sem_pxs = self._emitter.pixelSize.value
-            subpxs = (self._rep_stream.pixelSize.value / TILE_SHAPE[0],
-                      self._rep_stream.pixelSize.value / TILE_SHAPE[1])
-            scale = (subpxs[0] / sem_pxs[0], subpxs[1] / sem_pxs[1])
-
-            # In case dt it is below the minimum dwell time or scale is less
-            # than 1, give up fuzzing and do normal acquisition
+            # Largest (square) resolution the dwell time permits
             rng = self._emitter.dwellTime.range
-            if not (rng[0] <= dt <= rng[1]) or scale < 1:
+            max_tile_shape_dt = int(math.sqrt(exp / (rng[0] * 2)))
+            # Largest resolution the SEM scale permits (assuming min scale = 1)
+            sem_pxs = self._emitter.pixelSize.value
+            max_tile_shape_scale = int(self._rep_stream.pixelSize.value / sem_pxs[0])
+
+            # the min of both is the real maximum we can do
+            ts = max(1, min(max_tile_shape_dt, max_tile_shape_scale))
+            tile_shape = (ts, ts)
+            subpxs = self._rep_stream.pixelSize.value / ts
+            dt = (exp / numpy.prod(tile_shape)) / 2
+            scale = (subpxs / sem_pxs[0], subpxs / sem_pxs[1])
+
+            # Double check fuzzing would work (and make sense)
+            if ts == 1 or not (rng[0] <= dt <= rng[1]) or scale[0] < 1 or scale[1] < 1:
+                logging.info("Disabled fuzzing because SEM wouldn't support it")
                 fuzzing = False
 
         if fuzzing:
+            logging.info("Using fuzzing with tile shape = %s", tile_shape)
             # Handle fuzzing by scanning tile instead of spot
             self._emitter.scale.value = scale
-            self._emitter.resolution.value = TILE_SHAPE  # grid scan
+            self._emitter.resolution.value = tile_shape  # grid scan
             self._emitter.dwellTime.value = self._emitter.dwellTime.clip(dt)
         else:
             # Set SEM to spot mode, without caring about actual position (set later)
@@ -759,7 +765,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # A big timeout in the wait can cause up to 50 ms latency.
                     # => after waiting the expected time only do small waits
-                    endt = start + rep_time * 4 + 5
+                    endt = start + rep_time * 3 + 5
                     timedout = not self._acq_rep_complete.wait(rep_time + 0.01)
                     if timedout:
                         logging.debug("Waiting more for rep")
@@ -785,7 +791,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             logging.warning("Acquisition of repetition stream for "
                                             "pixel %s timed out after %g s. "
                                             "Memory usage is %d. Will try again",
-                                            i, rep_time * 4 + 5, memu)
+                                            i, rep_time * 3 + 5, memu)
                         else:  # too fast to be possible (< the expected time - 5%)
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)
@@ -902,42 +908,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         accordingly.
         return (float): estimated time for a whole CCD image
         """
-        exp = self._rep_det.exposureTime.value  # s
-        rep_size = self._rep_det.resolution.value
-        readout = numpy.prod(rep_size) / self._rep_det.readoutRate.value
-
         # Move ebeam to the center
         self._emitter.translation.value = (0, 0)
 
-        # Calculate dwellTime and scale to check if fuzzing could be applied
-        fuzzing = (hasattr(self._rep_stream, "fuzzing") and self._rep_stream.fuzzing.value)
-        if fuzzing:
-            dt = (exp / numpy.prod(TILE_SHAPE)) / 2
-            sem_pxs = self._emitter.pixelSize.value
-            subpxs = (self._rep_stream.pixelSize.value / TILE_SHAPE[0],
-                      self._rep_stream.pixelSize.value / TILE_SHAPE[1])
-            scale = (subpxs[0] / sem_pxs[0], subpxs[1] / sem_pxs[1])
-
-            # In case dt it is below the minimum dwell time or scale is less
-            # than 1, give up fuzzing and do normal acquisition
-            rng = self._emitter.dwellTime.range
-            if not (rng[0] <= dt <= rng[1]) or scale < 1:
-                fuzzing = False
-
-        if fuzzing:
-            # Handle fuzzing by scanning tile instead of spot
-            self._emitter.scale.value = scale
-            self._emitter.resolution.value = TILE_SHAPE  # grid scan
-            self._emitter.dwellTime.value = self._emitter.dwellTime.clip(dt)
-        else:
-            # Set SEM to spot mode, without caring about actual position (set later)
-            self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
-            self._emitter.resolution.value = (1, 1)
-            # Dwell time as long as possible, but better be slightly shorter than
-            # CCD to be sure it is not slowing thing down.
-            self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
-
-        return exp + readout
+        return self._adjustHardwareSettings(self)
 
     def _runAcquisitionScanStage(self, future):
         """
@@ -1057,7 +1031,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # A big timeout in the wait can cause up to 50 ms latency.
                     # => after waiting the expected time only do small waits
-                    endt = start + rep_time * 4 + 5
+                    endt = start + rep_time * 3 + 5
                     timedout = not self._acq_rep_complete.wait(rep_time + 0.01)
                     if timedout:
                         logging.debug("Waiting more for rep")
@@ -1084,7 +1058,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             logging.warning("Acquisition of repetition stream for "
                                             "pixel %s timed out after %g s. "
                                             "Memory usage is %d. Will try again",
-                                            i, rep_time * 4 + 5, memu)
+                                            i, rep_time * 3 + 5, memu)
                         else:  # too fast to be possible (< the expected time - 5%)
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)

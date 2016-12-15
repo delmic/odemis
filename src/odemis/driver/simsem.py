@@ -29,6 +29,7 @@ from odemis import model, util, dataio
 from odemis.model import isasync
 from odemis.util import img
 import os
+import random
 from scipy import ndimage
 import threading
 import time
@@ -353,7 +354,7 @@ class Detector(model.Detector):
         self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
         self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
 
-        self.drift_factor = 1  # dummy value for drift in pixels
+        self.drift_factor = 2  # dummy value for drift in pixels
         self.current_drift = 0
         # Given that max resolution is half the shape of fake_img,
         # we set the drift bound to stay inside the fake_img bounds
@@ -413,9 +414,13 @@ class Detector(model.Detector):
         """
         Periodically updates drift according to drift_factor and drift_period.
         """
-        self.current_drift += self.drift_factor
-        if abs(self.current_drift) == self.drift_bound:
+        drift = self.current_drift + random.random() * self.drift_factor
+        if abs(drift) >= self.drift_bound:
+            # Make it bounce back
+            drift = cmp(drift, 0) * (2 * self.drift_bound - abs(drift))
             self.drift_factor = -self.drift_factor
+
+        self.current_drift = drift
 
     def _simulate_image(self):
         """
