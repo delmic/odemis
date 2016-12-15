@@ -34,7 +34,7 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
-from odemis.acq import align, stream
+from odemis.acq import align
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import conf, acqmng
@@ -42,7 +42,6 @@ from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.model import TOOL_NONE
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
@@ -624,11 +623,13 @@ class SparcAcquiController(object):
         self._streambar_controller.enable(True)
         self._streambar_controller.resume()
 
-    def _reset_acquisition_gui(self, text=None, keep_filename=False):
+    def _reset_acquisition_gui(self, text=None, level=None, keep_filename=False):
         """
         Set back every GUI elements to be ready for the next acquisition
         text (None or str): a (error) message to display instead of the
           estimated acquisition time
+        level (None or logging.*): logging level of the text, shown as an icon.
+          If None, no icon is shown.
         keep_filename (bool): if True, will not update the filename
         """
         self.btn_cancel.Hide()
@@ -642,6 +643,7 @@ class SparcAcquiController(object):
 
         if text is not None:
             self.lbl_acqestimate.SetLabel(text)
+            self._show_status_icons(level)
         else:
             self.update_acquisition_time()
 
@@ -667,13 +669,11 @@ class SparcAcquiController(object):
 
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
+        self._main_data_model.is_acquiring.value = True
 
         self.gauge_acq.Show()
         self.btn_cancel.Show()
-
-        self._main_data_model.is_acquiring.value = True
-
-        # FIXME: probably not the whole window is required, just the file settings
+        self._show_status_icons(None)
         self._tab_panel.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
@@ -706,15 +706,14 @@ class SparcAcquiController(object):
         thumb = acq.computeThumbnail(st, acq_future)
         data, exp = acq_future.result()
 
-        # Handle the case acquisition failed "a bit"
-        if exp:
-            logging.error("Acquisition failed (after %d streams): %s",
-                          len(data), exp)
+        if data:
+            filename = self.filename.value
+            exporter = dataio.get_converter(self.conf.last_format)
+            exporter.export(filename, data, thumb)
+            logging.info(u"Acquisition saved as file '%s'.", filename)
+        else:
+            logging.debug("Not saving into file '%s' as there is no data", filename)
 
-        filename = self.filename.value
-        exporter = dataio.get_converter(self.conf.last_format)
-        exporter.export(filename, data, thumb)
-        logging.info(u"Acquisition saved as file '%s'.", filename)
         return data, exp, filename
 
     @call_in_wx_main
@@ -729,18 +728,25 @@ class SparcAcquiController(object):
         self._acq_future_connector = None
 
         try:
-            future.result()
+            data, exp = future.result()
         except CancelledError:
             # hide progress bar (+ put pack estimated time)
             self.gauge_acq.Hide()
             # don't change filename => we can reuse it
             self._reset_acquisition_gui(keep_filename=True)
             return
-        except Exception:
+        except Exception as exp:
             # leave the gauge, to give a hint on what went wrong.
             logging.exception("Acquisition failed")
-            self._reset_acquisition_gui("Acquisition failed.")
+            self._reset_acquisition_gui("Acquisition failed (see log panel).",
+                                        level=logging.WARNING,
+                                        keep_filename=True)
             return
+
+        # Handle the case acquisition failed "a bit"
+        if exp:
+            logging.error("Acquisition failed (after %d streams): %s",
+                          len(data), exp)
 
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
@@ -761,18 +767,24 @@ class SparcAcquiController(object):
             data, exp, filename = future.result()
         except Exception:
             logging.exception("Saving acquisition failed")
-            self._reset_acquisition_gui("Saving acquisition file failed")
+            self._reset_acquisition_gui("Saving acquisition file failed (see log panel).",
+                                        level=logging.WARNING)
             return
 
-        # Needs to be done before changing tabs as it will play again the stream
-        # (and they will be immediately be stopped when changing tab).
-        self._reset_acquisition_gui()
-
-        # TODO: we should add the file to the list of recently-used files
-        # cf http://pyxdg.readthedocs.org/en/latest/recentfiles.html
         if exp is None:
+            # Needs to be done before changing tabs as it will play again the stream
+            # (and they will be immediately be stopped when changing tab).
+            self._reset_acquisition_gui()
+
+            # TODO: we should add the file to the list of recently-used files
+            # cf http://pyxdg.readthedocs.org/en/latest/recentfiles.html
+
             # display in the analysis tab
             self._show_acquisition(data, open(filename))
+        else:
+            self._reset_acquisition_gui("Acquisition failed (see log panel).",
+                                        level=logging.WARNING,
+                                        keep_filename=(not data))
 
 
 # TODO: merge with AutoCenterController because they share too many GUI elements
