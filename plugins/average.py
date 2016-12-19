@@ -64,8 +64,14 @@ class AveragePlugin(Plugin):
             "tooltip": "Number of frames acquired and averaged",
             "control_type": odemis.gui.CONTROL_INT,  # no slider
         }),
+        ("scale", {
+            "control_type": odemis.gui.CONTROL_RADIO,
+            # Can't directly use binning_1d_from_2d because it needs a component
+        }),
         ("resolution", {
-            "control_type": odemis.gui.CONTROL_READONLY,  # don't allow to change
+            "control_type": odemis.gui.CONTROL_READONLY,
+            "tooltip": "Number of pixels scanned",
+            "accuracy": None,  # never simplify the numbers
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
@@ -90,6 +96,11 @@ class AveragePlugin(Plugin):
         dt = main_data.ebeam.dwellTime
         dtrg = (dt.range[0], min(dt.range[1], 1))
         self.dwellTime = model.FloatContinuous(dt.value, range=dtrg, unit=dt.unit)
+        self.scale = main_data.ebeam.scale
+        # Trick to pass the component (ebeam to binning_1d_from_2d())
+        self.vaconf["scale"]["choices"] = (lambda cp, va, cf:
+                       odemis.gui.conf.util.binning_1d_from_2d(self.main_app.main_data.ebeam,
+                                                               va, cf))
         self.resolution = main_data.ebeam.resolution  # Just for info
         self.accumulations = model.IntContinuous(10, (1, 10000))
         self.filename = model.StringVA("a.h5")
@@ -97,6 +108,7 @@ class AveragePlugin(Plugin):
 
         self.dwellTime.subscribe(self._update_exp_dur)
         self.accumulations.subscribe(self._update_exp_dur)
+        self.scale.subscribe(self._update_exp_dur)
 
     def _get_new_filename(self):
         conf = get_acqui_conf()
@@ -111,15 +123,25 @@ class AveragePlugin(Plugin):
         """
         main_data = self.main_app.main_data
 
+        # Stop the streams
+        tab_data = main_data.tab.value.tab_data_model
+        for s in tab_data.streams.value:
+            s.should_update.value = False
+
         self.filename.value = self._get_new_filename()
         self.dwellTime.value = main_data.ebeam.dwellTime.value
         self._update_exp_dur()
 
+        if main_data.cld:
+            # If the cl-detector is present => configure the optical path (just to speed-up)
+            main_data.opm.setPath("cli")
+
         dlg = AcquisitionDialog(self, "Averaged acquisition",
-                    "Acquires the SEM and CL intensity streams multiple times and store the average value.\n"
-                    "The number of acquisitions is defined by the 'accumulations' setting.\n")
+                    "Acquires the SEM and CL intensity streams multiple times, \n"
+                    "as defined by the 'accumulations' setting, \n"
+                    "and store the average value.")
         dlg.addSettings(self, self.vaconf)
-        dlg.addButton("Cancel")
+        dlg.addButton("Close")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
         ans = dlg.ShowModal()
 
@@ -135,7 +157,8 @@ class AveragePlugin(Plugin):
         Called when VA that affects the expected duration is changed
         """
         res = self.main_app.main_data.ebeam.resolution.value
-        frt = numpy.prod(res) * self.dwellTime.value * 1.05  # +5% for margin
+        # dt + 1µs for the sum and +5% for margin
+        frt = numpy.prod(res) * (self.dwellTime.value + 1e-6) * 1.05
         tott = frt * self.accumulations.value + 0.1
 
         # Use _set_value as it's read only
@@ -152,18 +175,29 @@ class AveragePlugin(Plugin):
         if not dets:
             raise ValueError("No EM detector available")
         logging.info("Will acquire frame average on %d detectors", len(dets))
-        exporter = dataio.find_fittest_converter(self.filename.value)
 
-        self._rawdas = tuple([] for d in dets) # to store each raw frame
+        self._das = [None] * len(dets)  # Data just received
+        sumdas = [None] * len(dets)  # to store accumulated frame (in float)
+        md = [None] * len(dets)  # to store the metadata
         self._prepare_acq(dets)
 
-        f = model.ProgressiveFuture(end=time.time() + self.expectedDuration.value)
+        end = time.time() + self.expectedDuration.value
+        if main_data.cld:
+            # If the cl-detector is present => configure the optical path
+            opmf = main_data.opm.setPath("cli")
+            end += 10
+        else:
+            opmf = None
+
+        f = model.ProgressiveFuture(end=end)
         f.task_canceller = lambda l: True  # To allow cancelling while it's running
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(f)
 
+        if opmf:
+            opmf.result()
+
         try:
-            das = []
             for i in range(nb):
                 # Update the progress bar
                 left = nb - i
@@ -174,29 +208,36 @@ class AveragePlugin(Plugin):
                 dets[0].softwareTrigger.notify()
 
                 # Wait for the acquisition
-                for ev in self._events:
+                for i, ev in enumerate(self._events):
                     if not ev.wait(dur * 3 + 5):
                         raise IOError("Timeout while waiting for frame")
                     ev.clear()
+
+                    # Add the latest frame to the sum
+                    # TODO: do this while waiting for the next frame (to save time)
+                    da = self._das[i]
+                    if sumdas[i] is None:
+                        # Convert to float, to handle very large numbers
+                        sumdas[i] = da.astype(numpy.float64)
+                        md[i] = da.metadata
+                    else:
+                        sumdas[i] += da
 
                 logging.info("Acquired frame %d", i + 1)
 
                 if f.cancelled():
                     logging.debug("Acquisition cancelled")
-                    self._rawdas = None # To recover the memory immediately
                     return
         finally:
             self._end_acq(dets)
 
         # Compute the average data
         fdas = []
-        for das in self._rawdas:
-            # TODO: if it's a lot of accumulation, we should have intermediate
-            # averaging during the acquisition
-            fdas.append(self._average_data(das))
-        self._rawdas = None
+        for sd, md, ld in zip(sumdas, md, self._das):
+            fdas.append(self._average_data(self.accumulations.value, sd, md, ld.dtype))
 
         logging.info("Exporting data to %s", self.filename.value)
+        exporter = dataio.find_fittest_converter(self.filename.value)
         exporter.export(self.filename.value, fdas)
         f.set_result(None)  # Indicate it's over
 
@@ -205,7 +246,7 @@ class AveragePlugin(Plugin):
         dlg.Destroy()
 
     def _prepare_acq(self, dets):
-        # We could synchronize all the detectors, but doing just one, will force
+        # We could synchronize all the detectors, but doing just one will force
         # the others to wait, as they are all handled by the same e-beam driver
         d0 = dets[0]
         d0.data.synchronizedOn(d0.softwareTrigger)
@@ -214,13 +255,13 @@ class AveragePlugin(Plugin):
         # to let the main loop know this data has been received
         self._events = []
         self._listeners = []
-        for d, rdas in zip(dets, self._rawdas):
+        for i, d in enumerate(dets):
             ev = threading.Event()
             self._events.append(ev)
 
             # Ad-hoc function to receive the data
-            def on_data(df, data, ev=ev, rdas=rdas):
-                rdas.append(data)
+            def on_data(df, data, i=i, ev=ev):
+                self._das[i] = data
                 ev.set()
 
             self._listeners.append(on_data)
@@ -231,19 +272,20 @@ class AveragePlugin(Plugin):
         for d, l in zip(dets, self._listeners):
             d.data.unsubscribe(l)
 
-    def _average_data(self, das):
+    def _average_data(self, nb, sumda, md, dtype):
         """
-        das (list of DataArrays): all the acquisitions from a detector
+        nb (int): the number of acquisitions
+        sumda (DataArray): the accumulated acquisition from a detector
+        md (dict): the metadata
+        dtype (numpy.dtype): the data type to be converted to
         return (DataArray): the averaged frame (with the correct metadata)
         """
-        # mean() convert to a float for the intermediary type, but to force
-        # immediately converting to integers again, we provide an int array
-        a = numpy.empty_like(das[0])
-        numpy.mean(das, axis=0, out=a)
+        a = sumda / nb
+        a = model.DataArray(a.astype(dtype), md)
 
         # The metadata is the on from the first DataArray, which is good for
         # _almost_ everything
         if model.MD_DWELL_TIME in a.metadata:
-            a.metadata[model.MD_DWELL_TIME] *= len(das)
+            a.metadata[model.MD_DWELL_TIME] *= nb
 
         return a
