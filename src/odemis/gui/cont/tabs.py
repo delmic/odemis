@@ -3477,6 +3477,7 @@ class TabBarController(object):
         # force the switch to the first tab
         self._tabs.notify(self._tabs.value)
 
+        self._enabled_tabs = set()  # tabs which were enabled before starting acquisition
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
     def get_tabs(self):
@@ -3494,8 +3495,22 @@ class TabBarController(object):
 
     @call_in_wx_main
     def on_acquisition(self, is_acquiring):
-        for tab in self._tabs.choices:
-            tab.button.Enable(not is_acquiring)
+        if is_acquiring:
+            # Remember which tab is already disabled, to not enable those afterwards
+            self._enabled_tabs = set()
+            for tab in self._tabs.choices:
+                if tab.button.Enabled:
+                    self._enabled_tabs.add(tab)
+                    tab.button.Enable(False)
+        else:
+            if not self._enabled_tabs:
+                # It should never happen, but just to protect in case it was
+                # called twice in a row acquiring
+                logging.warning("No tab to enable => will enable them all")
+                self._enabled_tabs = set(self._tabs.choices)
+
+            for tab in self._enabled_tabs:
+                tab.button.Enable(True)
 
     def _create_needed_tabs(self, tab_defs, main_frame, main_data):
         """ Create the tabs needed by the current microscope
