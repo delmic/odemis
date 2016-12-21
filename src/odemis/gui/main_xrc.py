@@ -417,9 +417,9 @@ class xrcpnl_tab_secom_streams(wx.Panel):
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
         self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
-        self.live_btn_press = xrc.XRCCTRL(self, "live_btn_press")
-        self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
-        self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
+        self.btn_press = xrc.XRCCTRL(self, "btn_press")
+        self.btn_opt = xrc.XRCCTRL(self, "btn_opt")
+        self.btn_sem = xrc.XRCCTRL(self, "btn_sem")
         self.pnl_hw_info = xrc.XRCCTRL(self, "pnl_hw_info")
         self.pnl_load_status = xrc.XRCCTRL(self, "pnl_load_status")
         self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
@@ -3397,7 +3397,6 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          
           <object class="ARLiveViewport" name="vp_align_center">
             <size>400,-1</size>
             <XRCED>
@@ -4816,7 +4815,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_press">
+                        <object class="ImageTextToggleButton" name="btn_press">
                           <size>114,-1</size>
                           <icon>img_icon_ico_press_png</icon>
                           <height>48</height>
@@ -4842,7 +4841,7 @@ def __init_resources():
                         <option>1</option>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_opt">
+                        <object class="ImageTextToggleButton" name="btn_opt">
                           <icon>img_icon_ico_optical_png</icon>
                           <icon_on>img_icon_ico_optical_green_png</icon_on>
                           <height>48</height>
@@ -4864,7 +4863,7 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_sem">
+                        <object class="ImageTextToggleButton" name="btn_sem">
                           <icon>img_icon_ico_sem_png</icon>
                           <icon_on>img_icon_ico_sem_green_png</icon_on>
                           <height>48</height>

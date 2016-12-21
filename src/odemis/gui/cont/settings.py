@@ -224,7 +224,8 @@ class SettingsController(object):
         # Create the widgets
 
         btn_autoadjust = ImageTextToggleButton(self.panel, height=24, label="Auto adjust",
-                                                icon=img.getBitmap("icon/ico_contrast.png"))
+                                               icon=img.getBitmap("icon/ico_contrast.png"))
+        btn_autoadjust.SetToolTipString("Adjust detector brightness/contrast")
 
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)

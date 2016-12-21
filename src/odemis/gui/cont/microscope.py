@@ -2,7 +2,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012-2013 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2016 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-from abc import ABCMeta
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
 import math
@@ -37,7 +36,7 @@ from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
     EllipsisAnimator
-from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
+from odemis.model import VigilantAttributeBase, InstantaneousFuture
 import threading
 import time
 import wx
@@ -55,67 +54,39 @@ DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overvie
 DELPHI_OVERVIEW_FOCUS = {"z": 0.006}  # Good focus position for overview image on the Delphi sample holder
 
 
-class MicroscopeStateController(object):
-    """
-    This controller controls the main microscope buttons (ON/OFF,
-    Pause, vacuum...) and updates the model. To query/change the status of a
-    specific component, use the main data model directly.
-    """
-    __metaclass__ = ABCMeta
-    btn_to_va = {}
-
-    def __init__(self, tab_data, tab_panel, btn_prefix):
-        """ Binds the 'hardware' buttons to their appropriate
-        Vigilant Attributes in the model.MainGUIData
-
-        tab_data (MicroscopyGUIData): the data model of the tab
-        tab_panel: (wx.Panel): the microscope tab
-        btn_prefix (string): common prefix of the names of the buttons
-        """
-        self._tab_data = tab_data
-        self._tab_panel = tab_panel
-
-        # Look for which buttons actually exist, and which VAs exist. Bind the fitting ones
-        self._btn_controllers = {}
-
-        for btn_name, (va_name, control_class) in self.btn_to_va.items():
-            btn = getattr(tab_panel, btn_prefix + btn_name, None)
-            if not btn:
-                continue
-
-            # First try on the tab model, then on the main model
-            va = getattr(tab_data, va_name, None)
-            if not va:
-                va = getattr(tab_data.main, va_name, None)
-                if not va:
-                    btn.Hide()
-                    continue
-
-            logging.debug("Connecting button %s to %s", btn_name, va_name)
-            btn_cont = control_class(btn, va, tab_data.main)
-            self._btn_controllers[btn_name] = btn_cont
-
-        if not self._btn_controllers:
-            logging.warning("No microscope button found in tab %s", btn_prefix)
-
-
 class HardwareButtonController(object):
     """
     Default button controller that on handles ON and OFF states
     """
 
-    def __init__(self, btn_ctrl, va, _):
+    def __init__(self, btn_ctrl, va, tooltips=None):
+        """
+        tooltips (None or dict value -> str): Tooltip string for each state.
+        """
         self.btn = btn_ctrl
         self.vac = VigilantAttributeConnector(va, btn_ctrl, self._va_to_btn, self._btn_to_va,
                                               events=wx.EVT_BUTTON)
+        self._tooltips = tooltips or {}
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state """
         self.btn.SetToggle(state != STATE_OFF)
+        self._update_tooltip()
 
     def _btn_to_va(self):
         """ Return the hardware state associated with the current button toggle state """
         return STATE_ON if self.btn.GetToggle() else STATE_OFF
+
+    def _update_tooltip(self):
+        if not self.btn.Enabled:
+            return
+        state = self.vac.vigilattr.value
+        if state in self._tooltips:
+            self.btn.SetToolTipString(self._tooltips[state])
+
+    def Enable(self, enabled=True):
+        self.btn.Enable(enabled)
+        self._update_tooltip()
 
 
 class ChamberButtonController(HardwareButtonController):
@@ -129,13 +100,11 @@ class ChamberButtonController(HardwareButtonController):
         :param main_data: (MainGUIData) GUI microscope model
 
         """
-
-        super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
         self.main_data = main_data
 
         # If there is pressure information, assume it is a complete SEM chamber,
         # otherwise assume it uses a sample loader like the Phenom or Delphi.
-        if 'pressure' in getVAs(main_data.chamber):
+        if model.hasVA(main_data.chamber, "pressure"):
             main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
 
             self._btn_icons = {
@@ -144,26 +113,27 @@ class ChamberButtonController(HardwareButtonController):
                 'vacuum': img.getBitmap("icon/ico_press_green.png"),
             }
 
-            self._tooltips = {
+            tooltips = {
                 CHAMBER_PUMPING: "Pumping...",
                 CHAMBER_VENTING: "Venting...",
                 CHAMBER_VENTED: "Pump the chamber",
                 CHAMBER_VACUUM: "Vent the chamber",
             }
         else:
-            self.btn.SetLabel("LOAD")
+            btn_ctrl.SetLabel("LOAD")
 
             self._btn_icons = {
                 'normal': img.getBitmap("icon/ico_eject.png"),
                 'working': img.getBitmap("icon/ico_eject_orange.png"),
                 'vacuum': img.getBitmap("icon/ico_eject_green.png"),
             }
-            self._tooltips = {
+            tooltips = {
                 CHAMBER_PUMPING: "Loading...",
-                CHAMBER_VENTING: "Ejecting...",
+                CHAMBER_VENTING: "Unloading...",
                 CHAMBER_VENTED: "Load the sample",
-                CHAMBER_VACUUM: "Eject the sample",
+                CHAMBER_VACUUM: "Unload the sample",
             }
+        super(ChamberButtonController, self).__init__(btn_ctrl, va, tooltips)
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state """
@@ -183,10 +153,7 @@ class ChamberButtonController(HardwareButtonController):
         else:
             logging.error("Unknown chamber state %d", state)
 
-        # Set the tooltip
-        if state in self._tooltips:
-            self.btn.SetToolTipString(self._tooltips[state])
-
+        self._update_tooltip()
         self.btn.Refresh()
 
     def _btn_to_va(self):
@@ -197,7 +164,6 @@ class ChamberButtonController(HardwareButtonController):
         venting.
 
         """
-
         logging.debug("Requesting change of chamber pressure")
 
         if self.btn.GetToggle():
@@ -216,41 +182,55 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.Refresh()
 
 
-class SecomStateController(MicroscopeStateController):
+class SecomStateController(object):
     """
     This controller controls the main microscope buttons (ON/OFF,
     Pause, vacuum...) and updates the model.
     """
-    # GUI toggle button (suffix) name -> VA name
-    btn_to_va = {
-        "sem": ("emState", HardwareButtonController),
-        "opt": ("opticalState", HardwareButtonController),
-        "press": ("chamberState", ChamberButtonController)
-    }
     # The classes of streams that are affected by the chamber
     # only SEM, as optical might be used even vented
     cls_streams_involved = stream.EMStream
 
-    def __init__(self, tab_data, tab_panel, btn_prefix, st_ctrl):
-        super(SecomStateController, self).__init__(tab_data, tab_panel, btn_prefix)
+    def __init__(self, tab_data, tab_panel, st_ctrl):
+        """ Binds the 'hardware' buttons to their appropriate
+        Vigilant Attributes in the tab and GUI models
 
+        tab_data (MicroscopyGUIData): the data model of the tab
+        tab_panel: (wx.Panel): the microscope tab
+        st_ctrl (StreamBarController): to start/stop streams
+        """
         self._main_data = tab_data.main
         self._tab_data = tab_data
+        self._tab_panel = tab_panel
         self._stream_controller = st_ctrl
 
-        # Event for indicating sample reached overview position and phenom GUI
-        # loading
-        self._in_overview = threading.Event()
-        self._phenom_load_done = True
-
         # Just to be able to disable the buttons when the chamber is vented
-        self._sem_btn = getattr(tab_panel, btn_prefix + "sem")
-        self._opt_btn = getattr(tab_panel, btn_prefix + "opt")
+        try:
+            va = tab_data.emState
+        except AttributeError:
+            tab_panel.btn_sem.Hide()
+        else:
+            self._sem_btn_ctrl = HardwareButtonController(tab_panel.btn_sem, va,
+                                  tooltips={STATE_OFF: "Activate the SEM view",
+                                            STATE_ON: "Switch off the SEM view"}
+                                  )
 
-        # To be able to disable the button when loading (door is open),
-        # or cancellation (venting or when moving from overview to SEM)
-        # is impossible.
-        self._press_btn = getattr(tab_panel, btn_prefix + "press")
+        try:
+            va = tab_data.opticalState
+        except AttributeError:
+            tab_panel.btn_opt.Hide()
+        else:
+            self._opt_btn_ctrl = HardwareButtonController(tab_panel.btn_opt, va,
+                                  tooltips={STATE_OFF: "Activate the optical view",
+                                            STATE_ON: "Switch off the optical view"}
+                                  )
+
+        if self._main_data.chamber:
+            self._press_btn_ctrl = ChamberButtonController(tab_panel.btn_press,
+                                                           self._main_data.chamberState,
+                                                           self._main_data)
+        else:
+            tab_panel.btn_press.Hide()
 
         # Turn off the light, but set the power to a nice default value
         # TODO: do the same with the brightlight and backlight
@@ -313,8 +293,6 @@ class SecomStateController(MicroscopeStateController):
             self._main_data.chamberState.subscribe(self.on_chamber_state)
             ch_pos = self._main_data.chamber.position
             ch_pos.subscribe(self.on_chamber_pressure, init=True)
-            ch_opened = self._main_data.chamber.opened
-            ch_opened.subscribe(self.on_door_opened, init=False)
 
             # at init, if chamber is in overview position, start by pumping
             # (which will indirectly first acquire an image)
@@ -327,8 +305,9 @@ class SecomStateController(MicroscopeStateController):
     @call_in_wx_main
     def on_preparation(self, is_preparing):
         # Make sure cannot switch stream during preparation
-        self._sem_btn.Enable(not is_preparing)
-        self._opt_btn.Enable(not is_preparing)
+        self._sem_btn_ctrl.Enable(not is_preparing)
+        self._opt_btn_ctrl.Enable(not is_preparing)
+        # TODO: should disable play/pause of streams + menu too
 
     def _subscribe_current_stream_active(self, streams):
         """ Find the active stream and subscribe to its is_active VA
@@ -421,10 +400,8 @@ class SecomStateController(MicroscopeStateController):
         # In any case, make sure the streams cannot be started
         if state == CHAMBER_VACUUM:
             # disabling the acquire button is done in the acquisition controller
-            self._sem_btn.Enable(True)
-            self._sem_btn.SetToolTip(None)
-            self._opt_btn.Enable(True)
-            self._opt_btn.SetToolTip(None)
+            self._sem_btn_ctrl.Enable(True)
+            self._opt_btn_ctrl.Enable(True)
             # TODO: enable overview move
             self._stream_controller.enableStreams(True)
 
@@ -444,17 +421,16 @@ class SecomStateController(MicroscopeStateController):
                 issubclass(stream.SEMStream, self.cls_streams_involved)
             ):
                 self._tab_data.emState.value = STATE_OFF
-                self._sem_btn.Enable(False)
-                self._sem_btn.SetToolTipString("Chamber must be under vacuum to activate the SEM")
+                self._sem_btn_ctrl.Enable(False)
+                self._tab_panel.btn_sem.SetToolTipString(u"Please insert a sample first")
 
             if (
                 hasattr(self._tab_data, "opticalState") and
                 issubclass(stream.CameraStream, self.cls_streams_involved)
             ):
                 self._tab_data.opticalState.value = STATE_OFF
-                self._opt_btn.Enable(False)
-                self._opt_btn.SetToolTipString("Chamber must be under vacuum to activate "
-                                               "the optical view")
+                self._opt_btn_ctrl.Enable(False)
+                self._tab_panel.btn_opt.SetToolTipString(u"Please insert a sample first")
 
             self._stream_controller.enableStreams(False, self.cls_streams_involved)
 
@@ -504,7 +480,7 @@ class SecomStateController(MicroscopeStateController):
         self._set_ebeam_power(False)
         self._chamber_vent_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
         # Will actually be displayed only if the hw_info is shown
-        self._press_btn.Enable(False)
+        self._press_btn_ctrl.Enable(False)
         self._chamber_fc = ProgressiveFutureConnector(
             self._chamber_vent_future,
             self._tab_panel.gauge_load_time,
@@ -515,7 +491,7 @@ class SecomStateController(MicroscopeStateController):
 
     def _on_vented(self, future):
         self.on_chamber_pressure(self._main_data.chamber.position.value)
-        wx.CallAfter(self._press_btn.Enable, True)
+        wx.CallAfter(self._press_btn_ctrl.Enable, True)
 
     # TODO: have multiple versions of this method depending on the type of chamber?
     # TODO: have a special states for CHAMBER_OVERVIEW_PRE_VACUUM and CHAMBER_OVERVIEW_POST_VACUUM?
@@ -548,18 +524,6 @@ class SecomStateController(MicroscopeStateController):
             # This can happen at initialisation if the chamber pressure is changing
             logging.info("Pressure position unknown: %s", currentp)
             # self._main_data.chamberState.value = CHAMBER_UNKNOWN
-
-    @call_in_wx_main
-    def on_door_opened(self, value):
-        """
-        Disable the load button when the chamber door is open, or there is no sample
-        """
-        loadable = not value and None not in self._main_data.chamber.sampleHolder.value
-        self._press_btn.Enable(loadable)
-        if loadable:  # Immediately start loading while at it...
-            self._press_btn.SetToggle(True)
-            self._phenom_load_done = False
-            self._main_data.chamberState.value = CHAMBER_PUMPING
 
     def _on_overview_position(self, unused):
         logging.debug("Overview position reached")
@@ -670,8 +634,8 @@ class DelphiStateController(SecomStateController):
 
         # To update the stream status
         self._status_prev_streams = []
-        tab_data.streams.subscribe(self._subscribe_current_stream_status)
         self._ellipsis_animator = None  # animator for messages containing ellipsis character
+        tab_data.streams.subscribe(self._subscribe_current_stream_status, init=True)
 
         # Last stage and focus move time
         self._last_pos = self._main_data.stage.position.value.copy()
@@ -684,6 +648,14 @@ class DelphiStateController(SecomStateController):
         self._views_list = []
         self._views_prev_list = []
         tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
+
+        # Event for indicating sample reached overview position and phenom GUI
+        # loading
+        self._in_overview = threading.Event()
+        self._phenom_load_done = True
+
+        ch_opened = self._main_data.chamber.opened
+        ch_opened.subscribe(self.on_door_opened)
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
@@ -873,6 +845,20 @@ class DelphiStateController(SecomStateController):
         self._tab_panel.pnl_load_status.Show(show_load)
         self._tab_panel.pnl_stream_status.Show(show_status)
         self._tab_panel.pnl_hw_info.Layout()
+
+    @call_in_wx_main
+    def on_door_opened(self, value):
+        """
+        Disable the load button when the chamber door is open, or there is no sample
+        """
+        loadable = not value and None not in self._main_data.chamber.sampleHolder.value
+        self._press_btn_ctrl.Enable(loadable)
+        if loadable:  # Immediately start loading while at it...
+            self._tab_panel.btn_press.SetToggle(True)
+            self._phenom_load_done = False
+            self._main_data.chamberState.value = CHAMBER_PUMPING
+        else:
+            self._tab_panel.btn_press.SetToolTipString(u"Please insert a sample first")
 
     def _start_chamber_pumping(self):
         """
@@ -1336,7 +1322,7 @@ class DelphiStateController(SecomStateController):
 
             if future._delphi_load_state == CANCELLED:
                 return
-            wx.CallAfter(self._press_btn.Enable, False)
+            wx.CallAfter(self._press_btn_ctrl.Enable, False)
             # move further to fully under vacuum (should do nothing if already there)
             future._actions_time.pop(0)
             pf = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
@@ -1366,7 +1352,7 @@ class DelphiStateController(SecomStateController):
             ccd_md = self._main_data.ccd.getMetadata()
             good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
             self._main_data.ebeam.horizontalFoV.value = good_hfw
-            wx.CallAfter(self._press_btn.Enable, True)
+            wx.CallAfter(self._press_btn_ctrl.Enable, True)
 
         finally:
             with future._delphi_load_lock:
@@ -1415,7 +1401,3 @@ class DelphiStateController(SecomStateController):
         rem_time = est_end - time.time()
         logging.debug("Loading future remaining time: %f", rem_time)
 
-
-# TODO SparcStateController?
-#     "spectrometer": ("specState", HardwareButtonController),
-#     "angular": ("arState", HardwareButtonController),

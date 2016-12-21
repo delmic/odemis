@@ -379,13 +379,10 @@ class SecomStreamsTab(Tab):
         self._state_controller = state_controller_cls(
             tab_data,
             panel,
-            "live_btn_",
             self._streambar_controller
         )
 
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
-        if not main_data.chamber:
-            panel.live_btn_press.Hide()
 
     @property
     def settingsbar_controller(self):
@@ -2243,9 +2240,6 @@ class SparcAlignTab(Tab):
         tab_data = guimod.SparcAlignGUIData(main_data)
         super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        self._ccd_stream = None
-        # TODO: add on/off button for the CCD and connect the MicroscopeStateController
-
         self._settings_controller = settings.SparcAlignSettingsController(
             panel,
             tab_data,
@@ -2258,6 +2252,7 @@ class SparcAlignTab(Tab):
         )
 
         # create the stream to the AR image + goal image
+        self._ccd_stream = None
         if main_data.ccd:
             ccd_stream = acqstream.CameraStream(
                 "Angle-resolved sensor",
