@@ -1023,6 +1023,7 @@ class ChronographViewport(PlotViewport):
     """
     Shows the chronograph of a 0D detector reading -> bar plot + legend
     Legend axes are time/intensity.
+    Intensity is between min/max of data.
     """
 
     def __init__(self, *args, **kwargs):
@@ -1041,7 +1042,15 @@ class ChronographViewport(PlotViewport):
             x = data.metadata[model.MD_ACQ_DATE]
             y = data
             range_x = (min(x[0], -self.stream.windowPeriod.value), x[-1])
-            range_y = (0, float(max(data)))  # float() to avoid numpy arrays
+            # Put the data axis with -5% of min and +5% of max:
+            # the margin hints the user the display is not clipped
+            extrema = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
+            data_width = extrema[1] - extrema[0]
+            if data_width == 0:
+                range_y = (0, extrema[1] * 1.05)
+            else:
+                range_y = (max(0, extrema[0] - data_width * 0.05),
+                           extrema[1] + data_width * 0.05)
 
             self.canvas.set_data(zip(x, y), unit_x, range_x=range_x, range_y=range_y)
 
