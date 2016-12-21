@@ -26,6 +26,7 @@ from concurrent.futures._base import CancelledError
 import logging
 from odemis.acq.align.delphi import DelphiCalibration
 from odemis.gui import model
+from odemis.gui.conf import get_calib_conf
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
@@ -136,11 +137,10 @@ class CalibrationProgressDialog(xrcprogress_dialog):
     """ Wrapper class responsible for the connection between delphi calibration
     future and the xrcprogress_dialog.
     """
-    def __init__(self, parent, main_data, calibconf, shid):
+    def __init__(self, parent, main_data, shid):
         xrcprogress_dialog.__init__(self, parent)
 
         # ProgressiveFuture for the ongoing calibration
-        self._calibconf = calibconf
         self._main_data = main_data
         self._shid = shid
         self.calib_future = None
@@ -222,7 +222,8 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             return
 
         # Update the calibration file
-        self._calibconf.set_sh_calib(self._shid, *shcalib)
+        calibconf = get_calib_conf()
+        calibconf.set_sh_calib(self._shid, *shcalib)
 
         # self.update_calibration_time(0)
         self.time_txt.SetLabel("Calibration completed.")

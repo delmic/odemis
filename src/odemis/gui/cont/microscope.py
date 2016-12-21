@@ -1088,13 +1088,12 @@ class DelphiStateController(SecomStateController):
                 # the optical microscope.
 
             # Look in the config file if the sample holder is known, or needs
-            # first-time calibration, and otherwise update the metadata
+            # first-time calibration
+            self._calibconf.read()  # Force reloading it (in case it was changed by re-calibration)
             if self._calibconf.get_sh_calib(shid) is None:
                 self.request_holder_calib()  # async
                 return False  # don't go further, as everything will be taken care
 
-                # TODO: shall we also reference the optical focus? It'd be handy only
-                # if the absolute position is used.
         except Exception:
             logging.exception("Failed to set calibration")
 
@@ -1205,7 +1204,6 @@ class DelphiStateController(SecomStateController):
         calib_dialog = windelphi.CalibrationProgressDialog(
             self._main_frame,
             self._main_data,
-            self._calibconf,
             shid
         )
         calib_dialog.Title = "Sample holder automatic calibration"
