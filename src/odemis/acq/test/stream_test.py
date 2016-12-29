@@ -1559,18 +1559,21 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
         self.assertEqual(len(sps._main_raw), 1)
-        exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
-        self.assertEqual(sps._main_raw[0].shape, exp_sem_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
+        sem_res = sps._main_raw[0].shape
         sshape = sps._rep_raw[0].shape
+        spec_res = sshape[1:]
+        res_upscale = (sem_res[0] / spec_res[0], sem_res[1] / spec_res[1])
+        self.assertGreaterEqual(res_upscale[0], 2)
+        self.assertGreaterEqual(res_upscale[1], 2)
+        self.assertEqual(len(sps._rep_raw), 1)
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         sem_md = sps._main_raw[0].metadata
         spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
-                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0],
-                                spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+                               (spec_md[model.MD_PIXEL_SIZE][0] / spec_res[0],
+                                spec_md[model.MD_PIXEL_SIZE][1] / spec_res[1]))
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
