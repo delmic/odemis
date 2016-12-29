@@ -29,7 +29,7 @@ from __future__ import division
 import wx.combo
 
 import odemis.gui
-from odemis.gui.comp.buttons import ImageButton, BtnMixin, darken_image
+from odemis.gui.comp.buttons import ImageButton, darken_image
 from odemis.gui import img
 
 
@@ -66,7 +66,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
 
         icon = img.getBitmap("icon/arr_down_s.png")
         icon_x = 16 // 2 - icon.GetWidth() // 2
-        icon_y = (16 // 2) - (icon.GetHeight() // 2) - 1
+        icon_y = 16 // 2 - icon.GetHeight() // 2 - 1
 
         bmpLabel = ImageButton._create_bitmap(img.getBitmap("button/btn_def_16.png"), (16, 16),
                                               self.GetBackgroundColour())
@@ -128,23 +128,3 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         back_brush = wx.Brush(back_colour, wx.BRUSHSTYLE_SOLID)
         dc.SetBackground(back_brush)
         dc.Clear()
-
-    # Doesn't seem needed anymore with wx3.0
-    # def on_key(self, evt):
-    #     """ The OwnerDrawnComboBox makes the left/right keys change the
-    #     selection instead of moving the caret. This method corrects that problem
-    #     """
-    #     if self.TextCtrl and self.Enabled:
-    #         key = evt.GetKeyCode()
-    #         ip = self.TextCtrl.GetInsertionPoint()
-    #
-    #         if key == wx.WXK_RIGHT:
-    #             self.TextCtrl.SetInsertionPoint(ip + 1)
-    #         elif key == wx.WXK_LEFT:
-    #             if ip > 0:
-    #                 self.TextCtrl.SetInsertionPoint(ip - 1)
-    #         else:
-    #             evt.Skip()
-    #     else:
-    #         evt.Skip()
-    #     evt.Skip()
