@@ -172,7 +172,7 @@ class StreamPanelHeader(wx.Control):
             colour=self.Parent.stream.tint.value,
             use_hover=True
         )
-        tint_btn.SetToolTipString("Select colour")
+        tint_btn.SetToolTipString("Stream display colour")
 
         # Tint event handlers
         tint_btn.Bind(wx.EVT_BUTTON, self._on_tint_click)
@@ -200,7 +200,7 @@ class StreamPanelHeader(wx.Control):
         visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
         visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
 
-        visibility_btn.SetToolTipString("Show stream")
+        visibility_btn.SetToolTipString("Toggle stream visibility")
         self._add_ctrl(visibility_btn)
         return visibility_btn
 
@@ -212,6 +212,8 @@ class StreamPanelHeader(wx.Control):
         update_btn.bmpSelected = img.getBitmap("icon/ico_play.png")
         update_btn.bmpSelectedHover = img.getBitmap("icon/ico_play_h.png")
 
+        # TODO: add a tooltip for when selected ("Turn off stream" vs "Activate stream")
+        # => on ImageToggleButtonImageButton
         update_btn.SetToolTipString("Update stream")
 
         self._vac_updated = VigilantAttributeConnector(
@@ -724,7 +726,7 @@ class StreamPanel(wx.Panel):
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
                                                    label="Auto")
-        btn_autobc.SetToolTipString("Toggle auto brightness and contrast")
+        btn_autobc.SetToolTipString("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         sld_bc_outliers = UnitFloatSlider(
@@ -737,8 +739,7 @@ class StreamPanel(wx.Panel):
             accuracy=2
         )
 
-        sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
-                                         "in auto brightness and contrast")
+        sld_bc_outliers.SetToolTipString("Amount of dark and bright pixels to ignore")
 
         autobc_sz = wx.BoxSizer(wx.HORIZONTAL)
         autobc_sz.Add(btn_autobc, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=5)

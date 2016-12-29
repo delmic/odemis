@@ -70,10 +70,12 @@ HW_SETTINGS_CONFIG = {
             }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Number of pixels combined",
                 "choices": util.binning_1d_from_2d,
             }),
             ("resolution", {
                 "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
                 "choices": util.resolution_from_range,
                 "accuracy": None,  # never simplify the numbers
             }),
@@ -124,11 +126,13 @@ HW_SETTINGS_CONFIG = {
         OrderedDict((
             ("accelVoltage", {
                 "label": "Accel. voltage",
-                "tooltip": "Acceleration voltage",
+                "tooltip": "Accelerating voltage",
                 "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("probeCurrent", {}),
-            ("spotSize", {}),
+            ("spotSize", {
+                "tooltip": "Electron-beam Spot size",
+            }),
             ("horizontalFoV", {
                 "label": "HFW",
                 "tooltip": "Horizontal Field Width",
@@ -142,7 +146,7 @@ HW_SETTINGS_CONFIG = {
             }),
             ("dwellTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
-                "tooltip": "Time spent by the e-beam on each pixel",
+                "tooltip": "Pixel integration time",
                 "range": (1e-9, 1),
                 "scale": "log",
                 "type": "float",
@@ -152,12 +156,13 @@ HW_SETTINGS_CONFIG = {
             ("scale", {
                 # same as binning (but accepts floats)
                 "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Pixel resolution preset",
                 # means will make sure both dimensions are treated as one
                 "choices": util.binning_1d_from_2d,
             }),
             ("resolution", {
                 "control_type": odemis.gui.CONTROL_COMBO,
-                "tooltip": "Number of pixels scanned",
+                "tooltip": "Number of pixels in the image",
                 "choices": util.resolution_from_range,
                 "accuracy": None,  # never simplify the numbers
             }),

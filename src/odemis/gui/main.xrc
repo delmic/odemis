@@ -2877,7 +2877,6 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          
           <object class="ARLiveViewport" name="vp_align_center">
             <size>400,-1</size>
             <XRCED>
@@ -4296,7 +4295,7 @@
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_press">
+                        <object class="ImageTextToggleButton" name="btn_press">
                           <size>114,-1</size>
                           <icon>img/icon/ico_press.png</icon>
                           <height>48</height>
@@ -4322,7 +4321,7 @@
                         <option>1</option>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_opt">
+                        <object class="ImageTextToggleButton" name="btn_opt">
                           <icon>img/icon/ico_optical.png</icon>
                           <icon_on>img/icon/ico_optical_green.png</icon_on>
                           <height>48</height>
@@ -4344,7 +4343,7 @@
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_sem">
+                        <object class="ImageTextToggleButton" name="btn_sem">
                           <icon>img/icon/ico_sem.png</icon>
                           <icon_on>img/icon/ico_sem_green.png</icon_on>
                           <height>48</height>
