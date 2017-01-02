@@ -911,7 +911,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # Move ebeam to the center
         self._emitter.translation.value = (0, 0)
 
-        return self._adjustHardwareSettings(self)
+        return self._adjustHardwareSettings()
 
     def _runAcquisitionScanStage(self, future):
         """
