@@ -247,11 +247,11 @@ class OpticalPathManager(object):
                 pass  # Mode to delete is just not there
 
         # Handle different focus for chamber-view (in SPARCv2)
+        self._chamber_view_own_focus = False
         if "chamber-view" in self._modes:
             self._focus_in_chamber_view = None
             self._focus_out_chamber_view = None
             # Check whether the focus affects the chamber view
-            self._chamber_view_own_focus = False
             try:
                 chamb_det = self._getComponent(self._modes["chamber-view"][0])
                 focus = self._getComponent("focus")
