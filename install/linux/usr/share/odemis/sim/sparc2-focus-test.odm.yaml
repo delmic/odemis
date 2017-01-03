@@ -1,0 +1,263 @@
+# Configuration for a simulated SPARC v2 system with focus simulated on AR cam
+SPARC2: {
+    class: Microscope,
+    role: sparc2,
+    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
+               "Optical Path Properties", "Spectrometer Vis-NIR",
+               "Camera", "Spectrometer IR",
+               "Spec CCD Flipper", "Spectrograph focus",
+               "Mirror Actuators", "Mirror Actuators in XY referential",
+               "Slit", "Lens1 Mover", "Lens2 Switch"],
+}
+
+# Light (lamp with known spectrum)
+"Calibration Light": {
+    class: light.Light,
+    role: "brightlight",
+    power_supplier: "Power Control Unit",
+    affects: ["Camera"],
+}
+
+"Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control",
+    init: {
+        port: "/dev/fake", # for simulator
+        pin_map: {"Calibration Light": 0,
+                  "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
+                  "Optical Actuators": 2},
+        delay: { # Time it takes before a component is accessible
+            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "Camera": 0,
+            "Spectral Camera": 0,
+            "Spectrograph": 0,
+            "Optical Actuators": 1
+        },
+        init: { # Which component to power on from the very beginning (to save time)
+            "Camera": True,
+            "Spectral Camera": True,
+            "Spectrograph": True,
+            "Optical Actuators": True
+        },
+    }
+}
+
+# This is a more realistic SEM simulator (image-wise, but less realistic HW-wise)
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: none,
+    init: {
+           drift_period: 5, # s  (disable to get a the whole resolution of the image)
+           image: "sparc-etd-gold-balls.h5",
+    },
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector"
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector", "Spectrometer", "Spectral Camera"] # affects the CCD in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+"Camera": {
+    class: simcam.Camera,
+    role: ccd,
+    init: {image: "sparc-spec-sim.h5",
+    },
+    children: {focus: "Spectrograph focus"}
+}
+
+# Normally this is a child of the spectrograph, but for simulation, it's from the
+# SimCam    
+"Spectrograph focus": {
+    role: focus,
+    # hard-coded: good focus level is at 0.006 (default pos)
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+"Spectrometer Vis-NIR": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-integrated,
+    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
+    },
+}
+
+# On some configuration, there is a dedicated camera for the acquisition of the
+# spectra, otherwise 'Camera' is used.
+"Spectral Camera": {
+    class: andorcam2.AndorCam2,
+    role: sp-ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+       device: "fake",
+       transp: [-1, 2], # if mirrored on X axis
+    },
+    properties: {
+        targetTemperature: -60, # °C
+    },
+}
+
+"Spectrometer IR": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer,
+    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    properties: {
+        binning: [4, 16],
+    },
+}
+
+"Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        fstepsize: 10.9e-6, # m, size of one focus step
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+"Spec CCD Flipper": {
+    class: actuator.FixedPositionsActuator,
+    role: "spec-det-selector",
+    children: {"rx": "Spectrograph"},
+    init: {
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera", "Spectrometer Vis-NIR"],
+            1.5707963267948966: ["Spectral Camera", "Spectrometer IR"],
+        },
+    },
+    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+}
+
+"Optical Path Properties": {
+    class: static.OpticalLens,
+    role: lens,
+    # Standard mirror config
+    init: {
+       mag: 0.31, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+       pole_pos: [600, 50], # (px, px), position of the pole (aka the hole in the mirror)
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+    },
+affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Controller for the motors moving the various parts of the optical box
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["l1", "l2", null, null, "slit"],
+        # These values are adapted to make the simulator roughly the same speed
+        ustepsize: [25.1e-9, 25.1e-9, null, null, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
+        refproc: "Standard",
+        refswitch: {"l1": 0, "l2": 0},
+        inverted: ["l2"],
+    },
+}
+
+# The first lens of Plate 1, able to move along the whole range
+"Lens1 Mover": {
+    class: actuator.MultiplexActuator,
+    role: "lens-mover",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": -0.0045} # m
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# The second lens of Plate 1, either to working or parking position
+"Lens2 Switch": {
+    class: actuator.FixedPositionsActuator,
+    role: "lens-switch",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "l2",
+        positions: {
+            -4.e-3: "on",
+            -0.02: "off", # completely out of the path
+        },
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
+"Slit": {
+    class: actuator.FixedPositionsActuator,
+    role: "slit-in-big",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "slit",
+        positions: {
+            0: "on", # fully opened
+            -0.0012: "off", # opening based on the small slit
+        },
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Controller for moving the 'Redux' stage
+# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
+"Mirror Actuators": {
+    class: tmcm.TMCLController,
+    role: "mirror",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["s", "l"],
+        ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
+        refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
+    },
+}
+
+# Internal component to convert between the referential of the mirror actuators
+# and the X/Y referential of the SEM. Used by the mirror alignment functions.
+"Mirror Actuators in XY referential": {
+    class: actuator.ConvertStage,
+    role: "mirror-xy",
+    children: {"orig": "Mirror Actuators"},
+    init: {
+        axes: ["l", "s"], # mapped respectively to X, Y
+        rotation: -1.0471975511965976, # rad (= 60°)
+        # Note: if you want to use absolute moves, add a "translation" too
+    },
+}
