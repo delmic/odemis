@@ -793,6 +793,171 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+    def testReadMDHWNOTE(self):
+        """
+        Checks that we can read back the metadata of a Hardware Note (Microscope Setting Data)
+        The OME-TIFF file will contain just one big array, but three arrays
+        should be read back with the right data.
+        """
+        metadata = [
+                    {
+                    model.MD_HW_NOTE: ("Component 'EBeam Phenom':\n"
+                                       "\trole: e-beam\n"
+                                       "\taffects: 'BSED Phenom', 'Camera'\n"
+                                       "\tshape (RO Attribute)	value: (1024, 1024)\n"
+                                       "\tswVersion (RO Attribute)	value: 4.4.2\n"
+                                       "\thwVersion (RO Attribute)	value: Phenom <G4>\n"
+                                       "\tscale (Vigilant Attribute)	 value: (4, 4) (range: (0, 0) , (2048, 2048))\n"
+                                       "\taccelVoltage (Vigilant Attribute)	 value: 5300 (unit: V) (range: 4797, 10000)\n"
+                                       "\tspotSize (Vigilant Attribute)	 value: 2.7 (range: 2.1, 3.3)\n"),
+                    model.MD_HW_NAME: "fake hw",
+                    model.MD_DESCRIPTION: "blue dye",
+                    model.MD_ACQ_DATE: time.time() + 1,
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                    model.MD_POS: (13.7e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 522e-9),  # m
+                    model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9),  # m
+                    model.MD_USER_TINT: (255, 0, 65),  # purple
+                    model.MD_LIGHT_POWER: 100e-3  # W
+                    },
+                    {
+                    model.MD_HW_NOTE: ("Component 'EBeam Phenom':\n"
+                                       "\trole: e-beam\n"
+                                       "\taffects: 'BSED Phenom', 'Camera'\n"
+                                       "\tshape (RO Attribute)	value: (2048, 2048)\n"
+                                       "\tswVersion (RO Attribute)	value: 4.4.2\n"
+                                       "\thwVersion (RO Attribute)	value: Phenom G4\n"
+                                       "\tscale (Vigilant Attribute)	 value: (4, 4) (range: (0, 0) , (2048, 2048))\n"
+                                       "\taccelVoltage (Vigilant Attribute)	 value: 5300 (unit: V) (range: 4797, 10000)\n"
+                                       "\tspotSize (Vigilant Attribute)	 value: 2.7 (range: 2.1 , 3.3)\n"),
+                    model.MD_HW_NAME: "fake hw",
+                    model.MD_DESCRIPTION: "green dye",
+                    model.MD_ACQ_DATE: time.time() + 2,
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                    model.MD_POS: (13.7e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1,  # s
+                    model.MD_IN_WL: (590e-9, 620e-9),  # m
+                    model.MD_OUT_WL: (620e-9, 650e-9),  # m
+                    model.MD_ROTATION: 0.1,  # rad
+                    model.MD_SHEAR: 0,
+                    model.MD_BASELINE: 400.0
+                    },
+                    {
+                    model.MD_HW_NAME: "fake hw",
+                    model.MD_DESCRIPTION: "green dye",
+                    model.MD_ACQ_DATE: time.time() + 2,
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                    model.MD_POS: (13.7e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1,  # s
+                    model.MD_IN_WL: (600e-9, 630e-9),  # m
+                    model.MD_OUT_WL: (620e-9, 650e-9),  # m
+                    # In order to test shear is applied even without rotation
+                    # provided. And also check that *_COR is merged into its
+                    # normal metadata brother.
+                    # model.MD_SHEAR: 0.03,
+                    model.MD_SHEAR_COR: 0.003,
+                    },
+                    {
+                    model.MD_HW_NOTE: ("Component 'EBeam Phenom':\n"
+                                       "\trole: e-beam\n"
+                                       "\taffects: 'BSED Phenom', 'Camera'\n"
+                                       "\tshape (RO Attribute)	value: (2048, 2048)\n"
+                                       "\tswVersion (RO Attribute)	value: 4.4.2\n"
+                                       "\thwVersion (RO Attribute)	value: Phenom G4\n"
+                                       "\tscale (Vigilant Attribute)	 value: (4, 4) (range: (0, 0) , (2048, 2048))\n"
+                                       "\taccelVoltage (Vigilant Attribute)	 value: 5300 (unit: V) (range: 4797 , 10000)\n"
+                                       "\tspotSize (Vigilant Attribute)	 value: 2.7 (range: 2.1 , 3.3)\n"),
+                    model.MD_HW_NAME: "fake hw",
+                    model.MD_DESCRIPTION: "brightfield",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+                    model.MD_POS: (13.7e-3, -30e-3), # m
+                    model.MD_EXP_TIME: 1.2, # s
+                    model.MD_IN_WL: (400e-9, 630e-9), # m
+                    model.MD_OUT_WL: (400e-9, 630e-9), # m
+                    # correction metadata
+                    model.MD_POS_COR: (-1e-6, 3e-6), # m
+                    model.MD_PIXEL_SIZE_COR: (1.2, 1.2),
+                    model.MD_ROTATION_COR: 6.27,  # rad
+                    model.MD_SHEAR_COR: 0.005
+                    },
+
+                    ]
+        # create 3 greyscale images of same size
+        size = (512, 256)
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
+            a[i, i] = i # "watermark" it
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (size[1] // 8, size[0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail.metadata[model.MD_DIMS] = "YXC"
+        thumbnail.metadata[model.MD_POS] = (13.7e-3, -30e-3)
+        thumbnail[:, :, 1] += 255 # green
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        # TODO: rdata and ldata don't have to be in the same order
+        for i, im in enumerate(rdata):
+            md = metadata[i].copy()
+            img.mergeMetadata(md)
+
+            if model.MD_HW_NOTE in md:
+                self.assertEqual(im.metadata[model.MD_HW_NOTE], md[model.MD_HW_NOTE])
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4);
+            numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
+            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+            if model.MD_USER_TINT in md:
+                self.assertEqual(im.metadata[model.MD_USER_TINT], md[model.MD_USER_TINT])
+
+            iwl = im.metadata[model.MD_IN_WL] # nm
+            self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
+                             iwl[1] <= md[model.MD_IN_WL][-1]),
+                            "%s not in %s" % (iwl, md[model.MD_IN_WL]))
+
+            owl = im.metadata[model.MD_OUT_WL] # nm
+            self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
+                             owl[1] <= md[model.MD_OUT_WL][-1]))
+            if model.MD_LIGHT_POWER in md:
+                self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
+
+            self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
+            self.assertAlmostEqual(im.metadata.get(model.MD_BASELINE, 0), md.get(model.MD_BASELINE, 0))
+            self.assertAlmostEqual(im.metadata.get(model.MD_SHEAR, 0), md.get(model.MD_SHEAR, 0))
+
+        # check thumbnail
+        rthumbs = tiff.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
 #    @skip("simple")
     def testReadMDOutWlBands(self):
         """

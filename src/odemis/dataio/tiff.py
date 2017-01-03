@@ -286,7 +286,8 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     # of the _same_ sample by different instruments. However, our interpretation
     # of the format is the following:
 #    + OME
-#      + Experiment        # To describe the type of microscopy
+#      + Experiment (*)    # To describe the acquisition settings and type of microscopy
+#        + Description     # Free form description of the acquisition
 #      + Experimenter      # To describe the user
 #      + Instrument (*)    # To describe the acquisition technical details for each
 #        + Microscope      # set of emitter/detector.
@@ -382,6 +383,18 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     for ifd, g in groups.items():
         did = ifd # our convention: ID is the first IFD
         da0 = g[0]
+
+        # Add an experiment description to contain MD_HW_NOTE, which is in
+        # theory any free-form text about the hardware settings, but in practice
+        # it's the list of all the settings for all the hardware involved in
+        # that acquisition
+        if model.MD_HW_NOTE in da0.metadata:
+            experiment = ET.SubElement(root, "Experiment",
+                                       attrib={"ID": "Experiment:%d" % did})
+
+            description = ET.SubElement(experiment, "Description")
+            description.text = da0.metadata[model.MD_HW_NOTE]
+
         if model.MD_HW_NAME in da0.metadata:
             obj = ET.SubElement(instr, "Detector", attrib={
                                 "ID": "Detector:%d" % did,
@@ -477,6 +490,15 @@ def _updateMDFromOME(root, das, basename):
                 val = acq_date.text
                 md[model.MD_ACQ_DATE] = calendar.timegm(time.strptime(val, "%Y-%m-%dT%H:%M:%S"))
             except (OverflowError, ValueError):
+                pass
+
+        expse = ime.find("ExperimentRef")
+        if expse is not None:
+            try:
+                exp = _findElementByID(root, expse.attrib["ID"], "Experiment")
+                exp_des = exp.find("Description")
+                md[model.MD_HW_NOTE] = exp_des.text
+            except (AttributeError, KeyError, ValueError):
                 pass
 
         detse = ime.find("DetectorSettings")
@@ -1154,6 +1176,11 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                         for d in das if model.MD_ACQ_DATE in d.metadata)
         ad = ET.SubElement(ime, "AcquisitionDate")
         ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
+
+    # add ExperimentRef as image element
+    if model.MD_HW_NOTE in globalMD:
+        expse = ET.SubElement(ime, "ExperimentRef",
+                              attrib={"ID": "Experiment:%d" % idnum})
 
     # find out about the common attribute (Name)
     if model.MD_DESCRIPTION in globalMD:
