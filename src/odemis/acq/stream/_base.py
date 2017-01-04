@@ -594,10 +594,10 @@ class Stream(object):
                     # * mn = 0, mx = max rounded to next power of 2  -1
                     # * mn = min, width = width rounded to next power of 2
                     # => pick the one which gives the smallest width
-                    diff = max(2, mx - mn)
-                    diffrd = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
+                    diff = max(2, mx - mn + 1)
+                    diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
                     width0 = max(2, mx + 1)
-                    width0rd = 1 << int(math.ceil(math.log(width0, 2)))  # next power of 2
+                    width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
                     if diffrd < width0rd:
                         drange = (mn, mn + diffrd - 1)
                     else:
@@ -610,6 +610,12 @@ class Stream(object):
                     drange = (min(drange[0], self._drange[0]),
                               max(drange[1], self._drange[1]))
         else:
+            # TODO: on live streams, this will always happen at init,
+            # and _guessDRangeFromDetector() will return typically the maximum
+            # value possible. So, in practice, the range will never adapt.
+            # => use a tiny range, or use this range, but allow to override it
+            # once there is data.
+
             # no data, assume try to use the detector
             drange = self._guessDRangeFromDetector()
 
