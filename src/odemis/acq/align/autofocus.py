@@ -701,7 +701,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
         # Autofocus each additional detector
         grating = pos_orig["grating"]
         for d in detectors[1:]:
-            logging.debug("Autofocusing on detector %s", d)
+            logging.debug("Autofocusing on detector %s", d.name)
             tstart = time.time()
             _moveSelectorToDetector(selector, d)
             try:
