@@ -1852,6 +1852,38 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(cls.emission.value, md[model.MD_OUT_WL])
         self.assertEqual(cls.image.value.shape, (512, 1024, 3))
 
+    def test_small_hist(self):
+        """Test small histogram computation"""
+        # AR background data
+        md = {
+            model.MD_SW_VERSION: "2.1",
+            model.MD_HW_NAME: "pmt",
+            model.MD_DESCRIPTION: "CL",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 16,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_OUT_WL: (658e-9, 845e-9),  # m
+        }
+
+        # DataArray with very big type, but very small values
+        da = model.DataArray(numpy.zeros((512, 1024), dtype=numpy.uint32), md)
+        da[2:100, 5:600] = 1
+        da[3, :] = 2
+
+        cls = stream.StaticCLStream("test", da)
+        time.sleep(0.5)  # wait a bit for the image to update
+
+        h = cls.histogram.value
+        ir = cls.intensityRange.range
+
+        self.assertEqual(ir[0][0], 0)
+        self.assertGreaterEqual(ir[1][1], da.max())
+        self.assertLessEqual(ir[1][1], 3)  # Should be rounded to the next power of 2 -1
+        self.assertEqual(h[2], da.shape[1])
+
 
 #     @skip("simple")
     def test_ar(self):
