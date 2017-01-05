@@ -27,7 +27,6 @@ import numpy
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
-from odemis.model import isasync
 from odemis.util import img
 import threading
 import time
@@ -139,6 +138,7 @@ class Stream(object):
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
         self._drange = None  # min/max data range, or None if unknown
+        self._drange_unreliable = True  # if current values are a rough guess (based on detector)
 
         # TODO: move to a "Projection" class, layer between Stream and GUI.
         # whether to use auto brightness & contrast
@@ -546,7 +546,6 @@ class Stream(object):
                 self._unlinkHwVAs()
         return active
 
-    # TODO: different versions for static (no hw/just one data) and live (hw/data&drange changes)
     def _updateDRange(self, data=None):
         """
         Update the ._drange, with whatever data is known so far.
@@ -554,13 +553,19 @@ class Stream(object):
           it will try to use .raw, and if there is nothing, will just use the
           detector information.
         """
-        # 2 types of drange management:
-        # * dtype is int -> follow MD_BPP/shape/dtype.max
-        # * dtype is float -> always increase, starting from 0-depth
+        # Note: it feels like live and static streams could have a separate
+        # version, but detecting a stream has no detector is really not costly
+        # and static stream can still have changing drange (eg, when picking a
+        # different 4th or 5th dimension). => just a generic version that tries
+        # to handle all the cases.
+
         if data is None:
             if self.raw:
                 data = self.raw[0]
 
+        # 2 types of drange management:
+        # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
+        # * dtype is float -> data.max
         if data is not None:
             if data.dtype.kind in "biu":
                 try:
@@ -583,10 +588,11 @@ class Stream(object):
                 # If range is too big to be used as is => look really at the data
                 if (drange[1] - drange[0] > 4095 and
                     (self._drange is None or
+                     self._drange_unreliable or
                      self._drange[1] - self._drange[0] < drange[1] - drange[0])):
                     mn = int(data.view(numpy.ndarray).min())
                     mx = int(data.view(numpy.ndarray).max())
-                    if self._drange is not None:
+                    if self._drange is not None and not self._drange_unreliable:
                         # Only allow the range to expand, to avoid it constantly moving
                         mn = min(mn, self._drange[0])
                         mx = max(mx, self._drange[1])
@@ -606,18 +612,16 @@ class Stream(object):
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
                 drange = (data.view(numpy.ndarray).min(),
                           data.view(numpy.ndarray).max())
-                if self._drange is not None:
+                if self._drange is not None and not self._drange_unreliable:
                     drange = (min(drange[0], self._drange[0]),
                               max(drange[1], self._drange[1]))
-        else:
-            # TODO: on live streams, this will always happen at init,
-            # and _guessDRangeFromDetector() will return typically the maximum
-            # value possible. So, in practice, the range will never adapt.
-            # => use a tiny range, or use this range, but allow to override it
-            # once there is data.
 
-            # no data, assume try to use the detector
+            if drange:
+                self._drange_unreliable = False
+        else:
+            # no data, give a large estimate based on the detector
             drange = self._guessDRangeFromDetector()
+            self._drange_unreliable = True
 
         if drange:
             # This VA will clip its own value if it is out of range
@@ -828,6 +832,10 @@ class Stream(object):
             return
 
         data = self.raw[0] if data is None else data
+
+        # Depth can change at each image (depends on hardware settings)
+        self._updateDRange(data)
+
         # Initially, _drange might be None, in which case it will be guessed
         hist, edges = img.histogram(data, irange=self._drange)
         if hist.size > 256:
@@ -854,8 +862,5 @@ class Stream(object):
             self.raw.append(data)
         else:
             self.raw[0] = data
-
-        # Depth can change at each image (depends on hardware settings)
-        self._updateDRange(data)
 
         self._shouldUpdateImage()

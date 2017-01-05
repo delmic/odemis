@@ -343,7 +343,6 @@ class StaticARStream(StaticStream):
                 # of the circle. => use a masked array?
                 # reset the drange to ensure that it doesn't depend on older data
                 self._drange = None
-                self._updateDRange(polard)
                 self._updateHistogram(polard)
                 self.image.value = self._projectXY2RGB(polard)
         except Exception:
@@ -877,11 +876,8 @@ class StaticSpectrumStream(StaticStream):
         called when the background or efficiency compensation is changed
         """
         # histogram will change as the pixel intensity is different
-        self._updateDRange()
         self._updateHistogram()
-
         self._shouldUpdateImage()
-
         self._force_selected_spectrum_update()
 
     def _onSelectionWidth(self, width):
