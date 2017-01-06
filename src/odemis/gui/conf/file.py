@@ -272,7 +272,7 @@ class CalibrationConfig(Config):
         return "delphi-%x" % shid
 
     def set_sh_calib(self, shid, htop, hbot, hfoc, ofoc, strans, sscale, srot,
-                     iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift):
+                     iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift):
         """ Store the calibration data for a given sample holder
 
         shid (int): the sample holder ID
@@ -290,7 +290,7 @@ class CalibrationConfig(Config):
         resa (2 floats): resolution related SEM image shift, slope of linear fit
         resb (2 floats): resolution related SEM image shift, intercept of linear fit
         hfwa (2 floats): hfw related SEM image shift, slope of linear fit
-        spotshift (2 floats): SEM spot shift in percentage of HFW
+        scaleshift (2 floats): SEM shift when scale is set to 0 as a ratio of HFW
 
         """
 
@@ -324,8 +324,8 @@ class CalibrationConfig(Config):
             ("resolution_b_y", "%.15f" % resb[1]),
             ("hfw_a_x", "%.15f" % hfwa[0]),
             ("hfw_a_y", "%.15f" % hfwa[1]),
-            ("spot_shift_x", "%.15f" % spotshift[0]),
-            ("spot_shift_y", "%.15f" % spotshift[1]),
+            ("scale_shift_x", "%.15f" % scaleshift[0]),
+            ("scale_shift_y", "%.15f" % scaleshift[1]),
         ])
 
     def _get_tuple(self, section, option):
@@ -362,7 +362,7 @@ class CalibrationConfig(Config):
             resa (2 floats): resolution related SEM image shift, slope of linear fit
             resb (2 floats): resolution related SEM image shift, intercept of linear fit
             hfwa (2 floats): hfw related SEM image shift, slope of linear fit
-            spotshift (2 floats): SEM spot shift in percentage of HFW
+            scaleshift (2 floats): SEM shift when scale is set to 0 as a ratio of HFW
 
         """
 
@@ -373,12 +373,14 @@ class CalibrationConfig(Config):
                 hbot = self._get_tuple(sec, "bottom_hole")
                 try:
                     hfoc = self.config.getfloat(sec, "hole_focus")
-                except Exception:
+                except (ValueError, NoOptionError):
+                    logging.info("No SEM focus calibration found. A re-calibration should be performed.")
                     hfoc = delphi.SEM_KNOWN_FOCUS
 
                 try:
                     ofoc = self.config.getfloat(sec, "optical_focus")
-                except Exception:
+                except (ValueError, NoOptionError):
+                    logging.info("No optical focus calibration found. A re-calibration should be performed.")
                     ofoc = delphi.OPTICAL_KNOWN_FOCUS
 
                 strans = self._get_tuple(sec, "stage_trans")
@@ -405,7 +407,7 @@ class CalibrationConfig(Config):
                     if not (iscale_xy[0] > 0 and iscale_xy[1] > 0):
                         raise ValueError("image_scaling_scan %s must be > 0" % str(iscale_xy))
                     ishear = self.config.getfloat(sec, "image_shear")
-                except Exception:
+                except (ValueError, NoOptionError):
                     iscale_xy = (1, 1)
                     ishear = 0
 
@@ -414,15 +416,27 @@ class CalibrationConfig(Config):
                     resa = self._get_tuple(sec, "resolution_a")
                     resb = self._get_tuple(sec, "resolution_b")
                     hfwa = self._get_tuple(sec, "hfw_a")
-                    spotshift = self._get_tuple(sec, "spot_shift")
-                except Exception:
+                except (ValueError, NoOptionError):
+                    logging.warning("No SEM image calibration found. Using default values. A re-calibration should be performed.")
                     resa = (0, 0)
                     resb = (0, 0)
-                    hfwa = (0, 0)
-                    spotshift = (0.035, 0)  # Rough approximation used until the calibration
+                    hfwa = delphi.HFW_SHIFT_KNOWN
+
+                # Until Odemis v2.5, it was called "spot_shift", and the value
+                # was computed including res* and hfwa, for a resolution of 456 px.
+                # From Odemis v2.6, this calibration value is _in addition_ to
+                # res* and hfwa, for a resolution of 256 px.
+                # => The metadata is still named MD_SPOT_SHIFT in the driver,
+                # but it's a different name in the calibration file to avoid
+                # using old incorrect value.
+                try:
+                    scaleshift = self._get_tuple(sec, "scale_shift")
+                except (ValueError, NoOptionError):
+                    logging.warning("No SEM spot shift calibration found. Using default values. A re-calibration should be performed.")
+                    scaleshift = delphi.SPOT_SHIFT_KNOWN
 
                 return (htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot,
-                        iscale_xy, ishear, resa, resb, hfwa, spotshift)
+                        iscale_xy, ishear, resa, resb, hfwa, scaleshift)
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",
                              exc_info=True)
