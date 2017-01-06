@@ -14,7 +14,7 @@ import sys
 
 
 # To be updated to the current version
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
@@ -25,7 +25,7 @@ ROOT = os.geteuid() == 0
 # system update services for Mime and Desktop registrations.
 # The debian/odemis.postinst script must do those.
 if not os.getenv("FAKEROOTKEY") == None:
-    print "NOTICE: Detected execution in a FakeRoot so disabling calls to system update services."
+    print "NOTICE: Detected execution in a FakeRoot so disabling system update services."
     ROOT = False
 
 # almost copy from odemis.__init__.py, but we cannot load it as it's not installed yet
@@ -35,10 +35,7 @@ def _get_version_git():
     raises LookupError if no version info found
     """
     # change directory to root
-    rootdir = os.path.dirname(__file__) # .
-
-#    if not os.path.isdir(rootdir) or not os.path.isdir(os.path.join(rootdir, ".git")):
-#        raise LookupError("Not in a git directory")
+    rootdir = os.path.dirname(__file__)
 
     try:
         out = subprocess.check_output(args=["git", "describe", "--tags", "--dirty", "--always"],
@@ -52,7 +49,7 @@ def _get_version_git():
 try:
     gver = _get_version_git()
     if "-" in gver:
-            sys.stderr.write("Warning: packaging a non-tagged version: %s\n" % gver)
+        sys.stderr.write("Warning: packaging a non-tagged version: %s\n" % gver)
     if VERSION != gver:
         sys.stderr.write("Warning: package version and git version don't match:"
                          " %s <> %s\n" % (VERSION, gver))
@@ -125,7 +122,7 @@ dist = setup(name='Odemis',
                            'odemis.gui': ["doc/*.html"],
                            'odemis.driver': ["*.tiff", "*.h5"],
                           },
-            ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
+             ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
              scripts=scripts,
              data_files=data_files, # not officially in setuptools, but works as for distutils
             )

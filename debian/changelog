@@ -1,3 +1,58 @@
+odemis (2.6.0-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6
+  * Main new features:
+    - pwrcomedi driver to control device power via any DAQ board
+    - cobolt driver to control Cobolt laser power
+    - MultiplexLight wrapper to merge multiple light devices into a single component
+    - "CL acquisition" plugin to acquire CL data on a SECOM/DELPHI
+    - "Averaged frame" plugin to acquire SEM images via fast accumulated scans
+    - Optical focus is restored to a "good" value when inserting a sample (DELPHI)
+    - Use a separate focus in chamber view from the acquisition focus (SPARCv2)
+  * Main improvements:
+    - Do not restart live stream when coming back to the acquisition tab
+    - Improved reliability of the DELPHI calibration
+    - Store logs and attach them to bug report in case of failure of the DELPHI calibration
+    - Updated tooltip information for each acquistion setting
+    - Fuzzing acquisition use always the finest e-beam resolution possible (SPARC)
+    - CCD temperature display in SPARCv2 alignment tab
+    - Possibility to zoom & pan in SPARCv2 lens alignment
+    - Only provide a text entry to change the spectrometer center wavelength (SPARC)
+    - Better logging in case of failure or errors
+  * Main bug fixed:
+    - Prevents sample to be moved outside of the physical limits of the axes (DELPHI)
+    - Workaround power control unit sometimes diconnecting when turning on the power (SPARC)
+    - Ensure the SEM HFW is never modified when the GUI window is resized
+  * Bugs fixed also in the stable v2.5 branch:
+    - Don't try setting extremely long exposure times in high-quality presets (DELPHI/SECOM)
+    - Zooming a lot on 1x1 px image could fail
+    - Editing the microscope file would fail when using a MODEL_SELECTOR (SPARC)
+    - CCD fan would not automatically stop during high-quality acquisition (DELPHI/SECOM)
+    - When exporting just one stream, use the stream name instead of the view name
+    - HFW values were not ordered (DELPHI)
+    - First image acquired from Phenom could be showing old data (DELPHI)
+    - In case of automatic calibration failure, it was impossible not to run the manual calibration (DELPHI)
+    - Bandwidth reported by omicronxx driver was 2x bigger than when opening back an image (DELPHI/SECOM)
+    - Limit stage positions during Twin stage calibration to improve reliability (DELPHI)
+    - Fix reduced precision when SEM dwell time > 12s (SPARC)
+    - Fix editing the microscope file and odemis.conf failing to show the editor
+    - Try to handle better acquisition errors of uEye cameras (SPARC)
+    - Reuse name of current file and store current path for export file names
+    - Show the date of the file as the data of the _latest_ acquisition
+    - Show the tint of the filtered stream in legend of print-ready export (SECOM/DELPHI)
+    - Increase font size of spectra and AR print-ready exports (SPARC)
+    - Fix post-processable spatial export of spectra (SPARC)
+    - Fix export of spectra with pixel width > 1 (SPARC)
+    - Fix post-processable line-spectrum export (SPARC)
+    - Fix SEM stream doing twice alignement during high-quality acquisition (DELPHI)
+    - Fix shutter handling on SR193 (SPARC)
+    - Avoid potential GUI crashes when sample holder loading is completed (DELPHI)
+    - Don't attempt to autofocus CCDs with 1D (SPARC)
+    - Don't hide streams automatically on stage move (SECOM)
+    - Change Picoharp driver to provide pixelDuration VA instead of binning (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 05 Jan 2017 10:46:05 +0100
+
 odemis (2.5.0-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5
