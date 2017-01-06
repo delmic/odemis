@@ -960,7 +960,7 @@ class DelphiStateController(SecomStateController):
         # locate the top and bottom holes of the sample holder, using
         # the SEM. So once the sample is fully loaded, new and more
         # precise calibration will be set.
-        htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib
+        htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift = calib
         self._hole_focus = hfoc
         self.good_optical_focus = ofoc
 
@@ -1004,18 +1004,17 @@ class DelphiStateController(SecomStateController):
             self._main_data.ebeam.updateMetadata({model.MD_ROTATION_COR: irot})
 
         # update the shear correction and ebeam scaling
-        self._main_data.ebeam.updateMetadata({model.MD_SHEAR_COR: ishear})
         self._main_data.ebeam.updateMetadata({
+            model.MD_SHEAR_COR: ishear,
             model.MD_PIXEL_SIZE_COR: iscale_xy,
         })
 
         # update detector metadata with the SEM image and spot shift correction
-        # values
         self._main_data.bsd.updateMetadata({
             model.MD_RESOLUTION_SLOPE: resa,
             model.MD_RESOLUTION_INTERCEPT: resb,
             model.MD_HFW_SLOPE: hfwa,
-            model.MD_SPOT_SHIFT: spotshift
+            model.MD_SPOT_SHIFT: scaleshift
         })
 
     def _check_holder_calib(self):

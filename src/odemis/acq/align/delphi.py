@@ -516,9 +516,9 @@ def _DoDelphiCalibration(future, main_data):
             # Compute spot shift ratio
             future.running_subf = ScaleShiftFactor(main_data.bsd, main_data.ebeam,
                                                    logpath)
-            spotshift = future.running_subf.result()
-            calib_values["spot_shift"] = spotshift
-            logger.debug("Spot shift: %s", spotshift)
+            scaleshift = future.running_subf.result()
+            calib_values["scale_shift"] = scaleshift
+            logger.debug("Spot shift: %s", scaleshift)
 
             # Compute resolution-related values.
             future.running_subf = ResolutionShiftFactor(main_data.bsd,
@@ -540,7 +540,7 @@ def _DoDelphiCalibration(future, main_data):
             logger.exception("Failure during SEM image calibration")
             raise IOError("Failed to measure SEM image calibration (%s)." % (ex,))
 
-        return htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
+        return htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift
 
     except CancelledError:
         logger.info("Calibration cancelled")

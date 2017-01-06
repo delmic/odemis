@@ -192,7 +192,7 @@ def man_calib(logpath):
         shid, sht = chamber.sampleHolder.value
         calib_values = calibconf.get_sh_calib(shid)
         if calib_values is None:
-            first_hole = second_hole = offset = resa = resb = hfwa = spotshift = (0, 0)
+            first_hole = second_hole = offset = resa = resb = hfwa = scaleshift = (0, 0)
             scaling = iscale = iscale_xy = (1, 1)
             rotation = irot = ishear = 0
             hole_focus = aligndelphi.SEM_KNOWN_FOCUS
@@ -200,7 +200,7 @@ def man_calib(logpath):
             print "\033[1;31mCalibration values missing! All the steps will be performed anyway...\033[1;m"
             force_calib = True
         else:
-            first_hole, second_hole, hole_focus, opt_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib_values
+            first_hole, second_hole, hole_focus, opt_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift = calib_values
             force_calib = False
         print "\033[1;36m"
         print "**Delphi Manual Calibration steps**"
@@ -222,7 +222,7 @@ def man_calib(logpath):
         print "    Current values: resolution-a: " + str(resa)
         print "                    resolution-b: " + str(resb)
         print "                    hfw-a: " + str(hfwa)
-        print "                    spot shift: " + str(spotshift)
+        print "                    spot shift: " + str(scaleshift)
         print '\033[1;m'
         print "\033[1;33mNote that you should not perform any stage move during the process. \nInstead, you may zoom in/out while focusing.\033[1;m"
         print "\033[1;30mNow initializing, please wait...\033[1;m"
@@ -298,7 +298,7 @@ def man_calib(logpath):
                         first_hole, second_hole, hole_focus = new_first_hole, new_second_hole, new_hole_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
-                               resa, resb, hfwa, spotshift)
+                               resa, resb, hfwa, scaleshift)
                     break
                 except IOError:
                     print "\033[1;31mSample holder hole detection failed.\033[1;m"
@@ -404,7 +404,7 @@ def man_calib(logpath):
                         offset, scaling, rotation, opt_focus = new_offset, new_scaling, new_rotation, new_opt_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
-                               resa, resb, hfwa, spotshift)
+                               resa, resb, hfwa, scaleshift)
                     break
                 except IOError:
                     print "\033[1;31mTwin stage calibration failed.\033[1;m"
@@ -494,7 +494,7 @@ def man_calib(logpath):
                         iscale, irot, iscale_xy, ishear = new_iscale, new_irot, new_iscale_xy, new_ishear
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
-                               resa, resb, hfwa, spotshift)
+                               resa, resb, hfwa, scaleshift)
                     break
                 except ValueError:
                     print "\033[1;31mFine alignment failed.\033[1;m"
@@ -523,7 +523,7 @@ def man_calib(logpath):
                     # Compute spot shift percentage
                     print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
                     f = aligndelphi.ScaleShiftFactor(detector, escan, logpath)
-                    new_spotshift = f.result()
+                    new_scaleshift = f.result()
 
                     # Compute resolution-related values.
                     print "\033[1;30mCalculating resolution shift, please wait...\033[1;m"
@@ -539,17 +539,17 @@ def man_calib(logpath):
                     print "Values computed: resolution-a: " + str(new_resa)
                     print "                 resolution-b: " + str(new_resb)
                     print "                 hfw-a: " + str(new_hfwa)
-                    print "                 spot shift: " + str(new_spotshift)
+                    print "                 spot shift: " + str(new_scaleshift)
                     print '\033[1;m'
                     ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
                     if ans in YES_CHARS:
-                        resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
+                        resa, resb, hfwa, scaleshift = new_resa, new_resb, new_hfwa, new_scaleshift
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
-                               resa, resb, hfwa, spotshift)
+                               resa, resb, hfwa, scaleshift)
                     break
                 except IOError:
                     print "\033[1;31mSEM image calibration failed.\033[1;m"
