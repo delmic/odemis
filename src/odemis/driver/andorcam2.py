@@ -523,13 +523,13 @@ class AndorCam2(model.DigitalCamera):
             else:
                 ranges = (-275, 100)
             self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit=u"°C",
-                                                            setter=self._setTargetTemperature)
+                                                           setter=self._setTargetTemperature)
             self._setTargetTemperature(ranges[0], force=True)
 
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
-            # max speed
+            # fan speed = ratio to max speed, with max speed by default
             self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
-                                        setter=self._setFanSpeed) # ratio to max speed
+                                                  setter=self._setFanSpeed)
             self._setFanSpeed(1.0, force=True)
 
         self._binning = (1, 1) # px, horizontal, vertical
@@ -669,7 +669,7 @@ class AndorCam2(model.DigitalCamera):
 #        metadata['Filter'] = "Cosmic Ray filter"
 
         # EM Gain set in "Real Gain" values
-        if self.hasFeature(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
             # 3 = Real Gain mode (seems to be the best, but not always available)
             # 2 = Linear mode (similar, but without aging compensation)
             # 0 = Gain between 0 and 255
@@ -691,6 +691,12 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
             # mode 3 is supported for iXon Ultra only since SDK 2.97
+
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_HIGHCAPACITY):
+            # High _sensitivity_ is what we typically need. It should be the
+            # default, but to be sure, we force it.
+            self.atcore.SetHighCapacity(0)
+            logging.debug("High sensitivity mode selected")
 
         self.atcore.SetTriggerMode(0) # 0 = internal
 
@@ -1069,7 +1075,7 @@ class AndorCam2(model.DigitalCamera):
         gain (float): current gain
         """
         # Check whether the camera supports it
-        if self.hasFeature(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
             # Lookup the right EM gain in the table
             try:
                 emgain = self._lut_emgains[(rr, gain)]
@@ -1131,7 +1137,6 @@ class AndorCam2(model.DigitalCamera):
 #         """
 #         cdata = (c_ubyte * len(data))(*data) # TODO: don't do if already a c_byte array
 #         self.atcore.I2CBurstWrite(c_ubyte(i2caddr), len(data), byref(cdata))
-
 
     # High level methods
     def select(self):
@@ -1448,7 +1453,7 @@ class AndorCam2(model.DigitalCamera):
         # Just save, and the setting will be actually updated by _update_settings()
         # Everything (within the choices) is fine, just need to update gain.
         self._readout_rate = value
-        self.gain.value = self.setGain(self.gain.value)
+        self.gain.value = self.gain.value  # Force checking it
         return value
 
     def _setShutterPeriod(self, period):
@@ -1456,21 +1461,8 @@ class AndorCam2(model.DigitalCamera):
         return period
 
     def setGain(self, value):
-        # TODO: need to handle EM Gain for EMCCD cameras (eg, iXon Ultra) too.
-        # cf SetEMCCDGain(), SetEMGainMode(), GetEMGainRange()
-
         # Just save, and the setting will be actually updated by _update_settings()
-        # not every gain is compatible with the readout rate (channel/hsspeed)
-        gains = self.gain.choices
-        for i in range(len(gains)):
-            c, hs = self._getChannelHSSpeed(self._readout_rate)
-            # FIXME: this doesn't work is driver is acquiring
-#            is_avail = c_int()
-#            self.atcore.IsPreAmpGainAvailable(c, self._output_amp, hs, i, byref(is_avail))
-#            if is_avail == 0:
-#                gains[i] = -100000 # should never be picked up
-
-        self._gain = util.find_closest(value, gains)
+        self._gain = value
         return self._gain
 
     def _getMaxBPP(self):
@@ -1547,6 +1539,18 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Updating gain to %f", self._gain)
             # DDGTIMES, DDGIO => other gain settings, but neither Clara nor
             # iXon Ultra seem to care
+
+            # TODO: On some camera, not all gains are compatible with all
+            # readout rates => pick the closest once available (and update VA)
+#           gains = self.GetPreAmpGains()
+#           c, hs = self._getChannelHSSpeed(self._readout_rate)
+#           is_avail = c_int()
+#           for i in range(len(gains)):
+#               self.atcore.IsPreAmpGainAvailable(c, self._output_amp, hs, i, byref(is_avail))
+#               if is_avail.value == 0:
+#                   gains[i] = -100000 # should never be picked up
+#           self._gain = util.find_closest(value, gains)
+
             self.SetPreAmpGain(self._gain)
             self._metadata[model.MD_GAIN] = self._gain
 
