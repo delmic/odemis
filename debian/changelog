@@ -17,6 +17,7 @@ odemis (2.6.0-1ubuntu1) precise; urgency=medium
     - Fuzzing acquisition use always the finest e-beam resolution possible (SPARC)
     - CCD temperature display in SPARCv2 alignment tab
     - Possibility to zoom & pan in SPARCv2 lens alignment
+    - Fiber alignment chronograph scales to data range (SPARC)
     - Only provide a text entry to change the spectrometer center wavelength (SPARC)
     - Better logging in case of failure or errors
   * Main bug fixed:
