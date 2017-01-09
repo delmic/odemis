@@ -627,6 +627,11 @@ class DelphiStateController(SecomStateController):
         self.good_focus = None
         self.good_optical_focus = None
 
+        # Event for indicating sample reached overview position and phenom GUI
+        # loading
+        self._in_overview = threading.Event()
+        self._phenom_load_done = True
+
         super(DelphiStateController, self).__init__(tab_data, tab_panel, *args, **kwargs)
 
         # Display the panel with the loading progress indicators
@@ -648,11 +653,6 @@ class DelphiStateController(SecomStateController):
         self._views_list = []
         self._views_prev_list = []
         tab_data.views.subscribe(self._subscribe_current_view_visibility, init=True)
-
-        # Event for indicating sample reached overview position and phenom GUI
-        # loading
-        self._in_overview = threading.Event()
-        self._phenom_load_done = True
 
         ch_opened = self._main_data.chamber.opened
         ch_opened.subscribe(self.on_door_opened)
