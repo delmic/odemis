@@ -150,10 +150,14 @@ class TestOverlayStream(unittest.TestCase):
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
         self.assertLessEqual(self.end, time.time())
-        self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
 
+        # make sure the callback had time to be called
+        time.sleep(0.1)
+        self.assertEqual(self.done, 1)
+
     def on_done(self, future):
+        logging.debug("Acquisition done received")
         self.done += 1
 
     def on_progress_update(self, future, start, end):
