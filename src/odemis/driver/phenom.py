@@ -957,10 +957,7 @@ class Detector(model.Detector):
             scale = self.parent._scanner._scale
             # Set dataType based on current bpp value
             bpp = self.bpp.value
-            if bpp == 16:
-                dataType = numpy.uint16
-            else:
-                dataType = numpy.uint8
+            dataType = {8: numpy.uint8, 16: numpy.uint16}[bpp]
 
             # update changed metadata
             metadata = self.parent._metadata.copy()
@@ -1085,9 +1082,12 @@ class Detector(model.Detector):
                                                  img_str.aAcqState.pixelHeight * fovscale)
                 metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
 
-                # image to ndarray
+                dtype = {8: numpy.uint8, 16: numpy.uint16}[img_str.image.descriptor.bits]
+                if dtype != dataType:
+                    logging.warning("Expected image of data type %s but got %s",
+                                    dataType, dtype)
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
-                                           dtype=dataType)
+                                           dtype=dtype)
                 sem_img.shape = res[::-1]
                 logging.debug("Returning SEM image of %s with %d bpp and %d frames",
                               res, bpp, nframes)
