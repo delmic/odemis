@@ -1659,7 +1659,7 @@ class NavCamFocus(PhenomFocus):
 PRESSURE_UNLOADED = 1e05  # Pa
 PRESSURE_NAVCAM = 1e04  # Pa
 PRESSURE_SEM = 1e-02  # Pa
-VACUUM_TIMEOUT = 5  # s
+
 class ChamberPressure(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
@@ -1720,22 +1720,19 @@ class ChamberPressure(model.Actuator):
         self.opened = model.BooleanVA(self._opened, readonly=True)
 
         self._updatePosition()
+        if self._position == PRESSURE_SEM:
+            self.parent._detector.update_parameters()
         self._updateSampleHolder()
 
-        # Start thread that continuously listens to chamber state changes
-        chamber_client = Client(self.parent._host + "?om", location=self.parent._host,
-                        username=self.parent._username, password=self.parent._password,
-                        timeout=SOCKET_TIMEOUT)
-        self._chamber_device = chamber_client.service
-        # Event to indicate that any move requested by the user has been
-        # completed and thus position can be updated
-        self._chamber_event = threading.Event()
-        self._chamber_event.set()
-        # Event to prevent move applied from the user while another move is
-        # in progress
-        self._move_event = threading.Event()
-        self._move_event.set()
-        # Event to prevent future from returning before position is updated
+        # Lock taken while "pressure" (= sample loader) is changing, to prevent
+        # position update too early
+        self._pressure_changing = threading.Lock()
+        # Event to prevent move to start while another move initiated from the
+        # Phenom GUI is in progress
+        self._move_in_progress = threading.Event()
+        self._move_in_progress.set() # by default
+        # Event indicating position has been updated (after a move), to prevent
+        # future from returning before the position is updated
         self._position_event = threading.Event()
         self._position_event.set()
 
@@ -1752,19 +1749,17 @@ class ChamberPressure(model.Actuator):
         """
         update the position VA and .pressure VA
         """
-        logging.debug("About to update chamber position...")
+        logging.debug("Updating chamber position...")
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
-        logging.debug("Targeted area: %s", area)
-        if area == "LOADING-WORK-AREA-SEM":
-            # Once moved in SEM, get current tilt and use as beam unblank value
-            # Then blank the beam and unblank it once SEM stream is started
-            self.parent._detector.update_parameters()
-            self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
-            self.parent._scanner.blanker.value = True
-            self._position = PRESSURE_SEM
-        elif area == "LOADING-WORK-AREA-NAVCAM":
-            self._position = PRESSURE_NAVCAM
-        else:
+        logging.debug("Latest targeted area: %s", area)
+        # TODO: use OperationalMode instead?
+        try:
+            self._position = {"LOADING-WORK-AREA-SEM": PRESSURE_SEM,
+                              "LOADING-WORK-AREA-NAVCAM": PRESSURE_NAVCAM,
+                              "LOADING-WORK-AREA-UNLOAD": PRESSURE_UNLOADED,
+                              }[area]
+        except KeyError:
+            logging.warning("Unknown area %s, will assume it's unloaded", area)
             self._position = PRESSURE_UNLOADED
 
         # .position contains the last known/valid position
@@ -1832,7 +1827,7 @@ class ChamberPressure(model.Actuator):
         f.task_canceller = self._CancelMove
         f._move_lock = threading.Lock()
 
-        return self._executor.submitf(f, self._changePressure, f, pos)
+        return self._executor.submitf(f, self._changePressure, f, pos["pressure"])
 
     def stop(self, axes=None):
         # Empty the queue for the given axes
@@ -1870,71 +1865,114 @@ class ChamberPressure(model.Actuator):
         updater = functools.partial(self._updateTime, future, p)
         TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
         TimeUpdater.start()
-        self._chamber_event.clear()
-        self._move_event.wait()
-        with self.parent._acq_progress_lock:
-            logging.debug("Moving to another chamber state...")
+        self._move_in_progress.wait()
+        with self._pressure_changing, self.parent._acq_progress_lock:
             try:
-                if p["pressure"] == PRESSURE_SEM:
-                    if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+                instmode = self._pressure_device.GetInstrumentMode()
+                semmode = self._pressure_device.GetSEMDeviceMode()
+                logging.debug("Moving to chamber pressure %g (Phenom currently in %s/%s)...",
+                              p, instmode, semmode)
+                if p == PRESSURE_SEM:
+                    # Both instrument and SEM modes report standby state, but
+                    # SEM is what really matters, so care about it most.
+                    if instmode != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                    semmod = self._pressure_device.GetSEMDeviceMode()
-                    if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
-                        # If in standby or currently waking up, open event channel
+                    if semmode not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         self._wakeUp(future)
+
                     if future._move_state == CANCELLED:
                         raise CancelledError()
-                    try:
-                        self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
-                    except suds.WebFault:
-                        # TODO, check why this exception appears only in CRUK
-                        logging.debug("Move appears not to be completed.")
+
+                    # If it's already in the right place, we are done (important
+                    # as we'll never receive a new event)
+                    opmode = self._pressure_device.GetOperationalMode()
+                    if opmode == "OPERATIONAL-MODE-LIVESEM":
+                        logging.debug("Device already in %s", opmode)
+                        return
+
+                    # It's "almost blocking": it waits until the stage has
+                    # finished its move, but doesn't fully wait until the
+                    # new operational mode is reached. Moreover, immediately
+                    # GetOperationalMode() returns the new mode, quite
+                    # before the event is sent and the system is actually ready.
+                    self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
                     TimeUpdater.cancel()
-                    # Take care of the calibration that takes place when we move to SEM
-                    if self.parent._phenom_gui:
-                        # Allow few phenom api acquisitions before you start acquiring
-                        # via odemis. An alternative would be to wait for the second
-                        # ACB performed by phenom API each time we load to SEM.
-                        self._waitForDevice("SEM-IMAGE-UPDATED-CHANGED-ID", 25)
-                elif p["pressure"] == PRESSURE_NAVCAM:
-                    if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+
+                    # Typically, it will first go to ACQUIRESEMIMAGE, then LIVESEM
+                    try:
+                        while True:
+                            evt = self._waitForEvent("OPERATIONAL-MODE-CHANGED-ID", 20)
+                            opmode = evt.OperationalModeChanged.opMode
+                            logging.debug("Operational mode is now %s", opmode)
+                            if opmode == "OPERATIONAL-MODE-LIVESEM":
+                                break
+                            elif opmode != "OPERATIONAL-MODE-ACQUIRESEMIMAGE":
+                                logging.warning("Excepted to reach SEM mode, but got mode %s", opmode)
+                    except IOError:
+                        logging.warning("Failed to receive operational mode event", exc_info=True)
+
+                elif p == PRESSURE_NAVCAM:
+                    # We could move to NavCam without waiting to wake up.
+                    # We force first a wake-up as a "hack" so that in the very
+                    # likely case the user goes to SEM mode afterwards, the total
+                    # needed time is counted as soon as loading starts.
+                    if instmode != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                    # Typically we can now move to NavCam without waiting to wake up.
-                    # We only open the channel in order to obtain the updates in
-                    # waking up remaining time, assuming that eventually we will
-                    # try to move to the SEM.
-                    semmod = self._pressure_device.GetSEMDeviceMode()
-                    if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
+                    if semmode not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         self._wakeUp(future)
+
                     if future._move_state == CANCELLED:
                         raise CancelledError()
+
+                    # If it's already in the right place, we are done (important
+                    # as we'll never receive a new event)
+                    opmode = self._pressure_device.GetOperationalMode()
+                    if opmode == "OPERATIONAL-MODE-LIVENAVCAM":
+                        logging.debug("Device already in %s", opmode)
+                        return
+
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     TimeUpdater.cancel()
-                    # Wait for NavCam
-                    if self.parent._phenom_gui:
-                        # just a workaround for the unexpected navcam image event when
-                        # loading to SEM
-                        self._waitForDevice("NAV-CAM-IMAGE-UPDATED-CHANGED-ID", 2)
-                else:
+
+                    # Typically, it will first go to ACQUIRENAVCAMIMAGE, then LIVENAVCAM
+                    try:
+                        while True:
+                            evt = self._waitForEvent("OPERATIONAL-MODE-CHANGED-ID", 10)
+                            opmode = evt.OperationalModeChanged.opMode
+                            logging.debug("Operational mode is now %s", opmode)
+                            if opmode == "OPERATIONAL-MODE-LIVENAVCAM":
+                                break
+                            elif opmode != "OPERATIONAL-MODE-ACQUIRENAVCAMIMAGE":
+                                logging.warning("Excepted to reach NavCam mode, but got mode %s", opmode)
+                    except IOError:
+                        logging.warning("Failed to receive operational mode event", exc_info=True)
+
+                elif p == PRESSURE_UNLOADED:
                     self._pressure_device.UnloadSample()
                     TimeUpdater.cancel()
-            except suds.WebFault:
-                logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
-        self._chamber_event.set()
-        # Wait for position to be updated
-        self._position_event.wait()
+                else:
+                    raise ValueError("Unexpected pressure %g", p)
+            except Exception as ex:
+                logging.exception("Failed to move to pressure %g: %s", p, ex)
+                raise
 
-    def _updateTime(self, future, target):
+        # Wait for position to be updated (via the chamber_move event listener thread)
+        self._position_event.wait(10)
+        logging.debug("Move to pressure %g completed", p)
+
+    def _updateTime(self, future, pressure):
         try:
-            remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-            area = self.parent._device.GetProgressAreaSelection().target
+            prog_info = self.parent._device.GetProgressAreaSelection()
+            remainingTime = prog_info.progress.timeRemaining
+            area = prog_info.target
             if area == "LOADING-WORK-AREA-SEM":
-                waiting_time = 6
+                waiting_time = 10
             else:
                 waiting_time = 0
             future.set_progress(end=time.time() + self.wakeUpTime + remainingTime + waiting_time)
         except suds.WebFault:
-            logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
+            logging.warning("Time updater failed while moving to pressure %g.",
+                            pressure, exc_info=True)
 
     def registerSampleHolder(self, code):
         """
@@ -1960,119 +1998,140 @@ class ChamberPressure(model.Actuator):
             raise ValueError("Wrong sample holder registration code")
 
     def _wakeUp(self, future):
+        """
+        Wakes up the system (if it's in suspended or hibernation state).
+        It's blocking, and will take care of updating the wake up time
+        """
+        logging.debug("Waiting for instrument to wake up")
         # Make sure system is waking up
         self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
 
         # Event for remaining time update
-        eventID = "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID"
         eventSpec = self.parent._objects.create('ns0:EventSpec')
-        eventSpec.eventID = eventID
+        eventSpec.eventID = "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID"
         eventSpec.compressed = False
-
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
         eventSpecArray.item = [eventSpec]
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
-        while(True):
+        while True:
             if future._move_state == CANCELLED:
                 break
-            self.wakeUpTime = self._pressure_device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
-            logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
-            if self.wakeUpTime == 0:
-                break
+            new_evts = self._pressure_device.ReadEventChannel(ch_id)
+            if new_evts == "":
+                logging.debug("Event listener timeout")
+                continue
+
+            new_evt_id = new_evts[0][0].eventID
+            if new_evt_id == "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID":
+                self.wakeUpTime = new_evts[0][0].SEMProgressDeviceModeChanged.timeRemaining
+                logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
+                if self.wakeUpTime == 0:
+                    break
+            else:
+                logging.warning("Unexpected event %s received", new_evt_id)
+
         self._pressure_device.CloseEventChannel(ch_id)
-        # Wait before move
+
+        # Wait a little, to be really sure
         time.sleep(1)
 
-    def _waitForDevice(self, event, frames):
-        logging.debug("Waiting for %d %s events", frames, event)
-        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+    def _waitForEvent(self, evtid, timeout=None):
+        """
+        evtid (str or int): the ID of the event to wait for
+        timeout (None or 0<float): maximum time to wait (in s). Note: it's very
+          rough, as the check might happen only every ~30s.
+        return (Event): the event received
+        raise IOError: in case of timeout
+        """
+        logging.debug("Waiting for a %s event", evtid)
 
         eventSpec = self.parent._objects.create('ns0:EventSpec')
-        eventSpec.eventID = event
+        eventSpec.eventID = evtid
         eventSpec.compressed = False
-
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
         eventSpecArray.item = [eventSpec]
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
-
-        api_frames = 0
-        while(True):
-            logging.debug("Device wait function about to read event...")
-            expected_event = self._pressure_device.ReadEventChannel(ch_id)
-            if expected_event == "":
-                logging.debug("Event listener timeout")
-            else:
-                newEvent = expected_event[0][0].eventID
-                logging.debug("Try to read event: %s", newEvent)
-                if (newEvent == event):
-                    api_frames += 1
-                    if api_frames >= frames:
-                        break
+        try:
+            tstart = time.time()
+            while timeout is None or time.time() - tstart < timeout:
+                new_evts = self._pressure_device.ReadEventChannel(ch_id)
+                if new_evts == "":
+                    logging.debug("Event listener timeout")
+                    continue
+                new_evt_id = new_evts[0][0].eventID
+                logging.debug("Received event: %s", new_evt_id)
+                if new_evt_id == evtid:
+                    return new_evts[0][0]
                 else:
-                    logging.warning("Unexpected event received")
-        self._pressure_device.CloseEventChannel(ch_id)
-        # Wait before allow acquisition
-        time.sleep(1)
+                    logging.warning("Unexpected event %s received", new_evt_id)
+            else:
+                raise IOError("Timeout waiting for event %s" % (evtid,))
+        finally:
+            self._pressure_device.CloseEventChannel(ch_id)
 
     def _chamber_move_thread(self):
         """
         Thread that listens to changes in Phenom chamber pressure.
         """
+        client = Client(self.parent._host + "?om", location=self.parent._host,
+                        username=self.parent._username, password=self.parent._password,
+                        timeout=SOCKET_TIMEOUT)
+        device = client.service
+
         eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+        eventSpecArray.item = []
+        for evtid in ("PROGRESS-AREA-SELECTION-CHANGED-ID", # sample holder move
+                      "SAMPLEHOLDER-STATUS-CHANGED-ID",  # sample holder insertion
+                      "DOOR-STATUS-CHANGED-ID"):  # door open/closed
+            eventSpec = self.parent._objects.create('ns0:EventSpec')
+            eventSpec.eventID = evtid
+            eventSpec.compressed = False
+            eventSpecArray.item.append(eventSpec)
 
-        # Event for performed sample holder move
-        eventID1 = "PROGRESS-AREA-SELECTION-CHANGED-ID"
-        eventSpec1 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec1.eventID = eventID1
-        eventSpec1.compressed = False
-
-        # Event for sample holder insertion
-        eventID2 = "SAMPLEHOLDER-STATUS-CHANGED-ID"
-        eventSpec2 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec2.eventID = eventID2
-        eventSpec2.compressed = False
-
-        # Event for door status change
-        eventID3 = "DOOR-STATUS-CHANGED-ID"
-        eventSpec3 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec3.eventID = eventID3
-        eventSpec3.compressed = False
-
-        eventSpecArray.item = [eventSpec1, eventSpec2, eventSpec3]
-        ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
+        ch_id = device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
                 logging.debug("Chamber move thread about to read event...")
-                expected_event = self._pressure_device.ReadEventChannel(ch_id)
-                if expected_event == "":
+                new_evts = self._pressure_device.ReadEventChannel(ch_id)
+                if new_evts == "":
                     logging.debug("Event listener timeout")
-                else:
-                    newEvent = expected_event[0][0].eventID
-                    logging.debug("Try to read event: %s", newEvent)
-                    if newEvent == eventID1:
-                        try:
-                            time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
-                            logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
-                            if time_remaining == 0:
-                                # Move in progress is completed
-                                self._move_event.set()
-                                # Wait until any move performed by the user is completed
-                                self._chamber_event.wait()
+                    continue
+
+                new_evt_id = new_evts[0][0].eventID
+                logging.debug("Received event: %s", new_evt_id)
+                if new_evt_id == "PROGRESS-AREA-SELECTION-CHANGED-ID":
+                    try:
+                        time_remaining = new_evts[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
+                        logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
+                        if time_remaining == 0:
+                            # Move in progress is completed
+                            self._move_in_progress.set()
+                            # Wait until any pressure move requested by us is completed
+                            with self._pressure_changing:
                                 self._updatePosition()
-                                self._position_event.set()
-                            else:
-                                self._move_event.clear()
-                                self._position_event.clear()
-                        except Exception:
-                            logging.warning("Received event does not have the expected attribute or format")
-                    elif newEvent == eventID2:
-                        logging.debug("Sample holder insertion, about to update sample holder id if needed")
-                        self._updateSampleHolder()  # in case new sample holder was loaded
-                    elif newEvent == eventID3:
-                        logging.debug("Door status changed")
-                        self._updateOpened()  # in case door status is changed
-                    else:
-                        logging.warning("Unexpected event received")
+
+                            # When moved to SEM position, blank ASAP
+                            if self._position == PRESSURE_SEM:
+                                self.parent._detector.update_parameters()
+                                if not self.parent._blank_supported:
+                                    self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
+                                self.parent._scanner.blanker.value = True
+
+                            self._position_event.set()
+                        else:
+                            self._move_in_progress.clear()
+                            self._position_event.clear()
+                    except Exception:
+                        logging.warning("Received event does not have the expected attribute or format")
+                elif new_evt_id == "SAMPLEHOLDER-STATUS-CHANGED-ID":
+                    logging.debug("Sample holder insertion, about to update sample holder id if needed")
+                    self._updateSampleHolder()  # in case new sample holder was loaded
+                elif new_evt_id == "DOOR-STATUS-CHANGED-ID":
+                    logging.debug("Door status changed")
+                    self._updateOpened()  # in case door status is changed
+                else:
+                    logging.warning("Unexpected event received")
         except Exception:
             logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             # Update the state of SEM component so the backend is aware of the error occured
@@ -2084,7 +2143,7 @@ class ChamberPressure(model.Actuator):
                                                       name="Phenom reconnection attempt")
             self._reconnect_thread.start()
         finally:
-            self._chamber_device.CloseEventChannel(ch_id)
+            device.CloseEventChannel(ch_id)
             logging.debug("Chamber pressure thread closed")
             self._chamber_must_stop.clear()
 
