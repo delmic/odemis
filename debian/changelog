@@ -1,3 +1,13 @@
+odemis (2.5.6-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.5.6
+  * Bugs fixed:
+   - Workaround power control unit issue sometimes resetting at power up (SPARC)
+   - Fix histogram missing last value when max value is a power of 2 (SPARC)
+   - Fix detecting EM gain support on Andor cameras
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 09 Jan 2017 18:31:09 +0100
+
 odemis (2.5.5-1ubuntu1) precise; urgency=medium
 
   * New version: 2.5.5
