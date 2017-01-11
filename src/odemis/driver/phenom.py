@@ -33,7 +33,6 @@ import numpy
 from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 import re
-import subprocess
 import suds
 from suds.client import Client
 import threading
@@ -136,11 +135,12 @@ class SEM(model.HwComponent):
     '''
     This represents the bare Phenom SEM.
     '''
-    def __init__(self, name, role, children, host, username, password, phenom_gui=True, daemon=None, **kwargs):
+    def __init__(self, name, role, children, host, username, password, phenom_gui=False, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
             They will be provided back in the .children VA
+        phenom_gui (bool): DEPRECATED.
         Raise an exception if the device cannot be opened
         '''
 
@@ -155,21 +155,6 @@ class SEM(model.HwComponent):
         self._host = host
         self._username = username
         self._password = password
-        self._phenom_gui = phenom_gui
-        # get the ip from the whole host string
-        res = re.sub("http://", "", self._host)
-        self._ip = re.sub(":8888", "", res)
-        try:
-            if self._phenom_gui:
-                o = subprocess.check_output(["PhenomHeadless", self._ip, "off"])
-                logging.debug("Got response %s", o)
-            else:
-                o = subprocess.check_output(["PhenomHeadless", self._ip, "on"])
-                logging.debug("Got response %s", o)
-        except Exception as e:
-            logging.warning("Could not enable/disable Phenom GUI: %s", e)
-            self._phenom_gui = True
-
         try:
             client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
         except Exception:
