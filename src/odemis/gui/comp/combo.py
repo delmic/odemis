@@ -26,11 +26,12 @@ Combobox and similar controls.
 
 """
 from __future__ import division
-import wx.combo
 
+import logging
+from odemis.gui import img
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, darken_image
-from odemis.gui import img
+import wx.combo
 
 
 class ComboBox(wx.combo.OwnerDrawnComboBox):
@@ -86,7 +87,15 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
                               bmpDisabled=dis_iamge.ConvertToBitmap(),
                               pushButtonBg=False)
 
-        # self.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        # Convert losing the focus into accepting the new value typed in
+        # (generates EVT_TEXT_ENTER).
+        self._prev_text = None
+        self._text_changed = False
+        self.Bind(wx.EVT_TEXT, self._on_text)
+        self.Bind(wx.EVT_COMBOBOX, self._on_text_enter)
+        self.Bind(wx.EVT_TEXT_ENTER, self._on_text_enter)
+        self.Bind(wx.EVT_KILL_FOCUS, self._on_focus)
+
         self.Bind(wx.EVT_PAINT, self.on_paint)
 
         # If no labels are provided, create them from the choices
@@ -108,6 +117,28 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
             pass
 
         self.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+
+    def _on_text(self, evt):
+        text = self.GetValue()
+        if self._prev_text != text:
+            self._text_changed = True
+            self._prev_text = text
+
+    def _on_text_enter(self, evt):
+        self._text_changed = False
+        self._prev_text = self.GetValue()
+
+    def _on_focus(self, evt):
+        # When showing/hiding the drop-down, the KILL_FOCUS event is sent,
+        # although we didn't really lose the focus. In such case, no need to
+        # report a change of value. Also send the event only if the text has
+        # (probably) changed, to avoid sending too many events.
+        if evt.GetWindow() != self and self._text_changed:
+            entevt = wx.CommandEvent(wx.wxEVT_COMMAND_TEXT_ENTER, self.Id)
+            wx.PostEvent(self, entevt)
+        else:
+            logging.debug("No sending event as focus is still on combobox or text unchanged")
+        evt.Skip()  # pass it on
 
     def on_paint(self, evt):
         """ Handle the paint event

@@ -811,11 +811,10 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      va_2_ctrl=cb_set, ctrl_2_va=cb_get,
-                                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS))
+                                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
         if change_callback:
             value_ctrl.Bind(wx.EVT_COMBOBOX, change_callback)
             value_ctrl.Bind(wx.EVT_TEXT_ENTER, change_callback)
-            value_ctrl.Bind(wx.EVT_KILL_FOCUS, change_callback)
 
     else:
         logging.error("Unknown control type %s", control_type)
