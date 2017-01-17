@@ -152,13 +152,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         """
         Sends an event EVT_COMMAND_ENTER to notify that the value has changed
         """
-        changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
-        # Set the originating object for the event (ourselves)
-        changeEvent.SetEventObject(self)
-
-        # Watch for a possible listener of this event that will catch it and
-        # eventually process it
-        self.GetEventHandler().ProcessEvent(changeEvent)
+        changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.Id)
+        wx.PostEvent(self, changeEvent)
 
     def GetListCtrl(self):
         return self.dropdownlistbox
@@ -761,11 +756,8 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     def _send_change_event(self):
         """ Create and send a change event (wxEVT_COMMAND_ENTER) """
-        change_event = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
-        # Set the originating object for the event (ourselves)
-        change_event.SetEventObject(self)
-        # Watch for a possible listener of this event that will catch it and eventually process it
-        self.GetEventHandler().ProcessEvent(change_event)
+        changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.Id)
+        wx.PostEvent(self, changeEvent)
 
     def on_char(self, evt):
         """ This event handler increases or decreases the integer value when

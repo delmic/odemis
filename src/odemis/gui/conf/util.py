@@ -31,6 +31,7 @@ import collections
 import logging
 import math
 import numbers
+from odemis import util
 import odemis.gui
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
@@ -165,7 +166,7 @@ def binning_firstd_only(comp, va, conf):
 
 
 def hfw_choices(comp, va, conf):
-    """ Return a list of HFW choices
+    """ Return a set of HFW choices
 
     If the VA has predefined choices, return those. Otherwise calculate the choices using the range
     of the VA.
@@ -176,22 +177,29 @@ def hfw_choices(comp, va, conf):
         # Pick every x2, x5, x10, starting from the min value
         factors = (2, 5, 10)
         mn, mx = va.range
-        choices = [mn]
+        choices = {mn}
+        cur_val = va.value
 
         # starting point (might be even less than mn)
         base = 10 ** int(math.log10(mn) - 1)
 
-        while base < mx and choices[-1] < mx:
+        while base < mx and max(choices) < mx:
             for f in factors:
                 v = base * f
                 if mn < v < mx:
-                    choices.append(v)
+                    if util.almost_equal(v, cur_val):
+                        # To avoid having twice (almost) the same value shown in
+                        # the choices when the current value is among them, but
+                        # slightly modified due to rounding.
+                        choices.add(cur_val)
+                    else:
+                        choices.add(v)
                 elif v >= mx:
                     break
 
             base *= 10
 
-        choices.append(mx)
+        choices.add(mx)
 
         # We don't add the current value, as it's a range, so anyway any other
         # value can also happen so the GUI must be able to handle well any other
@@ -441,13 +449,6 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             choices.add(setting_va.value)
         elif isinstance(choices, dict):
             choices[setting_va.value] = unicode(setting_va.value)
-        elif isinstance(choices, list):
-            # FIXME: The HFW choices are the only choices provided as a Python list, and it's
-            # not necessary to add the current value to the choices. That's why, for now,
-            # the `list` type is ignored here. However, it would be better to either allow for
-            # the current value to be added to the HFW choices, or to disable the adding of it in
-            # some explicit way.
-            pass
         else:
             logging.warning("Don't know how to extend choices of type %s", type(choices))
 
@@ -760,9 +761,10 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)
-        def cb_set(value, ctrl=value_ctrl, u=unit):
+        def cb_set(value, ctrl=value_ctrl, u=unit, acc=accuracy):
             for i in range(ctrl.Count):
-                if ctrl.GetClientData(i) == value:
+                if ((isinstance(value, float) and util.almost_equal(ctrl.GetClientData(i), value)) or
+                    ctrl.GetClientData(i) == value):
                     logging.debug("Setting combobox value to %s", ctrl.Items[i])
                     ctrl.SetSelection(i)
                     break
@@ -770,8 +772,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 logging.debug("No existing label found for value %s in combobox ctrl %d",
                               value, id(ctrl))
                 # entering value as free text
-                txt = readable_str(value, u, sig=accuracy)
-                return ctrl.SetValue(txt)
+                txt = readable_str(value, u, sig=acc)
+                ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
         def cb_get(ctrl=value_ctrl, va=va, u=unit):
@@ -789,21 +791,22 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 logging.debug("Parsing combobox free text value %s", ctrl_value)
                 va_val = va.value
                 # Try to find a good corresponding value inside the string
-
-                # Try and find an SI prefix
                 str_val, str_si, _ = decompose_si_prefix(ctrl_value, unit=u)
+                try:
+                    new_val = reproduce_typed_value(va_val, str_val)
+                except (ValueError, TypeError):
+                    logging.warning("Value %s couldn't be understood", str_val, exc_info=True)
+                    new_val = va_val  # To force going back to last value
 
-                new_val = reproduce_typed_value(va_val, str_val)
-
+                # In case of list, be lenient by dropping the extra values if it's too many
                 if isinstance(new_val, collections.Iterable):
-                    # be less picky, by shortening the number of values if it's too many
                     new_val = new_val[:len(va_val)]
 
                 # If an SI prefix was found, scale the new value
                 new_val = si_scale_val(new_val, str_si)
 
-                # if it ends up being the same value as before the combobox will not update, so
-                # force it now
+                # if it ends up being the same value as before the combobox will
+                # not update, so force it now
                 if va_val == new_val:
                     cb_set(va_val)
                 return new_val
@@ -811,11 +814,10 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      va_2_ctrl=cb_set, ctrl_2_va=cb_get,
-                                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS))
+                                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
         if change_callback:
             value_ctrl.Bind(wx.EVT_COMBOBOX, change_callback)
             value_ctrl.Bind(wx.EVT_TEXT_ENTER, change_callback)
-            value_ctrl.Bind(wx.EVT_KILL_FOCUS, change_callback)
 
     else:
         logging.error("Unknown control type %s", control_type)
@@ -914,12 +916,6 @@ def create_axis_entry(container, name, comp, conf=None):
 
         choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
 
-        # FIXME: Is this still needed?
-        def _eat_event(evt):
-            """ Quick and dirty empty function used to 'eat' mouse wheel events """
-            pass
-        value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
-
         # Set choices
         if unit is None:
             unit = ""
@@ -930,21 +926,29 @@ def create_axis_entry(container, name, comp, conf=None):
         # be set by passing the actual value (As opposed to the text label)
         def cb_set(value, ctrl=value_ctrl, unit=unit):
             for i in range(ctrl.Count):
-                if ctrl.GetClientData(i) == value:
+                if ((isinstance(value, float) and util.almost_equal(ctrl.GetClientData(i), value)) or
+                    ctrl.GetClientData(i) == value):
                     logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
-                    return ctrl.SetValue(ctrl.Items[i])
+                    ctrl.SetSelection(i)
+                    break
             else:
                 logging.warning("No existing label found for value %s", value)
-                return ctrl.GetValue()
+                # entering value as free text
+                txt = readable_str(value, unit)
+                ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
         def cb_get(ctrl=value_ctrl, name=name):
             value = ctrl.GetValue()
             # Try to use the predefined value if it's available
-            for i in range(ctrl.Count):
-                if ctrl.Items[i] == value:
-                    logging.debug("Getting CB value %s", ctrl.GetClientData(i))
-                    return ctrl.GetClientData(i)
+            i = ctrl.GetSelection()
+
+            # Warning: if the text contains an unknown value, GetSelection will
+            # not return wx.NOT_FOUND (as expected), but the last selection value
+            if i != wx.NOT_FOUND and ctrl.Items[i] == value:
+                logging.debug("Getting item value %s from combobox control",
+                              ctrl.GetClientData(i))
+                return ctrl.GetClientData(i)
             else:
                 logging.error("Failed to find value %s for axis %s", value, name)
 

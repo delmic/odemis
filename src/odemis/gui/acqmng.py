@@ -153,7 +153,9 @@ def preset_hq(entries):
         elif entry.name == "scale": # for scanners only
             # Double the current resolution (in each dimensions)
             # (best == smallest == 1,1)
-            value = tuple(v / 2 for v in entry.vigilattr.value)
+            # Note: some hardware provide scale < 1, but that's typically out
+            # of spec or with some limitations, so don't go there.
+            value = tuple(max(1, v / 2) for v in entry.vigilattr.value)
 
             # make sure it still fits
             if isinstance(entry.vigilattr.range, collections.Iterable):
