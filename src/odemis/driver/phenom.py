@@ -1700,9 +1700,8 @@ class ChamberPressure(model.Actuator):
         self.registeredSampleHolder = model.BooleanVA(False, readonly=True)
 
         # VA connected to the door status, True if door is open
-        door_status = self._pressure_device.GetDoorStatus()
-        self._opened = (door_status == 'STAGE-DOOR-STATUS-OPEN')
-        self.opened = model.BooleanVA(self._opened, readonly=True)
+        self.opened = model.BooleanVA(False, readonly=True)
+        self._updateOpened()
 
         self._updatePosition()
         if self._position == PRESSURE_SEM:
@@ -1749,8 +1748,7 @@ class ChamberPressure(model.Actuator):
 
         # .position contains the last known/valid position
         # it's read-only, so we change it via _value
-        self.position._value = {"pressure": self._position}
-        self.position.notify(self.position.value)
+        self.position._set_value({"pressure": self._position}, force_write=True)
         logging.debug("Chamber in position: %s", self._position)
 
     def _updateSampleHolder(self):
@@ -1770,20 +1768,15 @@ class ChamberPressure(model.Actuator):
         # sample holder is registered
         registered = (holder.status == "SAMPLE-PRESENT")
 
-        self.sampleHolder._value = val
-        self.registeredSampleHolder._value = registered
-        self.sampleHolder.notify(val)
-        self.registeredSampleHolder.notify(registered)
+        self.sampleHolder._set_value(val, force_write=True)
+        self.registeredSampleHolder._set_value(registered, force_write=True)
 
     def _updateOpened(self):
         """
         update the opened VA
         """
-        door_status = self._pressure_device.GetDoorStatus()
-        self._opened = (door_status == 'STAGE-DOOR-STATUS-OPEN')
-
-        self.opened._value = self._opened
-        self.opened.notify(self._opened)
+        opened = (self._pressure_device.GetDoorStatus() == 'STAGE-DOOR-STATUS-OPEN')
+        self.opened._set_value(opened, force_write=True)
 
     @isasync
     def moveRel(self, shift):
