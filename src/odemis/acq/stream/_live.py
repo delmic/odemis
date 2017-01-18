@@ -174,7 +174,7 @@ class LiveStream(Stream):
                 tend = time.time()
 
                 # sleep as much, to ensure we are not using too much CPU
-                tsleep = max(0.2, tend - tstart)  # max 5 Hz
+                tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
 
                 # If still nothing to do, update the RGB image with the new B/C.
@@ -188,19 +188,12 @@ class LiveStream(Stream):
         gc.collect()
 
     def _onNewData(self, dataflow, data):
-        old_drange = self._drange
-
         if not self.raw:
             self.raw.append(data)
         else:
             self.raw[0] = data
 
-        # Depth can change at each image (depends on hardware settings)
-        self._updateDRange(data)
-        if old_drange == self._drange:
-            # If different range, it will be immediately recomputed anyway
-            self._shouldUpdateHistogram()
-
+        self._shouldUpdateHistogram()
         self._shouldUpdateImage()
 
 

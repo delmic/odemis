@@ -241,15 +241,15 @@ def guessDRange(data):
             if depth <= 1:
                 logging.warning("Data reports a BPP of %d",
                                 data.metadata[model.MD_BPP])
-                raise ValueError()
+                raise ValueError()  # fall back to data type
 
             if data.dtype.kind == "i":
                 drange = (-depth // 2, depth // 2 - 1)
             else:
                 drange = (0, depth - 1)
         except (KeyError, ValueError):
-                idt = numpy.iinfo(data.dtype)
-                drange = (idt.min, idt.max)
+            idt = numpy.iinfo(data.dtype)
+            drange = (idt.min, idt.max)
     else:
         raise TypeError("Cannot guess drange for data of kind %s" % data.dtype.kind)
 
