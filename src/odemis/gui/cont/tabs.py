@@ -1921,11 +1921,12 @@ class SecomAlignTab(Tab):
 
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
+        # Use all VAs as HW VAs, so the values are shared with the streams tab
         sem_stream = acqstream.SEMStream("SEM", main_data.sed,
                                          main_data.sed.data,
                                          main_data.ebeam,
-                                         detvas=get_local_vas(main_data.sed),
-                                         emtvas=get_local_vas(main_data.ebeam),
+                                         hwdetvas=get_local_vas(main_data.sed),
+                                         hwemtvas=get_local_vas(main_data.ebeam),
                                          )
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
