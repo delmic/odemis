@@ -854,9 +854,14 @@ class DelphiStateController(SecomStateController):
         loadable = not value and None not in self._main_data.chamber.sampleHolder.value
         self._press_btn_ctrl.Enable(loadable)
         if loadable:  # Immediately start loading while at it...
-            self._tab_panel.btn_press.SetToggle(True)
-            self._phenom_load_done = False
-            self._main_data.chamberState.value = CHAMBER_PUMPING
+            if self._main_data.chamberState.value in (CHAMBER_VENTED, CHAMBER_UNKNOWN):
+                self._tab_panel.btn_press.SetToggle(True)
+                self._phenom_load_done = False
+                self._main_data.chamberState.value = CHAMBER_PUMPING
+            else:
+                # That's a little weird, but it could be just spurious notification
+                # of "closed" -> "closed".
+                logging.info("Door closed (again?) while the chamber was not vented")
         else:
             self._tab_panel.btn_press.SetToolTipString(u"Please insert a sample first")
 
