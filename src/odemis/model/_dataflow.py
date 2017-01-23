@@ -226,16 +226,18 @@ class DataFlow(DataFlowBase):
         """
         if self.pipe is None:
             return
-        if self._max_discard == 0:
-            # High-water mark
-            self.pipe.hwm = 10000
-        else:
-            # allow a bit of delay, but nothing more: if more than 4 already
-            # queued, the newest one will be dropped.
-            self.pipe.hwm = 4
-            # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
-            # containing only the newest message. That sounds closer to what we
-            # need (though, currently multi-part messages are not supported).
+
+        # When discarding, allow a bit of delay, but nothing more: if more than
+        # 2 (=2x3) msg already queued, the _newest_ one will be dropped.
+        # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
+        # containing only the newest message. That sounds closer to what we
+        # need (though, currently multi-part messages are not supported).
+        # The best would be to drop the _oldest_ messages.
+        hwm = 6 if self._max_discard else 10000
+        if hasattr(self.pipe, "sndhwm"):  # zmq v3+
+            self.pipe.sndhwm = hwm
+        else:  # zmq v2
+            self.pipe.hwm = hwm
 
     def _register(self, daemon):
         """
