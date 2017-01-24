@@ -1248,6 +1248,239 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+    def testExportSmallPyramid(self):
+        """
+        Checks that can both write and read back an pyramidal grayscale 16 bit image
+        """
+        size = (257, 295)
+        dtype = numpy.uint16
+        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        data = model.DataArray(arr)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        im = libtiff.TIFF.open(FILENAME)
+        # get an array of offsets, one for each subimage
+        sub_ifds = im.GetField(T.TIFFTAG_SUBIFD)
+        # check that there is one resized image
+        self.assertEqual(len(sub_ifds), 1)
+
+        full_image = im.read_image()
+        self.assertEqual(full_image.shape, size[::-1])
+        # checking the values in the corner of the tile
+        self.assertEqual(full_image[0][0], 0)
+        self.assertEqual(full_image[0][-1], 256)
+        self.assertEqual(full_image[-1][0], 10022)
+        self.assertEqual(full_image[-1][-1], 10278)
+
+        # set the offset of the current subimage
+        im.SetSubDirectory(sub_ifds[0])
+        # read the subimage
+        subimage = im.read_image()
+        self.assertEqual(subimage.shape, (147, 128))
+        # checking the values in the corner of the tile
+        self.assertEqual(subimage[0][0], 0)
+        self.assertEqual(subimage[0][-1], 256)
+        self.assertEqual(subimage[-1][0], 10022)
+        self.assertEqual(subimage[-1][-1], 10278)
+
+        del im
+        os.remove(FILENAME)
+
+    def testExportThinPyramid(self):    
+        """
+        Checks that can both write and read back a thin pyramidal grayscale 16 bit image
+        """
+        size = (2, 2049)
+        dtype = numpy.uint16
+        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        data = model.DataArray(arr)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        im = libtiff.TIFF.open(FILENAME)
+        # get an array of offsets, one for each subimage
+        sub_ifds = im.GetField(T.TIFFTAG_SUBIFD)
+        # check that there is only one zoom level, the original image
+        self.assertIsNone(sub_ifds)
+
+        full_image = im.read_image()
+        assert full_image.shape == size[::-1], repr(full_image.shape)
+        # checking the values in the corner of the tile
+        self.assertEqual(full_image[0][0], 0)
+        self.assertEqual(full_image[0][-1], 1)
+        self.assertEqual(full_image[-1][0], 4096)
+        self.assertEqual(full_image[-1][-1], 4097)
+
+        del im
+        os.remove(FILENAME)
+
+    def testExportMultiArrayPyramid(self):
+        """
+        Checks that we can export and read back the metadata and data of 1 SEM image,
+        2 optical images, 1 RGB imagem and a RGB thumnail
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "brightfield",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "blue dye",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_BPP: 12,
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                     model.MD_DIMS: "YXC",
+                     # In order to test shear is applied even without rotation
+                     # provided. And also check that *_COR is merged into its
+                     # normal metadata brother.
+                     # model.MD_SHEAR: 0.03,
+                     model.MD_SHEAR_COR: 0.003,
+                    },
+                    ]
+        # create 3 greyscale images of same size
+        size = (5120, 7680)
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        # iterate on the first 3 metadata items
+        for i, md in enumerate(metadata[:-1]):
+            nparray = numpy.zeros(size[::-1], dtype)
+            a = model.DataArray(nparray, md.copy())
+            a[i, i + 10] = i # "watermark" it
+            ldata.append(a)
+
+        # write a RGB image
+        a = model.DataArray(numpy.zeros((514, 516, 3), dtype), metadata[3].copy())
+        a[8:24, 24:40] = [5, 8, 13] # "watermark" a square
+        ldata.append(a)
+
+        # thumbnail : small RGB completely green
+        tshape = (size[1] // 8, size[0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail.metadata[model.MD_DIMS] = "YXC"
+        thumbnail.metadata[model.MD_POS] = (13.7e-3, -30e-3)
+        thumbnail[:, :, 1] += 255 # green
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail, pyramid=True)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        f = libtiff.TIFF.open(FILENAME)
+
+        # read all images and subimages and store in main_images
+        main_images = []
+        count = 0
+        for im in f.iter_images():
+            zoom_level_images = []
+            zoom_level_images.append(im)
+            # get an array of offsets, one for each subimage
+            sub_ifds = f.GetField(T.TIFFTAG_SUBIFD)
+            if not sub_ifds:
+                main_images.append(zoom_level_images)
+                f.SetDirectory(count)
+                count += 1
+                continue
+
+            for n in xrange(len(sub_ifds)):
+                # set the offset of the current subimage
+                f.SetSubDirectory(sub_ifds[n])
+                # read the subimage
+                subim = f.read_image()
+                zoom_level_images.append(subim)
+
+            f.SetDirectory(count)
+            count += 1
+            
+            main_images.append(zoom_level_images)
+
+        # check the total number of main images
+        self.assertEqual(len(main_images), 5)
+
+        # check the number of zoom level images of the thumbnail
+        thumbnail_im = main_images[0]
+        self.assertEqual(len(thumbnail_im), 1)
+        # thumbnail size
+        self.assertEqual(thumbnail_im[0].shape, (960, 640, 3))
+        # check the value of one pixel
+        self.assertEqual(thumbnail_im[0][0, 0].tolist(), [0, 255, 0])
+
+        # check the sizes of each grayscale pyramidal image
+        for main_image in main_images[1:-1]:
+            self.assertEqual(len(main_image), 6)
+            self.assertEqual(main_image[0].shape, (7680, 5120))
+            self.assertEqual(main_image[1].shape, (3840, 2560))
+            self.assertEqual(main_image[2].shape, (1920, 1280))
+            self.assertEqual(main_image[3].shape, (960, 640))
+            self.assertEqual(main_image[4].shape, (480, 320))
+            self.assertEqual(main_image[5].shape, (240, 160))
+
+        rgb_image = main_images[4]
+        # number of the RGB images
+        self.assertEqual(len(rgb_image), 3)
+        # size of RGB images with different zoom levels
+        self.assertEqual(rgb_image[0].shape, (514, 516, 3))
+        self.assertEqual(rgb_image[1].shape, (257, 258, 3))
+        self.assertEqual(rgb_image[2].shape, (128, 129, 3))
+
+        # check the watermark on the original image
+        self.assertEqual(rgb_image[0][16, 32].tolist(), [5, 8, 13])
+        # check the watermark on the resized images
+        self.assertEqual(rgb_image[1][8, 16].tolist(), [5, 8, 13])
+        self.assertEqual(rgb_image[2][4, 8].tolist(), [5, 8, 13])
+        # check the zeroes on some pixels
+        self.assertEqual(rgb_image[0][0, 0].tolist(), [0, 0, 0])
+        self.assertEqual(rgb_image[1][0, 0].tolist(), [0, 0, 0])
+        self.assertEqual(rgb_image[2][0, 0].tolist(), [0, 0, 0])
+
+        # set the directory to the RGB image
+        f.SetDirectory(4)
+        # get an array of offsets, one for each subimage
+        sub_ifds = f.GetField(T.TIFFTAG_SUBIFD)
+        # set the subdirectory to the 2nd zoom level
+        f.SetSubDirectory(sub_ifds[0])
+        # read the top left tile
+        tile = f.read_one_tile(0, 0)
+        self.assertEqual(tile.shape, (256, 256, 3))
+        # check the watermark on the tile
+        self.assertEqual(tile[8, 16].tolist(), [5, 8, 13])
+        # check the zero on some pixel
+        self.assertEqual(tile[0, 0].tolist(), [0, 0, 0])
+
+        # read the bottom right tile
+        tile = f.read_one_tile(256, 256)
+        # this tile is only 2 x 1 in size
+        self.assertEqual(tile.shape, (1, 2, 3))
+
+        del f
+        os.remove(FILENAME)
+        
 
 def rational2float(rational):
     """
