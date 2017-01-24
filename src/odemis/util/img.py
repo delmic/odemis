@@ -454,20 +454,17 @@ def ensureYXC(data):
     return model.DataArray(data, md)
 
 
-# FIXME: test it
 def rescale_hq(data, shape):
     """
     Resize the image to the new given shape (smaller or bigger). It tries to
     smooth the pixels. Metadata is updated.
-    data (DataArray of shape YX): data to be rescaled
-    shape (2 int>0): the new shape of the image (Y,X). The new data will fit
-      precisely, even if the ratio is different.
-    return (DataArray of shape YX): The image rescaled. If the metadata contains
-      information that is linked to the size (e.g, pixel size), it is also
-      updated.
+    data (DataArray or numpy.array): Data to be rescaled
+    shape (tuple): the new shape of the image. It needs to be the same size as the data.shape.
+    return (DataArray or numpy.array): The image rescaled. It has the same shape
+        as the 'shape' parameter. The returned object has the same type of the 'data' parameter
     """
-    # TODO: support RGB(A) images
     # TODO: make it faster
+
     out = numpy.empty(shape, dtype=data.dtype)
     scale = tuple(n / o for o, n in zip(data.shape, shape))
     scipy.ndimage.interpolation.zoom(data, zoom=scale, output=out, order=1, prefilter=False)
