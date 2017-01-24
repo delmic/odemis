@@ -51,12 +51,12 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.assertEqual(True, self.settings_panel.message_ctrl.IsShown())
         self.settings_panel.clear_default_message()
         self.assertEqual(False, self.settings_panel.message_ctrl.IsShown())
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_clear_all(self):
         self.settings_panel.clear_all()
         self.assertEqual(0, len(self.settings_panel.GetChildren()))
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_readonly_field(self):
         self.settings_panel.clear_all()
@@ -65,7 +65,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.add_readonly_field("No select", "!@#$^%$#%", False)
         self.settings_panel.add_readonly_field("Can select", ":) :) :)")
         self.assertEqual(len(self.settings_panel.GetChildren()), 6)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_divider(self):
         self.settings_panel.clear_all()
@@ -73,7 +73,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.add_divider()
         self.settings_panel.add_readonly_field("Below the divider")
         self.assertEqual(len(self.settings_panel.GetChildren()), 3)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_text_field(self):
         self.settings_panel.clear_all()
@@ -81,7 +81,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.add_divider()
         self.settings_panel.add_text_field("Writable", "other value")
         self.assertEqual(len(self.settings_panel.GetChildren()), 5)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_integer_slider(self):
 
@@ -102,7 +102,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.assertEqual(43, ctrl.GetValue())
 
         self.assertEqual(len(self.settings_panel.GetChildren()), 4)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_int_field(self):
 
@@ -117,7 +117,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.assertEqual(33, ctrl.GetValue())
 
         self.assertEqual(len(self.settings_panel.GetChildren()), 2)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_float_field(self):
 
@@ -133,7 +133,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.assertEqual(0.33, ctrl.GetValue())
 
         self.assertEqual(len(self.settings_panel.GetChildren()), 2)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_radio_control(self):
 
@@ -146,7 +146,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
 
         self.settings_panel.clear_all()
         _, ctrl = self.settings_panel.add_radio_control("Radio", value=3, conf=conf)
-        gui_loop(500)
+        gui_loop(0.5)
 
     def test_add_combobox_control(self):
 
@@ -158,7 +158,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.clear_all()
         _, ctrl = self.settings_panel.add_combobox_control("Combobox", value=2, conf=conf)
         gui_loop()
-        gui_loop(500)
+        gui_loop(0.5)
 
 
 if __name__ == "__main__":

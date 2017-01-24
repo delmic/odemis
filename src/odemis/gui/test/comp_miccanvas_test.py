@@ -272,7 +272,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         for horz, vert in PLOTS:
             vwp.canvas.set_1d_data(horz, vert)
             vwp.Refresh()
-            test.gui_loop(500)
+            test.gui_loop(0.5)
 
         # vwp.canvas.set_1d_data(PLOTS[2][0], PLOTS[2][1])
         # # vwp.legend.Refresh()
@@ -320,13 +320,13 @@ class PlotCanvasTestCase(test.GuiTestCase):
         test.gui_loop()
         cnvs.set_data(test_data)
 
-        test.gui_loop(200)
+        test.gui_loop(0.2)
 
         cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
 
         for horz, vert in PLOTS:
             cnvs.set_1d_data(horz, vert)
-            test.gui_loop(200)
+            test.gui_loop(0.2)
 
         test.gui_loop()
 

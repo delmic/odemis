@@ -61,14 +61,14 @@ def goto_inspect():
 def gui_loop(slp=0):
     """
     Execute the main loop for the GUI until all the current events are processed
+    slp (0<=float): time to wait (s)
     """
-    # TODO: take slp in seconds
     start = time.time()
     app = wx.GetApp()
     if app is None:
         return
 
-    while time.time() < (start + slp / 1000):
+    while time.time() < (start + slp):
         wx.CallAfter(app.ExitMainLoop)
         app.MainLoop()
 

@@ -50,7 +50,7 @@ class ButtonsTestCase(test.GuiTestCase):
         super(ButtonsTestCase, self).setUp()
 
     def tearDown(self):
-        test.gui_loop(1000)
+        test.gui_loop(1)
         super(ButtonsTestCase, self).tearDown()
 
     def test_image_button(self):
@@ -345,7 +345,7 @@ class ButtonsTestCase(test.GuiTestCase):
         btn = buttons.TabButton(self.panel, label="Tab Test")
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
         test.gui_loop()
-        test.gui_loop(500)
+        test.gui_loop(0.5)
         btn.SetToggle(True)
 
     def test_popup_button(self):
