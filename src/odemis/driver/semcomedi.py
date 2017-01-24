@@ -996,7 +996,7 @@ class SEMComedi(model.HwComponent):
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
             logging.error("Going to try to read very large buffer of %g MB, "
-                          " with osr = %d and dpr = %d.",
+                          "with osr = %d and dpr = %d.",
                           pixelsz / 2 ** 20, osr, dpr)
 
         return self._write_read_2d_subpixel(wchannels, wranges, rchannels, rranges,

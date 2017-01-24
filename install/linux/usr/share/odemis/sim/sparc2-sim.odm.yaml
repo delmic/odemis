@@ -119,6 +119,9 @@ SPARC2: {
 "CL Detector": {
     class: pmtctrl.PMT,
     role: cl-detector,
+    init: {
+        settle_time: 0.1, # s, time to wait before detector is ready
+    },
     children: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
