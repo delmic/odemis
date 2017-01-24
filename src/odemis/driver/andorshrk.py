@@ -490,7 +490,7 @@ class Shamrock(model.Actuator):
         """
         # Some hardware don't have a working mirror position detector, and the
         # only way to make sure it's at the right position is to ask to go there.
-        # Also there is a double SDK/firmware bug (as of 20160801/SDK 2.101.30001):
+        # Also there is a double firmware bug (as of 20160801/SDK 2.101.30001):
         # * When requesting a flipper move from the current position to the
         #  _same_ position, the focus offset is applied anyway.
         # * When opening the device via the SDK, the focus is moved by the
@@ -498,8 +498,8 @@ class Shamrock(model.Actuator):
         #  firmware attempts to move the flipper to the same position as it's
         #  currently is (ie, first bug).
         # => workaround that second bug by 'taking advantage' of the first bug.
-        # If they are both fixed, the actions become a no-op... and hopefully
-        # they'll get fixed at the same time.
+        # Since firmware 1.2 (ie 201611), both bugs are fixed, so both actions
+        # are a no-op.
 
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
 
@@ -967,12 +967,16 @@ class Shamrock(model.Actuator):
 
         return x1.value, y1.value, x2.value, y2.value
 
-    # Available since SDK 2.101, but currently raises either "Communication error"
+    # Available since SDK 2.101, but only with newer firmware (ie, 1.2+,
+    # after 2016-11). Earlier firmware will raises either "Communication error"
     # (for the Set) or "Parameter 3 invalid" (for the Get)
     def SetSlitZeroPosition(self, index, offset):
         """
-        (Probably) changes the calibration offset for the position of the slit
-        to be closed (= 0).
+        Changes the offset for the position of the given slit, to ensure that
+        when the slit is at its minimum opening, any increase in opening will
+        lead to an actual increase.
+        After the call, the reported slit position is changed (even if it hasn't
+        physically moved).
         index (1<=int<=4): Slit number
         offset (-200 <= int <= 0): some value representing the distance that needs to be moved
           by the actuator for the slit to just be closed when set to 0
@@ -984,8 +988,7 @@ class Shamrock(model.Actuator):
 
     def GetSlitZeroPosition(self, index):
         """
-        Read the current calibration offset for the position of the slit
-        to be closed (= 0).
+        Read the current calibration offset for the slit position.
         index (1<=int<=4): Slit number
         return (int): the offset
         """
@@ -1769,6 +1772,14 @@ class FakeShamrockDLL(object):
             self._slits[_val(index)] = w
         else:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
+
+    def ShamrockGetSlitZeroPosition(self, device, index, p_offset):
+        offset = _deref(p_offset, c_int)
+        offset.value = -50  # default value
+
+    def ShamrockSetSlitZeroPosition(self, device, index, offset):
+        o = _val(offset)
+        # raise ShamrockError(20201, ShamrockDLL.err_code[20201])
 
     def ShamrockShutterIsPresent(self, device, p_present):
         present = _deref(p_present, c_int)

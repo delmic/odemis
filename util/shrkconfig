@@ -28,6 +28,7 @@ import argparse
 import logging
 from odemis import model
 from odemis.driver import andorshrk
+from odemis.driver.andorshrk import ShamrockError
 import sys
 
 
@@ -53,6 +54,22 @@ def read_all(device):
                                                      fo, "side" if fo else "direct",
                                                      o))
 
+    print("Slits zero position:")
+    try:
+        for sio in ("input", "output"):
+            for ssd in ("side", "direct"):
+                # convert into constant like INPUT_SLIT_SIDE
+                sn = "%s_SLIT_%s" % (sio.upper(), ssd.upper())
+                si = getattr(andorshrk, sn)
+                if not device.AutoSlitIsPresent(si):
+                    logging.debug("Skipping slit %d, which is not present", si)
+                    continue
+                zp = device.GetSlitZeroPosition(si)
+                print("\tSlit %d (%s-%s): %d" % (si, sio, ssd, zp))
+    except ShamrockError as ex:
+        logging.debug("Failed to get slit %d: %s", si, ex)
+        print("Not supported")
+
 
 def set_goffset(device, grating, offset):
     if grating not in device.axes["grating"].choices:
@@ -68,6 +85,28 @@ def set_doffset(device, entrancep, exitp, offset):
 
     device.SetDetectorOffset(entrancep, exitp, offset)
     logging.info("Detector offset is at %d", device.GetDetectorOffset(entrancep, exitp))
+
+
+def set_szero(device, slit, offset):
+    if not (andorshrk.SLIT_INDEX_MIN <= slit <= andorshrk.SLIT_INDEX_MAX):
+        raise ValueError("Slit must be between 1 and 4")
+
+    if not device.AutoSlitIsPresent(slit):
+        raise ValueError("Slit %d is not present" % (slit,))
+
+    # On old firmware, this will fail with "Communication error"
+    try:
+        device.SetSlitZeroPosition(slit, offset)
+    except ShamrockError as ex:
+        if ex.errno == 20201:
+            raise IOError("Received \"%s\" when changing slit zero position. Is it a SR-193 with a new firmware?" % (ex,))
+        else:
+            raise
+    logging.info("Slit %d offset is at %d", slit, device.GetSlitZeroPosition(slit))
+
+    # As the offset is changed, the slit position is changed (although it hasn't
+    # actually moved) => force position update in case we are using the backend.
+    device._updatePosition()
 
 
 def main(args):
@@ -91,6 +130,9 @@ def main(args):
     parser.add_argument('--doffset', dest="doffset", nargs=3, type=int,
                         metavar=("<entrance>", "<exit>", "<offset>"),
                         help="Changes the detector offset for a given entrance/exit flipper configuration")
+    parser.add_argument('--szero', dest="szero", nargs=2, type=int,
+                        metavar=("<slit>", "<offset>"),
+                        help="Changes the zero position (-200 → 0) for the given slit. (1 step ≈ 5µm)")
     # TODO: allow to change the current turret?
 
     parser.add_argument('--serial', dest="serial", default=0,
@@ -121,6 +163,8 @@ def main(args):
             set_goffset(dev, *options.goffset)
         if options.doffset:
             set_doffset(dev, *options.doffset)
+        if options.szero:
+            set_szero(dev, *options.szero)
 
         if not options.role:
             dev.terminate()
