@@ -187,6 +187,7 @@ class PMTDataFlow(model.DataFlow):
 
     def synchronizedOn(self, event):
         self._pmt.data.synchronizedOn(event)
+        # TODO: update max_discard as well (but for now it has no effect anyway)
 
     def _newFrame(self, df, data):
         """

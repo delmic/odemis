@@ -218,7 +218,9 @@ class DataFlow(DataFlowBase):
     @max_discard.setter
     def max_discard(self, value):
         self._max_discard = value
-        self._update_pipe_hwm()
+        # TODO: for now it doesn't make sense to update the HWM, as 0MQ needs to
+        # unbind/bind, but that looses current subscriptions.
+        # self._update_pipe_hwm()
 
     def _update_pipe_hwm(self):
         """
@@ -226,16 +228,29 @@ class DataFlow(DataFlowBase):
         """
         if self.pipe is None:
             return
-        if self._max_discard == 0:
-            # High-water mark
-            self.pipe.hwm = 10000
-        else:
-            # allow a bit of delay, but nothing more: if more than 4 already
-            # queued, the newest one will be dropped.
-            self.pipe.hwm = 4
-            # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
-            # containing only the newest message. That sounds closer to what we
-            # need (though, currently multi-part messages are not supported).
+
+        # When discarding, allow a bit of delay, but nothing more: if more than
+        # 2 (=2x3) msg already queued, the _newest_ one will be dropped.
+        # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
+        # containing only the newest message. That sounds closer to what we
+        # need (though, currently multi-part messages are not supported).
+        # The best would be to drop the _oldest_ messages.
+        hwm = 6 if self._max_discard else 10000
+        if hasattr(self.pipe, "sndhwm"):  # zmq v3+
+            self.pipe.sndhwm = hwm
+        else:  # zmq v2
+            self.pipe.hwm = hwm
+
+#         # HWM is only updated after rebinding, but 0MQ v2 doesn't allow rebinding
+#         # and with v3+ rebinding losses the current subscriptions.
+#         if self._global_name:
+#             if zmq.zmq_version_info()[0] <= 2:
+#                 logging.info("Cannot update HWM on 0MQ v2")
+#             else:
+#                 logging.debug("Rebinding connection due to HWM change to %d on %s",
+#                               hwm, self._global_name)
+#                 self.pipe.unbind("ipc://" + self._global_name)
+#                 self.pipe.bind("ipc://" + self._global_name)
 
     def _register(self, daemon):
         """
@@ -488,10 +503,13 @@ class SubscribeProxyThread(threading.Thread):
 
         # create a zmq subscription to receive the data
         self._data = zmq_ctx.socket(zmq.SUB)
-        self._data.connect("ipc://" + uri)
         # TODO find out if it does something and if it does, depend on max_discard
-#        self.data.hwm = 1 # drop message silently if there is already one in the queue
-        self._data.hwm = 0  # FIXME currently set to 0 in order to avoid discarding when not wanted
+        # (for now, we just set it to 0, the default, to never discard messages)
+        if hasattr(self._data, "rcvhwm"):  # zmq v3+
+            self._data.rcvhwm = 0
+        else:  # zmq v2
+            self._data.hwm = 0
+        self._data.connect("ipc://" + uri)
 
         # TODO: we need a more advance support for max_discards to be able to
         # ensure all the data is received when the client needs it.
