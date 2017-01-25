@@ -293,7 +293,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             # Skip if the current value is equal to choice
             if changed:
                 fake_fluo_stream.excitation.value = choice
-                test.gui_loop(100)
+                test.gui_loop(0.1)
                 self.assertNotEqual(old_value, excitation_combo.GetValue())
                 self.assertNotEqual(old_colour, sp1._btn_excitation.colour)
 
@@ -310,7 +310,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             # Skip if the current value is equal to choice
             if changed:
                 fake_fluo_stream.emission.value = choice
-                test.gui_loop(100)
+                test.gui_loop(0.1)
                 self.assertNotEqual(old_value, emission_combo.GetValue())
                 self.assertNotEqual(old_colour, sp2._btn_emission.colour)
 
@@ -323,19 +323,19 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         for i in range(0, 11):
             v = i / 10.0
             fake_fluo_stream.intensityRange.value = (v, 1.0)
-            test.gui_loop(100)
+            test.gui_loop(0.1)
             self.assertEqual(v, txt_lowi.GetValue())
 
         for i in range(0, 11):
             v = i / 10.0
             fake_fluo_stream.intensityRange.value = (0.0, v)
-            test.gui_loop(100)
+            test.gui_loop(0.1)
             self.assertEqual(v, txt_highi.GetValue())
 
         # Test if the range gets updated when the histogram changes
         fake_fluo_stream.intensityRange.range = ((0.25, 0.25), (0.75, 0.75))
         fake_fluo_stream.histogram.notify(fake_fluo_stream.histogram.value)
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         self.assertEqual((0.25, 0.75), txt_lowi.GetValueRange())
 
     def test_static_streams(self):

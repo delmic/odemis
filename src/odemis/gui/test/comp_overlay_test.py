@@ -71,7 +71,7 @@ class OverlayTestCase(test.GuiTestCase):
                 ol.add_label(msg.format("with" if f else "without"),
                              font_size=size, pos=(0, y), flip=f,
                              colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-                test.gui_loop(50)
+                test.gui_loop(0.05)
 
             ol.clear_labels()
 
@@ -85,19 +85,19 @@ class OverlayTestCase(test.GuiTestCase):
         ol.add_label("TextViewOverlay left",
                      pos=(ol.view_width / 2, 10),
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("TextViewOverlay right",
                      pos=(ol.view_width / 2, 26),
                      align=wx.ALIGN_RIGHT,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("TextViewOverlay center",
                      pos=(ol.view_width / 2, 42),
                      align=wx.ALIGN_CENTER_HORIZONTAL,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("|",
                      pos=(ol.view_width / 2, 58),
@@ -111,7 +111,7 @@ class OverlayTestCase(test.GuiTestCase):
                      pos=(ol.view_width / 2, 90),
                      align=wx.ALIGN_CENTER_HORIZONTAL,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         # Example on how a right aligned label can be kept on the right on resize
         def realign(evt):
@@ -126,40 +126,40 @@ class OverlayTestCase(test.GuiTestCase):
                      pos=(0, 0),
                      align=wx.ALIGN_LEFT,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("top right",
                      pos=(ol.view_width, 0),
                      align=wx.ALIGN_RIGHT,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("bottom left",
                      pos=(0, ol.view_height),
                      align=wx.ALIGN_BOTTOM,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("bottom right",
                      pos=(ol.view_width, ol.view_height),
                      align=wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM,
                      flip=False,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("SHOULD NOT BE SEEN!",
                      pos=(ol.view_width, ol.view_height / 2),
                      align=wx.ALIGN_LEFT,
                      flip=False,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         ol.add_label("Visible because of flip",
                      pos=(ol.view_width, ol.view_height / 2),
                      align=wx.ALIGN_LEFT,
                      flip=True,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
     def test_text_view_overlay_rotate(self):
         cnvs = canvas.BitmapCanvas(self.panel)
@@ -176,14 +176,14 @@ class OverlayTestCase(test.GuiTestCase):
                           deg=0,
                           flip=False,
                           colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
-        test.gui_loop(50)
+        test.gui_loop(0.05)
 
         sl = ol.add_label(u"█ you should only see red",
                           pos=(0, 0),
                           font_size=20,
                           colour=(1, 0, 0),
                           align=wx.ALIGN_LEFT)
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         self.assertEqual(rl.render_pos, sl.render_pos)
 
         ol.clear_labels()
@@ -217,11 +217,11 @@ class OverlayTestCase(test.GuiTestCase):
                           flip=False,
                           colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
 
-        test.gui_loop(1000)
+        test.gui_loop(1)
 
         for l in (tl, tr, tc):
             l.deg = 15
-            test.gui_loop(500)
+            test.gui_loop(0.5)
             cnvs.Refresh()
 
     def test_crosshair_overlay(self):
@@ -250,11 +250,11 @@ class OverlayTestCase(test.GuiTestCase):
 
         sol = vol.PlayIconOverlay(cnvs)
         cnvs.add_view_overlay(sol)
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         sol.hide_pause(False)
         test.gui_loop()
         sol.hide_pause(True)
-        test.gui_loop(500)
+        test.gui_loop(0.5)
 
     def test_focus_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
@@ -298,25 +298,25 @@ class OverlayTestCase(test.GuiTestCase):
         mlol.val.value = (201e-9, 10e-6)
         cnvs.Refresh()
 
-        test.gui_loop(500)
+        test.gui_loop(0.5)
         mlol.orientation = vol.MarkingLineOverlay.HORIZONTAL
         cnvs.Refresh()
 
-        test.gui_loop(500)
+        test.gui_loop(0.5)
         mlol.orientation = vol.MarkingLineOverlay.VERTICAL
         mlol.val.value = (301e-9, 12e-6)
         cnvs.Refresh()
 
-        test.gui_loop(500)
+        test.gui_loop(0.5)
         mlol.orientation = vol.MarkingLineOverlay.HORIZONTAL | vol.MarkingLineOverlay.VERTICAL
         mlol.val.value = (401e-9, 20e-6)
         cnvs.Refresh()
 
-        test.gui_loop(500)
+        test.gui_loop(0.5)
         # Out of the range
         mlol.val.value = (0, 0)
         cnvs.Refresh()
-        test.gui_loop(500)
+        test.gui_loop(0.5)
 
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)

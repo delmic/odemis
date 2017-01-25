@@ -83,7 +83,7 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
                 self.app.test_frame.unit_float.SetValue(f)
                 test.gui_loop()
 
-            test.gui_loop(100)
+            test.gui_loop(0.1)
 
 
 class NumberTextCtrlTestCase(test.GuiTestCase):
@@ -101,7 +101,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         ctrl = FloatTextCtrl(self.panel, value=123456789)
         self.add_control(ctrl, label=ctrl.__class__.__name__, flags=wx.EXPAND | wx.ALL)
 
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         self.assertEqual(123456789, ctrl.GetValue())
 
         # Create simulator and focus field
@@ -110,14 +110,14 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         ctrl.SetFocus()
 
         # Type '1' followed by an [Enter]
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         sim.Char(ord('1'))
 
         self.assertEqual(123456789, ctrl.GetValue())
         sim.Char(ord('\r'))
 
         # The value should now be 1.0
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         self.assertEqual(1.0, ctrl.GetValue())
 
     def test_unit_int_txt_ctrl(self):
@@ -128,18 +128,18 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.assertEqual(ctrl.GetValue(), 123456789)
         self.assertEqual(ctrl.get_value_str(), u"123.456789 Mm")
 
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
         # Create simulator and focus the field
         sim = wx.UIActionSimulator()
         # Focusing the field will select all the number in it, but not the unit (Mm)
         ctrl.SetFocus()
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
         # Set the value to 1 Mm (period should not register)
         for c in "0.001\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(ctrl.GetValue(), 1000000)
         self.assertEqual(ctrl.get_value_str(), u"1 Mm")
@@ -148,7 +148,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         for c in "44m\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(ctrl.GetValue(), 44)
         self.assertEqual(ctrl.get_value_str(), u"44 m")
@@ -162,18 +162,18 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.assertEqual(ctrl.GetValue(), 123456789)
         self.assertEqual(ctrl.get_value_str(), u"123456789 px")
 
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
         # Create simulator and focus the field
         sim = wx.UIActionSimulator()
         # Focusing the field will select all the text in it
         ctrl.SetFocus()
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
         # Set the value to 1 px (minus and period should not register)
         for c in "-0.001\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(ctrl.GetValue(), 1)
         self.assertEqual(ctrl.get_value_str(), u"1 px")
@@ -182,7 +182,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         for c in "44px\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(ctrl.GetValue(), 44)
         self.assertEqual(ctrl.get_value_str(), u"44 px")
@@ -194,7 +194,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.add_control(mctrl, label=mctrl.__class__.__name__, flags=wx.EXPAND | wx.ALL)
 
         # Test the initial value
-        test.gui_loop(100)
+        test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 123456789)
         self.assertEqual(mctrl.get_value_str(), u"123.456789 Mm")
 
@@ -202,12 +202,12 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         sim = wx.UIActionSimulator()
         # Focusing the field will select all the text in it
         mctrl.SetFocus()
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
         # Set the value to 0.001 Mm
         for c in "0.001\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(mctrl.GetValue(), 1000)
         self.assertEqual(mctrl.get_value_str(), u"1 km")
@@ -217,7 +217,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         for c in "00000\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(mctrl.GetValue(), 1000)
         self.assertEqual(mctrl.get_value_str(), u"1 km")
@@ -228,7 +228,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Create illegal number
         for c in "e\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.1)
 
         self.assertEqual(mctrl.GetValue(), None)
         self.assertEqual(mctrl.get_value_str(), u"")
@@ -239,17 +239,17 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         self.add_control(wctrl, label=wctrl.__class__.__name__, flags=wx.EXPAND | wx.ALL)
 
         wctrl.SetFocus()
-        test.gui_loop(10)
+        test.gui_loop(0.1)
         wctrl.SetSelection(0, 20)
 
         for c in "44e-9W\r":
             sim.Char(ord(c))
-            test.gui_loop(10)
+            test.gui_loop(0.02)
 
         self.assertEqual(wctrl.GetValue(), 44e-9)
         self.assertEqual(wctrl.get_value_str(), u"44 nW")
 
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ class LegendTestCase(test.GuiTestCase):
             self.frame.Destroy()
             is_done.set()
 
-        test.gui_loop(500)
+        test.gui_loop(0.5)
 
         t = threading.Thread(target=set_range)
         # Setting Daemon to True, will cause the thread to exit when the parent does
@@ -95,7 +95,7 @@ class LegendTestCase(test.GuiTestCase):
         t.start()
 
         for i in range(30):  # Fail after 30s not yet finished
-            test.gui_loop(1000)
+            test.gui_loop(1)
             if is_done.is_set():
                 return
 
@@ -133,7 +133,7 @@ class LegendTestCase(test.GuiTestCase):
         for r in BAD_RANGES:
             hleg.range = r
             vleg.range = r
-            test.gui_loop(100)
+            test.gui_loop(0.1)
 
 
 if __name__ == "__main__":

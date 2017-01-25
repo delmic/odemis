@@ -164,7 +164,7 @@ class TestCanvas(test.GuiTestCase):
         cnvs.background_brush = wx.BRUSHSTYLE_SOLID
 
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
-        test.gui_loop(10)
+        test.gui_loop(0.01)
 
         # Changes in default values might affect other test, so we need to know
         self.assertEqual(cnvs.scale, 1, "Default canvas scale has changed!")
@@ -217,7 +217,7 @@ class TestCanvas(test.GuiTestCase):
             calc_rect = cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
             for ev, v in zip(rect, calc_rect):
                 self.assertAlmostEqual(ev, v)
-            test.gui_loop(100)
+            test.gui_loop(0.1)
 
         stream1 = RGBStream("stream_one", img)
         # Set the mpp again, because the on_size handler will recalculate it
@@ -442,7 +442,7 @@ class TestCanvas(test.GuiTestCase):
         canvas.set_images(images)
         canvas.scale = 1
         canvas.update_drawing()
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
     # @unittest.skip("simple")
     def test_reshape(self):

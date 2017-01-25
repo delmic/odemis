@@ -136,7 +136,7 @@ class PluginTestCase(test.GuiTestCase):
         sp.addMenu("TestRec/Recursive/Another entry\tCtrl+E",
                    self._on_menu_entry)
 
-        test.gui_loop(100)
+        test.gui_loop(0.1)
 
         # There should be two more main menus
         end_menu_len = self.frame.GetMenuBar().GetMenuCount()
