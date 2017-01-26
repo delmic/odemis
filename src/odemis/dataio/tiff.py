@@ -60,6 +60,9 @@ EXTENSIONS = [u".ome.tiff", u".ome.tif", u".tiff", u".tif"]
 
 STIFF_SPLIT = ".0."  # pattern to replace with the "stiff" multiple file
 
+CAN_SAVE_PYRAMID = True # indicates the support for pyramidal export
+TILE_SIZE = 256 # Tile size of pyramidal images
+
 # We try to make it as much as possible looking like a normal (multi-page) TIFF,
 # with as much metadata as possible saved in the known TIFF tags. In addition,
 # we ensure it's compatible with OME-TIFF, which support much more metadata, and
@@ -1527,7 +1530,8 @@ def _mergeCorrectionMetadata(da):
     img.mergeMetadata(md)
     return model.DataArray(da, md) # create a view
 
-def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False, file_index=None, uuid_list=None):
+def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False, 
+                       file_index=None, uuid_list=None, pyramid=False):
     """
     Saves a list of DataArray as a multiple-page TIFF file.
     filename (string): name of the file to save
@@ -1538,6 +1542,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
       files or not.
     file_index (int): index of this particular file.
     uuid_list (list of str): list that contains all the file uuids
+    pyramid (boolean): whether the file should be saved in the pyramid format or not.
+      In this format, each image is saved along with different zoom levels
     """
     if multiple_files:
         # Add index
@@ -1681,7 +1687,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
                 c = None # libtiff doesn't support compression on these types
             else:
                 c = compression
-            f.write_image(data[i], write_rgb=write_rgb, compression=c)
+            write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
 
 def _thumbsFromTIFF(filename):
     """
@@ -1726,6 +1732,27 @@ def _reconstructFromOMETIFF(xml, data, basename):
     omedata = _foldArraysFromOME(root, data, basename)
 
     return omedata
+
+def _genResizedShapes(data):
+    """
+    Generates a list of tuples with the size of the resized images
+    data (DataArray): The original image
+    return (list of tuples): List of the tuples with the size of the resized images
+    """
+    # initializes the first shape with the shape of the input DataArray
+    shape = data.shape
+    dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
+    
+    resized_shapes = []
+    z = 0
+    while shape[dims.index("X")] >= TILE_SIZE and shape[dims.index("Y")] >= TILE_SIZE:
+        z += 1
+        # Calculate the shape of the ith resampled image
+        # Copy the dimensions other than X and Y from the input DataArray shape
+        shape = tuple(s // 2**z if d in "XY" else s for s,d in zip(data.shape, dims))
+        resized_shapes.append(shape)
+        
+    return resized_shapes
 
 def _dataFromTIFF(filename):
     """
@@ -1822,8 +1849,42 @@ def _ensure_fs_encoding(filename):
     else:
         return filename.encode(sys.getfilesystemencoding())
 
+def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
+    """
+    f (libtiff file handle): Handle of a TIFF file
+    arr (DataArray): DataArray to be written to the file
+    compression (boolean): Compression type to be used on the TIFF file
+    write_rgb (boolean): True if the image is RGB, False if the image is grayscale
+    pyramid (boolean): whether the file should be saved in the pyramid format or not.
+      In this format, each image is saved along with different zoom levels
+    """
+    # if not pyramid, just save the image in the TIFF file, and return
+    if not pyramid:
+        f.write_image(arr, compression=compression, write_rgb=write_rgb)
+        return
 
-def export(filename, data, thumbnail=None, compressed=True, multiple_files=False):
+    # generate the sizes of the zoom levels to be generated and saved
+    resized_shapes = _genResizedShapes(arr)
+
+    # do not write the SUBIFD tag when there are no subimages
+    if len(resized_shapes) > 0:
+        # LibTIFF will automatically write the next N directories as subdirectories
+        # when this tag is present.
+        f.SetField(T.TIFFTAG_SUBIFD, [0] * len(resized_shapes), count=len(resized_shapes))
+
+    # write the original image
+    f.write_tiles(arr, TILE_SIZE, TILE_SIZE, compression, write_rgb)
+    # generate the rescaled images and write the tiled image
+    for resized_shape in resized_shapes:
+        # rescale the image
+        subim = img.rescale_hq(arr, resized_shape)
+
+        # Before writting the actual data, we set the special metadata
+        f.SetField(T.TIFFTAG_SUBFILETYPE, T.FILETYPE_REDUCEDIMAGE)
+        # write the tiled image to the TIFF file
+        f.write_tiles(subim, TILE_SIZE, TILE_SIZE, compression, write_rgb)
+
+def export(filename, data, thumbnail=None, compressed=True, multiple_files=False, pyramid=False):
     '''
     Write a TIFF file with the given image and metadata
     filename (unicode): filename of the file to create (including path)
@@ -1855,13 +1916,13 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
             for i in xrange(nfiles):
                 # TODO: Take care of thumbnails
                 _saveAsMultiTiffLT(filename, data, None, compressed,
-                                   multiple_files, i, uuid_list)
+                                   multiple_files, i, uuid_list, pyramid)
         else:
-            _saveAsMultiTiffLT(filename, data, thumbnail, compressed)
+            _saveAsMultiTiffLT(filename, data, thumbnail, compressed, pyramid=pyramid)
     else:
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
-        _saveAsMultiTiffLT(filename, [data], thumbnail, compressed)
+        _saveAsMultiTiffLT(filename, [data], thumbnail, compressed, pyramid=pyramid)
 
 def read_data(filename):
     """

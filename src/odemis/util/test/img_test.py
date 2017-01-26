@@ -678,6 +678,58 @@ class TestRGB2Greyscale(unittest.TestCase):
         self.assertEqual(gsim.shape, rgbim.shape[0:2])
         self.assertEqual(gsim[1, 1], 254)
 
+class TestRescaleHQ(unittest.TestCase):
+
+    def test_simple(self):
+        size = (1024, 512)
+        depth = 2 ** 12
+        img12 = numpy.zeros(size, dtype="uint16") + depth // 2
+        watermark = 538
+        # write a square of watermark
+        img12[20:40, 50:70] = watermark
+
+        # rescale
+        out = img.rescale_hq(img12, (512, 256))
+        self.assertEqual(out.shape, (512, 256))
+        # test if the watermark is in the right place
+        self.assertEqual(out[15, 30], watermark)
+        self.assertEqual(out[30, 60], depth // 2)
+
+    def test_data_array_metadata(self):
+        size = (1024, 512)
+        depth = 2 ** 12
+        img12 = numpy.zeros(size, dtype="uint16") + depth // 2
+        watermark = 538
+        # write a square of watermark
+        img12[20:40, 50:70] = watermark
+        metadata = {
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),
+            model.MD_BINNING: (1, 1),
+            model.MD_AR_POLE: (253.1, 65.1)
+        }
+        img12da = model.DataArray(img12, metadata)
+
+        # rescale
+        out = img.rescale_hq(img12da, (512, 256))
+        self.assertEqual(out.shape, (512, 256))
+        # test if the watermark is in the right place
+        self.assertEqual(out[15, 30], watermark)
+        self.assertEqual(out[30, 60], depth // 2)
+
+        # assert metadata
+        self.assertEqual(out.metadata[model.MD_PIXEL_SIZE], (2e-06, 4e-05))
+        self.assertEqual(out.metadata[model.MD_BINNING], (2.0, 2.0))
+        self.assertEqual(out.metadata[model.MD_AR_POLE], (126.55, 32.55))
+
+    def test_5d(self):
+        # C=3, T=2, Z=2, Y=1024, X=512
+        size = (3, 2, 2, 1024, 512)
+        background = 58
+        img_in = numpy.zeros(size, dtype="uint8") + background
+        img_in = model.DataArray(img_in)
+        out = img.rescale_hq(img_in, (3, 2, 2, 512, 256))
+        self.assertEqual(out.shape, (3, 2, 2, 512, 256))
+
 
 # TODO: test guessDRange()
 
