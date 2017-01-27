@@ -18,9 +18,10 @@ from __future__ import division
 
 import itertools
 import logging
-from odemis.acq.drift import AnchoredEstimator
+import numpy
+from odemis.acq.drift import AnchoredEstimator, GuessAnchorRegion
+from odemis.dataio import hdf5
 import unittest
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -63,6 +64,27 @@ class TestAnchoredEstimator(unittest.TestCase):
             # Check that up to the end of the expected list the period is correct
             lo = list(itertools.islice(o, len(eo)))
             self.assertEqual(lo, eo, "Unexpected output %s for input %s" % (lo, i))
+
+
+# @unittest.skip("skip")
+class TestGuessAnchorRegion(unittest.TestCase):
+    """
+    Test GuessAnchorRegion
+    """
+    # @unittest.skip("skip")
+    def setUp(self):
+        # Input
+        self.data = hdf5.read_data("example_input.h5")
+        C, T, Z, Y, X = self.data[0].shape
+        self.data[0].shape = Y, X
+
+    # @unittest.skip("skip")
+    def test_identical_inputs(self):
+        """
+        Tests for known roi.
+        """
+        roi = GuessAnchorRegion(self.data[0], (0, 0, 0.87, 0.95))
+        numpy.testing.assert_equal(roi, (0.86923076923076925, 0.74281609195402298, 0.9653846153846154, 0.81465517241379315))
 
 
 if __name__ == '__main__':
