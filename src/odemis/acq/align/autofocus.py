@@ -577,6 +577,8 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
         detectors = [detectors]
     if not detectors:
         raise ValueError("At least one detector must be provided")
+    if len(detectors) > 1 and selector is None:
+        raise ValueError("No selector provided, but multiple detectors")
 
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -626,6 +628,8 @@ def _moveSelectorToDetector(selector, detector):
                     mv[an] = pos
 
     if mv:
+        logging.debug("Moving selector %s to %s for %s",
+                      selector.name, mv, detector.name)
         selector.moveAbsSync(mv)
         return mv
     raise LookupError("Failed to find detector '%s' in positions of selector axes %s" %
@@ -712,7 +716,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
             except Exception:
                 logging.exception("Failed to move to 0th order and grating %s", grating)
 
-            future._subfuture = AutoFocus(detector, None, focuser)
+            future._subfuture = AutoFocus(d, None, focuser)
             fp, flvl = future._subfuture.result()
             ret[(grating, d)] = fp
             cnts -= 1
