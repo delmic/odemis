@@ -8,7 +8,7 @@ Created on 10 Feb 2016
 This is a script to acquire a set of EM/FM overlays over a long period.
 
 run as:
-./scripts/timelapse-overlay.py -n 12 --period 60 --output filename-.tiff
+./scripts/timelapse-secom.py -n 12 --period 60 --output filename-.tiff
 
 -n defines the number of images to acquire.
    Don't set it to make it infinite, in which case you can stop with Ctrl+C.
