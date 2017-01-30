@@ -130,6 +130,9 @@ class SimpleStreamFuture(futures.Future):
         # start stream
         self._startt = time.time()
         self._stream.image.subscribe(self._image_listener)
+        # TODO: if exception during activation, it will not be passed here
+        # as the VA will just log it. => change _onActive to be a setter, or
+        # check also the .status VA.
         self._stream.is_active.value = True
 
         # wait until one image acquired or cancelled
