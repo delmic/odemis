@@ -1,3 +1,18 @@
+odemis (2.6.1-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6.1
+  * Main bug fixed:
+    - Do not try to SEM scale to 0.5 in HQ acquisition (DELPHI)
+    - Fix selecting the HFW from the drop-box not working (DELPHI)
+    - Fix SEM magnification not properly set when changed from the alignment tab (SECOM)
+    - Fix autofocus on second CCD of spectrograph (SPARC)
+    - Fix first new data sometimes not being sent on Ubuntu 16.04
+  * Minor improvements
+    - Add support for slit calibration of SR-193 (SPARC)
+    - Package pituner (for PI controller calibration) (SECOM)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 30 Jan 2017 14:15:32 +0100
+
 odemis (2.6.0-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6
