@@ -24,16 +24,17 @@ from __future__ import division
 
 import itertools
 import logging
-import numpy
-import threading
 import math
+import numpy
+from scipy import misc
+import threading
+import cv2
 
 from .calculation import CalculateDrift
-from .dc_region import GuessAnchorRegion
-
 
 MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
 MAX_PIXELS = 128 ** 2  # px
+
 
 class AnchoredEstimator(object):
     """
@@ -96,11 +97,11 @@ class AnchoredEstimator(object):
                      max(MIN_RESOLUTION[1], int(round(shape[1] * width[1] / self._scale[1]))))
 
         logging.info("Anchor region defined with scale=%s, res=%s, trans=%s",
-                      self._scale, self._res, self._trans)
+                     self._scale, self._res, self._trans)
 
         self._safety_bounds = (0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = -self._safety_bounds[0] + (max(self._res[0],
-                                                        self._res[1]) / 2)
+                                                         self._res[1]) / 2)
         self._max_bound = self._safety_bounds[1] - (max(self._res[0],
                                                         self._res[1]) / 2)
 
@@ -171,7 +172,7 @@ class AnchoredEstimator(object):
                 abs(self.orig_drift[1] - prev_drift[1]) > 5):
                 logging.warning("Drift cannot be measured precisely, "
                                 "hesitating between %s and %s px",
-                                 self.orig_drift, prev_drift)
+                                self.orig_drift, prev_drift)
             # Update max_drift
             if math.hypot(*self.orig_drift) > math.hypot(*self.max_drift):
                 self.max_drift = self.orig_drift
@@ -239,8 +240,8 @@ class AnchoredEstimator(object):
         new_translation = (self._trans[0] - self.orig_drift[0],
                            self._trans[1] - self.orig_drift[1])
 
-        if (abs(new_translation[0]) > self._safety_bounds[0]
-            or abs(new_translation[1]) > self._safety_bounds[1]):
+        if (abs(new_translation[0]) > self._safety_bounds[0] or
+            abs(new_translation[1]) > self._safety_bounds[1]):
             logging.warning("Generated image may be incorrect due to extensive "
                             "drift of %s", new_translation)
 
@@ -252,4 +253,77 @@ class AnchoredEstimator(object):
         self._emitter.resolution.value = self._res
         self._emitter.translation.value = self._trans
         self._emitter.dwellTime.value = self._dwell_time
+
+
+def GuessAnchorRegion(whole_img, sample_region):
+    """
+    It detects a region with clean edges, proper for drift measurements. This region
+    must not overlap with the sample that is to be scanned due to the danger of
+    contamination.
+    whole_img (ndarray): 2d array with the whole SEM image
+    sample_region (tuple of 4 floats): roi of the sample in order to avoid overlap
+    returns (tuple of 4 floats): roi of the anchor region
+    """
+    # Drift correction region shape
+    dc_shape = (50, 50)
+
+    # Properly modified image for cv2.Canny
+    uint8_img = misc.bytescale(whole_img)
+
+    # Generates black/white image that contains only the edges
+    cannied_img = cv2.Canny(uint8_img, 100, 200)
+
+    # Mask the sample_region plus a margin equal to the half of dc region and
+    # a margin along the edges of the whole image again equal to the half of
+    # the anchor region. Thus we keep pixels that we can use as center of our
+    # anchor region knowing that it will not overlap with the sample region
+    # and it will not be outside of bounds
+    masked_img = cannied_img
+
+    # Clip between the bounds
+    left = sorted((0, sample_region[0] * whole_img.shape[0] -
+                   (dc_shape[0] / 2), whole_img.shape[0]))[1]
+    right = sorted((0, sample_region[2] * whole_img.shape[0] +
+                    (dc_shape[0] / 2), whole_img.shape[0]))[1]
+    top = sorted((0, sample_region[1] * whole_img.shape[1] -
+                  (dc_shape[1] / 2), whole_img.shape[1]))[1]
+    bottom = sorted((0, sample_region[3] * whole_img.shape[1] +
+                     (dc_shape[1] / 2), whole_img.shape[1]))[1]
+    masked_img[left:right, top:bottom].fill(0)
+    masked_img[0:(dc_shape[0] / 2), :].fill(0)
+    masked_img[:, 0:(dc_shape[1] / 2)].fill(0)
+    masked_img[masked_img.shape[0] - (dc_shape[0] / 2):masked_img.shape[0], :].fill(0)
+    masked_img[:, masked_img.shape[1] - (dc_shape[1] / 2):masked_img.shape[1]].fill(0)
+
+    # Find indices of edge pixels
+    occurrences_indices = numpy.where(masked_img == 255)
+    X = numpy.matrix(occurrences_indices[0]).T
+    Y = numpy.matrix(occurrences_indices[1]).T
+    occurrences = numpy.hstack([X, Y])
+
+    # If there is such a pixel outside of the sample region and there is enough
+    # space according to dc_shape, use the masked image and calculate the anchor
+    # region roi
+    if len(occurrences) > 0:
+        # Enough space outside of the sample region
+        anchor_roi = ((occurrences[0, 0] - (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
+                      (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
+
+    else:
+        # Not enough space outside of the sample region
+        # Pick a random pixel
+        cannied_img = cv2.Canny(uint8_img, 100, 200)
+        # Find indices of edge pixels
+        occurrences_indices = numpy.where(cannied_img == 255)
+        X = numpy.matrix(occurrences_indices[0]).T
+        Y = numpy.matrix(occurrences_indices[1]).T
+        occurrences = numpy.hstack([X, Y])
+        anchor_roi = ((occurrences[0, 0] - (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
+                      (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
+
+    return anchor_roi
 

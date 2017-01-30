@@ -1766,7 +1766,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
                           draw_merge_ratio, raw=False,
                           interpolate_data=False, logo=None):
     """
-    view_hfw (tuple of float): X (width), Y (heigth) in m
+    view_hfw (tuple of float): X (width), Y (height) in m
     view_pos (tuple of float): center position X, Y in m
     raw (bool): if False, generates one RGB image out of all the streams, otherwise
       generates one image per stream using the raw data
@@ -1842,23 +1842,26 @@ def images_to_export_data(streams, view_hfw, view_pos,
 
     # TODO: make sure that Y dim of the buffer_size is not crazy high
 
-    # Make surface based on the maximum resolution
-    data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
-    surface = cairo.ImageSurface.create_for_data(
-        data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
-    ctx = cairo.Context(surface)
-
     # The list of images to export
     data_to_export = []
 
     n = len(images)
-    last_image = images.pop()
-    # For every image, except the last
-    i = 0
     for i, im in enumerate(images):
+        if raw or i == 0:  # when print-ready, share the surface to draw
+            # Make surface based on the maximum resolution
+            data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
+            surface = cairo.ImageSurface.create_for_data(
+                data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
+            ctx = cairo.Context(surface)
+
         if im.metadata['blend_mode'] == BLEND_SCREEN or raw:
             # No transparency in case of "raw" export
             merge_ratio = 1.0
+        elif i == n - 1: # last image
+            if n == 1:
+                merge_ratio = 1.0
+            else:
+                merge_ratio = draw_merge_ratio
         else:
             merge_ratio = 1 - i / n
 
@@ -1877,11 +1880,12 @@ def images_to_export_data(streams, view_hfw, view_pos,
             blend_mode=im.metadata['blend_mode'],
             interpolate_data=interpolate_data
         )
+
+        # Create legend for each raw image
         if raw:
-            # Create legend
-            legend_rgb = draw_export_legend(images + [last_image], buffer_size, buffer_scale,
-                                                view_hfw[0], last_image.metadata['date'],
-                                                im.metadata['stream'], logo=logo)
+            legend_rgb = draw_export_legend(images, buffer_size, buffer_scale,
+                                            view_hfw[0], im.metadata['date'],
+                                            im.metadata['stream'], logo)
 
             legend_as_raw = _adapt_rgb_to_raw(legend_rgb, im.metadata['stream'], im_min_type)
             new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
@@ -1890,53 +1894,15 @@ def images_to_export_data(streams, view_hfw, view_pos,
             md = {model.MD_DESCRIPTION: im.metadata['name']}
             data_to_export.append(model.DataArray(data_with_legend, md))
 
-            data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
-            surface = cairo.ImageSurface.create_for_data(
-                data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
-            ctx = cairo.Context(surface)
-
-    if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or raw:
-        merge_ratio = 1.0
-    else:
-        merge_ratio = draw_merge_ratio
-
-    draw_image(
-        ctx,
-        last_image,
-        last_image.metadata['dc_center'],
-        buffer_center,
-        buffer_scale,
-        buffer_size,
-        merge_ratio,
-        im_scale=last_image.metadata['dc_scale'],
-        rotation=last_image.metadata['dc_rotation'],
-        shear=last_image.metadata['dc_shear'],
-        flip=last_image.metadata['dc_flip'],
-        blend_mode=last_image.metadata['blend_mode'],
-        interpolate_data=interpolate_data
-    )
-    # Create legend
-    if raw:
-        date = last_image.metadata['date']
-    else:
-        # Take the newest date (as in the GUI)
-        date = max(im.metadata['date'] for im in images + [last_image])
-
-    legend_rgb = draw_export_legend(images + [last_image], buffer_size, buffer_scale,
-                                        view_hfw[0], date,
-                                        last_image.metadata['stream'] if raw else None,
-                                        logo=logo)
-    if raw:
-        new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
-        # Turn legend to grayscale
-        legend_as_raw = _adapt_rgb_to_raw(legend_rgb, last_image.metadata['stream'], im_min_type)
-        data_with_legend = numpy.append(new_data_to_draw, legend_as_raw, axis=0)
-        md = {model.MD_DESCRIPTION: last_image.metadata['name']}
-    else:
+    # Create legend for print-ready
+    if not raw:
+        date = max(im.metadata['date'] for im in images)
+        legend_rgb = draw_export_legend(images, buffer_size, buffer_scale,
+                                        view_hfw[0], date, logo=logo)
         data_with_legend = numpy.append(data_to_draw, legend_rgb, axis=0)
         data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
         md = {model.MD_DIMS: 'YXC'}
-    data_to_export.append(model.DataArray(data_with_legend, md))
+        data_to_export.append(model.DataArray(data_with_legend, md))
 
     return data_to_export
 
