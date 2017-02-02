@@ -1477,10 +1477,209 @@ class TestTiffIO(unittest.TestCase):
         tile = f.read_one_tile(256, 256)
         # this tile is only 2 x 1 in size
         self.assertEqual(tile.shape, (1, 2, 3))
-
         del f
         os.remove(FILENAME)
+
+    def testAcquisitionDataTIFF(self):
+        size = (3, 257, 295)
+        dtype = numpy.uint16
+        md = {
+            model.MD_SAMPLES_PER_PIXEL: 3,
+            model.MD_DIMS: 'YXC',
+            model.MD_POS: (2e-6, 10e-6),
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6)
+        }
+        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(size[::-1]).astype(dtype)
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        # check data
+        rdata = tiff.open_data(FILENAME)
+        self.assertEqual(rdata.content[0].maxzoom, 2)
+        self.assertEqual(rdata.content[0].shape, size[::-1])
+
+        tiles = rdata.getSubData(0, 0, (0, 0, 256, 294))
+        self.assertEqual(len(tiles), 2)
+        self.assertEqual(len(tiles[0]), 2)
+        self.assertEqual(tiles[1][1].shape, (39, 1, 3))
         
+        # Test different zoom levels
+        tiles = rdata.getSubData(0, 1, (0, 0, 128, 147))
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(len(tiles[0]), 1)
+        self.assertEqual(tiles[0][0].shape, (147, 128, 3))
+
+        with self.assertRaises(ValueError):
+            # invalid Z
+            tiles = rdata.getSubData(0, 50, (0, 0, 256, 294))
+
+        with self.assertRaises(ValueError):
+            # invalid N
+            tiles = rdata.getSubData(50, 0, (0, 0, 256, 294))
+
+        # save the same file, but not pyramidal this time
+        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(size[::-1]).astype(dtype)
+        data = model.DataArray(arr, metadata=md)
+        tiff.export(FILENAME, data)
+
+        # the exception below is here only to call the __del__ method from rdata
+        try:
+            raise Exception()
+        except:
+            pass
+        del rdata
+
+        rdata = tiff.open_data(FILENAME)
+        with self.assertRaises(AttributeError):
+            rdata.content[0].maxzoom
+
+        with self.assertRaises(RuntimeError):
+            # the image is not tiled
+            rdata.getSubData(0, 0, (0, 0, 256, 294))
+
+        # the exception below is here only to call the __del__ method from rdata
+        try:
+            raise Exception()
+        except:
+            pass
+        del rdata
+
+        os.remove(FILENAME)
+
+    def testAcquisitionDataTIFFLargerFile(self):
+        PIXEL_SIZE = (1e-6, 1e-6)
+        ROTATION = 0.3
+        SHEAR = 0.2
+        size = (6000, 5000)
+        dtype = numpy.uint8
+        md = {
+            model.MD_DIMS: 'YX',
+            model.MD_POS: (5.0, 7.0),
+            model.MD_PIXEL_SIZE: PIXEL_SIZE,
+            model.MD_ROTATION: ROTATION,
+            model.MD_SHEAR: SHEAR
+        }
+        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        # check data
+        rdata = tiff.open_data(FILENAME)
+        self.assertEqual(rdata.content[0].maxzoom, 6)
+        self.assertEqual(rdata.content[0].shape, size[::-1])
+        
+        # calculate the shapes of each zoomed image
+        shapes = tiff._genResizedShapes(rdata.content[0])
+        # add the full image to the shape list
+        shapes = [(rdata.content[0].shape)] + shapes
+
+        # First zoom level (full image)
+        zoom_level = 0
+        # get the top-left tile
+        tile_shape = (0, 0, 0, 0)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # returns only one tile
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(len(tiles[0]), 1)
+        tile_md = tiles[0][0].metadata
+        exp_pixel_size = (PIXEL_SIZE[0] * 2 ** zoom_level, PIXEL_SIZE[1] * 2 ** zoom_level)
+        self.assertEqual(tile_md[model.MD_PIXEL_SIZE], exp_pixel_size)
+        self.assertAlmostEqual(tile_md[model.MD_ROTATION], ROTATION)
+        self.assertAlmostEqual(tile_md[model.MD_SHEAR], SHEAR)
+        numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9963856, 7.001966])
+        self.assertEqual(tiles[0][0].shape, (256, 256))
+
+        # get the bottom-right tile
+        tile_shape = (5998, 4998, 5999, 4999)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # returns only one tile
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(len(tiles[0]), 1)
+        tile_md = tiles[0][0].metadata
+        self.assertEqual(tile_md[model.MD_PIXEL_SIZE], exp_pixel_size)
+        self.assertAlmostEqual(tile_md[model.MD_ROTATION], ROTATION)
+        self.assertAlmostEqual(tile_md[model.MD_SHEAR], SHEAR)
+        numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9962948, 7.0020159])
+        self.assertEqual(tiles[0][0].shape, (136, 112))
+
+        # get all tiles
+        tile_shape = (0, 0, 5999, 4999)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # check the number of tiles in both dimensions
+        self.assertEqual(len(tiles), 24)
+        self.assertEqual(len(tiles[0]), 20)
+        # check the size of the bottom-right tile
+        self.assertEqual(tiles[23][19].shape, (136, 112))
+
+        # Zoom level 3
+        zoom_level = 3
+        # get the top-left tile
+        tile_shape = (0, 0, 0, 0)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # returns only one tile
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(len(tiles[0]), 1)
+        tile_md = tiles[0][0].metadata
+        exp_pixel_size = (PIXEL_SIZE[0] * 2 ** zoom_level, PIXEL_SIZE[1] * 2 ** zoom_level)
+        self.assertEqual(tile_md[model.MD_PIXEL_SIZE], exp_pixel_size)
+        self.assertAlmostEqual(tile_md[model.MD_ROTATION], ROTATION)
+        self.assertAlmostEqual(tile_md[model.MD_SHEAR], SHEAR)
+        numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9975593, 7.0012037])
+        self.assertEqual(tiles[0][0].shape, (256, 256))
+
+        # get the bottom-right tile
+        tile_shape = (5998, 4998, 5999, 4999)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # returns only one tile
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(len(tiles[0]), 1)
+        tile_md = tiles[0][0].metadata
+        self.assertEqual(tile_md[model.MD_PIXEL_SIZE], exp_pixel_size)
+        self.assertAlmostEqual(tile_md[model.MD_ROTATION], ROTATION)
+        self.assertAlmostEqual(tile_md[model.MD_SHEAR], SHEAR)
+        numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9973172, 7.0017426])
+        self.assertEqual(tiles[0][0].shape, (113, 238))
+
+        # get all tiles
+        tile_shape = (0, 0, 5999, 4999)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # check the number of tiles in both dimensions
+        self.assertEqual(len(tiles), 3)
+        self.assertEqual(len(tiles[0]), 3)
+        # check the size of the bottom-right tile
+        self.assertEqual(tiles[2][2].shape, (113, 238))
+
+        # Zoom level 5 (max zoom level). The image at this zoom level is smaller than the tile,
+        # so there is only one tile in this image
+        zoom_level = 5
+        # get the top-left tile
+        tile_shape = (0, 0, 0, 0)
+        tiles = rdata.getSubData(0, zoom_level, tile_shape)
+        # returns only one tile
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(len(tiles[0]), 1)
+        tile_md = tiles[0][0].metadata
+        exp_pixel_size = (PIXEL_SIZE[0] * 2 ** zoom_level, PIXEL_SIZE[1] * 2 ** zoom_level)
+        self.assertEqual(tile_md[model.MD_PIXEL_SIZE], exp_pixel_size)
+        self.assertAlmostEqual(tile_md[model.MD_ROTATION], ROTATION)
+        self.assertAlmostEqual(tile_md[model.MD_SHEAR], SHEAR)
+        numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9999907, 7.000003])
+        # the size of this tile is also the size of the image
+        self.assertEqual(tiles[0][0].shape, (156, 187))
+
+        # the exception below is here only to call the __del__ method from rdata
+        try:
+            raise Exception()
+        except:
+            pass
+        del rdata
+
+        os.remove(FILENAME)
+
 
 def rational2float(rational):
     """
