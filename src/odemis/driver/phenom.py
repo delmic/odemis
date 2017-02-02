@@ -673,10 +673,10 @@ class Detector(model.Detector):
         self.bpp = model.IntEnumerated(8, {8, 16}, unit="")
 
         # HW contrast and brightness
-        self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
-        self.contrast.subscribe(self._onContrast)
-        self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
-        self.brightness.subscribe(self._onBrightness)
+        self.contrast = model.FloatContinuous(0.5, [0, 1], unit="",
+                                              setter=self._setContrast)
+        self.brightness = model.FloatContinuous(0.5, [0, 1], unit="",
+                                                setter=self._setBrightness)
 
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
@@ -737,7 +737,7 @@ class Detector(model.Detector):
         self._updateContrast()
         self._updateBrightness()
 
-    def _onContrast(self, value):
+    def _setContrast(self, value):
         with self.parent._acq_progress_lock:
             # Actual range in Phenom is (0,4]
             contr = numpy.clip(4 * value, 0.00001, 4)
@@ -745,24 +745,27 @@ class Detector(model.Detector):
                 self.parent._device.SetSEMContrast(contr)
             except suds.WebFault:
                 logging.debug("Setting SEM contrast may be unsuccessful")
+            return contr / 4
 
-    def _onBrightness(self, value):
+    def _setBrightness(self, value):
         with self.parent._acq_progress_lock:
             try:
                 self.parent._device.SetSEMBrightness(value)
             except suds.WebFault:
                 logging.debug("Setting SEM brightness may be unsuccessful")
+            return value
 
     def _updateContrast(self):
         """
         Reads again the hardware setting and update the VA
         """
-        contr = (self.parent._device.GetSEMContrast() / 4)
+        contr = self.parent._device.GetSEMContrast() / 4
         contr = self.contrast.clip(contr)
 
-        # we don't set it explicitly, to avoid calling .onContrast()
-        self.contrast._value = contr
-        self.contrast.notify(contr)
+        # we don't set it explicitly, to avoid calling .setContrast()
+        if contr != self.contrast.value:
+            self.contrast._value = contr
+            self.contrast.notify(contr)
 
     def _updateBrightness(self):
         """
@@ -771,9 +774,10 @@ class Detector(model.Detector):
         bright = self.parent._device.GetSEMBrightness()
         bright = self.brightness.clip(bright)
 
-        # we don't set it explicitly, to avoid calling .onBrightness()
-        self.brightness._value = bright
-        self.brightness.notify(bright)
+        # we don't set it explicitly, to avoid calling .setBrightness()
+        if bright != self.brightness.value:
+            self.brightness._value = bright
+            self.brightness.notify(bright)
 
     def update_parameters(self):
         # Update stage and focus position
@@ -786,24 +790,29 @@ class Detector(model.Detector):
         fov = self._acq_device.GetSEMHFW()
         # take care of small deviations
         fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
-        self.parent._scanner.horizontalFoV.value = fov
+        if fov != self.parent._scanner.horizontalFoV.value:
+            self.parent._scanner.horizontalFoV._value = fov
+            self.parent._scanner.horizontalFoV.notify(fov)
 
         rotation = self._acq_device.GetSEMRotation()
-        self.parent._scanner.rotation.value = -rotation
+        if -rotation != self.parent._scanner.rotation.value:
+            self.parent._scanner.rotation._value = -rotation
+            self.parent._scanner.rotation.notify(-rotation)
 
         volt = self._acq_device.SEMGetHighTension()
-        self.parent._scanner.accelVoltage.value = -volt
+        if -volt != self.parent._scanner.accelVoltage.value:
+            self.parent._scanner.accelVoltage._value = -volt
+            self.parent._scanner.accelVoltage.notify(-volt)
 
         # Get current spot size
         spotSize = self._acq_device.SEMGetSpotSize()
-        self.parent._scanner.spotSize.value = spotSize
+        if spotSize != self.parent._scanner.spotSize.value:
+            self.parent._scanner.spotSize._value = spotSize
+            self.parent._scanner.spotSize.notify(spotSize)
 
         # Update all Detector VAs
-        contr = (self._acq_device.GetSEMContrast() / 4)
-        # Handle cases where Phenom returns weird values
-        self.parent._detector.contrast.value = self.parent._detector.contrast.clip(contr)
-        bright = self._acq_device.GetSEMBrightness()
-        self.parent._detector.brightness.value = self.parent._detector.brightness.clip(bright)
+        self._updateContrast()
+        self._updateBrightness()
 
     def start_acquire(self, callback):
         # Check if Phenom is in the proper mode
