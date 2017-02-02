@@ -110,7 +110,7 @@ HFW_RANGE = (2.5e-06, 0.0031)
 TENSION_RANGE = (4797.56, 10000.0)
 # REFERENCE_TENSION = 10e03 #Volt
 # BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
-SPOT_RANGE = (0.0, 5.73018379531)  # TODO: what means a spot of 0? => small value like 1e-3?
+SPOT_RANGE = (2.1, 3.3)
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
@@ -307,7 +307,6 @@ class Scanner(model.Emitter):
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
-        self.last_fov = self.horizontalFoV.value
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -398,6 +397,8 @@ class Scanner(model.Emitter):
         self.spotSize = model.FloatContinuous(spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
+        # TODO: add None, which indicate "automatic based on detector", which
+        # is currently what is happening.
         self.blanker = model.VAEnumerated(True, choices={True, False},
                                           setter=self._setBlanker)
 
@@ -412,11 +413,11 @@ class Scanner(model.Emitter):
         """
         Reads again the hardware setting and update the VA
         """
-        if self.parent._blank_supported and (not self.blanker.value):
+        if not self.parent._blank_supported or not self.blanker.value:
             # FIXME: Fow now only trust this value when beam is unblanked
             fov = self.parent._device.GetSEMHFW()
             # take care of small deviations
-            fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
+            fov = self.horizontalFoV.clip(fov)
 
             # we don't set it explicitly, to avoid calling .SetSEMHFW()
             self.horizontalFoV._value = fov
@@ -430,19 +431,28 @@ class Scanner(model.Emitter):
 
     def _setHorizontalFoV(self, value):
         # Make sure you are in the current range
-        logging.debug("Setting new hfw to: %f", value)
         try:
             rng = self.parent._device.GetSEMHFWRange()
+            # Fow now only apply this value when beam is unblanked,
+            # as the first versions of the Phenom firmware with blanker
+            # support returned bogus HFW when the blanker was active.
+            # TODO: once all systems are using newer versions, always read back
+            if rng.max - rng.min < 1e-9:
+                logging.info("HFW range currently only within %g->%g, will set HFW later",
+                             rng.min, rng.max)
+                return value
             new_fov = numpy.clip(value, rng.min, rng.max)
-            if self.parent._blank_supported and not self.blanker.value:
-                # Fow now only trust this value when beam is unblanked,
-                # as the first versions of the Phenom firmware with blanker
-                # support returned bogus HFW when the blanker was active.
-                # TODO: once all systems are using newer versions, always read back
-                self.parent._device.SetSEMHFW(new_fov)
-            return new_fov
+
+            logging.debug("Setting new hfw to: %g (was asked %g)", new_fov, value)
+            self.parent._device.SetSEMHFW(new_fov)
+            read_fov = self.parent._device.GetSEMHFW()
+            if HFW_RANGE[0] <= new_fov <= HFW_RANGE[1]:
+                return read_fov
+            else:
+                logging.warning("SEM reports HFW of %g", read_fov)
+                return new_fov
         except suds.WebFault:
-            logging.debug("Cannot set HFW when the sample is not in SEM.")
+            logging.info("Cannot set HFW when the sample is not in SEM.")
 
         return self.horizontalFoV.value
 
@@ -637,10 +647,11 @@ class Scanner(model.Emitter):
         limit = rng.max
         # The ratio between the shift distance and the limit
         ratio = 1
-        if shift_d > limit:
-            ratio = shift_d / limit
+        if shift_d > limit and shift_d > 0:
+            logging.debug("Shift range is %g->%g, will clip %s", rng.min, rng.max, value)
+            ratio = limit / shift_d
         # Clip within limit
-        clipped_shift = (value[0] / ratio, value[1] / ratio)
+        clipped_shift = (value[0] * ratio, value[1] * ratio)
         return clipped_shift
 
 
@@ -822,11 +833,13 @@ class Detector(model.Detector):
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
             try:
+                # TODO: if blanker is None (= Auto), internally request to
+                # unblank, and block until it's done. Otherwise, don't touch.
                 # "Unblank" the beam
                 self.parent._scanner.blanker.value = False
                 # Wait until it's indeed unblanked
-                while (self.parent._scanner.blanker.value):
-                    time.sleep(1)
+                while self.parent._scanner.blanker.value:
+                    time.sleep(0.1)
                     continue
             except suds.WebFault:
                 logging.warning("Beam might still be blanked!")
@@ -854,7 +867,7 @@ class Detector(model.Detector):
             else:
                 if self.parent._blank_supported:
                     self.parent._device.SEMUnblankBeam()
-                    # FIXME: we can now update hfw, range may have changed in the meantime
+                    # We can now update hfw (range may have changed in the meantime)
                     rng = self.parent._device.GetSEMHFWRange()
                     current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
                     self.parent._device.SetSEMHFW(current_fov)
@@ -868,9 +881,12 @@ class Detector(model.Detector):
         with self._acquisition_lock, self._acquisition_init_lock:
             self._acquisition_must_stop.set()
             try:
+                # TODO: it seems that in some cases, if the acquisition has just
+                # started, this will fail (and then the whole acquisition will
+                # go on until its end)
                 self._acq_device.SEMAbortImageAcquisition()
-            except suds.WebFault:
-                logging.debug("No acquisition in progress to be aborted.")
+            except suds.WebFault as ex:
+                logging.debug("No acquisition in progress to be aborted. (%s)", ex)
 
             # "Blank" the beam
             self.parent._scanner.blanker.value = True
@@ -1397,6 +1413,13 @@ class EbeamFocus(PhenomFocus):
     """
     def __init__(self, name, role, parent, axes, **kwargs):
         rng = parent._device.GetSEMWDRange()
+        # Some firmware versions of the Phenom sometimes return incorrect range
+        # (eg, when e-beam is not active).
+        # TODO: update the range as soon as the SEM area is reached.
+        if rng.max - rng.min < 1e-9:
+            logging.warning("SEM focus range reported is %s. Will replace by 1m", rng)
+            rng.min = 0
+            rng.max = 1
 
         PhenomFocus.__init__(self, name, role, parent=parent, axes=axes,
                              rng=(rng.min, rng.max), **kwargs)
