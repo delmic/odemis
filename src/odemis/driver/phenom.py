@@ -114,8 +114,6 @@ NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
 PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
-# Phenom version up to which high frame rate should not be allowed
-LOW_FR_VERSION = "4.4.1.rel.21032"
 
 
 # Methods used for sw version comparison
@@ -695,13 +693,6 @@ class Detector(model.Detector):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
-        self._high_fr = False
-        if splittedname(self._swVersion) > splittedname(LOW_FR_VERSION):
-            self._high_fr = True
-            logging.debug("High frame rate will be used.")
-        else:
-            logging.debug("Low frame rate will be used.")
-
         # will take care of executing autocontrast asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1046,11 +1037,9 @@ class Detector(model.Detector):
                     logging.debug("Acquiring full image accumulation")
                     img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
                 else:
-                    if self._high_fr and bpp == 8:
+                    if bpp == 8:
                         img_str = self._acq_device.SEMGetLiveImageCopy(0)
                     else:
-                        # This is to avoid using high frame rate in Phenom versions
-                        # that misbehave with frequent SEMGetLiveImageCopy calls
                         img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
 
                 # Use the metadata from the string to update some metadata
