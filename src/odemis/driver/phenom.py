@@ -78,9 +78,8 @@ import weakref
 #       However spot mode does not reduce further the scanning area, and an
 #       image can still be acquired (although the border will be wiggly as
 #       there is no settle time). To actually get a spot, you must set the
-#       scan parameter scale to 0. To be sure the center is at the same place
-#       as the center of the standard scanning, we also temporarily reset the
-#       HFW to minimum value.
+#       scan parameter scale to 0. However, the positioning is not good in the
+#       Phenom, and the center might be quite away from the center at scale = 1.
 #     * Not all values are readable all the time. Some values, like the SEM
 #       settings can only be read (and written) only when the sample holder is
 #       in SEM mode.
@@ -95,6 +94,7 @@ import weakref
 #       error instead of a clear 403 message. A fork of SUDS by "jurko" fixes a
 #       lot of such problems and might be worth to use if the standard SUDS
 #       version gets really too much annoying.
+
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
@@ -102,7 +102,6 @@ MAX_FRAMES = 255
 # For a 2048x2048 image with the maximum dt we need about 205 seconds plus some
 # additional overhead for the transfer. In any case, 300 second should be enough
 SOCKET_TIMEOUT = 300  # s, timeout for suds client
-TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
@@ -165,7 +164,8 @@ class SEM(model.HwComponent):
         # source tilt or we can just access the blanking Phenom API methods
         phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
         logging.debug("Methods available in Phenom host: %s", phenom_methods)
-        self._blank_supported = ("SEMBlankBeam" in phenom_methods)
+        if "SEMBlankBeam" not in phenom_methods:
+            raise HwError("This Phenom version doesn't support beam blanking! Version 4.4 or later is required.")
         self._device = client.service
 
         # check Phenom's state and raise HwError if it reports error mode
@@ -267,8 +267,8 @@ class SEM(model.HwComponent):
         """
         # Don't need to close the connection, it's already closed by the time
         # suds returns the data
-        self._scanner.terminate()
         self._detector.terminate()
+        self._scanner.terminate()
         self._stage.terminate()
         self._focus.terminate()
         self._navcam.terminate()
@@ -397,10 +397,14 @@ class Scanner(model.Emitter):
         self.spotSize = model.FloatContinuous(spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
-        # TODO: add None, which indicate "automatic based on detector", which
-        # is currently what is happening.
-        self.blanker = model.VAEnumerated(True, choices={True, False},
+        # None, indicates "whenever the detector is acquiring"
+        self.blanker = model.VAEnumerated(None, choices={None, True, False},
                                           setter=self._setBlanker)
+        try:
+            self._blank_beam(True)  # It's not acquiring at init
+        except suds.WebFault as ex:
+            # It's probably not even in SEM mode, so don't make a fuss about it
+            logging.debug("Failed to update the blanker status now: %s", ex)
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -413,13 +417,12 @@ class Scanner(model.Emitter):
         """
         Reads again the hardware setting and update the VA
         """
-        if not self.parent._blank_supported or not self.blanker.value:
-            # FIXME: Fow now only trust this value when beam is unblanked
-            fov = self.parent._device.GetSEMHFW()
-            # take care of small deviations
-            fov = self.horizontalFoV.clip(fov)
+        fov = self.parent._device.GetSEMHFW()
+        # take care of small deviations
+        fov = self.horizontalFoV.clip(fov)
 
-            # we don't set it explicitly, to avoid calling .SetSEMHFW()
+        # we don't set it explicitly, to avoid calling .SetSEMHFW()
+        if fov != self.horizontalFoV._value:
             self.horizontalFoV._value = fov
             self.horizontalFoV.notify(fov)
 
@@ -457,16 +460,48 @@ class Scanner(model.Emitter):
         return self.horizontalFoV.value
 
     def _setBlanker(self, value):
-        f = self.parent._detector.beam_blank(value)
-        f._blank_to_set = value
-        f.add_done_callback(self.on_blank_done)
+        # Blanking will block until the acquisition is done, which can
+        # take a long time, so try to only do it when needed.
+        if value == self.blanker.value:
+            return value
 
-        return self.blanker._value
+        if value is None:  # auto
+            # Active if the detector is acquiring otherwise not
+            blanked = self.parent._detector._acquisition_must_stop.is_set()
+        else:
+            blanked = value
+        try:
+            self._blank_beam(blanked)
+        except suds.WebFault as ex:
+            if value is None:
+                logging.debug("Failed to update the blanker status now: %s", ex)
+            else:
+                # If the user is changing it explicitly, pass on the error
+                # (typically because the Phenom is not in SEM imaging mode)
+                logging.warning("Failed to update the blanker status: %s", ex)
+                raise
 
-    def on_blank_done(self, future):
-        # Now we can update the actual beam blanker value
-        self.blanker._value = future._blank_to_set
-        self.blanker.notify(future._blank_to_set)
+        return value
+
+    def _blank_beam(self, blank):
+        """
+        (Un)blank the beam.
+          Note that the Phenom only allows to change the beam status if it's in
+          SEM imaging mode.
+        blank (boolean): If True, will blank the beam, otherwise will unblank it
+        raise WebFault: if anything went wrong on the Phenom side
+        """
+        with self.parent._acq_progress_lock:
+            logging.debug("Setting the blanker to %s", blank)
+            if blank:
+                self.parent._device.SEMBlankBeam()
+            else:
+                self.parent._device.SEMUnblankBeam()
+                # We can now update hfw (range may have changed in the meantime)
+                rng = self.parent._device.GetSEMHFWRange()
+                current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
+                self.parent._device.SetSEMHFW(current_fov)
+                # horizontalFoV setter would fail to call .SetSEMHFW()
 
     def _updateMagnification(self):
 
@@ -485,43 +520,12 @@ class Scanner(model.Emitter):
             self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
-        # When the voltage changes, the tilt values are updated.
-        # As we (used to) use tilt to blank the beam, if the voltage is changed
-        # while acquisition is not running, the beam would be unblanked.
-        # Thus we keep and reset the last known source tilt
-        if not self.parent._blank_supported:
-            current_tilt = self.parent._device.GetSEMSourceTilt()
-
         self.parent._device.SEMSetHighTension(-volt)
-
-        if not self.parent._blank_supported:
-            new_tilt = self.parent._device.GetSEMSourceTilt()
-            if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
-                self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
-                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                              volt, self.spotSize.value, self.parent._detector._tilt_unblank)
-            if (current_tilt.aX, current_tilt.aY) == TILT_BLANK:
-                self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
-        # Brightness and contrast have to be adjusted just once
-        # we set up the detector (see SEMACB())
-        # TODO reset the beam shift so it is within boundaries
 
     def _setSpotSize(self, value):
         # Set the corresponding spot size to Phenom SEM
         try:
-            if self.parent._blank_supported:
-                self.parent._device.SEMSetSpotSize(value)
-            else:
-                # Tilt, which we use to emulate blanking, is per spot size
-                current_tilt = self.parent._device.GetSEMSourceTilt()
-                self.parent._device.SEMSetSpotSize(value)
-                new_tilt = self.parent._device.GetSEMSourceTilt()
-                if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
-                    self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
-                    logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                                  self.accelVoltage.value, value, self.parent._detector._tilt_unblank)
-                if (current_tilt.aX, current_tilt.aY) == TILT_BLANK:
-                    self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
+            self.parent._device.SEMSetSpotSize(value)
         except suds.WebFault:
             logging.debug("Cannot set spot size (is the sample in SEM position?)", exc_info=True)
             return self.spotSize.value
@@ -654,6 +658,13 @@ class Scanner(model.Emitter):
         clipped_shift = (value[0] * ratio, value[1] * ratio)
         return clipped_shift
 
+    def terminate(self):
+        # Unblank the beam, in case the Phenom should be used as-is
+        try:
+            self.parent._scanner._blank_beam(False)
+        except suds.WebFault as ex:
+            logging.info("Beam might still be blanked (%s)", ex)
+
 
 class Detector(model.Detector):
     """
@@ -694,16 +705,11 @@ class Detector(model.Detector):
         self._acquisition_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
+        # For the auto-blanker to know we are not acquiring at initialisation
+        self._acquisition_must_stop.set()
 
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
-
-        # On (old) Phenom which don't support blanking, we emulate the blanking
-        # by setting a large tilt.
-        # This is the last tilt value when unblanked.
-        # Note the tilt value is per spot size and voltage. So changes of these
-        # values will reset the tilt (to the original calibrated values).
-        self._tilt_unblank = None  # Updated by the chamber pressure
 
         # Start dedicated connection for acquisition stream
         acq_client = Client(self.parent._host + "?om", location=self.parent._host,
@@ -725,25 +731,8 @@ class Detector(model.Detector):
         """
         Trigger Phenom's AutoContrast
         """
-        if not self.parent._blank_supported:
-            # Check if we need to temporarily unblank the ebeam
-            cur_tilt = self.parent._device.GetSEMSourceTilt()
-            beam_blanked = ((cur_tilt.aX, cur_tilt.aY) == TILT_BLANK)
-            if beam_blanked:
-                try:
-                    # "Unblank" the beam
-                    self.parent._scanner.blanker.value = False
-                except suds.WebFault:
-                    logging.warning("Beam might still be blanked!")
         with self.parent._acq_progress_lock:
             self.parent._device.SEMACB()
-        if not self.parent._blank_supported:
-            if beam_blanked:
-                try:
-                    # "Blank" the beam
-                    self.parent._scanner.blanker.value = True
-                except suds.WebFault:
-                    logging.warning("Beam might still be unblanked!")
         # Update with the new values after automatic procedure is completed
         self._updateContrast()
         self._updateBrightness()
@@ -832,50 +821,17 @@ class Detector(model.Detector):
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
-            try:
-                # TODO: if blanker is None (= Auto), internally request to
-                # unblank, and block until it's done. Otherwise, don't touch.
-                # "Unblank" the beam
-                self.parent._scanner.blanker.value = False
-                # Wait until it's indeed unblanked
-                while self.parent._scanner.blanker.value:
-                    time.sleep(0.1)
-                    continue
-            except suds.WebFault:
-                logging.warning("Beam might still be blanked!")
-            target = self._acquire_thread
-            self._acquisition_thread = threading.Thread(target=target,
+            if self.parent._scanner.blanker.value is None:
+                try:
+                    self.parent._scanner._blank_beam(False)
+                except suds.WebFault:
+                    logging.warning("Beam might still be blanked!", exc_info=True)
+            elif self.parent._scanner.blanker.value:
+                logging.warning("Starting acquisition while the beam is blanked")
+            self._acquisition_thread = threading.Thread(target=self._acquire_thread,
                     name="PhenomSEM acquire flow thread",
                     args=(callback,))
             self._acquisition_thread.start()
-
-    @isasync
-    def beam_blank(self, blank):
-        return self._executor.submit(self._beam_blank, blank)
-
-    def _beam_blank(self, blank):
-        """
-        (Un)blank the beam
-        blank (boolean): If True, will blank the beam, otherwise will unblank it
-        """
-        with self.parent._acq_progress_lock:
-            if blank:
-                if self.parent._blank_supported:
-                    self.parent._device.SEMBlankBeam()
-                else:
-                    self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-            else:
-                if self.parent._blank_supported:
-                    self.parent._device.SEMUnblankBeam()
-                    # We can now update hfw (range may have changed in the meantime)
-                    rng = self.parent._device.GetSEMHFWRange()
-                    current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
-                    self.parent._device.SetSEMHFW(current_fov)
-                    # horizontalFoV setter would fail to call .SetSEMHFW()
-                else:
-                    self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
-                    logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                                  self.parent._scanner.accelVoltage.value, self.parent._scanner.spotSize.value, self._tilt_unblank)
 
     def stop_acquire(self):
         with self._acquisition_lock, self._acquisition_init_lock:
@@ -888,11 +844,12 @@ class Detector(model.Detector):
             except suds.WebFault as ex:
                 logging.debug("No acquisition in progress to be aborted. (%s)", ex)
 
-            # "Blank" the beam
-            self.parent._scanner.blanker.value = True
-            # Wait until it's indeed blanked
-            while not self.parent._scanner.blanker.value:
-                time.sleep(1)
+            # Blank the beam if needed
+            if self.parent._scanner.blanker.value is None:
+                try:
+                    self.parent._scanner._blank_beam(True)
+                except suds.WebFault:
+                    logging.warning("Beam might still be unblanked!", exc_info=True)
 
     def _wait_acquisition_stopped(self):
         """
@@ -1134,14 +1091,6 @@ class Detector(model.Detector):
 
     def terminate(self):
         logging.info("Terminating SEM stream...")
-        try:
-            self.parent._scanner.blanker.value = False
-            # Wait until it's indeed unblanked
-            while (self.parent._scanner.blanker.value):
-                time.sleep(1)
-                continue
-        except suds.WebFault:
-            logging.warning("Beam might still be blanked!")
         if self._executor:
             self._executor.shutdown()
             self._executor = None
@@ -2124,9 +2073,11 @@ class ChamberPressure(model.Actuator):
                             # When moved to SEM position, blank ASAP
                             if self._position == PRESSURE_SEM:
                                 self.parent._detector.update_parameters()
-                                if not self.parent._blank_supported:
-                                    self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
-                                self.parent._scanner.blanker.value = True
+                                if self.parent._scanner.blanker.value in (None, True):
+                                    try:
+                                        self.parent._scanner._blank_beam(True)
+                                    except suds.WebFault as ex:
+                                        logging.warning("Failed to blank the beam when moving to SEM mode: %s", ex)
 
                             self._position_event.set()
                         else:
