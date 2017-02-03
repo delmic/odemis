@@ -406,6 +406,9 @@ class Scanner(model.Emitter):
             # It's probably not even in SEM mode, so don't make a fuss about it
             logging.debug("Failed to update the blanker status now: %s", ex)
 
+        # Mostly for testing/manual changes
+        self.power = model.BooleanVA(True, setter=self._setPower)
+
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
@@ -502,6 +505,17 @@ class Scanner(model.Emitter):
                 current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
                 self.parent._device.SetSEMHFW(current_fov)
                 # horizontalFoV setter would fail to call .SetSEMHFW()
+
+    def _setPower(self, value):
+        if value == self.power.value:
+            return value
+
+        if value:
+            self.parent._device.SEMUnblankSource()
+        else:
+            self.parent._device.SEMBlankSource()
+
+        return value
 
     def _updateMagnification(self):
 
