@@ -363,13 +363,17 @@ class SecomStateController(object):
                 power.value = power.range[1]  # max!
             except (AttributeError, model.NotApplicableError):
                 try:
-                    # if enumerated: the second lowest
-                    power.value = sorted(power.choices)[1]
+                    # if enumerated: the biggest
+                    power.value = max(power.choices)
                 except (AttributeError, model.NotApplicableError):
                     logging.error("Unknown ebeam power range, setting to 1")
                     power.value = 1
         else:
-            power.value = 0
+            try:
+                # if enumerated: the lowest
+                power.value = min(power.choices)
+            except (AttributeError, model.NotApplicableError):
+                power.value = 0
 
     def _reset_streams(self):
         """
@@ -890,6 +894,12 @@ class DelphiStateController(SecomStateController):
         self._reset_streams()
 
         self._chamber_pump_future.add_done_callback(self._on_vacuum)
+
+    def _set_ebeam_power(self, on):
+        # The Delphi has a ebeam.power but it shouldn't be turned on/off during
+        # (un)loading, as it takes time, and the Phenom already does the right
+        # thing.
+        pass
 
     @call_in_wx_main
     def _on_vacuum(self, future):

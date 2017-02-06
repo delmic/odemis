@@ -33,7 +33,6 @@ import numpy
 from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 import re
-import subprocess
 import suds
 from suds.client import Client
 import threading
@@ -79,9 +78,8 @@ import weakref
 #       However spot mode does not reduce further the scanning area, and an
 #       image can still be acquired (although the border will be wiggly as
 #       there is no settle time). To actually get a spot, you must set the
-#       scan parameter scale to 0. To be sure the center is at the same place
-#       as the center of the standard scanning, we also temporarily reset the
-#       HFW to minimum value.
+#       scan parameter scale to 0. However, the positioning is not good in the
+#       Phenom, and the center might be quite away from the center at scale = 1.
 #     * Not all values are readable all the time. Some values, like the SEM
 #       settings can only be read (and written) only when the sample holder is
 #       in SEM mode.
@@ -96,6 +94,7 @@ import weakref
 #       error instead of a clear 403 message. A fork of SUDS by "jurko" fixes a
 #       lot of such problems and might be worth to use if the standard SUDS
 #       version gets really too much annoying.
+
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
@@ -103,7 +102,6 @@ MAX_FRAMES = 255
 # For a 2048x2048 image with the maximum dt we need about 205 seconds plus some
 # additional overhead for the transfer. In any case, 300 second should be enough
 SOCKET_TIMEOUT = 300  # s, timeout for suds client
-TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
@@ -111,13 +109,11 @@ HFW_RANGE = (2.5e-06, 0.0031)
 TENSION_RANGE = (4797.56, 10000.0)
 # REFERENCE_TENSION = 10e03 #Volt
 # BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
-SPOT_RANGE = (0.0, 5.73018379531)  # TODO: what means a spot of 0? => small value like 1e-3?
+SPOT_RANGE = (2.1, 3.3)
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
 PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
-# Phenom version up to which high frame rate should not be allowed
-LOW_FR_VERSION = "4.4.1.rel.21032"
 
 
 # Methods used for sw version comparison
@@ -136,11 +132,12 @@ class SEM(model.HwComponent):
     '''
     This represents the bare Phenom SEM.
     '''
-    def __init__(self, name, role, children, host, username, password, phenom_gui=True, daemon=None, **kwargs):
+    def __init__(self, name, role, children, host, username, password, phenom_gui=False, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
             They will be provided back in the .children VA
+        phenom_gui (bool): DEPRECATED.
         Raise an exception if the device cannot be opened
         '''
 
@@ -155,21 +152,6 @@ class SEM(model.HwComponent):
         self._host = host
         self._username = username
         self._password = password
-        self._phenom_gui = phenom_gui
-        # get the ip from the whole host string
-        res = re.sub("http://", "", self._host)
-        self._ip = re.sub(":8888", "", res)
-        try:
-            if self._phenom_gui:
-                o = subprocess.check_output(["PhenomHeadless", self._ip, "off"])
-                logging.debug("Got response %s", o)
-            else:
-                o = subprocess.check_output(["PhenomHeadless", self._ip, "on"])
-                logging.debug("Got response %s", o)
-        except Exception as e:
-            logging.warning("Could not enable/disable Phenom GUI: %s", e)
-            self._phenom_gui = True
-
         try:
             client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
         except Exception:
@@ -180,7 +162,8 @@ class SEM(model.HwComponent):
         # source tilt or we can just access the blanking Phenom API methods
         phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
         logging.debug("Methods available in Phenom host: %s", phenom_methods)
-        self._blank_supported = ("SEMBlankBeam" in phenom_methods)
+        if "SEMBlankBeam" not in phenom_methods:
+            raise HwError("This Phenom version doesn't support beam blanking! Version 4.4 or later is required.")
         self._device = client.service
 
         # check Phenom's state and raise HwError if it reports error mode
@@ -282,8 +265,8 @@ class SEM(model.HwComponent):
         """
         # Don't need to close the connection, it's already closed by the time
         # suds returns the data
-        self._scanner.terminate()
         self._detector.terminate()
+        self._scanner.terminate()
         self._stage.terminate()
         self._focus.terminate()
         self._navcam.terminate()
@@ -322,7 +305,6 @@ class Scanner(model.Emitter):
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
-        self.last_fov = self.horizontalFoV.value
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -413,8 +395,17 @@ class Scanner(model.Emitter):
         self.spotSize = model.FloatContinuous(spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
-        self.blanker = model.VAEnumerated(True, choices={True, False},
+        # None, indicates "whenever the detector is acquiring"
+        self.blanker = model.VAEnumerated(None, choices={None, True, False},
                                           setter=self._setBlanker)
+        try:
+            self._blank_beam(True)  # It's not acquiring at init
+        except suds.WebFault as ex:
+            # It's probably not even in SEM mode, so don't make a fuss about it
+            logging.debug("Failed to update the blanker status now: %s", ex)
+
+        # Mostly for testing/manual changes
+        self.power = model.BooleanVA(True, setter=self._setPower)
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -427,13 +418,12 @@ class Scanner(model.Emitter):
         """
         Reads again the hardware setting and update the VA
         """
-        if self.parent._blank_supported and (not self.blanker.value):
-            # FIXME: Fow now only trust this value when beam is unblanked
-            fov = self.parent._device.GetSEMHFW()
-            # take care of small deviations
-            fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
+        fov = self.parent._device.GetSEMHFW()
+        # take care of small deviations
+        fov = self.horizontalFoV.clip(fov)
 
-            # we don't set it explicitly, to avoid calling .SetSEMHFW()
+        # we don't set it explicitly, to avoid calling .SetSEMHFW()
+        if fov != self.horizontalFoV._value:
             self.horizontalFoV._value = fov
             self.horizontalFoV.notify(fov)
 
@@ -445,33 +435,85 @@ class Scanner(model.Emitter):
 
     def _setHorizontalFoV(self, value):
         # Make sure you are in the current range
-        logging.debug("Setting new hfw to: %f", value)
         try:
             rng = self.parent._device.GetSEMHFWRange()
+            # Fow now only apply this value when beam is unblanked,
+            # as the first versions of the Phenom firmware with blanker
+            # support returned bogus HFW when the blanker was active.
+            # TODO: once all systems are using newer versions, always read back
+            if rng.max - rng.min < 1e-9:
+                logging.info("HFW range currently only within %g->%g, will set HFW later",
+                             rng.min, rng.max)
+                return value
             new_fov = numpy.clip(value, rng.min, rng.max)
-            if self.parent._blank_supported and not self.blanker.value:
-                # Fow now only trust this value when beam is unblanked,
-                # as the first versions of the Phenom firmware with blanker
-                # support returned bogus HFW when the blanker was active.
-                # TODO: once all systems are using newer versions, always read back
-                self.parent._device.SetSEMHFW(new_fov)
-            return new_fov
+
+            logging.debug("Setting new hfw to: %g (was asked %g)", new_fov, value)
+            self.parent._device.SetSEMHFW(new_fov)
+            read_fov = self.parent._device.GetSEMHFW()
+            if HFW_RANGE[0] <= new_fov <= HFW_RANGE[1]:
+                return read_fov
+            else:
+                logging.warning("SEM reports HFW of %g", read_fov)
+                return new_fov
         except suds.WebFault:
-            logging.debug("Cannot set HFW when the sample is not in SEM.")
+            logging.info("Cannot set HFW when the sample is not in SEM.")
 
         return self.horizontalFoV.value
 
     def _setBlanker(self, value):
-        f = self.parent._detector.beam_blank(value)
-        f._blank_to_set = value
-        f.add_done_callback(self.on_blank_done)
+        # Blanking will block until the acquisition is done, which can
+        # take a long time, so try to only do it when needed.
+        if value == self.blanker.value:
+            return value
 
-        return self.blanker._value
+        if value is None:  # auto
+            # Active if the detector is acquiring otherwise not
+            blanked = self.parent._detector._acquisition_must_stop.is_set()
+        else:
+            blanked = value
+        try:
+            self._blank_beam(blanked)
+        except suds.WebFault as ex:
+            if value is None:
+                logging.debug("Failed to update the blanker status now: %s", ex)
+            else:
+                # If the user is changing it explicitly, pass on the error
+                # (typically because the Phenom is not in SEM imaging mode)
+                logging.warning("Failed to update the blanker status: %s", ex)
+                raise
 
-    def on_blank_done(self, future):
-        # Now we can update the actual beam blanker value
-        self.blanker._value = future._blank_to_set
-        self.blanker.notify(future._blank_to_set)
+        return value
+
+    def _blank_beam(self, blank):
+        """
+        (Un)blank the beam.
+          Note that the Phenom only allows to change the beam status if it's in
+          SEM imaging mode.
+        blank (boolean): If True, will blank the beam, otherwise will unblank it
+        raise WebFault: if anything went wrong on the Phenom side
+        """
+        with self.parent._acq_progress_lock:
+            logging.debug("Setting the blanker to %s", blank)
+            if blank:
+                self.parent._device.SEMBlankBeam()
+            else:
+                self.parent._device.SEMUnblankBeam()
+                # We can now update hfw (range may have changed in the meantime)
+                rng = self.parent._device.GetSEMHFWRange()
+                current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
+                self.parent._device.SetSEMHFW(current_fov)
+                # horizontalFoV setter would fail to call .SetSEMHFW()
+
+    def _setPower(self, value):
+        if value == self.power.value:
+            return value
+
+        if value:
+            self.parent._device.SEMUnblankSource()
+        else:
+            self.parent._device.SEMBlankSource()
+
+        return value
 
     def _updateMagnification(self):
 
@@ -490,43 +532,12 @@ class Scanner(model.Emitter):
             self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
-        # When the voltage changes, the tilt values are updated.
-        # As we (used to) use tilt to blank the beam, if the voltage is changed
-        # while acquisition is not running, the beam would be unblanked.
-        # Thus we keep and reset the last known source tilt
-        if not self.parent._blank_supported:
-            current_tilt = self.parent._device.GetSEMSourceTilt()
-
         self.parent._device.SEMSetHighTension(-volt)
-
-        if not self.parent._blank_supported:
-            new_tilt = self.parent._device.GetSEMSourceTilt()
-            if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
-                self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
-                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                              volt, self.spotSize.value, self.parent._detector._tilt_unblank)
-            if (current_tilt.aX, current_tilt.aY) == TILT_BLANK:
-                self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
-        # Brightness and contrast have to be adjusted just once
-        # we set up the detector (see SEMACB())
-        # TODO reset the beam shift so it is within boundaries
 
     def _setSpotSize(self, value):
         # Set the corresponding spot size to Phenom SEM
         try:
-            if self.parent._blank_supported:
-                self.parent._device.SEMSetSpotSize(value)
-            else:
-                # Tilt, which we use to emulate blanking, is per spot size
-                current_tilt = self.parent._device.GetSEMSourceTilt()
-                self.parent._device.SEMSetSpotSize(value)
-                new_tilt = self.parent._device.GetSEMSourceTilt()
-                if (new_tilt.aX, new_tilt.aY) != TILT_BLANK:
-                    self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
-                    logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                                  self.accelVoltage.value, value, self.parent._detector._tilt_unblank)
-                if (current_tilt.aX, current_tilt.aY) == TILT_BLANK:
-                    self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
+            self.parent._device.SEMSetSpotSize(value)
         except suds.WebFault:
             logging.debug("Cannot set spot size (is the sample in SEM position?)", exc_info=True)
             return self.spotSize.value
@@ -652,11 +663,19 @@ class Scanner(model.Emitter):
         limit = rng.max
         # The ratio between the shift distance and the limit
         ratio = 1
-        if shift_d > limit:
-            ratio = shift_d / limit
+        if shift_d > limit and shift_d > 0:
+            logging.debug("Shift range is %g->%g, will clip %s", rng.min, rng.max, value)
+            ratio = limit / shift_d
         # Clip within limit
-        clipped_shift = (value[0] / ratio, value[1] / ratio)
+        clipped_shift = (value[0] * ratio, value[1] * ratio)
         return clipped_shift
+
+    def terminate(self):
+        # Unblank the beam, in case the Phenom should be used as-is
+        try:
+            self.parent._scanner._blank_beam(False)
+        except suds.WebFault as ex:
+            logging.info("Beam might still be blanked (%s)", ex)
 
 
 class Detector(model.Detector):
@@ -674,13 +693,6 @@ class Detector(model.Detector):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
-        self._high_fr = False
-        if splittedname(self._swVersion) > splittedname(LOW_FR_VERSION):
-            self._high_fr = True
-            logging.debug("High frame rate will be used.")
-        else:
-            logging.debug("Low frame rate will be used.")
-
         # will take care of executing autocontrast asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -688,26 +700,21 @@ class Detector(model.Detector):
         self.bpp = model.IntEnumerated(8, {8, 16}, unit="")
 
         # HW contrast and brightness
-        self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
-        self.contrast.subscribe(self._onContrast)
-        self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
-        self.brightness.subscribe(self._onBrightness)
+        self.contrast = model.FloatContinuous(0.5, [0, 1], unit="",
+                                              setter=self._setContrast)
+        self.brightness = model.FloatContinuous(0.5, [0, 1], unit="",
+                                                setter=self._setBrightness)
 
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
+        # For the auto-blanker to know we are not acquiring at initialisation
+        self._acquisition_must_stop.set()
 
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
-
-        # On (old) Phenom which don't support blanking, we emulate the blanking
-        # by setting a large tilt.
-        # This is the last tilt value when unblanked.
-        # Note the tilt value is per spot size and voltage. So changes of these
-        # values will reset the tilt (to the original calibrated values).
-        self._tilt_unblank = None  # Updated by the chamber pressure
 
         # Start dedicated connection for acquisition stream
         acq_client = Client(self.parent._host + "?om", location=self.parent._host,
@@ -729,30 +736,13 @@ class Detector(model.Detector):
         """
         Trigger Phenom's AutoContrast
         """
-        if not self.parent._blank_supported:
-            # Check if we need to temporarily unblank the ebeam
-            cur_tilt = self.parent._device.GetSEMSourceTilt()
-            beam_blanked = ((cur_tilt.aX, cur_tilt.aY) == TILT_BLANK)
-            if beam_blanked:
-                try:
-                    # "Unblank" the beam
-                    self.parent._scanner.blanker.value = False
-                except suds.WebFault:
-                    logging.warning("Beam might still be blanked!")
         with self.parent._acq_progress_lock:
             self.parent._device.SEMACB()
-        if not self.parent._blank_supported:
-            if beam_blanked:
-                try:
-                    # "Blank" the beam
-                    self.parent._scanner.blanker.value = True
-                except suds.WebFault:
-                    logging.warning("Beam might still be unblanked!")
         # Update with the new values after automatic procedure is completed
         self._updateContrast()
         self._updateBrightness()
 
-    def _onContrast(self, value):
+    def _setContrast(self, value):
         with self.parent._acq_progress_lock:
             # Actual range in Phenom is (0,4]
             contr = numpy.clip(4 * value, 0.00001, 4)
@@ -760,24 +750,27 @@ class Detector(model.Detector):
                 self.parent._device.SetSEMContrast(contr)
             except suds.WebFault:
                 logging.debug("Setting SEM contrast may be unsuccessful")
+            return contr / 4
 
-    def _onBrightness(self, value):
+    def _setBrightness(self, value):
         with self.parent._acq_progress_lock:
             try:
                 self.parent._device.SetSEMBrightness(value)
             except suds.WebFault:
                 logging.debug("Setting SEM brightness may be unsuccessful")
+            return value
 
     def _updateContrast(self):
         """
         Reads again the hardware setting and update the VA
         """
-        contr = (self.parent._device.GetSEMContrast() / 4)
+        contr = self.parent._device.GetSEMContrast() / 4
         contr = self.contrast.clip(contr)
 
-        # we don't set it explicitly, to avoid calling .onContrast()
-        self.contrast._value = contr
-        self.contrast.notify(contr)
+        # we don't set it explicitly, to avoid calling .setContrast()
+        if contr != self.contrast.value:
+            self.contrast._value = contr
+            self.contrast.notify(contr)
 
     def _updateBrightness(self):
         """
@@ -786,9 +779,10 @@ class Detector(model.Detector):
         bright = self.parent._device.GetSEMBrightness()
         bright = self.brightness.clip(bright)
 
-        # we don't set it explicitly, to avoid calling .onBrightness()
-        self.brightness._value = bright
-        self.brightness.notify(bright)
+        # we don't set it explicitly, to avoid calling .setBrightness()
+        if bright != self.brightness.value:
+            self.brightness._value = bright
+            self.brightness.notify(bright)
 
     def update_parameters(self):
         # Update stage and focus position
@@ -801,24 +795,29 @@ class Detector(model.Detector):
         fov = self._acq_device.GetSEMHFW()
         # take care of small deviations
         fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
-        self.parent._scanner.horizontalFoV.value = fov
+        if fov != self.parent._scanner.horizontalFoV.value:
+            self.parent._scanner.horizontalFoV._value = fov
+            self.parent._scanner.horizontalFoV.notify(fov)
 
         rotation = self._acq_device.GetSEMRotation()
-        self.parent._scanner.rotation.value = -rotation
+        if -rotation != self.parent._scanner.rotation.value:
+            self.parent._scanner.rotation._value = -rotation
+            self.parent._scanner.rotation.notify(-rotation)
 
         volt = self._acq_device.SEMGetHighTension()
-        self.parent._scanner.accelVoltage.value = -volt
+        if -volt != self.parent._scanner.accelVoltage.value:
+            self.parent._scanner.accelVoltage._value = -volt
+            self.parent._scanner.accelVoltage.notify(-volt)
 
         # Get current spot size
         spotSize = self._acq_device.SEMGetSpotSize()
-        self.parent._scanner.spotSize.value = spotSize
+        if spotSize != self.parent._scanner.spotSize.value:
+            self.parent._scanner.spotSize._value = spotSize
+            self.parent._scanner.spotSize.notify(spotSize)
 
         # Update all Detector VAs
-        contr = (self._acq_device.GetSEMContrast() / 4)
-        # Handle cases where Phenom returns weird values
-        self.parent._detector.contrast.value = self.parent._detector.contrast.clip(contr)
-        bright = self._acq_device.GetSEMBrightness()
-        self.parent._detector.brightness.value = self.parent._detector.brightness.clip(bright)
+        self._updateContrast()
+        self._updateBrightness()
 
     def start_acquire(self, callback):
         # Check if Phenom is in the proper mode
@@ -827,62 +826,35 @@ class Detector(model.Detector):
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
-            try:
-                # "Unblank" the beam
-                self.parent._scanner.blanker.value = False
-                # Wait until it's indeed unblanked
-                while (self.parent._scanner.blanker.value):
-                    time.sleep(1)
-                    continue
-            except suds.WebFault:
-                logging.warning("Beam might still be blanked!")
-            target = self._acquire_thread
-            self._acquisition_thread = threading.Thread(target=target,
+            if self.parent._scanner.blanker.value is None:
+                try:
+                    self.parent._scanner._blank_beam(False)
+                except suds.WebFault:
+                    logging.warning("Beam might still be blanked!", exc_info=True)
+            elif self.parent._scanner.blanker.value:
+                logging.warning("Starting acquisition while the beam is blanked")
+            self._acquisition_thread = threading.Thread(target=self._acquire_thread,
                     name="PhenomSEM acquire flow thread",
                     args=(callback,))
             self._acquisition_thread.start()
-
-    @isasync
-    def beam_blank(self, blank):
-        return self._executor.submit(self._beam_blank, blank)
-
-    def _beam_blank(self, blank):
-        """
-        (Un)blank the beam
-        blank (boolean): If True, will blank the beam, otherwise will unblank it
-        """
-        with self.parent._acq_progress_lock:
-            if blank:
-                if self.parent._blank_supported:
-                    self.parent._device.SEMBlankBeam()
-                else:
-                    self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-            else:
-                if self.parent._blank_supported:
-                    self.parent._device.SEMUnblankBeam()
-                    # FIXME: we can now update hfw, range may have changed in the meantime
-                    rng = self.parent._device.GetSEMHFWRange()
-                    current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
-                    self.parent._device.SetSEMHFW(current_fov)
-                    # horizontalFoV setter would fail to call .SetSEMHFW()
-                else:
-                    self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
-                    logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                                  self.parent._scanner.accelVoltage.value, self.parent._scanner.spotSize.value, self._tilt_unblank)
 
     def stop_acquire(self):
         with self._acquisition_lock, self._acquisition_init_lock:
             self._acquisition_must_stop.set()
             try:
+                # TODO: it seems that in some cases, if the acquisition has just
+                # started, this will fail (and then the whole acquisition will
+                # go on until its end)
                 self._acq_device.SEMAbortImageAcquisition()
-            except suds.WebFault:
-                logging.debug("No acquisition in progress to be aborted.")
+            except suds.WebFault as ex:
+                logging.debug("No acquisition in progress to be aborted. (%s)", ex)
 
-            # "Blank" the beam
-            self.parent._scanner.blanker.value = True
-            # Wait until it's indeed blanked
-            while not self.parent._scanner.blanker.value:
-                time.sleep(1)
+            # Blank the beam if needed
+            if self.parent._scanner.blanker.value is None:
+                try:
+                    self.parent._scanner._blank_beam(True)
+                except suds.WebFault:
+                    logging.warning("Beam might still be unblanked!", exc_info=True)
 
     def _wait_acquisition_stopped(self):
         """
@@ -957,10 +929,7 @@ class Detector(model.Detector):
             scale = self.parent._scanner._scale
             # Set dataType based on current bpp value
             bpp = self.bpp.value
-            if bpp == 16:
-                dataType = numpy.uint16
-            else:
-                dataType = numpy.uint8
+            dataType = {8: numpy.uint8, 16: numpy.uint16}[bpp]
 
             # update changed metadata
             metadata = self.parent._metadata.copy()
@@ -1068,11 +1037,9 @@ class Detector(model.Detector):
                     logging.debug("Acquiring full image accumulation")
                     img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
                 else:
-                    if self._high_fr and bpp == 8:
+                    if bpp == 8:
                         img_str = self._acq_device.SEMGetLiveImageCopy(0)
                     else:
-                        # This is to avoid using high frame rate in Phenom versions
-                        # that misbehave with frequent SEMGetLiveImageCopy calls
                         img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
 
                 # Use the metadata from the string to update some metadata
@@ -1085,9 +1052,12 @@ class Detector(model.Detector):
                                                  img_str.aAcqState.pixelHeight * fovscale)
                 metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
 
-                # image to ndarray
+                dtype = {8: numpy.uint8, 16: numpy.uint16}[img_str.image.descriptor.bits]
+                if dtype != dataType:
+                    logging.warning("Expected image of data type %s but got %s",
+                                    dataType, dtype)
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
-                                           dtype=dataType)
+                                           dtype=dtype)
                 sem_img.shape = res[::-1]
                 logging.debug("Returning SEM image of %s with %d bpp and %d frames",
                               res, bpp, nframes)
@@ -1124,14 +1094,6 @@ class Detector(model.Detector):
 
     def terminate(self):
         logging.info("Terminating SEM stream...")
-        try:
-            self.parent._scanner.blanker.value = False
-            # Wait until it's indeed unblanked
-            while (self.parent._scanner.blanker.value):
-                time.sleep(1)
-                continue
-        except suds.WebFault:
-            logging.warning("Beam might still be blanked!")
         if self._executor:
             self._executor.shutdown()
             self._executor = None
@@ -1403,6 +1365,13 @@ class EbeamFocus(PhenomFocus):
     """
     def __init__(self, name, role, parent, axes, **kwargs):
         rng = parent._device.GetSEMWDRange()
+        # Some firmware versions of the Phenom sometimes return incorrect range
+        # (eg, when e-beam is not active).
+        # TODO: update the range as soon as the SEM area is reached.
+        if rng.max - rng.min < 1e-9:
+            logging.warning("SEM focus range reported is %s. Will replace by 1m", rng)
+            rng.min = 0
+            rng.max = 1
 
         PhenomFocus.__init__(self, name, role, parent=parent, axes=axes,
                              rng=(rng.min, rng.max), **kwargs)
@@ -1659,7 +1628,7 @@ class NavCamFocus(PhenomFocus):
 PRESSURE_UNLOADED = 1e05  # Pa
 PRESSURE_NAVCAM = 1e04  # Pa
 PRESSURE_SEM = 1e-02  # Pa
-VACUUM_TIMEOUT = 5  # s
+
 class ChamberPressure(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
@@ -1715,27 +1684,23 @@ class ChamberPressure(model.Actuator):
         self.registeredSampleHolder = model.BooleanVA(False, readonly=True)
 
         # VA connected to the door status, True if door is open
-        door_status = self._pressure_device.GetDoorStatus()
-        self._opened = (door_status == 'STAGE-DOOR-STATUS-OPEN')
-        self.opened = model.BooleanVA(self._opened, readonly=True)
+        self.opened = model.BooleanVA(False, readonly=True)
+        self._updateOpened()
 
         self._updatePosition()
+        if self._position == PRESSURE_SEM:
+            self.parent._detector.update_parameters()
         self._updateSampleHolder()
 
-        # Start thread that continuously listens to chamber state changes
-        chamber_client = Client(self.parent._host + "?om", location=self.parent._host,
-                        username=self.parent._username, password=self.parent._password,
-                        timeout=SOCKET_TIMEOUT)
-        self._chamber_device = chamber_client.service
-        # Event to indicate that any move requested by the user has been
-        # completed and thus position can be updated
-        self._chamber_event = threading.Event()
-        self._chamber_event.set()
-        # Event to prevent move applied from the user while another move is
-        # in progress
-        self._move_event = threading.Event()
-        self._move_event.set()
-        # Event to prevent future from returning before position is updated
+        # Lock taken while "pressure" (= sample loader) is changing, to prevent
+        # position update too early
+        self._pressure_changing = threading.Lock()
+        # Event to prevent move to start while another move initiated from the
+        # Phenom GUI is in progress
+        self._move_in_progress = threading.Event()
+        self._move_in_progress.set() # by default
+        # Event indicating position has been updated (after a move), to prevent
+        # future from returning before the position is updated
         self._position_event = threading.Event()
         self._position_event.set()
 
@@ -1752,25 +1717,22 @@ class ChamberPressure(model.Actuator):
         """
         update the position VA and .pressure VA
         """
-        logging.debug("About to update chamber position...")
+        logging.debug("Updating chamber position...")
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
-        logging.debug("Targeted area: %s", area)
-        if area == "LOADING-WORK-AREA-SEM":
-            # Once moved in SEM, get current tilt and use as beam unblank value
-            # Then blank the beam and unblank it once SEM stream is started
-            self.parent._detector.update_parameters()
-            self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
-            self.parent._scanner.blanker.value = True
-            self._position = PRESSURE_SEM
-        elif area == "LOADING-WORK-AREA-NAVCAM":
-            self._position = PRESSURE_NAVCAM
-        else:
+        logging.debug("Latest targeted area: %s", area)
+        # TODO: use OperationalMode instead?
+        try:
+            self._position = {"LOADING-WORK-AREA-SEM": PRESSURE_SEM,
+                              "LOADING-WORK-AREA-NAVCAM": PRESSURE_NAVCAM,
+                              "LOADING-WORK-AREA-UNLOAD": PRESSURE_UNLOADED,
+                              }[area]
+        except KeyError:
+            logging.warning("Unknown area %s, will assume it's unloaded", area)
             self._position = PRESSURE_UNLOADED
 
         # .position contains the last known/valid position
         # it's read-only, so we change it via _value
-        self.position._value = {"pressure": self._position}
-        self.position.notify(self.position.value)
+        self.position._set_value({"pressure": self._position}, force_write=True)
         logging.debug("Chamber in position: %s", self._position)
 
     def _updateSampleHolder(self):
@@ -1790,20 +1752,15 @@ class ChamberPressure(model.Actuator):
         # sample holder is registered
         registered = (holder.status == "SAMPLE-PRESENT")
 
-        self.sampleHolder._value = val
-        self.registeredSampleHolder._value = registered
-        self.sampleHolder.notify(val)
-        self.registeredSampleHolder.notify(registered)
+        self.sampleHolder._set_value(val, force_write=True)
+        self.registeredSampleHolder._set_value(registered, force_write=True)
 
     def _updateOpened(self):
         """
         update the opened VA
         """
-        door_status = self._pressure_device.GetDoorStatus()
-        self._opened = (door_status == 'STAGE-DOOR-STATUS-OPEN')
-
-        self.opened._value = self._opened
-        self.opened.notify(self._opened)
+        opened = (self._pressure_device.GetDoorStatus() == 'STAGE-DOOR-STATUS-OPEN')
+        self.opened._set_value(opened, force_write=True)
 
     @isasync
     def moveRel(self, shift):
@@ -1832,7 +1789,7 @@ class ChamberPressure(model.Actuator):
         f.task_canceller = self._CancelMove
         f._move_lock = threading.Lock()
 
-        return self._executor.submitf(f, self._changePressure, f, pos)
+        return self._executor.submitf(f, self._changePressure, f, pos["pressure"])
 
     def stop(self, axes=None):
         # Empty the queue for the given axes
@@ -1870,71 +1827,114 @@ class ChamberPressure(model.Actuator):
         updater = functools.partial(self._updateTime, future, p)
         TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
         TimeUpdater.start()
-        self._chamber_event.clear()
-        self._move_event.wait()
-        with self.parent._acq_progress_lock:
-            logging.debug("Moving to another chamber state...")
+        self._move_in_progress.wait()
+        with self._pressure_changing, self.parent._acq_progress_lock:
             try:
-                if p["pressure"] == PRESSURE_SEM:
-                    if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+                instmode = self._pressure_device.GetInstrumentMode()
+                semmode = self._pressure_device.GetSEMDeviceMode()
+                logging.debug("Moving to chamber pressure %g (Phenom currently in %s/%s)...",
+                              p, instmode, semmode)
+                if p == PRESSURE_SEM:
+                    # Both instrument and SEM modes report standby state, but
+                    # SEM is what really matters, so care about it most.
+                    if instmode != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                    semmod = self._pressure_device.GetSEMDeviceMode()
-                    if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
-                        # If in standby or currently waking up, open event channel
+                    if semmode not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         self._wakeUp(future)
+
                     if future._move_state == CANCELLED:
                         raise CancelledError()
-                    try:
-                        self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
-                    except suds.WebFault:
-                        # TODO, check why this exception appears only in CRUK
-                        logging.debug("Move appears not to be completed.")
+
+                    # If it's already in the right place, we are done (important
+                    # as we'll never receive a new event)
+                    opmode = self._pressure_device.GetOperationalMode()
+                    if opmode == "OPERATIONAL-MODE-LIVESEM":
+                        logging.debug("Device already in %s", opmode)
+                        return
+
+                    # It's "almost blocking": it waits until the stage has
+                    # finished its move, but doesn't fully wait until the
+                    # new operational mode is reached. Moreover, immediately
+                    # GetOperationalMode() returns the new mode, quite
+                    # before the event is sent and the system is actually ready.
+                    self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
                     TimeUpdater.cancel()
-                    # Take care of the calibration that takes place when we move to SEM
-                    if self.parent._phenom_gui:
-                        # Allow few phenom api acquisitions before you start acquiring
-                        # via odemis. An alternative would be to wait for the second
-                        # ACB performed by phenom API each time we load to SEM.
-                        self._waitForDevice("SEM-IMAGE-UPDATED-CHANGED-ID", 25)
-                elif p["pressure"] == PRESSURE_NAVCAM:
-                    if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+
+                    # Typically, it will first go to ACQUIRESEMIMAGE, then LIVESEM
+                    try:
+                        while True:
+                            evt = self._waitForEvent("OPERATIONAL-MODE-CHANGED-ID", 20)
+                            opmode = evt.OperationalModeChanged.opMode
+                            logging.debug("Operational mode is now %s", opmode)
+                            if opmode == "OPERATIONAL-MODE-LIVESEM":
+                                break
+                            elif opmode != "OPERATIONAL-MODE-ACQUIRESEMIMAGE":
+                                logging.warning("Excepted to reach SEM mode, but got mode %s", opmode)
+                    except IOError:
+                        logging.warning("Failed to receive operational mode event", exc_info=True)
+
+                elif p == PRESSURE_NAVCAM:
+                    # We could move to NavCam without waiting to wake up.
+                    # We force first a wake-up as a "hack" so that in the very
+                    # likely case the user goes to SEM mode afterwards, the total
+                    # needed time is counted as soon as loading starts.
+                    if instmode != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                    # Typically we can now move to NavCam without waiting to wake up.
-                    # We only open the channel in order to obtain the updates in
-                    # waking up remaining time, assuming that eventually we will
-                    # try to move to the SEM.
-                    semmod = self._pressure_device.GetSEMDeviceMode()
-                    if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
+                    if semmode not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         self._wakeUp(future)
+
                     if future._move_state == CANCELLED:
                         raise CancelledError()
+
+                    # If it's already in the right place, we are done (important
+                    # as we'll never receive a new event)
+                    opmode = self._pressure_device.GetOperationalMode()
+                    if opmode == "OPERATIONAL-MODE-LIVENAVCAM":
+                        logging.debug("Device already in %s", opmode)
+                        return
+
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     TimeUpdater.cancel()
-                    # Wait for NavCam
-                    if self.parent._phenom_gui:
-                        # just a workaround for the unexpected navcam image event when
-                        # loading to SEM
-                        self._waitForDevice("NAV-CAM-IMAGE-UPDATED-CHANGED-ID", 2)
-                else:
+
+                    # Typically, it will first go to ACQUIRENAVCAMIMAGE, then LIVENAVCAM
+                    try:
+                        while True:
+                            evt = self._waitForEvent("OPERATIONAL-MODE-CHANGED-ID", 10)
+                            opmode = evt.OperationalModeChanged.opMode
+                            logging.debug("Operational mode is now %s", opmode)
+                            if opmode == "OPERATIONAL-MODE-LIVENAVCAM":
+                                break
+                            elif opmode != "OPERATIONAL-MODE-ACQUIRENAVCAMIMAGE":
+                                logging.warning("Excepted to reach NavCam mode, but got mode %s", opmode)
+                    except IOError:
+                        logging.warning("Failed to receive operational mode event", exc_info=True)
+
+                elif p == PRESSURE_UNLOADED:
                     self._pressure_device.UnloadSample()
                     TimeUpdater.cancel()
-            except suds.WebFault:
-                logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
-        self._chamber_event.set()
-        # Wait for position to be updated
-        self._position_event.wait()
+                else:
+                    raise ValueError("Unexpected pressure %g", p)
+            except Exception as ex:
+                logging.exception("Failed to move to pressure %g: %s", p, ex)
+                raise
 
-    def _updateTime(self, future, target):
+        # Wait for position to be updated (via the chamber_move event listener thread)
+        self._position_event.wait(10)
+        logging.debug("Move to pressure %g completed", p)
+
+    def _updateTime(self, future, pressure):
         try:
-            remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-            area = self.parent._device.GetProgressAreaSelection().target
+            prog_info = self.parent._device.GetProgressAreaSelection()
+            remainingTime = prog_info.progress.timeRemaining
+            area = prog_info.target
             if area == "LOADING-WORK-AREA-SEM":
-                waiting_time = 6
+                waiting_time = 10
             else:
                 waiting_time = 0
             future.set_progress(end=time.time() + self.wakeUpTime + remainingTime + waiting_time)
         except suds.WebFault:
-            logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
+            logging.warning("Time updater failed while moving to pressure %g.",
+                            pressure, exc_info=True)
 
     def registerSampleHolder(self, code):
         """
@@ -1960,119 +1960,142 @@ class ChamberPressure(model.Actuator):
             raise ValueError("Wrong sample holder registration code")
 
     def _wakeUp(self, future):
+        """
+        Wakes up the system (if it's in suspended or hibernation state).
+        It's blocking, and will take care of updating the wake up time
+        """
+        logging.debug("Waiting for instrument to wake up")
         # Make sure system is waking up
         self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
 
         # Event for remaining time update
-        eventID = "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID"
         eventSpec = self.parent._objects.create('ns0:EventSpec')
-        eventSpec.eventID = eventID
+        eventSpec.eventID = "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID"
         eventSpec.compressed = False
-
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
         eventSpecArray.item = [eventSpec]
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
-        while(True):
+        while True:
             if future._move_state == CANCELLED:
                 break
-            self.wakeUpTime = self._pressure_device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
-            logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
-            if self.wakeUpTime == 0:
-                break
+            new_evts = self._pressure_device.ReadEventChannel(ch_id)
+            if new_evts == "":
+                logging.debug("Event listener timeout")
+                continue
+
+            new_evt_id = new_evts[0][0].eventID
+            if new_evt_id == "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID":
+                self.wakeUpTime = new_evts[0][0].SEMProgressDeviceModeChanged.timeRemaining
+                logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
+                if self.wakeUpTime == 0:
+                    break
+            else:
+                logging.warning("Unexpected event %s received", new_evt_id)
+
         self._pressure_device.CloseEventChannel(ch_id)
-        # Wait before move
+
+        # Wait a little, to be really sure
         time.sleep(1)
 
-    def _waitForDevice(self, event, frames):
-        logging.debug("Waiting for %d %s events", frames, event)
-        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+    def _waitForEvent(self, evtid, timeout=None):
+        """
+        evtid (str or int): the ID of the event to wait for
+        timeout (None or 0<float): maximum time to wait (in s). Note: it's very
+          rough, as the check might happen only every ~30s.
+        return (Event): the event received
+        raise IOError: in case of timeout
+        """
+        logging.debug("Waiting for a %s event", evtid)
 
         eventSpec = self.parent._objects.create('ns0:EventSpec')
-        eventSpec.eventID = event
+        eventSpec.eventID = evtid
         eventSpec.compressed = False
-
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
         eventSpecArray.item = [eventSpec]
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
-
-        api_frames = 0
-        while(True):
-            logging.debug("Device wait function about to read event...")
-            expected_event = self._pressure_device.ReadEventChannel(ch_id)
-            if expected_event == "":
-                logging.debug("Event listener timeout")
-            else:
-                newEvent = expected_event[0][0].eventID
-                logging.debug("Try to read event: %s", newEvent)
-                if (newEvent == event):
-                    api_frames += 1
-                    if api_frames >= frames:
-                        break
+        try:
+            tstart = time.time()
+            while timeout is None or time.time() - tstart < timeout:
+                new_evts = self._pressure_device.ReadEventChannel(ch_id)
+                if new_evts == "":
+                    logging.debug("Event listener timeout")
+                    continue
+                new_evt_id = new_evts[0][0].eventID
+                logging.debug("Received event: %s", new_evt_id)
+                if new_evt_id == evtid:
+                    return new_evts[0][0]
                 else:
-                    logging.warning("Unexpected event received")
-        self._pressure_device.CloseEventChannel(ch_id)
-        # Wait before allow acquisition
-        time.sleep(1)
+                    logging.warning("Unexpected event %s received", new_evt_id)
+            else:
+                raise IOError("Timeout waiting for event %s" % (evtid,))
+        finally:
+            self._pressure_device.CloseEventChannel(ch_id)
 
     def _chamber_move_thread(self):
         """
         Thread that listens to changes in Phenom chamber pressure.
         """
+        client = Client(self.parent._host + "?om", location=self.parent._host,
+                        username=self.parent._username, password=self.parent._password,
+                        timeout=SOCKET_TIMEOUT)
+        device = client.service
+
         eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+        eventSpecArray.item = []
+        for evtid in ("PROGRESS-AREA-SELECTION-CHANGED-ID", # sample holder move
+                      "SAMPLEHOLDER-STATUS-CHANGED-ID",  # sample holder insertion
+                      "DOOR-STATUS-CHANGED-ID"):  # door open/closed
+            eventSpec = self.parent._objects.create('ns0:EventSpec')
+            eventSpec.eventID = evtid
+            eventSpec.compressed = False
+            eventSpecArray.item.append(eventSpec)
 
-        # Event for performed sample holder move
-        eventID1 = "PROGRESS-AREA-SELECTION-CHANGED-ID"
-        eventSpec1 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec1.eventID = eventID1
-        eventSpec1.compressed = False
-
-        # Event for sample holder insertion
-        eventID2 = "SAMPLEHOLDER-STATUS-CHANGED-ID"
-        eventSpec2 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec2.eventID = eventID2
-        eventSpec2.compressed = False
-
-        # Event for door status change
-        eventID3 = "DOOR-STATUS-CHANGED-ID"
-        eventSpec3 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec3.eventID = eventID3
-        eventSpec3.compressed = False
-
-        eventSpecArray.item = [eventSpec1, eventSpec2, eventSpec3]
-        ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
+        ch_id = device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
                 logging.debug("Chamber move thread about to read event...")
-                expected_event = self._pressure_device.ReadEventChannel(ch_id)
-                if expected_event == "":
+                new_evts = self._pressure_device.ReadEventChannel(ch_id)
+                if new_evts == "":
                     logging.debug("Event listener timeout")
-                else:
-                    newEvent = expected_event[0][0].eventID
-                    logging.debug("Try to read event: %s", newEvent)
-                    if newEvent == eventID1:
-                        try:
-                            time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
-                            logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
-                            if time_remaining == 0:
-                                # Move in progress is completed
-                                self._move_event.set()
-                                # Wait until any move performed by the user is completed
-                                self._chamber_event.wait()
+                    continue
+
+                new_evt_id = new_evts[0][0].eventID
+                logging.debug("Received event: %s", new_evt_id)
+                if new_evt_id == "PROGRESS-AREA-SELECTION-CHANGED-ID":
+                    try:
+                        time_remaining = new_evts[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
+                        logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
+                        if time_remaining == 0:
+                            # Move in progress is completed
+                            self._move_in_progress.set()
+                            # Wait until any pressure move requested by us is completed
+                            with self._pressure_changing:
                                 self._updatePosition()
-                                self._position_event.set()
-                            else:
-                                self._move_event.clear()
-                                self._position_event.clear()
-                        except Exception:
-                            logging.warning("Received event does not have the expected attribute or format")
-                    elif newEvent == eventID2:
-                        logging.debug("Sample holder insertion, about to update sample holder id if needed")
-                        self._updateSampleHolder()  # in case new sample holder was loaded
-                    elif newEvent == eventID3:
-                        logging.debug("Door status changed")
-                        self._updateOpened()  # in case door status is changed
-                    else:
-                        logging.warning("Unexpected event received")
+
+                            # When moved to SEM position, blank ASAP
+                            if self._position == PRESSURE_SEM:
+                                self.parent._detector.update_parameters()
+                                if self.parent._scanner.blanker.value in (None, True):
+                                    try:
+                                        self.parent._scanner._blank_beam(True)
+                                    except suds.WebFault as ex:
+                                        logging.warning("Failed to blank the beam when moving to SEM mode: %s", ex)
+
+                            self._position_event.set()
+                        else:
+                            self._move_in_progress.clear()
+                            self._position_event.clear()
+                    except Exception:
+                        logging.warning("Received event does not have the expected attribute or format")
+                elif new_evt_id == "SAMPLEHOLDER-STATUS-CHANGED-ID":
+                    logging.debug("Sample holder insertion, about to update sample holder id if needed")
+                    self._updateSampleHolder()  # in case new sample holder was loaded
+                elif new_evt_id == "DOOR-STATUS-CHANGED-ID":
+                    logging.debug("Door status changed")
+                    self._updateOpened()  # in case door status is changed
+                else:
+                    logging.warning("Unexpected event received")
         except Exception:
             logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             # Update the state of SEM component so the backend is aware of the error occured
@@ -2084,7 +2107,7 @@ class ChamberPressure(model.Actuator):
                                                       name="Phenom reconnection attempt")
             self._reconnect_thread.start()
         finally:
-            self._chamber_device.CloseEventChannel(ch_id)
+            device.CloseEventChannel(ch_id)
             logging.debug("Chamber pressure thread closed")
             self._chamber_must_stop.clear()
 
