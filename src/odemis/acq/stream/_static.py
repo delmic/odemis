@@ -46,45 +46,102 @@ class StaticStream(Stream):
     def __init__(self, name, raw):
         """
         Note: parameters are different from the base class.
-        image (DataArray): static raw data.
-        raw (None or list of DataArrays): raw data to be used at initialisation
-          by default, it will contain no data.(None or list of DataArrays)
+        raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
+        if isinstance(raw, model.DataArray):
+            raw = [raw]
+        elif isinstance(raw, list):
+            if len(raw) > 0 and not isinstance(raw[0], model.DataArray):
+                raise ValueError("'raw' must be a list of DataArray")
+        elif isinstance(raw, model.DataArrayShadow):
+            if hasattr(raw, 'maxzoom'):
+                md = raw.metadata
+                # get the pixel size of the full image
+                ps = md[model.MD_PIXEL_SIZE]
+                default_mpp = ps[0] * raw.maxzoom ** 2
+                # sets the mpp as the X axis of the pixel size of the full image
+                mpp_rng = (ps[0], default_mpp)
+                self.mpp = model.FloatContinuous(default_mpp, mpp_rng, setter=self._set_mpp)
+
+                full_rect = img._getBoundingBox(raw)
+                l, t, r, b = full_rect
+                mpp_range = ((l, t, l, t), (r, b, r, b))
+                self.rect = model.TupleContinuous(full_rect, mpp_range, setter=self._set_rect)
+            else:
+                # If raw does not have maxzoom,
+                # StaticStream should behave as when raw is a DataArray
+                raw = [raw.getData()]
+        else:
+            raise ValueError("'raw' must be a list of DataArray or a DataArrayShadow")
+
         super(StaticStream, self).__init__(name, None, None, None, raw=raw)
 
+    def _set_mpp(self, mpp):
+        self._shouldUpdateImage()
+
+        md = self._das.metadata
+        ps = md[model.MD_PIXEL_SIZE]
+        exp = math.log(mpp / ps[0], 2.0)
+        exp = round(exp, 0)
+        return ps[0] * 2 ** exp
+
+    def _set_rect(self, rect):
+        self._shouldUpdateImage()
+        return rect
 
 class RGBStream(StaticStream):
     """
     A static stream which gets as input the actual RGB image
     """
-    def __init__(self, name, image):
+    def __init__(self, name, raw):
         """
         Note: parameters are different from the base class.
-        image (DataArray of shape YX3): image to display.
-          The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
+        raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
         # Check it's 2D
-        if not (len(image.shape) == 3 and image.shape[2] in [3, 4]):
-            raise ValueError("Data must be RGB(A)")
+        if isinstance(raw, model.DataArray) or isinstance(raw, model.DataArrayShadow):
+            if not (len(raw.shape) == 3 and raw.shape[2] in [3, 4]):
+                raise ValueError("Data must be RGB(A)")
+        elif isinstance(raw, list):
+            for r in raw:
+                if not (len(r.shape) == 3 and r.shape[2] in [3, 4]):
+                    raise ValueError("Data must be RGB(A)")
+        super(RGBStream, self).__init__(name, raw)
 
-        super(RGBStream, self).__init__(name, [image])
+    def _projectTile(self, tile):
+        tile = img.ensureYXC(tile)
+        tile.flags.writeable = False
+        # merge and ensures all the needed metadata is there
+        tile.metadata = self._find_metadata(tile.metadata)
+        tile.metadata[model.MD_DIMS] = "YXC" # RGB format
+        return tile
 
     # Copy from RGBCameraStream
     def _updateImage(self):
         # Just pass the RGB data on
 
-        if not self.raw:
+        if not self.raw and isinstance(self.raw, list):
             return
 
         # TODO: use original image as raw, to allow changing the B/C/tint
         try:
-            data = self.raw[0]
-            rgbim = img.ensureYXC(data)
-            rgbim.flags.writeable = False
-            # merge and ensures all the needed metadata is there
-            rgbim.metadata = self._find_metadata(rgbim.metadata)
-            rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
-            self.image.value = rgbim
+            if isinstance(self.raw, list):
+                data = self.raw[0]
+                rgbim = img.ensureYXC(data)
+                rgbim.flags.writeable = False
+                # merge and ensures all the needed metadata is there
+                rgbim.metadata = self._find_metadata(rgbim.metadata)
+                rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
+                self.image.value = rgbim
+            elif isinstance(self.raw, tuple):
+                # .raw is an instance of DataArrayShadow, so .image is
+                # a tuple of tuple of tiles
+                (raw_tiles, projected_tiles) = self._getTilesFromSelectedArea()
+                self.image.value = projected_tiles
+                self.raw = raw_tiles
+            else:
+                raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
@@ -94,20 +151,24 @@ class Static2DStream(StaticStream):
     Stream containing one static image.
     For testing and static images.
     """
-    def __init__(self, name, image):
+    def __init__(self, name, raw):
         """
         Note: parameters are different from the base class.
-        image (DataArray of shape (111)YX): static raw data.
-          The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
+        raw (DataArray or DataArrayShadow): The data to display.
         """
-        # Check it's a 2D data
-        if len(image.shape) < 2:
-            raise ValueError("Data must be 2D")
-        # make it 2D by removing first dimensions (which must 1)
-        if len(image.shape) > 2:
-            image = img.ensure2DImage(image)
 
-        super(Static2DStream, self).__init__(name, [image])
+        if isinstance(raw, model.DataArray) or isinstance(raw, model.DataArrayShadow):
+            if len(raw.shape) < 2:
+                raise ValueError("Data must be 2D")
+            # make it 2D by removing first dimensions (which must 1)
+            # if len(image.shape) > 2:
+            #    image = img.ensure2DImage(image)
+        elif isinstance(raw, list):
+            for r in raw:
+                if len(r.shape) < 2:
+                    raise ValueError("Data must be 2D")
+
+        super(Static2DStream, self).__init__(name, raw)
 
 
 class StaticSEMStream(Static2DStream):

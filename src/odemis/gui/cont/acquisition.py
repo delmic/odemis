@@ -48,6 +48,7 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.util import units
+from odemis.util.img import mergeTiles
 import os
 import re
 import subprocess
@@ -197,7 +198,10 @@ class SnapshotController(object):
             # for each stream seen in the viewport
             raw_images = []
             for s in streams:
-                data = s.raw # list of raw images for this stream (with metadata)
+                data = s.raw
+                if isinstance(data, tuple): # 2D tuple = tiles
+                    data = mergeTiles(data)
+
                 for d in data:
                     # add the stream name to the image
                     if not hasattr(d, "metadata"):

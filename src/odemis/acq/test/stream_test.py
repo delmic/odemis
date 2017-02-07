@@ -36,6 +36,7 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
+from odemis.dataio import tiff
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -2140,6 +2141,355 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
         self.assertTrue(numpy.any(im2d != prev_im2d))
 
+    def test_tiled_stream(self):
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        POS = (5.0, 7.0)
+        size = (2000, 1000)
+        dtype = numpy.uint8
+        md = {
+            model.MD_DIMS: 'YX',
+            model.MD_POS: POS,
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        }
+        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        ss = stream.StaticSEMStream("test", acd.content[0])
+
+        # out of bounds
+        with self.assertRaises(IndexError):
+            ss.mpp.value = 1.0
+        ss.mpp.value = 2e-6 # second zoom level
+
+        # out of bounds
+        with self.assertRaises(IndexError):
+            ss.rect.value = (0.0, 0.0, 10e10, 10e10)
+        # full image
+        ss.rect.value = (POS[0] - 0.001, POS[1] - 0.0005, POS[0] + 0.001, POS[1] + 0.0005)
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(len(ss.image.value), 4)
+        self.assertEqual(len(ss.image.value[0]), 2)
+        # the corner tile should be smaller
+        self.assertEqual(ss.image.value[3][1].shape, (244, 232, 3))
+
+        # half image
+        ss.rect.value = (POS[0] - 0.001, POS[1] - 0.0005, POS[0], POS[1])
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(len(ss.image.value), 2)
+        self.assertEqual(len(ss.image.value[0]), 1)
+
+        del ss
+        os.remove(FILENAME)
+
+    def test_rgb_tiled_stream(self):
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        POS = (5.0, 7.0)
+        size = (2000, 1000, 3)
+        dtype = numpy.uint8
+        md = {
+            model.MD_DIMS: 'YXC',
+            model.MD_POS: POS,
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        }
+        arr_shape = (1000, 2000, 3)
+        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(arr_shape).astype(dtype)
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        ss = stream.RGBStream("test", acd.content[0])
+
+        # out of bounds
+        with self.assertRaises(IndexError):
+            ss.mpp.value = 1.0
+        ss.mpp.value = 2e-6 # second zoom level
+
+        # out of bounds
+        with self.assertRaises(IndexError):
+            ss.rect.value = (0.0, 0.0, 10e10, 10e10)
+
+        # full image
+        ss.rect.value = (POS[0] - 0.001, POS[1] - 0.0005, POS[0] + 0.001, POS[1] + 0.0005)
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(len(ss.image.value), 4)
+        self.assertEqual(len(ss.image.value[0]), 2)
+        # the corner tile should be smaller
+        self.assertEqual(ss.image.value[3][1].shape, (244, 232, 3))
+
+        # half image
+        ss.rect.value = (POS[0] - 0.001, POS[1] - 0.0005, POS[0], POS[1])
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(len(ss.image.value), 2)
+        self.assertEqual(len(ss.image.value[0]), 1)
+
+        del ss
+        os.remove(FILENAME)
+
+    def test_rgb_tiled_stream_pan(self):
+        read_tiles = []
+        def getTileMock(self, x, y, zoom):
+            tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
+            read_tiles.append(tile_desc)
+            return tiff.DataArrayShadowTIFF._getTileOld(self, x, y, zoom)
+
+        tiff.DataArrayShadowTIFF._getTileOld = tiff.DataArrayShadowTIFF._getTile
+        tiff.DataArrayShadowTIFF._getTile = getTileMock
+
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        POS = (5.0, 7.0)
+        size = (3000, 2000, 3)
+        dtype = numpy.uint8
+        md = {
+            model.MD_DIMS: 'YXC',
+            model.MD_POS: POS,
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        }
+        arr_shape = (2000, 3000, 3)
+        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(arr_shape).astype(dtype)
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        ss = stream.RGBStream("test", acd.content[0])
+
+        full_image_rect = (POS[0] - 0.0015, POS[1] - 0.001, POS[0] + 0.0015, POS[1] + 0.001)
+
+        ss.mpp.value = 2e-6 # second zoom level
+        # full image
+        ss.rect.value = full_image_rect
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(26, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 6)
+        self.assertEqual(len(ss.image.value[0]), 4)
+
+        # half image (left side), all tiles are cached
+        ss.rect.value = (POS[0] - 0.0015, POS[1] - 0.001, POS[0], POS[1] + 0.001)
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(26, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 3)
+        self.assertEqual(len(ss.image.value[0]), 4)
+
+        # half image (right side), only the center tiles will are cached
+        ss.rect.value = (POS[0], POS[1] - 0.001, POS[0] + 0.0015, POS[1] + 0.001)
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(38, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 4)
+        self.assertEqual(len(ss.image.value[0]), 4)
+
+        # really small rect on the center, the tile is in the cache
+        ss.rect.value = (POS[0], POS[1], POS[0] + 0.00001, POS[1] + 0.00001)
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertEqual(38, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 1)
+        self.assertEqual(len(ss.image.value[0]), 1)
+
+        # rect out of the image
+        with self.assertRaises(IndexError): # "rect out of bounds"
+            ss.rect.value = (POS[0] - 15, POS[1] - 15, POS[0] + 16, POS[1] + 16)
+            # Wait a little bit to make sure the image has been generated
+            time.sleep(0.5)
+
+        # get the old function back to the class
+        tiff.DataArrayShadowTIFF._getTile = tiff.DataArrayShadowTIFF._getTileOld
+
+        del ss
+        os.remove(FILENAME)
+
+    def test_rgb_tiled_stream_zoom(self):
+        read_tiles = []
+        def getTileMock(self, x, y, zoom):
+            tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
+            read_tiles.append(tile_desc)
+            return tiff.DataArrayShadowTIFF._getTileOld(self, x, y, zoom)
+
+        tiff.DataArrayShadowTIFF._getTileOld = tiff.DataArrayShadowTIFF._getTile
+        tiff.DataArrayShadowTIFF._getTile = getTileMock
+
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        POS = (5.0, 7.0)
+        dtype = numpy.uint8
+        md = {
+            model.MD_DIMS: 'YXC',
+            model.MD_POS: POS,
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        }
+        num_cols = 3000
+        num_rows = 2000
+        arr_shape = (num_rows, num_cols, 3)
+        arr = numpy.zeros(arr_shape, dtype=dtype)
+
+        line = numpy.linspace(0, 255, num_cols, dtype=dtype)
+        column = numpy.linspace(0, 255, num_rows, dtype=dtype)
+
+        # each line has values from 0 to 255, linearly distributed
+        arr[:, :, 0] = numpy.tile(line, (num_rows, 1))
+        # each row has values from 0 to 255, linearly distributed
+        arr[:, :, 1] = numpy.tile(column, (num_cols, 1)).transpose()
+
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        ss = stream.RGBStream("test", acd.content[0])
+        time.sleep(0.5)
+
+        # the maxzoom image has 2 tiles. So far 4 was read: 2 on the constructor, for
+        # _updateHistogram and _updateDRange. And 2 for _updateImage, because .rect
+        # and .mpp are initialized to the maxzoom image
+        self.assertEqual(4, len(read_tiles))
+
+        # delta full rect
+        dfr = [ -0.0015, -0.001, 0.0015, 0.001]
+        full_image_rect = (POS[0] + dfr[0], POS[1] + dfr[1], POS[0] + dfr[2], POS[1] + dfr[3])
+
+        # change both .rect and .mpp at the same time, to the same values
+        # that are set on Stream constructor
+        ss.rect.value = full_image_rect # full image
+        ss.mpp.value = 8e-6 # maximum zoom level
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.2)
+        # no tiles are read from the disk
+        self.assertEqual(4, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 2)
+        self.assertEqual(len(ss.image.value[0]), 1)
+        # top-left pixel of the left tile
+        numpy.testing.assert_array_equal([0, 0, 0], ss.image.value[0][0][0, 0, :])
+        # top-right pixel of the left tile
+        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
+        # bottom-left pixel of the left tile
+        numpy.testing.assert_array_equal([0, 255, 0], ss.image.value[0][0][249, 0, :])
+        # bottom-right pixel of the right tile
+        numpy.testing.assert_array_equal([254, 255, 0], ss.image.value[1][0][249, 117, :])
+
+        # really small rect on the center, the tile is in the cache
+        ss.rect.value = (POS[0], POS[1], POS[0] + 0.00001, POS[1] + 0.00001)
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        # no tiles are read from the disk
+        self.assertEqual(4, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 1)
+        self.assertEqual(len(ss.image.value[0]), 1)
+        # top-left pixel of the only tile
+        numpy.testing.assert_array_equal([0, 0, 0], ss.image.value[0][0][0, 0, :])
+        # top-right pixel of the only tile
+        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
+        # bottom-left pixel of the only tile
+        numpy.testing.assert_array_equal([0, 255, 0], ss.image.value[0][0][249, 0, :])
+
+        ss.mpp.value = 1e-6 # minimum zoom level
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        # only one tile is read
+        self.assertEqual(5, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 1)
+        self.assertEqual(len(ss.image.value[0]), 1)
+        # top-left pixel of the only tile
+        numpy.testing.assert_array_equal([108, 97, 0], ss.image.value[0][0][0, 0, :])
+        # top-right pixel of the only tile
+        numpy.testing.assert_array_equal([130, 97, 0], ss.image.value[0][0][0, 255, :])
+        # bottom-left pixel of the only tile
+        numpy.testing.assert_array_equal([108, 130, 0], ss.image.value[0][0][255, 0, :])
+        # bottom-right pixel of the only tile
+        numpy.testing.assert_array_equal([130, 130, 0], ss.image.value[0][0][255, 255, :])
+
+        # changing .rect and .mpp simultaneously
+        ss.rect.value = full_image_rect # full image
+        ss.mpp.value = 8e-6 # maximum zoom level
+
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        # Only 2 tiles read from disk. It means that the loop inside _updateImage,
+        # triggered by the change on .rect was immediately stopped when .mpp changed
+        self.assertEqual(7, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 2)
+        self.assertEqual(len(ss.image.value[0]), 1)
+
+        # top-left pixel of the left tile
+        numpy.testing.assert_array_equal([0, 0, 0], ss.image.value[0][0][0, 0, :])
+        # bottom-right pixel of the left tile
+        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
+        # bottom-right pixel of right right
+        numpy.testing.assert_array_equal([254, 255, 0], ss.image.value[1][0][249, 117, :])
+
+        delta = [d / 2 for d in dfr]
+        # this rect is half the size of the full image, in the center of the image
+        rect = (POS[0] + delta[0], POS[1] + delta[1],
+                POS[0] + delta[2], POS[1] + delta[3])
+        # changes .rect and .mpp simultaneously, simulating a GUI zoom
+        ss.rect.value = rect
+        # zoom 2
+        ss.mpp.value = 4e-6
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.3)
+
+        # reads 6 tiles from the disk, no tile is cached becase the zoom changed
+        self.assertEqual(13, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 3)
+        self.assertEqual(len(ss.image.value[0]), 2)
+        # top-left pixel of a center tile
+        numpy.testing.assert_array_equal([87, 0, 0], ss.image.value[1][0][0, 0, :])
+        # top-right pixel of a center tile
+        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[1][0][0, 255, :])
+        # bottom-left pixel of a center tile
+        numpy.testing.assert_array_equal([87, 130, 0], ss.image.value[1][0][255, 0, :])
+        # bottom pixel of a center tile
+        numpy.testing.assert_array_equal([173, 130, 0], ss.image.value[1][0][255, 255, :])
+
+        delta = [d / 8 for d in dfr]
+        # this rect is 1/8 the size of the full image, in the center of the image
+        rect = (POS[0] + delta[0], POS[1] + delta[1],
+                POS[0] + delta[2], POS[1] + delta[3])
+        # changes .rect and .mpp simultaneously, simulating a GUI zoom
+        ss.rect.value = rect
+        # zoom 0
+        ss.mpp.value = 1e-6
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+
+        # reads 4 tiles from the disk, no tile is cached becase the zoom changed
+        self.assertEqual(17, len(read_tiles))
+        self.assertEqual(len(ss.image.value), 2)
+        self.assertEqual(len(ss.image.value[0]), 2)
+        # top-left pixel of the top-left tile
+        numpy.testing.assert_array_equal([108, 97, 0], ss.image.value[0][0][0, 0, :])
+        # top-right pixel of top-left tile
+        numpy.testing.assert_array_equal([130, 97, 0], ss.image.value[0][0][0, 255, :])
+        # bottom-left pixel of top-left tile
+        numpy.testing.assert_array_equal([108, 130, 0], ss.image.value[0][0][255, 0, :])
+        # bottom pixel of top-left tile
+        numpy.testing.assert_array_equal([130, 130, 0], ss.image.value[0][0][255, 255, :])
+
+        # get the old function back to the class
+        tiff.DataArrayShadowTIFF._getTile = tiff.DataArrayShadowTIFF._getTileOld
+        
+        del ss
+        os.remove(FILENAME)
 
 if __name__ == "__main__":
     unittest.main()

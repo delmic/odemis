@@ -36,6 +36,7 @@ from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img
 from odemis.gui.util.img import format_rgba_darray
+from odemis.util.img import mergeTiles
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
 import time
@@ -381,14 +382,19 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not hasattr(s, "image") or s.image.value is None:
                 continue
 
+            if isinstance(s.raw, list):
+                image = s.image.value
+            else:
+                image = mergeTiles(s.image.value)
+
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             if isinstance(s, stream.OpticalStream):
-                images_opt.append((s.image.value, BLEND_SCREEN, s.name.value))
+                images_opt.append((image, BLEND_SCREEN, s.name.value))
             elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
-                images_spc.append((s.image.value, BLEND_DEFAULT, s.name.value))
+                images_spc.append((image, BLEND_DEFAULT, s.name.value))
             else:
-                images_std.append((s.image.value, BLEND_DEFAULT, s.name.value))
+                images_std.append((image, BLEND_DEFAULT, s.name.value))
 
         # Sort by size, so that the biggest picture is first drawn (no opacity)
         def get_area(d):

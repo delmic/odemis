@@ -1553,30 +1553,35 @@ def _get_stream_legend_text(s):
 
     # FluoStreams are merged using the "Screen" method that handles colour
     # merging without decreasing the intensity.
-    data_raw = s.raw[0]
+    if isinstance(s.raw, list):
+        md = s.raw[0].metadata
+    elif isinstance(s.raw, (model.DataArray, model.DataArrayShadow)):
+        md = s.raw.metadata
+    else:
+        ValueError("s.raw must be a list of DataArray or a DataArrayShadow")
 
     try:
-        if data_raw.metadata.get(model.MD_EXP_TIME, None):
+        if md.get(model.MD_EXP_TIME, None):
             if isinstance(s, acqstream.EMStream):
-                captions.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+                captions.append(u"Dwell time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
             else:
-                captions.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
-        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
-            captions.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s", sig=3))
-        if data_raw.metadata.get(model.MD_LENS_MAG, None):
-            captions.append(u"%s x" % units.readable_str(data_raw.metadata[model.MD_LENS_MAG], sig=2))
-        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
-            captions.append(data_raw.metadata[model.MD_FILTER_NAME])
-        if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
-            captions.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
-        if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
-            captions.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
-        if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
-            captions.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
-        if data_raw.metadata.get(model.MD_IN_WL, None):
-            captions.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
-        if data_raw.metadata.get(model.MD_OUT_WL, None):
-            out_wl = data_raw.metadata[model.MD_OUT_WL]
+                captions.append(u"Exposure time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
+        if md.get(model.MD_DWELL_TIME, None):
+            captions.append(u"Dwell time: %s" % units.readable_str(md[model.MD_DWELL_TIME], "s", sig=3))
+        if md.get(model.MD_LENS_MAG, None):
+            captions.append(u"%s x" % units.readable_str(md[model.MD_LENS_MAG], sig=2))
+        if md.get(model.MD_FILTER_NAME, None):
+            captions.append(md[model.MD_FILTER_NAME])
+        if md.get(model.MD_LIGHT_POWER, None):
+            captions.append(units.readable_str(md[model.MD_LIGHT_POWER], "W", sig=3))
+        if md.get(model.MD_EBEAM_VOLTAGE, None):
+            captions.append(units.readable_str(abs(md[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
+        if md.get(model.MD_EBEAM_CURRENT, None):
+            captions.append(units.readable_str(md[model.MD_EBEAM_CURRENT], "A", sig=3))
+        if md.get(model.MD_IN_WL, None):
+            captions.append(u"Excitation: %s" % units.readable_str(numpy.average(md[model.MD_IN_WL]), "m", sig=3))
+        if md.get(model.MD_OUT_WL, None):
+            out_wl = md[model.MD_OUT_WL]
             if isinstance(out_wl, basestring):
                 captions.append(u"Emission: %s" % (out_wl,))
             else:
@@ -1612,8 +1617,12 @@ def get_ordered_images(streams, raw=False):
         # merging without decreasing the intensity.
         if not raw:
             data = s.image.value
+            if isinstance(data, tuple): # 2D tuple = tiles
+                data = img.mergeTiles(data)
         else:
             data_raw = s.raw[0]
+            if isinstance(data_raw, tuple): # 2D tuple = tiles
+                data_raw = img.mergeTiles(data_raw)
 
             # Pretend to be RGB for the drawing by cairo
             if numpy.can_cast(im_min_type, min_type(data_raw)):
@@ -1904,7 +1913,10 @@ def _adapt_rgb_to_raw(imrgb, stream, dtype):
     return (ndarray Y,X)
     """
 
-    data_raw = stream.raw[0]
+    if isinstance(stream.raw, list):
+        data_raw = stream.raw[0]
+    else:
+        data_raw = img.mergeTiles(stream.raw)
     if isinstance(stream, acqstream.OpticalStream):
         blkval = data_raw.metadata.get(model.MD_BASELINE, 0)
     else:

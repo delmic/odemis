@@ -28,6 +28,7 @@ import pickle
 import unittest
 from unittest.case import skip
 import weakref
+import numpy
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -402,6 +403,26 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertEqual(prop.value, 2.0)
         prop.value = 10.0
         self.assertEqual(prop.value, 11.0)
+
+    def test_tuple_of_tuple_of_numpyarray(self):
+        prop = model.VigilantAttribute(None)
+
+        self.called = 0
+        # now count
+        prop.subscribe(self.callback_test_notify)
+        first_value = ((numpy.zeros(42),),)
+        # first value
+        prop.value = first_value # +1
+        # the same object as first value
+        prop.value = first_value
+        # test passing the same values, but with a different object
+        prop.value = ((numpy.zeros(42),),) # +1
+        self.assertEqual(self.called, 2, "Called has value %s" % self.called)
+        # empty tuple
+        prop.value = () # +1
+        # empty tuple inside e tuple
+        prop.value = ((),) # +1
+        self.assertEqual(self.called, 4, "Called has value %s" % self.called)
 
 class LittleObject(object):
     def __init__(self):
