@@ -154,7 +154,7 @@ from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
-from odemis.util.conversion import wxcol_to_frgb
+from odemis.gui.util.conversion import wxcol_to_frgb
 import os
 import sys
 import wx

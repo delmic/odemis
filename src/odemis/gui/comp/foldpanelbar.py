@@ -22,7 +22,7 @@
 from __future__ import division
 import os
 from odemis.gui import img
-from odemis.util.conversion import change_brightness, wxcol_to_frgb
+from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb
 import wx
 
 

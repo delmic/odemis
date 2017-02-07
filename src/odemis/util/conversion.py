@@ -2,7 +2,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2017 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -23,7 +23,6 @@ from __future__ import division
 import collections
 import logging
 import re
-import wx
 import yaml
 from odemis import model
 import numpy
@@ -113,7 +112,7 @@ def rgb_to_frgb(rgb):
 
     if len(rgb) != 3:
         raise ValueError("Illegal RGB colour %s" % rgb)
-    return tuple([v / 255.0 for v in rgb])
+    return tuple(v / 255.0 for v in rgb)
 
 
 def rgba_to_frgba(rgba):
@@ -126,7 +125,7 @@ def rgba_to_frgba(rgba):
 
     if len(rgba) != 4:
         raise ValueError("Illegal RGB colour %s" % rgba)
-    return tuple([v / 255.0 for v in rgba])
+    return tuple(v / 255.0 for v in rgba)
 
 
 def frgb_to_rgb(frgb):
@@ -139,7 +138,7 @@ def frgb_to_rgb(frgb):
 
     if len(frgb) != 3:
         raise ValueError("Illegal RGB colour %s" % frgb)
-    return tuple([int(v * 255) for v in frgb])
+    return tuple(int(v * 255) for v in frgb)
 
 
 def frgba_to_rgba(frgba):
@@ -152,7 +151,7 @@ def frgba_to_rgba(frgba):
 
     if len(frgba) != 4:
         raise ValueError("Illegal RGB colour %s" % frgba)
-    return tuple([int(v * 255) for v in frgba])
+    return tuple(int(v * 255) for v in frgba)
 
 
 def hex_to_frgb(hex_str):
@@ -167,111 +166,6 @@ def hex_to_frgba(hex_str, af=1.0):
     :rtype : (float, float, float, float)
     """
     return rgba_to_frgba(hex_to_rgba(hex_str, int(af * 255)))
-
-
-def wxcol_to_rgb(wxcol):
-    """ Convert a wx.Colour to an RGB int tuple
-    :param wxcol:
-    :return:
-    """
-    return wxcol.Red(), wxcol.Green(), wxcol.Blue()
-
-
-def wxcol_to_rgba(wxcol):
-    """ Convert a wx.Colour to an RGBA int tuple
-    :param wxcol:
-    :return:
-    """
-    return wxcol.Red(), wxcol.Green(), wxcol.Blue(), wxcol.Alpha()
-
-
-def rgb_to_wxcol(rgb):
-    """
-    :param rgb: (int, int, int)
-    :return: wx.Colour
-    """
-    if len(rgb) != 3:
-        raise ValueError("Illegal RGB colour %s" % rgb)
-    return wx.Colour(*rgb)
-
-
-def rgba_to_wxcol(rgba):
-    """
-    :param rgba: (int, int, int, int)
-    :return: wx.Colour
-    """
-    if len(rgba) != 4:
-        raise ValueError("Illegal RGB colour %s" % rgba)
-    return wx.Colour(*rgba)
-
-
-def rgb_to_hex(rgb):
-    """ Convert a RGB(A) colour to hexadecimal colour representation
-    rgb (3 or 4-tuple of ints): actually works with any length
-    return (string): in the form "aef1e532"
-    """
-    hex_str = "".join("%.2x" % c for c in rgb)
-    return hex_str
-
-
-def hex_to_wxcol(hex_str):
-    rgb = hex_to_rgb(hex_str)
-    return wx.Colour(*rgb)
-
-
-def wxcol_to_frgb(wxcol):
-    return wxcol.Red() / 255.0, wxcol.Green() / 255.0, wxcol.Blue() / 255.0
-
-
-def frgb_to_wxcol(frgb):
-    return rgb_to_wxcol(frgb_to_rgb(frgb))
-
-
-def change_brightness(colour, weight):
-    """ Brighten or darken a given colour
-
-    See also wx.lib.agw.aui.aui_utilities.StepColour() and Colour.ChangeLightness() from 3.0
-
-    colf (tuple of 3+ 0<float<1): RGB colour (and alpha)
-    weight (-1<float<1): how much to brighten (>0) or darken (<0)
-    return (tuple of 3+ 0<float<1): new RGB colour
-
-    :type colf: tuple
-    :type weight: float
-    :rtype : tuple
-    """
-
-    _alpha = None
-
-    if isinstance(colour, basestring):
-        _col = hex_to_frgb(colour)
-        _alpha = None
-    elif isinstance(colour, tuple):
-        if all([isinstance(v, float) for v in colour]):
-            _col = colour[:3]
-            _alpha = colour[-1] if len(colour) == 4 else None
-        elif all([isinstance(v, int) for v in colour]):
-            _col = rgb_to_frgb(colour[:3])
-            _alpha = colour[-1] if len(colour) == 4 else None
-        else:
-            raise ValueError("Unknown colour format (%s)" % (colour,))
-    elif isinstance(colour, wx.Colour):
-        _col = wxcol_to_frgb(colour)
-        _alpha = None
-    else:
-        raise ValueError("Unknown colour format")
-
-    if weight > 0:
-        # blend towards white
-        f, lim = min, 1.0
-    else:
-        # blend towards black
-        f, lim = max, 0.0
-        weight = -weight
-
-    new_fcol = tuple(f(c * (1 - weight) + lim * weight, lim) for c in _col[:3])
-
-    return new_fcol + (_alpha,) if _alpha is not None else new_fcol
 
 
 # String -> VA conversion helper
@@ -395,6 +289,7 @@ def ensure_tuple(v):
     else:
         return v
 
+
 def get_img_transformation_matrix(md):
     """
     Computes the 2D transformation matrix based on the given metadata.
@@ -416,6 +311,7 @@ def get_img_transformation_matrix(md):
     rot_mat = numpy.matrix([[rcos, -rsin], [rsin, rcos]])
     shear_mat = numpy.matrix([[1, 0], [-shear, 1]])
     return rot_mat * shear_mat * ps_mat
+
 
 def get_tile_md_pos(i, tile_size, tileda, origda):
     """
@@ -465,6 +361,5 @@ def get_tile_md_pos(i, tile_size, tileda, origda):
     new_tile_pos_rel = tmat * tile_rel_to_img_center_pixels
     new_tile_pos_rel = numpy.ravel(new_tile_pos_rel)
     # calculate the final position of the tile, in world coordinates
-    tile_pos_world_final = numpy.add(md_pos, new_tile_pos_rel)
+    tile_pos_world_final = md_pos + new_tile_pos_rel
     return tuple(tile_pos_world_final)
-    

@@ -48,27 +48,6 @@ class TestConversion(unittest.TestCase):
             o = conversion.wave2rgb(i)
             self.assertEquals(o, eo, u"%f nm -> %s should be %s" % (i * 1e9, o, eo))
 
-    def test_change_brightness(self):
-        # no change
-        col = (0.2, 0.5, 1.0, 0.8)
-        ncol = conversion.change_brightness(col, 0)
-        self.assertEqual(col, ncol)
-
-        # brighten
-        col = (0.2, 0.5, 1.0, 0.8)
-        ncol = conversion.change_brightness(col, 0.3)
-        self.assertTrue(all(n >= o for o, n in zip(col, ncol)))
-
-        # darken
-        col = (0.2, 0.5, 1.0)
-        ncol = conversion.change_brightness(col, -0.6)
-        self.assertTrue(all(n < o for o, n in zip(col, ncol)))
-
-        # full black
-        col = (0.2, 0.5, 1.0, 1.0)
-        ncol = conversion.change_brightness(col, -1)
-        self.assertTrue(ncol, (0, 0, 0, 1))
-
     def test_convertToObject_good(self):
         """
         check various inputs and compare to expected output
@@ -171,7 +150,7 @@ class TestConversion(unittest.TestCase):
             model.MD_SHEAR: 0.0,
         }
         mat = get_img_transformation_matrix(md)
-        numpy.testing.assert_almost_equal(mat, [[ 1., 0.], [ 0., -1.]])
+        numpy.testing.assert_almost_equal(mat, [[1., 0.], [0., -1.]])
 
         micro = 1.0e-06
         # 90 degrees of rotation
