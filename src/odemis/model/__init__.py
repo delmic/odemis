@@ -32,6 +32,7 @@ from ._components import *
 from ._dataflow import *
 from ._core import *
 from ._metadata import *
+from ._dataio import *
 
 
 #__all__ = []

@@ -653,6 +653,53 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
                 self.assertAlmostEqual(im.metadata.get(model.MD_SHEAR, 0), md.get(model.MD_SHEAR, 0))
 
+    def testExportReadPyramidal(self):
+        """
+        Checks that we can read back a pyramidal image
+        """
+        # create 2 simple greyscale images
+        sizes = [(512, 256), (500, 400)] # different sizes to ensure different acquisitions
+        dtype = numpy.dtype("uint16")
+        white = (12, 52) # non symmetric position
+        ldata = []
+        num = 2
+        # TODO: check support for combining channels when same data shape
+        for i in range(num):
+            a = model.DataArray(numpy.zeros(sizes[i][-1:-3:-1], dtype))
+            a[white[-1:-3:-1]] = 1027
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 0] += 255 # red
+        blue = (12, 22) # non symmetric position
+        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail, multiple_files=True, pyramid=True)
+
+        tokens = FILENAME.split(".0.", 1)
+        # Iterate through the files generated
+        for file_index in range(num):
+            fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
+            # check it's here
+            st = os.stat(fname)  # this test also that the file is created
+            self.assertGreater(st.st_size, 0)
+
+            # check data
+            rdata = tiff.read_data(fname)
+            self.assertEqual(len(rdata), num)
+
+            for i, im in enumerate(rdata):
+                if len(im.shape) > 2:
+                    subim = im[0, 0, 0]  # remove C,T,Z dimensions
+                else:
+                    subim = im  # TODO: should it always be 5 dim?
+                self.assertEqual(subim.shape, sizes[i][-1::-1])
+                self.assertEqual(subim[white[-1:-3:-1]], ldata[i][white[-1:-3:-1]])
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

@@ -35,9 +35,11 @@ import re
 import sys
 import time
 import uuid
+from odemis.model import DataArrayShadow, AcquisitionData
 
 import libtiff.libtiff_ctypes as T  # for the constant names
 import xml.etree.ElementTree as ET
+from odemis.util.conversion import get_tile_md_pos
 
 
 #pylint: disable=E1101
@@ -923,138 +925,6 @@ def _canBeMerged(das):
 
     return True
 
-def _mergeDA(das, hdim_index):
-    """
-    Merge multiple DataArrays into a higher dimension DataArray.
-    das (list of DataArrays): ordered list of DataArrays (can contain more
-      arrays than what is used in the high dimension arrays
-    hdim_index (ndarray of int >= 0): an array representing the higher
-      dimensions of the final merged arrays. Each value is the index of the
-      small array in das.
-    return (DataArray): the merge of all the DAs. The shape is hdim_index.shape
-     + shape of original DataArray. The metadata is the metadata of the first
-     DataArray inserted
-    """
-    fim = das[hdim_index.flat[0]]
-    tshape = hdim_index.shape + fim.shape
-    imset = numpy.empty(tshape, fim.dtype)
-    for hi, i in numpy.ndenumerate(hdim_index):
-        imset[hi] = das[i]
-
-    return model.DataArray(imset, metadata=fim.metadata)
-
-
-def _foldArraysFromOME(root, das, basename):
-    """
-    Reorganize DataArrays with more than 2 dimensions according to OME XML
-    Note: it expects _updateMDFromOME has been run before and so each array
-     has its metadata filled up.
-    Note: Officially OME supports only base arrays of 2D. But we also support
-     base arrays of 3D if the data is RGB (3rd dimension has length 3).
-    root (ET.Element): the root (i.e., OME) element of the XML description
-    data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
-    return (list of DataArrays): new shorter list of DAs
-    """
-    omedas = []
-
-    n = 0 # just for logging
-    # In case of multiple files, add an offset to the ifd based on the number of
-    # images found in the files that are already accessed
-    ifd_offset = 0
-    for ime in root.findall("Image"):
-        n += 1
-        pxe = ime.find("Pixels") # there must be only one per Image
-
-        # The relation between channel and planes is not very clear. Each channel
-        # can have multiple SamplesPerPixel, apparently to indicate they have
-        # multiple planes. However, the Interleaved attribute is global for
-        # Pixels, and seems to imply that RGB data could be saved as a whole,
-        # although OME-TIFF normally only has 2D arrays.
-        # So far the understanding is Channel refers to the "Logical channels",
-        # and Plane refers to the C dimension.
-#        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
-
-        imsetn, hdims = _getIFDsFromOME(pxe, offset=ifd_offset)
-        ifd_offset += len(imsetn)
-        # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
-        # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
-
-        fifd = imsetn.flat[0]
-        if fifd == -1:
-            logging.debug("Skipping metadata update for image %d", n)
-            continue
-
-        # Check if the IFDs are 2D or 3D, based on the first one
-        fim = das[fifd]
-        if fim is None:
-            continue # thumbnail
-
-        # Handle if the IFD data is 3D. Officially OME-TIFF expects all the data
-        # in IFDs to be 2D, but we allow to have RGB images too (so dimension C).
-        dims = pxe.get("DimensionOrder", "XYZTC")[::-1]
-        if fim.ndim == 3:
-            planedims = dims.translate(None, "TZ")  # remove TZ
-            ci = planedims.index("C")
-            if fim.shape[ci] > 1:
-                if "C" in hdims:
-                    logging.warning("TiffData %d seems RGB but hdims (%s) contains C too",
-                                    fifd, hdims)
-                if imsetn.ndim >= 3:
-                    logging.error("_getIFDsFromOME reported %d high dims, but TiffData has shape %s",
-                                  imsetn.ndim, fim.shape)
-#                 if imsetn.shape[0] != fim.shape[ci]:
-#                     # RGB data arrays are not officially supported in OME-TIFF anyway
-#                     raise NotImplementedError("Loading of %d channel from images "
-#                                               "with %d channels not supported" %
-#                                               (imsetn.shape[ci], fim.shape[ci]))
-#                 imsetn = imsetn[0]
-
-        # Short-circuit for dataset with only one IFD
-        if all(d == 1 for d in imsetn.shape):
-            omedas.append(fim)
-            continue
-
-        if -1 in imsetn:
-            raise ValueError("Not all IFDs defined for image %d" % (len(omedas) + 1,))
-
-        # TODO: Position might also be different. Probably should be grouped
-        # by position too, as Odemis doesn't support such case.
-
-        # In Odemis, arrays can be merged along C _only_ if they are continuous
-        # (like for a spectrum acquisition). If it's like fluorescence, with
-        # complex channel metadata, they need to be kept separated.
-        # Check for all the C with T=0, Z=0 (should be the same at other indices)
-        try:
-            ci = hdims.index("C")
-            chans = [0] * len(hdims)
-            chans[ci] = slice(None)
-            chans = tuple(chans)
-        except ValueError:
-            chans = slice(None)  # all of the IFDs
-        das_tz0n = list(imsetn[chans])
-        das_tz0 = [das[i] for i in das_tz0n]
-        if not _canBeMerged(das_tz0):
-            for sub_imsetn in imsetn:
-                # Combine all the IFDs into a (1+)4D array
-                sub_imsetn.shape = (1,) + sub_imsetn.shape
-                imset = _mergeDA(das, sub_imsetn)
-                omedas.append(imset)
-        else:
-            # Combine all the IFDs into a 5D array
-            imset = _mergeDA(das, imsetn)
-            omedas.append(imset)
-
-    # Updating MD_DIMS to remove too many dims if the array is no 5 dims
-    for da in omedas:
-        try:
-            dims = da.metadata[model.MD_DIMS]
-            da.metadata[model.MD_DIMS] = dims[-da.ndim:]
-        except KeyError:
-            pass
-
-    return omedas
-
-
 def _countNeededIFDs(da):
     """
     return the number of IFD (aka TIFF pages, aka planes) needed for storing the given array
@@ -1712,27 +1582,6 @@ def _thumbsFromTIFF(filename):
 
     return data
 
-def _reconstructFromOMETIFF(xml, data, basename):
-    """
-    Update DAs to reflect shape and metadata contained in OME XML
-    xml (string): String containing the OME XML declaration
-    data (list of model.DataArray): each
-    return (list of model.DataArray): new list with the DAs following the OME
-      XML description. Note that DAs are either updated or completely recreated.
-    """
-    # Remove "xmlns" which is the default namespace and is appended everywhere
-    # It's not beautiful, but the simplest with ET to handle expected namespaces.
-    xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                 "", xml, count=1)
-    # Remove ROI namespace too
-    xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                 "", xml)
-    root = ET.fromstring(xml)
-    _updateMDFromOME(root, data, basename)
-    omedata = _foldArraysFromOME(root, data, basename)
-
-    return omedata
-
 def _genResizedShapes(data):
     """
     Generates a list of tuples with the size of the resized images
@@ -1753,93 +1602,6 @@ def _genResizedShapes(data):
         resized_shapes.append(shape)
         
     return resized_shapes
-
-def _dataFromTIFF(filename):
-    """
-    Read microscopy data from a TIFF file.
-    filename (string): path of the file to read
-    return (list of model.DataArray)
-    """
-    f = TIFF.open(filename, mode='r')
-
-    # open each image/page as a separate image
-    data = []
-    for image in f.iter_images():
-        # If it's a thumbnail, skip it, but leave the space free to not mess with the IFD number
-        if _isThumbnail(f):
-            data.append(None)
-            continue
-        md = _readTiffTag(f) # reads tag of the current image
-        da = model.DataArray(image, metadata=md)
-        data.append(da)
-
-    # If looks like OME TIFF, reconstruct >2D data and add metadata
-    # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
-    # Warning: we support what we write, not the whole OME-TIFF specification.
-    f.SetDirectory(0)
-    desc = f.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-
-    if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
-                  or desc[:4].lower() == '<ome')):
-        try:
-            # take care of multiple file distribution
-            file_data = data
-            path, basename = os.path.split(filename)
-            data = []
-            desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                         "", desc, count=1)
-            desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                         "", desc)
-            root = ET.fromstring(desc)
-
-            # Keep track of the files that were already opened
-            file_read = set()
-#             ifd_counter = 0
-            for tiff_data in root.findall("Image/Pixels/TiffData"):
-
-                uuid = tiff_data.find("UUID")
-                if uuid is None:
-                    # uuid attribute is only part of multiple files distribution
-                    continue
-                else:
-                    uuid_data = uuid.get("FileName")
-#                 tiff_data.set("IFD", ifd_counter)
-                ifd_data = tiff_data.get("IFD")
-#                 ifd_counter += 1
-                # attach to the right path
-                uuid_path = os.path.join(path, uuid_data)
-                if uuid_data in file_read:
-                    continue
-                # try to find and open the enlisted file
-                try:
-                    f_link = TIFF.open(uuid_path, mode='r')
-                except TypeError:
-                    logging.warning("File '%s' enlisted in the OME-XML header is missing.", uuid_path)
-                    continue
-                for image in f_link.iter_images():
-                    # If it's a thumbnail, skip it, but leave the space free to not mess with the IFD number
-                    if _isThumbnail(f_link):
-                        data.append(None)
-                        continue
-                    md = _readTiffTag(f_link)  # reads tag of the current image
-                    da = model.DataArray(image, metadata=md)
-                    data.append(da)
-                file_read.add(uuid_data)
-
-            # If this file was not enlisted in the xml data we assume it has
-            # been renamed. In this case we also include its data.
-            if basename not in file_read:
-                data.extend(file_data)
-
-            data = _reconstructFromOMETIFF(desc, data, os.path.basename(filename))
-        except Exception:
-            # fallback to pretend there was no OME XML
-            logging.exception("Failed to decode OME XML string: '%s'", desc)
-
-    # Remove all the None (=thumbnails) from the list
-    data = [i for i in data if i is not None]
-    return data
-
 
 def _ensure_fs_encoding(filename):
     if not isinstance(filename, unicode):
@@ -1941,7 +1703,8 @@ def read_data(filename):
     # to do it without looking at the .filename attribute)
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
     filename = _ensure_fs_encoding(filename)
-    return _dataFromTIFF(filename)
+    acd = open_data(filename)
+    return [acd.getData(i) for i in range(len(acd.content))]
 
 def read_thumbnail(filename):
     """
@@ -1955,4 +1718,467 @@ def read_thumbnail(filename):
     """
     # TODO: support filename to be a File or Stream
     filename = _ensure_fs_encoding(filename)
-    return _thumbsFromTIFF(filename)
+    acd = open_data(filename)
+    return [acd.getThumbnail(i) for i in range(len(acd.thumbnails))]
+
+def open_data(fn):
+    """
+    Opens a TIFF file, and return an AcquisitionData instance
+    fn (string): path to the file
+    return (AcquisitionData): an opened file
+    """
+    return AcquisitionDataTIFF(fn)
+
+class AcquisitionDataTIFF(AcquisitionData):
+    """
+    Implements AcquisitionData for TIFF files
+    """
+    def __init__(self, filename):
+        """
+        Constructor
+        filename (string): The name of the TIFF file
+        """
+        # stores the opened tiff files to release the handles properly
+        self.opened_tiff_files = []
+
+        tiff_file = TIFF.open(filename, mode='r')
+        self.opened_tiff_files.append(tiff_file)
+
+        data = []
+        thumbnails = []
+
+        for dir_index in AcquisitionDataTIFF._iterDirectories(tiff_file):
+            AcquisitionDataTIFF._createDataArrayShadows(tiff_file, dir_index, data, thumbnails)
+
+        # If looks like OME TIFF, reconstruct >2D data and add metadata
+        # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
+        # Warning: we support what we write, not the whole OME-TIFF specification.
+        tiff_file.SetDirectory(0)
+        desc = tiff_file.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
+
+        if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
+                    or desc[:4].lower() == '<ome')):
+            try:
+                # take care of multiple file distribution
+
+                file_data, data = data, [] # keep the original data in case it doesn't go smoothly
+                path, basename = os.path.split(filename)
+                desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                            "", desc, count=1)
+                desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                            "", desc)
+                root = ET.fromstring(desc)
+
+                # Keep track of the files that were already opened
+                file_read = set()
+    #             ifd_counter = 0
+                for tiff_data in root.findall("Image/Pixels/TiffData"):
+
+                    uuid = tiff_data.find("UUID")
+                    if uuid is None:
+                        # uuid attribute is only part of multiple files distribution
+                        continue
+                    else:
+                        uuid_data = uuid.get("FileName")
+    #                 tiff_data.set("IFD", ifd_counter)
+                    ifd_data = tiff_data.get("IFD")
+    #                 ifd_counter += 1
+                    # attach to the right path
+                    uuid_path = os.path.join(path, uuid_data)
+                    if uuid_data in file_read:
+                        continue
+                    # try to find and open the enlisted file
+                    try:
+                        f_link = TIFF.open(uuid_path, mode='r')
+                        self.opened_tiff_files.append(f_link)
+                    except TypeError:
+                        logging.warning("File '%s' enlisted in the OME-XML header is missing.", uuid_path)
+                        continue
+
+                    for dir_index in AcquisitionDataTIFF._iterDirectories(f_link):
+                        AcquisitionDataTIFF._createDataArrayShadows(f_link, dir_index, data, thumbnails)
+
+                    file_read.add(uuid_data)
+
+                # If this file was not enlisted in the xml data we assume it has
+                # been renamed. In this case we also include its data.
+                if basename not in file_read:
+                    data.extend(file_data)
+
+                data = AcquisitionDataTIFF._reconstructFromOMETIFF(desc, data, os.path.basename(filename))
+            except Exception:
+                # fallback to pretend there was no OME XML
+                logging.exception("Failed to decode OME XML string: '%s'", desc)
+
+        # Remove all the None (=thumbnails) from the list
+        content = [i for i in data if i is not None]
+
+        AcquisitionData.__init__(self, tuple(content), tuple(thumbnails))
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        """
+        Releases the handles of the opened tiff files
+        """
+        for tiff_file in self.opened_tiff_files:
+            tiff_file.close()
+    
+    @staticmethod
+    def _createDataArrayShadows(tfile, dir_index, data_array_shadows, thumbnails):
+        """
+        Create the DataArrayShadows from the TIFF metadata for the current directory,
+        and add them to the data_array_shadows and thumbnails lists
+        tfile (tiff handle): Handle for the TIFF file
+        dir_index (int): Index of the directory in the TIFF file
+        data_array_shadows: (list of DataArrayShadows): List of DataArrayShadows representing
+            the images of the current TIFF file that are not thumbnails
+        thumbnails: (list of DataArrayShadows): List of DataArrayShadows of the current TIFF file
+            that are thumbnails
+        """
+        bits = tfile.GetField(T.TIFFTAG_BITSPERSAMPLE)
+        sample_format = tfile.GetField(T.TIFFTAG_SAMPLEFORMAT)
+        typ = tfile.get_numpy_type(bits, sample_format)
+
+        width = tfile.GetField(T.TIFFTAG_IMAGEWIDTH)
+        height = tfile.GetField(T.TIFFTAG_IMAGELENGTH)
+        samples_pp = tfile.GetField(T.TIFFTAG_SAMPLESPERPIXEL)
+        if samples_pp is None:  # default is 1
+            samples_pp = 1
+        sub_ifds = tfile.GetField(T.TIFFTAG_SUBIFD)
+        if sub_ifds:
+            # add the number of subdirectories, and the main image
+            maxzoom = len(sub_ifds) + 1
+        else:
+            maxzoom = None
+            
+        md = _readTiffTag(tfile)  # reads tag of the current image
+
+        shape = (height, width)
+        if samples_pp > 1:
+            shape = shape + (samples_pp,)
+        das = DataArrayShadow(shape, typ, md, maxzoom)
+
+        # add handle and directory information to be used when the actual
+        # pixels of the image are read
+        # This information is temporary. It is not needed outside the AcquisitionDataTIFF class,
+        # and it is not a part of DataArrayShadow class
+        # It can also be a a list of tiff_info, 
+        # in case the DataArray has multiple pixelData (eg, when data has more than 2D).
+        das.tiff_info = {'handle': tfile, 'dir_index': dir_index}
+
+        if _isThumbnail(tfile):
+            data_array_shadows.append(None)
+            thumbnails.append(das)
+        else:
+            data_array_shadows.append(das)
+
+    @staticmethod
+    def _reconstructFromOMETIFF(xml, data_array_shadows, basename):
+        """
+        Update DataArrayShadows to reflect shape and metadata contained in OME XML
+        xml (string): String containing the OME XML declaration
+        data_array_shadows (list of DataArrayShadows): each
+        basename (string): File name of the TIFF file
+        return (list of model.DataArray): new list with the DAs following the OME
+            XML description. Note that DASs are either updated or completely recreated.
+        """
+        # Remove "xmlns" which is the default namespace and is appended everywhere
+        # It's not beautiful, but the simplest with ET to handle expected namespaces.
+        xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                    "", xml, count=1)
+        # Remove ROI namespace too
+        xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."', "", xml)
+        root = ET.fromstring(xml)
+        _updateMDFromOME(root, data_array_shadows, basename)
+        omedata = AcquisitionDataTIFF._foldArrayShadowsFromOME(root, data_array_shadows, basename)
+
+        return omedata
+
+    @staticmethod
+    def _foldArrayShadowsFromOME(root, das, basename):
+        """
+        Reorganize DataArrayShadows with more than 2 dimensions according to OME XML
+        Note: it expects _updateMDFromOME has been run before and so each array
+        has its metadata filled up.
+        Note: Officially OME supports only base arrays of 2D. But we also support
+        base arrays of 3D if the data is RGB (3rd dimension has length 3).
+        root (ET.Element): the root (i.e., OME) element of the XML description
+        das (list of DataArrayShadows): DataArrayShadowss at the same place as the TIFF IFDs
+        basename (string): File name of the TIFF file
+        return (list of DataArrayShadows): new shorter list of DASs positions
+        """
+        omedas = []
+
+        n = 0 # just for logging
+        # In case of multiple files, add an offset to the ifd based on the number of
+        # images found in the files that are already accessed
+        ifd_offset = 0
+        for ime in root.findall("Image"):
+            n += 1
+            pxe = ime.find("Pixels") # there must be only one per Image
+
+            # The relation between channel and planes is not very clear. Each channel
+            # can have multiple SamplesPerPixel, apparently to indicate they have
+            # multiple planes. However, the Interleaved attribute is global for
+            # Pixels, and seems to imply that RGB data could be saved as a whole,
+            # although OME-TIFF normally only has 2D arrays.
+            # So far the understanding is Channel refers to the "Logical channels",
+            # and Plane refers to the C dimension.
+    #        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
+
+            imsetn, hdims = _getIFDsFromOME(pxe, offset=ifd_offset)
+            ifd_offset += len(imsetn)
+            # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
+            # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
+
+            fifd = imsetn.flat[0]
+            if fifd == -1:
+                logging.debug("Skipping metadata update for image %d", n)
+                continue
+
+            # Check if the IFDs are 2D or 3D, based on the first one
+            fim = das[fifd]
+            if fim is None:
+                continue # thumbnail
+
+            # Handle if the IFD data is 3D. Officially OME-TIFF expects all the data
+            # in IFDs to be 2D, but we allow to have RGB images too (so dimension C).
+            dims = pxe.get("DimensionOrder", "XYZTC")[::-1]
+            if fim.ndim == 3:
+                planedims = dims.translate(None, "TZ")  # remove TZ
+                ci = planedims.index("C")
+                if fim.shape[ci] > 1:
+                    if "C" in hdims:
+                        logging.warning("TiffData %d seems RGB but hdims (%s) contains C too",
+                                        fifd, hdims)
+                    if imsetn.ndim >= 3:
+                        logging.error("_getIFDsFromOME reported %d high dims, but TiffData has shape %s",
+                                    imsetn.ndim, fim.shape)
+
+            # Short-circuit for dataset with only one IFD
+            if all(d == 1 for d in imsetn.shape):
+                omedas.append(fim)
+                continue
+
+            if -1 in imsetn:
+                raise ValueError("Not all IFDs defined for image %d" % (len(omedas) + 1,))
+
+            # TODO: Position might also be different. Probably should be grouped
+            # by position too, as Odemis doesn't support such case.
+
+            # In Odemis, arrays can be merged along C _only_ if they are continuous
+            # (like for a spectrum acquisition). If it's like fluorescence, with
+            # complex channel metadata, they need to be kept separated.
+            # Check for all the C with T=0, Z=0 (should be the same at other indices)
+            try:
+                ci = hdims.index("C")
+                chans = [0] * len(hdims)
+                chans[ci] = slice(None)
+                chans = tuple(chans)
+            except ValueError:
+                chans = slice(None)  # all of the IFDs
+            das_tz0n = list(imsetn[chans])
+            das_tz0 = [das[i] for i in das_tz0n]
+            if not _canBeMerged(das_tz0):
+                for sub_imsetn in imsetn:
+                    # Combine all the IFDs into a (1+)4D array
+                    sub_imsetn.shape = (1,) + sub_imsetn.shape
+                    shadow_shape = AcquisitionDataTIFF._mergeDAShadowsShape(das, sub_imsetn)
+                    omedas.append(shadow_shape)
+            else:
+                # Combine all the IFDs into a 5D array
+                shadow_shape = AcquisitionDataTIFF._mergeDAShadowsShape(das, imsetn)
+                omedas.append(shadow_shape)
+
+        # Updating MD_DIMS to remove too many dims if the array is no 5 dims
+        for da in omedas:
+            try:
+                dims = da.metadata[model.MD_DIMS]
+                da.metadata[model.MD_DIMS] = dims[-da.ndim:]
+            except KeyError:
+                pass
+
+        return omedas
+
+    @staticmethod
+    def _mergeDAShadowsShape(das, hdim_index):
+        """
+        Merge multiple DataArrayShadows into a higher dimension DataArrayShadow.
+        das (list of DataArrays): ordered list of DataArrayShadows (can contain more
+            arrays than what is used in the high dimension arrays
+        hdim_index (ndarray of int >= 0): an array representing the higher
+            dimensions of the final merged arrays. Each value is the index of the
+            small array in das.
+        return (DataArrayShadow): the merge of all the DAs. The shape is hdim_index.shape
+            + shape of original DataArrayShadow. The metadata is the metadata of the first
+            DataArrayShadow inserted
+        """
+        fim = das[hdim_index.flat[0]]
+        tshape = hdim_index.shape + fim.shape
+        # it will hold the list of the information about each of the merged
+        # DataArrayShadow instance
+        tiff_info_list = []
+        for hi, i in numpy.ndenumerate(hdim_index):
+            local_tiff_info = das[i].tiff_info
+            # add the index of the DataArrayShadow in the merged DataArrayShadow
+            local_tiff_info['hdim_index'] = hi
+            tiff_info_list.append(local_tiff_info)
+
+        try:
+            maxzoom = fim.maxzoom
+        except AttributeError:
+            maxzoom = None
+        mergedDataArrayShadow = DataArrayShadow(tshape, fim.dtype, fim.metadata, maxzoom)
+        # add the information about each of the merged DataArrayShadows
+        mergedDataArrayShadow.tiff_info = tiff_info_list
+        return mergedDataArrayShadow
+
+    @staticmethod
+    def _iterDirectories(tiff_file):
+        """
+        Iterate on the directories of a tiff file
+        tiff_file (tiff handle): The tiff file handle to be iterated on
+        return (int): The index of the directory
+        """
+        tiff_file.SetDirectory(0)
+        dir_index = 0
+        yield dir_index
+        while not tiff_file.LastDirectory():
+            tiff_file.ReadDirectory()
+            dir_index += 1
+            yield dir_index
+        tiff_file.SetDirectory(0)
+
+    @staticmethod
+    def _readImage(tiff_file, dir_index):
+        """
+        Reads the image of a given directory
+        tiff_file (handle): Handle of the tiff file
+        dir_index (int): Index of the directory
+        return (numpy.array): The image
+        """
+        tiff_file.SetDirectory(dir_index)
+        return tiff_file.read_image()
+
+    @staticmethod
+    def _readAndMergeImages(data_array_shadow, tiff_info):
+        """
+        Read the images from file, and merge them into a higher dimension DataArray.
+        data_array_shadow (DataArrayShadows): DataArrayShadow, with an ordered list of tiff_info 
+            (can contain more arrays than what is used in the high dimension arrays
+        tiff_info (list): Information about each image on the TIFF file. It has the 
+            handle of the tiff file, the directory index, and hdim_index, which is an
+            index where the image should be fit in the returned merged DataArray
+        return (DataArray): the merge of all the DAs. The shape is hdim_index.shape
+            + shape of original DataArrayShadow. The metadata is the metadata of the first
+            DataArrayShadow of the list
+        """
+        imset = numpy.empty(data_array_shadow.shape, data_array_shadow.dtype)
+        for tiff_info_item in tiff_info:
+            image = AcquisitionDataTIFF._readImage(tiff_info_item['handle'], tiff_info_item['dir_index'])
+            imset[tiff_info_item['hdim_index']] = image
+
+        return model.DataArray(imset, metadata=data_array_shadow.metadata)
+
+    def getData(self, n):
+        """
+        Fetches the whole data (at full resolution) of image at index n.
+        n (0<=int): index of the image
+        return DataArray: the data, with its metadata (ie, identical to .content[n] but
+            with the actual data)
+        """
+        tiff_info = self.content[n].tiff_info
+        # if tiff_info is a list, it means that self.content[n]
+        # is a DataArrayShadow with multiple images
+        if type(tiff_info) is list:
+            return AcquisitionDataTIFF._readAndMergeImages(self.content[n], tiff_info)
+        else:
+            image = AcquisitionDataTIFF._readImage(tiff_info['handle'], tiff_info['dir_index'])
+            return model.DataArray(image, metadata=self.content[n].metadata.copy())
+
+    def getSubData(self, n, z, rect):
+        """
+        Fetches a part of the data, for a given zoom. If the (complete) data has more
+        than two dimensions, all the extra dimensions (ie, non-spatial) are always fully
+        returned for the given part.
+        n (int): index of the image
+        z (0 <= int) : zoom level. The data returned will be with MD_PIXEL_SIZE * 2^z.
+            So 0 means to use the highest zoom, with the original pixel size. 1 will
+            return data half the width and heigh (The maximum possible value depends
+            on the data).
+        rect (4 ints): left, top, right, bottom coordinates (in px, at zoom=0) of the
+            area of interest.
+        return (tuple of tuple of DataArray): all the tiles in X&Y dimension, so that
+            the area of interest is fully covered (so the area can be larger than requested).
+            The first dimension is X, and second is Y. For example, if returning 3x7 tiles,
+            the most bottom-right tile will be accessed as ret[2][6]. For each
+            DataArray.metadata, MD_POS and MD_PIXEL_SIZE are updated appropriately
+            (if MD_POS is not present, (0,0) is used as default for the entire image, and if
+            MD_PIXEL_SIZE is not present, it will not be updated).
+        raise ValueError: if the area or z is out of range, or if the raw data is not pyramidal.
+        """
+        if not (0 <= n < len(self.content)):
+            raise ValueError("Invalid N value %d" % (n,))
+
+        # get information about how to retrieve the actual pixels from the TIFF file
+        tiff_info = self.content[n].tiff_info
+        # TODO Implement the reading of the subdata when tiff_info is a list. 
+        # It is the case when the DataArray has multiple pixelData (eg, when data has more than 2D).
+        if type(tiff_info) is list:
+            raise NotImplemented("Not implemented when DataArray has multiple pixelData")
+
+        tiff_file = tiff_info['handle']
+        tiff_file.SetDirectory(tiff_info['dir_index'])
+
+        if z != 0:
+            # get an array of offsets, one for each subimage
+            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+            if not sub_ifds:
+                raise ValueError("Image does not have zoom levels")
+
+            if not (0 <= z <= len(sub_ifds)):
+                raise ValueError("Invalid Z value %d" % (z,))
+
+            # set the offset of the subimage. Z=0 is the main image
+            tiff_file.SetSubDirectory(sub_ifds[z - 1])
+        
+        num_tcols = tiff_file.GetField(T.TIFFTAG_TILEWIDTH)
+        num_trows = tiff_file.GetField(T.TIFFTAG_TILELENGTH)
+
+        if not num_tcols or not num_trows:
+            raise RuntimeError("the image is not tiled")
+
+        orig_pixel_size = self.content[n].metadata.get(model.MD_PIXEL_SIZE, (1, 1))
+
+        # calculate the pixel size of the tile for the zoom level
+        tile_pixel_size = tuple(ps * 2 ** z for ps in orig_pixel_size)
+        # calculate the rect coordinates for the zoom level
+        rect = tuple(r // 2 ** z for r in rect)
+
+        x1, y1, x2, y2 = rect
+        tiles = []
+        for xi, x in enumerate(range(x1, x2 + 1, num_tcols)):
+            tiles_column = []
+            for yi, y in enumerate(range(y1, y2 + 1, num_trows)):
+                tile = tiff_file.read_one_tile(x, y)
+                tile = model.DataArray(tile, self.content[n].metadata.copy())
+                tile.metadata[model.MD_PIXEL_SIZE] = tile_pixel_size
+                # calculate the center of the tile
+                tile.metadata[model.MD_POS] = \
+                    get_tile_md_pos((xi, yi), (TILE_SIZE, TILE_SIZE), tile, self.content[n])
+                tiles_column.append(tile)
+
+            tiles.append(tuple(tiles_column))
+
+        return tuple(tiles)
+
+    def getThumbnail(self, n):
+        """
+        Get the thumbnail image
+        n (int): Index of the thumbnail
+        """
+        tiff_info = self.thumbnails[n].tiff_info
+        image = AcquisitionDataTIFF._readImage(tiff_info['handle'], tiff_info['dir_index'])
+        return model.DataArray(image, metadata=self.thumbnails[n].metadata)
