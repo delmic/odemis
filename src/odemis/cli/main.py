@@ -379,12 +379,19 @@ def set_attr(comp_name, attr_val_str):
         # Special case for floats, due to rounding error, it's very hard to put the
         # exact value if it's an enumerated VA. So just pick the closest one in this
         # case.
-        if isinstance(new_val, float) and (
-           hasattr(attr, "choices") and isinstance(attr.choices, collections.Iterable)):
+        if (isinstance(new_val, float) and
+           hasattr(attr, "choices") and
+           isinstance(attr.choices, collections.Iterable)):
             orig_val = new_val
             new_val = util.find_closest(new_val, attr.choices)
             if new_val != orig_val:
                 logging.debug("Adjusting value to %s", new_val)
+
+        # Special case for None being referred to as "null" in YAML, but we should
+        # also accept "None"
+        elif new_val == "None" and not isinstance(attr.value, basestring):
+            new_val = None
+            logging.debug("Adjusting value to %s (null)", new_val)
 
         try:
             attr.value = new_val
