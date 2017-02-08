@@ -836,6 +836,7 @@ class FakePHDLL(object):
         # start/ (expected) end time of the current acquisition (or None if not started)
         self._acq_start = None
         self._acq_end = None
+        self._last_acq_dur = None  # s
 
     def PH_OpenDevice(self, i, sn_str):
         if i == self._idx:
@@ -899,8 +900,7 @@ class FakePHDLL(object):
         return
 
     def PH_ClearHistMem(self, i, block):
-        # TODO
-        return
+        self._last_acq_dur = None
 
     def PH_StartMeas(self, i, tacq):
         if self._acq_start is not None:
@@ -909,6 +909,8 @@ class FakePHDLL(object):
         self._acq_end = self._acq_start + _val(tacq) * 1e-3
 
     def PH_StopMeas(self, i):
+        if self._acq_start is not None:
+            self._last_acq_dur = self._acq_end - self._acq_start
         self._acq_start = None
         self._acq_end = None
 
@@ -928,15 +930,15 @@ class FakePHDLL(object):
 
     def PH_GetHistogram(self, i, p_chcount, block):
         p = cast(p_chcount, POINTER(c_uint32))
-        n = int(HISTCHAN / 2 ** self._bins)
-        ndbuffer = numpy.ctypeslib.as_array(p, (n,))
+        ndbuffer = numpy.ctypeslib.as_array(p, (HISTCHAN,))
 
         # make the max value dependent on the acquisition time
-        if self._acq_start is None:
-            maxval = 1
+        if self._last_acq_dur is None:
+            logging.warning("Simulator detected reading empty histogram")
+            maxval = 0
         else:
-            dur = self._acq_end - self._acq_start
-            maxval = max(1, int(2 ** 16 * 10 / min(10, dur)))  # 10 s -> full scale
+            dur = min(10, self._last_acq_dur)
+            maxval = max(1, int(2 ** 16 * (dur / 10)))  # 10 s -> full scale
 
         # Old numpy doesn't support dtype argument for randint
-        ndbuffer[...] = numpy.random.randint(0, maxval, n).astype(numpy.uint32)
+        ndbuffer[...] = numpy.random.randint(0, maxval + 1, HISTCHAN).astype(numpy.uint32)
