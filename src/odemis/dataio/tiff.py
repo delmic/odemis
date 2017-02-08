@@ -1559,6 +1559,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
                 c = compression
             write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
 
+
 def _thumbsFromTIFF(filename):
     """
     Read thumbnails from an TIFF file.
@@ -1582,6 +1583,7 @@ def _thumbsFromTIFF(filename):
 
     return data
 
+
 def _genResizedShapes(data):
     """
     Generates a list of tuples with the size of the resized images
@@ -1591,7 +1593,7 @@ def _genResizedShapes(data):
     # initializes the first shape with the shape of the input DataArray
     shape = data.shape
     dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
-    
+
     resized_shapes = []
     z = 0
     while shape[dims.index("X")] >= TILE_SIZE and shape[dims.index("Y")] >= TILE_SIZE:
@@ -1600,8 +1602,9 @@ def _genResizedShapes(data):
         # Copy the dimensions other than X and Y from the input DataArray shape
         shape = tuple(s // 2**z if d in "XY" else s for s,d in zip(data.shape, dims))
         resized_shapes.append(shape)
-        
+
     return resized_shapes
+
 
 def _ensure_fs_encoding(filename):
     if not isinstance(filename, unicode):
@@ -1610,6 +1613,7 @@ def _ensure_fs_encoding(filename):
         return filename # hope it's the correct encoding
     else:
         return filename.encode(sys.getfilesystemencoding())
+
 
 def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
     """
@@ -1645,6 +1649,7 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
         f.SetField(T.TIFFTAG_SUBFILETYPE, T.FILETYPE_REDUCEDIMAGE)
         # write the tiled image to the TIFF file
         f.write_tiles(subim, TILE_SIZE, TILE_SIZE, compression, write_rgb)
+
 
 def export(filename, data, thumbnail=None, compressed=True, multiple_files=False, pyramid=False):
     '''
@@ -1686,6 +1691,7 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
         assert(isinstance(data, model.DataArray))
         _saveAsMultiTiffLT(filename, [data], thumbnail, compressed, pyramid=pyramid)
 
+
 def read_data(filename):
     """
     Read an TIFF file and return its content (skipping the thumbnail).
@@ -1699,12 +1705,9 @@ def read_data(filename):
     raises:
         IOError in case the file format is not as expected.
     """
-    # TODO: support filename to be a File or Stream (but it seems very difficult
-    # to do it without looking at the .filename attribute)
-    # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
-    filename = _ensure_fs_encoding(filename)
     acd = open_data(filename)
     return [acd.getData(i) for i in range(len(acd.content))]
+
 
 def read_thumbnail(filename):
     """
@@ -1716,18 +1719,22 @@ def read_thumbnail(filename):
     raises:
         IOError in case the file format is not as expected.
     """
-    # TODO: support filename to be a File or Stream
-    filename = _ensure_fs_encoding(filename)
     acd = open_data(filename)
     return [acd.getThumbnail(i) for i in range(len(acd.thumbnails))]
 
-def open_data(fn):
+
+def open_data(filename):
     """
     Opens a TIFF file, and return an AcquisitionData instance
-    fn (string): path to the file
+    filename (string): path to the file
     return (AcquisitionData): an opened file
     """
-    return AcquisitionDataTIFF(fn)
+    # TODO: support filename to be a File or Stream (but it seems very difficult
+    # to do it without looking at the .filename attribute)
+    # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
+    filename = _ensure_fs_encoding(filename)
+    return AcquisitionDataTIFF(filename)
+
 
 class AcquisitionDataTIFF(AcquisitionData):
     """
@@ -1757,21 +1764,21 @@ class AcquisitionDataTIFF(AcquisitionData):
         desc = tiff_file.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
 
         if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
-                    or desc[:4].lower() == '<ome')):
+                      or desc[:4].lower() == '<ome')):
             try:
                 # take care of multiple file distribution
 
                 file_data, data = data, [] # keep the original data in case it doesn't go smoothly
                 path, basename = os.path.split(filename)
                 desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                            "", desc, count=1)
+                              "", desc, count=1)
                 desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                            "", desc)
+                              "", desc)
                 root = ET.fromstring(desc)
 
                 # Keep track of the files that were already opened
                 file_read = set()
-    #             ifd_counter = 0
+#                 ifd_counter = 0
                 for tiff_data in root.findall("Image/Pixels/TiffData"):
 
                     uuid = tiff_data.find("UUID")
@@ -1780,9 +1787,9 @@ class AcquisitionDataTIFF(AcquisitionData):
                         continue
                     else:
                         uuid_data = uuid.get("FileName")
-    #                 tiff_data.set("IFD", ifd_counter)
-                    ifd_data = tiff_data.get("IFD")
-    #                 ifd_counter += 1
+#                     tiff_data.set("IFD", ifd_counter)
+#                     ifd_data = tiff_data.get("IFD")
+#                     ifd_counter += 1
                     # attach to the right path
                     uuid_path = os.path.join(path, uuid_data)
                     if uuid_data in file_read:
@@ -1824,7 +1831,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         """
         for tiff_file in self.opened_tiff_files:
             tiff_file.close()
-    
+
     @staticmethod
     def _createDataArrayShadows(tfile, dir_index, data_array_shadows, thumbnails):
         """
@@ -1852,7 +1859,7 @@ class AcquisitionDataTIFF(AcquisitionData):
             maxzoom = len(sub_ifds) + 1
         else:
             maxzoom = None
-            
+
         md = _readTiffTag(tfile)  # reads tag of the current image
 
         shape = (height, width)
@@ -1887,7 +1894,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         # Remove "xmlns" which is the default namespace and is appended everywhere
         # It's not beautiful, but the simplest with ET to handle expected namespaces.
         xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                    "", xml, count=1)
+                     "", xml, count=1)
         # Remove ROI namespace too
         xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."', "", xml)
         root = ET.fromstring(xml)
@@ -2124,7 +2131,7 @@ class AcquisitionDataTIFF(AcquisitionData):
 
         # get information about how to retrieve the actual pixels from the TIFF file
         tiff_info = self.content[n].tiff_info
-        # TODO Implement the reading of the subdata when tiff_info is a list. 
+        # TODO Implement the reading of the subdata when tiff_info is a list.
         # It is the case when the DataArray has multiple pixelData (eg, when data has more than 2D).
         if type(tiff_info) is list:
             raise NotImplemented("Not implemented when DataArray has multiple pixelData")
@@ -2143,7 +2150,7 @@ class AcquisitionDataTIFF(AcquisitionData):
 
             # set the offset of the subimage. Z=0 is the main image
             tiff_file.SetSubDirectory(sub_ifds[z - 1])
-        
+
         num_tcols = tiff_file.GetField(T.TIFFTAG_TILEWIDTH)
         num_trows = tiff_file.GetField(T.TIFFTAG_TILELENGTH)
 
