@@ -707,6 +707,8 @@ class SparcAcquisitionTab(Tab):
         # This stream is a bit tricky, because it will play (potentially)
         # simultaneously as another one, and it changes the SEM settings at
         # play and pause.
+        # The stream controller takes care of turning on/off the stream when
+        # another stream needs it, or the tool mode selects it.
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
         tab_data.spotStream = spot_stream
@@ -956,6 +958,11 @@ class SparcAcquisitionTab(Tab):
         # pause streams when not displayed
         if not show:
             self._stream_controller.pauseStreams()
+            # Also stop the spot mode (as it's not useful for the spot mode to
+            # restart without any stream playing when coming back, and special
+            # care would be needed to restart the spotStream in this case)
+            if self.tab_data_model.tool.value == guimod.TOOL_SPOT:
+                self.tab_data_model.tool.value = guimod.TOOL_NONE
 
     def terminate(self):
         # make sure the streams are stopped
