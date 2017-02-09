@@ -35,6 +35,8 @@ import sys
 def read_all(device):
     print(device.hwVersion)
 
+    print("Current turret: %d" % (device.GetTurret(),))
+
     print("Grating offsets:")
     for g in device.axes["grating"].choices:
         o = device.GetGratingOffset(g)
@@ -69,6 +71,11 @@ def read_all(device):
     except ShamrockError as ex:
         logging.debug("Failed to get slit %d: %s", si, ex)
         print("Not supported")
+
+
+def set_turret(device, turret):
+    device.SetTurret(turret)
+    logging.info("Selected turret is %d", device.GetTurret())
 
 
 def set_goffset(device, grating, offset):
@@ -124,6 +131,8 @@ def main(args):
 
     parser.add_argument('--read', dest="read", action="store_true",
                         help="Will read all the offsets and display them")
+    parser.add_argument('--turret', dest="turret", type=int,
+                        help="Select the turret currently in the spectrograph (from 1 to 3)")
     parser.add_argument('--goffset', dest="goffset", nargs=2, type=int,
                         metavar=("<grating>", "<offset>"),
                         help="Changes the grating offset (integer value) for the given grating (starting from 1)")
@@ -159,6 +168,8 @@ def main(args):
 
         if options.read:
             read_all(dev)
+        if options.turret:
+            set_turret(dev, options.turret)
         if options.goffset:
             set_goffset(dev, *options.goffset)
         if options.doffset:

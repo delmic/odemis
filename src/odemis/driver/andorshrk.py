@@ -37,8 +37,8 @@ ACCESSORYMIN = 0  # changed in the latest version (from 1->2)
 ACCESSORYMAX = 1
 FILTERMIN = 1
 FILTERMAX = 6
-# SHAMROCK_TURRETMIN 1
-# SHAMROCK_TURRETMAX 3
+TURRETMIN = 1
+TURRETMAX = 3
 GRATINGMIN = 1
 # Note: the documentation mentions the width is in mm, but it's actually µm.
 SLITWIDTHMIN = 10
@@ -588,6 +588,26 @@ class Shamrock(model.Actuator):
                  byref(FocalLength), byref(AngularDeviation), byref(FocalTilt))
 
         return FocalLength.value, math.radians(AngularDeviation.value), math.radians(FocalTilt.value)
+
+    def SetTurret(self, turret):
+        """
+        Changes the turret (=set of gratings installed in the spectrograph)
+        Note: all gratings will be changed afterwards
+        turret (1<=int<=3)
+        """
+        assert TURRETMIN <= turret <= TURRETMAX
+
+        with self._hw_access:
+            self._dll.ShamrockSetTurret(self._device, turret)
+
+    def GetTurret(self):
+        """
+        return (1<=int<=3): current turret
+        """
+        turret = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetTurret(self._device, byref(turret))
+        return turret.value
 
     def SetGrating(self, grating):
         """
@@ -1555,6 +1575,7 @@ class FakeShamrockDLL(object):
                           (0.0, "Mirror", 10000, 26, 0.0, 0.0),
                           (1200.1, "500.0", 30000, -65, 0.0, 808.65)]
 
+        self._ct = 1
         self._cw = 300.2 # current wavelength (nm)
         self._cg = 1 # current grating (1->3)
         self._pw = 0 # pixel width
@@ -1628,6 +1649,13 @@ class FakeShamrockDLL(object):
         fl.value = 0.194  # m
         ad.value = 2.3 # °
         ft.value = -2.1695098876953125  # °
+
+    def ShamrockSetTurret(self, device, turret):
+        self._ct = _val(turret)
+
+    def ShamrockGetTurret(self, device, p_turret):
+        turret = _deref(p_turret, c_int)
+        turret.value = self._ct
 
     def ShamrockSetGrating(self, device, grating):
         self._check_hw_access()
