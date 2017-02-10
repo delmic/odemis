@@ -294,7 +294,7 @@ scripts, or via a command-line interface.
    version, with the right architecture for your computer (most likely 64-bit).
 
 #. Install Delmic's special version of Pyro4:
-   `pip install git+https://github.com/delmic/Pyro4.git`
+   `pip install https://github.com/delmic/Pyro4/archive/master.zip`
 
 #. Install using `pip install libtiff-0.4.0-cp27-none-win64.whl` (or `-win32`),
    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
