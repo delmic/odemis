@@ -35,6 +35,7 @@ import wx
 
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
+from odemis.gui.util.conversion import change_brightness
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.units as units
@@ -475,7 +476,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 self.y_label.pos = (2, yn)
                 self._write_label(ctx, self.y_label)
 
-            r, g, b, a = conversion.change_brightness(self.colour, -0.2)
+            r, g, b, a = change_brightness(self.colour, -0.2)
             ctx.set_source_rgba(r, g, b, 0.5)
             ctx.arc(v_pos[0], v_pos[1], 5.5, 0, 2 * math.pi)
             ctx.fill()
@@ -696,7 +697,7 @@ class DichotomyOverlay(base.ViewOverlay):
         # Color for quadrant that will expand the sequence
         self.hover_forw = conversion.hex_to_frgba(colour, 0.5)
         # Color for quadrant that will cut the sequence
-        self.hover_back = conversion.change_brightness(self.hover_forw, -0.2)
+        self.hover_back = change_brightness(self.hover_forw, -0.2)
 
         self.sequence_va = sequence_va
         self.sequence_rect = []

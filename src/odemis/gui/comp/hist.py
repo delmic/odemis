@@ -25,8 +25,8 @@ from __future__ import division
 
 import wx
 import wx.lib.wxcairo as wxcairo
+from odemis.gui.util.conversion import wxcol_to_frgb
 
-from odemis.util.conversion import wxcol_to_frgb
 
 class Histogram(wx.PyControl):
 
@@ -46,7 +46,6 @@ class Histogram(wx.PyControl):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
 
         self.OnSize(None)
-
 
     def _draw_content(self, ctx, width, height):
         # logging.debug("Plotting content background")
@@ -90,7 +89,7 @@ class Histogram(wx.PyControl):
         self.Refresh(eraseBackground=False)
         self.Update()
 
-    def SetForegroundColour(self, col):  #pylint: disable=W0221
+    def SetForegroundColour(self, col):  # pylint: disable=W0221
         ret = super(Histogram, self).SetForegroundColour(col)
         self.content_color = wxcol_to_frgb(self.GetForegroundColour())
         return ret
