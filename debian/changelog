@@ -1,3 +1,15 @@
+odemis (2.6.2-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6.2
+  * Main bugs fixed:
+    - Don't forward extra door changes from Phenom (DELPHI)
+    - Ensure the spot mode always start when start an optical stream (SPARC)
+  * Minor improvements:
+    - Add support to manually change turret of Andor Shamrock
+    - Accept "None" (in addition to "null") to set None in odemis-cli
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 10 Feb 2017 10:43:05 +0100
+
 odemis (2.6.1-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6.1
