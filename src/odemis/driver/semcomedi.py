@@ -1774,6 +1774,8 @@ class SEMComedi(model.HwComponent):
         # get the scan values (automatically updated to the latest needs)
         (scan, period, shape, margin,
          wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(len(detectors))
+        # TODO: immediately write the first position to give the beam a bit more
+        # settling time while we are preparing the whole scan.
 
         metadata = self._metadata.copy()
         metadata[model.MD_ACQ_DATE] = time.time()  # time at the beginning
@@ -1794,6 +1796,10 @@ class SEMComedi(model.HwComponent):
         # write and read the raw data
         rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
                             rranges, period, margin, osr, dpr, scan)
+
+        # TODO: if fast_park, immediately go to rest position, and otherwise,
+        # immediately go to initial position, to already position the beam for
+        # the next scan?
 
         # logging.debug("Converting raw data to physical: %s", rbuf)
         # TODO decimate/convert the data while reading, to save time, or do not convert at all
@@ -3090,9 +3096,12 @@ class Scanner(model.Emitter):
         translation = self.translation.value
 
         # settle_time is proportional to the size of the ROI (and =0 if only 1 px)
-        st = self._settle_time * (
-                  scale[0] * (resolution[0] - 1) / (self._shape[0] - 1))
-        margin = int(math.ceil(st / dwell_time))
+        st = self._settle_time * scale[0] * (resolution[0] - 1) / (self._shape[0] - 1)
+        # Round-up if settle time represents more than 1% of the dwell time.
+        # Below 1% the improvment would be marginal, and that allows to have
+        # tiny areas (eg, 4x4) scanned without the first pixel of each line
+        # being exposed twice more than the others.
+        margin = int(math.ceil(st / dwell_time - 0.01))
 
         new_settings = [resolution, scale, translation, margin]
         if self._prev_settings != new_settings:
@@ -3142,7 +3151,8 @@ class Scanner(model.Emitter):
                 assert roi_lim[0] >= roi_lim[1]
                 assert roi_lim[0] <= lim[0] and roi_lim[1] >= lim[1]
             roi_limits.append(roi_lim)
-        logging.debug("ranges X = %sV, Y = %sV", roi_limits[1], roi_limits[0])
+        logging.debug("ranges X = %sV, Y = %sV, for shape %s + margin %d",
+                      roi_limits[1], roi_limits[0], shape, margin)
 
         # if the conversion polynomial has degree <= 1, it's as precise and
         # much faster to generate directly the raw data.
