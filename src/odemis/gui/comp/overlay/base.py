@@ -507,8 +507,8 @@ class SelectionMixin(DragMixin):
     This class will store the last selection created by dragging and allows for manipulation of
     that selection.
 
-    These areas are always expressed in view port coordinates. Conversions to buffer and world
-    coordinates should be done using subclasses.
+    These areas are always expressed in view port coordinates.
+    Conversions to buffer and physical coordinates should be done using subclasses.
 
     Remember that the following methods *MUST* be called from the super class:
 
@@ -636,13 +636,13 @@ class SelectionMixin(DragMixin):
         current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
 
         if self.edit_mode == EDIT_MODE_BOX:
-            if gui.HOVER_TOP_EDGE == self.edit_hover & gui.HOVER_TOP_EDGE:
+            if self.edit_hover & gui.HOVER_TOP_EDGE:
                 self.select_v_start_pos = Vec(self.select_v_start_pos.x, current_pos.y)
-            if gui.HOVER_BOTTOM_EDGE == self.edit_hover & gui.HOVER_BOTTOM_EDGE:
+            if self.edit_hover & gui.HOVER_BOTTOM_EDGE:
                 self.select_v_end_pos = Vec(self.select_v_end_pos.x, current_pos.y)
-            if gui.HOVER_LEFT_EDGE == self.edit_hover & gui.HOVER_LEFT_EDGE:
+            if self.edit_hover & gui.HOVER_LEFT_EDGE:
                 self.select_v_start_pos = Vec(current_pos.x, self.select_v_start_pos.y)
-            if gui.HOVER_RIGHT_EDGE == self.edit_hover & gui.HOVER_RIGHT_EDGE:
+            if self.edit_hover & gui.HOVER_RIGHT_EDGE:
                 self.select_v_end_pos = Vec(current_pos.x, self.select_v_end_pos.y)
         elif self.edit_mode == EDIT_MODE_POINT:
             if self.edit_hover == gui.HOVER_START:
@@ -856,10 +856,10 @@ class SelectionMixin(DragMixin):
                         hover |= gui.HOVER_RIGHT_EDGE
 
                     if vy < self.v_edges["i_t"]:
-                        # logging.debug("Top edge hover")
+                        logging.debug("Top edge hover")
                         hover |= gui.HOVER_TOP_EDGE
                     elif vy > self.v_edges["i_b"]:
-                        # logging.debug("Bottom edge hover")
+                        logging.debug("Bottom edge hover")
                         hover |= gui.HOVER_BOTTOM_EDGE
 
                     return hover
@@ -971,11 +971,10 @@ class PixelDataMixin(object):
 
         # External values
         self._data_resolution = None  # Resolution of the pixel data (int, int)
-        self._selected_line_va = None  # TupleVA (int, int)
+        self._data_mpp = None  # size of one pixel in meters
 
         # Calculated values
-        self._pixel_data_w_rect = None  # (float left, float
-        self._data_mpp = None  # cnvs size of the pixel block float
+        self._pixel_data_p_rect = None  # ltbr physical coordinates
         self._pixel_pos = None  # position of the current pixel (int, int)
 
     def set_data_properties(self, mpp, physical_center, resolution):
@@ -989,28 +988,27 @@ class PixelDataMixin(object):
 
         self._data_resolution = Vec(resolution)
 
-        # We calculate the world size of the data. Even though world and physical data are in a
-        # 1 to 1 relation, we still do it the 'correct' way by calling 'physical_to_world_pos'.
-        w_size = self._data_resolution * mpp
+        # We calculate the physical size of the data: width/height
+        p_size = self._data_resolution * mpp
 
         # Get the top left corner of the pixel data
         # Remember that in physical coordinates, up is positive!
-        w_center = Vec(self.cnvs.physical_to_world_pos(physical_center))
+        p_center = Vec(physical_center)
 
-        self._pixel_data_w_rect = (
-            w_center.x - w_size.x / 2.0,
-            w_center.y - w_size.y / 2.0,
-            w_center.x + w_size.x / 2.0,
-            w_center.y + w_size.y / 2.0,
+        self._pixel_data_p_rect = (
+            p_center.x - p_size.x / 2.0,
+            p_center.y - p_size.y / 2.0,
+            p_center.x + p_size.x / 2.0,
+            p_center.y + p_size.y / 2.0,
         )
 
-        logging.debug("Physical top left of Spectrum data: %s", physical_center)
+        logging.debug("Physical center of spectrum data: %s", physical_center)
 
         self._data_mpp = mpp
 
     @property
     def data_properties_are_set(self):
-        return None not in (self._data_resolution, self._pixel_data_w_rect, self._data_mpp)
+        return None not in (self._data_resolution, self._pixel_data_p_rect, self._data_mpp)
 
     def _on_motion(self, evt):
         self._mouse_vpos = Vec(evt.GetPositionTuple())
@@ -1020,9 +1018,9 @@ class PixelDataMixin(object):
 
         if self._mouse_vpos or v_pos:
             offset = self.cnvs.get_half_buffer_size()
-            w_pos = self.cnvs.view_to_world(self._mouse_vpos or v_pos, offset)
-            return (self._pixel_data_w_rect[0] < w_pos[0] < self._pixel_data_w_rect[2] and
-                    self._pixel_data_w_rect[1] < w_pos[1] < self._pixel_data_w_rect[3])
+            p_pos = self.cnvs.view_to_phys(self._mouse_vpos or v_pos, offset)
+            return (self._pixel_data_p_rect[0] < p_pos[0] < self._pixel_data_p_rect[2] and
+                    self._pixel_data_p_rect[1] < p_pos[1] < self._pixel_data_p_rect[3])
 
         return False
 
@@ -1033,12 +1031,13 @@ class PixelDataMixin(object):
 
         """
 
-        # The offset, in pixels, to the center of the world coordinates
+        # The offset, in pixels, to the center of the physical coordinates
         offset = self.cnvs.get_half_buffer_size()
-        w_pos = self.cnvs.view_to_world(v_pos, offset)
+        p_pos = self.cnvs.view_to_phys(v_pos, offset)
 
-        # Calculate the distance to the top left in world units
-        dist = (w_pos[0] - self._pixel_data_w_rect[0], w_pos[1] - self._pixel_data_w_rect[1])
+        # Calculate the distance to the left bottom in physical units
+        dist = (p_pos[0] - self._pixel_data_p_rect[0],
+                - (p_pos[1] - self._pixel_data_p_rect[3]))
 
         # Calculate and return the data pixel, (0,0) is top left.
         return int(dist[0] / self._data_mpp), int(dist[1] / self._data_mpp)
@@ -1046,37 +1045,35 @@ class PixelDataMixin(object):
     def data_pixel_to_view(self, data_pixel):
         """ Return the view coordinates of the center of the given pixel """
 
-        w_x = self._pixel_data_w_rect[0] + (data_pixel[0] + 0.5) * self._data_mpp
-        w_y = self._pixel_data_w_rect[1] + (data_pixel[1] + 0.5) * self._data_mpp
+        p_x = self._pixel_data_p_rect[0] + (data_pixel[0] + 0.5) * self._data_mpp
+        p_y = self._pixel_data_p_rect[3] - (data_pixel[1] + 0.5) * self._data_mpp
         offset = self.cnvs.get_half_buffer_size()
 
-        return self.cnvs.world_to_view((w_x, w_y), offset)
+        return self.cnvs.phys_to_view((p_x, p_y), offset)
 
     def pixel_to_rect(self, pixel, scale):
         """ Return a rectangle, in buffer coordinates, describing the given data pixel
 
         :param pixel: (int, int) The pixel position
         :param scale: (float) The scale to draw the pixel at.
-        :return: (top, left, width, height)
+        :return: (top, left, width, height) in px
 
         *NOTE*
 
         The return type is structured like it is, because Cairo's rectangle drawing routine likes
-        them in this form (top, left, widht, height).
+        them in this form (top, left, width, height).
 
         """
+        # The whole thing is weird, because although the Y in physical coordinates
+        # is going up (instead of down for the buffer), each pixel is displayed
+        # from top to bottom. So the first line (ie, index 0) is at the lowest Y.
 
-        # First we calculate the position of the top left in buffer pixels
-        # Note the Y flip again, since were going from pixel to physical
-        # coordinates
-        offset_x = pixel[0] * self._data_mpp
-        offset_y = pixel[1] * self._data_mpp
+        # First we calculate the position of the bottom left in buffer pixels
+        p_left_bot = (self._pixel_data_p_rect[0] + pixel[0] * self._data_mpp,
+                      self._pixel_data_p_rect[3] - (pixel[1] * self._data_mpp))
 
-        w_top_left = (self._pixel_data_w_rect[0] + offset_x, self._pixel_data_w_rect[1] + offset_y)
-
-        # No need for an explicit Y flip here, since `physical_to_world_pos` takes care of that
         offset = self.cnvs.get_half_buffer_size()
-        b_top_left = self.cnvs.world_to_buffer(w_top_left, offset)
+        b_top_left = self.cnvs.phys_to_buffer(p_left_bot, offset)
         b_pixel_size = (self._data_mpp * scale + 0.5, self._data_mpp * scale + 0.5)
 
         return b_top_left + b_pixel_size

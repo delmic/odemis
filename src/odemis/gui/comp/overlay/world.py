@@ -3,7 +3,7 @@
 """
 :created: 2014-01-25
 :author: Rinze de Laat
-:copyright: © 2014 Rinze de Laat, Delmic
+:copyright: © 2014-2017 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -46,56 +46,55 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         WorldOverlay.__init__(self, cnvs)
         SelectionMixin.__init__(self, colour, center, EDIT_MODE_BOX)
 
-        self._w_start_pos = None
-        self._w_end_pos = None
+        self._p_start_pos = None
+        self._p_end_pos = None
 
         self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8), align=wx.ALIGN_RIGHT)
 
     @property
-    def w_start_pos(self):
-        return self._w_start_pos
+    def p_start_pos(self):
+        return self._p_start_pos
 
-    @w_start_pos.setter
-    def w_start_pos(self, w_pos):
-        self._w_start_pos = w_pos
-        self._world_to_view()
+    @p_start_pos.setter
+    def p_start_pos(self, p_pos):
+        self._p_start_pos = p_pos
+        self._phys_to_view()
 
     @property
-    def w_end_pos(self):
-        return self._w_end_pos
+    def p_end_pos(self):
+        return self._p_end_pos
 
-    @w_end_pos.setter
-    def w_end_pos(self, w_pos):
-        self._w_end_pos = w_pos
-        self._world_to_view()
+    @p_end_pos.setter
+    def p_end_pos(self, p_pos):
+        self._p_end_pos = p_pos
+        self._phys_to_view()
 
     # Selection clearing
 
     def clear_selection(self):
         """ Clear the current selection """
         SelectionMixin.clear_selection(self)
-        self.w_start_pos = None
-        self.w_end_pos = None
+        self.p_start_pos = None
+        self.p_end_pos = None
 
-    def _view_to_world(self):
-        """ Update the world position to reflect the view position """
+    def _view_to_phys(self):
+        """ Update the physical position to reflect the view position """
 
         if self.select_v_start_pos and self.select_v_end_pos:
             offset = self.cnvs.get_half_buffer_size()
-            wsp = self.cnvs.view_to_world(self.select_v_start_pos, offset)
-            wep = self.cnvs.view_to_world(self.select_v_end_pos, offset)
-            self.w_start_pos = wsp
-            self.w_end_pos = wep
+            psp = self.cnvs.view_to_phys(self.select_v_start_pos, offset)
+            pep = self.cnvs.view_to_phys(self.select_v_end_pos, offset)
+            self._p_start_pos = psp
+            self._p_end_pos = pep
 
-    def _world_to_view(self):
-        """ Update the view position to reflect the world position """
+    def _phys_to_view(self):
+        """ Update the view position to reflect the physical position """
 
-        if self.w_start_pos and self.w_end_pos:
+        if self.p_start_pos and self.p_end_pos:
             offset = self.cnvs.get_half_buffer_size()
-            vsp = self.cnvs.world_to_view(self.w_start_pos, offset)
-            vep = self.cnvs.world_to_view(self.w_end_pos, offset)
-            self.select_v_start_pos = Vec(vsp)
-            self.select_v_end_pos = Vec(vep)
+            vsp = self.cnvs.phys_to_view(self.p_start_pos, offset)
+            vep = self.cnvs.phys_to_view(self.p_end_pos, offset)
+            self.select_v_start_pos, self.select_v_end_pos = self._normalize_rect(vsp, vep)
             self._calc_edges()
 
     def get_physical_sel(self):
@@ -105,9 +104,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         """
 
-        if self.w_start_pos and self.w_end_pos:
-            p_pos = (self.cnvs.world_to_physical_pos(self.w_start_pos) +
-                     self.cnvs.world_to_physical_pos(self.w_end_pos))
+        if self.p_start_pos and self.p_end_pos:
+            p_pos = self.p_start_pos + self.p_end_pos
             return self._normalize_rect(p_pos)
         else:
             return None
@@ -122,17 +120,13 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if rect is None:
             self.clear_selection()
         else:
-            w_pos = (self.cnvs.physical_to_world_pos(rect[:2]) +
-                     self.cnvs.physical_to_world_pos(rect[2:4]))
-            w_pos = self._normalize_rect(w_pos)
-            self.w_start_pos = w_pos[:2]
-            self.w_end_pos = w_pos[2:4]
-            self._world_to_view()
+            self.p_start_pos = rect[:2]
+            self.p_end_pos = rect[2:4]
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw the selection as a rectangle """
 
-        if self.w_start_pos and self.w_end_pos:
+        if self.p_start_pos and self.p_end_pos:
 
             # FIXME: The following version of the code does not work. Update_projection is causing
             # the start position to be drawn at the top left of the buffer and the calculation of
@@ -141,22 +135,22 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             # translate the origin to the middle of the buffer
             # ctx.translate(*self.offset_b)
             #
-            # # Important: We need to use the world positions, in order to draw everything at the
+            # # Important: We need to use the physical positions, in order to draw everything at the
             # # right scale.
-            # b_start_pos = self.cnvs.world_to_buffer(self.w_start_pos)
-            # b_end_pos = self.cnvs.world_to_buffer(self.w_end_pos)
+            # b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos)
+            # b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos)
             # b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
 
-            # Important: We need to use the world positions, in order to draw everything at the
-            # right scale.
+            # Important: We need to use the physical positions, in order to draw
+            # everything at the right scale.
             offset = self.cnvs.get_half_buffer_size()
-            b_start_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
-            b_end_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
+            b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
+            b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
             b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
 
-            self.update_projection(b_start_pos, b_end_pos, shift + (scale,))
+            self.update_projection(b_start_pos, b_end_pos, (shift[0], shift[1], scale))
 
-            # logging.warn("%s %s", shift, world_to_buffer_pos(shift))
+            # logging.warn("%s %s", shift, phys_to_buffer_pos(shift))
             rect = (b_start_pos.x,
                     b_start_pos.y,
                     b_end_pos.x - b_start_pos.x,
@@ -181,7 +175,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             # Label
             if (self.selection_mode in (SEL_MODE_EDIT, SEL_MODE_CREATE) and
                     self.cnvs.microscope_view):
-                w, h = self.cnvs.selection_to_real_size(self.w_start_pos, self.w_end_pos)
+                w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
                 w = units.readable_str(w, 'm', sig=2)
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
@@ -198,7 +192,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
             SelectionMixin._on_left_down(self, evt)
-            self._view_to_world()
+            self._view_to_phys()
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_left_down(self, evt)
@@ -207,7 +201,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
             SelectionMixin._on_left_up(self, evt)
-            self._view_to_world()
+            self._view_to_phys()
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_left_up(self, evt)
@@ -241,9 +235,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 else:
                     self.cnvs.reset_dynamic_cursor()
             else:
-                self._view_to_world()
+                self._view_to_phys()
 
-            # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
+            # TODO: Find a way to render the selection at the full frame rate. Right now it's not
             # possible, because we are drawing directly into the buffer, which might render slowly
             # anyway. What we would want, is that a world overlay that can visually change when the
             # mouse moves, draws into the view. After the motion is done, it should be rendered into
@@ -338,8 +332,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
-                 self.cnvs.world_to_buffer(self.w_end_pos, offset))
+        b_pos = (self.cnvs.phys_to_buffer(self.p_start_pos, offset) +
+                 self.cnvs.phys_to_buffer(self.p_end_pos, offset))
         b_pos = self._normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
@@ -433,8 +427,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
-                 self.cnvs.world_to_buffer(self.w_end_pos, offset))
+        b_pos = (self.cnvs.phys_to_buffer(self.p_start_pos, offset) +
+                 self.cnvs.phys_to_buffer(self.p_end_pos, offset))
         b_pos = self._normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
@@ -494,7 +488,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         mode_cache = self.selection_mode
 
-        if self.w_start_pos and self.w_end_pos and 0 not in self.repetition:
+        if self.p_start_pos and self.p_end_pos and 0 not in self.repetition:
             if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
                 self.selection_mode = SEL_MODE_EDIT
@@ -526,9 +520,7 @@ class BoxOverlay(WorldOverlay):
     def set_dimensions(self, roi):
         """ Set the dimensions of the rectangle """
         # Connect the provided VA to the overlay
-        w_roi = (self.cnvs.physical_to_world_pos(roi[:2]) +
-                 self.cnvs.physical_to_world_pos(roi[2:4]))
-        self.roi = util.normalize_rect(w_roi)
+        self.roi = util.normalize_rect(roi)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
@@ -542,9 +534,9 @@ class BoxOverlay(WorldOverlay):
 
         offset = self.cnvs.get_half_buffer_size()
         # Convert from abs to relative, as the ROI is from the center of the view
-        cpos = self.cnvs.world_to_view((0, 0))
-        v_roi = (self.cnvs.world_to_view(self.roi[:2]) +
-                 self.cnvs.world_to_view(self.roi[2:4]))
+        cpos = self.cnvs.phys_to_view((0, 0))
+        v_roi = (self.cnvs.phys_to_view(self.roi[:2]) +
+                 self.cnvs.phys_to_view(self.roi[2:4]))
         v_width = v_roi[2] - v_roi[0], v_roi[3] - v_roi[1]
         rect = (offset[0] + (v_roi[0] - cpos[0]) + shift,
                 offset[1] + (v_roi[1] - cpos[1]) + shift,
@@ -579,37 +571,35 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         DragMixin.__init__(self)
         SpotModeBase.__init__(self, cnvs, spot_va=spot_va)
 
-        self.w_pos = None
+        self.p_pos = None
 
     def on_spot_change(self, _):
-        self._r_to_w()
+        self._ratio_to_phys()
 
     def on_size(self, evt):
-        self._r_to_w()
+        self._ratio_to_phys()
         WorldOverlay.on_size(self, evt)
 
-    def _w_to_r(self):
-        if self.w_pos is None:
+    def _phys_to_ratio(self):
+        if self.p_pos is None:
             self.r_pos.value = (0.5, 0.5)
         else:
-            # Since converting to a ratio possibly involves clipping, the w_pos is also updated
-            p_pos = self.cnvs.world_to_physical_pos(self.w_pos)
-            p_pos, self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(p_pos)
-            self.w_pos = self.cnvs.physical_to_world_pos(p_pos)
+            # Since converting to a ratio possibly involves clipping, the p_pos is also updated
+            p_pos, self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(self.p_pos)
+            self.p_pos = p_pos
 
-    def _r_to_w(self):
+    def _ratio_to_phys(self):
         try:
-            phys_spot = self.cnvs.convert_spot_ratio_to_phys(self.r_pos.value)
-            self.w_pos = self.cnvs.physical_to_world_pos(phys_spot)
+            self.p_pos = self.cnvs.convert_spot_ratio_to_phys(self.r_pos.value)
         except (TypeError, KeyError):
-            self.w_pos = None
+            self.p_pos = None
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.w_pos is None:
+        if self.p_pos is None:
             return
 
-        bx, by = self.cnvs.world_to_buffer(self.w_pos)
+        bx, by = self.cnvs.phys_to_buffer(self.p_pos)
         ctx.translate(*self.offset_b)
 
         SpotModeBase.draw(self, ctx, bx, by)
@@ -623,16 +613,16 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
     def on_left_up(self, evt):
         if self.active:
             DragMixin._on_left_up(self, evt)
-            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), self.offset_b)
-            self._w_to_r()
+            self.p_pos = self.cnvs.view_to_phys(evt.GetPositionTuple(), self.offset_b)
+            self._phys_to_ratio()
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         if self.active and self.left_dragging:
-            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), self.offset_b)
-            self._w_to_r()
+            self.p_pos = self.cnvs.view_to_phys(evt.GetPositionTuple(), self.offset_b)
+            self._phys_to_ratio()
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_left_up(self, evt)
@@ -650,48 +640,39 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
             WorldOverlay.on_leave(self, evt)
 
     def activate(self):
-        self._r_to_w()
+        self._ratio_to_phys()
         WorldOverlay.activate(self)
 
     def deactivate(self):
-        self.w_pos = None
+        self.p_pos = None
         WorldOverlay.deactivate(self)
 
 
 class LineSelectOverlay(WorldSelectOverlay):
-    """ Selection overlay that allows for the selection of a line in world coordinates"""
+    """ Selection overlay that allows for the selection of a line in physical coordinates"""
 
     def __init__(self, cnvs):
         WorldSelectOverlay.__init__(self, cnvs)
         self.edit_mode = EDIT_MODE_POINT
 
-    @property
-    def length(self):
-        if None in (self.w_start_pos, self.w_end_pos):
-            return 0
-        else:
-            x1, y1 = self.w_start_pos
-            x2, y2 = self.w_end_pos
-            return math.hypot(x2-x1, y2-y1)
-
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if None not in (self.w_start_pos, self.w_end_pos) and self.w_start_pos != self.w_end_pos:
+        if None not in (self.p_start_pos, self.p_end_pos) and self.p_start_pos != self.p_end_pos:
             # Pixel radius of the start marker
             start_radius = 3
             arrow_size = 12
 
             offset = self.cnvs.get_half_buffer_size()
             # Calculate buffer start and end positions
-            b_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
+            b_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
-            b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
+            b_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
             self.update_projection(b_start, b_end, shift + (scale,))
 
             # Calculate unit vector
-            dx, dy = (self.w_start_pos[0] - self.w_end_pos[0],
-                      self.w_start_pos[1] - self.w_end_pos[1])
+            dx, dy = (b_start[0] - b_end[0],
+                      b_start[1] - b_end[1])
 
             length = math.hypot(dx, dy) or 0.000001
             udx, udy = dx / length, dy / length  # Normalized vector
@@ -748,7 +729,7 @@ class LineSelectOverlay(WorldSelectOverlay):
                 ctx.set_source_rgba(*self.colour)
 
             ctx.set_line_width(1.5)
-            ctx.arc(b_start[0], b_start[1], start_radius, 0, 2*math.pi)
+            ctx.arc(b_start[0], b_start[1], start_radius, 0, 2 * math.pi)
             ctx.stroke()
 
             # Draw arrow head
@@ -783,9 +764,9 @@ class LineSelectOverlay(WorldSelectOverlay):
                 else:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_PENCIL)
             else:
-                self._view_to_world()
+                self._view_to_phys()
 
-            # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
+            # TODO: Find a way to render the selection at the full frame rate. Right now it's not
             # possible, because we are drawing directly into the buffer, which might render slowly
             # anyway. What we would want, is that a world overlay that can visually change when the
             # mouse moves, draws into the view. After the motion is done, it should be rendered into
@@ -797,7 +778,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
 class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     """
-    Selection overlay that allows for the selection of a line in world coordinates
+    Selection overlay that allows for the selection of a line in physical coordinates
     and displays a specific point/circle over this line (if requested).
     """
 
@@ -856,7 +837,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
                 v_pos = self.data_pixel_to_view(self.end_pixel)
                 self.drag_v_end_pos = self.select_v_end_pos = Vec(v_pos)
 
-                self._view_to_world()
+                self._view_to_phys()
 
             wx.CallAfter(self.cnvs.request_drawing_update)
 
@@ -902,7 +883,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         # If no valid selection is made, do nothing...
-        if None in (self.w_start_pos, self.w_end_pos) or self.w_start_pos == self.w_end_pos:
+        if None in (self.p_start_pos, self.p_end_pos) or self.p_start_pos == self.p_end_pos:
             return
 
         if (None, None) in (self.start_pixel, self.end_pixel):
@@ -1164,8 +1145,8 @@ class PointsOverlay(WorldOverlay):
 
         # A VA tracking the selected point
         self.point = None
-        # The possible choices for point as a world pos => point mapping
-        self.choices = {}
+        # The possible choices for point as a physical coordinates
+        self.choices = set()
 
         self.min_dist = None
 
@@ -1211,7 +1192,7 @@ class PointsOverlay(WorldOverlay):
         if self.active:
             # Clear the hover when the canvas was dragged
             if self.cursor_over_point and not self.cnvs.was_dragged:
-                self.point.value = self.choices[self.cursor_over_point]
+                self.point.value = self.cursor_over_point
                 logging.debug("Point %s selected", self.point.value)
                 self.cnvs.update_drawing()
             elif self.cnvs.was_dragged:
@@ -1238,8 +1219,8 @@ class PointsOverlay(WorldOverlay):
 
                 b_hover_box = None
 
-                for w_pos in self.choices.keys():
-                    b_box_x, b_box_y = self.cnvs.world_to_buffer(w_pos, offset)
+                for p_pos in self.choices:
+                    b_box_x, b_box_y = self.cnvs.phys_to_buffer(p_pos, offset)
 
                     if abs(b_box_x - b_x) <= self.dot_size and abs(b_box_y - b_y) <= self.dot_size:
                         # Calculate box in buffer coordinates
@@ -1261,40 +1242,25 @@ class PointsOverlay(WorldOverlay):
         WorldOverlay.on_motion(self, evt)
 
     def _calc_choices(self):
-        """ Create a mapping between world coordinates and physical points
-
-        The minimum physical distance between points is also calculated
+        """ Prepares the choices and compute the minimum physical distance
+         between points
         """
-
-        logging.debug("Calculating choices as buffer positions")
-
-        self.choices = {}
-
-        # Translate physical to buffer coordinates
-        physical_points = [c for c in self.point.choices if None not in c]
-
-        if len(physical_points) > 1:
-            for p_point in physical_points:
-                w_x, w_y = self.cnvs.physical_to_world_pos(p_point)
-                self.choices[(w_x, w_y)] = p_point
-
+        choices = [c for c in self.point.choices if None not in c]
+        if len(choices) > 1:
             # normally all the points are uniformly distributed, so just need to
             # look at the distance from the first point
-            p0 = physical_points[0]
+            p0 = choices[0]
 
             def distance(p):
                 return math.hypot(p[0] - p0[0], p[1] - p0[1])
 
-            min_dist = min(distance(p) for p in physical_points[1:])
+            min_dist = min(distance(p) for p in choices[1:])
         else:
             # can't compute the distance => pick something typical
             min_dist = 100e-9  # m
 
-            if len(physical_points) == 1:
-                w_x, w_y = self.cnvs.physical_to_world_pos(physical_points[0])
-                self.choices[(w_x, w_y)] = physical_points[0]
-
-        self.min_dist = min_dist / 2.0  # get radius
+        self.choices = frozenset(choices)
+        self.min_dist = min_dist / 2  # radius
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
@@ -1304,11 +1270,11 @@ class PointsOverlay(WorldOverlay):
         if self.b_hover_box:
             b_l, b_t, b_r, b_b = self.b_hover_box
 
-        w_cursor_over = None
+        p_cursor_over = None
         offset = self.cnvs.get_half_buffer_size()
 
-        for w_pos in self.choices.keys():
-            b_x, b_y = self.cnvs.world_to_buffer(w_pos, offset)
+        for p_pos in self.choices:
+            b_x, b_y = self.cnvs.phys_to_buffer(p_pos, offset)
 
             ctx.new_sub_path()
             ctx.arc(b_x, b_y, self.dot_size, 0, 2 * math.pi)
@@ -1316,9 +1282,9 @@ class PointsOverlay(WorldOverlay):
             # If the mouse is hovering over a dot (and we are not dragging)
             if (self.b_hover_box and (b_l <= b_x <= b_r and b_t <= b_y <= b_b) and
                     not self.cnvs.was_dragged):
-                w_cursor_over = w_pos
+                p_cursor_over = p_pos
                 ctx.set_source_rgba(*self.select_colour)
-            elif self.point.value == self.choices[w_pos]:
+            elif self.point.value == p_pos:
                 ctx.set_source_rgba(*self.select_colour)
             else:
                 ctx.set_source_rgba(*self.dot_colour)
@@ -1342,7 +1308,7 @@ class PointsOverlay(WorldOverlay):
             #               self.dot_size * 1.9)
             # ctx.stroke()
 
-        self.cursor_over_point = w_cursor_over
+        self.cursor_over_point = p_cursor_over
 
 
 class MirrorArcOverlay(WorldOverlay, DragMixin):
@@ -1354,7 +1320,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
 
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
 
-        # The world position of the hole in the mirror (starts with a non-used VA)
+        # The phys position of the hole in the mirror (starts with a non-used VA)
         self.hole_pos_va = model.TupleContinuous((0.0, 0.0), ((-1.0, -1.0), (1.0, 1.0)))
 
         # Mirror arc rendering parameters
@@ -1431,8 +1397,8 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
     def on_left_up(self, evt):
         if self.active:
             DragMixin._on_left_up(self, evt)
-            # Convert the final delta value to world coordinates and add it to the hole position
-            d = self.cnvs.world_to_physical_pos(self.cnvs.buffer_to_world(self.delta_v))
+            # Convert the final delta value to physical coordinates and add it to the hole position
+            d = self.cnvs.buffer_to_phys(self.delta_v)
             hole_pos_p = Vec(self.hole_pos_va.value) + Vec(d)
             self.hole_pos_va.value = (hole_pos_p.x, hole_pos_p.y)
             self.clear_drag()
@@ -1466,14 +1432,14 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.stroke()
         # END DEBUG Lines Buffer Center
 
-        hole_pos_w = Vec(self.cnvs.physical_to_world_pos(self.hole_pos_va.value))
+        hole_pos_p = Vec(self.hole_pos_va.value)
 
         if (self.cnvs.flip == wx.VERTICAL) != self.flipped:  # XOR
             ctx.transform(cairo.Matrix(1.0, 0.0, 0.0, -1.0))
-            hole_offset = scale * (Vec(hole_pos_w.x, -hole_pos_w.y) + (0, -self.hole_y))
+            hole_offset = scale * (hole_pos_p + (0, -self.hole_y))
             hole_offset += (self.delta_v.x, -self.delta_v.y)
         else:
-            hole_offset = scale * (hole_pos_w + (0, -self.hole_y))
+            hole_offset = scale * (Vec(hole_pos_p.x, -hole_pos_p.y) + (0, -self.hole_y))
             hole_offset += self.delta_v
 
         ctx.translate(*hole_offset)

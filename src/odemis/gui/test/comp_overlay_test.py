@@ -365,9 +365,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.dummy = print_pos
 
         slol.v_pos.subscribe(print_pos)
-        slol.w_pos.subscribe(print_pos)
-        if slol.p_pos:
-            slol.p_pos.subscribe(print_pos)
+        slol.p_pos.subscribe(print_pos)
 
         cnvs.add_view_overlay(slol)
 
