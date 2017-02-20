@@ -1400,7 +1400,7 @@ def _mergeCorrectionMetadata(da):
     img.mergeMetadata(md)
     return model.DataArray(da, md) # create a view
 
-def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False, 
+def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False,
                        file_index=None, uuid_list=None, pyramid=False):
     """
     Saves a list of DataArray as a multiple-page TIFF file.
@@ -1706,7 +1706,7 @@ def read_data(filename):
         IOError in case the file format is not as expected.
     """
     acd = open_data(filename)
-    return [acd.getData(i) for i in range(len(acd.content))]
+    return [acd.content[n].getData() for n in range(len(acd.content))]
 
 
 def read_thumbnail(filename):
@@ -1720,7 +1720,7 @@ def read_thumbnail(filename):
         IOError in case the file format is not as expected.
     """
     acd = open_data(filename)
-    return [acd.getThumbnail(i) for i in range(len(acd.thumbnails))]
+    return [acd.thumbnails[n].getData() for n in range(len(acd.thumbnails))]
 
 
 def open_data(filename):
@@ -1736,6 +1736,152 @@ def open_data(filename):
     return AcquisitionDataTIFF(filename)
 
 
+class DataArrayShadowTIFF(DataArrayShadow):
+    """
+    This class contains information about a DataArray.
+    It has all the useful attributes of a DataArray, but not the actual data.
+    """
+    def __init__(self, tiff_info, shape, dtype, metadata=None):
+        """
+        Constructor
+        tiff_info (dictionary or list of dictionaries): Information about the source tiff file
+            and directory from which the image should be read. It can be a dictionary or
+            a list of dictionaries. It is a list of dictionaries when
+            the DataArray has multiple pixelData
+            The dictionary (or each dictionary in the list) has 2 values:
+            'tiff_file' (handle): Handle of the tiff file
+            'dir_index' (int): Index of the directory
+        shape (tuple of int): The shape of the corresponding DataArray
+        dtype (numpy.dtype): The data type
+        metadata (dict str->val): The metadata
+        maxzoom (0<=int): the maximum zoom level possible. If the data isn't
+            encoded in pyramidal format, the attribute is not present.
+            The shape of the images in each zoom level is as following:
+            (shape of full image) // (2**z)
+            where z is the index of the zoom level
+        tile_shape (tuple): the shape of the tile, if the image is tiled. It is only present
+            when maxzoom is also present
+        """
+        if isinstance(tiff_info, list):
+            tiff_handle = tiff_info[0]['handle']
+        else:
+            tiff_handle = tiff_info['handle']
+
+        self.tiff_info = tiff_info
+
+        sub_ifds = tiff_handle.GetField(T.TIFFTAG_SUBIFD)
+        if sub_ifds:
+            # add the number of subdirectories, and the main image
+            maxzoom = len(sub_ifds)
+
+            num_tcols = tiff_handle.GetField(T.TIFFTAG_TILEWIDTH)
+            num_trows = tiff_handle.GetField(T.TIFFTAG_TILELENGTH)
+            if num_tcols is None or num_trows is None:
+                raise RuntimeError("The image is not tiled")
+
+            tile_shape = (num_tcols, num_trows)
+
+            # make getTile available as a public method.
+            # An other possibility would be to make the DataArrayShadowTIFF have a method
+            # called getTile directly, instead of _getTile, and then call
+            # 'del self.getTile' if the image is not tiled. But Python does not allow
+            # to delete a method from an instance, only a method from the class. But it would
+            # remove the method from all instance, and it is not what we want to do.
+            self.getTile = self._getTile
+        else:
+            maxzoom = None
+            tile_shape = None
+
+        DataArrayShadow.__init__(self, shape, dtype, metadata, maxzoom, tile_shape)
+
+    def getData(self):
+        """
+        Fetches the whole data (at full resolution) of image.
+        return DataArray: the data, with its metadata
+        """
+        # if tiff_info is a list, it means that self.content[n]
+        # is a DataArrayShadow with multiple images
+        if type(self.tiff_info) is list:
+            return self._readAndMergeImages()
+        else:
+            image = self._readImage(self.tiff_info)
+            return model.DataArray(image, metadata=self.metadata.copy())
+
+    def _readImage(self, tiff_info):
+        """
+        Reads the image of a given directory
+        tiff_info (dictionary): Information about the source tiff file and directory from which
+            the image should be read. It has 2 values:
+            'tiff_file' (handle): Handle of the tiff file
+            'dir_index' (int): Index of the directory
+        return (numpy.array): The image
+        """
+        tiff_info['handle'].SetDirectory(tiff_info['dir_index'])
+        return tiff_info['handle'].read_image()
+
+    def _readAndMergeImages(self):
+        """
+        Read the images from file, and merge them into a higher dimension DataArray.
+        return (DataArray): the merge of all the DAs. The shape is hdim_index.shape
+            + shape of original DataArrayShadow. The metadata is the metadata of the first
+            DataArrayShadow of the list
+        """
+        imset = numpy.empty(self.shape, self.dtype)
+        for tiff_info_item in self.tiff_info:
+            image = self._readImage(tiff_info_item)
+            imset[tiff_info_item['hdim_index']] = image
+
+        return model.DataArray(imset, metadata=self.metadata)
+
+    def _getTile(self, x, y, zoom):
+        '''
+        Fetches one tile
+        x (0<=int): X index of the tile.
+        y (0<=int): Y index of the tile
+        zoom (0<=int): zoom level to use. The total shape of the image is shape / 2**zoom.
+            The number of tiles available in an image is ceil((shape//zoom)/tile_shape)
+        return (DataArray): the shape of the DataArray is typically of shape
+        '''
+        # get information about how to retrieve the actual pixels from the TIFF file
+        tiff_info = self.tiff_info
+        # TODO Implement the reading of the subdata when tiff_info is a list.
+        # It is the case when the DataArray has multiple pixelData (eg, when data has more than 2D).
+        if type(tiff_info) is list:
+            raise NotImplemented("Not implemented when DataArray has multiple pixelData")
+
+        tiff_file = tiff_info['handle']
+        tiff_file.SetDirectory(tiff_info['dir_index'])
+
+        if zoom != 0:
+            # get an array of offsets, one for each subimage
+            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+            if not sub_ifds:
+                raise ValueError("Image does not have zoom levels")
+
+            if not (0 <= zoom <= len(sub_ifds)):
+                raise ValueError("Invalid Z value %d" % (zoom,))
+
+            # set the offset of the subimage. Z=0 is the main image
+            tiff_file.SetSubDirectory(sub_ifds[zoom - 1])
+
+        if not hasattr(self, 'tile_shape'):
+            raise RuntimeError("the image is not tiled")
+
+        orig_pixel_size = self.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
+
+        # calculate the pixel size of the tile for the zoom level
+        tile_pixel_size = tuple(ps * 2 ** zoom for ps in orig_pixel_size)
+
+        xp = x * self.tile_shape[0]
+        yp = y * self.tile_shape[1]
+        tile = tiff_file.read_one_tile(xp, yp)
+        tile = model.DataArray(tile, self.metadata.copy())
+        tile.metadata[model.MD_PIXEL_SIZE] = tile_pixel_size
+        # calculate the center of the tile
+        tile.metadata[model.MD_POS] = get_tile_md_pos((x, y), self.tile_shape, tile, self)
+        return tile
+
+
 class AcquisitionDataTIFF(AcquisitionData):
     """
     Implements AcquisitionData for TIFF files
@@ -1745,11 +1891,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         Constructor
         filename (string): The name of the TIFF file
         """
-        # stores the opened tiff files to release the handles properly
-        self.opened_tiff_files = []
-
         tiff_file = TIFF.open(filename, mode='r')
-        self.opened_tiff_files.append(tiff_file)
 
         data = []
         thumbnails = []
@@ -1778,7 +1920,6 @@ class AcquisitionDataTIFF(AcquisitionData):
 
                 # Keep track of the files that were already opened
                 file_read = set()
-#                 ifd_counter = 0
                 for tiff_data in root.findall("Image/Pixels/TiffData"):
 
                     uuid = tiff_data.find("UUID")
@@ -1787,9 +1928,6 @@ class AcquisitionDataTIFF(AcquisitionData):
                         continue
                     else:
                         uuid_data = uuid.get("FileName")
-#                     tiff_data.set("IFD", ifd_counter)
-#                     ifd_data = tiff_data.get("IFD")
-#                     ifd_counter += 1
                     # attach to the right path
                     uuid_path = os.path.join(path, uuid_data)
                     if uuid_data in file_read:
@@ -1822,16 +1960,6 @@ class AcquisitionDataTIFF(AcquisitionData):
 
         AcquisitionData.__init__(self, tuple(content), tuple(thumbnails))
 
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        """
-        Releases the handles of the opened tiff files
-        """
-        for tiff_file in self.opened_tiff_files:
-            tiff_file.close()
-
     @staticmethod
     def _createDataArrayShadows(tfile, dir_index, data_array_shadows, thumbnails):
         """
@@ -1853,27 +1981,21 @@ class AcquisitionDataTIFF(AcquisitionData):
         samples_pp = tfile.GetField(T.TIFFTAG_SAMPLESPERPIXEL)
         if samples_pp is None:  # default is 1
             samples_pp = 1
-        sub_ifds = tfile.GetField(T.TIFFTAG_SUBIFD)
-        if sub_ifds:
-            # add the number of subdirectories, and the main image
-            maxzoom = len(sub_ifds) + 1
-        else:
-            maxzoom = None
 
         md = _readTiffTag(tfile)  # reads tag of the current image
 
         shape = (height, width)
         if samples_pp > 1:
             shape = shape + (samples_pp,)
-        das = DataArrayShadow(shape, typ, md, maxzoom)
 
         # add handle and directory information to be used when the actual
         # pixels of the image are read
         # This information is temporary. It is not needed outside the AcquisitionDataTIFF class,
         # and it is not a part of DataArrayShadow class
-        # It can also be a a list of tiff_info, 
+        # It can also be a a list of tiff_info,
         # in case the DataArray has multiple pixelData (eg, when data has more than 2D).
-        das.tiff_info = {'handle': tfile, 'dir_index': dir_index}
+        tiff_info = {'handle': tfile, 'dir_index': dir_index}
+        das = DataArrayShadowTIFF(tiff_info, shape, typ, md)
 
         if _isThumbnail(tfile):
             data_array_shadows.append(None)
@@ -2033,13 +2155,8 @@ class AcquisitionDataTIFF(AcquisitionData):
             local_tiff_info['hdim_index'] = hi
             tiff_info_list.append(local_tiff_info)
 
-        try:
-            maxzoom = fim.maxzoom
-        except AttributeError:
-            maxzoom = None
-        mergedDataArrayShadow = DataArrayShadow(tshape, fim.dtype, fim.metadata, maxzoom)
         # add the information about each of the merged DataArrayShadows
-        mergedDataArrayShadow.tiff_info = tiff_info_list
+        mergedDataArrayShadow = DataArrayShadowTIFF(tiff_info_list, tshape, fim.dtype, fim.metadata)
         return mergedDataArrayShadow
 
     @staticmethod
@@ -2058,134 +2175,3 @@ class AcquisitionDataTIFF(AcquisitionData):
             yield dir_index
         tiff_file.SetDirectory(0)
 
-    @staticmethod
-    def _readImage(tiff_file, dir_index):
-        """
-        Reads the image of a given directory
-        tiff_file (handle): Handle of the tiff file
-        dir_index (int): Index of the directory
-        return (numpy.array): The image
-        """
-        tiff_file.SetDirectory(dir_index)
-        return tiff_file.read_image()
-
-    @staticmethod
-    def _readAndMergeImages(data_array_shadow, tiff_info):
-        """
-        Read the images from file, and merge them into a higher dimension DataArray.
-        data_array_shadow (DataArrayShadows): DataArrayShadow, with an ordered list of tiff_info 
-            (can contain more arrays than what is used in the high dimension arrays
-        tiff_info (list): Information about each image on the TIFF file. It has the 
-            handle of the tiff file, the directory index, and hdim_index, which is an
-            index where the image should be fit in the returned merged DataArray
-        return (DataArray): the merge of all the DAs. The shape is hdim_index.shape
-            + shape of original DataArrayShadow. The metadata is the metadata of the first
-            DataArrayShadow of the list
-        """
-        imset = numpy.empty(data_array_shadow.shape, data_array_shadow.dtype)
-        for tiff_info_item in tiff_info:
-            image = AcquisitionDataTIFF._readImage(tiff_info_item['handle'], tiff_info_item['dir_index'])
-            imset[tiff_info_item['hdim_index']] = image
-
-        return model.DataArray(imset, metadata=data_array_shadow.metadata)
-
-    def getData(self, n):
-        """
-        Fetches the whole data (at full resolution) of image at index n.
-        n (0<=int): index of the image
-        return DataArray: the data, with its metadata (ie, identical to .content[n] but
-            with the actual data)
-        """
-        tiff_info = self.content[n].tiff_info
-        # if tiff_info is a list, it means that self.content[n]
-        # is a DataArrayShadow with multiple images
-        if type(tiff_info) is list:
-            return AcquisitionDataTIFF._readAndMergeImages(self.content[n], tiff_info)
-        else:
-            image = AcquisitionDataTIFF._readImage(tiff_info['handle'], tiff_info['dir_index'])
-            return model.DataArray(image, metadata=self.content[n].metadata.copy())
-
-    def getSubData(self, n, z, rect):
-        """
-        Fetches a part of the data, for a given zoom. If the (complete) data has more
-        than two dimensions, all the extra dimensions (ie, non-spatial) are always fully
-        returned for the given part.
-        n (int): index of the image
-        z (0 <= int) : zoom level. The data returned will be with MD_PIXEL_SIZE * 2^z.
-            So 0 means to use the highest zoom, with the original pixel size. 1 will
-            return data half the width and heigh (The maximum possible value depends
-            on the data).
-        rect (4 ints): left, top, right, bottom coordinates (in px, at zoom=0) of the
-            area of interest.
-        return (tuple of tuple of DataArray): all the tiles in X&Y dimension, so that
-            the area of interest is fully covered (so the area can be larger than requested).
-            The first dimension is X, and second is Y. For example, if returning 3x7 tiles,
-            the most bottom-right tile will be accessed as ret[2][6]. For each
-            DataArray.metadata, MD_POS and MD_PIXEL_SIZE are updated appropriately
-            (if MD_POS is not present, (0,0) is used as default for the entire image, and if
-            MD_PIXEL_SIZE is not present, it will not be updated).
-        raise ValueError: if the area or z is out of range, or if the raw data is not pyramidal.
-        """
-        if not (0 <= n < len(self.content)):
-            raise ValueError("Invalid N value %d" % (n,))
-
-        # get information about how to retrieve the actual pixels from the TIFF file
-        tiff_info = self.content[n].tiff_info
-        # TODO Implement the reading of the subdata when tiff_info is a list.
-        # It is the case when the DataArray has multiple pixelData (eg, when data has more than 2D).
-        if type(tiff_info) is list:
-            raise NotImplemented("Not implemented when DataArray has multiple pixelData")
-
-        tiff_file = tiff_info['handle']
-        tiff_file.SetDirectory(tiff_info['dir_index'])
-
-        if z != 0:
-            # get an array of offsets, one for each subimage
-            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
-            if not sub_ifds:
-                raise ValueError("Image does not have zoom levels")
-
-            if not (0 <= z <= len(sub_ifds)):
-                raise ValueError("Invalid Z value %d" % (z,))
-
-            # set the offset of the subimage. Z=0 is the main image
-            tiff_file.SetSubDirectory(sub_ifds[z - 1])
-
-        num_tcols = tiff_file.GetField(T.TIFFTAG_TILEWIDTH)
-        num_trows = tiff_file.GetField(T.TIFFTAG_TILELENGTH)
-
-        if not num_tcols or not num_trows:
-            raise RuntimeError("the image is not tiled")
-
-        orig_pixel_size = self.content[n].metadata.get(model.MD_PIXEL_SIZE, (1, 1))
-
-        # calculate the pixel size of the tile for the zoom level
-        tile_pixel_size = tuple(ps * 2 ** z for ps in orig_pixel_size)
-        # calculate the rect coordinates for the zoom level
-        rect = tuple(r // 2 ** z for r in rect)
-
-        x1, y1, x2, y2 = rect
-        tiles = []
-        for xi, x in enumerate(range(x1, x2 + 1, num_tcols)):
-            tiles_column = []
-            for yi, y in enumerate(range(y1, y2 + 1, num_trows)):
-                tile = tiff_file.read_one_tile(x, y)
-                tile = model.DataArray(tile, self.content[n].metadata.copy())
-                tile.metadata[model.MD_PIXEL_SIZE] = tile_pixel_size
-                # calculate the center of the tile
-                tile.metadata[model.MD_POS] = \
-                    get_tile_md_pos((xi, yi), (TILE_SIZE, TILE_SIZE), tile, self.content[n])
-                tiles_column.append(tile)
-
-            tiles.append(tuple(tiles_column))
-
-        return tuple(tiles)
-
-    def getThumbnail(self, n):
-        """
-        Get the thumbnail image
-        n (int): Index of the thumbnail
-        """
-        tiff_info = self.thumbnails[n].tiff_info
-        image = AcquisitionDataTIFF._readImage(tiff_info['handle'], tiff_info['dir_index'])
-        return model.DataArray(image, metadata=self.thumbnails[n].metadata)
