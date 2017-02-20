@@ -481,10 +481,10 @@ def set_images(im_args):
     """ Set (or update) image
 
     im_args: (list of tuples): Each element is either None or
-        (im, w_pos, scale, keepalpha, rotation, name, blend_mode)
+        (im, p_pos, scale, keepalpha, rotation, name, blend_mode)
 
         0. im (DataArray of shape YXC): the image
-        1. w_pos (2-tuple of float): position of the center of the image (in world units)
+        1. p_pos (2-tuple of float): position of the center of the image (in physical coordinates)
         2. scale (float, float): scale of the image
         3. keepalpha (boolean): whether the alpha channel must be used to draw
         4. rotation (float): clockwise rotation in radians on the center of the image
@@ -505,7 +505,7 @@ def set_images(im_args):
         if args is None:
             images.append(None)
         else:
-            im, w_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name, date, stream = args
+            im, p_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name, date, stream = args
 
             if not blend_mode:
                 blend_mode = BLEND_DEFAULT
@@ -521,7 +521,7 @@ def set_images(im_args):
                 # Handle grayscale images pretending they are rgb
                 pass
 
-            im.metadata['dc_center'] = w_pos
+            im.metadata['dc_center'] = p_pos
             im.metadata['dc_scale'] = scale
             im.metadata['dc_rotation'] = rotation
             im.metadata['dc_shear'] = shear
@@ -537,15 +537,15 @@ def set_images(im_args):
     return images
 
 
-def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_scale, buffer_size):
+def calc_img_buffer_rect(im_data, im_scale, p_im_center, buffer_center, buffer_scale, buffer_size):
     """ Compute the rectangle containing the image in buffer coordinates
 
     The (top, left) value are relative to the 0,0 top left of the buffer.
 
     im_data (DataArray): image data
     im_scale (float, float): The x and y scales of the image
-    w_im_center (float, float): The center of the image in world coordinates
-    buffer_center (float, float): The buffer center
+    p_im_center (float, float): The center of the image in phys coordinates
+    buffer_center (float, float): The buffer center (in phys coordinates)
     buffer_scale (float, float): The buffer scale
     buffer_size (float, float): The buffer size
 
@@ -561,18 +561,18 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
     scale_x, scale_y = im_scale
     scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
-    # Calculate the top left
-    w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
-                 w_im_center[1] - (scaled_im_size[1] / 2))
+    # Calculate the top left (in buffer coordinates, so bottom left in phys)
+    p_topleft = (p_im_center[0] - (scaled_im_size[0] / 2),
+                 p_im_center[1] + (scaled_im_size[1] / 2))
 
-    b_topleft = (round(((w_topleft[0] - buffer_center[0]) // buffer_scale[0]) + (buffer_size[0] // 2)),
-                 round(((w_topleft[1] + buffer_center[1]) // buffer_scale[1]) + (buffer_size[1] // 2)))
+    b_topleft = (round(((p_topleft[0] - buffer_center[0]) // buffer_scale[0]) + (buffer_size[0] // 2)),
+                 round((-(p_topleft[1] - buffer_center[1]) // buffer_scale[1]) + (buffer_size[1] // 2)))
 
     final_size = (scaled_im_size[0] // buffer_scale[0], scaled_im_size[1] // buffer_scale[1])
     return b_topleft + final_size
 
 
-def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
+def draw_image(ctx, im_data, p_im_center, buffer_center, buffer_scale,
                buffer_size, opacity=1.0, im_scale=(1.0, 1.0), rotation=None,
                shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False):
     """ Draw the given image to the Cairo context
@@ -581,7 +581,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
 
     ctx (cairo.Context): Cario context to draw on
     im_data (DataArray): Image to draw
-    w_im_center (2-tuple float)
+    p_im_center (2-tuple float)
     buffer_center (float, float): The buffer center
     buffer_scale (float, float): The buffer scale
     buffer_size (float, float): The buffer size
@@ -602,7 +602,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
 
     # Determine the rectangle the image would occupy in the buffer
     # TODO: check why it works when there is rotation or skew
-    b_im_rect = calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_scale, buffer_size)
+    b_im_rect = calc_img_buffer_rect(im_data, im_scale, p_im_center, buffer_center, buffer_scale, buffer_size)
 
     # To small to see, so no need to draw
     if b_im_rect[2] < 1 or b_im_rect[3] < 1:
@@ -1655,17 +1655,6 @@ def get_ordered_images(streams, raw=False):
     return images_opt + images_std + images_spc, im_min_type
 
 
-def physical_to_world_pos(phy_pos):
-    """ Translate physical coordinates into world coordinates.
-    Works both for absolute and relative values.
-
-    phy_pos (float, float): "physical" coordinates in m
-    returns (float, float)
-    """
-    # The y value needs to be flipped between physical and world coordinates.
-    return phy_pos[0], -phy_pos[1]
-
-
 # Similar to miccanvas, but without cache, and with trick to support raw export
 def convert_streams_to_images(streams, raw=False):
     """ Temporary function to convert the StreamTree to a list of images as
@@ -1687,7 +1676,7 @@ def convert_streams_to_images(streams, raw=False):
         keepalpha = False
         date = rgbim.metadata.get(model.MD_ACQ_DATE, None)
         scale = rgbim.metadata[model.MD_PIXEL_SIZE]
-        pos = physical_to_world_pos(rgbim.metadata[model.MD_POS])
+        pos = rgbim.metadata[model.MD_POS]
         rot = rgbim.metadata.get(model.MD_ROTATION, 0)
         shear = rgbim.metadata.get(model.MD_SHEAR, 0)
         flip = rgbim.metadata.get(model.MD_FLIP, 0)

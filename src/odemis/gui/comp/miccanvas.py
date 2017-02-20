@@ -4,7 +4,7 @@ Created on 6 Feb 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2013 Éric Piel, Delmic
+Copyright © 2012-2017 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -153,9 +153,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view.view_pos.subscribe(self._onViewPos)
         # Update new position immediately, so that fit_to_content() directly
         # gets the correct center
-        world_pos = self.physical_to_world_pos(self.microscope_view.view_pos.value)
-        self._calc_bg_offset(world_pos)
-        self.requested_world_pos = world_pos
+        phys_pos = self.microscope_view.view_pos.value
+        self._calc_bg_offset(phys_pos)
+        self.requested_phys_pos = phys_pos
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._on_view_image_update, init=True)
@@ -427,7 +427,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]
-            pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
+            pos = rgbim.metadata[model.MD_POS]
             rot = rgbim.metadata.get(model.MD_ROTATION, 0)
             shear = rgbim.metadata.get(model.MD_SHEAR, 0)
             flip = rgbim.metadata.get(model.MD_FLIP, 0)
@@ -485,39 +485,36 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if img is not None:
                 self.microscope_view.thumbnail.value = img
 
-    def _onViewPos(self, phy_pos):
+    def _onViewPos(self, phys_pos):
         """
         When the view position is updated: recenter the view
-        phy_pos (tuple of 2 float): X/Y in physical coordinates (m)
+        phys_pos (tuple of 2 float): X/Y in physical coordinates (m)
         """
-        pos = self.physical_to_world_pos(phy_pos)
         # skip ourselves, to avoid asking the stage to move to (almost) the same position
-        super(DblMicroscopeCanvas, self).recenter_buffer(pos)
+        super(DblMicroscopeCanvas, self).recenter_buffer(phys_pos)
 
-    def recenter_buffer(self, world_pos):
+    def recenter_buffer(self, phys_pos):
         """
         Update the position of the buffer on the world
-        world_pos (float, float): the coordinates of the center of the buffer in
-                                  world units
+        phys_pos (float, float): the coordinates of the center of the buffer in
+                                 physical units (m, with Y going up)
         """
         # in case we are not attached to a view yet (shouldn't happen)
-        super(DblMicroscopeCanvas, self).recenter_buffer(world_pos)
+        super(DblMicroscopeCanvas, self).recenter_buffer(phys_pos)
         if self.microscope_view:
-            physical_pos = self.world_to_physical_pos(world_pos)
             # This will call _onViewPos() -> recenter_buffer(), but as
             # recenter_buffer() has already been called with this position,
             # nothing will happen
-            self.microscope_view.view_pos.value = physical_pos
+            self.microscope_view.view_pos.value = phys_pos
 
     def on_center_position_changed(self, shift):
         """
         Called whenever the view position changes.
 
-        shift (float, float): offset moved in world coordinates
+        shift (float, float): offset moved in physical coordinates
         """
         if self.microscope_view:
-            phys_shift = self.world_to_physical_pos(shift)
-            self.microscope_view.moveStageBy(phys_shift)
+            self.microscope_view.moveStageBy(shift)
 
     def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP and center to fit to the current content
@@ -539,8 +536,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             new_mpp = 1 / self.scale
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
             if recenter:
-                phy_pos = self.world_to_physical_pos(self.requested_world_pos)
-                self.microscope_view.view_pos.value = phy_pos
+                self.microscope_view.view_pos.value = self.requested_phys_pos
 
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
@@ -757,26 +753,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).on_motion(evt)
 
-    def world_to_physical_pos(self, pos):
-        """ Translate world coordinates into physical coordinates.
-        Works both for absolute and relative values.
-
-        :param pos: (float, float) "world" coordinates
-        :return: (float, float)
-        """
-        # The y value needs to be flipped between physical and world coordinates.
-        return (pos[0], -pos[1])
-
-    def physical_to_world_pos(self, phy_pos):
-        """ Translate physical coordinates into world coordinates.
-        Works both for absolute and relative values.
-
-        :param phy_pos: (float, float) "physical" coordinates in m
-        :return: (float, float)
-        """
-        # The y value needs to be flipped between physical and world coordinates.
-        return phy_pos[0], -phy_pos[1]
-
     def _get_sem_rect(self):
         """
         Returns the (theoretical) scanning area of the SEM. Works even if the
@@ -918,9 +894,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         return phys_rect
 
-    def selection_to_real_size(self, start_w_pos, end_w_pos):
-        w = abs(start_w_pos[0] - end_w_pos[0])
-        h = abs(start_w_pos[1] - end_w_pos[1])
+    # TODO: this is just a subtraction -> just let the caller do it
+    def selection_to_real_size(self, start_p_pos, end_p_pos):
+        w = abs(start_p_pos[0] - end_p_pos[0])
+        h = abs(start_p_pos[1] - end_p_pos[1])
         return w, h
 
     def draw(self):

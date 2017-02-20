@@ -4,7 +4,7 @@
 
 :created: 2 Feb 2012
 :author: Éric Piel, Rinze de Laat
-:copyright: © 2012 Delmic
+:copyright: © 2012-2017 Delmic
 
 ..license::
     This file is part of Odemis.
@@ -52,23 +52,14 @@ buffer:
 
     Attributes related to the view have the prefix `b_`
 
-world:
+physical:
     This coordinate system has its origin 0.0,0.0 and it's the starting point of
     the microscope's operation. From this origin, the microscope can move up,
-    down, left and right. Left and down are considered the positive directions.
+    down, left and right. Left and *up* are considered the positive directions.
 
-    World coordinates are expressed using float numbers.
+    The coordinates are expressed using float numbers.
 
-    Attributes related to the world coordinate system have the prefix `w_`.
-
-    The relation between world and buffer is determined by `scale`.
-
-physical:
-    Basically the same as the world coordinate system, with the exception that
-    *up* is the positive direction, instead of down.
-
-    Because only this minor difference exists between the systems, they will
-    most likely be merge into one in the future.
+    The relation between physical and buffer is determined by `scale`.
 
     Attributes related to the physical coordinate system have the prefix `p_`
 
@@ -98,10 +89,10 @@ This canvas class is an abstract base class on which all other canvasses used
 by Odemis are based. It uses an internal bitmap as a buffer from which graphical
 data is displayed on the screen.
 
-The canvas starts off at the origin of the world coordinate system with the
+The canvas starts off at the origin of the physical coordinate system with the
 buffer's center aligned with this origin. If the view is moved, the center of
-this buffer is realigned with this new world coordinate. The current world
-position of the center of the buffer is stored in the `w_buffer_center`
+this buffer is realigned with this new world coordinate. The current physical
+position of the center of the buffer is stored in the `p_buffer_center`
 attribute.
 
 Graphical data is drawn using the following sequence of method calls:
@@ -204,7 +195,7 @@ class BufferedCanvas(wx.Panel):
         # Memory buffer device context
         self._dc_buffer = wx.MemoryDC()
         # Center of the buffer in world coordinates
-        self.w_buffer_center = (0, 0)
+        self.p_buffer_center = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
         self._bmp_buffer = None
         # very small first, so that for sure it'll be resized with on_size
@@ -621,8 +612,8 @@ class BufferedCanvas(wx.Panel):
             ctx.restore()
 
     @classmethod
-    def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=(0, 0)):
-        """ Convert a position in world coordinates into buffer coordinates
+    def phys_to_buffer_pos(cls, p_pos, p_buff_center, scale, offset=(0, 0)):
+        """ Convert a position in physical coordinates into buffer coordinates
 
         The value calculated is relative to the buffer center, which is regarded as the 0,0 origin.
 
@@ -632,8 +623,8 @@ class BufferedCanvas(wx.Panel):
         ..Note:
             This method does not check if the given world position actually falls within the buffer.
 
-        :param w_pos: (float, float) the coordinates in the world
-        :param w_buff_center: the center of the buffer in world coordinates
+        :param p_pos: (float, float) the coordinates in the world
+        :param p_buff_center: the center of the buffer in world coordinates
         :param scale: the scale of the world compared to the buffer.
             I.e.: with scale 2, 100px of world data are displayed using 200px of buffer space.
             (The world is zoomed in with a scale > 1)
@@ -643,15 +634,15 @@ class BufferedCanvas(wx.Panel):
 
         """
 
-        return (round((w_pos[0] - w_buff_center[0]) * scale + offset[0]),
-                round((w_pos[1] - w_buff_center[1]) * scale + offset[1]))
+        return (round((p_pos[0] - p_buff_center[0]) * scale + offset[0]),
+                round(-(p_pos[1] - p_buff_center[1]) * scale + offset[1]))
 
     @classmethod
-    def buffer_to_world_pos(cls, b_pos, w_buffer_center, scale, offset=(0, 0)):
-        """ Convert a position from buffer coordinates into world coordinates
+    def buffer_to_phys_pos(cls, b_pos, p_buffer_center, scale, offset=(0, 0)):
+        """ Convert a position from buffer coordinates into physical coordinates
 
         :param b_pos: (int, int) the buffer coordinates
-        :param w_buffer_center: the center of the buffer in world coordinates
+        :param p_buffer_center: the center of the buffer in world coordinates
         :param scale: the scale of the world compared to the buffer.
             I.e.: with scale 2, 100px of world data are displayed using 200px of buffer space.
             (The world is zoomed in with a scale > 1)
@@ -661,8 +652,8 @@ class BufferedCanvas(wx.Panel):
 
         """
 
-        return (w_buffer_center[0] + (b_pos[0] - offset[0]) / scale,
-                w_buffer_center[1] + (b_pos[1] - offset[1]) / scale)
+        return (p_buffer_center[0] + (b_pos[0] - offset[0]) / scale,
+                p_buffer_center[1] - (b_pos[1] - offset[1]) / scale)
 
     @classmethod
     def view_to_buffer_pos(cls, v_pos, margins):
@@ -709,34 +700,35 @@ class BufferedCanvas(wx.Panel):
         else:
             return v_pos
 
-    # View <-> World
+    # View <-> Phys
     @classmethod
-    def view_to_world_pos(cls, v_pos, w_buff_cent, margins, scale, offset=(0, 0)):
-        """ Convert a position in view coordinates into world coordinates
+    def view_to_phys_pos(cls, v_pos, p_buff_cent, margins, scale, offset=(0, 0)):
+        """ Convert a position in view coordinates into physical coordinates (m)
 
-        See `view_to_buffer_pos` and `buffer_to_world_pos` for more details
+        See `view_to_buffer_pos` and `buffer_to_phys_pos` for more details
 
         """
 
-        return cls.buffer_to_world_pos(
+        return cls.buffer_to_phys_pos(
             cls.view_to_buffer_pos(v_pos, margins),
-            w_buff_cent,
+            p_buff_cent,
             scale,
             offset
         )
 
     @classmethod
-    def world_to_view_pos(cls, w_pos, w_buff_cent, margins, scale, offset=(0, 0)):
-        """ Convert a position in world coordinates into view coordinates
+    def phys_to_view_pos(cls, w_pos, p_buff_cent, margins, scale, offset=(0, 0)):
+        """ Convert a position in physical coordinates into view coordinates
 
         See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
 
         """
 
         return cls.buffer_to_view_pos(
-            cls.world_to_buffer_pos(w_pos, w_buff_cent, scale, offset),
+            cls.phys_to_buffer_pos(w_pos, p_buff_cent, scale, offset),
             margins
         )
+
 
     # ########### END Position conversion ############
 
@@ -800,7 +792,7 @@ class BitmapCanvas(BufferedCanvas):
         self.images = [None]
         # Merge ratio for combining the images
         self.merge_ratio = 0.3
-        self.scale = 1.0  # px/wu
+        self.scale = 1.0  # px/m
         self.margins = (0, 0)
 
     def clear(self):
@@ -894,7 +886,7 @@ class BitmapCanvas(BufferedCanvas):
         # context.
         for o in self.world_overlays:
             ctx.save()
-            o.draw(ctx, self.w_buffer_center, self.scale)
+            o.draw(ctx, self.p_buffer_center, self.scale)
             ctx.restore()
 
     def _draw_merged_images(self, ctx, interpolate_data=False):
@@ -984,7 +976,7 @@ class BitmapCanvas(BufferedCanvas):
                 interpolate_data=interpolate_data
             )
 
-    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0,
+    def _draw_image(self, ctx, im_data, p_im_center, opacity=1.0,
                     im_scale=(1.0, 1.0), rotation=None, shear=None, flip=None,
                     blend_mode=BLEND_DEFAULT, interpolate_data=False):
         """ Draw the given image to the Cairo context
@@ -1010,7 +1002,7 @@ class BitmapCanvas(BufferedCanvas):
             return
 
         # Determine the rectangle the image would occupy in the buffer
-        b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, w_im_center)
+        b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, p_im_center)
         # logging.debug("Image on buffer %s", b_im_rect)
 
         # To small to see, so no need to draw
@@ -1109,14 +1101,14 @@ class BitmapCanvas(BufferedCanvas):
         # Restore the cached transformation matrix
         ctx.restore()
 
-    def _calc_img_buffer_rect(self, im_data, im_scale, w_im_center):
+    def _calc_img_buffer_rect(self, im_data, im_scale, p_im_center):
         """ Compute the rectangle containing the image in buffer coordinates
 
         The (top, left) value are relative to the 0,0 top left of the buffer.
 
         :param im_data: (DataArray) image data
         :param im_scale: (float, float) The x and y scales of the image
-        :param w_im_center: (float, float) The center of the image in world coordinates
+        :param p_im_center: (float, float) The center of the image in physical coordinates
 
         :return: (float, float, float, float) top, left, width, height
 
@@ -1132,12 +1124,12 @@ class BitmapCanvas(BufferedCanvas):
         scale_x, scale_y = im_scale
         scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
-        # Calculate the top left
-        w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
-                     w_im_center[1] - (scaled_im_size[1] / 2))
+        # Calculate the top left (in buffer coordinates, so bottom left in phys)
+        p_topleft = (p_im_center[0] - (scaled_im_size[0] / 2),
+                     p_im_center[1] + (scaled_im_size[1] / 2))
 
         # Translate to buffer coordinates (remember, buffer is world + scale)
-        b_topleft = self.world_to_buffer(w_topleft, self.get_half_buffer_size())
+        b_topleft = self.phys_to_buffer(p_topleft, self.get_half_buffer_size())
         # Adjust the size to the buffer scale (on top of the earlier image
         # scale)
         final_size = (scaled_im_size[0] * self.scale, scaled_im_size[1] * self.scale)
@@ -1146,38 +1138,38 @@ class BitmapCanvas(BufferedCanvas):
 
     # Position conversion
 
-    def world_to_buffer(self, pos, offset=(0, 0)):
-        return super(BitmapCanvas, self).world_to_buffer_pos(
+    def phys_to_buffer(self, pos, offset=(0, 0)):
+        return super(BitmapCanvas, self).phys_to_buffer_pos(
             pos,
-            self.w_buffer_center,
+            self.p_buffer_center,
             self.scale,
             offset
         )
 
-    def buffer_to_world(self, pos, offset=(0, 0)):
-        return super(BitmapCanvas, self).buffer_to_world_pos(
+    def buffer_to_phys(self, pos, offset=(0, 0)):
+        return super(BitmapCanvas, self).buffer_to_phys_pos(
             pos,
-            self.w_buffer_center,
+            self.p_buffer_center,
             self.scale,
             offset
         )
 
-    def view_to_world(self, pos, offset=(0, 0)):
-        return super(BitmapCanvas, self).view_to_world_pos(
+    def view_to_phys(self, pos, offset=(0, 0)):
+        return super(BitmapCanvas, self).view_to_phys_pos(
             pos,
-            self.w_buffer_center,
+            self.p_buffer_center,
             self.margins,
             self.scale,
             offset)
 
-    def world_to_view(self, pos, offset=(0, 0)):
+    def phys_to_view(self, pos, offset=(0, 0)):
         # TODO: either indicate what should be offset (half the buffer size?)
         # or remove from argument and always use the right value
-        # TODO: there is probably no reason we need to include the buffer size
-        # into the computations
-        return super(BitmapCanvas, self).world_to_view_pos(
+        # Or is it needed to convert a distance from phys (m) to view (px)?
+        # => just use a special argument or function
+        return super(BitmapCanvas, self).phys_to_view_pos(
             pos,
-            self.w_buffer_center,
+            self.p_buffer_center,
             self.margins,
             self.scale,
             offset)
@@ -1240,7 +1232,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # the position the view is asking to the next buffer recomputation
         # in buffer-coordinates: = 1px at scale = 1
-        self.requested_world_pos = self.w_buffer_center
+        self.requested_phys_pos = self.p_buffer_center
 
         # Indicate a left mouse button drag in the canvas
         # Note: *only* use it indicate that the *canvas* is performing an operation related to
@@ -1342,12 +1334,12 @@ class DraggableCanvas(BitmapCanvas):
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
             offset = (-self.drag_shift[0] / self.scale,
-                      - self.drag_shift[1] / self.scale)
-            self.recenter_buffer((self.w_buffer_center[0] + offset[0],
-                                  self.w_buffer_center[1] + offset[1]))
+                      self.drag_shift[1] / self.scale)
+            self.recenter_buffer((self.p_buffer_center[0] + offset[0],
+                                  self.p_buffer_center[1] + offset[1]))
 
             self.on_center_position_changed(offset)
-            # Update the drawing immediately, since w_buffer_center need to be updated
+            # Update the drawing immediately, since p_buffer_center need to be updated
             self.update_drawing()
 
         super(DraggableCanvas, self).on_left_up(evt)
@@ -1397,9 +1389,9 @@ class DraggableCanvas(BitmapCanvas):
             self.Refresh()
 
             # recompute the view
-            offset = (-shift[0] / self.scale, -shift[1] / self.scale)
-            new_pos = (self.w_buffer_center[0] + offset[0],
-                       self.w_buffer_center[1] + offset[1])
+            offset = (-shift[0] / self.scale, shift[1] / self.scale)
+            new_pos = (self.p_buffer_center[0] + offset[0],
+                       self.p_buffer_center[1] + offset[1])
             self.recenter_buffer(new_pos)
 
             self.on_center_position_changed(offset)
@@ -1459,9 +1451,9 @@ class DraggableCanvas(BitmapCanvas):
 
         :param shift: (int, int) delta in buffer coordinates (pixels)
         """
-        offset = (-shift[0] / self.scale, -shift[1] / self.scale)
-        self.recenter_buffer((self.w_buffer_center[0] + offset[0],
-                              self.w_buffer_center[1] + offset[1]))
+        offset = (-shift[0] / self.scale, shift[1] / self.scale)
+        self.recenter_buffer((self.p_buffer_center[0] + offset[0],
+                              self.p_buffer_center[1] + offset[1]))
 
         self.on_center_position_changed(offset)
 
@@ -1469,12 +1461,12 @@ class DraggableCanvas(BitmapCanvas):
         """
         Called whenever the view position changes.
         This can be overriden by sub-classes to detect such changes.
-        The new (absolute) position is in .requested_world_pos
+        The new (absolute) position is in .requested_phys_pos
 
         shift (float, float): offset moved in world coordinates
         """
-        logging.debug("Canvas position changed by %s, new position is %s wu",
-                      shift, self.requested_world_pos)
+        logging.debug("Canvas position changed by %s, new position is %s m",
+                      shift, self.requested_phys_pos)
 
     def on_paint(self, evt):
         """ Quick update of the window content with the buffer + the static
@@ -1521,27 +1513,27 @@ class DraggableCanvas(BitmapCanvas):
         :param new_pos: (float, float) new world position
         """
 
-        # Convert the shift in world units into pixels
-        old_pos = self.requested_world_pos
-        shift_world = (old_pos[0] - new_pos[0],
-                       old_pos[1] - new_pos[1])
-        shift_px = (int(round(self.scale * shift_world[0])),
-                    int(round(self.scale * shift_world[1])))
+        # Convert the shift in physical coordinates into pixels
+        old_pos = self.requested_phys_pos
+        shift_phys = (old_pos[0] - new_pos[0],
+                      old_pos[1] - new_pos[1])
+        shift_px = (int(round(self.scale * shift_phys[0])),
+                    - int(round(self.scale * shift_phys[1])))
         self.background_offset = (
             (self.background_offset[0] - shift_px[0]) % self.background_img.Size.x,
             (self.background_offset[1] - shift_px[1]) % self.background_img.Size.y
         )
 
-    def recenter_buffer(self, world_pos):
+    def recenter_buffer(self, phys_pos):
         """ Update the position of the buffer on the world
 
         :param world_pos: (2-tuple float) The world coordinates to center the
             buffer on.
         """
 
-        if self.requested_world_pos != world_pos:
-            self._calc_bg_offset(world_pos)
-            self.requested_world_pos = world_pos
+        if self.requested_phys_pos != phys_pos:
+            self._calc_bg_offset(phys_pos)
+            self.requested_phys_pos = phys_pos
             # TODO: could maybe be more clever and only request redraw for the
             # outside region
             wx.CallAfter(self.request_drawing_update)
@@ -1562,8 +1554,8 @@ class DraggableCanvas(BitmapCanvas):
     def update_drawing(self):
         """ Redraws everything (that is viewed in the buffer) """
 
-        prev_world_pos = self.w_buffer_center
-        self.w_buffer_center = self.requested_world_pos
+        prev_phys_pos = self.p_buffer_center
+        self.p_buffer_center = self.requested_phys_pos
 
         self.draw()
 
@@ -1571,8 +1563,8 @@ class DraggableCanvas(BitmapCanvas):
         if self._ldragging:
             # Calculate the amount the view has shifted in pixels
             shift_view = (
-                (self.w_buffer_center[0] - prev_world_pos[0]) * self.scale,
-                (self.w_buffer_center[1] - prev_world_pos[1]) * self.scale,
+                (self.p_buffer_center[0] - prev_phys_pos[0]) * self.scale,
+                - (self.p_buffer_center[1] - prev_phys_pos[1]) * self.scale,
             )
 
             self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
@@ -1604,7 +1596,7 @@ class DraggableCanvas(BitmapCanvas):
         # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
 
         # Find bounding box of all the content
-        bbox = [None, None, None, None]  # ltrb in wu
+        bbox = [None, None, None, None]  # ltrb in m
         for im in self.images:
             if im is None:
                 continue
@@ -1623,15 +1615,16 @@ class DraggableCanvas(BitmapCanvas):
 
         # if no recenter, increase bbox so that its center is the current center
         if not recenter:
-            c = self.requested_world_pos  # think ahead, use the next center pos
+            c = self.requested_phys_pos  # think ahead, use the next center pos
             hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
             hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
             bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
 
+        # TODO: check sign of Y
         # compute mpp so that the bbox fits exactly the visible part
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # wu
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
         if w == 0 or h == 0:
-            logging.warning("Weird image size of %fx%f wu", w, h)
+            logging.warning("Weird image size of %fx%f m", w, h)
             return  # no image
         cs = self.ClientSize
         cw = max(1, cs[0])  # px
@@ -1643,7 +1636,7 @@ class DraggableCanvas(BitmapCanvas):
 
         if recenter:
             c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
-            self.requested_world_pos = c  # As recenter_buffer but without request_drawing_update
+            self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
 
         wx.CallAfter(self.request_drawing_update)
 

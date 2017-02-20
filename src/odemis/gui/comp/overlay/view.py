@@ -1285,7 +1285,7 @@ class PolarOverlay(base.ViewOverlay):
 
 
 class PointSelectOverlay(base.ViewOverlay):
-    """ Overlay for the selection of canvas points in view, world and physical coordinates """
+    """ Overlay for the selection of canvas points in view and physical coordinates """
 
     def __init__(self, cnvs):
         base.ViewOverlay.__init__(self, cnvs)
@@ -1293,7 +1293,6 @@ class PointSelectOverlay(base.ViewOverlay):
 
         # Physical position of the last click
         self.v_pos = model.VigilantAttribute(None)
-        self.w_pos = model.VigilantAttribute(None)
         self.p_pos = model.VigilantAttribute(None)
 
     # Event Handlers
@@ -1317,13 +1316,12 @@ class PointSelectOverlay(base.ViewOverlay):
     def on_left_up(self, evt):
         if self.active:
             v_pos = evt.GetPositionTuple()
-            w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_buffer_size())
+            p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
 
             self.v_pos.value = v_pos
-            self.w_pos.value = w_pos
-            self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
-            logging.debug("Point selected (view, world, physical): %s, %s, %s)",
-                          self.v_pos.value, self.w_pos.value, self.p_pos.value)
+            self.p_pos.value = p_pos
+            logging.debug("Point selected (view, physical): %s, %s)",
+                          self.v_pos.value, self.p_pos.value)
         else:
             base.ViewOverlay.on_left_up(self, evt)
 
@@ -1379,7 +1377,7 @@ class HistoryOverlay(base.ViewOverlay):
 
         for i, (p_center, p_size) in enumerate(self.history.value):
             alpha = (i + 1) * (0.8 / len(self.history.value)) + 0.2 if self.fade else 1.0
-            v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
+            v_center = self.cnvs.phys_to_view(p_center, offset)
 
             if scale:
                 v_center = (shift[0] + v_center[0] * scale,

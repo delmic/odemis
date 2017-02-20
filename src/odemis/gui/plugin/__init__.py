@@ -497,6 +497,7 @@ class AcquisitionDialog(xrcfr_plugin):
         self.Update()
 
     def on_close(self, btnid, _):
+        logging.debug("Closing window")
         self.EndModal(btnid)
 
     @call_in_wx_main
@@ -504,5 +505,7 @@ class AcquisitionDialog(xrcfr_plugin):
         # save the return code, as Destroy() automatically sets it to wx.ID_CANCEL
         # but we want to keep the value potentially set by the button.
         rc = self.ReturnCode
+        logging.debug("Destroying acquisition dialog")
         super(AcquisitionDialog, self).Destroy(*args, **kwargs)
         self.ReturnCode = rc
+        logging.debug("Dialog destroyed")

@@ -276,7 +276,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         """ This test checks the various conversion functions and methods """
 
         view_size = (200, 200)
-        buffer_world_center = (0, 0)
+        buffer_phys_center = (0, 0)
         buffer_margin = (100, 100)
         buffer_size = (400, 400)  # buffer - margin = 200x200 viewport
         offset = (200, 200)
@@ -289,93 +289,93 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
                          "Illegal test values! %s != %s" % (view_size, total_size))
 
         # Matching values at scale 1
-        view_buffer_world_values = [
+        view_buffer_phys_values = [
             # view         buffer       world
-            ((-201, -201), (-101, -101), (-301, -301)),
-            ((-1, -1),     (99, 99),     (-101, -101)),
-            ((0, 0),       (100, 100),   (-100, -100)),
-            ((100, 100),   (200, 200),   (0, 0)),
-            ((200, 200),   (300, 300),   (100, 100)),
-            ((400, 400),   (500, 500),   (300, 300)),
-            ((401, 401),   (501, 501),   (301, 301)),
+            ((-201, -201), (-101, -101), (-301, 301)),
+            ((-1, -1), (99, 99), (-101, 101)),
+            ((0, 0), (100, 100), (-100, 100)),
+            ((100, 100), (200, 200), (0, 0)),
+            ((200, 200), (300, 300), (100, -100)),
+            ((400, 400), (500, 500), (300, -300)),
+            ((401, 401), (501, 501), (301, -301)),
         ]
 
         # View to buffer
-        for view_point, buffer_point, _ in view_buffer_world_values:
+        for view_point, buffer_point, _ in view_buffer_phys_values:
             bp = BufferedCanvas.view_to_buffer_pos(view_point, buffer_margin)
             self.assertEqual(buffer_point, bp)
 
         # Buffer to view
-        for view_point, buffer_point, _ in view_buffer_world_values:
+        for view_point, buffer_point, _ in view_buffer_phys_values:
             vp = BufferedCanvas.buffer_to_view_pos(buffer_point, buffer_margin)
             self.assertEqual(view_point, vp)
 
-        # Buffer to world
-        for _, buffer_point, world_point in view_buffer_world_values:
-            wp = BufferedCanvas.buffer_to_world_pos(buffer_point,
-                                                    buffer_world_center,
+        # Buffer to physical
+        for _, buffer_point, phys_point in view_buffer_phys_values:
+            pp = BufferedCanvas.buffer_to_phys_pos(buffer_point,
+                                                    buffer_phys_center,
                                                     scale,
                                                     offset)
-            self.assertTrue(all([isinstance(v, float) for v in wp]))
-            self.assertEqual(world_point, wp)
+            self.assertTrue(all(isinstance(v, float) for v in pp))
+            self.assertEqual(phys_point, pp)
 
-        # World to buffer
-        for _, buffer_point, world_point in view_buffer_world_values:
-            bp = BufferedCanvas.world_to_buffer_pos(world_point,
-                                                    buffer_world_center,
+        # Physical to buffer
+        for _, buffer_point, phys_point in view_buffer_phys_values:
+            bp = BufferedCanvas.phys_to_buffer_pos(phys_point,
+                                                    buffer_phys_center,
                                                     scale,
                                                     offset)
             self.assertTrue(all([isinstance(v, float) for v in bp]))
             self.assertEqual(buffer_point, bp)
 
-        # View to world
-        for view_point, _, world_point in view_buffer_world_values:
-            wp = BufferedCanvas.view_to_world_pos(view_point,
-                                                  buffer_world_center,
+        # View to physical
+        for view_point, _, phys_point in view_buffer_phys_values:
+            pp = BufferedCanvas.view_to_phys_pos(view_point,
+                                                  buffer_phys_center,
                                                   buffer_margin,
                                                   scale,
                                                   offset)
-            self.assertTrue(all([isinstance(v, float) for v in wp]))
-            self.assertEqual(world_point, wp)
+            self.assertTrue(all(isinstance(v, float) for v in pp))
+            self.assertEqual(phys_point, pp)
 
-        # World to View
-        for view_point, _, world_point in view_buffer_world_values:
-            vp = BufferedCanvas.world_to_view_pos(world_point,
-                                                  buffer_world_center,
+        # Physical to View
+        for view_point, _, phys_point in view_buffer_phys_values:
+            vp = BufferedCanvas.phys_to_view_pos(phys_point,
+                                                  buffer_phys_center,
                                                   buffer_margin,
                                                   scale,
                                                   offset)
-            self.assertTrue(all([isinstance(v, float) for v in vp]))
+            self.assertTrue(all(isinstance(v, float) for v in vp))
             self.assertEqual(view_point, vp)
 
         scale = 2.0
 
-        # Buffer <-> world, with scale != 1
-        for _, buffer_point, world_point in view_buffer_world_values:
-            wp = BufferedCanvas.buffer_to_world_pos(buffer_point,
-                                                    buffer_world_center,
+        # Buffer <-> phys, with scale != 1
+        for _, buffer_point, phys_point in view_buffer_phys_values:
+            pp = BufferedCanvas.buffer_to_phys_pos(buffer_point,
+                                                    buffer_phys_center,
                                                     scale,
                                                     offset)
-            bp = BufferedCanvas.world_to_buffer_pos(wp,
-                                                    buffer_world_center,
+            bp = BufferedCanvas.phys_to_buffer_pos(pp,
+                                                    buffer_phys_center,
                                                     scale,
                                                     offset)
-            self.assertTrue(all([isinstance(v, float) for v in wp]))
-            self.assertTrue(all([isinstance(v, float) for v in bp]))
+            self.assertTrue(all(isinstance(v, float) for v in pp))
+            self.assertTrue(all(isinstance(v, float) for v in bp))
             self.assertEqual(buffer_point, bp)
 
-            bp = BufferedCanvas.world_to_buffer_pos(world_point,
-                                                    buffer_world_center,
+            bp = BufferedCanvas.phys_to_buffer_pos(phys_point,
+                                                    buffer_phys_center,
                                                     scale,
                                                     offset)
-            wp = BufferedCanvas.buffer_to_world_pos(bp,
-                                                    buffer_world_center,
+            pp = BufferedCanvas.buffer_to_phys_pos(bp,
+                                                    buffer_phys_center,
                                                     scale,
                                                     offset)
 
-            self.assertTrue(all([isinstance(v, float) for v in wp]))
-            self.assertTrue(all([isinstance(v, float) for v in bp]))
-            self.assertEqual(world_point, wp)
+            self.assertTrue(all(isinstance(v, float) for v in pp))
+            self.assertTrue(all(isinstance(v, float) for v in bp))
+            self.assertEqual(phys_point, pp)
 
     def test_conversion_methods(self):
 
@@ -383,64 +383,50 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.canvas.scale = 1
 
         # Matching values at scale 1
-        view_buffer_world_values = [
-            # view         buffer       world       physical
-            ((-201, -201), (311, 311), (111, 111), (111, -111)),
-            ((-1, -1),     (511, 511), (311, 311), (311, -311)),
-            ((0, 0),       (512, 512), (312, 312), (312, -312)),
-            ((100, 100),   (612, 612), (412, 412), (412, -412)),
-            ((200, 200),   (712, 712), (512, 512), (512, -512)),
-            ((400, 400),   (912, 912), (712, 712), (712, -712)),
-            ((401, 401),   (913, 913), (713, 713), (713, -713)),
+        view_buffer_phys_values = [
+            # view         buffer       physical
+            ((-201, -201), (311, 311), (111, -111)),
+            ((-1, -1), (511, 511), (311, -311)),
+            ((0, 0), (512, 512), (312, -312)),
+            ((100, 100), (612, 612), (412, -412)),
+            ((200, 200), (712, 712), (512, -512)),
+            ((400, 400), (912, 912), (712, -712)),
+            ((401, 401), (913, 913), (713, -713)),
         ]
 
         # View to buffer
-        for view_point, buffer_point, _, _ in view_buffer_world_values:
+        for view_point, buffer_point, _ in view_buffer_phys_values:
             bp = self.canvas.view_to_buffer(view_point)
             self.assertEqual(buffer_point, bp)
 
         # Buffer to view
-        for view_point, buffer_point, _, _ in view_buffer_world_values:
+        for view_point, buffer_point, _ in view_buffer_phys_values:
             vp = self.canvas.buffer_to_view(buffer_point)
             self.assertEqual(view_point, vp)
 
-        # Buffer to world
-        for _, buffer_point, world_point, _ in view_buffer_world_values:
-            wp = self.canvas.buffer_to_world(buffer_point, offset)
-            self.assertTrue(all([isinstance(v, float) for v in wp]))
-            self.assertEqual(world_point, wp)
+        # Buffer to phy
+        for _, buffer_point, phys_point in view_buffer_phys_values:
+            pp = self.canvas.buffer_to_phys(buffer_point, offset)
+            self.assertTrue(all(isinstance(v, float) for v in pp))
+            self.assertEqual(phys_point, pp)
 
-        # World to buffer
-        for _, buffer_point, world_point, _ in view_buffer_world_values:
-            bp = self.canvas.world_to_buffer(world_point, offset)
-            self.assertTrue(all([isinstance(v, (int, float)) for v in bp]))
+        # Phys to buffer
+        for _, buffer_point, phys_point in view_buffer_phys_values:
+            bp = self.canvas.phys_to_buffer(phys_point, offset)
+            self.assertTrue(all(isinstance(v, (int, float)) for v in bp))
             self.assertEqual(buffer_point, bp)
 
-        # View to world
-        for view_point, _, world_point, _ in view_buffer_world_values:
-            wp = self.canvas.view_to_world(view_point, offset)
-            self.assertTrue(all([isinstance(v, float) for v in wp]))
-            self.assertEqual(world_point, wp)
+        # View to phys
+        for view_point, _, phys_point in view_buffer_phys_values:
+            pp = self.canvas.view_to_phys(view_point, offset)
+            self.assertTrue(all(isinstance(v, float) for v in pp))
+            self.assertEqual(phys_point, pp)
 
-        # World to View
-        for view_point, _, world_point, _ in view_buffer_world_values:
-            vp = self.canvas.world_to_view(world_point, offset)
-            self.assertTrue(all([isinstance(v, (int, float)) for v in vp]))
+        # phys to View
+        for view_point, _, phys_point in view_buffer_phys_values:
+            vp = self.canvas.phys_to_view(phys_point, offset)
+            self.assertTrue(all(isinstance(v, (int, float)) for v in vp))
             self.assertEqual(view_point, vp)
-
-        # World to physical
-        for _, _, world_point, physical_point in view_buffer_world_values:
-            pp = self.canvas.world_to_physical_pos(world_point)
-            wp_pp = zip(world_point, pp)
-            self.assertTrue(all([type(w) == type(p) for w, p in wp_pp]))
-            self.assertEqual(physical_point, pp)
-
-        # Physical to world
-        for _, _, world_point, physical_point in view_buffer_world_values:
-            pp = self.canvas.world_to_physical_pos(world_point)
-            wp_pp = zip(world_point, pp)
-            self.assertTrue(all([type(w) == type(p) for w, p in wp_pp]))
-            self.assertEqual(physical_point, pp)
 
 
 if __name__ == "__main__":
