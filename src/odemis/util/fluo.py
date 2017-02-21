@@ -176,16 +176,18 @@ def quantify_fit_to_dye(wl, band):
     center = get_center(band)
     width = band[-1] - band[0]
     distance = abs(wl - center)
+    dist_border = min(abs(wl - band[0]), abs(wl - band[-1]))
 
     if band[0] < wl < band[-1]:
         # ensure it cannot get infinite score for being in the center
         return 1 / (max(distance, 1e-9) * max(width, 1e-9))
-    elif band[0] - 20e-9 < wl < band[-1] + 20e-9:
+    elif dist_border < 20e-9:
         # almost? => 100x less good
         return 0.01 / (max(distance, 1e-9) * max(width, 1e-9))
     else:
-        # No match
-        return 0
+        # Not matching => at least report some small number so that if no band
+        # matches, the closest one is selected
+        return 0.0001 / max(dist_border, 1e-9)
 
 
 def find_best_band_for_dye(wl, bands):
@@ -197,7 +199,7 @@ def find_best_band_for_dye(wl, bands):
     return ((list of) tuple of 2 or 5 floats): the best fitting bands
     """
     # The most fitting band: narrowest band centered around the wavelength
-    return max([b for b in bands], key=lambda x: quantify_fit_to_dye(wl, x))
+    return max((b for b in bands), key=lambda x: quantify_fit_to_dye(wl, x))
 
 
 def to_readable_band(band):
