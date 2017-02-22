@@ -114,7 +114,7 @@ class FluoTestCase(unittest.TestCase):
         for args in ins:
             est = fluo.estimate_fit_to_dye(*args)
             quant = fluo.quantify_fit_to_dye(*args)
-            if quant == 0:
+            if quant < 1e4:  # Just rough estimate
                 self.assertEqual(est, fluo.FIT_IMPOSSIBLE)
             else:
                 self.assertIn(est, {fluo.FIT_BAD, fluo.FIT_GOOD})
@@ -173,13 +173,13 @@ class FluoTestCase(unittest.TestCase):
             self.assertEqual(b, out, "find_best(%f, %s) returned %s while expected %s" % (wl, bands, out, b))
 
         # tests with 5-float bands
-        bands = {(490e-9, 497e-9, 500e-9, 503e-9, 510e-9),
+        bands = ((490e-9, 497e-9, 500e-9, 503e-9, 510e-9),
                  (400e-9, 405e-9, 407e-9, 409e-9, 413e-9),
                  ((650e-9, 660e-9, 675e-9, 678e-9, 680e-9),
                   (780e-9, 785e-9, 790e-9, 800e-9, 812e-9),
                   (1034e-9, 1080e-9, 1100e-9, 1200e-9, 1500e-9)
                  )
-                }
+                )
         # try with "hard" values: the border
         for b in bands:
             # pick a good wl, and check the function finds it
@@ -190,6 +190,12 @@ class FluoTestCase(unittest.TestCase):
             wl = sb[0]
             out = fluo.find_best_band_for_dye(wl, bands)
             self.assertEqual(b, out, "find_best(%f, %s) returned %s while expected %s" % (wl, bands, out, b))
+
+        # Try completely out: at least it should pick the closest from the wl
+        for i, wl in ((0, 540e-9), (1, 360e-9)):
+            exb = bands[i]
+            out = fluo.find_best_band_for_dye(wl, bands)
+            self.assertEqual(exb, out, "find_best(%f, %s) returned %s while expected %s" % (wl, bands, out, exb))
 
     def test_find_best_overlap(self):
         # tests with overlapping 2-bands
