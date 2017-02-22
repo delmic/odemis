@@ -117,7 +117,7 @@ class StreamTree(object):
             self.add_stream(s)
 
     def __str__(self):
-        return "[" + ", ".join([str(s) for s in self.streams]) + "]"
+        return "[" + ", ".join(str(s) for s in self.streams) + "]"
 
     def __len__(self):
         acc = 0
@@ -191,33 +191,32 @@ class StreamTree(object):
                     if sub_s not in streams:
                         streams.append(sub_s)
 
-        # print [s.name.value for s in streams]
         return streams
 
-    def getImage(self, rect, mpp):
-        """
-        Returns an image composed of all the current stream images.
-        Precisely, it returns the output of a call to operator.
-        rect (2-tuple of 2-tuple of float): top-left and bottom-right points in
-          world position (m) of the area to draw
-        mpp (0<float): density (meter/pixel) of the image to compute
-        """
-        # TODO: probably not so useful function, need to see what canvas
-        #  it will likely need as argument a wx.Bitmap, and view rectangle
-        #  that will define where to save the result
-
-        # TODO: cache with the given rect and mpp and last update time of each
-        # image
-
-        # create the arguments list for operator
-        images = []
-        for s in self.streams:
-            if isinstance(s, Stream):
-                images.append(s.image.value)
-            elif isinstance(s, StreamTree):
-                images.append(s.getImage(rect, mpp))
-
-        return self.operator(images, rect, mpp, **self.kwargs)
+#     def getImage(self, rect, mpp):
+#         """
+#         Returns an image composed of all the current stream images.
+#         Precisely, it returns the output of a call to operator.
+#         rect (2-tuple of 2-tuple of float): top-left and bottom-right points in
+#           world position (m) of the area to draw
+#         mpp (0<float): density (meter/pixel) of the image to compute
+#         """
+#         # TODO: probably not so useful function, need to see what canvas
+#         #  it will likely need as argument a wx.Bitmap, and view rectangle
+#         #  that will define where to save the result
+#
+#         # TODO: cache with the given rect and mpp and last update time of each
+#         # image
+#
+#         # create the arguments list for operator
+#         images = []
+#         for s in self.streams:
+#             if isinstance(s, Stream):
+#                 images.append(s.image.value)
+#             elif isinstance(s, StreamTree):
+#                 images.append(s.getImage(rect, mpp))
+#
+#         return self.operator(images, rect, mpp, **self.kwargs)
 
     def getImages(self):
         """
@@ -234,40 +233,6 @@ class StreamTree(object):
                         images.append(im)
 
         return images
-
-    def getRawImages(self):
-        """
-        Returns a list of all the raw images used to create the final image
-        """
-        # TODO not sure if a list is enough, we might need to return more
-        # information about how the image was built (operator, args...)
-        lraw = []
-        for s in self.getStreams():
-            lraw.extend(s.raw)
-
-        return lraw
-
-    @property
-    def spectrum_streams(self):
-        """ Return a flat list of spectrum streams """
-        return self.get_streams_by_type(SpectrumStream)
-
-    @property
-    def em_streams(self):
-        """ Return a flat list of electron microscope streams """
-        return self.get_streams_by_type(EMStream)
-
-    def get_streams_by_name(self, name):
-        """ Return a list of streams with have names that match `name` """
-
-        leaves = set()
-        for s in self.streams:
-            if isinstance(s, Stream) and s.name.value == name:
-                leaves.add(s)
-            elif isinstance(s, StreamTree):
-                leaves |= s.get_streams_by_name(name)
-
-        return list(leaves)
 
     def get_streams_by_type(self, stream_types):
         """ Return a flat list of streams of `stream_type` within the StreamTree """

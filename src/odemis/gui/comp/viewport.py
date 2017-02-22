@@ -1144,7 +1144,7 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        ss = self.microscope_view.stream_tree.spectrum_streams
+        ss = self.microscope_view.stream_tree.get_streams_by_type(SpectrumStream)
         if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
