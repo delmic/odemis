@@ -2,7 +2,7 @@
 
 """
 :author: Rinze de Laat <laat@delmic.com>
-:copyright: © 2013 Rinze de Laat, Delmic
+:copyright: © 2013-2017 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -105,6 +105,22 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # Advanced settings for andorcam2
+            ("verticalReadoutRate", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("verticalClockVoltage", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("emGain", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvert", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvertWavelength", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
@@ -237,6 +253,22 @@ HW_SETTINGS_CONFIG = {
             ("depthOfField", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            # Advanced settings for andorcam2
+            ("verticalReadoutRate", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("verticalClockVoltage", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("emGain", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvert", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvertWavelength", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
         )),
     "spectrometer-integrated":
         OrderedDict((
@@ -282,6 +314,22 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # Advanced settings for andorcam2
+            ("verticalReadoutRate", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("verticalClockVoltage", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("emGain", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvert", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvertWavelength", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
