@@ -154,6 +154,16 @@ class AndorCapabilities(Structure):
     SETFUNCTION_SUPERKINETICS = 0x20000000
     SETFUNCTION_TIMESCAN = 0x40000000
 
+    # AcqModes field
+    ACQMODE_SINGLE = 1
+    ACQMODE_VIDEO = 2
+    ACQMODE_ACCUMULATE = 4
+    ACQMODE_KINETIC = 8
+    ACQMODE_FRAMETRANSFER = 16
+    ACQMODE_FASTKINETICS = 32
+    ACQMODE_OVERLAP = 64
+    ACQMODE_TDI = 0x80
+
     # ReadModes field
     READMODE_FULLIMAGE = 1
     READMODE_SUBIMAGE = 2
@@ -162,6 +172,16 @@ class AndorCapabilities(Structure):
     READMODE_MULTITRACK = 16
     READMODE_RANDOMTRACK = 32
     READMODE_MULTITRACKSCAN = 64
+
+    # TriggerModes field
+    TRIGGERMODE_INTERNAL = 1
+    TRIGGERMODE_EXTERNAL = 2
+    TRIGGERMODE_EXTERNAL_FVB_EM = 4
+    TRIGGERMODE_CONTINUOUS = 8
+    TRIGGERMODE_EXTERNALSTART = 16
+    TRIGGERMODE_EXTERNALEXPOSURE = 32
+    TRIGGERMODE_INVERTED = 0x40
+    TRIGGERMODE_EXTERNAL_CHARGESHIFTING = 0x80
 
     CAMERATYPE_PDA = 0
     CAMERATYPE_IXON = 1
@@ -564,10 +584,36 @@ class AndorCam2(model.DigitalCamera):
         # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
         self._output_amp = 0
 
-        ror_choices = set(self.GetReadoutRates())
+        ror_choices = self._getReadoutRates()
         self._readout_rate = max(ror_choices) # default to fast acquisition
         self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
-                                                 unit="Hz", setter=self.setReadoutRate)
+                                                 unit="Hz", setter=self._setReadoutRate)
+
+        # Note: the following VAs are extra ones just for advanced usage, and
+        # are only to be used with full understanding. It is not supported to
+        # modify them while acquiring (unless the SDK does support it).
+        # * verticalReadoutRate
+        # * verticalClockVoltage
+        # * emGain
+        # * countConvert
+        # * countConvertWavelength
+
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT):
+            # Allows to tweak the vertical readout rate. Normally, we use the
+            # recommended one, but higher speeds can be used, given that the voltage
+            # is increased. The drawback of higher clock voltage is that it can
+            # introduce extra noise.
+            vror_choices = self._getVerticalReadoutRates()
+            if len(vror_choices) > 1:  # Some cameras have just one "choice" => no need
+                vror_choices.add(None)  # means "use recommended rate"
+                self.verticalReadoutRate = model.VAEnumerated(None, vror_choices,
+                                               unit="Hz", setter=self._setVertReadoutRate)
+
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VSAMPLITUDE):
+            vamps = self._getVerticalAmplitudes()
+            # 0 should always be in the available amplitudes, as it means "normal"
+            self.verticalClockVoltage = model.IntEnumerated(0, vamps,
+                                                setter=self._setVertAmplitude)
 
         gain_choices = set(self.GetPreAmpGains())
         self._gain = min(gain_choices) # default to low gain = less noise
@@ -598,6 +644,37 @@ class AndorCam2(model.DigitalCamera):
         except (TypeError, AttributeError):
             raise ValueError("Failed to parse emgains, which must be in the "
                              "form [[rr, gain, emgain], ...]: '%s'" % (emgains,))
+
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
+            # Allow to manually change the EM gain, while using the "automatic"
+            # LUT selection when it's set to "None". 0 disable the EMCCD mode.
+            # => create choices as None, 0, 3, 50, 100...
+            emgrng = self.GetEMGainRange()
+            emgc = set(i for i in range(0, emgrng[1], 50) if i > emgrng[0])
+            emgc.add(None)
+            emgc.add(0)  # to disable the EMCCD mode
+            emgc.add(emgrng[0])
+            emgc.add(emgrng[1])
+            self.emGain = model.VAEnumerated(None, choices=emgc,
+                                             setter=self._setEMGain)
+            self._setEMGain(None)  # To force the EM gain active, so that count convert works
+        elif self._lut_emgains:
+            raise ValueError("Camera doesn't support EM gain")
+
+        # To activate special feature of the SDK: allows to directly convert the
+        # values as an electron or photon counts.
+        # Note: there are extra restrictions on when it's actually possible to
+        # convert (eg, no-cropping, baseline clamp active)
+        # cf IsCountConvertModeAvailable()
+        if self.hasFeature(AndorCapabilities.FEATURES_COUNTCONVERT):
+            # Note: it's available on Clara, excepted the old ones.
+            self.countConvert = model.IntEnumerated(0, choices={0: "counts", 1: "electrons", 2: "photons"},
+                                                    setter=self._setCountConvert)
+            wlrng = self.GetCountConvertWavelengthRange()
+            self.countConvertWavelength = model.FloatContinuous(wlrng[0],
+                                                range=wlrng,
+                                                unit="m",
+                                                setter=self._setCountConvertWavelength)
 
         # To control the shutter: select the maximum frequency, aka minimum
         # period for the shutter. If it the acquisition time is below, the
@@ -685,18 +762,39 @@ class AndorCam2(model.DigitalCamera):
                     break
             else:
                 logging.warning("Failed to change EMCCD gain mode")
-            logging.debug("Initial EMCCD gain is %d, between %s, in mode %d", self.GetEMCCDGain(), self.GetEMGainRange(), m)
+            logging.debug("Initial EMCCD gain is %d, between %s, in mode %d",
+                          self.GetEMCCDGain(), self.GetEMGainRange(), m)
             # iXon Ultra reports:
             # Initial EMCCD gain is 0, between (1, 221), in mode 0
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
+            # Initial EMCCD gain is 0, between (2, 300), in mode 3
             # mode 3 is supported for iXon Ultra only since SDK 2.97
+
+        # Baseline clamp is required in order to do count conversion.
+        # Normally, it's activated by default anyway. The only drawback is that
+        # it might bring a relatively large time overhead on small ROIs.
+        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_BASELINECLAMP):
+            self.atcore.SetBaselineClamp(1)
+            logging.debug("Baseline clamp activated")
 
         if self.hasSetFunction(AndorCapabilities.SETFUNCTION_HIGHCAPACITY):
             # High _sensitivity_ is what we typically need. It should be the
             # default, but to be sure, we force it.
             self.atcore.SetHighCapacity(0)
             logging.debug("High sensitivity mode selected")
+
+        # Frame transfer mode is available on some cameras which have two areas,
+        # one used for exposure while the other one is used for readout. This
+        # allows faster frame rate and avoid streaking (so avoids the need for
+        # shutter). Obviously, it doesn't work in single image mode (so not in
+        # the current "synchronized mode"). Apparently the only draw back is
+        # that on some old cameras (all using PCI connection), software trigger
+        # is not available.
+        caps = self.GetCapabilities()
+        if caps.AcqModes & AndorCapabilities.ACQMODE_FRAMETRANSFER:
+            self.atcore.SetFrameTransferMode(1)
+            logging.debug("Frame transfer mode selected")
 
         self.atcore.SetTriggerMode(0) # 0 = internal
 
@@ -957,8 +1055,13 @@ class AndorCam2(model.DigitalCamera):
     def GetEMGainRange(self):
         """
         Can only be called on cameras which have the GETFUNCTION_EMCCDGAIN feature
+        Note: the range returned doesn't include 0, but 0 is valid for
+          SetEMCCDGain(), to disable EMCCD mode.
+        Also, the range depends on the current EMCCD gain mode, and some other variables.
         returns (int, int): min, max EMCCD gain
         """
+        # TODO: it seems the minimum gain varies a bit depending on other options,
+        # but it's not clear which one (temp?)
         low, high = c_int(), c_int()
         self.atcore.GetEMGainRange(byref(low), byref(high))
         return low.value, high.value
@@ -971,6 +1074,15 @@ class AndorCam2(model.DigitalCamera):
         gain = c_int()
         self.atcore.GetEMCCDGain(byref(gain))
         return gain.value
+
+    def GetCountConvertWavelengthRange(self):
+        """
+        Can only be called on cameras which have the FEATURES_COUNTCONVERT
+        return (float, float): min, max wavelength (in m)
+        """
+        low, high = c_float(), c_float()
+        self.atcore.GetCountConvertWavelengthRange(byref(low), byref(high))
+        return low.value * 1e-9, high.value * 1e-9
 
     def GetAcquisitionTimings(self):
         """
@@ -1004,7 +1116,7 @@ class AndorCam2(model.DigitalCamera):
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
             self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
 
-    def GetReadoutRates(self):
+    def _getReadoutRates(self):
         """
         returns (set of float): all available readout rates, in Hz
         """
@@ -1042,6 +1154,40 @@ class AndorCam2(model.DigitalCamera):
                     return channel, i
 
         raise KeyError("Couldn't find readout rate %f" % speed)
+
+    def _getVerticalReadoutRates(self):
+        """
+        List all the vertical readout speeds
+        Note: it assumes the camera supports vertical speeds (VREADOUT)
+        returns (set of float): all available vertical readout rates, in Hz
+        """
+        vsspeeds = set()
+
+        nb_vsspeeds = c_int()
+        vsspeed = c_float()  # µs / pixel
+        self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
+        for i in range(nb_vsspeeds.value):
+            self.atcore.GetVSSpeed(i, byref(vsspeed))
+            vsspeeds.add(1e6 / vsspeed.value)
+
+        return vsspeeds
+
+    def _getVerticalAmplitudes(self):
+        """
+        List all the vertical clock voltage amplitudes
+        Note: it assumes the camera supports vertical clock (VSAMPLITUDE)
+        returns (set of int): all available vertical amplitudes (in arbitrary units)
+        """
+        nb_vamps = c_int()
+        self.atcore.GetNumberVSAmplitudes(byref(nb_vamps))
+        # Note: GetVSAmplitudeValue() just return the index, without more clever
+        # thinking. GetVSAmplitudeString() seems to just return "+N"
+#         vamp = c_int()  # unit??
+#         for i in range(nb_vamps.value):
+#             self.atcore.GetVSAmplitudeValue(i, byref(vamp))
+#             logging.debug("Vertical clock amplitude %d = %d", i, vamp.value)
+
+        return set(range(nb_vamps.value))
 
     def SetPreAmpGain(self, gain):
         """
@@ -1087,6 +1233,49 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("EMCCD range is %s", self.GetEMGainRange())
             logging.debug("Setting EMCCD gain to %s", emgain)
             self.atcore.SetEMCCDGain(emgain)
+
+    def _setVertReadoutRate(self, vrr):
+        if vrr is None:
+            speed_idx, vsspeed = c_int(), c_float()  # idx, µs
+            self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
+            self.atcore.SetVSSpeed(speed_idx)
+            logging.debug(u"Set vertical readout rate to %g Hz", 1e6 / vsspeed.value)
+        else:
+            # Find the corresponding index
+            vsspeed_req = 1e6 / vrr
+            nb_vsspeeds = c_int()
+            vsspeed = c_float()
+            self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
+            for i in range(nb_vsspeeds.value):
+                self.atcore.GetVSSpeed(i, byref(vsspeed))
+                if util.almost_equal(vsspeed.value, vsspeed_req):
+                    self.atcore.SetVSSpeed(i)
+                    break
+            else:
+                raise ValueError("Failed to find rate %g Hz" % (vrr,))
+
+        return vrr
+
+    def _setVertAmplitude(self, amp):
+        # For now we directly select the amplitude as an index
+        self.atcore.SetVSAmplitude(amp)
+
+        return amp
+
+    def _setEMGain(self, emg):
+        if emg is None:
+            self._setBestEMGain(self._readout_rate, self._gain)
+        else:
+            self.atcore.SetEMCCDGain(emg)
+        return emg
+
+    def _setCountConvert(self, mode):
+        self.atcore.SetCountConvertMode(mode)
+        return mode
+
+    def _setCountConvertWavelength(self, wl):
+        self.atcore.SetCountConvertWavelength(c_float(wl * 1e9))
+        return wl
 
 #     # I²C related functions (currently unused)
 #     def I2CReset(self):
@@ -1422,7 +1611,7 @@ class AndorCam2(model.DigitalCamera):
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
-        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
+        if not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE:
             return max_size
 
         # smaller than the whole sensor
@@ -1449,7 +1638,7 @@ class AndorCam2(model.DigitalCamera):
         self._exposure_time = min(value, maxexp.value)
         return self._exposure_time
 
-    def setReadoutRate(self, value):
+    def _setReadoutRate(self, value):
         # Just save, and the setting will be actually updated by _update_settings()
         # Everything (within the choices) is fine, just need to update gain.
         self._readout_rate = value
@@ -1501,7 +1690,7 @@ class AndorCam2(model.DigitalCamera):
          prev_gain, prev_shut) = self._prev_settings
 
         if prev_readout_rate != self._readout_rate:
-            logging.debug("Updating readout rate settings to %f Hz", self._readout_rate)
+            logging.debug("Updating readout rate settings to %g Hz", self._readout_rate)
 
             # set readout rate
             channel, hsspeed = self._getChannelHSSpeed(self._readout_rate)
@@ -1516,13 +1705,16 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.SetHSSpeed(self._output_amp, hsspeed)
             self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
 
-            if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT):
+            if (self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT) and
+                (not hasattr(self, "verticalReadoutRate") or
+                 self.verticalReadoutRate.value is None)
+               ):
                 # fastest VSspeed which doesn't need to increase noise (voltage)
                 try:
                     speed_idx, vsspeed = c_int(), c_float()  # idx, µs
                     self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
                     self.atcore.SetVSSpeed(speed_idx)
-                    logging.debug(u"Set VSSpeed to %g µs", vsspeed.value)
+                    logging.debug(u"Set vertical readout rate to %g Hz", 1e6 / vsspeed.value)
                 except AndorV2Error as ex:
                     # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
                     if ex.errno == 20991:  # DRV_NOT_SUPPORTED
@@ -1556,7 +1748,8 @@ class AndorCam2(model.DigitalCamera):
 
         if prev_readout_rate != self._readout_rate or prev_gain != self._gain:
             # Good EMCCD Gain is dependent on gain & readout rate
-            self._setBestEMGain(self._readout_rate, self._gain)
+            if hasattr(self, "emGain") and self.emGain.value is None:
+                self._setBestEMGain(self._readout_rate, self._gain)
 
         new_image_settings = self._binning + self._image_rect
         if prev_image_settings != new_image_settings:
@@ -1866,6 +2059,7 @@ class AndorCam2(model.DigitalCamera):
                             self.acquisition_lock.release()
                             self.acquire_must_stop.clear()
                             raise
+                    # TODO: instead use software trigger (ie, SetTriggerMode(10) + SendSoftwareTrigger())
                     # We don't use the kinetic mode as it might go faster than we can
                     # process them.
                     self.atcore.SetAcquisitionMode(AndorV2DLL.AM_SINGLE)
@@ -2327,7 +2521,9 @@ class FakeAndorV2DLL(object):
         self.exposure = 0.1 # s
         self.kinetic = 0. # s, kinetic cycle time
         self.hsspeed = 0 # index in pixelReadout
+        self.vsspeed = 0  # index in vertReadouts
         self.pixelReadouts = [0.01e-6, 0.1e-6] # s, time to readout one pixel
+        self.vertReadouts = [1e-6, 6.5e-6]  # s, time to vertically readout one pixel
 
         self.pixelSize = (6.45, 6.45) # µm
 
@@ -2399,13 +2595,18 @@ class FakeAndorV2DLL(object):
 
     def GetCapabilities(self, p_caps):
         caps = _deref(p_caps, AndorCapabilities)
-        caps.SetFunctions = (AndorCapabilities.SETFUNCTION_TEMPERATURE
+        caps.SetFunctions = (AndorCapabilities.SETFUNCTION_TEMPERATURE |
+                             AndorCapabilities.SETFUNCTION_EMCCDGAIN |
+                             AndorCapabilities.SETFUNCTION_HREADOUT |
+                             AndorCapabilities.SETFUNCTION_VREADOUT |
+                             AndorCapabilities.SETFUNCTION_VSAMPLITUDE
                              )
         caps.GetFunctions = (AndorCapabilities.GETFUNCTION_TEMPERATURERANGE
                              )
         caps.Features = (AndorCapabilities.FEATURES_FANCONTROL |
                          AndorCapabilities.FEATURES_MIDFANCONTROL |
-                         AndorCapabilities.FEATURES_SHUTTER
+                         AndorCapabilities.FEATURES_SHUTTER |
+                         AndorCapabilities.FEATURES_COUNTCONVERT
                          )
         caps.CameraType = AndorCapabilities.CAMERATYPE_CLARA
         caps.ReadModes = (AndorCapabilities.READMODE_SUBIMAGE
@@ -2500,7 +2701,7 @@ class FakeAndorV2DLL(object):
     def SetOutputAmplifier(self, output_amp):
         # should be 0 or 1
         if _val(output_amp) > 1:
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
 
     def GetNumberADChannels(self, p_nb):
         nb = _deref(p_nb, c_int)
@@ -2508,7 +2709,7 @@ class FakeAndorV2DLL(object):
 
     def SetADChannel(self, channel):
         if _val(channel) != 0:
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
         self.channel = _val(channel)
 
     def GetBitDepth(self, channel, p_bpp):
@@ -2527,7 +2728,43 @@ class FakeAndorV2DLL(object):
 
     def SetPreAmpGain(self, i):
         if _val(i) > len(self.gains):
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
+        # whatever
+
+    def SetEMGainMode(self, m):
+        if not 0 <= _val(m) <= 3:
+            raise AndorV2Error(20066, "Argument out of bounds")
+        # whatever
+
+    def GetEMGainRange(self, p_minr, p_maxr):
+        minr = _deref(p_minr, c_int)
+        maxr = _deref(p_maxr, c_int)
+        minr.value = 6
+        maxr.value = 300
+
+    def GetEMCCDGain(self, p_gain):
+        gain = _deref(p_gain, c_int)
+        gain.value = 100
+
+    def SetEMCCDGain(self, gain):
+        if not 0 <= _val(gain) <= 300:
+            raise AndorV2Error(20066, "Argument out of bounds")
+        # whatever
+
+    def GetCountConvertWavelengthRange(self, p_min, p_max):
+        minwl = _deref(p_min, c_float)
+        maxwl = _deref(p_max, c_float)
+        minwl.value = 200.0
+        maxwl.value = 1200.0
+
+    def SetCountConvertMode(self, i):
+        if not 0 <= _val(i) <= 2:
+            raise AndorV2Error(20066, "Argument out of bounds")
+        # whatever
+
+    def SetCountConvertWavelength(self, wl):
+        if not 0 <= _val(wl) <= 1200:
+            raise AndorV2Error(20066, "Argument out of bounds")
         # whatever
 
     def GetNumberHSSpeeds(self, channel, output_amp, p_nb):
@@ -2542,18 +2779,39 @@ class FakeAndorV2DLL(object):
 
     def SetHSSpeed(self, output_amp, i):
         if _val(i) >= len(self.pixelReadouts):
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
         self.hsspeed = i
+
+    def GetNumberVSSpeeds(self, p_nb):
+        nb = _deref(p_nb, c_int)
+        nb.value = len(self.vertReadouts)
+
+    def GetVSSpeed(self, i, p_speed):
+        speed = _deref(p_speed, c_float)
+        speed.value = self.vertReadouts[i] * 1e6  # µs
 
     def GetFastestRecommendedVSSpeed(self, p_i, p_speed):
         i = _deref(p_i, c_int)
         speed = _deref(p_speed, c_float)
         i.value = 0
-        speed.value = 1e-6 # us
+        speed.value = self.vertReadouts[0] * 1e6  # µs
 
     def SetVSSpeed(self, i):
-        if _val(i) != 0:
-            raise AndorV2Error()
+        if _val(i) >= len(self.vertReadouts):
+            raise AndorV2Error(20066, "Argument out of bounds")
+        self.vsspeed = _val(i)
+
+    def GetNumberVSAmplitudes(self, p_nb):
+        nb = _deref(p_nb, c_int)
+        nb.value = 5
+
+    def GetVSAmplitudeValue(self, i, p_vamp):
+        vamp = _deref(p_vamp, c_int)
+        vamp.value = _val(i)
+
+    def SetVSAmplitude(self, i):
+        if _val(i) >= 5:
+            raise AndorV2Error(20066, "Argument out of bounds")
         # whatever
 
     # settings
@@ -2572,7 +2830,7 @@ class FakeAndorV2DLL(object):
     def SetTriggerMode(self, mode):
         # 0 = internal
         if _val(mode) > 12:
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
         if _val(mode) != 0:
             raise NotImplementedError()
 
@@ -2623,7 +2881,7 @@ class FakeAndorV2DLL(object):
         try:
             must_stop = self.acq_aborted.wait(timeout)
             if must_stop:
-                raise AndorV2Error(20024, "No new data, simulated acquistion aborted")
+                raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
 
             if time.time() < self.acq_end:
                 raise AndorV2Error(20024, "No new data, simulated acquisition still running for %g s" % (self.acq_end - time.time()))
