@@ -763,8 +763,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         # be set by passing the actual value (As opposed to the text label)
         def cb_set(value, ctrl=value_ctrl, u=unit, acc=accuracy):
             for i in range(ctrl.Count):
-                if ((isinstance(value, float) and util.almost_equal(ctrl.GetClientData(i), value)) or
-                    ctrl.GetClientData(i) == value):
+                d = ctrl.GetClientData(i)
+                if (d == value or
+                    (all(isinstance(v, float) for v in (value, d)) and
+                     util.almost_equal(d, value))
+                   ):
                     logging.debug("Setting combobox value to %s", ctrl.Items[i])
                     ctrl.SetSelection(i)
                     break
