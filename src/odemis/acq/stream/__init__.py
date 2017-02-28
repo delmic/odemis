@@ -229,10 +229,6 @@ class StreamTree(object):
             elif isinstance(s, Stream):
                 if hasattr(s, "image"):
                     im = s.image.value
-                    if isinstance(im, tuple):
-                        # TODO This is a "hack" in order to temporarily properly already
-                        # display the pyramidal streams before the GUI classes are changed
-                        im = util.img.mergeTiles(im)
                     if im is not None:
                         images.append(im)
 

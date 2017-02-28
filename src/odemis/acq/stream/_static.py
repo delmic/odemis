@@ -62,11 +62,13 @@ class StaticStream(Stream):
                 # sets the mpp as the X axis of the pixel size of the full image
                 mpp_rng = (ps[0], max_mpp)
                 self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
+                self.mpp.subscribe(self._on_mpp)
 
                 full_rect = img._getBoundingBox(raw)
                 l, t, r, b = full_rect
-                mpp_range = ((l, b, l, b), (r, t, r, t))
-                self.rect = model.TupleContinuous(full_rect, mpp_range, setter=self._set_rect)
+                rect_range = ((l, b, l, b), (r, t, r, t))
+                self.rect = model.TupleContinuous(full_rect, rect_range)
+                self.rect.subscribe(self._on_rect)
             else:
                 # If raw does not have maxzoom,
                 # StaticStream should behave as when raw is a DataArray
@@ -77,16 +79,16 @@ class StaticStream(Stream):
         super(StaticStream, self).__init__(name, None, None, None, raw=raw)
 
     def _set_mpp(self, mpp):
-        self._shouldUpdateImage()
-
         ps0 = self.mpp.range[0]
         exp = math.log(mpp / ps0, 2)
         exp = round(exp)
         return ps0 * 2 ** exp
 
-    def _set_rect(self, rect):
+    def _on_mpp(self, mpp):
         self._shouldUpdateImage()
-        return rect
+
+    def _on_rect(self, mpp):
+        self._shouldUpdateImage()
 
 
 class RGBStream(StaticStream):

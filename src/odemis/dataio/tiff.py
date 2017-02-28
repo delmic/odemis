@@ -1737,7 +1737,6 @@ def open_data(filename):
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
     filename = _ensure_fs_encoding(filename)
     return AcquisitionDataTIFF(filename)
-    
 
 class DataArrayShadowTIFF(DataArrayShadow):
     """

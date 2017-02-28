@@ -27,6 +27,7 @@ import numpy
 from odemis import model
 from odemis.gui import test
 from odemis.gui.comp.canvas import BufferedCanvas
+from odemis.dataio import tiff
 import unittest
 import wx
 
@@ -428,6 +429,290 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
             self.assertTrue(all(isinstance(v, (int, float)) for v in vp))
             self.assertEqual(view_point, vp)
 
+    def test_pyramidal_one_tile(self):
+        """
+        Draws a view with two streams, one pyramidal stream square completely green,
+        and the other is a red square with a blue square in the center
+        """
+        mpp = 0.00001
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
+        self.view.show_crosshair.value = False
+
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        w = 201
+        h = 201
+        size = (w, h, 3)
+        dtype = numpy.uint8
+        md = {
+            model.MD_PIXEL_SIZE: (mpp, mpp),
+            model.MD_POS: (200.5 * mpp, 199.5 * mpp),
+            model.MD_DIMS: 'YXC'
+        }
+        arr = model.DataArray(numpy.zeros((h, w, 3), dtype="uint8"))
+        # make it all green
+        arr[:, :] = [0, 255, 0]
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        stream1 = RGBStream("test", acd.content[0])
+
+        im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
+        # red background
+        im2[:, :] = [255, 0, 0]
+        # Blue square at center
+        im2[90:110, 90:110] = [0, 0, 255]
+        # 200, 200 => outside of the im1
+        # (+0.5, -0.5) to make it really in the center of the pixel
+        im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
+        im2.metadata[model.MD_POS] = (200.5 * mpp, 199.5 * mpp)
+        im2.metadata[model.MD_DIMS] = "YXC"
+        stream2 = RGBStream("s2", im2)
+
+        self.view.addStream(stream1)
+        self.view.addStream(stream2)
+
+        # reset the mpp of the view, as it's automatically set to the first  image
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
+        # center pixel, 1/3 green, 2/3 blue
+        self.assertEqual(px2, (0, 76, 179))
+        px2 = get_rgb(result_im, result_im.Width // 2 - 30, result_im.Height // 2 - 30)
+        # background of the images, 1/3 green, 2/3 red
+        self.assertEqual(px2, (179, 76, 0))
+
+        self.view.mpp.value = mpp
+
+        shift = (63, 63)
+        self.canvas.shift_view(shift)
+
+        # merge the images
+        ratio = 0.5
+        self.view.merge_ratio.value = ratio
+        # self.assertEqual(ratio, self.view.merge_ratio.value)
+
+        test.gui_loop(0.5)
+        # it's supposed to update in less than 0.5s
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        px = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
+        # center pixel, now pointing to the background of the larger squares
+        # half red, half green
+        self.assertEqual(px, (127, 128, 0))
+
+        # copy the buffer into a nice image here
+        result_im = get_image_from_buffer(self.canvas)
+
+        px1 = get_rgb(result_im, result_im.Width // 2 + shift[0], result_im.Height // 2 + shift[1])
+        self.assertEqual(px1, (0, 128, 127))  # Ratio is at 0.5, so 255 becomes 128
+
+        px2 = get_rgb(result_im,
+                      result_im.Width // 2 + 200 + shift[0],
+                      result_im.Height // 2 - 200 + shift[1])
+        self.assertEqual(px2, (0, 0, 0))
+
+        # remove first picture
+        self.view.removeStream(stream1)
+        test.gui_loop()
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        # center of the translated red square with blue square on the center
+        # pixel must be completely blue
+        px2 = get_rgb(result_im,
+                      result_im.Width // 2 + shift[0],
+                      result_im.Height // 2 + shift[1])
+        self.assertEqual(px2, (0, 0, 255))
+
+    def test_pyramidal_zoom(self):
+        """
+        Draws a view with two streams, one pyramidal stream square completely green,
+        and the other is a red square with a blue square in the center
+        """
+        mpp = 0.00001
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
+        self.view.show_crosshair.value = False
+
+        init_pos = (200.5 * mpp, 199.5 * mpp)
+
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        # 1 row of 2 tiles
+        w = 512
+        h = 250
+        size = (w, h, 3)
+        dtype = numpy.uint8
+        md = {
+            model.MD_PIXEL_SIZE: (mpp, mpp),
+            model.MD_POS: init_pos,
+            model.MD_DIMS: 'YXC'
+        }
+        arr = model.DataArray(numpy.zeros((h, w, 3), dtype="uint8"))
+        # make it all green
+        arr[:, :] = [0, 255, 0]
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        stream1 = RGBStream("test", acd.content[0])
+
+        im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
+        # red background
+        im2[:, :] = [255, 0, 0]
+        # Blue square at center
+        im2[90:110, 90:110] = [0, 0, 255]
+        im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
+        im2.metadata[model.MD_POS] = init_pos
+        im2.metadata[model.MD_DIMS] = "YXC"
+        stream2 = RGBStream("s2", im2)
+
+        self.view.addStream(stream1)
+        self.view.addStream(stream2)
+        self.view.fov_buffer.value = (1.0, 1.0)
+
+        # reset the mpp of the view, as it's automatically set to the first  image
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
+        # center pixel, 2/3 green, 1/3 blue. The green image is the largest image
+        self.assertEqual(px2, (0, 179, 76))
+        px2 = get_rgb(result_im, result_im.Width // 2 - 30, result_im.Height // 2 - 30)
+        # background of the images, 2/3 green, 1/3 red
+        self.assertEqual(px2, (76, 179, 0))
+
+        self.view.mpp.value = mpp
+
+        shift = (63, 63)
+        self.canvas.shift_view(shift)
+
+        # merge the images
+        ratio = 0.5
+        self.view.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.view.merge_ratio.value)
+
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        px = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
+        # center pixel, now pointing to the background of the larger squares
+        # half red, half green
+        self.assertEqual(px, (128, 127, 0))
+
+        # copy the buffer into a nice image here
+        result_im = get_image_from_buffer(self.canvas)
+
+        px1 = get_rgb(result_im, result_im.Width // 2 + shift[0], result_im.Height // 2 + shift[1])
+        self.assertEqual(px1, (0, 127, 128))  # Ratio is at 0.5, so 255 becomes 128
+
+        px2 = get_rgb(result_im,
+                      result_im.Width // 2 + 200 + shift[0],
+                      result_im.Height // 2 - 200 + shift[1])
+        self.assertEqual(px2, (0, 0, 0))
+
+        self.assertAlmostEqual(1e-05, self.view.mpp.value)
+        numpy.testing.assert_almost_equal([0.001375,  0.002625], self.view.view_pos.value)
+        self.canvas.fit_view_to_content(recenter=True)
+        test.gui_loop(0.5)
+        self.assertAlmostEqual(1.3333333e-5, self.view.mpp.value)
+        # after fitting, the center of the view should be the center of the image
+        numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
+        # remove green picture
+        result_im = get_image_from_buffer(self.canvas)
+        #result_im.SaveFile('/home/gstiebler/Projetos/Delmic/tmp3.bmp', wx.BITMAP_TYPE_BMP)
+        self.view.removeStream(stream1)
+        test.gui_loop(0.5)
+        # copy the buffer into a nice image here
+        result_im = get_image_from_buffer(self.canvas)
+        #result_im.SaveFile('/home/gstiebler/Projetos/Delmic/tmp4.bmp', wx.BITMAP_TYPE_BMP)
+        self.canvas.fit_view_to_content(recenter=True)
+        # only .mpp changes, but the image keeps centered
+        self.assertAlmostEqual(5.89442e-06, self.view.mpp.value)
+        numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+
+        # center of the translated red square with blue square on the center
+        # pixel must be completely blue
+        px2 = get_rgb(result_im,
+                      result_im.Width // 2 + shift[0],
+                      result_im.Height // 2 + shift[1])
+        # the center is red
+        self.assertEqual(px2, (255, 0, 0))
+
+        self.canvas.fit_to_content()
+
+    def test_pyramidal_3x2(self):
+        """
+        Draws a view with two streams, one pyramidal stream square completely green,
+        and the other is a red square with a blue square in the center
+        """
+        mpp = 0.00001
+        self.view.mpp.value = mpp
+        self.assertEqual(mpp, self.view.mpp.value)
+        self.view.show_crosshair.value = False
+
+        init_pos = (1.0, 2.0)
+
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        # 1 row of 2 tiles
+        w = 600
+        h = 300
+        size = (w, h, 3)
+        dtype = numpy.uint8
+        md = {
+            model.MD_PIXEL_SIZE: (mpp, mpp),
+            model.MD_POS: init_pos,
+            model.MD_DIMS: 'YXC'
+        }
+        arr = model.DataArray(numpy.zeros((h, w, 3), dtype="uint8"))
+        # make it all green
+        arr[:, :] = [0, 255, 0]
+        data = model.DataArray(arr, metadata=md)
+
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+
+        acd = tiff.open_data(FILENAME)
+        stream1 = RGBStream("test", acd.content[0])
+
+        im2 = model.DataArray(numpy.zeros((800, 800, 3), dtype="uint8"))
+        # red background
+        im2[:, :] = [255, 0, 0]
+        # Blue square at center
+        im2[390:410, 390:410] = [0, 0, 255]
+
+        im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
+        im2.metadata[model.MD_POS] = init_pos
+        im2.metadata[model.MD_DIMS] = "YXC"
+        stream2 = RGBStream("s2", im2)
+
+        self.view.addStream(stream1)
+        self.view.addStream(stream2)
+        # insert a value greater than the maximu. This value will be croped
+        self.view.fov_buffer.value = (1.0, 1.0)
+        self.view.mpp.value = mpp
+
+        # reset the mpp of the view, as it's automatically set to the first  image
+        test.gui_loop(0.5)
+
+        result_im = get_image_from_buffer(self.canvas)
+        result_im.SaveFile('/home/gstiebler/Projetos/Delmic/big.bmp', wx.BITMAP_TYPE_BMP)
+        px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
+        # center pixel, 1/3 green, 2/3 blue. The red image is the largest image
+        self.assertEqual(px2, (0, 76, 179))
+        px2 = get_rgb(result_im, result_im.Width // 2 - 30, result_im.Height // 2 - 30)
+        # background of the images, 1/3 green, 2/3 red
+        self.assertEqual(px2, (179, 76, 0))
 
 if __name__ == "__main__":
     unittest.main()

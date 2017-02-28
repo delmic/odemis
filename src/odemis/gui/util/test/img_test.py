@@ -560,10 +560,9 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
         dataRGB = numpy.zeros((1024, 1024, 4))
         metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
-                    'Exposure time': 3e-06, 'Pixel size': (5.9910982493639e-08, 6.0604642506361e-08),
+                    'Exposure time': 3e-06, 'Pixel size': (1e-6, 1e-6),
                     'Acquisition date': 1441361562.0, 'Hardware version': 'Unknown (driver 2.1-160-g17a59fb (driver ni_pcimio v0.7.76))',
-                    'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 5000.0, 'Rotation': 0.0,
-                    'Shear': 0.003274715695854}
+                    'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 5000.0, 'Rotation': 0.0}
         image = model.DataArray(data, metadata)
 
         # export
@@ -572,7 +571,7 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         # read back
         acd = tiff.open_data(FILENAME)
         sem_stream = stream.StaticSEMStream(metadata['Description'], acd.content[0])
-        #sem_stream = stream.StaticSEMStream(metadata['Description'], image)
+        sem_stream.mpp.value = 1e-6
 
         self.streams = [fluo_stream, sem_stream]
         self.min_res = (623, 432)
@@ -585,15 +584,16 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         view_hfw = (8.191282393266523e-05, 6.205915392651362e-05)
         view_pos = [-0.001203511795256, -0.000295338300158]
         draw_merge_ratio = 0.3
-        exp_data = img.images_to_export_data([self.streams[1]], view_hfw, view_pos, draw_merge_ratio, False)
-        self.assertEqual(len(exp_data), 1)
-        self.assertEqual(len(exp_data[0].shape), 3)  # RGB
+        self.streams[1]._updateImage()
+        exp_data_rgb = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(len(exp_data_rgb), 1)
+        self.assertEqual(len(exp_data_rgb[0].shape), 3)  # RGB
 
         # Post-process format
-        exp_data = img.images_to_export_data([self.streams[1]], view_hfw, view_pos, draw_merge_ratio, True)
-        self.assertEqual(len(exp_data), 1)
-        self.assertEqual(len(exp_data[0].shape), 2)  # grayscale
-        self.assertEqual(exp_data[0].shape, exp_data[0].shape)  # all exported images must have the same shape
+        exp_data_gray = img.images_to_export_data(self.streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data_gray), 2)
+        self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
+        self.assertEqual(exp_data_rgb[0].shape[:2], exp_data_gray[0].shape)  # all exported images must have the same shape
 
 
 if __name__ == "__main__":

@@ -74,12 +74,11 @@ TINT_SIZE = 0.0155
 # TODO: rename to *_bgra_*
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
-
+    im_darray (DataArray or tuple of tuple of DataArray): input image
     alpha (0 <= int <= 255 or None): If an alpha value is provided it will be
       set in the '4th' byte and used to scale the other RGB values within the array.
-
+    return (DataArray or tuple of tuple of DataArray): The return type is the same of im_darray
     """
-
     if im_darray.shape[-1] == 3:
         h, w, _ = im_darray.shape
         rgba_shape = (h, w, 4)
@@ -1553,12 +1552,10 @@ def _get_stream_legend_text(s):
 
     # FluoStreams are merged using the "Screen" method that handles colour
     # merging without decreasing the intensity.
-    if isinstance(s.raw, list):
-        md = s.raw[0].metadata
-    elif isinstance(s.raw, (model.DataArray, model.DataArrayShadow)):
-        md = s.raw.metadata
+    if isinstance(s.raw, tuple): #s.raw has tiles
+        md = s.raw[0][0].metadata
     else:
-        ValueError("s.raw must be a list of DataArray or a DataArrayShadow")
+        md = s.raw[0].metadata
 
     try:
         if md.get(model.MD_EXP_TIME, None):
@@ -1620,9 +1617,10 @@ def get_ordered_images(streams, raw=False):
             if isinstance(data, tuple): # 2D tuple = tiles
                 data = img.mergeTiles(data)
         else:
-            data_raw = s.raw[0]
-            if isinstance(data_raw, tuple): # 2D tuple = tiles
-                data_raw = img.mergeTiles(data_raw)
+            if isinstance(s.raw, tuple): # 2D tuple = tiles
+                data_raw = img.mergeTiles(s.raw)
+            else:
+                data_raw = s.raw[0]
 
             # Pretend to be RGB for the drawing by cairo
             if numpy.can_cast(im_min_type, min_type(data_raw)):
@@ -1885,7 +1883,12 @@ def images_to_export_data(streams, view_hfw, view_pos,
                                             view_hfw[0], im.metadata['date'],
                                             im.metadata['stream'], logo)
 
-            legend_as_raw = _adapt_rgb_to_raw(legend_rgb, im.metadata['stream'], im_min_type)
+            stream = im.metadata['stream']
+            if isinstance(stream.raw, tuple): # tiles
+                data_raw = img.mergeTiles(stream.raw)
+            else:
+                data_raw = stream.raw[0]
+            legend_as_raw = _adapt_rgb_to_raw(legend_rgb, data_raw, stream, im_min_type)
             new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
             data_with_legend = numpy.append(new_data_to_draw, legend_as_raw, axis=0)
 
@@ -1905,18 +1908,15 @@ def images_to_export_data(streams, view_hfw, view_pos,
     return data_to_export
 
 
-def _adapt_rgb_to_raw(imrgb, stream, dtype):
+def _adapt_rgb_to_raw(imrgb, data_raw, stream, dtype):
     """
     imrgb (ndarray Y,X,4): RGB image to convert to a greyscale
+    data_raw (DataArray): Raw image
     stream: corresponding stream: for the raw data
     dtype: data type of the ouptut data
     return (ndarray Y,X)
     """
 
-    if isinstance(stream.raw, list):
-        data_raw = stream.raw[0]
-    else:
-        data_raw = img.mergeTiles(stream.raw)
     if isinstance(stream, acqstream.OpticalStream):
         blkval = data_raw.metadata.get(model.MD_BASELINE, 0)
     else:
@@ -1962,6 +1962,17 @@ def _unpack_raw_data(imrgb, dtype):
 
 
 def add_alpha_byte(im_darray, alpha=255):
+    # if im_darray is a tuple of tuple of tiles, return a tuple of tuple of processed tiles
+    if isinstance(im_darray, tuple):
+        new_array = []
+        for tuple_col in im_darray:
+            new_array_col = []
+            for tile in tuple_col:
+                tile = add_alpha_byte(tile, alpha)
+                new_array_col.append(tile)
+
+            new_array.append(tuple(new_array_col))
+        return tuple(new_array)
 
     height, width, depth = im_darray.shape
 

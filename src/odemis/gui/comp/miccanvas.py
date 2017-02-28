@@ -382,23 +382,24 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not hasattr(s, "image") or s.image.value is None:
                 continue
 
-            if isinstance(s.raw, list):
-                image = s.image.value
-            else:
-                image = mergeTiles(s.image.value)
+            image = s.image.value
 
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             if isinstance(s, stream.OpticalStream):
-                images_opt.append((image, BLEND_SCREEN, s.name.value))
+                images_opt.append((image, BLEND_SCREEN, s.name.value, s))
             elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
-                images_spc.append((image, BLEND_DEFAULT, s.name.value))
+                images_spc.append((image, BLEND_DEFAULT, s.name.value, s))
             else:
-                images_std.append((image, BLEND_DEFAULT, s.name.value))
+                images_std.append((image, BLEND_DEFAULT, s.name.value, s))
 
         # Sort by size, so that the biggest picture is first drawn (no opacity)
         def get_area(d):
-            return numpy.prod(d[0].shape[0:2]) * d[0].metadata[model.MD_PIXEL_SIZE][0]
+            stream = d[3]
+            bbox = stream.getBoundingBox()
+            width = bbox[2] - bbox[0]
+            height = bbox[3] - bbox[1]
+            return width * height
 
         images_opt.sort(key=get_area, reverse=True)
         images_spc.sort(key=get_area, reverse=True)
@@ -421,27 +422,55 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # add the images in order
         ims = []
         im_cache = {}
-        for rgbim, blend_mode, name in images:
-            # Get converted RGBA image from cache, or create it and cache it
-            # On large images it costs 100 ms (per image and per canvas)
-            im_id = id(rgbim)
-            if im_id in self.images_cache:
-                rgba_im = self.images_cache[im_id]
+        images_cache = {}
+        for rgbim, blend_mode, name, stream in images:
+            if isinstance(rgbim, tuple): # tuple of tuple of tiles
+                if len(rgbim) == 0 or len(rgbim[0]) == 0:
+                    continue
+                first_tile = rgbim[0][0]
+                md = first_tile.metadata
+                new_array = []
+                for tile_column in rgbim:
+                    new_array_col = []
+                    for tile in tile_column:
+                        tile_id = id(tile)
+                        if tile_id in self.images_cache:
+                            rgba_tile = self.images_cache[tile_id]
+                        else:
+                            rgba_tile = format_rgba_darray(tile)
+                        images_cache[tile_id] = rgba_tile
+                        new_array_col.append(rgba_tile)
+                        rgba_tile.metadata = md
+                    new_array.append(tuple(new_array_col))
+                # creates a 2D tuple with the converted tiles
+                rgba_im = tuple(new_array)
+
+                bbox = stream.getBoundingBox()
+                t, l, b, r = bbox
+                pos = ((l + r) / 2, (b + t) / 2)
             else:
-                rgba_im = format_rgba_darray(rgbim)
-            im_cache[im_id] = rgba_im
+                # Get converted RGBA image from cache, or create it and cache it
+                # On large images it costs 100 ms (per image and per canvas)
+                im_id = id(rgbim)
+                if im_id in self.images_cache:
+                    rgba_im = self.images_cache[im_id]
+                else:
+                    rgba_im = format_rgba_darray(rgbim)
+                im_cache[im_id] = rgba_im
+
+                md = rgbim.metadata
+                pos = md[model.MD_POS]
+
+            scale = md[model.MD_PIXEL_SIZE]
+            rot = md.get(model.MD_ROTATION, 0)
+            shear = md.get(model.MD_SHEAR, 0)
+            flip = md.get(model.MD_FLIP, 0)
+
+            # Replace the old cache, so the obsolete RGBA images can be garbage collected
+            self.images_cache = im_cache
 
             keepalpha = False
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
-            pos = rgbim.metadata[model.MD_POS]
-            rot = rgbim.metadata.get(model.MD_ROTATION, 0)
-            shear = rgbim.metadata.get(model.MD_SHEAR, 0)
-            flip = rgbim.metadata.get(model.MD_FLIP, 0)
-
             ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
-
-        # Replace the old cache, so the obsolete RGBA images can be garbage collected
-        self.images_cache = im_cache
 
         # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
@@ -535,7 +564,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # recenter only if there is no stage attached
             recenter = not self.microscope_view.has_stage()
 
-        super(DblMicroscopeCanvas, self).fit_to_content(recenter=recenter)
+        self.fit_to_content(recenter=recenter)
 
         # this will indirectly call _on_view_mpp(), but not have any additional effect
         if self.microscope_view:
@@ -600,7 +629,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Check for every image
             for im in self.microscope_view.stream_tree.getImages():
                 try:
-                    im_mpp = im.metadata[model.MD_PIXEL_SIZE][0]
+                    if isinstance(im, tuple):
+                        # gets the metadata of the first tile
+                        md = im[0][0].metadata
+                    else:
+                        md = im.metadata
+                    im_mpp = md[model.MD_PIXEL_SIZE][0]
                     # did we just passed the image mpp (=zoom zero)?
                     if ((prev_mpp < im_mpp < mpp or prev_mpp > im_mpp > mpp) and
                             abs(prev_mpp - im_mpp) > 1e-15):  # for float error
@@ -930,6 +964,59 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._last_frame_update = now
         else:
             super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)
+
+
+    # TODO: just return best scale and center? And let the caller do what it wants?
+    # It would allow to decide how to redraw depending if it's on size event or more high level.
+    def fit_to_content(self, recenter=False):
+        """ Adapt the scale and (optionally) center to fit to the current content
+
+        :param recenter: (boolean) If True, also recenter the view.
+
+        """
+
+        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
+
+        # Find bounding box of all the content
+        bbox = [None, None, None, None]  # ltrb in m
+        streams = self.microscope_view.getStreams()
+        for stream in streams:
+            s_bbox = stream.getBoundingBox()
+            if bbox[0] is None:
+                bbox = s_bbox
+            else:
+                bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
+                        max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
+
+        if bbox[0] is None:
+            return  # no image => nothing to do
+
+        # if no recenter, increase bbox so that its center is the current center
+        if not recenter:
+            c = self.requested_phys_pos  # think ahead, use the next center pos
+            hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
+            hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
+            bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
+
+        # TODO: check sign of Y
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f m", w, h)
+            return  # no image
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
+
+        # TODO: avoid aliasing when possible by picking a round number for the
+        # zoom level (for the "main" image) if it's ±10% of the target size
+
+        if recenter:
+            c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+            self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
+
+        wx.CallAfter(self.request_drawing_update)
 
 
 class OverviewCanvas(DblMicroscopeCanvas):
@@ -1430,7 +1517,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def on_size(self, evt):
         """ Called when the canvas is resized """
-        self.fit_to_content(recenter=True)
+        self.fit_to_content()
         super(AngularResolvedCanvas, self).on_size(evt)
 
     def setView(self, microscope_view, tab_data):
@@ -1470,13 +1557,58 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def _onViewImageUpdate(self, t):
         self._convert_streams_to_images()
-        self.fit_to_content(recenter=True)
+        self.fit_to_content()
         wx.CallAfter(self.request_drawing_update)
 
     def update_drawing(self):
         super(AngularResolvedCanvas, self).update_drawing()
         if self.microscope_view:
             self.update_thumbnail()
+
+    # TODO: just return best scale and center? And let the caller do what it wants?
+    # It would allow to decide how to redraw depending if it's on size event or more high level.
+    def fit_to_content(self):
+        """ Adapt the scale and (optionally) center to fit to the current content
+
+        """
+        # TODO check if it's possible to remove duplicate code from the other fit_to_content
+
+        # Find bounding box of all the content
+        bbox = [None, None, None, None]  # ltrb in m
+        for im in self.images:
+            if im is None:
+                continue
+            md = im.metadata
+            shape = im.shape
+            im_scale = md['dc_scale']
+            w, h = shape[1] * im_scale[0], shape[0] * im_scale[1]
+            c = md['dc_center']
+            bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
+            if bbox[0] is None:
+                bbox = bbox_im
+            else:
+                bbox = (min(bbox[0], bbox_im[0]), min(bbox[1], bbox_im[1]),
+                        max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
+
+        if bbox[0] is None:
+            return  # no image => nothing to do
+
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f m", w, h)
+            return  # no image
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
+
+        # TODO: avoid aliasing when possible by picking a round number for the
+        # zoom level (for the "main" image) if it's ±10% of the target size
+        c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+        self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
+
+        wx.CallAfter(self.request_drawing_update)
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):

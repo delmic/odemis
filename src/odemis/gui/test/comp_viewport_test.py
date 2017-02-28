@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import numpy
 from collections import deque
 import copy
 import threading
@@ -32,6 +33,7 @@ import time
 
 import odemis.gui.comp.viewport as viewport
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.test as test
 
 MODES = [canvas.PLOT_MODE_POINT, canvas.PLOT_MODE_LINE, canvas.PLOT_MODE_BAR]
@@ -183,6 +185,47 @@ class ViewportTestCase(test.GuiTestCase):
         vwp = viewport.SpatialSpectrumViewport(self.panel)
 
         self.add_control(vwp, wx.EXPAND, proportion=1)
+
+
+class MicroscopeViewportTestCase(test.GuiTestCase):
+    frame_class = test.test_gui.xrccanvas_frame
+
+    def test_basic(self):
+
+        def dummy_fn(*args, **kwargs):
+            pass
+
+        class DummyObj:
+            pass
+
+        # mock for AnalysisGUIData
+        class DataMock:
+            def __init__(self):
+                self.tool = None
+                self.main = DummyObj()
+                self.main.debug = DummyObj()
+                self.main.debug.subscribe = dummy_fn
+
+        test.gui_loop()
+        self.mmodel = self.create_simple_tab_model()
+        self.view = self.mmodel.focussedView.value
+
+        vwp = viewport.MicroscopeViewport(self.panel)
+        vwp.setView(self.view, DataMock())
+        self.canvas = vwp.canvas
+        # sets the size of the buffer
+        self.canvas.resize_buffer((2000.0, 2000.0))
+        # check the initial size of the buffer field of view
+        numpy.testing.assert_almost_equal((0.001554,  0.001025), self.view.fov_buffer.value)
+        self.view.mpp.value = 0.0002
+        # check the new values of fov_buffer after changing .mpp
+        numpy.testing.assert_almost_equal((0.4, 0.4), self.view.fov_buffer.value)
+        evt = DummyObj()
+        evt.Skip = dummy_fn
+        self.canvas.resize_buffer((1200.0, 1300.0))
+        vwp.OnSize(evt)
+        # fov_buffer should change after resizing
+        numpy.testing.assert_almost_equal((0.24,  0.26), self.view.fov_buffer.value)
 
 
 if __name__ == "__main__":

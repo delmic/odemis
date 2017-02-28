@@ -146,6 +146,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
 from odemis.gui.util.conversion import wxcol_to_frgb
+from odemis import model
 import os
 import sys
 import wx
@@ -839,21 +840,41 @@ class BitmapCanvas(BufferedCanvas):
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
 
-                depth = im.shape[2]
+                if isinstance(im, tuple):
+                    first_tile = im[0][0]
+                    depth = first_tile.shape[2]
 
-                if depth == 3:
-                    im = add_alpha_byte(im)
-                elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
-                    raise ValueError("Unsupported colour byte size (%s)!" % depth)
+                    if depth == 3:
+                        im = add_alpha_byte(im)
+                    elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                        raise ValueError("Unsupported colour byte size (%s)!" % depth)
 
-                im.metadata['dc_center'] = w_pos
-                im.metadata['dc_scale'] = scale
-                im.metadata['dc_rotation'] = rotation
-                im.metadata['dc_shear'] = shear
-                im.metadata['dc_flip'] = flip
-                im.metadata['dc_keepalpha'] = keepalpha
-                im.metadata['blend_mode'] = blend_mode
-                im.metadata['name'] = name
+                    for tile_col in im:
+                        for tile in tile_col:
+                            tile.metadata['dc_center'] = tile.metadata.get(model.MD_POS, w_pos)
+                            tile.metadata['dc_scale'] = scale
+                            tile.metadata['dc_rotation'] = rotation
+                            tile.metadata['dc_shear'] = shear
+                            tile.metadata['dc_flip'] = flip
+                            tile.metadata['dc_keepalpha'] = keepalpha
+                            tile.metadata['blend_mode'] = blend_mode
+                            tile.metadata['name'] = name
+                else:
+                    depth = im.shape[2]
+
+                    if depth == 3:
+                        im = add_alpha_byte(im)
+                    elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                        raise ValueError("Unsupported colour byte size (%s)!" % depth)
+
+                    im.metadata['dc_center'] = w_pos
+                    im.metadata['dc_scale'] = scale
+                    im.metadata['dc_rotation'] = rotation
+                    im.metadata['dc_shear'] = shear
+                    im.metadata['dc_flip'] = flip
+                    im.metadata['dc_keepalpha'] = keepalpha
+                    im.metadata['blend_mode'] = blend_mode
+                    im.metadata['name'] = name
 
                 images.append(im)
 
@@ -927,54 +948,168 @@ class BitmapCanvas(BufferedCanvas):
 
         if images:
             n = len(images)
-            last_image = images.pop()
-            # For every image, except the last
             for i, im in enumerate(images):
-                # print "Drawing %s %s %s %s merge: %s" % (id(im),
-                #                                          im.shape,
-                #                                          im.metadata['blend_mode'],
-                #                                          im.metadata['name'],
-                #                                          1.0)
-                if im.metadata['blend_mode'] == BLEND_SCREEN:
+                if isinstance(im, tuple):
+                    first_tile = im[0][0]
+                    md = first_tile.metadata
+                else:
+                    md = im.metadata
+
+                if md['blend_mode'] == BLEND_SCREEN:
                     merge_ratio = 1.0
+                elif i == n - 1: # last image
+                    if n == 1:
+                        merge_ratio = 1.0
+                    else:
+                        merge_ratio = self.merge_ratio
                 else:
                     merge_ratio = 1 - i / n
 
-                self._draw_image(
-                    ctx,
-                    im,
-                    im.metadata['dc_center'],
-                    merge_ratio,
-                    im_scale=im.metadata['dc_scale'],
-                    rotation=im.metadata['dc_rotation'],
-                    shear=im.metadata['dc_shear'],
-                    flip=im.metadata['dc_flip'],
-                    blend_mode=im.metadata['blend_mode'],
-                    interpolate_data=interpolate_data
-                )
+                if isinstance(im, tuple):
+                    self._draw_tiles(
+                        ctx,
+                        im,
+                        md['dc_center'],
+                        merge_ratio,
+                        im_scale=md['dc_scale'],
+                        rotation=md['dc_rotation'],
+                        shear=md['dc_shear'],
+                        flip=md['dc_flip'],
+                        blend_mode=md['blend_mode'],
+                        interpolate_data=interpolate_data
+                    )
+                else:
+                    self._draw_image(
+                        ctx,
+                        im,
+                        im.metadata['dc_center'],
+                        merge_ratio,
+                        im_scale=im.metadata['dc_scale'],
+                        rotation=im.metadata['dc_rotation'],
+                        shear=im.metadata['dc_shear'],
+                        flip=im.metadata['dc_flip'],
+                        blend_mode=im.metadata['blend_mode'],
+                        interpolate_data=interpolate_data
+                    )
 
-            if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN:
-                merge_ratio = 1.0
+    def _draw_tiles(self, ctx, tiles, p_im_center, opacity=1.0,
+                    im_scale=(1.0, 1.0), rotation=None, shear=None, flip=None,
+                    blend_mode=BLEND_DEFAULT, interpolate_data=False):
+
+        """ Draw the given tiles to the Cairo context. It is very similar to _draw_image,
+        but this function draw a tuple of tuple of tiles instead of a full image.
+
+        The buffer is considered to have it's 0,0 origin at the top left
+
+        :param ctx: (cairo.Context) Cario context to draw on
+        :param tiles: (tuple of tuple of DataArray) Tiles to draw
+        :param w_im_center: (2-tuple float)
+        :param opacity: (float) [0..1] => [transparent..opaque]
+        :param im_scale: (float, float)
+        :param rotation: (float) Clock-wise rotation around the image center in radians
+        :param shear: (float) Horizontal shearing of the image data (around it's center)
+        :param flip: (wx.HORIZONTAL | wx.VERTICAL) If and how to flip the image
+        :param blend_mode: (int) Graphical blending type used for transparency
+        :param interpolate_data: (boolean) Apply interpolation if True
+
+        """
+        first_tile = tiles[0][0]
+        ftmd = first_tile.metadata
+
+        # Fully transparent image does not need to be drawn
+        if opacity < 1e-8:
+            logging.debug("Skipping draw: image fully transparent")
+            return
+
+        # Determine the rectangle the image would occupy in the buffer
+        b_im_rect = self._calc_img_buffer_rect(first_tile.shape[:2], im_scale, p_im_center)
+
+        # To small to see, so no need to draw
+        if b_im_rect[2] < 1 or b_im_rect[3] < 1:
+            # TODO: compute the mean, and display one pixel with it
+            logging.debug("Skipping draw: too small")
+            return
+
+        # Get the intersection with the actual buffer
+        buffer_rect = (0, 0) + self._bmp_buffer_size
+
+        intersection = intersect(buffer_rect, b_im_rect)
+
+        # No intersection means nothing to draw
+        if not intersection:
+            logging.debug("Skipping draw: no intersection with buffer")
+            return
+
+        # Cache the current transformation matrix
+        ctx.save()
+        # apply transformations if needed
+        apply_rotation(ctx, rotation, b_im_rect)
+        apply_shear(ctx, shear, b_im_rect)
+        apply_flip(ctx, flip, b_im_rect)
+
+        scale_x, scale_y = im_scale
+        total_scale = total_scale_x, total_scale_y = (scale_x * self.scale, scale_y * self.scale)
+
+        # in case of small floating errors
+        if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
+            total_scale = (1.0, 1.0)
+
+        if ftmd.get('dc_keepalpha', True):
+            im_format = cairo.FORMAT_ARGB32
+        else:
+            im_format = cairo.FORMAT_RGB24
+
+        base_x, base_y, _, _ = b_im_rect
+        #translate the the first tile
+        ctx.translate(base_x, base_y)
+        # Apply total scale
+        ctx.scale(total_scale_x, total_scale_y)
+
+        if interpolate_data:
+            # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
+            # Downscaling and upscaling < 2x is nice, but above that, it just
+            # makes the pixels big (and antialiased)    
+            if total_scale_x > 2:
+                cairo_filter = cairo.FILTER_BILINEAR
             else:
-                merge_ratio = self.merge_ratio
+                cairo_filter = cairo.FILTER_BEST
+        else:
+            cairo_filter = cairo.FILTER_NEAREST  # FAST
 
-            # print "Drawing last %s %s %s %s merge: %s" % (id(last_image),
-            #                                               last_image.shape,
-            #                                               last_image.metadata['blend_mode'],
-            #                                               last_image.metadata['name'],
-            #                                               merge_ratio)
-            self._draw_image(
-                ctx,
-                last_image,
-                last_image.metadata['dc_center'],
-                merge_ratio,
-                im_scale=last_image.metadata['dc_scale'],
-                rotation=last_image.metadata['dc_rotation'],
-                shear=last_image.metadata['dc_shear'],
-                flip=last_image.metadata['dc_flip'],
-                blend_mode=last_image.metadata['blend_mode'],
-                interpolate_data=interpolate_data
-            )
+        for tile_col in tiles:
+            # save the transformation matrix to return to the top of the column
+            ctx.save()
+            for tile in tile_col:
+                tmd = tile.metadata
+                height, width, _ = tile.shape
+
+                # Note: Stride calculation is done automatically when no stride parameter is provided.
+                stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
+                # In Cairo a surface is a target that it can render to. Here we're going to use it as the
+                #  source for a pattern
+                imgsurface = cairo.ImageSurface.create_for_data(tile, im_format, width, height, stride)
+
+                # In Cairo a pattern is the 'paint' that it uses to draw
+                surfpat = cairo.SurfacePattern(imgsurface)
+
+                surfpat.set_filter(cairo_filter)
+                ctx.set_source(surfpat)
+                ctx.set_operator(blend_mode)
+
+                # always has alpha, so the tiles are not drawn over each other when
+                # the image is tiled
+                ctx.paint_with_alpha(opacity)
+
+                ctx.translate(0, height)
+
+            # restore the transformation matrix to the top of the column
+            ctx.restore()
+
+            offset_x = tile_col[0].shape[1]
+            ctx.translate(offset_x, 0)
+
+        # Restore the cached transformation matrix
+        ctx.restore()
 
     def _draw_image(self, ctx, im_data, p_im_center, opacity=1.0,
                     im_scale=(1.0, 1.0), rotation=None, shear=None, flip=None,
@@ -1002,7 +1137,7 @@ class BitmapCanvas(BufferedCanvas):
             return
 
         # Determine the rectangle the image would occupy in the buffer
-        b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, p_im_center)
+        b_im_rect = self._calc_img_buffer_rect(im_data.shape[:2], im_scale, p_im_center)
         # logging.debug("Image on buffer %s", b_im_rect)
 
         # To small to see, so no need to draw
@@ -1101,12 +1236,12 @@ class BitmapCanvas(BufferedCanvas):
         # Restore the cached transformation matrix
         ctx.restore()
 
-    def _calc_img_buffer_rect(self, im_data, im_scale, p_im_center):
+    def _calc_img_buffer_rect(self, im_shape, im_scale, p_im_center):
         """ Compute the rectangle containing the image in buffer coordinates
 
         The (top, left) value are relative to the 0,0 top left of the buffer.
 
-        :param im_data: (DataArray) image data
+        :param im_shape: (int, int) x and y shape of the image
         :param im_scale: (float, float) The x and y scales of the image
         :param p_im_center: (float, float) The center of the image in physical coordinates
 
@@ -1120,7 +1255,7 @@ class BitmapCanvas(BufferedCanvas):
         # * the scale of the buffer (dependent on how much the user zoomed in)
 
         # Scale the image
-        im_h, im_w = im_data.shape[:2]
+        im_h, im_w = im_shape
         scale_x, scale_y = im_scale
         scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
@@ -1583,62 +1718,6 @@ class DraggableCanvas(BitmapCanvas):
         self.Update()
 
     # END Buffer and drawing methods
-
-    # TODO: just return best scale and center? And let the caller do what it wants?
-    # It would allow to decide how to redraw depending if it's on size event or more high level.
-    def fit_to_content(self, recenter=False):
-        """ Adapt the scale and (optionally) center to fit to the current content
-
-        :param recenter: (boolean) If True, also recenter the view.
-
-        """
-
-        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
-
-        # Find bounding box of all the content
-        bbox = [None, None, None, None]  # ltrb in m
-        for im in self.images:
-            if im is None:
-                continue
-            im_scale = im.metadata['dc_scale']
-            w, h = im.shape[1] * im_scale[0], im.shape[0] * im_scale[1]
-            c = im.metadata['dc_center']
-            bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
-            if bbox[0] is None:
-                bbox = bbox_im
-            else:
-                bbox = (min(bbox[0], bbox_im[0]), min(bbox[1], bbox_im[1]),
-                        max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
-
-        if bbox[0] is None:
-            return  # no image => nothing to do
-
-        # if no recenter, increase bbox so that its center is the current center
-        if not recenter:
-            c = self.requested_phys_pos  # think ahead, use the next center pos
-            hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
-            hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
-            bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
-
-        # TODO: check sign of Y
-        # compute mpp so that the bbox fits exactly the visible part
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
-        if w == 0 or h == 0:
-            logging.warning("Weird image size of %fx%f m", w, h)
-            return  # no image
-        cs = self.ClientSize
-        cw = max(1, cs[0])  # px
-        ch = max(1, cs[1])  # px
-        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
-
-        # TODO: avoid aliasing when possible by picking a round number for the
-        # zoom level (for the "main" image) if it's ±10% of the target size
-
-        if recenter:
-            c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
-            self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
-
-        wx.CallAfter(self.request_drawing_update)
 
 
 # PlotCanvas configuration flags
