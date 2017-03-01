@@ -33,6 +33,7 @@ from odemis import model, dataio
 from odemis.acq import stream
 from odemis.gui.util import img
 from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray
+from odemis.dataio import tiff
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -537,6 +538,62 @@ class TestSpatialExport(unittest.TestCase):
         self.assertEqual(len(exp_data), len(self.streams))
         self.assertEqual(len(exp_data[0].shape), 2)  # greyscale
         self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
+
+
+class TestSpatialExportAcquisitionData(unittest.TestCase):
+
+    def setUp(self):
+        self.app = wx.App()
+        data = numpy.zeros((2160, 2560), dtype=numpy.uint16)
+        dataRGB = numpy.zeros((2160, 2560, 4))
+        metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
+                    'Exposure time': 0.3, 'Pixel size': (1.59604600574173e-07, 1.59604600574173e-07),
+                    'Acquisition date': 1441361559.258568, 'Hardware version': "firmware: '14.9.16.0' (driver 3.10.30003.5)",
+                    'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 40.0,
+                    'Input wavelength range': (6.15e-07, 6.350000000000001e-07), 'Shear':-4.358492733391727e-16,
+                    'Description': 'Filtered colour 1', 'Bits per pixel': 16, 'Binning': (1, 1), 'Pixel readout time': 1e-08,
+                    'Gain': 1.1, 'Rotation': 6.279302551026012, 'Light power': 0.0, 'Display tint': (255, 0, 0),
+                    'Output wavelength range': (6.990000000000001e-07, 7.01e-07)}
+        image = model.DataArray(data, metadata)
+        fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
+
+        data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
+        dataRGB = numpy.zeros((1024, 1024, 4))
+        metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
+                    'Exposure time': 3e-06, 'Pixel size': (5.9910982493639e-08, 6.0604642506361e-08),
+                    'Acquisition date': 1441361562.0, 'Hardware version': 'Unknown (driver 2.1-160-g17a59fb (driver ni_pcimio v0.7.76))',
+                    'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 5000.0, 'Rotation': 0.0,
+                    'Shear': 0.003274715695854}
+        image = model.DataArray(data, metadata)
+
+        # export
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        tiff.export(FILENAME, image, pyramid=True)
+        # read back
+        acd = tiff.open_data(FILENAME)
+        sem_stream = stream.StaticSEMStream(metadata['Description'], acd.content[0])
+        #sem_stream = stream.StaticSEMStream(metadata['Description'], image)
+
+        self.streams = [fluo_stream, sem_stream]
+        self.min_res = (623, 432)
+
+        # Wait for all the streams to get an RGB image
+        time.sleep(0.5)
+
+    def test_first(self):
+        # Print ready format
+        view_hfw = (8.191282393266523e-05, 6.205915392651362e-05)
+        view_pos = [-0.001203511795256, -0.000295338300158]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data([self.streams[1]], view_hfw, view_pos, draw_merge_ratio, False)
+        self.assertEqual(len(exp_data), 1)
+        self.assertEqual(len(exp_data[0].shape), 3)  # RGB
+
+        # Post-process format
+        exp_data = img.images_to_export_data([self.streams[1]], view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data), 1)
+        self.assertEqual(len(exp_data[0].shape), 2)  # grayscale
+        self.assertEqual(exp_data[0].shape, exp_data[0].shape)  # all exported images must have the same shape
 
 
 if __name__ == "__main__":

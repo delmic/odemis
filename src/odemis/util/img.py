@@ -29,6 +29,7 @@ import math
 import numpy
 from odemis import model
 import scipy.ndimage
+from odemis.util.conversion import get_img_transformation_matrix
 
 
 # See if the optimised (cython-based) functions are available
@@ -591,3 +592,104 @@ def mergeMetadata(current, correction=None):
         if k in current:
             del current[k]
 
+def mergeTiles(tiles):
+    """"
+    Merge tiles into one DataArray
+    tiles (tuple of tuple of DataArray): Tiles to be merged
+    return (DataArray): Merge of all the tiles
+    """
+    first_tile = tiles[0][0]
+    ft_md = first_tile.metadata
+
+    # calculates the height of the image, summing the heights of the tiles of the first column
+    height = 0
+    for tile in tiles[0]:
+        height += tile.shape[0]
+
+    # calculates the width of the image, summing the width of the tiles of the first row
+    width = 0
+    for tiles_column in tiles:
+        width += tiles_column[0].shape[1]
+
+    result_shape = (height, width)
+    # TODO must work when the channel dimension is not the last
+    if len(first_tile.shape) == 3:
+        result_shape = result_shape + (first_tile.shape[2],)
+
+    result = numpy.empty(result_shape, dtype=first_tile.dtype)
+    result = model.DataArray(result, ft_md.copy())
+
+    width_sum = 0
+    # copy the tiles to the result image
+    for tiles_column in tiles:
+        tile_width = tiles_column[0].shape[1]
+        height_sum = 0
+        for tile in tiles_column:
+            tile_height = tile.shape[0]
+            bottom = height_sum + tile_height
+            right = width_sum + tile_width
+            result[height_sum:bottom, width_sum:right] = tile
+            height_sum += tile_height
+
+        width_sum += tile_width
+
+    # The section below calculates the center of the result image
+    # It is based on the formula for calculating the position of a pixel in world coordinates:
+    # CT = CI + TMAT * DC
+    # where:
+    #   CT: center of the tile in pixel coordinates
+    #   CI: center of the image in world coordinates
+    #   DC: delta of the centers in pixel coordinates
+    #   TMAT: transformation matrix
+    # From the formula above, comes the following formula:
+    # CI = CT - TMAT * DC,
+    # which is used below
+    dims = ft_md.get(model.MD_DIMS, "CTZYX"[-first_tile.ndim::])
+    ft_shape = [first_tile.shape[dims.index('X')], first_tile.shape[dims.index('Y')]]
+    # center of the tile in pixel coordinates
+    center_tile_pixel = [d / 2 for d in ft_shape]
+    # center of the image in pixel coordinates
+    center_image_pixel = [d / 2 for d in result_shape[::-1]]
+    # distance between the center of the tile and the center of the image, in pixel coordinates
+    dist_centers_tile_pixels = [ct - ci for ct, ci in zip(center_tile_pixel, center_image_pixel)]
+    # converts the centers distance, so this variable can be multiplied by the transformation matrix
+    dist_centers_tile_pixels = numpy.matrix(dist_centers_tile_pixels).getT()
+    # transformation matrix
+    tmat = get_img_transformation_matrix(first_tile.metadata)
+    # distance of the centers converted to world coordinates
+    dist_centers_w = tmat * dist_centers_tile_pixels
+    # convert the variable from a numpy.matrix to a numpy.array
+    dist_centers_w = numpy.ravel(dist_centers_w)
+    # center of the tile in world coordinates
+    center_tile_w = first_tile.metadata[model.MD_POS]
+    # center of the image in world coordinates
+    image_pos = center_tile_w - dist_centers_w
+    result.metadata[model.MD_POS] = tuple(image_pos)
+
+    return result
+
+def _getBoundingBox(content):
+    """
+    Compute the physical bounding-box of the given DataArray(Shadow)
+    content (DataArray(Shadow)): The data of the image
+    return (tuple(ltbr)): left,top,bottom,right positions in world coordinates
+    """
+    md = content.metadata
+    # get the pixel size of the full image
+    ps = md[model.MD_PIXEL_SIZE]
+
+    dims = md.get(model.MD_DIMS, "CTZYX"[-content.ndim::])
+    img_shape = (content.shape[dims.index('X')], content.shape[dims.index('Y')])
+    # half shape on world coordinates
+    half_shape_wc = (
+        img_shape[0] * ps[0] / 2,
+        img_shape[1] * ps[1] / 2,
+    )
+    md_pos = md.get(model.MD_POS, (0.0, 0.0))
+    rect = (
+        md_pos[0] - half_shape_wc[0],
+        md_pos[1] - half_shape_wc[1],
+        md_pos[0] + half_shape_wc[0],
+        md_pos[1] + half_shape_wc[1],
+    )
+    return rect

@@ -228,7 +228,13 @@ class StreamTree(object):
                 images.extend(s.getImages())
             elif isinstance(s, Stream):
                 if hasattr(s, "image"):
-                    im = s.image.value
+                    # if .raw is a list of DataArray, .image is a complete image
+                    if isinstance(s.image.value, model.DataArray):
+                        im = s.image.value
+                    else:
+                        # TODO This is a "hack" in order to temporarily properly already
+                        # display the pyramidal streams before the GUI classes are changed
+                        im = util.img.mergeTiles(s.image.value)
                     if im is not None:
                         images.append(im)
 

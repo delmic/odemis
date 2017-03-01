@@ -26,13 +26,16 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq import stream
+from odemis import dataio
+import odemis.gui.util as guiutil
+import os
 
 
 def data_to_static_streams(data):
     """ Split the given data into static streams
 
     Args:
-        data: (list of DataArrays) Data to be split
+        data: (list of DataArrays or DataArrayShadows) Data to be split
 
     Returns:
         (list) A list of Stream instances
@@ -144,7 +147,8 @@ def data_to_static_streams(data):
                                 name, d.shape)
                 d = d[-2, -1]
 
-        result_streams.append(klass(name, d))
+        stream_instance = klass(name, d)
+        result_streams.append(stream_instance)
 
     # Add one global AR stream
     if ar_data:
@@ -189,3 +193,28 @@ def _split_planes(data):
         das.append(plane)
 
     return das
+
+def open_acquisition(filename, fmt=None):
+    """
+    Opens the data acording to the type of file, and returns the openend data. 
+    If it's a pyramidal image, do not fetch the whole data from the image. If the image
+    is not pyramidal, it reads the entire image and returns it
+    filename (string): Name of the file where the image is
+    fmt (string): The format of the file
+    return (list of DataArrays or DataArrayShadows): The opened acquisition source
+    """
+    if fmt:
+        converter = dataio.get_converter(fmt)
+    else:
+        converter = dataio.find_fittest_converter(filename, mode=os.O_RDONLY)
+    data = []
+    try:
+        if hasattr(converter, 'open_data'):
+            acd = converter.open_data(filename)
+            data = acd.content
+        else:
+            data = converter.read_data(filename)
+    except Exception:
+        logging.exception("Failed to open file '%s' with format %s", filename, fmt)
+
+    return data

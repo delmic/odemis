@@ -234,7 +234,7 @@ class TestTiffIO(unittest.TestCase):
         lin.shape = (size3d[2], 1, 1) # to be able to copy it on the first dim
         data3d[:] = lin
         # introduce Time and Z dimension to state the 3rd dim is channel
-        data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:] 
+        data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:]
         ldata.append(model.DataArray(data3d, metadata3d))
 
         # an additional 2D data, for the sake of it
@@ -353,7 +353,7 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9), #m
                     }
 
-        data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)     
+        data = model.DataArray(numpy.zeros((size[1], size[0]), dtype), metadata=metadata)
 
         # export
         tiff.export(FILENAME, data)
@@ -663,7 +663,7 @@ class TestTiffIO(unittest.TestCase):
     def testReadMDFluo(self):
         """
         Checks that we can read back the metadata of a fluoresence image
-        The OME-TIFF file will contain just one big array, but three arrays 
+        The OME-TIFF file will contain just one big array, but three arrays
         should be read back with the right data.
         """
         metadata = [{model.MD_SW_VERSION: "1.0-test",
@@ -1292,7 +1292,7 @@ class TestTiffIO(unittest.TestCase):
         del im
         os.remove(FILENAME)
 
-    def testExportThinPyramid(self):    
+    def testExportThinPyramid(self):           
         """
         Checks that can both write and read back a thin pyramidal grayscale 16 bit image
         """
@@ -1478,6 +1478,35 @@ class TestTiffIO(unittest.TestCase):
         # this tile is only 2 x 1 in size
         self.assertEqual(tile.shape, (1, 2, 3))
         del f
+        os.remove(FILENAME)
+
+    def testAcquisitionDataTIFFSmallFile(self):
+        num_rows = 10
+        num_cols = 5
+        size = (num_rows, num_cols)
+        md = {
+            model.MD_SAMPLES_PER_PIXEL: 1,
+            model.MD_DIMS: 'YX',
+            model.MD_POS: (2e-6, 10e-6),
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6)
+        }
+        arr = numpy.empty(size, dtype=numpy.uint8)
+        data = model.DataArray(arr, metadata=md)
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+        # check data
+        rdata = tiff.open_data(FILENAME)
+        self.assertEqual(1, len(rdata.content))
+        self.assertEqual(rdata.content[0].maxzoom, 0)
+        self.assertEqual(rdata.content[0].shape, size)
+        self.assertEqual(rdata.content[0].tile_shape, (256, 256))
+        # get the only tile of the image
+        tile = rdata.content[0].getTile(0, 0, 0)
+        # the tile must have the same shape of the full image
+        self.assertEqual(num_rows, len(tile))
+        self.assertEqual(num_cols, len(tile[0]))
+
+        del rdata
         os.remove(FILENAME)
 
     def testAcquisitionDataTIFF(self):

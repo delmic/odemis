@@ -33,6 +33,7 @@ import time
 import weakref
 
 
+
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
@@ -105,8 +106,16 @@ class Stream(object):
         # every time it's modified, image is also modified
         if raw is None:
             self.raw = []
+        elif isinstance(raw, model.DataArrayShadow):
+            self._das = raw
+            self.raw = (())
         else:
             self.raw = raw
+
+        # initialize the projected tiles cache
+        self._projectedTilesCache = {}
+        # initialize the raw tiles cache
+        self._rawTilesCache = {}
 
         # TODO: should better be based on a BufferedDataFlow: subscribing starts
         # acquisition and sends (raw) data to whoever is interested. .get()
@@ -149,6 +158,20 @@ class Stream(object):
         # side.
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
 
+        # drange_raw is the smaller (less zoomed) image of an pyramidal image. It is used
+        # instead of the full image because it would be too slow or even impossible to read
+        # the full data from the image to the memory. It is also not the tiles from the tiled
+        # image, so the code for pyramidal and non-pyramidal images
+        # that reads drange_raw is the same.
+        # The drawback of not using the full image, is that some of the pixels are lost, so
+        # maybe the max/min of the smaller image is different from the min/max of the full image.
+        # And the histogram of both images will probably be a bit different also.
+        if isinstance(self.raw, tuple):
+            # if the image is pyramidal, use the smaller image
+            drange_raw = self._getMergedRawImage(self._das.maxzoom)
+        else:
+            drange_raw = None
+
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
         # black/white. Its range is ._drange (will be updated by _updateDRange)
@@ -159,7 +182,7 @@ class Stream(object):
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
-        self._updateDRange()
+        self._updateDRange(drange_raw)
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
@@ -180,9 +203,13 @@ class Stream(object):
 
         # if there is already some data, update image with it
         # TODO: have this done by the child class, if needed.
-        if self.raw:
-            self._updateHistogram()
-            self._onNewData(None, self.raw[0])
+        if self.raw or isinstance(self.raw, tuple):
+            self._updateHistogram(drange_raw)
+            if isinstance(self.raw, list):
+                raw = self.raw[0]
+            else:
+                raw = self.raw
+            self._onNewData(None, raw)
 
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
@@ -523,9 +550,22 @@ class Stream(object):
         self.status.notify(self.status.value)
 
     def onTint(self, value):
-        if self.raw:
-            data = self.raw[0]
-            data.metadata[model.MD_USER_TINT] = value
+        if isinstance(self.raw, list):
+            if len(self.raw) > 0:
+                raw = self.raw[0]
+            else:
+                raw = None
+        elif isinstance(self.raw, tuple):
+            raw = self._das
+        else:
+            raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+
+        if raw is not None:
+            # If the image is pyramidal, the exported image is based on tiles from .raw.
+            # And the metadata from raw will be used to generate the metadata of the merged
+            # image from the tiles. So, in the end, the exported image metadata will be based
+            # on the raw metadata
+            raw.metadata[model.MD_USER_TINT] = value
 
         self._shouldUpdateImage()
 
@@ -561,7 +601,13 @@ class Stream(object):
 
         if data is None:
             if self.raw:
-                data = self.raw[0]
+                if isinstance(self.raw, list):
+                    data = self.raw[0]
+                elif isinstance(self.raw, tuple):
+                    # if the image is pyramidal, use the smaller image
+                    data = self._getMergedRawImage(self.raw.maxzoom)
+                else:
+                    raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
 
         # 2 types of drange management:
         # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
@@ -787,15 +833,195 @@ class Stream(object):
 
         gc.collect()
 
+    def _zFromMpp(self):
+        """
+        Return the zoom level based on the current .mpp value
+        return (int): The zoom level based on the current .mpp value
+        """
+        md = self._das.metadata
+        ps = md[model.MD_PIXEL_SIZE]
+        return int(math.log(self.mpp.value / ps[0], 2))
+
+    def _rectWorldToPixel(self, rect):
+        """
+        Convert rect from world coordinates to pixel coordinates
+        rect (tuple containing x1, y1, x2, y2): Rect on world coordinates
+        return (tuple containing x1, y1, x2, y2): Rect on pixel coordinates
+        """
+        md = self._das.metadata
+        ps = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+        pos = md.get(model.MD_POS, (0.0, 0.0))
+        # Removes the center coordinates of the image. After that, rect will be centered on 0, 0
+        rect = (
+            rect[0] - pos[0],
+            rect[1] - pos[1],
+            rect[2] - pos[0],
+            rect[3] - pos[1]
+        )
+        dims = md.get(model.MD_DIMS, "CTZYX"[-self._das.ndim::])
+        img_shape = (self._das.shape[dims.index('X')], self._das.shape[dims.index('Y')])
+
+        # Converts rect from physical to pixel coordinates.
+        # The received rect is relative to the center of the image, but pixel coordinates
+        # are relative to the top-left corner. So it also needs to sum half image.
+        # The -1 are necessary on the right and bottom sides, as the coordinates of a pixel
+        # are -1 relative to the side of the pixel
+        return (
+            int(round(rect[0] / ps[0] + img_shape[0] / 2)),
+            int(round(rect[1] / ps[1] + img_shape[1] / 2)),
+            int(round(rect[2] / ps[0] + img_shape[0] / 2)) - 1,
+            int(round(rect[3] / ps[1] + img_shape[1] / 2)) - 1,
+        )
+
+    def _getMergedRawImage(self, z):
+        """
+        Returns the merged image based on z and .rect, using the raw tiles (not projected)
+        z (int): Zoom level index
+        return (DataArray): The merged image
+        """
+        # calculates the size of the merged image
+        width_zoomed = self._das.shape[1] / (2 ** z)
+        height_zoomed = self._das.shape[0] / (2 ** z)
+        # calculates the number of tiles on both axes
+        num_tiles_x = int(math.ceil(width_zoomed / self._das.tile_shape[1]))
+        num_tiles_y = int(math.ceil(height_zoomed/ self._das.tile_shape[0]))
+
+        tiles = []
+        for x in range(num_tiles_x):
+            tiles_column = []
+            for y in range(num_tiles_y):
+                tile = self._das.getTile(x, y, z)
+                tiles_column.append(tile)
+            tiles.append(tiles_column)
+
+        return img.mergeTiles(tiles)
+
+    def _getTile(self, x, y, z, prev_raw_cache, prev_proj_cache):
+        """
+        Get a tile from a DataArrayShadow. Uses cache.
+        The cache for projected tiles and the cache for raw tiles has always the same tiles
+        x (int): X coordinate of the tile
+        y (int): Y coordinate of the tile
+        z (int): zoom level where the tile is
+        prev_raw_cache (dictionary): raw tiles cache from the
+            last execution of _updateImage
+        prev_proj_cache (dictionary): projected tiles cache from the
+            last execution of _updateImage
+        return (tuple(DataArray, DataArray)): raw tile and projected tile
+        """
+        # the key of the tile on the cache
+        tile_key = "%d-%d-%d" % (x, y, z)
+
+        # if the tile has been already cached, read it from the cache
+        if tile_key in prev_proj_cache:
+            proj_tile = prev_proj_cache[tile_key]
+            raw_tile = prev_raw_cache[tile_key]
+        elif tile_key in self._projectedTilesCache:
+            proj_tile = self._projectedTilesCache[tile_key]
+            raw_tile = self._rawTilesCache[tile_key]
+        else:
+            # The tile was not cached, so it must be read from the file
+            raw_tile = self._das.getTile(x, y, z)
+            proj_tile = self._projectTile(raw_tile)
+
+        # cache raw and projected tiles
+        self._rawTilesCache[tile_key] = raw_tile
+        self._projectedTilesCache[tile_key] = proj_tile
+        return (raw_tile, proj_tile)
+
+    def _projectTile(self, tile):
+        """
+        Project the tile
+        tile (DataArray): Raw tile
+        return (DataArray): Projected tile
+        """
+        return self._projectXY2RGB(tile, self.tint.value)
+
+    def _getTilesFromSelectedArea(self):
+        """
+        Get the tiles inside the region defined by .rect and .mpp
+        return ((DataArray, DataArray)): Raw tiles and projected tiles
+        """
+
+        # This custom exception is used when the .mpp or .rect values changes while
+        # generating the tiles. If the values changes, everything needs to be recomputed
+        class NeedRecomputeException(Exception):
+            pass
+
+        # store the previous cache to use in this execution
+        prev_raw_cache = self._rawTilesCache
+        prev_proj_cache = self._projectedTilesCache
+        # Execute at least once. If mpp and rect changed in
+        # the last execution of the loops, execute again
+        mpp_rect_changed = True
+        while mpp_rect_changed:
+            z = self._zFromMpp()
+            rect = self._rectWorldToPixel(self.rect.value)
+            # convert the rect coords to tile indexes
+            rect = [l / (2 ** z) for l in rect]
+            rect = [int(math.floor(l / self._das.tile_shape[0])) for l in rect]
+            x1, y1, x2, y2 = rect
+            curr_mpp = self.mpp.value
+            curr_rect = self.rect.value
+            # the 4 lines below avoids that lots of old tiles
+            # stays in instance caches
+            prev_raw_cache.update(self._rawTilesCache)
+            prev_proj_cache.update(self._projectedTilesCache)
+            # empty current caches
+            self._rawTilesCache = {}
+            self._projectedTilesCache = {}
+
+            raw_tiles = []
+            projected_tiles = []
+            mpp_rect_changed = False
+            try:
+                for x in range(x1, x2 + 1):
+                    rt_column = []
+                    pt_column = []
+
+                    for y in range(y1, y2 + 1):
+                        # check if .mpp or .rect changed in the middle of the process.
+                        # it is common to happen when .rect and .mpp are changed simultaneously
+                        if curr_mpp != self.mpp.value or curr_rect != self.rect.value:
+                            # Raise the exception, so everything will be calculated again,
+                            # but using the cache from the last execution
+                            raise NeedRecomputeException()
+
+                        raw_tile, proj_tile = \
+                                self._getTile(x, y, z, prev_raw_cache, prev_proj_cache)
+                        rt_column.append(raw_tile)
+                        pt_column.append(proj_tile)
+
+                    raw_tiles.append(tuple(rt_column))
+                    projected_tiles.append(tuple(pt_column))
+
+            except NeedRecomputeException:
+                # mpp or rect changed
+                mpp_rect_changed = True
+
+        return (tuple(raw_tiles), tuple(projected_tiles))
+
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
         """
         logging.debug("Updating image")
-        if not self.raw:
+        if not self.raw and isinstance(self.raw, list):
             return
 
         try:
-            self.image.value = self._projectXY2RGB(self.raw[0], self.tint.value)
+            # if .raw is a list of DataArray, .image is a complete image
+            if isinstance(self.raw, list):
+                raw = self.raw[0]
+                self.image.value = self._projectXY2RGB(raw, self.tint.value)
+            elif isinstance(self.raw, tuple):
+                # .raw is an instance of DataArrayShadow, so .image is
+                # a tuple of tuple of tiles
+                (raw_tiles, projected_tiles) = self._getTilesFromSelectedArea()
+                self.image.value = projected_tiles
+                self.raw = raw_tiles
+            else:
+                raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
@@ -828,8 +1054,11 @@ class Stream(object):
         data (DataArray): the raw data to use, default to .raw[0]
         """
         # Compute histogram and compact version
-        if not self.raw and data is None:
-            return
+        if data is None:
+            if isinstance(self.raw, tuple):
+                data = self._getMergedRawImage(self._das.maxzoom)
+            elif not self.raw or not isinstance(self.raw, list):
+                return
 
         data = self.raw[0] if data is None else data
 
@@ -849,18 +1078,15 @@ class Stream(object):
         self.histogram.notify(chist)
 
     def _onNewData(self, dataflow, data):
-        # For now, raw images are pretty simple: we only have one
-        # (in the future, we could keep the old ones which are not fully
-        # overlapped)
-
         # Commented out to prevent log flooding
         # if model.MD_ACQ_DATE in data.metadata:
         #     logging.debug("Receive raw %g s after acquisition",
         #                   time.time() - data.metadata[model.MD_ACQ_DATE])
 
-        if not self.raw:
+        if not self.raw and isinstance(self.raw, list):
             self.raw.append(data)
         else:
-            self.raw[0] = data
+            if isinstance(self.raw, list):
+                self.raw[0] = data
 
         self._shouldUpdateImage()

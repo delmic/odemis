@@ -50,7 +50,7 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
-from odemis.util.dataio import data_to_static_streams
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 import os.path
 import pkg_resources
 import wx
@@ -1483,28 +1483,7 @@ class AnalysisTab(Tab):
         self.select_acq_file()
 
     def load_data(self, filename, fmt=None):
-
-        if fmt is None:
-            formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
-            _, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
-
-            # Try to guess from the extension
-            for f, exts in formats_to_ext.items():
-                if any(filename.endswith(e) for e in exts):
-                    fmt = f
-                    break
-            else:
-                # pick a random format hoping it's the right one
-                fmt = formats[1]
-                logging.warning("Couldn't guess format from filename '%s', will use %s.",
-                                filename, fmt)
-
-        converter = dataio.get_converter(fmt)
-        try:
-            data = converter.read_data(filename)
-        except Exception:
-            logging.exception("Failed to open file '%s' with format %s", filename, fmt)
-
+        data = open_acquisition(filename, fmt)
         self.display_new_data(filename, data)
 
     @call_in_wx_main
@@ -1543,9 +1522,11 @@ class AnalysisTab(Tab):
                    self.panel.vp_inspection_br]:
             vp.canvas.fit_view_to_next_image = True
 
+        md_list = [d.metadata for d in data]
+
         # Update the acquisition date to the newest image present (so that if
         # several acquisitions share one old image, the date is still different)
-        acq_dates = [d.metadata[model.MD_ACQ_DATE] for d in data if model.MD_ACQ_DATE in d.metadata]
+        acq_dates = [md[model.MD_ACQ_DATE] for md in md_list if model.MD_ACQ_DATE in md]
         if acq_dates:
             fi.metadata[model.MD_ACQ_DATE] = max(acq_dates)
         self.tab_data_model.acq_fileinfo.value = fi
