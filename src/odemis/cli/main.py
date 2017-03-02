@@ -383,7 +383,8 @@ def set_attr(comp_name, attr_val_str):
            hasattr(attr, "choices") and
            isinstance(attr.choices, collections.Iterable)):
             orig_val = new_val
-            new_val = util.find_closest(new_val, attr.choices)
+            choices = [v for v in attr.choices if isinstance(v, numbers.Number)]
+            new_val = util.find_closest(new_val, choices)
             if new_val != orig_val:
                 logging.debug("Adjusting value to %s", new_val)
 
