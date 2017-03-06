@@ -2321,6 +2321,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         def getTileMock(self, x, y, zoom):
             tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
             read_tiles.append(tile_desc)
+            logging.debug("Accessing tile %s", tile_desc)
             return tiff.DataArrayShadowTIFF._getTileOld(self, x, y, zoom)
 
         tiff.DataArrayShadowTIFF._getTileOld = tiff.DataArrayShadowTIFF._getTile
@@ -2368,7 +2369,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # change both .rect and .mpp at the same time, to the same values
         # that are set on Stream constructor
         ss.rect.value = full_image_rect # full image
-        ss.mpp.value = 8e-6 # maximum zoom level
+        logging.info("Rect after: %s", ss.rect.value)
+        ss.mpp.value = ss.mpp.range[1]  # maximum zoom level
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.2)
@@ -2401,7 +2403,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         # bottom-left pixel of the only tile
         numpy.testing.assert_array_equal([0, 255, 0], ss.image.value[0][0][249, 0, :])
 
-        ss.mpp.value = 1e-6 # minimum zoom level
+        # Now, just the tiny rect again, but at the minimum mpp (= fully zoomed in)
+        # => should just need one new tile
+        ss.mpp.value = ss.mpp.range[0]
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
@@ -2419,14 +2423,25 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal([130, 130, 0], ss.image.value[0][0][255, 255, :])
 
         # changing .rect and .mpp simultaneously
+        # Note: the recommended way is to first change mpp and then rect, as it
+        # ensures the first tiles read will not be at the wrong zoom level.
+        # However, we do the opposite here, to check it doesn't go too wrong
+        # (ie, first load the entire image at min mpp, and then load again at
+        # max mpp). It should at worse have loaded one tile at the min mpp.
         ss.rect.value = full_image_rect # full image
-        ss.mpp.value = 8e-6 # maximum zoom level
+        # time.sleep(0.0001) # uncomment to test with slight delay between VA changes
+        ss.mpp.value = ss.mpp.range[1]  # maximum zoom level
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         # Only 2 tiles read from disk. It means that the loop inside _updateImage,
         # triggered by the change on .rect was immediately stopped when .mpp changed
-        self.assertEqual(7, len(read_tiles))
+        if len(read_tiles) == 8:
+            logging.warning("Two tiles read while expected to have just one, but "
+                            "this is acceptable as updateImage thread might have "
+                            "gone very fast.")
+        else:
+            self.assertEqual(7, len(read_tiles))
         self.assertEqual(len(ss.image.value), 2)
         self.assertEqual(len(ss.image.value[0]), 1)
 
@@ -2436,6 +2451,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
         # bottom-right pixel of right right
         numpy.testing.assert_array_equal([254, 255, 0], ss.image.value[1][0][249, 117, :])
+
+        read_tiles = []  # reset, to keep the numbers simple
 
         delta = [d / 2 for d in dfr]
         # this rect is half the size of the full image, in the center of the image
@@ -2448,8 +2465,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.3)
 
-        # reads 6 tiles from the disk, no tile is cached becase the zoom changed
-        self.assertEqual(13, len(read_tiles))
+        # reads 6 tiles from the disk, no tile is cached because the zoom changed
+        self.assertEqual(6, len(read_tiles))
         self.assertEqual(len(ss.image.value), 3)
         self.assertEqual(len(ss.image.value[0]), 2)
         # top-left pixel of a center tile
@@ -2468,12 +2485,12 @@ class StaticStreamsTestCase(unittest.TestCase):
         # changes .rect and .mpp simultaneously, simulating a GUI zoom
         ss.rect.value = rect
         # zoom 0
-        ss.mpp.value = 1e-6
+        ss.mpp.value = ss.mpp.range[0]
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
 
         # reads 4 tiles from the disk, no tile is cached becase the zoom changed
-        self.assertEqual(17, len(read_tiles))
+        self.assertEqual(10, len(read_tiles))
         self.assertEqual(len(ss.image.value), 2)
         self.assertEqual(len(ss.image.value[0]), 2)
         # top-left pixel of the top-left tile
@@ -2487,7 +2504,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # get the old function back to the class
         tiff.DataArrayShadowTIFF._getTile = tiff.DataArrayShadowTIFF._getTileOld
-        
+
         del ss
         os.remove(FILENAME)
 
