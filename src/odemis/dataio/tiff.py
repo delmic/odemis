@@ -1938,7 +1938,6 @@ class AcquisitionDataTIFF(AcquisitionData):
                     # try to find and open the enlisted file
                     try:
                         f_link = TIFF.open(uuid_path, mode='r')
-                        self.opened_tiff_files.append(f_link)
                     except TypeError:
                         logging.warning("File '%s' enlisted in the OME-XML header is missing.", uuid_path)
                         continue
