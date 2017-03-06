@@ -65,7 +65,7 @@ class StaticStream(Stream):
 
                 full_rect = img._getBoundingBox(raw)
                 l, t, r, b = full_rect
-                mpp_range = ((l, t, l, t), (r, b, r, b))
+                mpp_range = ((l, b, l, b), (r, t, r, t))
                 self.rect = model.TupleContinuous(full_rect, mpp_range, setter=self._set_rect)
             else:
                 # If raw does not have maxzoom,

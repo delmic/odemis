@@ -868,9 +868,9 @@ class Stream(object):
         # are -1 relative to the side of the pixel
         return (
             int(round(rect[0] / ps[0] + img_shape[0] / 2)),
-            int(round(rect[1] / ps[1] + img_shape[1] / 2)),
+            int(round(rect[1] / (-ps[1]) + img_shape[1] / 2)),
             int(round(rect[2] / ps[0] + img_shape[0] / 2)) - 1,
-            int(round(rect[3] / ps[1] + img_shape[1] / 2)) - 1,
+            int(round(rect[3] / (-ps[1]) + img_shape[1] / 2)) - 1,
         )
 
     def _getMergedRawImage(self, z):
