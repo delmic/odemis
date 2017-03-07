@@ -5,7 +5,7 @@ Created on 9 Jan 2015
 
 @author: Éric Piel
 
-Copyright © 2015 Éric Piel, Delmic
+Copyright © 2015-2017 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -20,17 +20,23 @@ You should have received a copy of the GNU General Public License along with Ode
 # to provide input for high-resolution reconstruction algorithm.
 
 
+import Queue
 import argparse
 import logging
 from odemis import dataio, model
-import odemis
 from odemis.gui.util import get_picture_folder
+from odemis.util import fluo
 import os
 import sys
+import threading
+import time
+
+
+logging.getLogger().setLevel(logging.INFO)
 
 
 class HRAcquirer(object):
-    
+
     def __init__(self, fn, number):
         self.number = number
 
@@ -38,84 +44,103 @@ class HRAcquirer(object):
         self.light = model.getComponent(role="light")
         self.ccd = model.getComponent(role="ccd")
 
+        # TODO: only support TIFF
         # prepare the data export
         self.exporter = dataio.find_fittest_converter(fn)
-        
-        # Make the name "fn" -> "~/Pictures + fn + fn-XXXX.ext"
+
+        # Make the name "fn" -> "~/Pictures/fn-XXXXXX.ext"
         path, base = os.path.split(fn)
         bn, ext = os.path.splitext(base)
-        tmpl = os.path.join(path, bn, bn + "-%05d." + ext)
+        tmpl = os.path.join(path, bn + "-%06d" + ext)
         if path.startswith("/"):
             # if fn starts with / => don't add ~/Pictures
             self.fntmpl = tmpl
         else:
             self.fntmpl = os.path.join(get_picture_folder(), tmpl)
 
-
+        self._acq_done = threading.Event()
         self._n = 0
+        self._startt = 0  # starting time of acquisition
 
-    def set_hardware_settings(self, exposure, binning, power, wavelength):
+        self._q = Queue.Queue()  # queue of tuples (str, DataArray) for saving data
+        # TODO: find the right number of threads, based on CPU numbers (but with
+        # python threading that might be a bit overkill)
+        for i in range(4):
+            t = threading.Thread(target=self._saving_thread, args=(i,))
+            t.daemon = True
+            t.start()
+
+    def _saving_thread(self, i):
+        try:
+            while True:
+                n, da = self._q.get()
+                logging.info("Saving data %d in thread %d", n, i)
+                self.save_data(da, n)
+                self._q.task_done()
+        except Exception:
+            logging.exception("Failure in the saving thread")
+
+    def set_hardware_settings(self, wavelength, power=None):
         """
         Setup the hardware to the defined settings
         """
-        self.exposure = exposure
+        if power is None:
+            power = self.light.power.range[-1]
         self.power = power
-        self.binning = binning
 
         # find the fitting wavelength for the light
         spectra = self.light.spectra.value
-        for i, s in enumerate(spectra):
-            # each spectrum contains 5 values, with center wl as 3rd value
-            if abs(s[2] - wavelength * 1e-9) < 2e-9:
-                wli = i
-
-        self._off_intensity = [0] * len(spectra)
-        self._full_intensity = list(self._off_intensity) # copy
+        band = fluo.find_best_band_for_dye(wavelength, spectra)
+        wli = spectra.index(band)
+        self._full_intensity = [0] * len(spectra)
         self._full_intensity[wli] = 1
-    
-    def _on_continuous_image(self, df, data):
-        
-        # TODO: export in a separate thread to save time? (put to a queue)
-        self._n += 1
-        self.save_data(data, self._n)
-        
-        if self._n == self.number:
-            self.ccd.data.unsubscribe(self._on_continuous_image)
-            self._acq_done.set() # indicate it's over
 
-    def run_acquisition_continuous(self):
+        # Special CCD settings
+        self.ccd.countConvert.value = 2  # photons
+        self.ccd.countConvertWavelength.value = wavelength
+
+    def _on_continuous_image(self, df, data):
+
+        try:
+            self._n += 1
+            self._q.put((self._n, data))
+            fps = self._n / (time.time() - self._startt)
+            logging.info("Saved data %d (%g fps), queue size = %d", self._n, fps, self._q.qsize())
+
+            # TODO: if queue size too long => pause until it's all processed
+
+            if self._n == self.number:
+                self.ccd.data.unsubscribe(self._on_continuous_image)
+                self._acq_done.set()  # indicate it's over
+        except Exception:
+            logging.exception("Failure to save acquisition %d", self._n)
+            # Stop the rest of the acquisition
+            self.ccd.data.unsubscribe(self._on_continuous_image)
+            self._acq_done.set()  # indicate it's over
+
+    def acquire(self):
         """
         Run the acquisition with the maximum frame rate
         """
-        
-#       Switch on [lasersource] at [laserpower]
-        self.light.intensity.value = self._full_intensity
+
+        # TODO: support cancellation
+
+        # Switch on laser (at the right wavelength and power)
+        self.light.emissions.value = self._full_intensity
         self.light.power.value = self.power
         self._n = 0
+        self._startt = time.time()
         self.ccd.data.subscribe(self._on_continuous_image)
-        
-        # Wait for event done
+
+        # Wait for the complete acquisition to be done
         self._acq_done.wait() # TODO: put large timeout
-        
-#       switch off laser
+        logging.info("Waiting for all data to be saved")
+        self._q.join()
+        fps = self.number / (time.time() - self._startt)
+        logging.info("Finished with average %g fps", fps)
+
+        # Switch off laser
         self.light.power.value = 0
-    
-    def run_acquisition_discreet(self):
-        """
-        Run acquisition with one frame at the time synchronised with excitation
-        light.
-        """
-        
-        # Prepare acquisition
-        
-        
-        for n in self.number:
-#           Switch on [lasersource] at [laserpower]
-#           expose with exposure time
-#           switch off laser
-#           wait idle time for grab frame
-            pass
-        
 
     def save_data(self, data, n):
         """
@@ -123,13 +148,13 @@ class HRAcquirer(object):
         data (DataArray): data to save
         n (int): iteration number
         """
-        # TODO: disable compression to save time
-
         filename = self.fntmpl % (n,)
         try:
-            self.exporter.export(filename, data)
+            # Note: compressed seems to written faster
+            self.exporter.export(filename, data, compressed=True)
         except IOError as exc:
             raise IOError(u"Failed to save to '%s': %s" % (filename, exc))
+
 
 def main(args):
     """
@@ -140,21 +165,13 @@ def main(args):
     # arguments handling
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--version', dest="version", action='store_true',
-                        help="show program's version number and exit")
     parser.add_argument("--wavelength", dest="wavelength", type=float,
+                        required=True,
                         help="Centre wavelength (in nm) of the excitation light to use.")
     parser.add_argument("--power", dest="power", type=float,
                         help="Excitation light power (in W), default is maximum.")
-    parser.add_argument("--exposure", dest="exposure", type=float,
-                        help="Exposure time for each frame.")
-    parser.add_argument("--binning", dest="binning", type=int, default=1,
-                        help="Binning of the CCD (default is 1).")
-    parser.add_argument("--number", dest="number",
+    parser.add_argument("--number", dest="number", type=int, required=True,
                         help="Number of frames to grab.")
-    parser.add_argument('--continuous', dest="continuous", action='store_true',
-                         help="Acquire in continuous mode instead of discreet mode. "
-                         "It is is faster but might introduce frame-drops.")
     # TODO: specify the folder name where to save the file
     parser.add_argument("--output", "-o", dest="output",
                         help="template of the filename under which to save the images. "
@@ -163,21 +180,10 @@ def main(args):
 
     options = parser.parse_args(args[1:])
 
-    # Cannot use the internal feature, because it doesn't support multiline
-    if options.version:
-        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
-               odemis.__copyright__ + "\n" +
-               "Licensed under the " + odemis.__license__)
-        return 0
-
-    # TODO: if arguments not present, ask for them on the console
-
     try:
         acquirer = HRAcquirer(options.output, options.number)
-        acquirer.set_hardware_settings(options.exposure, options.binning,
-                                       options.power, options.wavelength)
-        filename = options.output.decode(sys.getfilesystemencoding())
-        acquire(component, dataflows, filename)
+        acquirer.set_hardware_settings(options.wavelength * 1e-9, options.power)
+        acquirer.acquire()
     except ValueError as exp:
         logging.error("%s", exp)
         return 127
