@@ -58,7 +58,7 @@ class StaticStream(Stream):
                 md = raw.metadata
                 # get the pixel size of the full image
                 ps = md[model.MD_PIXEL_SIZE]
-                default_mpp = ps[0] * raw.maxzoom ** 2
+                default_mpp = ps[0] * (2 ** raw.maxzoom)
                 # sets the mpp as the X axis of the pixel size of the full image
                 mpp_rng = (ps[0], default_mpp)
                 self.mpp = model.FloatContinuous(default_mpp, mpp_rng, setter=self._set_mpp)
