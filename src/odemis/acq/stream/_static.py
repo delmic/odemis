@@ -58,10 +58,10 @@ class StaticStream(Stream):
                 md = raw.metadata
                 # get the pixel size of the full image
                 ps = md[model.MD_PIXEL_SIZE]
-                default_mpp = ps[0] * (2 ** raw.maxzoom)
+                max_mpp = ps[0] * (2 ** raw.maxzoom)
                 # sets the mpp as the X axis of the pixel size of the full image
-                mpp_rng = (ps[0], default_mpp)
-                self.mpp = model.FloatContinuous(default_mpp, mpp_rng, setter=self._set_mpp)
+                mpp_rng = (ps[0], max_mpp)
+                self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
 
                 full_rect = img._getBoundingBox(raw)
                 l, t, r, b = full_rect
@@ -79,15 +79,15 @@ class StaticStream(Stream):
     def _set_mpp(self, mpp):
         self._shouldUpdateImage()
 
-        md = self._das.metadata
-        ps = md[model.MD_PIXEL_SIZE]
-        exp = math.log(mpp / ps[0], 2.0)
-        exp = round(exp, 0)
-        return ps[0] * 2 ** exp
+        ps0 = self.mpp.range[0]
+        exp = math.log(mpp / ps0, 2)
+        exp = round(exp)
+        return ps0 * 2 ** exp
 
     def _set_rect(self, rect):
         self._shouldUpdateImage()
         return rect
+
 
 class RGBStream(StaticStream):
     """
@@ -98,52 +98,28 @@ class RGBStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
-        # Check it's 2D
-        if isinstance(raw, model.DataArray) or isinstance(raw, model.DataArrayShadow):
-            if not (len(raw.shape) == 3 and raw.shape[2] in [3, 4]):
+        # Check it's RGB
+        if isinstance(raw, (model.DataArray, model.DataArrayShadow)):
+            r = [raw]
+        else:
+            r = raw
+
+        for d in r:
+            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+            ci = dims.find("C")  # -1 if not found
+            if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
                 raise ValueError("Data must be RGB(A)")
-        elif isinstance(raw, list):
-            for r in raw:
-                if not (len(r.shape) == 3 and r.shape[2] in [3, 4]):
-                    raise ValueError("Data must be RGB(A)")
+
         super(RGBStream, self).__init__(name, raw)
 
     def _projectTile(self, tile):
+        # Just pass the RGB data on
         tile = img.ensureYXC(tile)
         tile.flags.writeable = False
         # merge and ensures all the needed metadata is there
         tile.metadata = self._find_metadata(tile.metadata)
         tile.metadata[model.MD_DIMS] = "YXC" # RGB format
         return tile
-
-    # Copy from RGBCameraStream
-    def _updateImage(self):
-        # Just pass the RGB data on
-
-        if not self.raw and isinstance(self.raw, list):
-            return
-
-        # TODO: use original image as raw, to allow changing the B/C/tint
-        try:
-            if isinstance(self.raw, list):
-                data = self.raw[0]
-                rgbim = img.ensureYXC(data)
-                rgbim.flags.writeable = False
-                # merge and ensures all the needed metadata is there
-                rgbim.metadata = self._find_metadata(rgbim.metadata)
-                rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
-                self.image.value = rgbim
-            elif isinstance(self.raw, tuple):
-                # .raw is an instance of DataArrayShadow, so .image is
-                # a tuple of tuple of tiles
-                (raw_tiles, projected_tiles) = self._getTilesFromSelectedArea()
-                self.image.value = projected_tiles
-                self.raw = raw_tiles
-            else:
-                raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
-
-        except Exception:
-            logging.exception("Updating %s image", self.__class__.__name__)
 
 
 class Static2DStream(StaticStream):
@@ -156,17 +132,15 @@ class Static2DStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray or DataArrayShadow): The data to display.
         """
+        # Check it's 2D
+        if isinstance(raw, (model.DataArray, model.DataArrayShadow)):
+            r = [raw]
+        else:
+            r = raw
 
-        if isinstance(raw, model.DataArray) or isinstance(raw, model.DataArrayShadow):
-            if len(raw.shape) < 2:
+        for d in r:
+            if len(d.shape) < 2:
                 raise ValueError("Data must be 2D")
-            # make it 2D by removing first dimensions (which must 1)
-            # if len(image.shape) > 2:
-            #    image = img.ensure2DImage(image)
-        elif isinstance(raw, list):
-            for r in raw:
-                if len(r.shape) < 2:
-                    raise ValueError("Data must be 2D")
 
         super(Static2DStream, self).__init__(name, raw)
 
@@ -182,15 +156,15 @@ class StaticCLStream(Static2DStream):
     """
     Same as a StaticStream, but has a emission wavelength
     """
-    def __init__(self, name, image):
+    def __init__(self, name, raw):
         """
         Note: parameters are different from the base class.
-        image (DataArray of shape (111)YX): raw data. The metadata should
+        raw (DataArray of shape (111)YX): raw data. The metadata should
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_OUT_WL.
         """
         try:
-            em_range = image.metadata[model.MD_OUT_WL]
+            em_range = raw.metadata[model.MD_OUT_WL]
             if isinstance(em_range, basestring):
                 unit = None
             else:
@@ -202,7 +176,7 @@ class StaticCLStream(Static2DStream):
             logging.warning("No emission wavelength for CL stream")
 
         # Do it at the end, as it forces it the update of the image
-        Static2DStream.__init__(self, name, image)
+        Static2DStream.__init__(self, name, raw)
 
 
 class StaticBrightfieldStream(Static2DStream):
@@ -219,19 +193,19 @@ class StaticFluoStream(Static2DStream):
     and how to taint the image.
     """
 
-    def __init__(self, name, image):
+    def __init__(self, name, raw):
         """
         Note: parameters are different from the base class.
-        image (DataArray of shape (111)YX): raw data. The metadata should
+        raw (DataArray of shape (111)YX): raw data. The metadata should
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_IN_WL and MD_OUT_WL.
         """
         # Note: it will update the image, and changing the tint will do it again
-        super(StaticFluoStream, self).__init__(name, image)
+        super(StaticFluoStream, self).__init__(name, raw)
 
         # Wavelengths
         try:
-            exc_range = image.metadata[model.MD_IN_WL]
+            exc_range = raw.metadata[model.MD_IN_WL]
             self.excitation = VigilantAttribute(exc_range, unit="m",
                                                 readonly=True)
         except KeyError:
@@ -239,7 +213,7 @@ class StaticFluoStream(Static2DStream):
 
         default_tint = (0, 255, 0)  # green is most typical
         try:
-            em_range = image.metadata[model.MD_OUT_WL]
+            em_range = raw.metadata[model.MD_OUT_WL]
             if isinstance(em_range, basestring):
                 unit = None
             else:
@@ -251,7 +225,7 @@ class StaticFluoStream(Static2DStream):
             logging.warning("No emission wavelength for fluorescence stream")
 
         # colouration of the image
-        tint = image.metadata.get(model.MD_USER_TINT, default_tint)
+        tint = raw.metadata.get(model.MD_USER_TINT, default_tint)
         self.tint.value = tint
 
 

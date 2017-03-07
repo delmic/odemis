@@ -65,7 +65,7 @@ def data_to_static_streams(data):
              (ci >= 0 and d.shape[ci] > 1)
              ) or
             (ci >= 0 and d.shape[ci] >= 5)
-        ):
+           ):
             # Spectrum: either it's obvious according to metadata, or no metadata
             # but lots of wavelengths, so no other way to display
             name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
@@ -99,11 +99,9 @@ def data_to_static_streams(data):
             # AR data
             ar_data.append(d)
             continue
-        elif (
-                (model.MD_IN_WL in d.metadata and
-                 model.MD_OUT_WL in d.metadata) or
-                model.MD_USER_TINT in d.metadata
-        ):
+        elif ((model.MD_IN_WL in d.metadata and model.MD_OUT_WL in d.metadata) or
+              model.MD_USER_TINT in d.metadata
+             ):
             # No explicit way to distinguish between Brightfield and Fluo,
             # so guess it's Brightfield iif:
             # * No tint
@@ -131,6 +129,7 @@ def data_to_static_streams(data):
             # Now, either it's a flat greyscale image and we decide it's a SEM image,
             # or it's gone too weird and we try again on flat images
             if numpy.prod(d.shape[:-2]) != 1:
+                # FIXME: doesn't work currently if d is a DAS
                 subdas = _split_planes(d)
                 logging.info("Reprocessing data of shape %s into %d sub-data",
                              d.shape, len(subdas))
@@ -142,6 +141,7 @@ def data_to_static_streams(data):
             klass = stream.StaticSEMStream
 
         if issubclass(klass, stream.Static2DStream):
+            # FIXME: doesn't work currently if d is a DAS
             if numpy.prod(d.shape[:-2]) != 1:
                 logging.warning("Dropping dimensions from the data %s of shape %s",
                                 name, d.shape)
@@ -173,7 +173,7 @@ def _split_planes(data):
     dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
     hdims = dims.translate(None, "XY") # remove XY while keeping order
     ldims = dims.translate(None, hdims)
-    if not "X" in dims or not "Y" in dims:
+    if "X" not in dims or "Y" not in dims:
         return [data]
 
     das = []
@@ -193,6 +193,7 @@ def _split_planes(data):
         das.append(plane)
 
     return das
+
 
 def open_acquisition(filename, fmt=None):
     """

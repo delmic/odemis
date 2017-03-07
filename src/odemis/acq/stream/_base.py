@@ -76,8 +76,9 @@ class Stream(object):
           (VAs) to be duplicated on the stream. They will be named .detOriginalName
         emtvas (None or set of str): names of all the emitter VAs to be
           duplicated on the stream. They will be named .emtOriginalName
-        raw (None or list of DataArrays): raw data to be used at initialisation
-          by default, it will contain no data.
+        raw (None or list of DataArrays or DataArrayShadow): raw data to be used
+          at initialisation. By default, it will contain no data. If it's a
+          DataArrayShadow, it will provide a 2D tuple as .raw.
         """
         self.name = model.StringVA(name)
 
@@ -935,6 +936,8 @@ class Stream(object):
         tile (DataArray): Raw tile
         return (DataArray): Projected tile
         """
+        if tile.ndim != 2:
+            tile = img.ensure2DImage(tile)  # Remove extra dimensions (of length 1)
         return self._projectXY2RGB(tile, self.tint.value)
 
     def _getTilesFromSelectedArea(self):
@@ -1004,7 +1007,7 @@ class Stream(object):
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
         """
-        logging.debug("Updating image")
+        # logging.debug("Updating image")
         if not self.raw and isinstance(self.raw, list):
             return
 
@@ -1012,11 +1015,11 @@ class Stream(object):
             # if .raw is a list of DataArray, .image is a complete image
             if isinstance(self.raw, list):
                 raw = self.raw[0]
-                self.image.value = self._projectXY2RGB(raw, self.tint.value)
+                self.image.value = self._projectTile(raw)
             elif isinstance(self.raw, tuple):
                 # .raw is an instance of DataArrayShadow, so .image is
                 # a tuple of tuple of tiles
-                (raw_tiles, projected_tiles) = self._getTilesFromSelectedArea()
+                raw_tiles, projected_tiles = self._getTilesFromSelectedArea()
                 self.image.value = projected_tiles
                 self.raw = raw_tiles
             else:
