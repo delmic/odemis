@@ -686,10 +686,11 @@ def _getBoundingBox(content):
         img_shape[1] * ps[1] / 2,
     )
     md_pos = md.get(model.MD_POS, (0.0, 0.0))
+    # in physical coordinates, Y goes up. So top > bottom
     rect = (
         md_pos[0] - half_shape_wc[0],
-        md_pos[1] - half_shape_wc[1],
-        md_pos[0] + half_shape_wc[0],
         md_pos[1] + half_shape_wc[1],
+        md_pos[0] + half_shape_wc[0],
+        md_pos[1] - half_shape_wc[1],
     )
     return rect

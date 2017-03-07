@@ -58,14 +58,14 @@ class StaticStream(Stream):
                 md = raw.metadata
                 # get the pixel size of the full image
                 ps = md[model.MD_PIXEL_SIZE]
-                max_mpp = ps[0] * raw.maxzoom ** 2
+                max_mpp = ps[0] * (2 ** raw.maxzoom)
                 # sets the mpp as the X axis of the pixel size of the full image
                 mpp_rng = (ps[0], max_mpp)
                 self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
 
                 full_rect = img._getBoundingBox(raw)
                 l, t, r, b = full_rect
-                mpp_range = ((l, t, l, t), (r, b, r, b))
+                mpp_range = ((l, b, l, b), (r, t, r, t))
                 self.rect = model.TupleContinuous(full_rect, mpp_range, setter=self._set_rect)
             else:
                 # If raw does not have maxzoom,
