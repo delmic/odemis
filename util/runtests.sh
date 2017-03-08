@@ -39,7 +39,7 @@ DATE=$(date +%Y%m%d)
 # Every file which is in the pattern /test/*_test.py
 MAXTIME=1800  # 30 min maximum per test case
 
-PYTHONPATH=$ODEMIS_SRC/../:../Pyro4/src/
+PYTHONPATH="$ODEMIS_SRC"/../:../Pyro4/src/:"$PYTHONPATH"
 if [ -f /etc/odemis.conf ]; then
     # use the odemis config if it's available
     . /etc/odemis.conf
