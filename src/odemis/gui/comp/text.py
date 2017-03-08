@@ -784,6 +784,7 @@ class _NumberTextCtrl(wx.TextCtrl):
         self._number_value = self.GetValidator().get_validated_number(val)
 
         if prev_num != self._number_value:
+            self._display_pretty()  # Update the GUI immediately
             self._send_change_event()
 
     def on_focus(self, evt):
