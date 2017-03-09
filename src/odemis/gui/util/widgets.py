@@ -153,6 +153,8 @@ class AxisConnector(object):
         self.axis = axis
         self.comp = comp
         self.value_ctrl = value_ctrl
+        self._prev_focus = None  # the focused control before starting to move
+        self._future = None  # Future representing the current move
         pos_2_ctrl = pos_2_ctrl or value_ctrl.SetValue
         self.pos_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(pos_2_ctrl))
         self.ctrl_2_pos = ctrl_2_pos or value_ctrl.GetValue
@@ -179,6 +181,10 @@ class AxisConnector(object):
         it moves the axis to the new value.
         """
         try:
+            if self._future is not None and not self._future.done():
+                logging.info("Not moving axis %s as it's already moving", self.axis)
+                return
+
             value = self.ctrl_2_pos()
             logging.debug("Requesting axis %s to move to %g", self.axis, value)
 
@@ -193,17 +199,24 @@ class AxisConnector(object):
 
         if not future.done():
             # disable the control until the move is finished => gives user
-            # feedback and avoids accumulating moves
+            # feedback and avoids accumulating moves. The drawback is that the
+            # GUI focus is lost.
+            self._prev_focus = wx.Window.FindFocus()
             self.value_ctrl.Disable()
+            self._future = future
             future.add_done_callback(self._on_move_done)
 
     @call_in_wx_main
     def _on_move_done(self, _):
         """ Process the end of the move """
+        self._future = None
         # _on_pos_change() is almost always called as well, but not if the move was so small that
         #  the position didn't change. That's why this separate method is needed.
         if self.value_ctrl:
             self.value_ctrl.Enable()
+            # Put back the focus on the widget if nothing else got it in the meantime
+            if self._prev_focus and wx.Window.FindFocus() is None:
+                self._prev_focus.SetFocus()
         logging.debug("Axis %s finished moving", self.axis)
 
     @call_in_wx_main
