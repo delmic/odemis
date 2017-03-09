@@ -38,7 +38,7 @@ from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import NotApplicableError
 from odemis.util.conversion import reproduce_typed_value
 from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
-    si_scale_val
+    si_scale_val, readable_time
 import re
 import wx
 from wx.lib.pubsub import pub
@@ -503,38 +503,40 @@ def format_choices(choices):
         return None, None
 
 
-def create_formatted_setter(value_ctrl, val, val_unit, sig=3):
+def create_formatted_setter(value_ctrl, val, unit, sig=3, pretty_time=False):
     """ Create a setting function for the given value control that also formats its value
 
     Args:
         value_ctrl (wx.Window): A text control
         val: The current value of the value control
-        val_unit: The unit of the value
+        unit: The unit of the value
         sig: The number of significant digits
-
+        pretty_time (bool): allow to make a full time display (as in "day, hour, min...")
+    return (callable): a function taking a value, and updating the control with it
     """
 
     value_formatter = None
 
-    if (
-            isinstance(val, (int, long, float)) or
-            (
-                isinstance(val, collections.Iterable) and
-                len(val) > 0 and
-                isinstance(val[0], (int, long, float))
-            )
-    ):
-        def value_formatter(value, unit=val_unit):
+    if pretty_time and isinstance(val, (int, long, float)) and unit == "s":
+        def value_formatter(value):
+            value_ctrl.SetValue(readable_time(value, full=False))
+    elif (isinstance(val, (int, long, float)) or
+          (isinstance(val, collections.Iterable) and
+           len(val) > 0 and
+           isinstance(val[0], (int, long, float))
+          )
+         ):
+        def value_formatter(value, unit=unit):
             value_ctrl.SetValue(readable_str(value, unit, sig=sig))
 
     return value_formatter
 
 
-def choice_to_str(choice, js=None):
+def choice_to_str(choice):
     """ Return a list of choices, where iterable choices are joined by an `x` """
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
-    return (js if js else u" x ").join([unicode(c) for c in choice])
+    return u" x ".join(unicode(c) for c in choice)
 
 
 def label_to_human(camel_label):
@@ -589,7 +591,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         val = va.value  # only format if it's a number
         accuracy = conf.get('accuracy', 3)
         lbl_ctrl, value_ctrl = container.add_readonly_field(label_text, val)
-        value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
+        value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy, pretty_time=True)
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                      va_2_ctrl=value_formatter)
