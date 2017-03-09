@@ -1913,7 +1913,7 @@ class ChamberPressure(model.Actuator):
                     self._pressure_device.UnloadSample()
                     TimeUpdater.cancel()
                 else:
-                    raise ValueError("Unexpected pressure %g", p)
+                    raise ValueError("Unexpected pressure %g" % (p,))
             except Exception as ex:
                 logging.exception("Failed to move to pressure %g: %s", p, ex)
                 raise

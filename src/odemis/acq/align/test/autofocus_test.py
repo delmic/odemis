@@ -229,7 +229,12 @@ class TestAutofocusSpectrometer(unittest.TestCase):
         res = f.result(timeout=900)
         for (g, d), fpos in res.items():
             self.assertIn(d, (self.ccd, self.spccd))
-            self.assertAlmostEqual(fpos, self._good_focus, 3)
+            # Only check that the focus is correct with the CCD as the simulator
+            # doesn't actually connects the focus position to the spccd image
+            # (so the image is always the same, and the autofocus procedure
+            # picks a random position)
+            if d is self.ccd:
+                self.assertAlmostEqual(fpos, self._good_focus, 3)
 
         self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices) + 1)
 

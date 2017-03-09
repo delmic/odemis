@@ -105,8 +105,6 @@ class ChamberButtonController(HardwareButtonController):
         # If there is pressure information, assume it is a complete SEM chamber,
         # otherwise assume it uses a sample loader like the Phenom or Delphi.
         if model.hasVA(main_data.chamber, "pressure"):
-            main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
-
             self._btn_icons = {
                 'normal': img.getBitmap("icon/ico_press.png"),
                 'working': img.getBitmap("icon/ico_press_orange.png"),
@@ -134,6 +132,9 @@ class ChamberButtonController(HardwareButtonController):
                 CHAMBER_VACUUM: "Unload the sample",
             }
         super(ChamberButtonController, self).__init__(btn_ctrl, va, tooltips)
+
+        if model.hasVA(main_data.chamber, "pressure"):
+            main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state """
