@@ -1552,7 +1552,10 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         for i in numpy.ndindex(*hdim):
             # Save metadata (before the image)
             for key, val in tags.items():
-                f.SetField(key, val)
+                try:
+                    f.SetField(key, val)
+                except Exception:
+                    logging.exception("Failed to store tag %s with value '%s'", key, val)
             if data[i].dtype in [numpy.int64, numpy.uint64]:
                 c = None # libtiff doesn't support compression on these types
             else:
