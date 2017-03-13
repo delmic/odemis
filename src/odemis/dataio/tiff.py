@@ -1734,13 +1734,31 @@ def open_data(filename):
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
     filename = _ensure_fs_encoding(filename)
     return AcquisitionDataTIFF(filename)
-
+    
 
 class DataArrayShadowTIFF(DataArrayShadow):
     """
-    This class contains information about a DataArray.
-    It has all the useful attributes of a DataArray, but not the actual data.
+    This class implements the read of a TIFF file
+    It has all the useful attributes of a DataArray and the actual data.
     """
+
+    def __new__(cls, tiff_info, *args, **kwargs):
+        """
+        Returns an instance of DataArrayShadowTIFF or DataArrayShadowPyramidalTIFF,
+        depending if the image is pyramidal or not.
+        """
+        if isinstance(tiff_info, list):
+            tiff_handle = tiff_info[0]['handle']
+        else:
+            tiff_handle = tiff_info['handle']
+        num_tcols = tiff_handle.GetField(T.TIFFTAG_TILEWIDTH)
+        num_trows = tiff_handle.GetField(T.TIFFTAG_TILELENGTH)
+        if num_tcols and num_trows:
+            subcls = DataArrayShadowPyramidalTIFF
+        else:
+            subcls = DataArrayShadowTIFF
+        return super(DataArrayShadowTIFF, cls).__new__(subcls, tiff_info, *args, **kwargs)
+
     def __init__(self, tiff_info, shape, dtype, metadata=None):
         """
         Constructor
@@ -1766,36 +1784,9 @@ class DataArrayShadowTIFF(DataArrayShadow):
             tiff_handle = tiff_info[0]['handle']
         else:
             tiff_handle = tiff_info['handle']
-
         self.tiff_info = tiff_info
 
-        num_tcols = tiff_handle.GetField(T.TIFFTAG_TILEWIDTH)
-        num_trows = tiff_handle.GetField(T.TIFFTAG_TILELENGTH)
-        if num_tcols and num_trows:
-            sub_ifds = tiff_handle.GetField(T.TIFFTAG_SUBIFD)
-             # add the number of subdirectories, and the main image
-            if sub_ifds:
-                maxzoom = len(sub_ifds)
-            else:
-                maxzoom = 0
-
-            if num_tcols is None or num_trows is None:
-                raise RuntimeError("The image is not tiled")
-
-            tile_shape = (num_tcols, num_trows)
-
-            # make getTile available as a public method.
-            # An other possibility would be to make the DataArrayShadowTIFF have a method
-            # called getTile directly, instead of _getTile, and then call
-            # 'del self.getTile' if the image is not tiled. But Python does not allow
-            # to delete a method from an instance, only a method from the class. But it would
-            # remove the method from all instance, and it is not what we want to do.
-            self.getTile = self._getTile
-        else:
-            maxzoom = None
-            tile_shape = None
-
-        DataArrayShadow.__init__(self, shape, dtype, metadata, maxzoom, tile_shape)
+        DataArrayShadow.__init__(self, shape, dtype, metadata)
 
     def getData(self):
         """
@@ -1835,8 +1826,58 @@ class DataArrayShadowTIFF(DataArrayShadow):
             imset[tiff_info_item['hdim_index']] = image
 
         return model.DataArray(imset, metadata=self.metadata)
+    
 
-    def _getTile(self, x, y, zoom):
+class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
+    """
+    This class implements the read of a TIFF file
+    It has all the useful attributes of a DataArray and the actual data. It also implements
+    the reading of a pyramidal TIFF file. IOW, reading subdirectories and tiles.
+    """
+
+    def __init__(self, tiff_info, shape, dtype, metadata=None):
+        """
+        Constructor
+        tiff_info (dictionary or list of dictionaries): Information about the source tiff file
+            and directory from which the image should be read. It can be a dictionary or
+            a list of dictionaries. It is a list of dictionaries when
+            the DataArray has multiple pixelData
+            The dictionary (or each dictionary in the list) has 2 values:
+            'tiff_file' (handle): Handle of the tiff file
+            'dir_index' (int): Index of the directory
+        shape (tuple of int): The shape of the corresponding DataArray
+        dtype (numpy.dtype): The data type
+        metadata (dict str->val): The metadata
+        maxzoom (0<=int): the maximum zoom level possible. If the data isn't
+            encoded in pyramidal format, the attribute is not present.
+            The shape of the images in each zoom level is as following:
+            (shape of full image) // (2**z)
+            where z is the index of the zoom level
+        tile_shape (tuple): the shape of the tile, if the image is tiled. It is only present
+            when maxzoom is also present
+        """
+        if isinstance(tiff_info, list):
+            tiff_handle = tiff_info[0]['handle']
+        else:
+            tiff_handle = tiff_info['handle']
+        self.tiff_info = tiff_info
+
+        num_tcols = tiff_handle.GetField(T.TIFFTAG_TILEWIDTH)
+        num_trows = tiff_handle.GetField(T.TIFFTAG_TILELENGTH)
+        if num_tcols is None or num_trows is None:
+            raise RuntimeError("The image is not tiled")
+
+        sub_ifds = tiff_handle.GetField(T.TIFFTAG_SUBIFD)
+        # add the number of subdirectories, and the main image
+        if sub_ifds:
+            maxzoom = len(sub_ifds)
+        else:
+            maxzoom = 0
+
+        tile_shape = (num_tcols, num_trows)
+        DataArrayShadow.__init__(self, shape, dtype, metadata, maxzoom, tile_shape)
+    
+    def getTile(self, x, y, zoom):
         '''
         Fetches one tile
         x (0<=int): X index of the tile.

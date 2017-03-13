@@ -75,9 +75,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel(white), 124)
 
-        del im
-        os.remove(FILENAME)
-
     def testUnicodeName(self):
         """Try filename not fitting in ascii"""
         # create a simple greyscale image
@@ -130,9 +127,6 @@ class TestTiffIO(unittest.TestCase):
             im.seek(i)
             self.assertEqual(im.size, size)
             self.assertEqual(im.getpixel(white), 124)
-
-        del im
-        os.remove(FILENAME)
 
 #    @skip("simple")
     def testExportThumbnail(self):
@@ -1289,9 +1283,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(subimage[-1][0], 10022)
         self.assertEqual(subimage[-1][-1], 10278)
 
-        del im
-        os.remove(FILENAME)
-
     def testExportThinPyramid(self):           
         """
         Checks that can both write and read back a thin pyramidal grayscale 16 bit image
@@ -1321,9 +1312,6 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(full_image[0][-1], 1)
         self.assertEqual(full_image[-1][0], 4096)
         self.assertEqual(full_image[-1][-1], 4097)
-
-        del im
-        os.remove(FILENAME)
 
     def testExportMultiArrayPyramid(self):
         """
@@ -1477,8 +1465,6 @@ class TestTiffIO(unittest.TestCase):
         tile = f.read_one_tile(256, 256)
         # this tile is only 2 x 1 in size
         self.assertEqual(tile.shape, (1, 2, 3))
-        del f
-        os.remove(FILENAME)
 
     def testAcquisitionDataTIFFSmallFile(self):
         num_rows = 10
@@ -1505,9 +1491,6 @@ class TestTiffIO(unittest.TestCase):
         # the tile must have the same shape of the full image
         self.assertEqual(num_rows, len(tile))
         self.assertEqual(num_cols, len(tile[0]))
-
-        del rdata
-        os.remove(FILENAME)
 
     def testAcquisitionDataTIFF(self):
 
@@ -1560,16 +1543,6 @@ class TestTiffIO(unittest.TestCase):
         data = model.DataArray(arr, metadata=md)
         tiff.export(FILENAME, data)
 
-        # Raise another exception, just to flush the previous one from the
-        # internal python system which holds a complete stack trace of the last
-        # exception. As the exception was in a method of rdata, a reference to
-        # rdata is hold until another exception (or the method goes out of scope)
-        try:
-            raise Exception()
-        except:
-            pass
-        del rdata
-
         rdata = tiff.open_data(FILENAME)
         with self.assertRaises(AttributeError):
             rdata.content[0].maxzoom
@@ -1577,15 +1550,6 @@ class TestTiffIO(unittest.TestCase):
         with self.assertRaises(AttributeError):
             # the image is not tiled
             rdata.content[0].getTile(0, 0, 0)
-
-        # Another exception for flushing the previous exception
-        try:
-            raise Exception()
-        except:
-            pass
-        del rdata
-
-        os.remove(FILENAME)
 
     def testAcquisitionDataTIFFLargerFile(self):
 
@@ -1720,15 +1684,6 @@ class TestTiffIO(unittest.TestCase):
         numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9999907, 7.000003])
         # the size of this tile is also the size of the image
         self.assertEqual(tiles[0][0].shape, (156, 187))
-
-        # TODO: not needed here? (as there is no exception before)
-        try:
-            raise Exception()
-        except:
-            pass
-        del rdata
-
-        os.remove(FILENAME)
 
 
 def rational2float(rational):
