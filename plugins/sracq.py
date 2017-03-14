@@ -27,7 +27,6 @@ from odemis import dataio, model, gui
 from odemis.acq import stream
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.util import fluo
 import os
 import threading
 import time
@@ -35,6 +34,7 @@ import time
 
 logging.getLogger().setLevel(logging.INFO)
 
+LIVE_UPDATE_PERIOD = 10  # s, time between two images in the GUI (during acquisition)
 
 class SRAcqPlugin(Plugin):
     name = "Super-resolution acquisition"
@@ -157,10 +157,12 @@ class SRAcqPlugin(Plugin):
         self._acq_done = threading.Event()
         self._n = 0
         self._startt = 0  # starting time of acquisition
+        self._last_display = 0  # last time the GUI image was updated
         self._future = None  # future to represent the acquisition progress
         self._exporter = None  # to save the file
 
         self._q = Queue.Queue()  # queue of tuples (str, DataArray) for saving data
+        self._qdisplay = Queue.Queue()
         # TODO: find the right number of threads, based on CPU numbers (but with
         # python threading that might be a bit overkill)
         for i in range(4):
@@ -259,6 +261,7 @@ class SRAcqPlugin(Plugin):
         self._acq_done.clear()
 
         self._startt = time.time()
+        self._last_display = self._startt
         end = self._startt + self.expectedDuration.value
 
         f = model.ProgressiveFuture(end=end)
@@ -287,6 +290,15 @@ class SRAcqPlugin(Plugin):
                 left = nb - self._n
                 dur = self.exposureTime.value * left + 0.1
                 f.set_progress(end=time.time() + dur)
+
+                # Update the image
+                try:
+                    da = self._qdisplay.get(block=False)
+                    # Hack: we pretend the stream has received an image it was
+                    # subscribed to (although it's paused)
+                    self._stream._onNewData(None, da)
+                except Queue.Empty:
+                    pass
 
             logging.info("Waiting for all data to be saved")
             dur = self._q.qsize() * 0.1  # very pessimistic
@@ -327,7 +339,8 @@ class SRAcqPlugin(Plugin):
         try:
             self._n += 1
             self._q.put((self._n, data))
-            fps = self._n / (time.time() - self._startt)
+            now = time.time()
+            fps = self._n / (now - self._startt)
             logging.info("Received data %d (%g fps), queue size = %d",
                          self._n, fps, self._q.qsize())
 
@@ -340,6 +353,12 @@ class SRAcqPlugin(Plugin):
                 self.ccd.data.unsubscribe(self._on_image)
                 self._acq_done.set()  # indicate it's over
                 return
+
+            if now > self._last_display + LIVE_UPDATE_PERIOD:
+                if not self._qdisplay.qsize():
+                    self._qdisplay.put(data)
+                else:
+                    logging.debug("Not pushing new image to display as previous one hasn't been processed")
 
             if self._n == self.number.value:
                 self.ccd.data.unsubscribe(self._on_image)
@@ -356,7 +375,10 @@ class SRAcqPlugin(Plugin):
                 n, da = self._q.get()
                 logging.info("Saving data %d in thread %d", n, i)
                 filename = self._fntmpl % (n,)
-                self._exporter.export(filename, da, compressed=True)
+                try:
+                    self._exporter.export(filename, da, compressed=True)
+                except Exception:
+                    logging.exception("Failed to store data %d", n)
                 self._q.task_done()
                 logging.debug("Data %d saved", n)
         except Exception:
