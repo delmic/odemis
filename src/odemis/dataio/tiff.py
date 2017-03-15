@@ -1772,13 +1772,6 @@ class DataArrayShadowTIFF(DataArrayShadow):
         shape (tuple of int): The shape of the corresponding DataArray
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
-        maxzoom (0<=int): the maximum zoom level possible. If the data isn't
-            encoded in pyramidal format, the attribute is not present.
-            The shape of the images in each zoom level is as following:
-            (shape of full image) // (2**z)
-            where z is the index of the zoom level
-        tile_shape (tuple): the shape of the tile, if the image is tiled. It is only present
-            when maxzoom is also present
         """
         if isinstance(tiff_info, list):
             tiff_handle = tiff_info[0]['handle']
@@ -1848,13 +1841,6 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
         shape (tuple of int): The shape of the corresponding DataArray
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
-        maxzoom (0<=int): the maximum zoom level possible. If the data isn't
-            encoded in pyramidal format, the attribute is not present.
-            The shape of the images in each zoom level is as following:
-            (shape of full image) // (2**z)
-            where z is the index of the zoom level
-        tile_shape (tuple): the shape of the tile, if the image is tiled. It is only present
-            when maxzoom is also present
         """
         if isinstance(tiff_info, list):
             tiff_handle = tiff_info[0]['handle']
