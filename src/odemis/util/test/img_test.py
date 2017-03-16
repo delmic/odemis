@@ -361,7 +361,7 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 3)
         pixel = out[2, 2]
-        numpy.testing.assert_equal(pixel, [128, 128, 128])
+        numpy.testing.assert_equal(pixel, [127, 127, 127])
 
     def test_irange(self):
         """test with specific corner values of irange"""

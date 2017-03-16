@@ -317,7 +317,14 @@ class MicroscopeViewport(ViewPort):
         mpps = set()
         for im in self._microscope_view.stream_tree.getImages():
             try:
-                mpps.add(im.metadata[model.MD_PIXEL_SIZE][0])
+                if isinstance(im, tuple): # im is a tuple of tuple of tiles
+                    if len(im) == 0:
+                        return
+                    first_tile = im[0][0]
+                    md = first_tile.metadata
+                else:
+                    md = im.metadata
+                mpps.add(md[model.MD_PIXEL_SIZE][0])
             except KeyError:
                 pass
 
@@ -345,6 +352,9 @@ class MicroscopeViewport(ViewPort):
 
     @call_in_wx_main
     def _on_view_mpp(self, mpp):
+        self.microscope_view.fov.value = self.get_fov_from_mpp()
+        self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+        self.microscope_view.mpp.value = mpp
         if self.bottom_legend:
             self.bottom_legend.scale_win.SetMPP(mpp)
             self.UpdateHFWLabel()
@@ -429,6 +439,10 @@ class MicroscopeViewport(ViewPort):
         # Note: no need to update fov_hw, as when the canvas is resized, it
         # updates the mpp in a way to ensure the fov_hw stays _constant_
         self.UpdateHFWLabel()
+        fov = self.get_fov_from_mpp()
+        if fov is not None and self.microscope_view is not None:
+            self.microscope_view.fov.value = fov
+            self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
         evt.Skip()  # processed also by the parent
 
     def OnSliderIconClick(self, evt):
@@ -471,6 +485,10 @@ class MicroscopeViewport(ViewPort):
 
         The canvas calculates the new hfw value.
         """
+        fov = self.get_fov_from_mpp()
+        self.microscope_view.fov.value = fov
+        self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+
         # Only change the FoV of the hardware if:
         # * this Viewport was *not* responsible for setting the mpp
         #   (by calling `self.set_mpp_from_fov`)
@@ -479,7 +497,6 @@ class MicroscopeViewport(ViewPort):
         # This way, we prevent mpp/fov setting loops.
         if not self.self_set_mpp and self.IsShownOnScreen():
             logging.debug("View mpp changed to %s on %s", mpp, self)
-            fov = self.get_fov_from_mpp()
             if fov is None:
                 return
 
@@ -504,14 +521,14 @@ class MicroscopeViewport(ViewPort):
         else:
             self.self_set_mpp = False
 
-    def get_fov_from_mpp(self):
+    def _get_fov_from_mpp(self, view_size_px):
         """
         Return the field of view of the canvas
+        view_size_px (float, float): View size in pixels
         :return: (None or float,float) Field width and height in meters
         """
         # Trick: we actually return the smallest of the FoV dimensions, so
         # that we are sure the microscope image will fit fully (if it's square)
-        view_size_px = self.canvas.ClientSize
 
         if self.microscope_view and all(v > 0 for v in view_size_px):
             mpp = self.microscope_view.mpp.value
@@ -521,6 +538,20 @@ class MicroscopeViewport(ViewPort):
             return fov
 
         return None
+
+    def get_fov_from_mpp(self):
+        """
+        Return the field of view of the canvas
+        :return: (None or float,float) Field width and height in meters
+        """
+        return self._get_fov_from_mpp(self.canvas.ClientSize)
+
+    def get_buffer_fov_from_mpp(self):
+        """
+        Return the field of view of the canvas
+        :return: (None or float,float) Field width and height in meters
+        """
+        return self._get_fov_from_mpp(self.canvas.buffer_size)
 
     def set_mpp_from_fov(self, fov):
         """

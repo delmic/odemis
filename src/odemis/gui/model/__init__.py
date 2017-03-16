@@ -880,6 +880,10 @@ class StreamView(View):
 
         self.fov_hw = fov_hw
 
+        self.fov = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov_buffer = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov_buffer.subscribe(self._onFovBuffer)
+
         # Will be created on the first time it's needed
         self._focus_thread = {}  # Focuser -> thread
         self._focus_queue = {}  # Focuser -> Queue.Queue() of float (relative distance)
@@ -897,12 +901,14 @@ class StreamView(View):
             view_pos_init = (0, 0)
 
         self.view_pos = model.ListVA(view_pos_init, unit="m")
+        self.view_pos.subscribe(self._onViewPos)
 
         self._fstage_move = InstantaneousFuture() # latest future representing a move request
 
         # current density (meter per pixel, ~ scale/zoom level)
         # 1µm/px => ~large view of the sample (view width ~= 1000 px)
         self.mpp = FloatContinuous(1e-6, range=(10e-12, 200e-6), unit="m/px")
+        self.mpp.subscribe(self._onMpp)
         # self.mpp.debug = True
 
         # How much one image is displayed on the other one. Value used by
@@ -922,6 +928,31 @@ class StreamView(View):
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
         self.interpolate_content = model.BooleanVA(False)
+
+    def _onFovBuffer(self, fov):
+        self._updateStreamsViewParams()
+
+    def _onViewPos(self, view_pos):
+        self._updateStreamsViewParams()
+
+    def _onMpp(self, mpp):
+        self._updateStreamsViewParams()
+
+    def _updateStreamsViewParams(self):
+        ''' Updates .rect and .mpp members of all streams based on the field of view of the buffer
+        '''
+        half_fov = (self.fov_buffer.value[0] / 2, self.fov_buffer.value[1] / 2)
+        view_rect = (
+            self.view_pos.value[0] - half_fov[0],
+            self.view_pos.value[1] + half_fov[1],
+            self.view_pos.value[0] + half_fov[0],
+            self.view_pos.value[1] - half_fov[1],
+        )
+        streams = self.getStreams()
+        for stream in streams:
+            if hasattr(stream, 'rect'): # the stream is probably pyramidal
+                stream.rect.value = stream.rect.clip(view_rect)
+                stream.mpp.value = stream.mpp.clip(self.mpp.value)
 
     def has_stage(self):
         return self._stage is not None

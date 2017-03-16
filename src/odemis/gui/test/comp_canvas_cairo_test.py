@@ -214,7 +214,7 @@ class TestCanvas(test.GuiTestCase):
         for mpp, scale, rect in zip(mpps, exp_scales, exp_b_rect):
             view.mpp.value = mpp
             self.assertAlmostEqual(scale, cnvs.scale)
-            calc_rect = cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
+            calc_rect = cnvs._calc_img_buffer_rect(img.shape[:2], im_scale, im_pos)
             for ev, v in zip(rect, calc_rect):
                 self.assertAlmostEqual(ev, v)
             test.gui_loop(0.1)
@@ -255,7 +255,7 @@ class TestCanvas(test.GuiTestCase):
             logging.debug("Center: %s", im_center)
             for im_scale, rect in zip(im_scales, rects):
                 logging.debug("Scale: %s", im_scale)
-                b_rect = cnvs._calc_img_buffer_rect(darray, im_scale, im_center)
+                b_rect = cnvs._calc_img_buffer_rect(darray.shape[:2], im_scale, im_center)
 
                 for v in b_rect:
                     self.assertIsInstance(v, float)
@@ -288,7 +288,7 @@ class TestCanvas(test.GuiTestCase):
             logging.debug("Center: %s", im_center)
             for im_scale, rect in zip(im_scales, rects):
                 logging.debug("Scale: %s", im_scale)
-                b_rect = cnvs._calc_img_buffer_rect(darray, im_scale, im_center)
+                b_rect = cnvs._calc_img_buffer_rect(darray.shape[:2], im_scale, im_center)
 
                 for v in b_rect:
                     self.assertIsInstance(v, float)
@@ -322,7 +322,7 @@ class TestCanvas(test.GuiTestCase):
             logging.debug("Center: %s", im_center)
             for im_scale, rect in zip(im_scales, rects):
                 logging.debug("Scale: %s", im_scale)
-                b_rect = cnvs._calc_img_buffer_rect(darray, im_scale, im_center)
+                b_rect = cnvs._calc_img_buffer_rect(darray.shape[:2], im_scale, im_center)
 
                 for v in b_rect:
                     self.assertIsInstance(v, float)

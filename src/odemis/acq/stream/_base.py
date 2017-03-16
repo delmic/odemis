@@ -212,6 +212,9 @@ class Stream(object):
                 raw = self.raw
             self._onNewData(None, raw)
 
+        # When True, the projected tiles cache should be invalidated
+        self._projectedTilesInvalid = False
+
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
 
@@ -867,6 +870,8 @@ class Stream(object):
         # are relative to the top-left corner. So it also needs to sum half image.
         # The -1 are necessary on the right and bottom sides, as the coordinates of a pixel
         # are -1 relative to the side of the pixel
+        # The '-' before ps[1] is necessary due to the fact that 
+        # Y in pixel coordinates grows down, and Y in physical coordinates grows up
         return (
             int(round(rect[0] / ps[0] + img_shape[0] / 2)),
             int(round(rect[1] / (-ps[1]) + img_shape[1] / 2)),
@@ -913,16 +918,22 @@ class Stream(object):
         # the key of the tile on the cache
         tile_key = "%d-%d-%d" % (x, y, z)
 
-        # if the tile has been already cached, read it from the cache
-        if tile_key in prev_proj_cache:
-            proj_tile = prev_proj_cache[tile_key]
+        # if the raw tile has been already cached, read it from the cache
+        if tile_key in prev_raw_cache:
             raw_tile = prev_raw_cache[tile_key]
-        elif tile_key in self._projectedTilesCache:
-            proj_tile = self._projectedTilesCache[tile_key]
+        elif tile_key in self._rawTilesCache:
             raw_tile = self._rawTilesCache[tile_key]
         else:
             # The tile was not cached, so it must be read from the file
             raw_tile = self._das.getTile(x, y, z)
+
+        # if the projected tile has been already cached, read it from the cache
+        if tile_key in prev_proj_cache:
+            proj_tile = prev_proj_cache[tile_key]
+        elif tile_key in self._projectedTilesCache:
+            proj_tile = self._projectedTilesCache[tile_key]
+        else:
+            # The tile was not cached, so it must be projected again
             proj_tile = self._projectTile(raw_tile)
 
         # cache raw and projected tiles
@@ -956,8 +967,8 @@ class Stream(object):
         prev_proj_cache = self._projectedTilesCache
         # Execute at least once. If mpp and rect changed in
         # the last execution of the loops, execute again
-        mpp_rect_changed = True
-        while mpp_rect_changed:
+        need_recompute = True
+        while need_recompute:
             z = self._zFromMpp()
             rect = self._rectWorldToPixel(self.rect.value)
             # convert the rect coords to tile indexes
@@ -966,26 +977,33 @@ class Stream(object):
             x1, y1, x2, y2 = rect
             curr_mpp = self.mpp.value
             curr_rect = self.rect.value
-            # the 4 lines below avoids that lots of old tiles
-            # stays in instance caches
+            # if the projected tiles cache are invalid, empty it
+            if self._projectedTilesInvalid:
+                prev_proj_cache = {}
+                self._projectedTilesInvalid = False
+            else:
+                # the caches are valid, update the projected tiles cache with the cache
+                # from the previous execution
+                prev_proj_cache.update(self._projectedTilesCache)
+            # update the raw tiles cache with the cache from the previous execution
             prev_raw_cache.update(self._rawTilesCache)
-            prev_proj_cache.update(self._projectedTilesCache)
-            # empty current caches
+
+            # empty current caches to avoid that lots of old tiles are kept on the cache
             self._rawTilesCache = {}
             self._projectedTilesCache = {}
 
             raw_tiles = []
             projected_tiles = []
-            mpp_rect_changed = False
+            need_recompute = False
             try:
                 for x in range(x1, x2 + 1):
                     rt_column = []
                     pt_column = []
 
                     for y in range(y1, y2 + 1):
-                        # check if .mpp or .rect changed in the middle of the process.
-                        # it is common to happen when .rect and .mpp are changed simultaneously
-                        if curr_mpp != self.mpp.value or curr_rect != self.rect.value:
+                        # check if the image changed in the middle of the process
+                        if self._im_needs_recompute.is_set():
+                            self._im_needs_recompute.clear()
                             # Raise the exception, so everything will be calculated again,
                             # but using the cache from the last execution
                             raise NeedRecomputeException()
@@ -999,8 +1017,8 @@ class Stream(object):
                     projected_tiles.append(tuple(pt_column))
 
             except NeedRecomputeException:
-                # mpp or rect changed
-                mpp_rect_changed = True
+                # image changed
+                need_recompute = True
 
         return (tuple(raw_tiles), tuple(projected_tiles))
 
@@ -1050,6 +1068,8 @@ class Stream(object):
         # If auto_bc is active, it updates intensities (from _updateImage()),
         # so no need to refresh image again.
         if not self.auto_bc.value:
+            # set projected tiles cache as invalid
+            self._projectedTilesInvalid = True
             self._shouldUpdateImage()
 
     def _updateHistogram(self, data=None):
@@ -1093,3 +1113,22 @@ class Stream(object):
                 self.raw[0] = data
 
         self._shouldUpdateImage()
+
+    def getBoundingBox(self):
+        ''' Get the bounding box. I
+        return (tuple of floats(l,t,r,b)): Tuple with the bounding box
+        Raises:
+            ValueError: If the .image member is not set
+        '''
+        if hasattr(self, 'rect'):
+            rng = self.rect.range
+            return (rng[0][0], rng[0][1], rng[1][0], rng[1][1])
+        else:
+            md = self.image.value.metadata
+            if self.image.value is None:
+                raise ValueError("Stream's image not defined")
+            shape = self.image.value.shape
+            im_scale = md[model.MD_PIXEL_SIZE]
+            w, h = shape[1] * im_scale[0], shape[0] * im_scale[1]
+            c = md[model.MD_POS]
+            return [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
