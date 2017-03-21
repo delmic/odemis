@@ -83,6 +83,9 @@ class USBAccesser(object):
             self._file.close()
             self._file = None
 
+    def __del__(self):
+        self.terminate()
+
     def _openSerialPort(self, port):
         """
         Opens the given serial port the right way for the Omicron xX devices.
@@ -192,7 +195,7 @@ class DevxX(object):
         channel (None or 0 <= int): If None, will expect to drive directly a
           device with a single source. If a number >= 1, then will expect to
           drive the channel corresponding to the given number. If 0, will
-          expect to just get enough information on the channels provide by the
+          expect to just get enough information on the channels provided by the
           device (it will provide .channels with the available channel numbers).
         raise IOError if no device answering or not a xX device
         """
@@ -209,10 +212,29 @@ class DevxX(object):
             raise IOError("No xX device detected on port %s" % acc.port)
 
         hwname = OXX_DEVID.get(devid, modl)
-        # Multi-channel devices have also a separate SN for each subdevice but
-        # we don't display it
+
+        # Fill in some info
+        wl, power, subdev = self.GetSpecInfo()
+        if channel is None:
+            if subdev:
+                raise TypeError("Multi-channel device found but no channel selected")
+        elif channel == 0:  # master
+            if not subdev:
+                raise TypeError("Single-channel device found while master device requested")
+            # wl is always 0, and power is the total power
+            self.channels = subdev
+        else:
+            if channel not in subdev:
+                raise HwError("No channel %d found in device on port %s" % acc.port)
+            self._com_chan = "[%d]" % channel
+            # Now we can ask again, to get the actual values
+            wl, _, _ = self.GetSpecInfo()
+
         sn = self.GetSerialNumber()
-        self.hwVersion = "%s v%s (s/n %s)" % (hwname, fw, sn)
+        if channel in (None, 0):
+            self.hwVersion = "%s v%s (s/n %s)" % (hwname, fw, sn)
+        else:  # Sub channel
+            self.hwVersion = "s/n[%d] %s" % (channel, sn)
 
         # If there is error => reset
         status = self.GetActualStatus()
@@ -227,6 +249,9 @@ class DevxX(object):
                 error = self.GetFailureByte()
                 status = self.GetActualStatus()
 
+            # TODO: if there is an error state, but no error in failure byte =>
+            # check LatchFailure and reset?
+
             if error:
                 raise HwError("Device reports error %04X, power cycle the light source. "
                               "If the problem persists, contact a support technician." %
@@ -235,11 +260,14 @@ class DevxX(object):
         if status & (1 << 8):  # bit 8: Need to toggle key
             raise HwError("Device needs to have the key switch toggled off and on")
 
-        if not (status & (1 << 7)):  # bit 6: key switch allows laser (=1)
+        if not (status & (1 << 7)):  # bit 7: key switch allows laser (=1)
             raise HwError("Key switch interlock prevents laser output, close the interlock loop to activate the device")
 
         if not (status & (1 << 6)):  # bit 6: "external" light enabler (=1)
             raise HwError("Electronic shutter active, open the shutter by pressing the button on the device")
+
+        if channel == 0:  # master
+            return
 
         # Select the right command to change the level power
         if devid in (19, 20):  # LEDMOD, LedHUB
@@ -258,33 +286,6 @@ class DevxX(object):
         mode &= ~((1 << 13) | (1 << 7) | (1 << 5))
         self.SetOperatingMode(mode)
 
-        # Fill in some info
-        wl, power, subdev = self.GetSpecInfo()
-        if channel is None:
-            if subdev:
-                raise TypeError("Multi-channel device found but no channel selected")
-        elif channel == 0:
-            if not subdev:
-                raise TypeError("Single-channel device found while master device requested")
-            # Go out of stand-by
-            mode = self.GetOperatingMode()
-            mode |= (1 << 4) + (1 << 3) # bit 4 = operation release, bit 3 = bias release
-            self.SetOperatingMode(mode)
-            self.channels = subdev
-            # wl is always 0, and power is the total power
-            return
-        else:
-            if channel not in subdev:
-                raise HwError("No channel %d found in device on port %s" % acc.port)
-            self._com_chan = "[%d]" % channel
-            # Now we can ask again, to get the actual values
-            wl, _, _ = self.GetSpecInfo()
-
-        if channel is None:
-            devname = acc.port
-        else:
-            devname = "%d" % channel
-
         if devid in (19, 20):  # LEDMOD, LedHUB => led
             # The wavelength range is not precisely provided by the hardware,
             # but it's usually around 20 nm
@@ -296,23 +297,48 @@ class DevxX(object):
 
         self.max_power = self.GetMaxPower()
 
+        if channel is None:
+            devname = acc.port
+        else:
+            devname = "%d" % channel
+
         # Just for info
         wh = self.GetWorkingHours()
         logging.info("Device %s has %d working hours", devname, wh)
 
+        try:
+            tempd = self.MeasureTemperatureDiode()
+            tempa = self.MeasureTemperatureAmbient()
+            logging.info("Temperature of %s: diode = %g °C, ambient = %g °C",
+                         devname, tempd, tempa)
+        except Exception:
+            # Some hardware just don't support it
+            logging.debug("Unable to read temperature")
+
         self.LightOff() # for safety
         self.SetLevelPower(0)  # saved in memory, so next reboot it will start off
+        self.activate(False)  # stand-by
         self.PowerOn()
 
-        # Go out of stand-by
+    def activate(self, active):
+        """
+        Go out or in stand-by.
+        active (bool): if True, will turn on the operation and bias release.
+          Otherwise, will disable them.
+        """
         mode = self.GetOperatingMode()
-        mode |= (1 << 4) + (1 << 3) # bit 4 = operation release, bit 3 = bias release
+        if active:
+            mode |= (1 << 4) + (1 << 3)  # bit 4 = operation release, bit 3 = bias release
+        else:
+            mode &= ~((1 << 4) + (1 << 3))
         self.SetOperatingMode(mode)
 
     def terminate(self):
-        # self.SetLevelPower(0)  # To make sure at next start it's off
-        self.LightOff()
-        self.PowerOff()
+        if self.acc:
+            self.LightOff()
+            self.PowerOff()
+            self.activate(False)  # Go to stand-by
+            self.acc = None
 
     def _getValue(self, com):
         """
@@ -475,6 +501,14 @@ class DevxX(object):
         ans = self._getValue("GAS")
         return int(ans, 16)
 
+    def GetLatchedFailure(self):
+        """
+        Get the error that caused a lockout of the laser
+        return (int): bit mask of the status, cf documentation
+        """
+        ans = self._getValue("GLF")
+        return int(ans, 16)
+
     def GetFailureByte(self):
         """
         Get the error info
@@ -483,6 +517,24 @@ class DevxX(object):
         """
         ans = self._getValue("GFB")
         return int(ans, 16)
+
+    def MeasureTemperatureDiode(self):
+        """
+        Get the diode temperature
+        return (float or None): temperature in °C, None if unknown
+        """
+        # returns "25.3" or "x" when not available
+        ans = self._getValue("MTD")
+        return float(ans)  # Raise ValueError if not a float
+
+    def MeasureTemperatureAmbient(self):
+        """
+        Get the ambient temperature inside the head
+        return (float): temperature in °C
+        raise ValueError: if the temperature is unknown/unavailable
+        """
+        ans = self._getValue("MTA")
+        return float(ans)
 
     def GetOperatingMode(self):
         """
@@ -498,7 +550,21 @@ class DevxX(object):
         mode (int): bit mask of the mode, cf documentation on Get Operating Mode
         """
         assert(0 <= mode < 2 ** 16)
+        # Note: The master of a Hub only supports bits 13->15 (the other ones
+        # are unused)
+
         self._setValue("SOM", "%2X" % mode)
+
+    def RecallOperatingMode(self, mode):
+        """
+        Set the "preset" operating mode.
+        Note: each device has different operating mode presets, so you need to
+        check the documentation.
+        mode (0<=int): one of the operating mode for the device. 0 is "stand-by",
+          the rest is device dependent.
+        """
+        assert(0 <= mode < 256)
+        self._setValue("ROM", "%d" % mode)  # Unknown above 8 so unclear if it's decimal or hexadecimal
 
     def ResetController(self):
         self._setValue("RsC")
@@ -509,6 +575,20 @@ class DevxX(object):
             except IOError:
                 continue
             if "$RsC" in msg:
+                break
+
+    def CalibrateLaserDiode(self):
+        # TODO: untested
+        self._setValue("CLD")
+        # Immediately return !CLD
+        # Then send $CLDc1 when the procedure is over (about 2 minutes later)
+
+        while True:  # TODO timeout
+            try:
+                msg = self.acc.readMessage()
+            except IOError:
+                continue
+            if "$CLD" in msg:
                 break
 
     def LightOn(self):
@@ -597,16 +677,32 @@ class GenericxX(model.Emitter):
         # TODO: compare to the previous (known) state, and only send commands for
         # the difference, to save some time (each command takes ~5 ms)
         # set the actual values
+        all_off = all(power * i == 0 for i in intensities)
+        if not all_off and self._master:
+            # On the LedHUB, when the master goes from off to on, all the
+            # devices are turned on too. In theory, as the level has been set to
+            # 0, it's not an issue... but some (non-properly calibrated) lights
+            # seem to still emit a little bit at level 0. That's why we also set
+            # them in stand-by, so that the light cannot be emitting anyway.
+            self._master.LightOn()
+
         for d, intens in zip(self._devices, intensities):
             p = min(power * intens, d.max_power)
             if p > 0:
                 d.LightOn()
                 d.setLightPower(p / d.max_power)
+                d.activate(True)
             else:
+                d.activate(False)
+                # In theory, not need to turn light off as the stand-by does it,
+                # but as it cannot hurt, we do it to be extra-safe.
                 d.LightOff()
-                # TODO: also turn on/off the power?
-        # TODO: if all lights are off, and there is a master, also turn off the
-        # master? Or only do after a little while?
+                d.setLightPower(0)
+
+        if all_off and self._master:
+            # On the LedHUB, it's necessary to turn off the master to get the
+            # "emission" status led off.
+            self._master.LightOff()
 
     def _updatePower(self, value):
         self._updateIntensities(value, self.emissions.value)
@@ -698,7 +794,9 @@ class HubxX(GenericxX):
           which case it will pick the first lighthub it finds.
         """
         super(HubxX, self).__init__(name, role, ports=port, **kwargs)
-        self._hwVersion = "Omicron %s" % self._master.hwVersion
+        self._hwVersion = ("Omicron %s (%s)" %
+                           (self._master.hwVersion,
+                            ", ". join(d.hwVersion for d in self._devices)))
 
     @classmethod
     def _getMasterDevices(cls, ports):
@@ -869,6 +967,10 @@ class HubxXSimulator(object):
             self._sendAnswer("GMP", chan, "%d" % (pw,))
         elif com == "GWH":
             self._sendAnswer("GWH", chan, "23")
+        elif com == "MTD":
+            self._sendAnswer("MTD", chan, "35.6")
+        elif com == "MTA":
+            self._sendAnswer("MTA", chan, "28.3")
         elif com == "GSI":
             if chan is None:
                 # Master -> return the sub devices

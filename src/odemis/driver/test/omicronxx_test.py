@@ -79,6 +79,8 @@ class TestGenericxX(object):
         self.dev.emissions.value = em
         self.assertGreater(self.dev.emissions.value[0], 0)
 
+        logging.debug("Found hardware %s", self.dev.hwVersion)
+
     def test_cycle(self):
         """
         Test each emission source for 2 seconds at maximum intensity and then 1s
