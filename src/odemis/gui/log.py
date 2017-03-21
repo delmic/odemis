@@ -18,13 +18,17 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/. """
 
 from __future__ import division
+
+import collections
 import logging
 from logging.handlers import RotatingFileHandler
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, FG_COLOUR_MAIN
+from odemis.gui.util import wxlimit_invocation
 import os.path
 import sys
+import threading
 import wx
-from odemis.gui.util import wxlimit_invocation
+
 
 LOG_FILE = "odemis-gui.log"
 
@@ -136,12 +140,10 @@ class TextFieldHandler(logging.Handler):
         self.textfield = None
         self.debug_va = None
         self.level_va = None
-        self.cache = {
-            0: [],
-            1: []
-        }
-        self.current_cache = 0
-        self._locked = False
+
+        # queue of tuple (str, TextAttr) = text, style
+        self._to_print = collections.deque(maxlen=LOG_LINES)
+        self._print_lock = threading.Lock()
 
     def setTextField(self, textfield):
         self.textfield = textfield
@@ -168,48 +170,37 @@ class TextFieldHandler(logging.Handler):
             if self.level_va and record.levelno > self.level_va.value:
                 self.level_va.value = record.levelno
 
-            # FIXME: still seems to be possible to completely hog the GUI by
-            # logging too much. A way to fix it would be to run the textfield
-            # update at a maximum frequency (10Hz), and queue the logs in
-            # between.
-
-            # Do the actual writing in a CallAfter, so logging won't interfere
-            # with the GUI drawing process.
-            self.cache[self.current_cache].append((record, text_style))
+            # Do the actual writing in a rate-limited thread, so logging won't
+            # interfere with the GUI drawing process.
+            self._to_print.append((record, text_style))
             self.write_to_field()
 
     @wxlimit_invocation(0.2)
     def write_to_field(self):
 
-        if self._locked:
-            return
-        self._locked = True
-        # Cache that we are going to write
-        write_cache = self.current_cache
-        # Swap caches, so new messages get added to the other cache
-        self.current_cache = int(not self.current_cache)
+        with self._print_lock:
 
-        cache = self.cache[write_cache]
-        prev_style = None
+            # Process the latest messages
+            try:
+                prev_style = None
+                while True:
+                    record, text_style = self._to_print.popleft()
+                    if prev_style != text_style:
+                        self.textfield.SetDefaultStyle(text_style)
+                        prev_style = text_style
+                    self.textfield.AppendText(self.format(record) + "\n")
+            except IndexError:
+                pass  # end of the queue
 
-        # Process at most the latest 'LOG_LINES' messages
-        for record, text_style in cache[-LOG_LINES:]:
-            if prev_style != text_style:
-                self.textfield.SetDefaultStyle(text_style)
-                prev_style = text_style
-            self.textfield.AppendText(self.format(record) + "\n")
-
-        nb_lines = self.textfield.GetNumberOfLines()
-        nb_old = nb_lines - LOG_LINES
-        if nb_old > 0:
             # Removes the characters from position 0 up to and including the Nth line break
-            first_new = 0
-            txt = self.textfield.Value
-            for i in range(nb_old):
-                first_new = txt.find('\n', first_new) + 1
+            nb_lines = self.textfield.GetNumberOfLines()
+            nb_old = nb_lines - LOG_LINES
+            if nb_old > 0:
+                first_new = 0
+                txt = self.textfield.Value
+                for i in range(nb_old):
+                    first_new = txt.find('\n', first_new) + 1
 
-            self.textfield.Remove(0, first_new)
+                self.textfield.Remove(0, first_new)
 
-        self.cache[write_cache] = []
-        self._locked = False
         self.textfield.Refresh()
