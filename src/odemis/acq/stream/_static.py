@@ -250,11 +250,17 @@ class StaticARStream(StaticStream):
     def __init__(self, name, data):
         """
         name (string)
-        data (model.DataArray of shape (YX) or list of such DataArray). The
-         metadata MD_POS and MD_AR_POLE should be provided
+        data (model.DataArray(Shadow) of shape (YX) or list of such DataArray(Shadow)).
+         The metadata MD_POS and MD_AR_POLE should be provided
         """
         if not isinstance(data, collections.Iterable):
             data = [data] # from now it's just a list of DataArray
+
+        # TODO: support DAS, as a "delayed loading" by only calling .getData()
+        # when the projection for the particular data needs to be computed (or
+        # .raw needs to be accessed?)
+        # Ensure all the data is a DataArray, as we don't handle (yet) DAS
+        data = [d.getData() if isinstance(d, model.DataArrayShadow) else d for d in data]
 
         # find positions of each acquisition
         # tuple of 2 floats -> DataArray: position on SEM -> data
@@ -450,7 +456,7 @@ class StaticSpectrumStream(StaticStream):
     def __init__(self, name, image):
         """
         name (string)
-        image (model.DataArray of shape (CYX) or (C11YX)). The metadata
+        image (model.DataArray(Shadow) of shape (CYX) or (C11YX)). The metadata
         MD_WL_POLYNOMIAL or MD_WL_LIST should be included in order to associate the C to a
         wavelength.
         """
@@ -459,6 +465,12 @@ class StaticSpectrumStream(StaticStream):
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
 
+        # TODO: need to handle DAS properly, in case it's tiled (in XY), to avoid
+        # loading too much data in memory.
+        # Ensure the data is a DataArray, as we don't handle (yet) DAS
+        if isinstance(image, model.DataArrayShadow):
+            image = image.getData()
+
         if len(image.shape) == 3:
             # force 5D
             image = image[:, numpy.newaxis, numpy.newaxis, :, :]
@@ -466,7 +478,7 @@ class StaticSpectrumStream(StaticStream):
             logging.error("Cannot handle data of shape %s", image.shape)
             raise NotImplementedError("SpectrumStream needs a cube data")
 
-        # ## this is for "average spectrum" projection
+        # This is for "average spectrum" projection
         try:
             # cached list of wavelength for each pixel pos
             self._wl_px_values = spectrum.get_wavelength_per_pixel(image)
