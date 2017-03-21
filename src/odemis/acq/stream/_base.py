@@ -1115,20 +1115,25 @@ class Stream(object):
         self._shouldUpdateImage()
 
     def getBoundingBox(self):
-        ''' Get the bounding box. I
+        """
+        Get the bounding box in X/Y of the complete data contained.
         return (tuple of floats(l,t,r,b)): Tuple with the bounding box
         Raises:
-            ValueError: If the .image member is not set
-        '''
-        if hasattr(self, 'rect'):
+            ValueError: If the stream has no (spatial) data
+        """
+        if hasattr(self, "rect"):
             rng = self.rect.range
             return (rng[0][0], rng[0][1], rng[1][0], rng[1][1])
         else:
-            md = self.image.value.metadata
-            if self.image.value is None:
-                raise ValueError("Stream's image not defined")
-            shape = self.image.value.shape
-            im_scale = md[model.MD_PIXEL_SIZE]
+            if not self.raw:
+                raise ValueError("Cannot compute bounding-box as stream has no data")
+            raw = self.raw[0]
+            md = raw.metadata
+            shape = raw.shape
+            try:
+                im_scale = md[model.MD_PIXEL_SIZE]
+                c = md[model.MD_POS]
+            except KeyError:
+                raise ValueError("Cannot compute bounding-box as stream data no spatial metadata")
             w, h = shape[1] * im_scale[0], shape[0] * im_scale[1]
-            c = md[model.MD_POS]
-            return [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
+            return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
