@@ -27,7 +27,6 @@ import cairo
 from decorator import decorator
 import logging
 import math
-import numpy
 from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI, EMStream
@@ -36,7 +35,6 @@ from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img
 from odemis.gui.util.img import format_rgba_darray
-from odemis.util.img import mergeTiles
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
 import time
@@ -408,7 +406,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Reset the first image to be drawn to the default blend operator to be
         # drawn full opacity (only useful if the background is not full black)
         if images_opt:
-            images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2])
+            images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2], images_opt[0][3])
 
         return images_opt + images_std + images_spc
 
@@ -965,7 +963,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)
 
-
     # TODO: just return best scale and center? And let the caller do what it wants?
     # It would allow to decide how to redraw depending if it's on size event or more high level.
     def fit_to_content(self, recenter=False):
@@ -981,7 +978,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         bbox = [None, None, None, None]  # ltrb in m
         streams = self.microscope_view.getStreams()
         for stream in streams:
-            s_bbox = stream.getBoundingBox()
+            try:
+                s_bbox = stream.getBoundingBox()
+            except ValueError:
+                pass  # Stream has no data (yet)
             if bbox[0] is None:
                 bbox = s_bbox
             else:
