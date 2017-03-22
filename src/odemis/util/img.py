@@ -668,6 +668,7 @@ def mergeTiles(tiles):
 
     return result
 
+# TODO: rename without _
 def _getBoundingBox(content):
     """
     Compute the physical bounding-box of the given DataArray(Shadow)

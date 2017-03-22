@@ -229,7 +229,9 @@ class Plugin(object):
         """
         # TODO: have a way to disable the menu on some conditions
         # Either return MenuItem (but cannot be call_in_wx_main anymore)
+        # or pass a BooleanVA which indicate when the menu is enabled,
         # or just pass a list of tabs where the menu is enabled.
+        # TODO: allow to pass a BooleanVA instead of callable => make it a checkable menu item
         main_frame = self.main_app.main_frame
 
         # Split the entry into groups and entry name

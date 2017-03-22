@@ -588,6 +588,7 @@ class Scanner(model.Emitter):
                                                   setter=self._setPC)
         self.probeCurrent.subscribe(self._onPC)
 
+        # TODO: Use BooleanVA instead
         # 0 turns off the e-beam, 1 turns it on
         power = self.parent._device.HVGetBeam()  # Don't change state
         self.power = model.IntEnumerated(power, {0, 1}, unit="",

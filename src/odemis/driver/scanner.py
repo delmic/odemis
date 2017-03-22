@@ -86,6 +86,8 @@ class CompositedScanner(model.Emitter):
                 setattr(self, vaname, va)
 
         # VAs that could be both on internal or external. If on both, pick internal
+        # TODO: add a better way to select if both provide: either via arg, or
+        # select the one which provides a None (=auto)?
         for vaname in ("power", "blanker", "external"):
             if model.hasVA(self._internal, vaname):
                 va = getattr(self._internal, vaname)
@@ -106,6 +108,7 @@ class CompositedScanner(model.Emitter):
 
     # Share the metadata with the external, which is the one that will actually
     # generate the data (with the metadata)
+    # TODO: merge the metadata from the internal
     def updateMetadata(self, md):
         self._external.updateMetadata(md)
 

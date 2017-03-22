@@ -413,6 +413,7 @@ class MultipleDetectorStream(Stream):
             return
 
         # TODO: store all the data received, and average it (to reduce noise)
+        # or at least in case of fuzzing, store and average the N expected images
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
         if not self._acq_main_complete.is_set():
             # only use the first data per pixel

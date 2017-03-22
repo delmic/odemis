@@ -1136,6 +1136,7 @@ class Stream(object):
                 data = self.image.value
                 md = data.metadata
 
+            # TODO: check img._getBoundingBox which is similar (but uses MD_DIMS)
             shape = data.shape
             pxs = md[model.MD_PIXEL_SIZE]
             c = md[model.MD_POS]
