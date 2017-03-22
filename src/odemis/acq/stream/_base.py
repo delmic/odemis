@@ -1127,13 +1127,17 @@ class Stream(object):
         else:
             if not self.raw:
                 raise ValueError("Cannot compute bounding-box as stream has no data")
-            raw = self.raw[0]
-            md = raw.metadata
-            shape = raw.shape
-            try:
-                im_scale = md[model.MD_PIXEL_SIZE]
-                c = md[model.MD_POS]
-            except KeyError:
-                raise ValueError("Cannot compute bounding-box as stream data no spatial metadata")
-            w, h = shape[1] * im_scale[0], shape[0] * im_scale[1]
+            # Use .image if possible as the metadata is already processed but
+            # fallback to the raw, if the image is not yet available
+            if self.image.value is None:
+                data = self.raw[0]
+                md = self._find_metadata(data.metadata)
+            else:
+                data = self.image.value
+                md = data.metadata
+
+            shape = data.shape
+            pxs = md[model.MD_PIXEL_SIZE]
+            c = md[model.MD_POS]
+            w, h = shape[1] * pxs[0], shape[0] * pxs[1]
             return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)

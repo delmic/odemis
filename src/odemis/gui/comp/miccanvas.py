@@ -981,7 +981,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             try:
                 s_bbox = stream.getBoundingBox()
             except ValueError:
-                pass  # Stream has no data (yet)
+                continue  # Stream has no data (yet)
             if bbox[0] is None:
                 bbox = s_bbox
             else:
