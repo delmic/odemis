@@ -1489,12 +1489,12 @@ class AnalysisTab(Tab):
     @call_in_wx_main
     def display_new_data(self, filename, data):
         """
-        Display a new data set (removing all references to the current one)
+        Display a new data set (and removes all references to the current one)
 
-        Args:
-            filename: (str) Name of the file containing the data
-            data: ([model.DataArray]) List of data to display. Should contain at least one array
-
+        filename (str or None): Name of the file containing the data.
+          If None, just the current data will be closed.
+        data (list of DataArray(Shadow)): List of data to display.
+          Should contain at least one array
         """
         # Remove all the previous streams
         self._stream_bar_controller.clear()

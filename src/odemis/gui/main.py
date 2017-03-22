@@ -33,7 +33,6 @@ from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
-import os
 import sys
 import threading
 import traceback
@@ -42,14 +41,6 @@ from wx.lib.pubsub import pub
 
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.model as guimodel
-
-
-# Ensure that the current working directory is the same as the location of this file
-if getattr(sys, 'frozen', False):
-    path = os.path.abspath(sys.executable)
-else:
-    path = os.path.abspath(__file__)
-os.chdir(os.path.dirname(path))
 
 
 class OdemisGUIApp(wx.App):
