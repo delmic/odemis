@@ -793,6 +793,9 @@ class FileInfo(object):
             self.file_name = a_file.name
             self.file_obj = a_file # file object
 
+        # Ensure the file name contains the full path
+        self.file_name = os.path.abspath(self.file_name)
+
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
         self.metadata = metadata or {}
