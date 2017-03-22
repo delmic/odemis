@@ -200,7 +200,7 @@ class SnapshotController(object):
             for s in streams:
                 data = s.raw
                 if isinstance(data, tuple): # 2D tuple = tiles
-                    data = mergeTiles(data)
+                    data = [mergeTiles(data)]
 
                 for d in data:
                     # add the stream name to the image

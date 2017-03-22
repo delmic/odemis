@@ -32,6 +32,7 @@ from ._helper import *
 from ._live import *
 from ._static import *
 from ._sync import *
+from ._projection import *
 
 from abc import ABCMeta
 
@@ -143,7 +144,7 @@ class StreamTree(object):
         return False
 
     def add_stream(self, stream):
-        if isinstance(stream, (Stream, StreamTree)):
+        if isinstance(stream, (Stream, StreamTree, RGBSpatialProjection)):
             self.streams.append(stream)
             self.size.value = len(self.streams)
             if hasattr(stream, 'should_update'):
@@ -183,7 +184,7 @@ class StreamTree(object):
         streams = []
 
         for s in self.streams:
-            if isinstance(s, Stream) and s not in streams:
+            if isinstance(s, (Stream, RGBSpatialProjection)) and s not in streams:
                 streams.append(s)
             elif isinstance(s, StreamTree):
                 sub_streams = s.getStreams()

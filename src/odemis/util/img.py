@@ -469,7 +469,7 @@ def rescale_hq(data, shape):
 
     scale = tuple(n / o for o, n in zip(data.shape, shape))
     if len(data.shape) <= 3:
-        out = cv2.resize(data, (shape[1], shape[0]))#, 'bilinear')
+        out = cv2.resize(data, (shape[1], shape[0]))
     else:
         out = numpy.empty(shape, dtype=data.dtype)
         scipy.ndimage.interpolation.zoom(data, zoom=scale, output=out, order=1, prefilter=False)
