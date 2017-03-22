@@ -316,6 +316,7 @@ class GridAcquirer(object):
         act_tr = self.escan.translation.value
         if math.hypot(x - act_tr[0], y - act_tr[1]) > 1e-3:  # Anything below a thousand of a pixel is just float error
             logging.warning("Trans = %s instead of %s, will wait a bit" % (act_tr, (x, y)))
+            # FIXME: why could waiting help? the semcomedi driver immediately sets the value
             time.sleep(0.1)
             act_tr = self.escan.translation.value
             if math.hypot(x - act_tr[0], y - act_tr[1]) > 1e-3:  # Anything below a thousand of a pixel is just float error
@@ -542,7 +543,7 @@ class CLAcqPlugin(Plugin):
         logging.warning("No SEM survey stream found")
         return None
 
-    def _update_stepsize(self, _):
+    def _update_stepsize(self, _=None):
         """
         Update the stepsize based on X/Y repetition
         """
@@ -554,13 +555,19 @@ class CLAcqPlugin(Plugin):
         # Note: currently the semcomedi driver doesn't allow to move to the very
         # border, even if when fuzzing is disabled, so need to remove one pixel
         widths = (rngs[1][0] - rngs[0][0] - 1, rngs[1][1] - rngs[0][1] - 1)
-        stepsize = min(widths[0] / (res[0] - 1), widths[1] / (res[1] - 1))
+
+        if res == (1, 1):
+            # When there is only one pixel, step size doesn't mean anything
+            logging.info("Cannot compute pixel size when rep = 1x1")
+            return
+
+        stepsize = min(w / (r - 1) for w, r in zip(widths, res) if r > 1)
         pxs = escan.pixelSize.value
         self.stepsize.value = stepsize * pxs[0]
 
     def start(self):
         self.filename.value = self._get_new_filename()
-        self._update_stepsize(None)
+        self._update_stepsize()
 
         dlg = AcquisitionDialog(self, "CL acquisition",
                                 "Acquires a CCD image for each e-beam spot.\n")
