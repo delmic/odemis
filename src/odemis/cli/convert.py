@@ -68,6 +68,7 @@ def open_acq(fn):
         logging.exception("Failed to read the thumbnail of file '%s' as %s",
                           fn, fmt_mng.FORMAT)
         # doesn't matter that much
+        thumb = []
 
     return data, thumb
 
@@ -96,7 +97,7 @@ def open_ec(fn):
     return [da]
 
 
-def save_acq(fn, data, thumbs):
+def save_acq(fn, data, thumbs, pyramid=False):
     """
     Saves to a file the data and thumbnail
     """
@@ -107,7 +108,18 @@ def save_acq(fn, data, thumbs):
         thumb = thumbs[0]
     else:
         thumb = None
-    exporter.export(fn, data, thumb)
+
+    # Add pyramid as argument only when it's True, because the exporters which
+    # don't support pyramidal format, don't even allow pyramid=False
+    kwargs = {}
+    if pyramid:
+        if exporter.CAN_SAVE_PYRAMID:
+            kwargs["pyramid"] = True
+        else:
+            raise ValueError("Format %s doesn't support pyramidal export" %
+                             (exporter.FORMAT,))
+
+    exporter.export(fn, data, thumb, **kwargs)
 
 
 def da_sub(daa, dab):
@@ -184,7 +196,11 @@ def main(args):
             help="name of the output file. "
             "The file format is derived from the extension (%s are supported)." %
             (" and ".join(fmts)))
-
+    # TODO: automatically select pyramidal format if image > 4096px?
+    parser.add_argument("--pyramid", "-p", dest="pyramid", action='store_true',
+                        help="Export the data in pyramidal format. "
+                        "It takes about 2x more space, but allows to visualise large images. "
+                        "Currently, only the TIFF format supports this option.")
     parser.add_argument("--minus", "-m", dest="minus", action='append',
             help="name of an acquisition file whose data is subtracted from the input file.")
 
@@ -227,10 +243,10 @@ def main(args):
             logging.info("Dropping thumbnail due to subtraction")
             thumbs = []
         for fn in options.minus:
-            sdata, sthumbs = open_acq(fn)
+            sdata, _ = open_acq(fn)
             data = minus(data, sdata)
 
-    save_acq(outfn, data, thumbs)
+    save_acq(outfn, data, thumbs, options.pyramid)
 
     logging.info("Successfully generated file %s", outfn)
 
