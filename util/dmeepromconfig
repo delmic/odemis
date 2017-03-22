@@ -18,6 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 eepromconfig. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division, absolute_import, print_function
 
 import argparse
 import logging
@@ -25,32 +26,32 @@ from odemis.driver import powerctrl
 import re
 import sys
 import yaml
-import time
 
 
-def read_param(ctrl, id, filename):
+def read_param(ctrl, eid, filename):
     """
     We use this method to get a file that contains all the data written in the
     EEPROM with the given id.
-    id (str): EEPROM registration number #hex (little-endian format)
+    eid (str): EEPROM registration number #hex (little-endian format)
     filename (str): Name of YAML file
     """
     if id not in ctrl.memoryIDs.value:
         raise KeyError("There was no EEPROM with the given id found")
-    mem_yaml = ctrl.readEEPROM(id)
+    mem_yaml = ctrl.readEEPROM(eid)
     filename.write("%s" % (mem_yaml))
     filename.close()
 
-def write_param(ctrl, id, filename):
+
+def write_param(ctrl, eid, filename):
     """
     Using this method we write all the information of a YAML file to the EEPROM
     with the given ID. To this end, this method first turns the YAML to a byte
     stream that is then split and written in chunks to the EEPROM.
-    id (str): EEPROM registration number #hex (little-endian format)
+    eid (str): EEPROM registration number #hex (little-endian format)
     filename (str): Name of YAML file
     """
-    if id not in ctrl.memoryIDs.value:
-        raise KeyError("There was no EEPROM with the given id found")
+    if eid not in ctrl.memoryIDs.value:
+        raise KeyError("There was no EEPROM with the given ID found")
     # with open(filename) as data_file:
     data = yaml.load(filename)
     str = yaml.dump(data)
@@ -62,22 +63,24 @@ def write_param(ctrl, id, filename):
         addr += 8
         hex = hex[16:]
 
-def reset_mem(ctrl, id):
+
+def reset_mem(ctrl, eid):
     """
     Using this method we write all the information of a YAML file to the EEPROM
     with the given ID. To this end, this method first turns the YAML to a byte
     stream that is then split and written in chunks to the EEPROM.
-    id (str): EEPROM registration number #hex (little-endian format)
+    eid (str): EEPROM registration number #hex (little-endian format)
     filename (str): Name of YAML file
     """
-    if id not in ctrl.memoryIDs.value:
-        raise KeyError("There was no EEPROM with the given id found")
+    if eid not in ctrl.memoryIDs.value:
+        raise KeyError("There was no EEPROM with the given ID found")
     # FIXME better way to know when end of memory is reached
     addr = 0
     while addr < powerctrl.EEPROM_CAPACITY:
         # send in 8byte chunks if possible
-        ctrl.writeMemory(id, "%0.4X" % addr, "0000000000000000")
+        ctrl.writeMemory(eid, "%0.4X" % addr, "0000000000000000")
         addr += 8
+
 
 def main(args):
     """
@@ -87,7 +90,7 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(prog="eepromconfig",
+    parser = argparse.ArgumentParser(prog="dmeepromconfig",
                         description="Read/write parameters in an EEPROM")
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
@@ -99,7 +102,7 @@ def main(args):
     parser.add_argument('--write', dest="write", type=argparse.FileType('r'),
                         help="Will write all the parameters as read from the file (use - for stdin)")
 
-    parser.add_argument('--id', dest="id",
+    parser.add_argument('--id', dest="id", required=True,
                         help="EEPROM registration number")
 
     options = parser.parse_args(args[1:])
@@ -114,10 +117,10 @@ def main(args):
 
     try:
         if options.id is None:
-            raise ValueError("Need to either specify the EEPROM id")
+            raise ValueError("Need to specify the EEPROM ID")
 
         ctrl = powerctrl.PowerControlUnit("Power control unit", "config",
-                                   port="/dev/ttyPMT*")
+                                          port="/dev/ttyPMT*")
         logging.info("Connected to %s", ctrl._hwVersion)
 
         if options.reset:

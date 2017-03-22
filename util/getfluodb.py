@@ -20,6 +20,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division, absolute_import, print_function
+
 import os
 import shutil
 import urllib2
@@ -68,18 +70,17 @@ def open_json_or_remove(filename):
         return content
     except ValueError:
         logging.error("File %s seems to be an invalid JSON file, trying to fix its escape sequences...", filename)
-    
+
     # fluorophores.org sometimes returns JSON files which have "\ ". It's
     # officially invalid, but it's not hard to make sense of it.
     f.seek(0)
     text = f.read()
     fixed_text = text.replace("\\ ", " ")
-    
+
     # fluorophores.org sometimes returns JSON files which have multiple lines
     # strings, separated with \r\n. It's invalid, but easy to understand.
     # => change \r\n to " ".
     fixed_text = fixed_text.replace("\r\n", " ")
-
 
     try:
         if fixed_text == text:
@@ -90,7 +91,7 @@ def open_json_or_remove(filename):
             f.close()
             f = open(filename, "w")
             f.write(fixed_text)
-            
+
         content = json.loads(fixed_text)
         logging.error("File %s was fixed", filename)
         return content
@@ -100,18 +101,18 @@ def open_json_or_remove(filename):
         os.remove(filename)
         raise
 
-def main(*args):
+
+def main(args):
     if not os.path.exists(OUT_DIR):
         logging.error("Directory '%s' doesn't exists, stopping.", OUT_DIR)
         return 1
-    
+
     # create the sub directories
     for p in ["environment", "substance"]:
         fp = OUT_DIR + p
         if not os.path.exists(fp):
             os.mkdir(fp)
-    
-    
+
     # Download the root (environment index)
     logging.debug("Downloading the Environment index")
     download(URL_DB + "environment/index.json", OUT_DIR + "environment/index.json")
@@ -121,7 +122,7 @@ def main(*args):
     except ValueError:
         logging.error("Cannot go further")
         return 1
-        
+
     # For each environment, download it
     for eid, e in index.items():
         eurl = e["environment_url"]
@@ -134,7 +135,7 @@ def main(*args):
             open_json_or_remove(ename)
         except ValueError:
             logging.exception("Skipping %s", eurl)
-        
+
     substances = {} # id -> url
     # For each substance, download it
     for eid, e in index.items():
@@ -148,13 +149,13 @@ def main(*args):
         logging.debug("Downloading substance %d", nsid)
         sname = OUT_DIR + "substance/%d.json" % nsid
         download(surl, sname)
-        
+
         try:
             fulls = open_json_or_remove(sname)
         except ValueError:
             logging.exception("Skipping %s", surl)
             continue
-        
+
         # gif/png file too, if it is there
         strurl = fulls["structure"]
         if strurl:
@@ -165,7 +166,7 @@ def main(*args):
             try:
                 download(strurl, strname)
             except Exception:
-                 logging.exception("Failed to download structure image @ %s", strurl)
+                logging.exception("Failed to download structure image @ %s", strurl)
 
 if __name__ == '__main__':
     ret = main(sys.argv)

@@ -13,6 +13,7 @@ method,  will return true if it contains a value ending with '.png', indicating
 the content is an PNG image.
 
 """
+from __future__ import division, absolute_import, print_function
 
 import os
 import sys
@@ -28,7 +29,7 @@ if __name__ == '__main__':
             from wx.tools.XRCed.globals import set_debug
             set_debug(True)
         except ImportError:
-            print >> sys.stderr, 'Check that XRCed is installed and is in PYTHONPATH'
+            print('Check that XRCed is installed and is in PYTHONPATH', file=sys.stderr)
             raise
 
     from wx.tools import pywxrc
@@ -37,7 +38,7 @@ if __name__ == '__main__':
     xrced_path = os.getenv('XRCEDPATH')
     this_path = os.path.dirname(__file__)
     os.environ['XRCEDPATH'] = xrced_path or os.path.join(this_path, "../src/odemis/gui/xmlh")
-    print "'XRCEDPATH' is set to %s" % os.getenv('XRCEDPATH')
+    print("'XRCEDPATH' is set to %s" % os.getenv('XRCEDPATH'))
 
     # Move this to a separate launcher so it can be spread with
     # odemis

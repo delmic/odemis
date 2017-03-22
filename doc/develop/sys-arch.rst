@@ -12,7 +12,7 @@ The figure below represents a typical Odemis instance run.
 .. image:: sys-arch.*
     :width: 100 %
     :alt: Odemis architecture overview
-    
+
 The following describes the various parts of Odemis in more details.
 
 Drivers
