@@ -976,17 +976,18 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Find bounding box of all the content
         bbox = [None, None, None, None]  # ltrb in m
-        streams = self.microscope_view.getStreams()
-        for stream in streams:
-            try:
-                s_bbox = stream.getBoundingBox()
-            except ValueError:
-                continue  # Stream has no data (yet)
-            if bbox[0] is None:
-                bbox = s_bbox
-            else:
-                bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
-                        max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
+        if self.microscope_view is not None:
+            streams = self.microscope_view.getStreams()
+            for stream in streams:
+                try:
+                    s_bbox = stream.getBoundingBox()
+                except ValueError:
+                    continue  # Stream has no data (yet)
+                if bbox[0] is None:
+                    bbox = s_bbox
+                else:
+                    bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
+                            max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
 
         if bbox[0] is None:
             return  # no image => nothing to do
