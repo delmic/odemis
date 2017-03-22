@@ -894,7 +894,7 @@ def _getIFDsFromOME(pxe, offset=0):
     return imsetn, hdims
 
 # List of metadata which is allowed to merge (and possibly loose it partially)
-WHITELIST_MD_MERGE = frozenset([model.MD_DESCRIPTION, model.MD_FILTER_NAME,
+WHITELIST_MD_MERGE = frozenset([model.MD_FILTER_NAME,
                                 model.MD_HW_NAME, model.MD_HW_VERSION,
                                 model.MD_SW_VERSION, model.MD_LENS_NAME,
                                 model.MD_SENSOR_TEMP, model.MD_ACQ_DATE])
@@ -2065,7 +2065,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         Note: Officially OME supports only base arrays of 2D. But we also support
         base arrays of 3D if the data is RGB (3rd dimension has length 3).
         root (ET.Element): the root (i.e., OME) element of the XML description
-        das (list of DataArrayShadows): DataArrayShadowss at the same place as the TIFF IFDs
+        das (list of DataArrayShadows): DataArrayShadows at the same place as the TIFF IFDs
         basename (string): File name of the TIFF file
         return (list of DataArrayShadows): new shorter list of DASs positions
         """

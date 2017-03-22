@@ -1789,6 +1789,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         self._image = im
 
 
+FILENAME = u"test" + tiff.EXTENSIONS[0]
+
 # @skip("faster")
 class StaticStreamsTestCase(unittest.TestCase):
     """
@@ -1896,7 +1898,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 #     @skip("simple")
     def test_ar(self):
         """Test StaticARStream"""
-        # AR background data
+        # AR metadata
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "AR",
@@ -1968,6 +1970,52 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         self.assertFalse(im2d1 is im2dc)
 
+    def test_ar_das(self):
+        """Test StaticARStream with a DataArrayShadow"""
+        logging.info("setting up stream")
+        # AR metadata
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "AR",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_BINNING: (1, 1),  # px, px
+             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+             model.MD_POS: (1.2e-3, -30e-3),  # m
+             model.MD_EXP_TIME: 1.2,  # s
+             model.MD_AR_POLE: (253.1, 65.1),
+             model.MD_LENS_MAG: 0.4,  # ratio
+            }
+
+        # AR data
+        md0 = dict(md)
+        data0 = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md0)
+        md1 = dict(md)
+        md1[model.MD_POS] = (1.5e-3, -30e-3)
+        md1[model.MD_BASELINE] = 300  # AR background should take this into account
+        data1 = model.DataArray(3345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
+
+        tiff.export(FILENAME, [data0, data1])
+        acd = tiff.open_data(FILENAME)
+
+        ars = stream.StaticARStream("test", acd.content)
+
+        self.assertEqual(len(ars.point.choices), 3)  # 2 data + (None, None)
+
+        # wait a bit for the image to update
+        e = threading.Event()
+        def on_im(im):
+            if im is not None:
+                e.set()
+        ars.image.subscribe(on_im)
+        e.wait()
+
+        # Control AR projection
+        im2d0 = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d0.shape[2], 3)
+
     def _create_spec_data(self):
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
@@ -1989,6 +2037,24 @@ class StaticStreamsTestCase(unittest.TestCase):
              model.MD_WL_LIST: wld,
             }
         return model.DataArray(data, md)
+
+    def test_spec_das(self):
+        """Test StaticSpectrumStream with DataArrayShadow"""
+        # TODO: once it supports it, test the stream with pyramidal data
+        spec = self._create_spec_data()
+        tiff.export(FILENAME, spec)
+        acd = tiff.open_data(FILENAME)
+
+        specs = stream.StaticSpectrumStream("test", acd.content[0])
+        time.sleep(0.5)  # wait a bit for the image to update
+
+        # Control spatial spectrum
+        im2d = specs.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
+        # Check it's at the right position
+        md2d = im2d.metadata
+        self.assertEqual(md2d[model.MD_POS], spec.metadata[model.MD_POS])
 
     def test_spec_2d(self):
         """Test StaticSpectrumStream 2D"""
@@ -2149,7 +2215,6 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertTrue(numpy.any(im2d != prev_im2d))
 
     def test_tiled_stream(self):
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (2000, 1000)
         dtype = numpy.uint8
@@ -2194,7 +2259,6 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(ss.image.value[0]), 1)
 
     def test_rgb_tiled_stream(self):
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (2000, 1000, 3)
         dtype = numpy.uint8
@@ -2245,12 +2309,11 @@ class StaticStreamsTestCase(unittest.TestCase):
         def getTileMock(self, x, y, zoom):
             tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
             read_tiles.append(tile_desc)
-            return tiff.DataArrayShadowPyramidalTIFF._getTileOld(self, x, y, zoom)
+            return tiff.DataArrayShadowPyramidalTIFF._getTileOldSP(self, x, y, zoom)
 
-        tiff.DataArrayShadowPyramidalTIFF._getTileOld = tiff.DataArrayShadowPyramidalTIFF.getTile
+        tiff.DataArrayShadowPyramidalTIFF._getTileOldSP = tiff.DataArrayShadowPyramidalTIFF.getTile
         tiff.DataArrayShadowPyramidalTIFF.getTile = getTileMock
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (3000, 2000, 3)
         dtype = numpy.uint8
@@ -2268,6 +2331,12 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         acd = tiff.open_data(FILENAME)
         ss = stream.RGBStream("test", acd.content[0])
+        time.sleep(0.5)
+
+        # the maxzoom image has 2 tiles. So far 4 was read: 2 on the constructor, for
+        # _updateHistogram and _updateDRange. And 2 for _updateImage, because .rect
+        # and .mpp are initialized to the maxzoom image
+        self.assertEqual(4, len(read_tiles))
 
         full_image_rect = (POS[0] - 0.0015, POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
 
@@ -2276,7 +2345,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ss.rect.value = full_image_rect
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(27, len(read_tiles))
+        self.assertEqual(28, len(read_tiles))
         self.assertEqual(len(ss.image.value), 6)
         self.assertEqual(len(ss.image.value[0]), 4)
 
@@ -2284,7 +2353,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ss.rect.value = (POS[0] - 0.0015, POS[1] + 0.001, POS[0], POS[1] - 0.001)
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(27, len(read_tiles))
+        self.assertEqual(28, len(read_tiles))
         self.assertEqual(len(ss.image.value), 3)
         self.assertEqual(len(ss.image.value[0]), 4)
 
@@ -2292,7 +2361,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ss.rect.value = (POS[0], POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(39, len(read_tiles))
+        self.assertEqual(40, len(read_tiles))
         self.assertEqual(len(ss.image.value), 4)
         self.assertEqual(len(ss.image.value[0]), 4)
 
@@ -2300,7 +2369,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ss.rect.value = (POS[0], POS[1] + 0.00001, POS[0] + 0.00001, POS[1])
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(39, len(read_tiles))
+        self.assertEqual(40, len(read_tiles))
         self.assertEqual(len(ss.image.value), 1)
         self.assertEqual(len(ss.image.value[0]), 1)
 
@@ -2311,19 +2380,18 @@ class StaticStreamsTestCase(unittest.TestCase):
             time.sleep(0.5)
 
         # get the old function back to the class
-        tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOld
+        tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOldSP
 
     def test_rgb_tiled_stream_zoom(self):
         read_tiles = []
         def getTileMock(self, x, y, zoom):
             tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
             read_tiles.append(tile_desc)
-            return tiff.DataArrayShadowPyramidalTIFF._getTileOld(self, x, y, zoom)
+            return tiff.DataArrayShadowPyramidalTIFF._getTileOldSZ(self, x, y, zoom)
 
-        tiff.DataArrayShadowPyramidalTIFF._getTileOld = tiff.DataArrayShadowPyramidalTIFF.getTile
+        tiff.DataArrayShadowPyramidalTIFF._getTileOldSZ = tiff.DataArrayShadowPyramidalTIFF.getTile
         tiff.DataArrayShadowPyramidalTIFF.getTile = getTileMock
 
-        FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         dtype = numpy.uint8
         md = {
@@ -2498,7 +2566,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal([130, 130, 0], ss.image.value[0][0][255, 255, :])
 
         # get the old function back to the class
-        tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOld
+        tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOldSZ
 
 if __name__ == "__main__":
     unittest.main()
