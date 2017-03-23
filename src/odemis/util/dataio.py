@@ -197,7 +197,7 @@ def _split_planes(data):
 
 def open_acquisition(filename, fmt=None):
     """
-    Opens the data acording to the type of file, and returns the openend data. 
+    Opens the data according to the type of file, and returns the opened data.
     If it's a pyramidal image, do not fetch the whole data from the image. If the image
     is not pyramidal, it reads the entire image and returns it
     filename (string): Name of the file where the image is
