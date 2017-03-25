@@ -443,9 +443,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 # creates a 2D tuple with the converted tiles
                 rgba_im = tuple(new_array)
 
-                bbox = stream.getBoundingBox()
-                t, l, b, r = bbox
-                pos = ((l + r) / 2, (b + t) / 2)
+                # Calculate the shape of the image composed of the tiles
+                tiles_merged_shape = util.img.getTilesSize(rgba_im)
+                # the center of the image composed of the tiles
+                pos = util.img.getCenterOfTiles(rgba_im, tiles_merged_shape)
             else:
                 # Get converted RGBA image from cache, or create it and cache it
                 # On large images it costs 100 ms (per image and per canvas)

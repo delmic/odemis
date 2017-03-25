@@ -844,21 +844,13 @@ class BitmapCanvas(BufferedCanvas):
                     first_tile = im[0][0]
                     depth = first_tile.shape[2]
 
-                    if depth == 3:
-                        im = add_alpha_byte(im)
-                    elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                    if depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
                         raise ValueError("Unsupported colour byte size (%s)!" % depth)
 
-                    for tile_col in im:
-                        for tile in tile_col:
-                            tile.metadata['dc_center'] = tile.metadata.get(model.MD_POS, w_pos)
-                            tile.metadata['dc_scale'] = scale
-                            tile.metadata['dc_rotation'] = rotation
-                            tile.metadata['dc_shear'] = shear
-                            tile.metadata['dc_flip'] = flip
-                            tile.metadata['dc_keepalpha'] = keepalpha
-                            tile.metadata['blend_mode'] = blend_mode
-                            tile.metadata['name'] = name
+                    # Write the information of the image composed of the selected tiles
+                    # on the metadata of the first tile. It is a convention, as there's no
+                    # way to write information on the container tuple of the tiles.
+                    md = first_tile.metadata
                 else:
                     depth = im.shape[2]
 
@@ -867,14 +859,16 @@ class BitmapCanvas(BufferedCanvas):
                     elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
                         raise ValueError("Unsupported colour byte size (%s)!" % depth)
 
-                    im.metadata['dc_center'] = w_pos
-                    im.metadata['dc_scale'] = scale
-                    im.metadata['dc_rotation'] = rotation
-                    im.metadata['dc_shear'] = shear
-                    im.metadata['dc_flip'] = flip
-                    im.metadata['dc_keepalpha'] = keepalpha
-                    im.metadata['blend_mode'] = blend_mode
-                    im.metadata['name'] = name
+                    md = im.metadata
+
+                md['dc_center'] = w_pos
+                md['dc_scale'] = scale
+                md['dc_rotation'] = rotation
+                md['dc_shear'] = shear
+                md['dc_flip'] = flip
+                md['dc_keepalpha'] = keepalpha
+                md['blend_mode'] = blend_mode
+                md['name'] = name
 
                 images.append(im)
 
@@ -1021,8 +1015,10 @@ class BitmapCanvas(BufferedCanvas):
             logging.debug("Skipping draw: image fully transparent")
             return
 
+        # calculates the shape of the image composed from the tiles
+        im_shape = util.img.getTilesSize(tiles)
         # Determine the rectangle the image would occupy in the buffer
-        b_im_rect = self._calc_img_buffer_rect(first_tile.shape[:2], im_scale, p_im_center)
+        b_im_rect = self._calc_img_buffer_rect(im_shape[:2], im_scale, p_im_center)
 
         # To small to see, so no need to draw
         if b_im_rect[2] < 1 or b_im_rect[3] < 1:
