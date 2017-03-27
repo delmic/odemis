@@ -315,16 +315,13 @@ class MicroscopeViewport(ViewPort):
 
         # Gather all different image mpp values
         mpps = set()
-        for im in self._microscope_view.stream_tree.getImages():
+        for im, stream in self._microscope_view.stream_tree.getImages():
             try:
-                if isinstance(im, tuple): # im is a tuple of tuple of tiles
-                    if len(im) == 0:
-                        return
-                    first_tile = im[0][0]
-                    md = first_tile.metadata
+                if hasattr(stream, 'mpp'): # im is a tuple of tuple of tiles
+                    mpps.add(stream.mpp.min)
                 else:
                     md = im.metadata
-                mpps.add(md[model.MD_PIXEL_SIZE][0])
+                    mpps.add(md[model.MD_PIXEL_SIZE][0])
             except KeyError:
                 pass
 

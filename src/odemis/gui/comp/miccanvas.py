@@ -626,7 +626,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if block_on_zero:
             # Check for every image
-            for im in self.microscope_view.stream_tree.getImages():
+            for im, _ in self.microscope_view.stream_tree.getImages():
                 try:
                     if isinstance(im, tuple):
                         # gets the metadata of the first tile
