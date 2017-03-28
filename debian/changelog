@@ -1,3 +1,40 @@
+odemis (2.7.0-1) precise; urgency=medium
+
+  * New version: 2.7
+  * Main new features:
+    - Support for stitching image tiles into a large image
+    - Support for saving pyramidal TIFF images
+    - Support for displaying pyramidal TIFF images
+    - Overview image builds up while moving around the sample (DELPHI/SECOM)
+    - "Tile acquisition" plugin to acquire large scale images
+    - "CCD-as-a-CL-detector" plugin (SPARC)
+    - "Add image" plugin to insert an acquisition into another acquisition
+    - "Automatic alignment" plugin to add an extra EM image to a CLEM acquisition
+    - "CL time-correlator acquisition" plugin (SPARC)
+    - "AR/Spectral" plugin (SPARC)
+    - Support for probe current detector during SPARC acquisition
+    - Support of the Keithley 6485 microammeter
+  * Behaviour change:
+    - Plugins are now loaded from /usr/lib/odemis/plugins, instead of /usr/share
+  * Main improvements:
+    - Improve reliability of Phenom driver (DELPHI)
+    - Additional low-level control of Andor iXon and Newton CCDs (SPARC/SECOM)
+    - Support for manually changing the turret on Andor Shamrock (SPARC)
+    - Simplification of the mirror alignment tab (SPARC)
+    - Support for confocal fluorescence microscope (instead of CCD) with the SECOM
+    - Support for SPARCv2 mirror stage on SPARCv1 microscopes
+    - Improve reliability of the IDS USB camera (SPARC compact)
+    - The back-end detects more types of errors in the microscope file
+  * Main bugs fixed:
+    - Turn off the emission status led when no emission is active on omicron ledhub (DELPHI/SECOM)
+    - Stream could sometimes be playing in background if acquisition is cancelled early (SPARC)
+    - When a dye has no emission wavelength fitting, pick the closest one anyway (DELPHI/SECOM)
+    - When centre wavelength is at 0, show it as "0 nm" instead of "0 m" (SPARC)
+    - Allow to enter "None" on odemis-cli in addition to "null"
+    - Allow typing "µ" into number field (for unit prefix)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 16 Jan 2018 13:11:40 +0200
+
 odemis (2.6.0-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6
