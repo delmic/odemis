@@ -27,7 +27,8 @@ import math
 import numpy
 from odemis import model
 import odemis
-from odemis.acq import stream, calibration
+from odemis.acq import stream, calibration, path
+from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.util import test, conversion, img
 import os
@@ -36,7 +37,6 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-from odemis.dataio import tiff
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -1616,6 +1616,9 @@ class SettingsStreamsTestCase(unittest.TestCase):
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
 
+        mic = model.getMicroscope()
+        cls.optmngr = path.OpticalPathManager(mic)
+
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
@@ -1653,8 +1656,44 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # .image should be a 1D spectrum
         self.assertEqual(self._image.shape, (specs.detResolution.value[0],))
 
+        specs.image.unsubscribe(self._on_image)
+
         # TODO
         # change center wavelength and try again
+
+    def test_cancel_active(self):
+        """
+        Test stopping the stream before it's done preparing
+        """
+        specs = stream.SpectrumSettingsStream("test",
+              self.spec, self.spec.data, self.ebeam, opm=self.optmngr,
+              detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+        self._image = None
+        specs.image.subscribe(self._on_image)
+
+        # Make sure the optical math is not in the right place, so that it takes
+        # some time to prepare the stream
+        self.optmngr.setPath("ar").result()
+
+        specs.detExposureTime.value = 0.3  # s
+
+        # Start acquisition
+        specs.should_update.value = True
+        specs.is_active.value = True
+
+        # Wait just a tiny bit and stop => the optical path and acquisition should not continue
+        time.sleep(0.1)
+        specs.is_active.value = False
+
+        self.assertIsNone(self._image, "Spectrum received immediately")
+
+        # Make sure the optical path has time to be finished for the spectrometer
+        self.optmngr.setPath("spectral").result()
+        time.sleep(1)
+
+        self.assertIsNone(self._image, "Spectrum received after stopping the stream")
+
+        specs.image.unsubscribe(self._on_image)
 
     def test_mnchr_ss(self):
         """ Tests MonochromatorSettingsStream """
@@ -1697,6 +1736,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         # TODO: run a SpotStream and try again
         spots.is_active.value = False
+
+        mcs.image.unsubscribe(self._on_image)
 
         # TODO
         # change center wavelength and try again
@@ -1742,6 +1783,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         exp_shape = ars.detResolution.value[::-1] + (3,)
         self.assertEqual(self._image.shape, exp_shape)
 
+        ars.image.unsubscribe(self._on_image)
+
     def test_cl_ss(self):
         """ Test CLSettingsStream """
         # Create the stream
@@ -1784,6 +1827,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         new_scale = self.ebeam.scale.value[0]
         cls.is_active.value = False
         self.assertAlmostEqual(new_scale / old_scale, ratio)
+
+        cls.image.unsubscribe(self._on_image)
 
     def _on_image(self, im):
         self._image = im

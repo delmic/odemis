@@ -98,6 +98,11 @@ class LiveStream(Stream):
             self._dataflow.unsubscribe(self._onNewData)
 
     def _startAcquisition(self, future=None):
+        if not self.is_active.value or (future and future.cancelled()):
+            logging.info("Not activating %s, as it was stopped before the preparation finished",
+                         self)
+            return
+
         msg = "Subscribing to dataflow of component %s"
         logging.debug(msg, self._detector.name)
         if not self.should_update.value:
