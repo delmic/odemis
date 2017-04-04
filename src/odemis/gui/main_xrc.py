@@ -496,11 +496,13 @@ class xrcfr_plugin(wx.Dialog):
 
         # Define variables for the controls, bind event handlers
         self.pnl_desc = xrc.XRCCTRL(self, "pnl_desc")
-        self.viewport = xrc.XRCCTRL(self, "viewport")
+        self.viewport_l = xrc.XRCCTRL(self, "viewport_l")
+        self.viewport_r = xrc.XRCCTRL(self, "viewport_r")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
         self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
         self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -5422,7 +5424,17 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxBoxSizer">
           <object class="sizeritem">
-            <object class="LiveViewport" name="viewport">
+            <object class="LiveViewport" name="viewport_l">
+              <hidden>1</hidden>
+              <XRCED>
+                <assign_var>1</assign_var>
+              </XRCED>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="LiveViewport" name="viewport_r">
               <hidden>1</hidden>
               <XRCED>
                 <assign_var>1</assign_var>
@@ -5443,7 +5455,6 @@ def __init_resources():
                           <object class="sizeritem">
                             <object class="FoldPanelBar">
                               <object class="FoldPanelItem" name="fp_settings">
-                                <label>OPTICAL SETTINGS</label>
                                 <nocaption>1</nocaption>
                                 <fg>#1A1A1A</fg>
                                 <bg>#555555</bg>
@@ -5497,7 +5508,7 @@ def __init_resources():
                 <flag>wxEXPAND</flag>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel">
+                <object class="wxPanel" name="pnl_gauge">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
@@ -5555,9 +5566,13 @@ def __init_resources():
                     <orient>wxVERTICAL</orient>
                   </object>
                   <bg>#4D4D4D</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
                 <flag>wxEXPAND</flag>
               </object>
+              <orient>wxVERTICAL</orient>
               <object class="sizeritem">
                 <object class="wxPanel" name="pnl_buttons">
                   <object class="wxBoxSizer">
@@ -5571,7 +5586,6 @@ def __init_resources():
                 </object>
                 <flag>wxEXPAND</flag>
               </object>
-              <orient>wxVERTICAL</orient>
             </object>
             <flag>wxEXPAND</flag>
           </object>

@@ -333,7 +333,10 @@ class AcquisitionDialog(xrcfr_plugin):
         data_model = MicroscopyGUIData(plugin.main_app.main_data)
         self.microscope_view = MicroscopeView("Plugin View")
         data_model.focussedView = VigilantAttribute(self.microscope_view)
-        self.viewport.setView(self.microscope_view, data_model)
+        self.viewport_l.setView(self.microscope_view, data_model)
+
+        self.microscope_view_r = MicroscopeView("Plugin View2")
+        self.viewport_r.setView(self.microscope_view_r, data_model)
 
         self.streambar_controller = StreamBarController(
             data_model,
@@ -410,27 +413,35 @@ class AcquisitionDialog(xrcfr_plugin):
         self.Fit()
 
     @call_in_wx_main
-    def addStream(self, stream):
+    def addStream(self, stream, index=0):
         """
         Adds a stream to the canvas, and a stream entry to the stream panel.
         It also ensures the panel box and canvas are shown.
 
         Note: If this method is not called, the stream panel and canvas are hidden.
 
+        stream(Stream): Stream to be added
+        index(0 or 1): Index of the viewport to add the stream.
         returns (StreamController): the stream entry
 
         """
+        if index == 0:
+            viewport = self.viewport_l
+            microscope_view = self.microscope_view
+        else:
+            viewport = self.viewport_r
+            microscope_view = self.microscope_view_r
 
-        if not self.fp_streams.IsShown() or not self.viewport.IsShown():
+        if not self.fp_streams.IsShown() or not viewport.IsShown():
             self.fp_streams.Show()
-            self.viewport.Show()
+            viewport.Show()
             self.Layout()
             self.Fit()
             self.Update()
 
         if stream:
             self.streambar_controller.addStream(stream)
-            self.microscope_view.addStream(stream)
+            microscope_view.addStream(stream)
 
     @call_in_wx_main
     def showProgress(self, future):
@@ -464,6 +475,7 @@ class AcquisitionDialog(xrcfr_plugin):
                 self.gauge_progress.Pulse()
 
             if hasattr(self.current_future, 'task_canceller'):
+
                 self.btn_cancel.Enable()
             else:
                 self.btn_cancel.Disable()
