@@ -2,9 +2,9 @@
 """
 Created on 3 Jan 2014
 
-@author: kimon
+@author: Kimon Tsitsikas
 
-Copyright © 2013-2014 Éric Piel & Kimon Tsitsikas, Delmic
+Copyright © 2013-2017 Kimon Tsitsikas, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -29,6 +29,7 @@ import math
 from numpy import arange
 from numpy import fft
 
+# TODO: move and rename to something more explicit. Eg acq.align.MeasureShift (CrossCorrelation)
 
 def CalculateDrift(previous_img, current_img, precision=1):
     """
@@ -52,7 +53,7 @@ def CalculateDrift(previous_img, current_img, precision=1):
 
     previous_fft = fft.fft2(previous_img)
     current_fft = fft.fft2(current_img)
-    (m, n) = previous_fft.shape
+    m, n = previous_fft.shape
 
     if precision == 1:
         # Cross-correlation computation
@@ -87,8 +88,9 @@ def CalculateDrift(previous_img, current_img, precision=1):
         # embed Fourier data in a 2x larger array
         CC = numpy.zeros((mlarge, nlarge), dtype=numpy.complex)
         CC[m - m // 2:m + 1 + (m - 1) // 2,
-           n - n // 2:n + 1 + (n - 1) // 2] = (
-                fft.fftshift(previous_fft) * fft.fftshift(current_fft).conj())
+           n - n // 2:n + 1 + (n - 1) // 2] = (fft.fftshift(previous_fft) *
+                                               fft.fftshift(current_fft).conj()
+                                              )
 
         # Cross-correlation computation
         CC = fft.ifft2(fft.ifftshift(CC))
@@ -117,19 +119,19 @@ def CalculateDrift(previous_img, current_img, precision=1):
         else:
             col_shift = cloc
 
-        row_shift = row_shift / 2
-        col_shift = col_shift / 2
+        row_shift /= 2
+        col_shift /= 2
 
         # DFT computation
         # Initial shift estimation in upsampled grid
-        row_shift = numpy.round(row_shift * precision) / precision
-        col_shift = numpy.round(col_shift * precision) / precision
-        dft_shift = numpy.fix(numpy.ceil(precision * 1.5) / 2)  # Center of output at dft_shift+1
+        row_shift = round(row_shift * precision) / precision
+        col_shift = round(col_shift * precision) / precision
+        dft_shift = math.ceil(precision * 1.5) // 2  # Center of output at dft_shift+1
 
         # Matrix multiply DFT around the current shift estimation
         CC = (_UpsampledDFT(current_fft * previous_fft.conj(),
-                            numpy.ceil(precision * 1.5),
-                            numpy.ceil(precision * 1.5),
+                            math.ceil(precision * 1.5),
+                            math.ceil(precision * 1.5),
                             precision,
                             dft_shift - row_shift * precision,
                             dft_shift - col_shift * precision)
@@ -174,10 +176,14 @@ def _UpsampledDFT(data, nor, noc, precision=1, roff=0, coff=0):
     nr, nc = data.shape
 
     # Compute kernels and obtain DFT by matrix products
-    kernc = numpy.power(math.e, (-z * 2 * math.pi / (nc * precision)) * ((fft.ifftshift(arange(0, nc))[:, None]).transpose() \
-                                - numpy.floor(nc / 2)) * (arange(0, noc) - coff)[:, None])
+    kernc = numpy.power(math.e, (-z * 2 * math.pi / (nc * precision)) *
+                                ((fft.ifftshift(arange(0, nc))[:, None]).T - nc // 2) *
+                                (arange(0, noc) - coff)[:, None]
+                       )
 
-    kernr = numpy.power(math.e, (-z * 2 * math.pi / (nr * precision)) * (fft.ifftshift(arange(0, nr))[:, None] \
-                                - numpy.floor(nr / 2)) * ((arange(0, nor)[:, None]).transpose() - roff))
+    kernr = numpy.power(math.e, (-z * 2 * math.pi / (nr * precision)) *
+                                (fft.ifftshift(arange(0, nr))[:, None] - nr // 2) *
+                                ((arange(0, nor)[:, None]).T - roff)
+                       )
 
     return numpy.dot(numpy.dot((kernr.transpose()), data), kernc.transpose())
