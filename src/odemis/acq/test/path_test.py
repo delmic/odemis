@@ -220,6 +220,7 @@ class MonashPathTestCase(unittest.TestCase):
         """
         Test setting modes that do exist. We expect all modes to be available
         """
+        fbands = self.filter.axes["band"].choices
         # setting ar
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
@@ -234,15 +235,15 @@ class MonashPathTestCase(unittest.TestCase):
         self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["mirror-align"][1]["lens-switch"])
-        # Special assertion for filter wheel
-        self.assertEqual(self.filter.position.value, {path.SPARC_MODES["mirror-align"][1]["filter"].keys()[0] : 6})
+        # Check the filter wheel is in "pass-through"
+        self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
 
         # setting fiber-align
         self.optmngr.setPath("fiber-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["fiber-align"][1]["lens-switch"])
-        # Special assertion for filter wheel and spectrograph
-        self.assertEqual(self.filter.position.value, {path.SPARC_MODES["fiber-align"][1]["filter"].keys()[0] : 6})
+        # Check the filter wheel is in "pass-through", and the slit is opened
+        self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.specgraph.position.value['slit-in'], path.SPARC_MODES["fiber-align"][1]["spectrograph"]['slit-in'])
 
         # setting cli
@@ -410,7 +411,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         cls.sed = model.getComponent(role="se-detector")
         cls.lensmover = model.getComponent(role="lens-mover")
         cls.lenswitch = model.getComponent(role="lens-switch")
-        # cls.filter = model.getComponent(role="filter")
+        cls.filter = model.getComponent(role="filter")
         cls.slit = model.getComponent(role="slit-in-big")
         cls.focus = model.getComponent(role="focus")
         cls.spec_det_sel = model.getComponent(role="spec-det-selector")
@@ -475,6 +476,8 @@ class Sparc2PathTestCase(unittest.TestCase):
         """
         Test setting modes that do exist. We expect all modes to be available
         """
+        fbands = self.filter.axes["band"].choices
+
         # setting ar
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
@@ -517,11 +520,18 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.lenswitch, "mirror-align")
         self.assert_pos_as_in_mode(self.slit, "mirror-align")
         self.assert_pos_as_in_mode(self.specgraph, "mirror-align")
+        # Check the filter wheel is in "pass-through"
+        self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
 
         # Check the focus is remembered before going to chamber-view
         orig_focus = self.focus.position.value
+        # Move to a different filter band
+        for b in fbands.keys():
+            if b != self.filter.position.value["band"]:
+                self.filter.moveAbsSync({"band": b})
+                break
 
         # setting chamber-view
         self.optmngr.setPath("chamber-view").result()
@@ -529,6 +539,8 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
         self.assert_pos_as_in_mode(self.slit, "chamber-view")
         self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        # Check the filter wheel is in "pass-through"
+        self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         self.focus.moveRel({"z": 1e-3}).result()
@@ -627,9 +639,9 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        self.assert_pos_as_in_mode(self.lenswitch, "spectral-integrated")
+        self.assert_pos_as_in_mode(self.slit, "spectral-integrated")
+        self.assert_pos_as_in_mode(self.specgraph, "spectral-integrated")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
 
