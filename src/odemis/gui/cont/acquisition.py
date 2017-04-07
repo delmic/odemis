@@ -371,11 +371,12 @@ class SecomAcquiController(object):
         self.open_acquisition_dialog()
 
     def open_acquisition_dialog(self):
-        secom_live_tab = self._tab_data_model.main.getTabByName("secom_live")
+        main_data = self._tab_data_model.main
+        secom_live_tab = main_data.getTabByName("secom_live")
 
         # Indicate we are acquiring, especially important for the SEM which
         # need to get the external signal to not scan (cf MicroscopeController)
-        self._tab_data_model.main.is_acquiring.value = True
+        main_data.is_acquiring.value = True
 
         # save the original settings
         settingsbar_controller = secom_live_tab.settingsbar_controller
@@ -409,13 +410,14 @@ class SecomAcquiController(object):
             streambar_controller.enable(True)
             streambar_controller.resume()
 
-            self._tab_data_model.main.is_acquiring.value = False
+            main_data.is_acquiring.value = False
 
             acq_dialog.Destroy()
 
         if action == wx.ID_OPEN:
-            wx.GetApp().tab_controller.open_tab('analysis')
-            self._tab_data_model.main.tab.value.load_data(acq_dialog.last_saved_file)
+            tab = main_data.getTabByName('analysis')
+            main_data.tab.value = tab
+            tab.load_data(acq_dialog.last_saved_file)
 
 
 class SparcAcquiController(object):
