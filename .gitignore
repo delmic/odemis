@@ -23,6 +23,8 @@ var
 sdist
 develop-eggs
 .installed.cfg
+/debian/odemis/
+/debian/files
 
 # Installer logs
 pip-log.txt
@@ -32,6 +34,9 @@ pip-log.txt
 .tox
 *.lprof
 nosetests.xml
+/src/odemis/acq/align/test/hfw_shift*.tiff
+/src/odemis/acq/align/test/twin_stage*.tiff
+/src/odemis/acq/test/test*.tiff
 
 # Dev environment
 odemis.sublime-project
@@ -53,9 +58,10 @@ odemis.profile
 magic.odm.yaml
 *.idea
 
-#HTML documentation files
+# documentation files
 doc/code/_build
 doc/code/_gen
+doc/develop/_build/
 
 # This directory contains the database from fluorophores.org
 # To fill it, run ./util/getfluodb.py
