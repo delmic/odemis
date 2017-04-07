@@ -684,8 +684,8 @@ class TestRescaleHQ(unittest.TestCase):
 
     def test_simple(self):
         size = (1024, 512)
-        depth = 2 ** 12
-        img12 = numpy.zeros(size, dtype="uint16") + depth // 2
+        background = 2 ** 12
+        img12 = numpy.zeros(size, dtype="uint16") + background
         watermark = 538
         # write a square of watermark
         img12[20:40, 50:70] = watermark
@@ -695,7 +695,21 @@ class TestRescaleHQ(unittest.TestCase):
         self.assertEqual(out.shape, (512, 256))
         # test if the watermark is in the right place
         self.assertEqual(out[15, 30], watermark)
-        self.assertEqual(out[30, 60], depth // 2)
+        self.assertEqual(out[30, 60], background)
+
+    def test_smoothness(self):
+        size = (100, 100)
+        img_in = numpy.zeros(size, dtype="uint8")
+        # draw an image like a chess board
+        for i in range(0, 100):
+            for j in range(0, 100):
+                img_in[i, j] = ((i + j) % 2) * 255
+
+        # rescale
+        out = img.rescale_hq(img_in, (50, 50))
+        # if the image is smooth, all the values are the same
+        for i in range(10, 20):
+            self.assertEqual(128, out[0, i])
 
     def test_data_array_metadata(self):
         size = (1024, 512)
@@ -731,6 +745,23 @@ class TestRescaleHQ(unittest.TestCase):
         img_in = model.DataArray(img_in)
         out = img.rescale_hq(img_in, (3, 2, 2, 512, 256))
         self.assertEqual(out.shape, (3, 2, 2, 512, 256))
+
+    def test_rgb(self):
+        # C=3, T=2, Z=2, Y=1024, X=512
+        size = (512, 1024, 3)
+        background = 58
+        img_in = numpy.zeros(size, dtype="uint8") + background
+        # watermark
+        img_in[246:266, 502:522, 0] = 50
+        img_in[246:266, 502:522, 1] = 100
+        img_in[246:266, 502:522, 2] = 150
+        img_in = model.DataArray(img_in)
+        out = img.rescale_hq(img_in, (256, 512, 3))
+        self.assertEqual(out.shape, (256, 512, 3))
+        # Check watermark. Should be no interpolation between color channels
+        self.assertEqual(50, out[128, 256, 0])
+        self.assertEqual(100, out[128, 256, 1])
+        self.assertEqual(150, out[128, 256, 2])
 
 
 class TestMergeTiles(unittest.TestCase):

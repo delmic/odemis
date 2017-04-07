@@ -220,7 +220,8 @@ class StreamTree(object):
 
     def getImages(self):
         """
-        return a list of all the .image (which are not None)
+        return a list of all the .image (which are not None) and the source stream
+        return (list of (image, stream)): A list with a tuple of (image, stream)
         """
         images = []
         for s in self.streams:
@@ -230,7 +231,7 @@ class StreamTree(object):
                 if hasattr(s, "image"):
                     im = s.image.value
                     if im is not None:
-                        images.append(im)
+                        images.append((im, s))
 
         return images
 

@@ -443,9 +443,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 # creates a 2D tuple with the converted tiles
                 rgba_im = tuple(new_array)
 
-                bbox = stream.getBoundingBox()
-                t, l, b, r = bbox
-                pos = ((l + r) / 2, (b + t) / 2)
+                # Calculate the shape of the image composed of the tiles
+                tiles_merged_shape = util.img.getTilesSize(rgba_im)
+                # the center of the image composed of the tiles
+                pos = util.img.getCenterOfTiles(rgba_im, tiles_merged_shape)
             else:
                 # Get converted RGBA image from cache, or create it and cache it
                 # On large images it costs 100 ms (per image and per canvas)
@@ -625,7 +626,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if block_on_zero:
             # Check for every image
-            for im in self.microscope_view.stream_tree.getImages():
+            for im, _ in self.microscope_view.stream_tree.getImages():
                 try:
                     if isinstance(im, tuple):
                         # gets the metadata of the first tile
@@ -976,17 +977,18 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Find bounding box of all the content
         bbox = [None, None, None, None]  # ltrb in m
-        streams = self.microscope_view.getStreams()
-        for stream in streams:
-            try:
-                s_bbox = stream.getBoundingBox()
-            except ValueError:
-                continue  # Stream has no data (yet)
-            if bbox[0] is None:
-                bbox = s_bbox
-            else:
-                bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
-                        max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
+        if self.microscope_view is not None:
+            streams = self.microscope_view.getStreams()
+            for stream in streams:
+                try:
+                    s_bbox = stream.getBoundingBox()
+                except ValueError:
+                    continue  # Stream has no data (yet)
+                if bbox[0] is None:
+                    bbox = s_bbox
+                else:
+                    bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
+                            max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
 
         if bbox[0] is None:
             return  # no image => nothing to do

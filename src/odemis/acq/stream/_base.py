@@ -1053,6 +1053,8 @@ class Stream(object):
 
     def _onOutliers(self, outliers):
         if self.auto_bc.value:
+            # set projected tiles cache as invalid
+            self._projectedTilesInvalid = True
             self._shouldUpdateImage()
 
     def _setIntensityRange(self, irange):
