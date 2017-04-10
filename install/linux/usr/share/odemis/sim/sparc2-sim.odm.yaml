@@ -16,7 +16,7 @@ SPARC2: {
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
 
 "Power Control Unit": {
@@ -202,7 +202,7 @@ SPARC2: {
         },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 "Spectrograph focus": {
@@ -212,7 +212,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 
@@ -263,7 +263,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"]
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -296,7 +296,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -311,7 +311,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -326,7 +326,7 @@ SPARC2: {
             -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -341,7 +341,7 @@ SPARC2: {
             0.01: ["Spec CCD Flipper"]
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer IR", "CL Detector"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
 }
 
 "CL Filter Wheel": {

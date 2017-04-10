@@ -136,6 +136,7 @@ SPARC2_MODES = {
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'on'},
+                 'filter': {'band': 'pass-through'},
                  'spectrograph': {'grating': 'mirror'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
@@ -146,6 +147,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'on'},
                  # 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
+                 'filter': {'band': 'pass-through'},
                  'spectrograph': {'grating': 'mirror'},
                  # Note: focus is store/restore when going to/from this mode
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
@@ -156,6 +158,7 @@ SPARC2_MODES = {
             'spec-focus': ("ccd",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},
+                 'filter': {'band': 'pass-through'},
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
@@ -164,6 +167,11 @@ SPARC2_MODES = {
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': 'off'},
+                 # FIXME: the settings for "filter" will be removed if it doesn't
+                 # affect the fiber-aligner, which is very likely the case.
+                 # => need to find out the right detector used during fiber
+                 # alignment, and decide whether the filter is affecting it.
+                 'filter': {'band': 'pass-through'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
                  # current values so we can restore them
@@ -172,6 +180,7 @@ SPARC2_MODES = {
                 }),
             'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
                 {'lens-switch': {'x': 'off'},
+                 'filter': {'band': 'pass-through'},
                  # TODO: should use affects to know whether to use spectrograph or spectrograph-dedicated?
                  'spectrograph-dedicated': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
@@ -266,25 +275,24 @@ class OpticalPathManager(object):
             spec = self._getComponent("spectrometer")
         except LookupError:
             spec = None
-        if self.microscope.role == "sparc2" and spec:
+        # TODO: do this also for the sparc
+        if self.microscope.role == "sparc2":
             # Remove the moves that don't affects the detector
-            # TODO: do this for _all_ modes
-            for mode in ('spectral', 'monochromator'):
-                if mode in self._modes:
-                    det_role = self._modes[mode][0]
-                    det = self._getComponent(det_role)
-                    modeconf = self._modes[mode][1]
-                    for act_role in modeconf.keys():
-                        try:
-                            act = self._getComponent(act_role)
-                        except LookupError:
-                            # TODO: just remove that move too?
-                            logging.debug("Failed to find component %s, skipping it", act_role)
-                            continue
-                        if not self.affects(act.name, det.name):
-                            logging.debug("Actuator %s doesn't affect %s, so removing it from mode %s",
-                                          act_role, det_role, mode)
-                            del modeconf[act_role]
+            for mode in self._modes:
+                det_role = self._modes[mode][0]
+                det = self._getComponent(det_role)
+                modeconf = self._modes[mode][1]
+                for act_role in modeconf.keys():
+                    try:
+                        act = self._getComponent(act_role)
+                    except LookupError:
+                        # TODO: just remove that move too?
+                        logging.debug("Failed to find component %s, skipping it", act_role)
+                        continue
+                    if not self.affects(act.name, det.name):
+                        logging.debug("Actuator %s doesn't affect %s, so removing it from mode %s",
+                                      act_role, det_role, mode)
+                        del modeconf[act_role]
 
         # will take care of executing setPath asynchronously
         self._executor = ThreadPoolExecutor(max_workers=1)
