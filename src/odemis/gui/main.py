@@ -92,7 +92,8 @@ class OdemisGUIApp(wx.App):
         wx.App.__init__(self, redirect=True)
 
         if file_name:
-            tab = self.tab_controller.open_tab('analysis')
+            tab = self.main_data.getTabByName('analysis')
+            self.main_data.tab.value = tab
             wx.CallLater(500, tab.load_data, file_name)
 
     def OnInit(self):

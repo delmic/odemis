@@ -3467,16 +3467,6 @@ class TabBarController(object):
     def get_tabs(self):
         return self._tabs.choices
 
-    def open_tab(self, tab_name):
-        for tab in self._tabs.choices:
-            if tab.name == tab_name:
-                self._tabs.value = tab
-                return tab
-        else:
-            logging.warn("Could not open tab '%s", tab_name)
-
-        return None
-
     @call_in_wx_main
     def on_acquisition(self, is_acquiring):
         if is_acquiring:
