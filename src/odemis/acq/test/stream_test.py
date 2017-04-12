@@ -1871,13 +1871,14 @@ class StaticStreamsTestCase(unittest.TestCase):
         da[15] = 2 ** 10
 
         fls = stream.StaticFluoStream(md[model.MD_DESCRIPTION], da)
+        pj = stream.RGBSpatialProjection(fls)
 
         self.assertEqual(fls.excitation.value, md[model.MD_IN_WL])
         self.assertEqual(fls.emission.value, md[model.MD_OUT_WL])
         self.assertEqual(tuple(fls.tint.value), md[model.MD_USER_TINT])
 
         time.sleep(0.5)  # wait a bit for the image to update
-        im = fls.image.value
+        im = pj.image.value
         self.assertEqual(im.shape, (512, 1024, 3))
         numpy.testing.assert_equal(im[0, 0], [0, 0, 0])
         numpy.testing.assert_equal(im[12, 1], md[model.MD_USER_TINT])
@@ -1902,10 +1903,11 @@ class StaticStreamsTestCase(unittest.TestCase):
         da = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
 
         cls = stream.StaticCLStream("test", da)
+        pj = stream.RGBSpatialProjection(cls)
         time.sleep(0.5)  # wait a bit for the image to update
 
         self.assertEqual(cls.emission.value, md[model.MD_OUT_WL])
-        self.assertEqual(cls.image.value.shape, (512, 1024, 3))
+        self.assertEqual(pj.image.value.shape, (512, 1024, 3))
 
     def test_small_hist(self):
         """Test small histogram computation"""
@@ -2276,32 +2278,33 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         acd = tiff.open_data(FILENAME)
         ss = stream.StaticSEMStream("test", acd.content[0])
+        pj = stream.RGBSpatialProjection(ss)
 
         # out of bounds
         with self.assertRaises(IndexError):
-            ss.mpp.value = 1.0
-        ss.mpp.value = 2e-6 # second zoom level
+            pj.mpp.value = 1.0
+        pj.mpp.value = 2e-6 # second zoom level
 
         # out of bounds
         with self.assertRaises(IndexError):
-            ss.rect.value = (0.0, 0.0, 10e10, 10e10)
+            pj.rect.value = (0.0, 0.0, 10e10, 10e10)
         # full image
-        ss.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0] + 0.001, POS[1] - 0.0005)
+        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0] + 0.001, POS[1] - 0.0005)
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(len(ss.image.value), 4)
-        self.assertEqual(len(ss.image.value[0]), 2)
+        self.assertEqual(len(pj.image.value), 4)
+        self.assertEqual(len(pj.image.value[0]), 2)
         # the corner tile should be smaller
-        self.assertEqual(ss.image.value[3][1].shape, (244, 232, 3))
+        self.assertEqual(pj.image.value[3][1].shape, (244, 232, 3))
 
         # half image
-        ss.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0], POS[1])
+        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0], POS[1])
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(len(ss.image.value), 2)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 2)
+        self.assertEqual(len(pj.image.value[0]), 1)
 
     def test_rgb_tiled_stream(self):
         POS = (5.0, 7.0)
@@ -2321,33 +2324,34 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         acd = tiff.open_data(FILENAME)
         ss = stream.RGBStream("test", acd.content[0])
+        pj = stream.RGBSpatialProjection(ss)
 
         # out of bounds
         with self.assertRaises(IndexError):
-            ss.mpp.value = 1.0
-        ss.mpp.value = 2e-6 # second zoom level
+            pj.mpp.value = 1.0
+        pj.mpp.value = 2e-6 # second zoom level
 
         # out of bounds
         with self.assertRaises(IndexError):
-            ss.rect.value = (0.0, 0.0, 10e10, 10e10)
+            pj.rect.value = (0.0, 0.0, 10e10, 10e10)
 
         # full image
-        ss.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0] + 0.001, POS[1] - 0.0005)
+        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0] + 0.001, POS[1] - 0.0005)
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(len(ss.image.value), 4)
-        self.assertEqual(len(ss.image.value[0]), 2)
+        self.assertEqual(len(pj.image.value), 4)
+        self.assertEqual(len(pj.image.value[0]), 2)
         # the corner tile should be smaller
-        self.assertEqual(ss.image.value[3][1].shape, (244, 232, 3))
+        self.assertEqual(pj.image.value[3][1].shape, (244, 232, 3))
 
         # half image
-        ss.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0], POS[1])
+        pj.rect.value = (POS[0] - 0.001, POS[1] + 0.0005, POS[0], POS[1])
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
-        self.assertEqual(len(ss.image.value), 2)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 2)
+        self.assertEqual(len(pj.image.value[0]), 1)
 
     def test_rgb_tiled_stream_pan(self):
         read_tiles = []
@@ -2376,6 +2380,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         acd = tiff.open_data(FILENAME)
         ss = stream.RGBStream("test", acd.content[0])
+        pj = stream.RGBSpatialProjection(ss)
         time.sleep(0.5)
 
         # the maxzoom image has 2 tiles. So far 4 was read: 2 on the constructor, for
@@ -2385,42 +2390,43 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         full_image_rect = (POS[0] - 0.0015, POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
 
-        ss.mpp.value = 2e-6 # second zoom level
+        pj.mpp.value = 2e-6 # second zoom level
         # full image
-        ss.rect.value = full_image_rect
+        pj.rect.value = full_image_rect
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(28, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 6)
-        self.assertEqual(len(ss.image.value[0]), 4)
+        self.assertEqual(len(pj.image.value), 6)
+        self.assertEqual(len(pj.image.value[0]), 4)
 
         # half image (left side), all tiles are cached
-        ss.rect.value = (POS[0] - 0.0015, POS[1] + 0.001, POS[0], POS[1] - 0.001)
+        pj.rect.value = (POS[0] - 0.0015, POS[1] + 0.001, POS[0], POS[1] - 0.001)
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(28, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 3)
-        self.assertEqual(len(ss.image.value[0]), 4)
+        self.assertEqual(len(pj.image.value), 3)
+        self.assertEqual(len(pj.image.value[0]), 4)
 
         # half image (right side), only the center tiles will are cached
-        ss.rect.value = (POS[0], POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
+        pj.rect.value = (POS[0], POS[1] + 0.001, POS[0] + 0.0015, POS[1] - 0.001)
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(40, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 4)
-        self.assertEqual(len(ss.image.value[0]), 4)
+        self.assertEqual(len(pj.image.value), 4)
+        self.assertEqual(len(pj.image.value[0]), 4)
 
         # really small rect on the center, the tile is in the cache
-        ss.rect.value = (POS[0], POS[1] + 0.00001, POS[0] + 0.00001, POS[1])
+        pj.rect.value = (POS[0], POS[1] + 0.00001, POS[0] + 0.00001, POS[1])
+        
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(40, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 1)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 1)
+        self.assertEqual(len(pj.image.value[0]), 1)
 
         # rect out of the image
         with self.assertRaises(IndexError): # "rect out of bounds"
-            ss.rect.value = (POS[0] - 15, POS[1] + 15, POS[0] + 16, POS[1] - 16)
+            pj.rect.value = (POS[0] - 15, POS[1] + 15, POS[0] + 16, POS[1] - 16)
             # Wait a little bit to make sure the image has been generated
             time.sleep(0.5)
 
@@ -2452,9 +2458,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         line = numpy.linspace(0, 255, num_cols, dtype=dtype)
         column = numpy.linspace(0, 255, num_rows, dtype=dtype)
 
-        # each line has values from 0 to 255, linearly distributed
-        arr[:, :, 0] = numpy.tile(line, (num_rows, 1))
         # each row has values from 0 to 255, linearly distributed
+        arr[:, :, 0] = numpy.tile(line, (num_rows, 1))
+        # each column has values from 0 to 255, linearly distributed
         arr[:, :, 1] = numpy.tile(column, (num_cols, 1)).transpose()
 
         data = model.DataArray(arr, metadata=md)
@@ -2464,6 +2470,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         acd = tiff.open_data(FILENAME)
         ss = stream.RGBStream("test", acd.content[0])
+        pj = stream.RGBSpatialProjection(ss)
         time.sleep(0.5)
 
         # the maxzoom image has 2 tiles. So far 4 was read: 2 on the constructor, for
@@ -2477,58 +2484,58 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # change both .rect and .mpp at the same time, to the same values
         # that are set on Stream constructor
-        ss.rect.value = full_image_rect # full image
-        ss.mpp.value = ss.mpp.range[1]  # maximum zoom level
+        pj.rect.value = full_image_rect # full image
+        pj.mpp.value = pj.mpp.range[1]  # maximum zoom level
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.2)
         # no tiles are read from the disk
         self.assertEqual(4, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 2)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 2)
+        self.assertEqual(len(pj.image.value[0]), 1)
         # top-left pixel of the left tile
-        numpy.testing.assert_array_equal([0, 0, 0], ss.image.value[0][0][0, 0, :])
+        numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
         # top-right pixel of the left tile
-        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
+        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[0][0][0, 255, :])
         # bottom-left pixel of the left tile
-        numpy.testing.assert_array_equal([0, 255, 0], ss.image.value[0][0][249, 0, :])
+        numpy.testing.assert_array_equal([0, 254, 0], pj.image.value[0][0][249, 0, :])
         # bottom-right pixel of the right tile
-        numpy.testing.assert_array_equal([254, 255, 0], ss.image.value[1][0][249, 117, :])
+        numpy.testing.assert_array_equal([254, 254, 0], pj.image.value[1][0][249, 117, :])
 
         # really small rect on the center, the tile is in the cache
-        ss.rect.value = (POS[0], POS[1], POS[0] + 0.00001, POS[1] + 0.00001)
+        pj.rect.value = (POS[0], POS[1], POS[0] + 0.00001, POS[1] + 0.00001)
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         # no tiles are read from the disk
         self.assertEqual(4, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 1)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 1)
+        self.assertEqual(len(pj.image.value[0]), 1)
         # top-left pixel of the only tile
-        numpy.testing.assert_array_equal([0, 0, 0], ss.image.value[0][0][0, 0, :])
+        numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
         # top-right pixel of the only tile
-        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
+        numpy.testing.assert_array_equal([173, 0, 0],pj.image.value[0][0][0, 255, :])
         # bottom-left pixel of the only tile
-        numpy.testing.assert_array_equal([0, 255, 0], ss.image.value[0][0][249, 0, :])
+        numpy.testing.assert_array_equal([0, 254, 0], pj.image.value[0][0][249, 0, :])
 
         # Now, just the tiny rect again, but at the minimum mpp (= fully zoomed in)
         # => should just need one new tile
-        ss.mpp.value = ss.mpp.range[0]
+        pj.mpp.value = pj.mpp.range[0]
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         # only one tile is read
         self.assertEqual(5, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 1)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 1)
+        self.assertEqual(len(pj.image.value[0]), 1)
         # top-left pixel of the only tile
-        numpy.testing.assert_array_equal([108, 97, 0], ss.image.value[0][0][0, 0, :])
+        numpy.testing.assert_array_equal([108, 97, 0], pj.image.value[0][0][0, 0, :])
         # top-right pixel of the only tile
-        numpy.testing.assert_array_equal([130, 97, 0], ss.image.value[0][0][0, 255, :])
+        numpy.testing.assert_array_equal([130, 97, 0], pj.image.value[0][0][0, 255, :])
         # bottom-left pixel of the only tile
-        numpy.testing.assert_array_equal([108, 130, 0], ss.image.value[0][0][255, 0, :])
+        numpy.testing.assert_array_equal([108, 130, 0], pj.image.value[0][0][255, 0, :])
         # bottom-right pixel of the only tile
-        numpy.testing.assert_array_equal([130, 130, 0], ss.image.value[0][0][255, 255, :])
+        numpy.testing.assert_array_equal([130, 130, 0], pj.image.value[0][0][255, 255, :])
 
         # changing .rect and .mpp simultaneously
         # Note: the recommended way is to first change mpp and then rect, as it
@@ -2536,9 +2543,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         # However, we do the opposite here, to check it doesn't go too wrong
         # (ie, first load the entire image at min mpp, and then load again at
         # max mpp). It should at worse have loaded one tile at the min mpp.
-        ss.rect.value = full_image_rect # full image
+        pj.rect.value = full_image_rect # full image
         # time.sleep(0.0001) # uncomment to test with slight delay between VA changes
-        ss.mpp.value = ss.mpp.range[1]  # maximum zoom level
+        pj.mpp.value = pj.mpp.range[1]  # maximum zoom level
 
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
@@ -2550,15 +2557,15 @@ class StaticStreamsTestCase(unittest.TestCase):
                             "gone very fast.")
         else:
             self.assertEqual(7, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 2)
-        self.assertEqual(len(ss.image.value[0]), 1)
+        self.assertEqual(len(pj.image.value), 2)
+        self.assertEqual(len(pj.image.value[0]), 1)
 
         # top-left pixel of the left tile
-        numpy.testing.assert_array_equal([0, 0, 0], ss.image.value[0][0][0, 0, :])
+        numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
         # bottom-right pixel of the left tile
-        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[0][0][0, 255, :])
+        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[0][0][0, 255, :])
         # bottom-right pixel of right right
-        numpy.testing.assert_array_equal([254, 255, 0], ss.image.value[1][0][249, 117, :])
+        numpy.testing.assert_array_equal([254, 254, 0], pj.image.value[1][0][249, 117, :])
 
         read_tiles = []  # reset, to keep the numbers simple
 
@@ -2567,48 +2574,48 @@ class StaticStreamsTestCase(unittest.TestCase):
         rect = (POS[0] + delta[0], POS[1] + delta[1],
                 POS[0] + delta[2], POS[1] + delta[3])
         # changes .rect and .mpp simultaneously, simulating a GUI zoom
-        ss.rect.value = rect
+        pj.rect.value = rect
         # zoom 2
-        ss.mpp.value = 4e-6
+        pj.mpp.value = 4e-6
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.3)
 
         # reads 6 tiles from the disk, no tile is cached because the zoom changed
         self.assertEqual(6, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 3)
-        self.assertEqual(len(ss.image.value[0]), 2)
+        self.assertEqual(len(pj.image.value), 3)
+        self.assertEqual(len(pj.image.value[0]), 2)
         # top-left pixel of a center tile
-        numpy.testing.assert_array_equal([87, 0, 0], ss.image.value[1][0][0, 0, :])
+        numpy.testing.assert_array_equal([87, 0, 0], pj.image.value[1][0][0, 0, :])
         # top-right pixel of a center tile
-        numpy.testing.assert_array_equal([173, 0, 0], ss.image.value[1][0][0, 255, :])
+        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[1][0][0, 255, :])
         # bottom-left pixel of a center tile
-        numpy.testing.assert_array_equal([87, 130, 0], ss.image.value[1][0][255, 0, :])
+        numpy.testing.assert_array_equal([87, 130, 0], pj.image.value[1][0][255, 0, :])
         # bottom pixel of a center tile
-        numpy.testing.assert_array_equal([173, 130, 0], ss.image.value[1][0][255, 255, :])
+        numpy.testing.assert_array_equal([173, 130, 0], pj.image.value[1][0][255, 255, :])
 
         delta = [d / 8 for d in dfr]
         # this rect is 1/8 the size of the full image, in the center of the image
         rect = (POS[0] + delta[0], POS[1] + delta[1],
                 POS[0] + delta[2], POS[1] + delta[3])
         # changes .rect and .mpp simultaneously, simulating a GUI zoom
-        ss.rect.value = rect
+        pj.rect.value = rect
         # zoom 0
-        ss.mpp.value = ss.mpp.range[0]
+        pj.mpp.value = pj.mpp.range[0]
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
 
         # reads 4 tiles from the disk, no tile is cached becase the zoom changed
         self.assertEqual(10, len(read_tiles))
-        self.assertEqual(len(ss.image.value), 2)
-        self.assertEqual(len(ss.image.value[0]), 2)
+        self.assertEqual(len(pj.image.value), 2)
+        self.assertEqual(len(pj.image.value[0]), 2)
         # top-left pixel of the top-left tile
-        numpy.testing.assert_array_equal([108, 97, 0], ss.image.value[0][0][0, 0, :])
+        numpy.testing.assert_array_equal([108, 97, 0], pj.image.value[0][0][0, 0, :])
         # top-right pixel of top-left tile
-        numpy.testing.assert_array_equal([130, 97, 0], ss.image.value[0][0][0, 255, :])
+        numpy.testing.assert_array_equal([130, 97, 0], pj.image.value[0][0][0, 255, :])
         # bottom-left pixel of top-left tile
-        numpy.testing.assert_array_equal([108, 130, 0], ss.image.value[0][0][255, 0, :])
+        numpy.testing.assert_array_equal([108, 130, 0], pj.image.value[0][0][255, 0, :])
         # bottom pixel of top-left tile
-        numpy.testing.assert_array_equal([130, 130, 0], ss.image.value[0][0][255, 255, :])
+        numpy.testing.assert_array_equal([130, 130, 0], pj.image.value[0][0][255, 255, :])
 
         # get the old function back to the class
         tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOldSZ

@@ -35,6 +35,7 @@ import re
 import sys
 import time
 import uuid
+import threading
 from odemis.model import DataArrayShadow, AcquisitionData
 
 import libtiff.libtiff_ctypes as T  # for the constant names
@@ -1803,10 +1804,13 @@ class DataArrayShadowTIFF(DataArrayShadow):
             the image should be read. It has 2 values:
             'tiff_file' (handle): Handle of the tiff file
             'dir_index' (int): Index of the directory
+            'lock' (threading.Lock): The lock that controls the access to the TIFF file
         return (numpy.array): The image
         """
-        tiff_info['handle'].SetDirectory(tiff_info['dir_index'])
-        return tiff_info['handle'].read_image()
+        with tiff_info['lock']:
+            tiff_info['handle'].SetDirectory(tiff_info['dir_index'])
+            image = tiff_info['handle'].read_image()
+        return image
 
     def _readAndMergeImages(self):
         """
@@ -1840,6 +1844,7 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
             The dictionary (or each dictionary in the list) has 2 values:
             'tiff_file' (handle): Handle of the tiff file
             'dir_index' (int): Index of the directory
+            'lock' (threading.Lock): The lock that controls the access to the TIFF file
         shape (tuple of int): The shape of the corresponding DataArray
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
@@ -1863,6 +1868,7 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
             maxzoom = 0
 
         tile_shape = (num_tcols, num_trows)
+
         DataArrayShadow.__init__(self, shape, dtype, metadata, maxzoom, tile_shape)
     
     def getTile(self, x, y, zoom):
@@ -1881,36 +1887,38 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
         if type(tiff_info) is list:
             raise NotImplemented("Not implemented when DataArray has multiple pixelData")
 
-        tiff_file = tiff_info['handle']
-        tiff_file.SetDirectory(tiff_info['dir_index'])
+        with tiff_info['lock']:
+            tiff_file = tiff_info['handle']
+            tiff_file.SetDirectory(tiff_info['dir_index'])
 
-        if zoom != 0:
-            # get an array of offsets, one for each subimage
-            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
-            if not sub_ifds:
-                raise ValueError("Image does not have zoom levels")
+            if zoom != 0:
+                # get an array of offsets, one for each subimage
+                sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+                if not sub_ifds:
+                    raise ValueError("Image does not have zoom levels")
 
-            if not (0 <= zoom <= len(sub_ifds)):
-                raise ValueError("Invalid Z value %d" % (zoom,))
+                if not (0 <= zoom <= len(sub_ifds)):
+                    raise ValueError("Invalid Z value %d" % (zoom,))
 
-            # set the offset of the subimage. Z=0 is the main image
-            tiff_file.SetSubDirectory(sub_ifds[zoom - 1])
+                # set the offset of the subimage. Z=0 is the main image
+                tiff_file.SetSubDirectory(sub_ifds[zoom - 1])
 
-        if not hasattr(self, 'tile_shape'):
-            raise RuntimeError("the image is not tiled")
+            if not hasattr(self, 'tile_shape'):
+                raise RuntimeError("the image is not tiled")
 
-        orig_pixel_size = self.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
+            orig_pixel_size = self.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
 
-        # calculate the pixel size of the tile for the zoom level
-        tile_pixel_size = tuple(ps * 2 ** zoom for ps in orig_pixel_size)
+            # calculate the pixel size of the tile for the zoom level
+            tile_pixel_size = tuple(ps * 2 ** zoom for ps in orig_pixel_size)
 
-        xp = x * self.tile_shape[0]
-        yp = y * self.tile_shape[1]
-        tile = tiff_file.read_one_tile(xp, yp)
-        tile = model.DataArray(tile, self.metadata.copy())
-        tile.metadata[model.MD_PIXEL_SIZE] = tile_pixel_size
-        # calculate the center of the tile
-        tile.metadata[model.MD_POS] = get_tile_md_pos((x, y), self.tile_shape, tile, self)
+            xp = x * self.tile_shape[0]
+            yp = y * self.tile_shape[1]
+            tile = tiff_file.read_one_tile(xp, yp)
+            tile = model.DataArray(tile, self.metadata.copy())
+            tile.metadata[model.MD_PIXEL_SIZE] = tile_pixel_size
+            # calculate the center of the tile
+            tile.metadata[model.MD_POS] = get_tile_md_pos((x, y), self.tile_shape, tile, self)
+
         return tile
 
 
@@ -1927,9 +1935,14 @@ class AcquisitionDataTIFF(AcquisitionData):
 
         data = []
         thumbnails = []
+        
+        # creates a lock to avoid race conditions when acessing the TIFF file
+        self._lock = threading.Lock()
 
+        # iterates all the directories of the TIFF file
         for dir_index in AcquisitionDataTIFF._iterDirectories(tiff_file):
-            AcquisitionDataTIFF._createDataArrayShadows(tiff_file, dir_index, data, thumbnails)
+            AcquisitionDataTIFF._createDataArrayShadows(tiff_file, dir_index, 
+                    self._lock, data, thumbnails)
 
         # If looks like OME TIFF, reconstruct >2D data and add metadata
         # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
@@ -1972,7 +1985,8 @@ class AcquisitionDataTIFF(AcquisitionData):
                         continue
 
                     for dir_index in AcquisitionDataTIFF._iterDirectories(f_link):
-                        AcquisitionDataTIFF._createDataArrayShadows(f_link, dir_index, data, thumbnails)
+                        AcquisitionDataTIFF._createDataArrayShadows(f_link, dir_index, 
+                                self._lock, data, thumbnails)
 
                     file_read.add(uuid_data)
 
@@ -1992,12 +2006,13 @@ class AcquisitionDataTIFF(AcquisitionData):
         AcquisitionData.__init__(self, tuple(content), tuple(thumbnails))
 
     @staticmethod
-    def _createDataArrayShadows(tfile, dir_index, data_array_shadows, thumbnails):
+    def _createDataArrayShadows(tfile, dir_index, lock, data_array_shadows, thumbnails):
         """
         Create the DataArrayShadows from the TIFF metadata for the current directory,
         and add them to the data_array_shadows and thumbnails lists
         tfile (tiff handle): Handle for the TIFF file
         dir_index (int): Index of the directory in the TIFF file
+        lock (threading.Lock): The lock that controls the access to the TIFF file
         data_array_shadows: (list of DataArrayShadows): List of DataArrayShadows representing
             the images of the current TIFF file that are not thumbnails
         thumbnails: (list of DataArrayShadows): List of DataArrayShadows of the current TIFF file
@@ -2018,14 +2033,15 @@ class AcquisitionDataTIFF(AcquisitionData):
         shape = (height, width)
         if samples_pp > 1:
             shape = shape + (samples_pp,)
-
+        
         # add handle and directory information to be used when the actual
         # pixels of the image are read
         # This information is temporary. It is not needed outside the AcquisitionDataTIFF class,
         # and it is not a part of DataArrayShadow class
         # It can also be a a list of tiff_info,
         # in case the DataArray has multiple pixelData (eg, when data has more than 2D).
-        tiff_info = {'handle': tfile, 'dir_index': dir_index}
+        # Add also the lock of the TIFF file
+        tiff_info = {'handle': tfile, 'dir_index': dir_index, 'lock': lock}
         das = DataArrayShadowTIFF(tiff_info, shape, typ, md)
 
         if _isThumbnail(tfile):

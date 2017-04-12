@@ -48,47 +48,7 @@ class StaticStream(Stream):
         Note: parameters are different from the base class.
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
-        if isinstance(raw, model.DataArray):
-            raw = [raw]
-        elif isinstance(raw, list):
-            if len(raw) > 0 and not isinstance(raw[0], model.DataArray):
-                raise ValueError("'raw' must be a list of DataArray")
-        elif isinstance(raw, model.DataArrayShadow):
-            if hasattr(raw, 'maxzoom'):
-                md = raw.metadata
-                # get the pixel size of the full image
-                ps = md[model.MD_PIXEL_SIZE]
-                max_mpp = ps[0] * (2 ** raw.maxzoom)
-                # sets the mpp as the X axis of the pixel size of the full image
-                mpp_rng = (ps[0], max_mpp)
-                self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
-                self.mpp.subscribe(self._on_mpp)
-
-                full_rect = img._getBoundingBox(raw)
-                l, t, r, b = full_rect
-                rect_range = ((l, b, l, b), (r, t, r, t))
-                self.rect = model.TupleContinuous(full_rect, rect_range)
-                self.rect.subscribe(self._on_rect)
-            else:
-                # If raw does not have maxzoom,
-                # StaticStream should behave as when raw is a DataArray
-                raw = [raw.getData()]
-        else:
-            raise ValueError("'raw' must be a list of DataArray or a DataArrayShadow")
-
         super(StaticStream, self).__init__(name, None, None, None, raw=raw)
-
-    def _set_mpp(self, mpp):
-        ps0 = self.mpp.range[0]
-        exp = math.log(mpp / ps0, 2)
-        exp = round(exp)
-        return ps0 * 2 ** exp
-
-    def _on_mpp(self, mpp):
-        self._shouldUpdateImage()
-
-    def _on_rect(self, mpp):
-        self._shouldUpdateImage()
 
 
 class RGBStream(StaticStream):
@@ -102,11 +62,11 @@ class RGBStream(StaticStream):
         """
         # Check it's RGB
         if isinstance(raw, (model.DataArray, model.DataArrayShadow)):
-            r = [raw]
+            raw = [raw]
         else:
-            r = raw
+            raw = raw
 
-        for d in r:
+        for d in raw:
             dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
             ci = dims.find("C")  # -1 if not found
             if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
@@ -114,14 +74,16 @@ class RGBStream(StaticStream):
 
         super(RGBStream, self).__init__(name, raw)
 
-    def _projectTile(self, tile):
-        # Just pass the RGB data on
-        tile = img.ensureYXC(tile)
-        tile.flags.writeable = False
-        # merge and ensures all the needed metadata is there
-        tile.metadata = self._find_metadata(tile.metadata)
-        tile.metadata[model.MD_DIMS] = "YXC" # RGB format
-        return tile
+    def _init_projection_vas(self):
+        ''' On RGBStream, the projection is done on RGBSpatialProjection
+        '''
+        pass
+
+    def _init_thread(self):
+        ''' The thread for updating the image on RGBStream resides on DataProjection
+            TODO remove this function when all the streams become projectionless
+        '''
+        pass
 
 
 class Static2DStream(StaticStream):
@@ -134,17 +96,18 @@ class Static2DStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray or DataArrayShadow): The data to display.
         """
-        # Check it's 2D
-        if isinstance(raw, (model.DataArray, model.DataArrayShadow)):
-            r = [raw]
-        else:
-            r = raw
+        super(Static2DStream, self).__init__(name, [raw])
 
-        for d in r:
-            if len(d.shape) < 2:
-                raise ValueError("Data must be 2D")
+    def _init_projection_vas(self):
+        ''' On Static2DStream, the projection is done on RGBSpatialProjection
+        '''
+        pass
 
-        super(Static2DStream, self).__init__(name, raw)
+    def _init_thread(self):
+        ''' The thread for updating the image on Static2DStream resides on DataProjection
+            TODO remove this function when all the streams become projectionless
+        '''
+        pass
 
 
 class StaticSEMStream(Static2DStream):

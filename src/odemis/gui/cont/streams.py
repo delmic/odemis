@@ -1301,7 +1301,7 @@ class StreamBarController(object):
         self._prev_view = view
 
     def _on_visible_streams(self, flat):
-        visible_streams = flat
+        visible_streams = [s if isinstance(s, acqstream.Stream) else s.stream for s in flat]
 
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
