@@ -144,7 +144,7 @@ class StreamTree(object):
         return False
 
     def add_stream(self, stream):
-        if isinstance(stream, (Stream, StreamTree, RGBSpatialProjection)):
+        if isinstance(stream, (Stream, StreamTree, DataProjection)):
             self.streams.append(stream)
             self.size.value = len(self.streams)
             if hasattr(stream, 'should_update'):
@@ -184,7 +184,7 @@ class StreamTree(object):
         streams = []
 
         for s in self.streams:
-            if isinstance(s, (Stream, RGBSpatialProjection)) and s not in streams:
+            if isinstance(s, (Stream, DataProjection)) and s not in streams:
                 streams.append(s)
             elif isinstance(s, StreamTree):
                 sub_streams = s.getStreams()
@@ -228,7 +228,7 @@ class StreamTree(object):
         for s in self.streams:
             if isinstance(s, StreamTree):
                 images.extend(s.getImages())
-            elif isinstance(s, Stream):
+            elif isinstance(s, (Stream, DataProjection)):
                 if hasattr(s, "image"):
                     im = s.image.value
                     if im is not None:
