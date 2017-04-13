@@ -271,7 +271,7 @@ class PH300(model.Detector):
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
-        self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-9, SYNCOFFSMAX * 1e-9),
+        self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-12, SYNCOFFSMAX * 1e-12),
                                                 unit="s", setter=self._setSyncOffset)
 
         # Make sure the device is synchronised and metadata is updated
@@ -408,6 +408,8 @@ class PH300(model.Detector):
 
     def SetSyncOffset(self, offset):
         """
+        This function can replace an adjustable cable delay.
+        A positive offset corresponds to inserting a cable in the sync input.
         Note that this offset must not be confused with the histogram acquisition offset.
         offset (int): offset in ps
         """
