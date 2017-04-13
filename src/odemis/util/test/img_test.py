@@ -693,6 +693,7 @@ class TestRescaleHQ(unittest.TestCase):
         # rescale
         out = img.rescale_hq(img12, (512, 256))
         self.assertEqual(out.shape, (512, 256))
+        self.assertEqual(out.dtype, img12.dtype)
         # test if the watermark is in the right place
         self.assertEqual(out[15, 30], watermark)
         self.assertEqual(out[30, 60], background)
@@ -747,7 +748,10 @@ class TestRescaleHQ(unittest.TestCase):
         self.assertEqual(out.shape, (3, 2, 2, 512, 256))
 
     def test_rgb(self):
-        # C=3, T=2, Z=2, Y=1024, X=512
+        """
+        Test downscaling an RGB in YXC format
+        """
+        # X=1024, Y=512
         size = (512, 1024, 3)
         background = 58
         img_in = numpy.zeros(size, dtype="uint8") + background
@@ -756,12 +760,38 @@ class TestRescaleHQ(unittest.TestCase):
         img_in[246:266, 502:522, 1] = 100
         img_in[246:266, 502:522, 2] = 150
         img_in = model.DataArray(img_in)
+        img_in.metadata[model.MD_DIMS] = "YXC"
         out = img.rescale_hq(img_in, (256, 512, 3))
         self.assertEqual(out.shape, (256, 512, 3))
+        self.assertEqual(out.dtype, img_in.dtype)
         # Check watermark. Should be no interpolation between color channels
         self.assertEqual(50, out[128, 256, 0])
         self.assertEqual(100, out[128, 256, 1])
         self.assertEqual(150, out[128, 256, 2])
+
+    def test_25d(self):
+        """
+        Test downscaling an 2.5D image (YXC, with C=14)
+        """
+        # X=1024, Y=512
+        size = (512, 1024, 14)
+        background = 58
+        img_in = numpy.zeros(size, dtype=numpy.float) + background
+        # watermark
+        img_in[246:266, 502:522, 0] = 50
+        img_in[246:266, 502:522, 1] = 100
+        img_in[246:266, 502:522, 2] = 150
+        img_in[246:266, 502:522, 3] = 255  # Alpha
+        img_in = model.DataArray(img_in)
+        img_in.metadata[model.MD_DIMS] = "YXC"
+        out = img.rescale_hq(img_in, (256, 512, 14))
+        self.assertEqual(out.shape, (256, 512, 14))
+        self.assertEqual(out.dtype, img_in.dtype)
+        # Check watermark. Should be no interpolation between color channels
+        self.assertEqual(50, out[128, 256, 0])
+        self.assertEqual(100, out[128, 256, 1])
+        self.assertEqual(150, out[128, 256, 2])
+        self.assertEqual(255, out[128, 256, 3])
 
 
 class TestMergeTiles(unittest.TestCase):

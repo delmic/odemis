@@ -461,16 +461,31 @@ def rescale_hq(data, shape):
     Resize the image to the new given shape (smaller or bigger). It tries to
     smooth the pixels. Metadata is updated.
     data (DataArray or numpy.array): Data to be rescaled
-    shape (tuple): the new shape of the image. It needs to be the same size as the data.shape.
+    shape (tuple): the new shape of the image. It needs to be the same length as the data.shape.
     return (DataArray or numpy.array): The image rescaled. It has the same shape
         as the 'shape' parameter. The returned object has the same type of the 'data' parameter
     """
-    # TODO: make it faster
-
     scale = tuple(n / o for o, n in zip(data.shape, shape))
-    if len(data.shape) <= 3:
-        out = cv2.resize(data, (shape[1], shape[0]))
+
+    if hasattr(data, "metadata"):
+        dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+        ci = dims.find("C")  # -1 if not found
     else:
+        ci = -1
+
+    if data.ndim == 2 or (data.ndim == 3 and ci == 2 and scale[ci] == 1):
+        # TODO: if C is not last dim, reshape (ie, call ensureYXC())
+        # TODO: not all dtypes are supported by OpenCV (eg, uint32)
+        # This is a normal spatial image
+        if any(s < 1 for s in scale):
+            interpolation = cv2.INTER_AREA  # Gives best looking when shrinking
+        else:
+            interpolation = cv2.INTER_LINEAR
+        # If a 3rd dim, OpenCV will apply the resize on each C independently
+        out = cv2.resize(data, (shape[1], shape[0]), interpolation=interpolation)
+    else:
+        # Weird number of dimensions => default to the less pretty but more
+        # generic scipy version
         out = numpy.empty(shape, dtype=data.dtype)
         scipy.ndimage.interpolation.zoom(data, zoom=scale, output=out, order=1, prefilter=False)
 
