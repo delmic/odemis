@@ -669,7 +669,10 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                                      events=update_event)
 
         if change_callback:
-            value_ctrl.Bind(wx.EVT_SLIDER, change_callback)
+            if not isinstance(update_event, collections.Iterable):
+                update_event = (update_event,)
+            for event in update_event:
+                value_ctrl.Bind(event, change_callback)
 
     elif control_type == odemis.gui.CONTROL_INT:
         if unit == "":  # don't display unit prefix if no unit
