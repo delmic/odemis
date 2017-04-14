@@ -124,6 +124,9 @@ class StreamTree(object):
         acc = 0
 
         for s in self.streams:
+            # if the stream is a DataProjection, get the internal stream
+            if isinstance(s, DataProjection):
+                s = s.stream
             if isinstance(s, Stream):
                 acc += 1
             elif isinstance(s, StreamTree):
@@ -242,9 +245,12 @@ class StreamTree(object):
         streams = []
 
         for s in self.streams:
-            if isinstance(s, StreamTree):
+            leaf = s
+            if isinstance(s, DataProjection):
+                leaf = s.stream
+            if isinstance(leaf, StreamTree):
                 streams.extend(s.get_streams_by_type(stream_types))
-            elif isinstance(s, stream_types):
+            elif isinstance(leaf, stream_types):
                 streams.append(s)
 
         return streams
