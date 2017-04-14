@@ -355,29 +355,28 @@ class TestTiffIO(unittest.TestCase):
         # check it's here
         st = os.stat(FILENAME) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
-        imo = libtiff.tiff.TIFFfile(FILENAME)
-        self.assertEqual(len(imo.IFD), 1, "Tiff file doesn't contain just one image")
+        imo = libtiff.TIFF.open(FILENAME)
+        self.assertEqual(imo.SetDirectory(1), 0, "Tiff file doesn't contain just one image")
 
-        ifd = imo.IFD[0]
         # check format
-        self.assertEqual(size[2], ifd.get_value("SamplesPerPixel"))
+        # self.assertEqual(size[2], imo.GetField("SamplesPerPixel"))
         # BitsPerSample is the actual format, not model.MD_BPP
-        self.assertEqual(dtype.itemsize * 8, ifd.get_value("BitsPerSample")[0])
-        self.assertEqual(T.SAMPLEFORMAT_UINT, ifd.get_value("SampleFormat")[0])
+        self.assertEqual(dtype.itemsize * 8, imo.GetField("BitsPerSample"))
+        self.assertEqual(T.SAMPLEFORMAT_UINT, imo.GetField("SampleFormat"))
 
         # check metadata
-        self.assertEqual("Odemis " + odemis.__version__, ifd.get_value("Software"))
-        self.assertEqual(metadata[model.MD_HW_NAME], ifd.get_value("Make"))
+        self.assertEqual("Odemis " + odemis.__version__, imo.GetField("Software"))
+        self.assertEqual(metadata[model.MD_HW_NAME], imo.GetField("Make"))
         self.assertEqual(metadata[model.MD_HW_VERSION] + " (driver %s)" % metadata[model.MD_SW_VERSION],
-                         ifd.get_value("Model"))
-        self.assertEqual(metadata[model.MD_DESCRIPTION], ifd.get_value("PageName"))
-        yres = rational2float(ifd.get_value("YResolution"))
+                         imo.GetField("Model"))
+        self.assertEqual(metadata[model.MD_DESCRIPTION], imo.GetField("PageName"))
+        yres = imo.GetField("YResolution")
         self.assertAlmostEqual(1 / metadata[model.MD_PIXEL_SIZE][1], yres * 100)
-        ypos = rational2float(ifd.get_value("YPosition"))
+        ypos = imo.GetField("YPosition")
         self.assertAlmostEqual(metadata[model.MD_POS][1], (ypos / 100) - 1)
 
         # check OME-TIFF metadata
-        omemd = imo.IFD[0].get_value("ImageDescription")
+        omemd = imo.GetField("ImageDescription")
         self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
 
         # remove "xmlns" which is the default namespace and is appended everywhere
@@ -1687,12 +1686,13 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(tiles[0][0].shape, (156, 187))
 
 
-def rational2float(rational):
-    """
-    Converts a rational number (from libtiff) to a float
-    rational (numpy array of shape 1 with numer and denom fields): num,denom
-    """
-    return rational["numer"][0] / rational["denom"][0]
+# Not used anymore
+# def rational2float(rational):
+#     """
+#     Converts a rational number (from libtiff) to a float
+#     rational (numpy array of shape 1 with numer and denom fields): num,denom
+#     """
+#     return rational["numer"][0] / rational["denom"][0]
 
 if __name__ == "__main__":
     unittest.main()

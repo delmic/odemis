@@ -1935,14 +1935,14 @@ class AcquisitionDataTIFF(AcquisitionData):
 
         data = []
         thumbnails = []
-        
+
         # creates a lock to avoid race conditions when acessing the TIFF file
         self._lock = threading.Lock()
 
         # iterates all the directories of the TIFF file
         for dir_index in AcquisitionDataTIFF._iterDirectories(tiff_file):
-            AcquisitionDataTIFF._createDataArrayShadows(tiff_file, dir_index, 
-                    self._lock, data, thumbnails)
+            AcquisitionDataTIFF._createDataArrayShadows(tiff_file, dir_index,
+                                                        self._lock, data, thumbnails)
 
         # If looks like OME TIFF, reconstruct >2D data and add metadata
         # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
@@ -1985,7 +1985,7 @@ class AcquisitionDataTIFF(AcquisitionData):
                         continue
 
                     for dir_index in AcquisitionDataTIFF._iterDirectories(f_link):
-                        AcquisitionDataTIFF._createDataArrayShadows(f_link, dir_index, 
+                        AcquisitionDataTIFF._createDataArrayShadows(f_link, dir_index,
                                 self._lock, data, thumbnails)
 
                     file_read.add(uuid_data)
@@ -2033,7 +2033,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         shape = (height, width)
         if samples_pp > 1:
             shape = shape + (samples_pp,)
-        
+
         # add handle and directory information to be used when the actual
         # pixels of the image are read
         # This information is temporary. It is not needed outside the AcquisitionDataTIFF class,
@@ -2131,7 +2131,7 @@ class AcquisitionDataTIFF(AcquisitionData):
                                         fifd, hdims)
                     if imsetn.ndim >= 3:
                         logging.error("_getIFDsFromOME reported %d high dims, but TiffData has shape %s",
-                                    imsetn.ndim, fim.shape)
+                                      imsetn.ndim, fim.shape)
 
             # Short-circuit for dataset with only one IFD
             if all(d == 1 for d in imsetn.shape):
