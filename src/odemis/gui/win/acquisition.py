@@ -87,6 +87,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # To turn on/off the fan
         self._orig_fan_speed = None
+        self._orig_fan_temp = None
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -302,7 +303,7 @@ class AcquisitionDialog(xrcfr_acq):
             if self.chkbox_fine_align.Value:
                 streams.append(self._ovrl_stream)
             acq_time = acq.estimateTime(streams)
-            acq_time = math.ceil(acq_time) # round a bit pessimistically
+            acq_time = math.ceil(acq_time)  # round a bit pessimisticly
             txt = "The estimated acquisition time is {}."
             txt = txt.format(units.readable_time(acq_time))
         else:
@@ -349,8 +350,6 @@ class AcquisitionDialog(xrcfr_acq):
         # The hardware might not exactly apply the setting as computed in the
         # preset. We need the _exact_ same value to find back which preset is
         # currently selected. So update the values the first time.
-        # TODO: this should not be necessary once the settings only change the
-        # stream settings, and not directly the hardware.
         if preset_name not in self._presets_confirmed:
             for se in new_preset.keys():
                 new_preset[se] = se.vigilattr.value
@@ -440,6 +439,23 @@ class AcquisitionDialog(xrcfr_acq):
         else:
             self._orig_fan_speed = fs.value
             fs.value = 0
+
+        # Raise targetTemperature to max/ambient to avoid the fan from
+        # automatically starting again. (Some hardware have this built-in when
+        # the current temperature is too high compared to the target)
+        if model.hasVA(self._main_data_model.ccd, "targetTemperature"):
+            temp = self._main_data_model.ccd.targetTemperature
+            if enable:
+                if self._orig_fan_temp is not None:
+                    temp.value = min(temp.value, self._orig_fan_temp)
+            else:
+                self._orig_fan_temp = temp.value
+                # TODO: handle choices
+                try:
+                    temp.value = min(temp.range[1], 25) # don't set above ambient temperature
+                except Exception:
+                    logging.warning("Failed to change targetTemperature when disabling fan",
+                                    exc_info=True)
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
