@@ -410,7 +410,10 @@ class TestSpatialExport(unittest.TestCase):
         image = model.DataArray(data, metadata)
         sem_stream = stream.StaticSEMStream(metadata['Description'], image)
         #sem_stream.image.value = model.DataArray(dataRGB, metadata)
-        self.streams = [fluo_stream, sem_stream]
+        # create DataProjections for the streams
+        fluo_stream_pj = stream.RGBSpatialProjection(fluo_stream)
+        sem_stream_pj = stream.RGBSpatialProjection(sem_stream)
+        self.streams = [fluo_stream_pj, sem_stream_pj]
         self.min_res = (623, 432)
 
         # Spectrum stream
@@ -556,6 +559,7 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
                     'Output wavelength range': (6.990000000000001e-07, 7.01e-07)}
         image = model.DataArray(data, metadata)
         fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
+        fluo_stream_pj = stream.RGBSpatialProjection(fluo_stream)
 
         data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
         dataRGB = numpy.zeros((1024, 1024, 4))
@@ -571,9 +575,10 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         # read back
         acd = tiff.open_data(FILENAME)
         sem_stream = stream.StaticSEMStream(metadata['Description'], acd.content[0])
-        sem_stream.mpp.value = 1e-6
+        sem_stream_pj = stream.RGBSpatialProjection(sem_stream)
+        sem_stream_pj.mpp.value = 1e-6
 
-        self.streams = [fluo_stream, sem_stream]
+        self.streams = [fluo_stream_pj, sem_stream_pj]
         self.min_res = (623, 432)
 
         # Wait for all the streams to get an RGB image

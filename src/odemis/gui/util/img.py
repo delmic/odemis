@@ -1607,12 +1607,11 @@ def get_ordered_images(streams, raw=False):
             logging.error("StreamTree has a None stream")
             continue
 
-        if not hasattr(s, "image") or s.image.value is None:
-            continue
-
         # FluoStreams are merged using the "Screen" method that handles colour
         # merging without decreasing the intensity.
         if not raw:
+            if not hasattr(s, "image") or s.image.value is None:
+                continue
             data = s.image.value
             if isinstance(data, tuple): # 2D tuple = tiles
                 data = img.mergeTiles(data)
