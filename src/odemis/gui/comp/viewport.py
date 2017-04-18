@@ -29,7 +29,7 @@ from abc import abstractmethod, ABCMeta
 from concurrent.futures._base import CancelledError
 import logging
 from odemis import gui, model, util
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, StaticStream
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, StaticStream, DataProjection
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -401,9 +401,15 @@ class MicroscopeViewport(ViewPort):
                     self.bottom_legend.set_stream_type(wx.RIGHT, SpectrumStream)
                 else:
                     sc = self._microscope_view.stream_tree[0]
+                    # if sc is an instance of DataProjection, get the inner stream
+                    if isinstance(sc, DataProjection):
+                        sc = sc.stream
                     self.bottom_legend.set_stream_type(wx.LEFT, sc.__class__)
 
                     sc = self._microscope_view.stream_tree[1]
+                    # if sc is an instance of DataProjection, get the inner stream
+                    if isinstance(sc, DataProjection):
+                        sc = sc.stream
                     self.bottom_legend.set_stream_type(wx.RIGHT, sc.__class__)
 
                 self.ShowMergeSlider(True)

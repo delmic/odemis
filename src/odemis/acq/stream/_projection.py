@@ -110,10 +110,10 @@ class RGBSpatialProjection(DataProjection):
         self.image = model.VigilantAttribute(None)
 
         # Don't call at init, so don't set metadata if default value
-        self.stream.tint.subscribe(self.needImageUpdate)
-        self.stream.intensityRange.subscribe(self.needImageUpdate)
-        self.stream.auto_bc.subscribe(self.needImageUpdate)
-        self.stream.auto_bc_outliers.subscribe(self.needImageUpdate)
+        self.stream.tint.subscribe(self._onTint)
+        self.stream.intensityRange.subscribe(self._onIntensityRange)
+        self.stream.auto_bc.subscribe(self._onAutoBC)
+        self.stream.auto_bc_outliers.subscribe(self._onOutliers)
 
         if hasattr(stream, '_das'):
             raw = stream._das
@@ -147,7 +147,26 @@ class RGBSpatialProjection(DataProjection):
     def raw(self):
         return self.stream.raw
 
-    def needImageUpdate(self, param):
+    def _onAutoBC(self, enabled):
+        # if changing to auto: B/C might be different from the manual values
+        if enabled:
+            self.needImageUpdate()
+
+    def _onOutliers(self, outliers):
+        if self.stream.auto_bc.value:
+            self.needImageUpdate()
+
+    def _onIntensityRange(self, irange):
+        # If auto_bc is active, it updates intensities (from _updateImage()),
+        # so no need to refresh image again.
+        if not self.stream.auto_bc.value:
+            self.needImageUpdate()
+
+    def _onTint(self, value):
+        self.needImageUpdate()
+
+    def needImageUpdate(self):
+        # set projected tiles cache as invalid
         self._projectedTilesInvalid = True
         self._shouldUpdateImage()
 

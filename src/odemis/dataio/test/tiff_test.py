@@ -1277,11 +1277,12 @@ class TestTiffIO(unittest.TestCase):
         # read the subimage
         subimage = im.read_image()
         self.assertEqual(subimage.shape, (147, 128))
-        # checking the values in the corner of the tile
-        self.assertEqual(subimage[0][0], 0)
-        self.assertEqual(subimage[0][-1], 256)
-        self.assertEqual(subimage[-1][0], 10022)
-        self.assertEqual(subimage[-1][-1], 10278)
+        # Checking the values in the corner of the tile. The downsampling uses
+        # the neighbour pixels to calculate a pixel in the resized image.
+        self.assertEqual(subimage[0][0], 130)
+        self.assertEqual(subimage[0][-1], 385)
+        self.assertEqual(subimage[-1][0], 9893)
+        self.assertEqual(subimage[-1][-1], 10148)
 
     def testExportThinPyramid(self):           
         """
