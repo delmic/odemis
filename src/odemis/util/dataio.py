@@ -147,9 +147,6 @@ def data_to_static_streams(data):
                                 name, d.shape)
                 d = d[-2, -1]
 
-        if not hasattr(d, 'maxzoom'):
-            d = d.getData()
-
         stream_instance = klass(name, d)
         result_streams.append(stream_instance)
 

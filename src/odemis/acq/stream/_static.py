@@ -60,12 +60,13 @@ class RGBStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
-        # Check it's RGB
-        if isinstance(raw, (model.DataArray, model.DataArrayShadow)):
-            raw = [raw]
+        # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
+        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
+            raw = [raw.getData()]
         else:
-            raw = raw
+            raw = [raw]
 
+        # Check it's RGB
         for d in raw:
             dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
             ci = dims.find("C")  # -1 if not found
@@ -96,7 +97,12 @@ class Static2DStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray or DataArrayShadow): The data to display.
         """
-        super(Static2DStream, self).__init__(name, [raw])
+        # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
+        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
+            raw = [raw.getData()]
+        else:
+            raw = [raw]
+        super(Static2DStream, self).__init__(name, raw)
 
     def _init_projection_vas(self):
         ''' On Static2DStream, the projection is done on RGBSpatialProjection
