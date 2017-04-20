@@ -217,11 +217,15 @@ class MainGUIData(object):
             if not self.light and not self.ebeam:
                 raise KeyError("No emitter found in the microscope")
 
-            # Optical path manager (for now, only used on the SPARC)
-            # Used to control the actuators so that the light goes to the right
-            # detector (in the right way).
-            if microscope.role in ("sparc-simplex", "sparc", "sparc2"):
+            # Optical path manager: used to control the actuators so that the
+            # light goes to the right detector (in the right way).
+            # On the SECOM/DELPHI it's mostly used to turn off the fan during
+            # high-quality acquisition.
+            try:
                 self.opm = path.OpticalPathManager(microscope)
+            except NotImplementedError as ex:
+                logging.info("No optical path manager: %s", ex)
+                self.opm = None
 
             # Used when doing SECOM fine alignment, based on the value used by the user
             # when doing manual alignment. 0.1s is not too bad value if the user

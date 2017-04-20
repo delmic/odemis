@@ -507,6 +507,15 @@ class Stream(object):
             return hwva
 
     def prepare(self):
+        """
+        Take care of any action required to be taken before the stream becomes
+        active.
+        Note: it's not necessary to call it before a stream is set to active.
+          If it was not called, this function will automatically be called when
+          starting the stream.
+
+        returns (model.ProgressiveFuture): Progress of preparation
+        """
         if self.is_active.value:
             logging.warning("Prepare of stream %s called while already active")
             # TODO: raise an error
@@ -523,6 +532,9 @@ class Stream(object):
         # actually indicate that preparation has been triggered, don't wait for
         # it to be completed
         self._prepared = True
+        return self._prepare_opm()
+
+    def _prepare_opm(self):
         if self._opm is not None:
             try:
                 f = self._opm.setPath(self)
@@ -530,11 +542,8 @@ class Stream(object):
                 logging.debug("%s doesn't require optical path change", self.name.value)
                 f = model.InstantaneousFuture()
             else:
-                # TODO: Run in a separate thread as in live view it's ok if
-                # the path is not immediately correct?
                 logging.debug("Setting optical path for %s", self.name.value)
-            finally:
-                return f
+            return f
         return model.InstantaneousFuture()
 
     def estimateAcquisitionTime(self):

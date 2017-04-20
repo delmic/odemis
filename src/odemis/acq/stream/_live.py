@@ -528,6 +528,9 @@ class AlignedSEMStream(SEMStream):
             self._shift = shift
             self._compensateShift()
 
+            # Update the optical path if needed
+            self._prepare_opm().result()
+
 #     def _onActive(self, active):
 #         # TODO: if preparing (ie, executor has a futures running) => wait
 #         super(AlignedSEMStream, self)._onActive(active)
