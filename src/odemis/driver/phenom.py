@@ -659,6 +659,7 @@ class Scanner(model.Emitter):
         shift_d = math.hypot(*value)
         # The exact limit depends on a lot of parameters
         # limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
+        # Note: the range is 0->0 if the Phenom is in stand-by
         rng = self.parent._device.GetSEMImageShiftRange()
         limit = rng.max
         # The ratio between the shift distance and the limit
@@ -1029,18 +1030,26 @@ class Detector(model.Detector):
                 # last check before we initiate the actual acquisition
                 if self._acquisition_must_stop.is_set():
                     raise CancelledError()
-                if need_set or is_first:
-                    self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
-                    # Just to wait long enough before we get a frame with the new
-                    # parameters applied. In the meantime, it can be the case that
-                    # Phenom generates semi-created frames that we want to avoid.
-                    logging.debug("Acquiring full image accumulation")
-                    img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
-                else:
-                    if bpp == 8:
-                        img_str = self._acq_device.SEMGetLiveImageCopy(0)
+                if bpp == 8:
+                    # In 8-bit mode, we can save time by sharing the same scan
+                    # for the Phenom GUI (aka "live") and the image we need.
+                    if need_set or is_first:
+                        # Note: changing the viewing mode can take ~2 s
+                        self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
+                        # Just to wait long enough before we get a frame with the new
+                        # parameters applied. In the meantime, it can be the case that
+                        # Phenom generates semi-created frames that we want to avoid.
+                        logging.debug("Acquiring full image accumulation")
+                        img_str = self._acq_device.SEMGetLiveImageCopy(nframes)
                     else:
-                        img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
+                        img_str = self._acq_device.SEMGetLiveImageCopy(0)
+                else:
+                    # 16-bit mode: need to acquire separately from the live mode
+                    if need_set or is_first:
+                        # TODO: set the live mode in a very low res all the time
+                        # to save time
+                        self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
+                    img_str = self._acq_device.SEMAcquireImageCopy(scan_params)
 
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
