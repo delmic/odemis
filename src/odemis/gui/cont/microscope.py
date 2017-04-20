@@ -954,7 +954,8 @@ class DelphiStateController(SecomStateController):
 
         calib = self._calibconf.get_sh_calib(shid)
         if calib is None:
-            raise ValueError("Calibration data for sample holder is not present")
+            raise ValueError("Calibration data for sample holder (%x) is not present" %
+                             (shid,))
 
         # TODO: to be more precise on the stage rotation, we'll need to
         # locate the top and bottom holes of the sample holder, using
@@ -1028,14 +1029,14 @@ class DelphiStateController(SecomStateController):
             shid, sht = self._main_data.chamber.sampleHolder.value
             if shid is None or sht is None:
                 # sample holder was just removed (or something went wrong)
-                logging.warning("Failed to read sample holder ID %s, aborting load",
-                                (shid, sht))
+                logging.warning("Failed to read sample holder ID %x (type %d), aborting load",
+                                shid, sht)
                 # Eject the sample holder (mainly to update the load button
                 # state, since there is nothing really loaded)
                 self._main_data.chamberState.value = CHAMBER_VENTING
                 return False
 
-            logging.debug("Detected sample holder type %d, id %x", sht, shid)
+            logging.debug("Detected sample holder type %d, ID %x", sht, shid)
 
             # ID number 0 typically indicates something went wrong and it
             # couldn't be read. So instead of asking the user to calibrate it,
