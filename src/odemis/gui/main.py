@@ -287,7 +287,7 @@ class OdemisGUIApp(wx.App):
             self.main_frame.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
-            self.main_data.level.subscribe(self.on_level_va, init=False)
+            self.main_data.level.subscribe(self.on_level_va, init=True)
             log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
@@ -342,6 +342,10 @@ class OdemisGUIApp(wx.App):
     @call_in_wx_main
     def on_level_va(self, log_level):
         """ Set the log button color """
+        # As this function is called in the main thread, it might not be called
+        # in the called order. Therefore, the log level might not be up-to-date.
+        # => Read the log level from the model, which contains the latest value.
+        log_level = self.main_data.level.value
 
         colour = 'def'
 
