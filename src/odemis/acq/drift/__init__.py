@@ -170,6 +170,7 @@ class AnchoredEstimator(object):
             logging.debug("Previous frame diff: %s", prev_drift)
             if (abs(self.orig_drift[0] - prev_drift[0]) > 5 or
                 abs(self.orig_drift[1] - prev_drift[1]) > 5):
+                # TODO: in such case, add the previous and current image to .raw
                 logging.warning("Drift cannot be measured precisely, "
                                 "hesitating between %s and %s px",
                                 self.orig_drift, prev_drift)
