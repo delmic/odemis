@@ -56,8 +56,14 @@ class AnchoredEstimator(object):
         self._emitter = scanner
         self._semd = detector
         self._dwell_time = dwell_time
-        self.orig_drift = (0, 0) # in sem px
+
+        # Latest drift vector from the previous acquisition
+        self.drift = (0, 0)  # in sem px
+        # Total drift vector from the first acquisition
+        self.tot_drift = (0, 0)  # in sem px
+        # Maximum distance drifted from the first acquisition
         self.max_drift = (0, 0) # in sem px
+
         self.raw = []  # first 2 and last 2 anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
 
@@ -147,38 +153,45 @@ class AnchoredEstimator(object):
         """
         Estimate the additional drift since previous acquisition+estimation.
         Note: It should be only called once after every acquisition.
-        To read the value again, use .orig_drift.
-        return (float, float): estimated current drift in X/Y SEM px
+        To read the value again, use .drift.
+        To read the total drift since the first acquisition, use .tot_drift
+        return (float, float): estimated extra drift in X/Y SEM px since last
+          estimation.
         """
         # Calculate the drift between the last two frames and
         # between the last and first frame
         if len(self.raw) > 1:
-            # Note: prev_drift and orig_drift, don't represent exactly the same
+            # Note: prev_drift and drift, don't represent exactly the same
             # value as the previous image also had drifted. So we need to
             # include also the drift of the previous image.
             # Also, CalculateDrift return the shift in image pixels, which is
             # different (usually bigger) from the SEM px.
             prev_drift = CalculateDrift(self.raw[-2], self.raw[-1], 10)
-            prev_drift = (prev_drift[0] * self._scale[0] + self.orig_drift[0],
-                          prev_drift[1] * self._scale[1] + self.orig_drift[1])
+            prev_drift = (prev_drift[0] * self._scale[0] + self.drift[0],
+                          prev_drift[1] * self._scale[1] + self.drift[1])
 
             orig_drift = CalculateDrift(self.raw[0], self.raw[-1], 10)
-            self.orig_drift = (orig_drift[0] * self._scale[0],
-                               orig_drift[1] * self._scale[1])
+            self.drift = (orig_drift[0] * self._scale[0],
+                          orig_drift[1] * self._scale[1])
 
-            logging.debug("Current drift: %s", self.orig_drift)
+            logging.debug("Current drift: %s", self.drift)
             logging.debug("Previous frame diff: %s", prev_drift)
-            if (abs(self.orig_drift[0] - prev_drift[0]) > 5 or
-                abs(self.orig_drift[1] - prev_drift[1]) > 5):
+            if (abs(self.drift[0] - prev_drift[0]) > 5 * self._scale[0] or
+                abs(self.drift[1] - prev_drift[1]) > 5 * self._scale[1]):
                 # TODO: in such case, add the previous and current image to .raw
                 logging.warning("Drift cannot be measured precisely, "
                                 "hesitating between %s and %s px",
-                                self.orig_drift, prev_drift)
-            # Update max_drift
-            if math.hypot(*self.orig_drift) > math.hypot(*self.max_drift):
-                self.max_drift = self.orig_drift
+                                self.drift, prev_drift)
 
-        return self.orig_drift
+            # Update drift since the original position
+            self.tot_drift = (self.tot_drift[0] + self.drift[0],
+                              self.tot_drift[1] + self.drift[1])
+
+            # Update maximum drift
+            if math.hypot(*self.tot_drift) > math.hypot(*self.max_drift):
+                self.max_drift = self.tot_drift
+
+        return self.drift
 
     def estimateAcquisitionTime(self):
         """
@@ -238,8 +251,8 @@ class AnchoredEstimator(object):
         """
         # translation is distance from center (situated at 0.5, 0.5), can be floats
         # we clip translation inside of bounds in case of huge drift
-        new_translation = (self._trans[0] - self.orig_drift[0],
-                           self._trans[1] - self.orig_drift[1])
+        new_translation = (self._trans[0] - self.drift[0],
+                           self._trans[1] - self.drift[1])
 
         if (abs(new_translation[0]) > self._safety_bounds[0] or
             abs(new_translation[1]) > self._safety_bounds[1]):
