@@ -459,10 +459,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
-        # Very special view which is used only as a container to save which
-        # stream will be acquired (for the Sparc acquisition interface only).
-        # The tab controller will take care of filling it
-        self.acquisitionView = MicroscopeView("Acquisition")
+        # List of streams to be acquired (as the ones used to display the live
+        # view are different)
+        self.acquisitionStreams = set()
 
         # The SEM concurrent stream that is used to select the acquisition settings
         # eg, ROI (aka ROA), dcPeriod, dcRegion.

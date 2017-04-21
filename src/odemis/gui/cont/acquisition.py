@@ -598,7 +598,7 @@ class SparcAcquiController(object):
             txt = u"Region of acquisition needs to be selected"
             lvl = logging.WARN
         else:
-            streams = self._tab_data_model.acquisitionView.getStreams()
+            streams = self._tab_data_model.acquisitionStreams
             acq_time = acq.estimateTime(streams)
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
@@ -683,9 +683,7 @@ class SparcAcquiController(object):
         self._tab_panel.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        streams = self._tab_data_model.acquisitionView.getStreams()
-
-        self.acq_future = acq.acquire(streams)
+        self.acq_future = acq.acquire(self._tab_data_model.acquisitionStreams)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
@@ -708,7 +706,8 @@ class SparcAcquiController(object):
         """
         return (list of DataArray, filename): data exported and filename
         """
-        st = self._tab_data_model.acquisitionView.stream_tree
+        streams = list(self._tab_data_model.acquisitionStreams)
+        st = acq.stream.StreamTree(streams=streams)
         thumb = acq.computeThumbnail(st, acq_future)
         data, exp = acq_future.result()
 

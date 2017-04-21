@@ -1655,7 +1655,7 @@ class SparcStreamsController(StreamBarController):
     """
     Controlls the streams for the SPARC acquisition view
     In addition to the standard controller it:
-     * Updates the .acquisitionView when a stream is added/removed
+     * Updates the .acquisitionStreams when a stream is added/removed
      * Connects the ROA (.roi of each settings streams) to semStream
      * Shows the repetition overlay when the repetition setting is focused
      * Play/pause the spot stream in spot mode
@@ -1747,11 +1747,9 @@ class SparcStreamsController(StreamBarController):
             streams (list of streams): The streams currently used in this tab
         """
         semcls = self._tab_data_model.semStream
-        # The acquisition streams
-        acq_streams = self._tab_data_model.acquisitionView.getStreams()
 
         # For all MD streams in the acquisition view...
-        for mds in acq_streams:
+        for mds in self._tab_data_model.acquisitionStreams.copy():
             if not isinstance(mds, acqstream.MultipleDetectorStream):
                 continue
             # Are all the sub streams of the MDStreams still there?
@@ -1762,7 +1760,7 @@ class SparcStreamsController(StreamBarController):
                         logging.warning("Removing stream because %s is gone!", ss)
                     logging.debug("Removing acquisition stream %s because %s is gone",
                                   mds.name.value, ss.name.value)
-                    self._tab_data_model.acquisitionView.removeStream(mds)
+                    self._tab_data_model.acquisitionStreams.discard(mds)
                     break
 
         # clean up the ROI listeners
@@ -1861,7 +1859,7 @@ class SparcStreamsController(StreamBarController):
         stream_cont.stream_panel.show_visible_btn(False)
 
         # add the acquisition stream to the acquisition view
-        self._tab_data_model.acquisitionView.addStream(mdstream)
+        self._tab_data_model.acquisitionStreams.add(mdstream)
 
         stream_config = self._stream_config.get(type(stream), {})
 

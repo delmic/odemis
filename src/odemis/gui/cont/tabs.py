@@ -702,7 +702,7 @@ class SparcAcquisitionTab(Tab):
             detvas=get_local_vas(main_data.sed),
         )
 
-        tab_data.acquisitionView.addStream(sem_stream)  # it should also be saved
+        tab_data.acquisitionStreams.add(sem_stream)  # it should also be saved
 
         # This stream is a bit tricky, because it will play (potentially)
         # simultaneously as another one, and it changes the SEM settings at
