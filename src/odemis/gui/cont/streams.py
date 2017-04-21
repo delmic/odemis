@@ -146,13 +146,12 @@ class StreamController(object):
                 self._add_selwidth_ctrl()
 
         # Set the visibility button on the stream panel
-        vis = stream in tab_data_model.focussedView.value.getStreams()
+        vis = stream in tab_data_model.focussedView.value.stream_tree
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
-            vis = stream in tab_data_model.focussedView.value.getStreams()
             self.stream_panel.set_peak(PEAK_METHOD_TO_STATE[stream.peak_method.value])
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
@@ -291,7 +290,6 @@ class StreamController(object):
         # (More references are present, see getrefcount
         self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
         self.stream_panel.header_change_callback = None
-        self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
         self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
         self.stream_panel.Unbind(EVT_STREAM_PEAK)
 
@@ -1240,13 +1238,6 @@ class StreamBarController(object):
                                                 locked=self.locked_mode,
                                                 static=self.static_mode)
 
-            # TODO: make StreamTree a VA-like and remove this
-            # logging.debug("Sending stream.ctrl.added message")
-            # pub.sendMessage('stream.ctrl.added',
-            #                 streams_present=True,
-            #                 streams_visible=self._has_visible_streams(),
-            #                 tab=self._tab_data_model)
-
             return stream_cont
         else:
             return stream
@@ -1301,6 +1292,7 @@ class StreamBarController(object):
         self._prev_view = view
 
     def _on_visible_streams(self, flat):
+        # Convert the DataProjections into Stream
         visible_streams = [s if isinstance(s, acqstream.Stream) else s.stream for s in flat]
 
         for e in self._stream_bar.stream_panels:

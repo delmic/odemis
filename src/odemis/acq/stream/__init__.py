@@ -84,6 +84,12 @@ ARStream.register(SEMARMDStream)
 
 
 # TODO: make it like a VA, so that it's possible to know when it changes
+# TODO: move it to its own file
+# TODO: It's misnamed as it's a tree of spatial DataProjection, which also
+# support Streams temporarily, until all streams support DataProjection.
+# TODO: it's entirely over-engineered for now. It's currently only used to
+# contain a list of DataProjection/Stream. => use more fully (eg, to keep the
+# operator and order), or simplify to just a ListVA.
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to
     appear as one image. It's a tree which has one stream per leaf and one merge
@@ -109,9 +115,8 @@ class StreamTree(object):
         assert(isinstance(streams, list))
 
         self.streams = []
-        self.flat = model.ListVA([], readonly=True)
+        self.flat = model.ListVA([], readonly=True)  # same content as .getStreams()
         self.should_update = model.BooleanVA(False)
-        self.size = model.IntVA(0)
         self.kwargs = kwargs
 
         for s in streams:
@@ -124,10 +129,7 @@ class StreamTree(object):
         acc = 0
 
         for s in self.streams:
-            # if the stream is a DataProjection, get the internal stream
-            if isinstance(s, DataProjection):
-                s = s.stream
-            if isinstance(s, Stream):
+            if isinstance(s, (Stream, DataProjection)):
                 acc += 1
             elif isinstance(s, StreamTree):
                 acc += len(s)
@@ -138,23 +140,30 @@ class StreamTree(object):
         """ Return the Stream of StreamTree using index reference val[i] """
         return self.streams[index]
 
-    def __contains__(self, the_stream):
-        for stream in self.streams:
-            if isinstance(the_stream, StreamTree) and the_stream in stream:
+    def __contains__(self, sp):
+        """
+        Checks if a stream or projection is in the tree.
+        sp (Stream or DataProjection): If a stream is passed, it will also check
+          if any projection is representing this stream.
+        """
+        for node in self.streams:
+            if isinstance(node, StreamTree) and sp in node:
                 return True
-            elif stream == the_stream:
+            elif node == sp or (isinstance(node, DataProjection) and node.stream == sp):
                 return True
+            # No need to handle cases where sp is a projection and node is a
+            # stream because if it's possible to have a projection a stream,
+            # it's the projection which should always be present in the StreamTree
         return False
 
     def add_stream(self, stream):
-        if isinstance(stream, (Stream, StreamTree, DataProjection)):
-            self.streams.append(stream)
-            self.size.value = len(self.streams)
-            if hasattr(stream, 'should_update'):
-                stream.should_update.subscribe(self.on_stream_update_changed, init=True)
-        else:
-            msg = "Illegal type %s found in add_stream!" % type(stream)
-            raise ValueError(msg)
+        if not isinstance(stream, (Stream, StreamTree, DataProjection)):
+            raise ValueError("Illegal type %s found in add_stream!" % type(stream))
+
+        self.streams.append(stream)
+        if hasattr(stream, 'should_update'):
+            stream.should_update.subscribe(self.on_stream_update_changed, init=True)
+
         # Also update the flat streams list
         curr_streams = self.getStreams()
         self.flat._value = curr_streams
@@ -164,7 +173,6 @@ class StreamTree(object):
         if hasattr(stream, 'should_update'):
             stream.should_update.unsubscribe(self.on_stream_update_changed)
         self.streams.remove(stream)
-        self.size.value = len(self.streams)
         self.on_stream_update_changed()
         # Also update the flat streams list
         curr_streams = self.getStreams()
@@ -182,7 +190,7 @@ class StreamTree(object):
             self.should_update.value = False
 
     def getStreams(self):
-        """ Return the list of streams used to compose the picture """
+        """ Return the list leafs (ie, Stream or DataProjection) used to compose the picture """
 
         streams = []
 
@@ -240,17 +248,18 @@ class StreamTree(object):
         return images
 
     def get_streams_by_type(self, stream_types):
-        """ Return a flat list of streams of `stream_type` within the StreamTree """
-
+        """
+        Return a flat list of streams of `stream_type` within the StreamTree
+          Note: if a node is a DataProjection, the corresponding Stream is returned
+        """
         streams = []
 
         for s in self.streams:
-            leaf = s
             if isinstance(s, DataProjection):
-                leaf = s.stream
-            if isinstance(leaf, StreamTree):
+                s = s.stream
+            if isinstance(s, StreamTree):
                 streams.extend(s.get_streams_by_type(stream_types))
-            elif isinstance(leaf, stream_types):
+            elif isinstance(s, stream_types):
                 streams.append(s)
 
         return streams

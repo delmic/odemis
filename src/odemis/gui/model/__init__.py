@@ -29,11 +29,11 @@ import logging
 import math
 from odemis import model
 from odemis.acq import path
-from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection
+from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
+from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
-from odemis.driver.actuator import ConvertStage
 from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 import os
 import threading
@@ -1231,7 +1231,7 @@ class StreamView(View):
         with self._streams_lock:
             self.stream_tree.add_stream(stream)
 
-        if isinstance(stream, RGBSpatialProjection):
+        if isinstance(stream, DataProjection):
             # sets the current mpp and viewport to the projection
             self._updateStreamsViewParams()
 
@@ -1251,23 +1251,20 @@ class StreamView(View):
         stream (Stream): stream to remove
         If the stream is not present, nothing happens
         """
-        # Stop listening to the stream changes
-        if hasattr(stream, "image"):
-            stream.image.unsubscribe(self._onNewImage)
 
         with self._streams_lock:
-            streams = self.stream_tree.getStreams()
-            for stream_in_tree in streams:
-                if isinstance(stream_in_tree, RGBSpatialProjection):
-                    original_stream = stream_in_tree.stream
-                else:
-                    original_stream = stream_in_tree
+            for node in self.stream_tree.getStreams():
+                ostream = node.stream if isinstance(node, DataProjection) else node
 
                 # check if the stream is still present on the stream list
-                if stream == original_stream:
+                if stream == ostream:
+                    # Stop listening to the stream changes
+                    if hasattr(node, "image"):
+                        node.image.unsubscribe(self._onNewImage)
+
                     # remove stream from the StreamTree()
                     # TODO: handle more complex trees
-                    self.stream_tree.remove_stream(stream_in_tree)
+                    self.stream_tree.remove_stream(node)
                     # let everyone know that the view has changed
                     self.lastUpdate.value = time.time()
                     break
