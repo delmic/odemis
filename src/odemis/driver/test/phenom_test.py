@@ -22,6 +22,7 @@ from __future__ import division
 
 import Pyro4
 import copy
+import logging
 from odemis import model
 from odemis.driver import phenom
 from odemis.model import HwError
@@ -33,6 +34,8 @@ import time
 import unittest
 from unittest.case import skip
 
+logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 
 # If no hardware, we pretty much cannot test anything :-(
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
@@ -157,6 +160,11 @@ class TestSEM(unittest.TestCase):
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
         self.acq_done = threading.Event()
 
+        # TODO: a way to group tests, so that all the ones that need to be in
+        # SEM mode are together, and all the one for navcam are together?
+        f = self.pressure.moveAbs({"pressure":1e-02})  # move to SEM
+        f.result()
+
     def tearDown(self):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
@@ -174,6 +182,7 @@ class TestSEM(unittest.TestCase):
         settle = 5.e-4
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
+
 #     @skip("skip")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6  # s
@@ -185,14 +194,14 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
-#     @skip("skip")
+
     def test_hfv(self):
         orig_pxs = self.scanner.pixelSize.value
         orig_hfv = self.scanner.horizontalFoV.value
         self.scanner.horizontalFoV.value = orig_hfv / 2
 
         self.assertAlmostEqual(orig_pxs[0] / 2, self.scanner.pixelSize.value[0])
-#     @skip("skip")
+
     def test_roi(self):
         """
         check that .translation and .scale work
@@ -233,7 +242,7 @@ class TestSEM(unittest.TestCase):
         """
         small resolution, but large osr, to force acquisition not by whole array
         """
-        self.scanner.resolution.value = (256, 200)
+        self.scanner.resolution.value = (256, 300)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 100
         expected_duration = self.compute_expected_duration()  # about 1 min
@@ -245,10 +254,10 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
-#     @skip("skip")
+
     def test_long_dwell_time(self):
         """
-        one pixel only, but long dwell time (> 4s), which means it uses 
+        one pixel only, but long dwell time (> 4s), which means it uses
         duplication rate.
         """
         self.scanner.resolution.value = self.scanner.resolution.range[0]
@@ -263,12 +272,11 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
 
-#     @skip("skip")
     def test_acquire_long_short(self):
         """
         test being able to cancel image acquisition if dwell time is too long
         """
-        self.scanner.resolution.value = (256, 200)
+        self.scanner.resolution.value = (256, 300)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 100
         expected_duration_l = self.compute_expected_duration()  # about 5 s
@@ -291,7 +299,7 @@ class TestSEM(unittest.TestCase):
         self.assertTrue(self.acq_done.is_set())
         self.assertGreaterEqual(duration, expected_duration_s, "Error execution took %f s, less than exposure time %f." % (duration, expected_duration_s))
         self.assertLess(duration, expected_duration_l, "Execution took %f s, as much as the long exposure time %f." % (duration, expected_duration_l))
-#     @skip("skip")
+
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
 
@@ -302,34 +310,38 @@ class TestSEM(unittest.TestCase):
         self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
 
         self.assertEqual(self.left, 0)
-#     @skip("skip")
+
     def test_acquire_with_va(self):
         """
         Change some settings before and while acquiring
         """
-        dwell = self.scanner.dwellTime.range[0] * 2
+        dwell = self.scanner.dwellTime.range[0] * 4
         self.scanner.dwellTime.value = dwell
         self.scanner.resolution.value = self.scanner.resolution.range[1]  # test big image
         self.size = self.scanner.resolution.value
         expected_duration = self.compute_expected_duration()
+        logging.debug("Expecting duration of %g s per acq", expected_duration)
 
         number = 3
         self.left = number
         self.sed.data.subscribe(self.receive_image)
 
+        time.sleep(expected_duration * 0.5)  # half-way acquiring
         # change few attributes
-        time.sleep(expected_duration)
-        dwell = self.scanner.dwellTime.range[0]
+        dwell = self.scanner.dwellTime.range[0] * 2
         self.scanner.dwellTime.value = dwell
         self.scanner.spotSize.value = 2.5
         self.scanner.accelVoltage.value = 6000
+        time.sleep(expected_duration * 0.7)  # make sure the first acquisition is over
         expected_duration = self.compute_expected_duration()
+        logging.debug("Expecting duration of %g s per acq", expected_duration)
 
-        self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
+        # Note: the Phenom is very slow to reconfigure ~2s for changing the scan
+        self.acq_done.wait(number * (4 + expected_duration * 1.1))  # 4s per image for extra margin
 
         self.sed.data.unsubscribe(self.receive_image)  # just in case it failed
         self.assertEqual(self.left, 0)
-#     @skip("skip")
+
     def test_df_fast_sub_unsub(self):
         """
         Test the dataflow on a very fast cycle subscribing/unsubscribing
@@ -352,7 +364,7 @@ class TestSEM(unittest.TestCase):
         self.sed.data.unsubscribe(self.receive_image)
 
         self.assertLessEqual(self.left, 10000 - 1)
-#     @skip("skip")
+
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
@@ -372,13 +384,11 @@ class TestSEM(unittest.TestCase):
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
 
-    def onEvent(self):
-        self.events += 1
-
     def receive_image(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
         """
+        logging.info("Received an image of shape %s", image.shape)
         self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
@@ -434,8 +444,10 @@ class TestSEM(unittest.TestCase):
 #     @skip("skip")
     def test_navcam(self):
         """
-        Check it's possible to move the stage
+        Check it's possible to acquire a navcam image
         """
+        f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
+        f.result()
         # Exposure time is fixed, time is mainly spent on the image transfer
         expected_duration = 0.5  # s
         start = time.time()
@@ -448,6 +460,8 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to change the overview focus
         """
+        f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
+        f.result()
         pos = self.navcam_focus.position.value
         f = self.navcam_focus.moveRel({"z":0.1e-3})  # 1 mm
         f.result()
@@ -480,12 +494,11 @@ class TestSEM(unittest.TestCase):
 
 #     @skip("skip")
     def test_grid_scanning(self):
-        self.scanner.dwellTime.value = 10e-6  # s
+        # Dwell time is hard-coded when doing grid scanning
+        self.scanner.dwellTime.value = 100e-6  # s
         last_res = self.scanner.resolution.value
-        last_size = self.size
         self.scanner.resolution.value = (4, 4)
         self.size = self.scanner.resolution.value
-        expected_duration = self.compute_expected_duration()
 
         self.sed.data.subscribe(self.discard_image)
         # grid scanning for 5 seconds
@@ -493,7 +506,7 @@ class TestSEM(unittest.TestCase):
         self.sed.data.unsubscribe(self.discard_image)
         self.assertEqual(self.scanner.resolution.value, (4, 4))
         self.scanner.resolution.value = last_res
-        self.size = last_size
+        self.size = self.scanner.resolution.value
 
 #     @skip("skip")
     def test_sample_holder(self):
@@ -513,6 +526,7 @@ class TestSEM(unittest.TestCase):
         """
         f = self.sed.applyAutoContrast()
         f.result()
+
 
 if __name__ == "__main__":
     unittest.main()
