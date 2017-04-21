@@ -760,9 +760,9 @@ class Stream(object):
         try:
             pxs = md[MD_PIXEL_SIZE]
         except KeyError:
-            # Hopefully it'll be within the same magnitude
-            # default to typical sensor size
-            spxs = md.get(model.MD_SENSOR_PIXEL_SIZE, (20e-6, 20e-6))
+            # Hopefully it'll be within the same magnitude, and otherwise
+            # default to small value so that it easily fits in the FoV.
+            spxs = md.get(model.MD_SENSOR_PIXEL_SIZE, (100e-9, 100e-9))
             binning = md.get(model.MD_BINNING, (1, 1))
             pxs = spxs[0] / binning[0], spxs[1] / binning[1]
             # Note: this log message is disabled to prevent log flooding

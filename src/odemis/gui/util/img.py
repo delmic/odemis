@@ -20,7 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-# Some helper functions to convert/manipulate images (DataArray and wxImage)
+# Some helper functions to convert/manipulate images
 
 from __future__ import division
 
@@ -848,11 +848,11 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     min_val, max_val = value_range
 
     # Get the horizontal/vertical space in pixels
-    pixel_space = client_size[orientation != wx.HORIZONTAL]
-
     if orientation == wx.HORIZONTAL:
+        pixel_space = client_size[0]
         min_pixel = 0
     else:
+        pixel_space = client_size[1]
         # Don't display ticks too close from the left border
         min_pixel = 10
 
