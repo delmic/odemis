@@ -292,7 +292,7 @@ class Plugin(object):
         Show the analysis (aka Gallery) tab and opens the given acquisition file.
         filename (str): filename of the file to open.
         """
-        analysis_tab = self.main_app.getTabByName('analysis')
+        analysis_tab = self.main_app.main_data.getTabByName('analysis')
         self.main_app.main_data.tab.value = analysis_tab
         analysis_tab.load_data(filename)
 
