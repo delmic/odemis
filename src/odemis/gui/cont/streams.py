@@ -1051,6 +1051,7 @@ class StreamBarController(object):
             self._main_data_model.light,
             self._main_data_model.light_filter,
             focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1074,7 +1075,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.brightlight,
             focuser=self._main_data_model.focus,
-            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
+            opm=self._main_data_model.opm,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1094,7 +1095,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.backlight,
             focuser=self._main_data_model.focus,
-            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
+            opm=self._main_data_model.opm,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1138,6 +1139,7 @@ class StreamBarController(object):
                 self._main_data_model.stage,
                 self._main_data_model.focus,
                 focuser=self._main_data_model.ebeam_focus,
+                opm=self._main_data_model.opm,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
         else:
@@ -1146,7 +1148,8 @@ class StreamBarController(object):
                 detector,
                 detector.data,
                 self._main_data_model.ebeam,
-                focuser=self._main_data_model.ebeam_focus
+                focuser=self._main_data_model.ebeam_focus,
+                opm=self._main_data_model.opm
             )
 
         # If the detector already handles brightness and contrast, don't do it by default
@@ -1389,7 +1392,13 @@ class StreamBarController(object):
         elif not stream.should_update.value:
             logging.debug("Not activating %s as it is now paused", stream.name.value)
         else:
-            logging.debug("Preparation of %s completed, will activate it", stream.name.value)
+            try:
+                future.result()
+            except Exception:
+                logging.exception("Preparation of %s failed, but will activate the stream anyway",
+                                  stream.name.value)
+            else:
+                logging.debug("Preparation of %s completed, will activate it", stream.name.value)
             stream.is_active.value = True
 
         # Mostly to avoid keeping ref to the stream (hold in the callback)
@@ -1920,7 +1929,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
+            opm=self._main_data_model.opm,
             # TODO: add a focuser for the SPARCv2?
             detvas=get_local_vas(main_data.ccd),
         )
@@ -1952,7 +1961,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             focuser=self._main_data_model.ebeam_focus,
-            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
+            opm=self._main_data_model.opm,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.cld),
         )
@@ -2009,7 +2018,7 @@ class SparcStreamsController(StreamBarController):
             detector.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
+            opm=self._main_data_model.opm,
             # emtvas=get_local_vas(main_data.ebeam), # no need
             detvas=get_local_vas(detector),
         )
@@ -2048,7 +2057,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             spectrograph=spg,
             sstage=main_data.scan_stage,
-            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
+            opm=self._main_data_model.opm,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator),
         )

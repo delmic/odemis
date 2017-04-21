@@ -27,7 +27,7 @@ import copy
 import logging
 import math
 from odemis import acq, model, dataio
-from odemis.acq import stream
+from odemis.acq import stream, path
 from odemis.acq.stream import EMStream, OpticalStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
@@ -85,10 +85,6 @@ class AcquisitionDialog(xrcfr_acq):
             highlight_change=True  # also adds a "Reset" context menu
         )
 
-        # To turn on/off the fan
-        self._orig_fan_speed = None
-        self._orig_fan_temp = None
-
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
 
@@ -123,7 +119,8 @@ class AcquisitionDialog(xrcfr_acq):
                     em_emt = s.emitter
                 elif isinstance(s, OpticalStream):
                     opt_det = s.detector
-            self._ovrl_stream = stream.OverlayStream("Fine alignment", opt_det, em_emt, em_det)
+            self._ovrl_stream = stream.OverlayStream("Fine alignment", opt_det, em_emt, em_det,
+                                                     opm=self._main_data_model.opm)
             self._ovrl_stream.dwellTime.value = self._main_data_model.fineAlignDwellTime.value
         else:
             self.chkbox_fine_align.Show(False)
@@ -424,39 +421,6 @@ class AcquisitionDialog(xrcfr_acq):
         self.streambar_controller.enable(True)
         self.streambar_controller.resume()
 
-    def _set_fan(self, enable):
-        """
-        Turn on/off the fan of the CCD
-        enable (boolean): True to turn on/restore the fan, and False to turn if off
-        """
-        if not model.hasVA(self._main_data_model.ccd, "fanSpeed"):
-            return
-
-        fs = self._main_data_model.ccd.fanSpeed
-        if enable:
-            if self._orig_fan_speed is not None:
-                fs.value = max(fs.value, self._orig_fan_speed)
-        else:
-            self._orig_fan_speed = fs.value
-            fs.value = 0
-
-        # Raise targetTemperature to max/ambient to avoid the fan from
-        # automatically starting again. (Some hardware have this built-in when
-        # the current temperature is too high compared to the target)
-        if model.hasVA(self._main_data_model.ccd, "targetTemperature"):
-            temp = self._main_data_model.ccd.targetTemperature
-            if enable:
-                if self._orig_fan_temp is not None:
-                    temp.value = min(temp.value, self._orig_fan_temp)
-            else:
-                self._orig_fan_temp = temp.value
-                # TODO: handle choices
-                try:
-                    temp.value = min(temp.range[1], 25) # don't set above ambient temperature
-                except Exception:
-                    logging.warning("Failed to change targetTemperature when disabling fan",
-                                    exc_info=True)
-
     def on_acquire(self, evt):
         """ Start the actual acquisition """
         if self.last_saved_file:  # This means the button is actually "View"
@@ -483,8 +447,10 @@ class AcquisitionDialog(xrcfr_acq):
         if self.chkbox_fine_align.Value:
             streams.append(self._ovrl_stream)
 
-        # Turn off the fan to avoid vibrations (in all acquisitions)
-        self._set_fan(False)
+        # For now, always indicate the best quality (even if the preset is set
+        # to "live")
+        if self._main_data_model.opm:
+            self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
@@ -510,7 +476,8 @@ class AcquisitionDialog(xrcfr_acq):
     @call_in_wx_main
     def on_acquisition_done(self, future):
         """ Callback called when the acquisition is finished (either successfully or cancelled) """
-        self._set_fan(True)  # Turn the fan back on
+        if self._main_data_model.opm:
+            self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_FAST)
 
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)

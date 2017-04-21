@@ -26,12 +26,19 @@ from concurrent.futures.thread import ThreadPoolExecutor
 import copy
 import logging
 import math
-from odemis import model
+from odemis import model, util
 from odemis.acq import stream
-from odemis.model import isasync
+from odemis.model import NotApplicableError
+import time
+from odemis.util import TimeoutError
+
 
 GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
 
+ACQ_QUALITY_FAST = 0
+ACQ_QUALITY_BEST = 1
+
+TEMP_EPSILON = 3  # °C
 
 # Dict includes all the modes available and the corresponding component axis or
 # VA values
@@ -187,6 +194,28 @@ SPARC2_MODES = {
                 }),
          }
 
+# Currently not used as-is.
+# The only thing it does is to turns on the fan iff SEM acquisition in best
+# acquisition quality. This is done via dedicated code. The precise rule is the
+# following:
+# * In acquisition FAST, the fan is always let on
+# * In acquisition BEST, the fan is turned off for every stream not using the CCD
+# One difficulty is to detect that the fan is not in used even for optical
+# streams (eg, because the CCD is water-cooled).
+SECOM_MODES = {'fluo': ("ccd",
+                {'ccd': {'fanSpeed': 1},
+                }),
+               'overlay': ("ccd",
+                {'ccd': {'fanSpeed': 1},
+                }),
+               'sed': ("se-detector",
+                {'ccd': {'fanSpeed': 0}, # To avoid vibrations
+                }),
+               'bsd': ("bs-detector",
+                {'ccd': {'fanSpeed': 0}, # To avoid vibrations
+                }),
+              }
+
 ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus', 'spec-fiber-focus'}
 
 
@@ -221,8 +250,13 @@ class OpticalPathManager(object):
             self._modes = copy.deepcopy(SPARC2_MODES)
         elif microscope.role in ("sparc-simplex", "sparc"):
             self._modes = copy.deepcopy(SPARC_MODES)
+        elif microscope.role in ("secom", "delphi"):
+            self._modes = SECOM_MODES # Just to know it's a SECOM/DELPHI
         else:
             raise NotImplementedError("Microscope role '%s' unsupported" % (microscope.role,))
+
+        # Currently only used with the SECOM/DELPHI
+        self.quality = ACQ_QUALITY_FAST
 
         # keep list of already accessed components, to avoid creating new proxys
         # every time the mode changes
@@ -255,6 +289,24 @@ class OpticalPathManager(object):
             except KeyError:
                 pass  # Mode to delete is just not there
 
+        if self._modes is SECOM_MODES:
+            # To record the fan settings when in "fast" acq quality
+            try:
+                ccd = self._getComponent("ccd")
+            except LookupError:
+                logging.warning("Expect a CCD but found none")
+                ccd = None
+
+            self._has_fan_speed = model.hasVA(ccd, "fanSpeed")
+            self._has_fan_temp = (model.hasVA(ccd, "targetTemperature") and
+                                  not ccd.targetTemperature.readonly)
+            # Consider that by default we are in "fast" acquisition, with the fan
+            # active (if it ought to be active)
+            self._fan_enabled = True
+            # Settings of the fan when the fan is in "active cooling" mode
+            self._enabled_fan_speed = None
+            self._enabled_fan_temp = None
+
         # Handle different focus for chamber-view (in SPARCv2)
         self._chamber_view_own_focus = False
         if "chamber-view" in self._modes:
@@ -271,10 +323,6 @@ class OpticalPathManager(object):
             if not self._chamber_view_own_focus:
                 logging.debug("No focus component affecting chamber")
 
-        try:
-            spec = self._getComponent("spectrometer")
-        except LookupError:
-            spec = None
         # TODO: do this also for the sparc
         if self.microscope.role == "sparc2":
             # Remove the moves that don't affects the detector
@@ -328,7 +376,25 @@ class OpticalPathManager(object):
 
         return comp
 
-    @isasync
+    def setAcqQuality(self, quality):
+        """
+        Update the acquisition quality expected. Depending on the quality,
+        some hardware settings will be adjusted.
+        quality (ACQ_QUALITY): the acquisition quality
+        """
+        assert quality in (ACQ_QUALITY_FAST, ACQ_QUALITY_BEST)
+
+        if quality == self.quality:
+            return
+        self.quality = quality
+
+        if self._modes is SECOM_MODES:
+            if quality == ACQ_QUALITY_FAST:
+                # Restore the fan (if it was active before)
+                ccd = self._getComponent("ccd")
+                self._setFan(ccd, True)
+            # Don't turn off the fan if BEST: first wait for setPath()
+
     def setPath(self, mode):
         """
         Just a wrapper of _doSetPath
@@ -361,6 +427,14 @@ class OpticalPathManager(object):
             target = comp.name
 
         logging.debug("Going to optical path '%s', with target detector %s.", mode, target)
+
+        # Special SECOM mode: just look at the fan and be done
+        if self._modes is SECOM_MODES:
+            ccd = self._getComponent("ccd")
+            if self.quality == ACQ_QUALITY_FAST:
+                self._setFan(ccd, True)
+            elif self.quality == ACQ_QUALITY_BEST:
+                self._setFan(ccd, target == ccd.name)
 
         fmoves = []  # moves in progress
 
@@ -396,6 +470,9 @@ class OpticalPathManager(object):
                         except AttributeError:
                             logging.debug("Could not retrieve power range of %s component", comp_role)
                     continue
+                if not hasattr(comp, "axes") or not isinstance(comp.axes, dict):
+                    continue
+                # Unused
                 if isinstance(pos, str) and pos.startswith("MD:"):
                     pos = self.mdToValue(comp, pos[3:])[axis]
                 if axis in comp.axes:
@@ -462,6 +539,8 @@ class OpticalPathManager(object):
                     elif axis == "slit-in":
                         if self._last_mode not in ALIGN_MODES:
                             # TODO: save also the component
+                            # FIXME: only if "spectrograph" (not "spectrograph-dedicated")?
+                            # Or also store the component
                             self._stored[axis] = comp.position.value[axis]
                     elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
                         choices = comp.axes[axis].choices
@@ -502,6 +581,8 @@ class OpticalPathManager(object):
         # wait for all the moves to be completed
         for f in fmoves:
             try:
+                # TODO: have some timeout?
+                # Can be large, eg within 5 min one (any) move should finish.
                 f.result()
             except IOError as e:
                 logging.warning("Actuator move failed giving the error %s", e)
@@ -531,9 +612,10 @@ class OpticalPathManager(object):
         fmoves = []
         for comp in self._actuators:
             # TODO: pre-cache this as comp/target -> axis/pos
+            # TODO: don't do moves already done
 
             # TODO: extend the path computation to "for every actuator which _affects_
-            # the target, move if if position known, and update path to that actuator"?
+            # the target, move if position known, and update path to that actuator"?
             # Eg, this would improve path computation on SPARCv2 with fiber aligner
             mv = {}
             for an, ad in comp.axes.items():
@@ -577,6 +659,8 @@ class OpticalPathManager(object):
                     return self.guessMode(st)
                 except LookupError:
                     pass
+        elif isinstance(guess_stream, stream.OverlayStream):
+            return "overlay"
         else:
             for mode, conf in self.guessed.items():
                 if conf[0] == guess_stream.detector.role:
@@ -615,6 +699,8 @@ class OpticalPathManager(object):
             if dets:
                 logging.warning("No detector on stream %s has a known optical role", path_stream.name.value)
                 return dets[0]
+        elif isinstance(path_stream, stream.OverlayStream):
+            return path_stream._ccd.name
         else:
             try:
                 return path_stream.detector.name
@@ -670,3 +756,80 @@ class OpticalPathManager(object):
                 if new_path:
                     return new_path
         return None
+
+    def _setFan(self, comp, enable):
+        """
+        Turn on/off the fan of the CCD
+        enable (boolean): True to turn on/restore the fan, and False to turn if off
+        """
+        if not self._has_fan_speed:
+            return
+
+        if self._fan_enabled == enable:
+            return
+        self._fan_enabled = enable
+
+        if enable:
+            if self._enabled_fan_speed is not None:
+                logging.debug("Turning fan on of %s", comp.name)
+                comp.fanSpeed.value = max(comp.fanSpeed.value, self._enabled_fan_speed)
+        else:
+            if comp.fanSpeed.value == 0:
+                # Already off => don't touch it
+                self._enabled_fan_speed = None
+                self._enabled_fan_temp = None
+            else:
+                logging.debug("Turning fan off of %s", comp.name)
+                self._enabled_fan_speed = comp.fanSpeed.value
+                comp.fanSpeed.value = 0
+
+        # Raise targetTemperature to max/ambient to avoid the fan from
+        # automatically starting again. (Some hardware have this built-in when
+        # the current temperature is too high compared to the target)
+        if self._has_fan_temp:
+            temp = comp.targetTemperature
+            if enable:
+                if self._enabled_fan_temp is not None:
+                    temp.value = min(comp.targetTemperature.value, self._enabled_fan_temp)
+                    try:
+                        self._waitTemperatureReached(comp, timeout=60)
+                    except Exception as ex:
+                        logging.warning("Failed to reach target temperature of CCD: %s",
+                                        ex)
+            else:
+                # Set ~25°C == ambient temperature
+                self._enabled_fan_temp = temp.value
+                try:
+                    try:
+                        temp.value = min(comp.targetTemperature.range[1], 25)
+                    except (AttributeError, NotApplicableError):
+                        temp.value = util.find_closest(25, comp.targetTemperature.choices)
+                except Exception:
+                    logging.warning("Failed to change targetTemperature when disabling fan",
+                                    exc_info=True)
+
+    def _waitTemperatureReached(self, comp, timeout=None):
+        """
+        Wait until the current temperature of the component has reached the
+          target temperature (within some margin).
+        comp (Component)
+        timeout (0<float or None): maximum time to wait (in s)
+        raises:
+            TimeoutError: if time-out reached
+        """
+        tstart = time.time()
+        while timeout is None or time.time() < tstart + timeout:
+            # TODO: adjust the timeout depending on whether the temperature
+            # gets closer to the target over time or not.
+            ttemp = comp.targetTemperature.value
+            atemp = comp.temperature.value
+            if atemp < ttemp + TEMP_EPSILON:
+                return
+            else:
+                logging.debug(u"Waiting for temperature to reach %g °C (currently at %g °C)",
+                              ttemp, atemp)
+                time.sleep(1)
+
+        raise TimeoutError("Target temperature (%g C) not reached after %g s" %
+                           (comp.targetTemperature.value, timeout))
+

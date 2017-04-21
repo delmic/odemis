@@ -42,7 +42,8 @@ import time
 
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
-# because it's a bit strange dependency.
+# because it's a bit strange dependency. => just move to a acq.manager module?
+
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
 # background. You are in charge of ensuring that no other acquisition is
@@ -112,10 +113,8 @@ def computeThumbnail(streamTree, acqTask):
     # FIXME: need to use the raw images of the acqTask as the source in the
     # streams of the streamTree (instead of whatever is the latest content of
     # .raw .
-
-    # FIXME: this call now doesn't work. We need to have a working .getImage()
-    # which do not depend on the GUI.
-    # thumbnail = self._streamTree.getImage()
+    # cf gui.util.img
+    # => move to gui.util.img?
 
     # poor man's implementation: take the first image of the streams, hoping
     # it actually has a renderer (.image)
@@ -170,9 +169,8 @@ def _weight_stream(stream):
 
 class AcquisitionTask(object):
 
-    def __init__(self, streams, future, opm=None):
+    def __init__(self, streams, future):
         self._future = future
-        self._opm = opm
 
         # order the streams for optimal acquisition
         self._streams = sorted(streams, key=_weight_stream, reverse=True)

@@ -25,6 +25,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.acq import path, stream
+from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
 from odemis.util import test
 import os
 import unittest
@@ -46,6 +47,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 # Test for the different configurations
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "sim/secom2-sim.odm.yaml"
 MONASH_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPEC_CONFIG = CONFIG_PATH + "sim/sparc-sim-spec.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
@@ -892,6 +894,116 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # Assert that actuator was moved according to mode given
         self.assert_pos_as_in_mode(self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
+
+
+class SecomPathTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SECOM
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SECOM_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Microscope component
+        cls.microscope = model.getComponent(role="secom")
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.filter = model.getComponent(role="filter")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        del cls.optmngr  # To garbage collect it
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def test_set_acq_quality(self):
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+
+        # Set the quality to best + SEM stream => fan off
+        self.optmngr.setAcqQuality(ACQ_QUALITY_BEST)
+        self.optmngr.setPath(sems).result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+
+        # Set back the quality to fast => fan on
+        self.optmngr.setAcqQuality(ACQ_QUALITY_FAST)
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+
+        # Set again SEM stream => fan (still) on
+        self.optmngr.setPath(sems).result()
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+
+        # Set back to high quality => don't touch the fan => fan on
+        self.optmngr.setAcqQuality(ACQ_QUALITY_BEST)
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+
+        # SEM stream => fan off
+        self.optmngr.setPath(sems).result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+
+    def test_set_path_stream(self):
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam, opm=self.optmngr)
+        fluos = stream.FluoStream("test fluo", self.ccd, self.ccd.data, self.light,
+                                  self.filter, opm=self.optmngr)
+        ols = stream.OverlayStream("test overlay", self.ccd, self.ebeam, self.sed, opm=self.optmngr)
+
+        # Set quality to fast => any stream has the fan on
+        self.optmngr.setAcqQuality(ACQ_QUALITY_FAST)
+        sems.prepare().result()
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+        fluos.prepare().result()
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+        ols.prepare().result()
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+
+        # Set quality to best => SEM stream = fan off, the other ones = fan on
+        self.optmngr.setAcqQuality(ACQ_QUALITY_BEST)
+        sems.prepare().result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+        fluos.prepare().result()
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+        sems.prepare().result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+        ols.prepare().result()
+        self.assertGreater(self.ccd.fanSpeed.value, 0)
+
+        # Pretend it's water-cooled (= fan is off at the "init")
+        # => Fan should stay off all the time
+        self.optmngr.setAcqQuality(ACQ_QUALITY_FAST)
+        self.ccd.fanSpeed.value = 0
+
+        self.optmngr.setAcqQuality(ACQ_QUALITY_BEST)
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+
+        self.optmngr.setAcqQuality(ACQ_QUALITY_FAST)
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+
+        fluos.prepare().result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+
+        self.optmngr.setAcqQuality(ACQ_QUALITY_BEST)
+        sems.prepare().result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
+        ols.prepare().result()
+        self.assertEqual(self.ccd.fanSpeed.value, 0)
 
 
 if __name__ == "__main__":
