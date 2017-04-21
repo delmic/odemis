@@ -4,7 +4,9 @@
 # It allows to do a move while recording commanded and actual position, and
 # update the PID parameter values.
 # Example way to start:
-# ./util/pituner.py --port autoip --controller 1
+# ./util/pituner --port autoip --controller 1
+# To test:
+# ./util/pituner --port /dev/fake --controller 1
 
 # Note for tuning:
 #  * Start tuning with P, with I & D = 0, then tune I, and then D.
@@ -35,7 +37,7 @@ from __future__ import division, absolute_import, print_function
 import argparse
 import logging
 import math
-import numpy as np
+import numpy
 import sys
 import time
 from odemis.driver import pigcs
@@ -43,143 +45,179 @@ from odemis.util import driver
 import matplotlib.pyplot as plt
 
 
-def tune(cont, axis):
-    tablelen = 1024  # True on E-861 (but could be read using HDR?)
-    # TODO: check this is correct: doc says 20µs but recorded data indicates 50µs
-    # cycledur = 20e-6  # s, for the E-861
-    cycledur = 50e-6  # s, for the E-861
-    upm = cont._upm[axis]  # ratio : user unit -> m
+class PITuner(object):
+    def __init__(self, cont, axis):
+        """
+        cont: the PIGCS controller
+        axis (int): axis number
+        """
+        self.cont = cont
+        self.axis = axis
 
-    # Hack to force the servo to be always on.
-    # We could try to init with auto_suspend = False, but that only works with
-    # some type of controllers.
-    if hasattr(cont, "_acquireAxis"):
-        cont._acquireAxis(axis)
+        # print(cont._sendQueryCommand("HDR?\n"))
 
-    # print(cont._sendQueryCommand("HDR?\n"))
+        # TODO: set different values based on the type of controller
+        self._tablelen = 1024  # True on E-861 (but could be read using HDR?)
+        # Doc says 20µs but actually it's  50µs
+        self._cycledur = 50e-6  # s, for the E-861
+        self._upm = cont._upm[axis]  # ratio : user unit -> m
 
-    # Configure the recording options
-    # 1 = commanded position
-    # 2 = actual position
-    # 3 = position error
-    cont.SetRecordConfig(1, axis, 1)
-    cont.SetRecordConfig(2, axis, 2)
+        # Hack to force the servo to be always on.
+        # We could try to init with auto_suspend = False, but that only works with
+        # some type of controllers.
+        if hasattr(cont, "_acquireAxis"):
+            cont._acquireAxis(axis)
 
-    # Get speed and acceleration
-    # TODO: allow to change too
-    try:
-        vel = cont.GetCLVelocity(axis) * upm
-    except Exception:
-        vel = 2e-3  # m/s
-    try:
-        acc = cont.GetCLAcceleration(axis) * upm
-    except Exception:
-        acc = 3e-3  # m/s²
+        # Configure the recording options
+        # 1 = commanded position
+        # 2 = actual position
+        # 3 = position error
+        cont.SetRecordConfig(1, axis, 1)
+        cont.SetRecordConfig(2, axis, 2)
+        try:
+            self.cont.checkError()
+        except Exception:
+            logging.warning("Failed to set record config", exc_info=True)
 
-    # Force to be what we think it is
-    cont.SetCLVelocity(axis, vel / upm)
-    cont.SetCLAcceleration(axis, acc / upm)
-    cont.SetCLDeceleration(axis, acc / upm)
-    cont.checkError()
+        # distance to move (negative to move backward)
+        self._distm = 10e-6  # m
 
-    # To change PID values: param 1, 2, 3  (4 = I limit)
-    # param = 1
-    # cont.SetParameter(axis, param, 30)
+        # Get speed and acceleration
+        try:
+            self._vel = cont.GetCLVelocity(axis) * self._upm
+            self._acc = cont.GetCLAcceleration(axis) * self._upm
+            # Set the deceleration same as the acceleration
+            self.cont.SetCLDeceleration(self.axis, self._acc / self._upm)
+            self.cont.checkError()
+        except Exception:
+            logging.warning("Failed to read velocity/acceleration", exc_info=True)
+            self._vel = None
+            self._acc = None
 
-    while True:
-        distm = ask_next_move(cont, axis)
-        if distm is None:
-            return
+    def tune(self, show_vel=False):
+        """
+        Main loop for the tuning process: asks the user, does one move, show
+          the result... rinse and repeat.
+        show_vel (bool): True to also display the measured velocity
+        """
 
-        movedur = driver.estimateMoveDuration(abs(distm), vel, acc)
-        logging.info("Expected move time = %g s", movedur)
+        while self.ask_next_move():
+            if self._vel is not None:
+                movedur = driver.estimateMoveDuration(abs(self._distm), self._vel, self._acc)
+            else:
+                # Fill up by not too crazy velocity/acceleration
+                movedur = driver.estimateMoveDuration(abs(self._distm), 2e-3, 3e-3)
+            logging.info("Expected move time = %g s", movedur)
 
-        rrate = max(1, int(math.ceil((movedur * 2 + 0.5) / (tablelen * cycledur))))
-        cont.SetRecordRate(rrate)
-        recdur = tablelen * cycledur * rrate
-        logging.info("Recording every %d cycle => duration = %g s", rrate, recdur)
-        # TODO: change record rate to fit the move duration?
-        cont.MoveRelRecorded(axis, distm / upm)
-        tstart = time.time()
-        tendmax = tstart + 2 * recdur + 1
+            # Adjust record rate to fit the move duration
+            rrate = max(1, int(math.ceil((movedur + min(movedur, 2) + 0.5) / (self._tablelen * self._cycledur))))
+            self.cont.SetRecordRate(rrate)
+            recdur = self._tablelen * self._cycledur * rrate
+            logging.info("Recording every %d cycle => duration = %g s", rrate, recdur)
 
-        # Wait until the move is done
-        while True:
-            time.sleep(0.01)
+            # Start moving and recording
+            self.cont.MoveRelRecorded(self.axis, self._distm / self._upm)
+            tstart = time.time()
+            tendmax = tstart + 2 * recdur + 1
 
-            try:
-                if cont.IsOnTarget(axis, check=True):
-                    logging.debug("Move finished after %g s", time.time() - tstart)
+            # Wait until the move is done
+            while True:
+                time.sleep(0.01)
+
+                try:
+                    if self.cont.IsOnTarget(self.axis, check=True):
+                        logging.debug("Move finished after %g s", time.time() - tstart)
+                        break
+                except pigcs.PIGCSError as exp:
+                    logging.warning("Controller reports error %s", exp)
                     break
-            except pigcs.PIGCSError as exp:
-                logging.warning("Controller reports error %s", exp)
-                break
 
-            if time.time() > tendmax:
-                logging.warning("Controller still moving after %g s, stopping it", tendmax - tstart)
-                cont.Stop()
-                break
+                if time.time() > tendmax:
+                    logging.warning("Controller still moving after %g s, stopping it", tendmax - tstart)
+                    self.cont.Stop()
+                    break
 
-        # Wait until all the data is recorded
-        left = tstart + recdur - time.time()
-        if left > 0:
-            time.sleep(left)
+            # Wait until all the data is recorded
+            left = tstart + recdur - time.time()
+            if left > 0:
+                time.sleep(left)
 
-        # Read the recorded data from the move
-        data = cont.GetRecordedData()
+            # Read the recorded data from the move
+            data = self.cont.GetRecordedData()
 
-        # plot data using matplotlib
-        idx = np.linspace(0, (len(data) - 1) * cycledur * rrate, len(data))
-        cp, ap = np.array(zip(*data)) * upm * 1e6  # -> µm
-        ep = ap - cp
+            # plot data using matplotlib
+            idx = numpy.linspace(0, (len(data) - 1) * self._cycledur * rrate, len(data))
+            cp, ap = numpy.array(zip(*data)) * self._upm * 1e6  # -> µm
+            ep = ap - cp
+            nb_plots = 2
+            if show_vel:
+                # Compute actual velocity
+                av = (ap[1:] - ap[:-1]) / (self._cycledur * rrate)
+                nb_plots += 1
 
-        f, ax = plt.subplots(2, sharex=True)
-        ax[0].plot(idx, cp, 'b-', idx, ap, 'r-')
-        ax[0].set_title('Commanded vs. Actual position')
-        ax[1].plot(idx, ep, 'b-')
-        ax[1].set_title('Position Error')
-        plt.show()
+            f, ax = plt.subplots(nb_plots, sharex=True)
+            ax[0].plot(idx, cp, 'b-', idx, ap, 'r-')
+            ax[0].set_title(u'Commanded vs. Actual position (µm)')
+            ax[1].plot(idx, ep, 'b-')
+            ax[1].set_title(u'Position Error (µm)')
+            if show_vel:
+                ax[2].plot(idx[1:], av, 'b-')
+                ax[2].set_title(u'Actual velocity (µm/s)')
 
-        # print("# Commanded pos\tActual pos")
-        # for cp, ap in data:
-        #    print("%g\t%g" % (cp, ap))
+            plt.show()
 
-# last move distance requested
-distm = 0.001e-3  # m
-def ask_next_move(cont, axis):
-    """
-    Ask the user for the size of the next move, or to update the settings of
-    the controller.
-    return (float or None): distance to move in meter or None if wants to quit
-    """
-    global distm
-    P = cont.GetParameter(axis, 1)
-    I = cont.GetParameter(axis, 2)
-    D = cont.GetParameter(axis, 3)
-    print("P=%s, I=%s, D=%s" % (P, I, D))
-    print(u"Current move distance: %g µm" % (distm * 1e6,))
+            # print("# Commanded pos\tActual pos")
+            # for cp, ap in data:
+            #    print("%g\t%g" % (cp, ap))
 
-    while True:
-        print("Change P, I, D, (M)ove distance, (Q)uit or press Enter to start next move: ", end="")
-        choice = raw_input().upper()
-        if choice in ("P", "I", "D"):
-            val = raw_input("Enter new value for %s: " % (choice,))
-            param = {"P": 1, "I": 2, "D": 3}[choice]
-            try:
-                cont.SetParameter(axis, param, val)
-            except Exception:
-                logging.exception("Failed to write %s to parameter 0x%x", val, param)
-        elif choice == "M":
-            print(u"Enter new distance in µm (can be negative): ", end="")
-            val = raw_input()
-            distm = float(val) * 1e-6
-        elif choice == "":
-            return distm
-        elif choice == "Q":
-            return None
-        else:
-            # Just keep asking
-            print("Command '%s' not understood" % (choice,))
+    def ask_next_move(self):
+        """
+        Ask the user for the size of the next move, or to update the settings of
+        the controller.
+        return (bool): False if needs to stop, True if a move is requested
+        """
+        P = self.cont.GetParameter(self.axis, 1)
+        I = self.cont.GetParameter(self.axis, 2)
+        D = self.cont.GetParameter(self.axis, 3)
+        print("P=%s, I=%s, D=%s" % (P, I, D))
+        if self._vel is not None:
+            print(u"Vel=%g µm/s, Acc/Dec=%g µm/s²" % (self._vel * 1e6, self._acc * 1e6))
+        print(u"Current move distance: %g µm" % (self._distm * 1e6,))
+
+        while True:
+            print("Change P, I, D, (M)ove distance, (V)elocity, (A)cceleration, (Q)uit or press Enter to start next move: ", end="")
+            choice = raw_input().upper()
+            if choice in ("P", "I", "D"):
+                val = raw_input("Enter new value for %s: " % (choice,))
+                param = {"P": 1, "I": 2, "D": 3}[choice]
+                try:
+                    self.cont.SetParameter(self.axis, param, val)
+                except Exception:
+                    logging.exception("Failed to write %s to parameter 0x%x", val, param)
+            elif choice == "V":
+                print(u"Enter new velocity in µm/s: ", end="")
+                val = raw_input()
+                self._vel = float(val) * 1e-6
+                self.cont.SetCLVelocity(self.axis, self._vel / self._upm)
+                self.cont.checkError()
+            elif choice == "A":
+                print(u"Enter new acceleration/deceleration in µm/s²: ", end="")
+                val = raw_input()
+                self._acc = float(val) * 1e-6
+                self.cont.SetCLAcceleration(self.axis, self._acc / self._upm)
+                self.cont.SetCLDeceleration(self.axis, self._acc / self._upm)
+                self.cont.checkError()
+            elif choice == "M":
+                print(u"Enter new distance in µm (can be negative): ", end="")
+                val = raw_input()
+                self._distm = float(val) * 1e-6
+            elif choice == "":
+                return True
+            elif choice == "Q":
+                return False
+            else:
+                # Just keep asking
+                print("Command '%s' not understood" % (choice,))
 
 
 def main(args):
@@ -200,6 +238,8 @@ def main(args):
                         help="Port name (ex: /dev/ttyUSB0, autoip, or 192.168.95.5)")
     parser.add_argument('--controller', dest="addr", type=int,
                         help="Controller address (if controller needs it)")
+    parser.add_argument("--velocity", "-s", dest="vel", action="store_true", default=False,
+                        help="Also shows velocity based on the measured position.")
 
     options = parser.parse_args(args[1:])
 
@@ -218,14 +258,15 @@ def main(args):
             kwargs["master"] = None
 
         if options.port == "/dev/fake":
-            kwargs["_addresses"] = {options.addr: False}
+            kwargs["_addresses"] = {options.addr: True}
             acc = pigcs.FakeBus._openPort(options.port, **kwargs)
         else:
             acc = pigcs.Bus._openPort(options.port, **kwargs)
 
         # TODO: allow to specify the axis
         cont = pigcs.Controller(acc, address=options.addr, axes={1: True})
-        tune(cont, 1)
+        tuner = PITuner(cont, 1)
+        tuner.tune(options.vel)
 
         cont.terminate()
         acc.terminate()
