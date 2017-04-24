@@ -1939,6 +1939,7 @@ class SecomAlignTab(Tab):
             main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         self._stream_controllers = (ccd_spe, sem_spe)
+        self._sem_spe = sem_spe  # to disable it during spot mode
 
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
@@ -2048,20 +2049,24 @@ class SecomAlignTab(Tab):
             self._spot_stream.should_update.value = False
             self._spot_stream.is_active.value = False
             self._sem_stream.should_update.value = True
-            self._sem_stream.is_active.value = True and shown
+            self._sem_stream.is_active.value = shown
+            self._sem_spe.resume()
+            self._sem_spe.enable(True)
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
             self.panel.pnl_move_to_center.Show(True)
             self.panel.pnl_align_tools.Show(False)
         elif tool == guimod.TOOL_SPOT:
+            # Do not show the SEM settings being changed during spot mode, and
+            # do not allow to change the resolution/scale
+            self._sem_spe.enable(False)
+            self._sem_spe.pause()
+
             self._sem_stream.should_update.value = False
             self._sem_stream.is_active.value = False
             self._spot_stream.should_update.value = True
-            self._spot_stream.is_active.value = True and shown
-            # TODO: until the settings are directly connected to the hardware,
-            # or part of the stream, we need to disable/freeze the SEM settings
-            # in spot mode.
+            self._spot_stream.is_active.value = shown
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
@@ -2091,6 +2096,9 @@ class SecomAlignTab(Tab):
                 stream_controller.pause()
         else:
             for stream_controller in self._stream_controllers:
+                if (self.tab_data_model.tool.value == guimod.TOOL_SPOT and
+                    stream_controller is self._sem_spe):
+                    continue
                 stream_controller.resume()
                 stream_controller.enable(True)
 
