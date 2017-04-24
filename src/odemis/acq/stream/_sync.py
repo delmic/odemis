@@ -695,7 +695,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Generating %s spots for %g (dt=%g) s", spot_pos.shape[:2], rep_time, dwell_time)
             rep = self._rep_stream.repetition.value
             roi = self._rep_stream.roi.value
-            drift_shift = (0, 0)  # total drift shift (in sem px)
             main_pxs = self._emitter.pixelSize.value
             self._main_data = []
             self._rep_data = None
@@ -745,9 +744,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 trans = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
                 cptrans = self._emitter.translation.clip(trans)
                 if cptrans != trans:
-                    logging.error("Drift of %s px caused acquisition region out "
-                                  "of bounds: needed to scan spot at %s.",
-                                  drift_shift, trans)
+                    if self._dc_estimator:
+                        logging.error("Drift of %s px caused acquisition region out "
+                                      "of bounds: needed to scan spot at %s.",
+                                      self._dc_estimator.tot_drift, trans)
+                    else:
+                        logging.error("Unexpected clipping in the scan spot position %s", trans)
                 self._emitter.translation.value = cptrans
                 self._acq_min_date = time.time()
                 logging.debug("E-beam spot after drift correction: %s",
@@ -824,6 +826,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # MD_POS default to the center of the stage, but it needs to be
                     # the position of the e-beam (corrected for drift)
                     raw_pos = self._main_data[-1].metadata[MD_POS]
+                    drift_shift = self._dc_estimator.tot_drift if self._dc_estimator else (0, 0)
                     cor_pos = (raw_pos[0] + drift_shift[0] * main_pxs[0],
                                raw_pos[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
                     self._rep_data.metadata[MD_POS] = cor_pos
@@ -851,8 +854,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         shift = self._dc_estimator.estimate()
                         spot_pos[:, :, 0] -= shift[0]
                         spot_pos[:, :, 1] -= shift[1]
-                        drift_shift = (drift_shift[0] + shift[0],
-                                       drift_shift[1] + shift[1])
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
@@ -1242,7 +1243,6 @@ class SEMMDStream(MultipleDetectorStream):
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 trans_list.append((spot_pos[i[::-1]][0], spot_pos[i[::-1]][1]))
             roi = self._rep_stream.roi.value
-            drift_shift = (0, 0)  # total drift shift (in sem px)
             self._main_data = []
             self._rep_data = None
             rep_buf = []
@@ -1287,9 +1287,12 @@ class SEMMDStream(MultipleDetectorStream):
                 trans = tuple(numpy.mean(trans_list[spots_sum:(spots_sum + cur_dc_period)], axis=0))
                 cptrans = self._emitter.translation.clip(trans)
                 if cptrans != trans:
-                    logging.error("Drift of %s px caused acquisition region out "
-                                  "of bounds: needed to scan spot at %s.",
-                                  drift_shift, trans)
+                    if self._dc_estimator:
+                        logging.error("Drift of %s px caused acquisition region out "
+                                      "of bounds: needed to scan spot at %s.",
+                                      self._dc_estimator.tot_drift, trans)
+                    else:
+                        logging.error("Unexpected clipping in the scan spot position %s", trans)
                 self._emitter.translation.value = cptrans
 
                 spots_sum += cur_dc_period
@@ -1346,8 +1349,6 @@ class SEMMDStream(MultipleDetectorStream):
                     # Estimate drift and update next positions
                     shift = self._dc_estimator.estimate()
                     trans_list = [((x[0] - shift[0]), (x[1] - shift[1])) for x in trans_list]
-                    drift_shift = (drift_shift[0] + shift[0],
-                                   drift_shift[1] + shift[1])
 
             self._main_df.unsubscribe(self._onMainImage)
             self._rep_df.unsubscribe(self._onRepetitionImage)
