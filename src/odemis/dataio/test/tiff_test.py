@@ -168,8 +168,8 @@ class TestTiffIO(unittest.TestCase):
         del im
 
         # check OME-TIFF metadata
-        imo = libtiff.tiff.TIFFfile(FILENAME)
-        omemd = imo.IFD[0].get_value("ImageDescription")
+        imo = libtiff.TIFF.open(FILENAME)
+        omemd = imo.GetField("ImageDescription")
         self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
 
         # remove "xmlns" which is the default namespace and is appended everywhere
@@ -182,7 +182,7 @@ class TestTiffIO(unittest.TestCase):
         for tdt in root.findall("Image/Pixels/TiffData"):
             ifd = int(tdt.get("IFD", "0"))
             self.assertNotIn(ifd, ifds, "Multiple times the same IFD %d" % ifd)
-            self.assertTrue(imo.IFD[ifd], "IFD %d doesn't exists" % ifd)
+            self.assertEqual(imo.SetDirectory(ifd), 1, "IFD %d doesn't exists" % ifd)
 
         imo.close()
 
