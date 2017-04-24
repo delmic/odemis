@@ -349,8 +349,12 @@ class MicroscopeViewport(ViewPort):
 
     @call_in_wx_main
     def _on_view_mpp(self, mpp):
-        self.microscope_view.fov.value = self.get_fov_from_mpp()
-        self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+        fov = self.get_fov_from_mpp()
+        if fov:
+            self.microscope_view.fov.value = fov
+        buf_fov = self.get_buffer_fov_from_mpp()
+        if buf_fov:
+            self.microscope_view.fov_buffer.value = buf_fov
         self.microscope_view.mpp.value = mpp
         if self.bottom_legend:
             self.bottom_legend.scale_win.SetMPP(mpp)

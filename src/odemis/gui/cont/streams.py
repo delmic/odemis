@@ -146,13 +146,12 @@ class StreamController(object):
                 self._add_selwidth_ctrl()
 
         # Set the visibility button on the stream panel
-        vis = stream in tab_data_model.focussedView.value.getStreams()
+        vis = stream in tab_data_model.focussedView.value.stream_tree
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
-            vis = stream in tab_data_model.focussedView.value.getStreams()
             self.stream_panel.set_peak(PEAK_METHOD_TO_STATE[stream.peak_method.value])
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
@@ -291,7 +290,6 @@ class StreamController(object):
         # (More references are present, see getrefcount
         self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
         self.stream_panel.header_change_callback = None
-        self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
         self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
         self.stream_panel.Unbind(EVT_STREAM_PEAK)
 
@@ -1243,13 +1241,6 @@ class StreamBarController(object):
                                                 locked=self.locked_mode,
                                                 static=self.static_mode)
 
-            # TODO: make StreamTree a VA-like and remove this
-            # logging.debug("Sending stream.ctrl.added message")
-            # pub.sendMessage('stream.ctrl.added',
-            #                 streams_present=True,
-            #                 streams_visible=self._has_visible_streams(),
-            #                 tab=self._tab_data_model)
-
             return stream_cont
         else:
             return stream
@@ -1304,6 +1295,7 @@ class StreamBarController(object):
         self._prev_view = view
 
     def _on_visible_streams(self, flat):
+        # Convert the DataProjections into Stream
         visible_streams = [s if isinstance(s, acqstream.Stream) else s.stream for s in flat]
 
         for e in self._stream_bar.stream_panels:
@@ -1672,7 +1664,7 @@ class SparcStreamsController(StreamBarController):
     """
     Controlls the streams for the SPARC acquisition view
     In addition to the standard controller it:
-     * Updates the .acquisitionView when a stream is added/removed
+     * Updates the .acquisitionStreams when a stream is added/removed
      * Connects the ROA (.roi of each settings streams) to semStream
      * Shows the repetition overlay when the repetition setting is focused
      * Play/pause the spot stream in spot mode
@@ -1764,11 +1756,9 @@ class SparcStreamsController(StreamBarController):
             streams (list of streams): The streams currently used in this tab
         """
         semcls = self._tab_data_model.semStream
-        # The acquisition streams
-        acq_streams = self._tab_data_model.acquisitionView.getStreams()
 
         # For all MD streams in the acquisition view...
-        for mds in acq_streams:
+        for mds in self._tab_data_model.acquisitionStreams.copy():
             if not isinstance(mds, acqstream.MultipleDetectorStream):
                 continue
             # Are all the sub streams of the MDStreams still there?
@@ -1779,7 +1769,7 @@ class SparcStreamsController(StreamBarController):
                         logging.warning("Removing stream because %s is gone!", ss)
                     logging.debug("Removing acquisition stream %s because %s is gone",
                                   mds.name.value, ss.name.value)
-                    self._tab_data_model.acquisitionView.removeStream(mds)
+                    self._tab_data_model.acquisitionStreams.discard(mds)
                     break
 
         # clean up the ROI listeners
@@ -1878,7 +1868,7 @@ class SparcStreamsController(StreamBarController):
         stream_cont.stream_panel.show_visible_btn(False)
 
         # add the acquisition stream to the acquisition view
-        self._tab_data_model.acquisitionView.addStream(mdstream)
+        self._tab_data_model.acquisitionStreams.add(mdstream)
 
         stream_config = self._stream_config.get(type(stream), {})
 

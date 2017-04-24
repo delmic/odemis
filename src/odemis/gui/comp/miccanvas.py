@@ -29,7 +29,7 @@ import logging
 import math
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI, EMStream
+from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
@@ -384,9 +384,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
-            if isinstance(s, stream.OpticalStream):
+            ostream = s.stream if isinstance(s, DataProjection) else s
+            if isinstance(ostream, stream.OpticalStream):
                 images_opt.append((image, BLEND_SCREEN, s.name.value, s))
-            elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
+            elif isinstance(ostream, (stream.SpectrumStream, stream.CLStream)):
                 images_spc.append((image, BLEND_DEFAULT, s.name.value, s))
             else:
                 images_std.append((image, BLEND_DEFAULT, s.name.value, s))
