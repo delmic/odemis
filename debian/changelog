@@ -1,3 +1,19 @@
+odemis (2.6.3-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6.3
+  * Main bugs fixed:
+    - Changing the dwell time in the acquisition window didn't update the
+      expected time (SECOM/DELPHI)
+    - Early error messages in GUI would not update log panel button colour
+    - Ensure in SPARCv2 lens alignment mode the pass-through filter is selected
+    - When starting/stopping a stream very quickly, the stream could be playing
+      unexpectedly (SPARC)
+    - Guess good unit prefix in GUI when the value is 0
+    - Wrong range in syncOffset attribute of picoquant driver
+    - Fix opening a file without absolute path in the GUI from the command line
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 24 Apr 2017 10:34:07 +0200
+
 odemis (2.6.2-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6.2
