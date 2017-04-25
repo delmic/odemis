@@ -6,6 +6,8 @@ RUN_DIR="/var/run/odemisd"
 
 export PYTHONPATH
 
+GRACE_PER_COMP=5  # s
+
 # Clean up the run directory that contains pipes for connection between backend and clients
 clean_run_dir () {
     if [ -e "$RUN_DIR" ]; then
@@ -45,7 +47,7 @@ if [ -n "$OLD_BE_PIDS" ]; then
     # As long as number of PIDS decreases, sleep more
     while [ "$NLEFT_PIDS" -gt 0 -a "$NLEFT_PIDS" -lt "$NOLD_PIDS" ]; do
         echo "Waiting for a back-end a bit more ($NLEFT_PIDS processes left)..."
-        sleep 1
+        sleep $GRACE_PER_COMP
         NOLD_PIDS="$NLEFT_PIDS"
         NOW_BE_PIDS=$(pgrep -f $BACKEND)
         LEFT_BE_PIDS=$(sort <<< "$OLD_BE_PIDS"$'\n'"$NOW_BE_PIDS" | uniq -d | sed '/^ $/d')
@@ -53,12 +55,12 @@ if [ -n "$OLD_BE_PIDS" ]; then
     done
     #echo "Left = $LEFT_BE_PIDS"
     if [ -n "$LEFT_BE_PIDS" ]; then
-        echo "Back-end still running, killing it..."
+        echo "Back-end still running ($LEFT_BE_PIDS processes), killing it..."
         # TODO: only use sudo if the backend is running as root
         sudo /bin/kill $LEFT_BE_PIDS
 #        sudo /bin/kill $BEP_PID
 
-        sleep 1
+        sleep $GRACE_PER_COMP
         # Try even harder
         if pgrep -f $BACKEND > /dev/null; then
             echo "Back-end is apparently dead, trying harder to kill it..."
