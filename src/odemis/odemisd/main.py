@@ -317,6 +317,9 @@ class BackendContainer(model.Container):
                     logging.warning("Failed to update the alive VA", exc_info=True)
 
     def terminate(self):
+        if self._must_stop.is_set():
+            logging.info("Terminate already called, so not running it again")
+
         # Stop the component instantiator, to be sure it'll not restart the components
         self._must_stop.set()
         if self._inst_thread:

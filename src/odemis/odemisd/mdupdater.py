@@ -294,7 +294,7 @@ class MetadataUpdater(model.Component):
         for fun, args in self._onTerminate:
             try:
                 fun(*args)
-            except:
-                logging.exception("Failed to unsubscribe metadata properly.")
+            except Exception as ex:
+                logging.warning("Failed to unsubscribe metadata properly: %s", ex)
 
         model.Component.terminate(self)
