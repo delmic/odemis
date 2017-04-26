@@ -77,7 +77,7 @@ class MultiplexLight(model.Emitter):
     def _updatePower(self, power):
         for child, idx in self._child_idx.items():
             cpwr = child.power.range[1] * power / self.power.range[1]
-            child.power.value = cpwr
+            child.power.value = child.power.clip(cpwr)
             logging.debug("Setting %s as %g W => %g W",
                           child.name, power, cpwr)
 
