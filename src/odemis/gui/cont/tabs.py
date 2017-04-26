@@ -3152,7 +3152,7 @@ class Sparc2AlignTab(Tab):
             try:
                 spgr, dets, selector = self._getSpectrometerFocusingComponents(focuser)
             except LookupError as ex:
-                logging.error("Failed to focus: %s" % (ex,))
+                logging.error("Failed to focus: %s", ex)
                 # TODO: just run the standard autofocus procedure instead?
                 return
 
@@ -3195,6 +3195,9 @@ class Sparc2AlignTab(Tab):
                 btn = self.panel.btn_autofocus
             elif self._autofocus_align_mode == "fiber-align":
                 btn = self.panel.btn_fib_autofocus
+            else:
+                logging.error("Unexpected autofocus mode '%s'", self._autofocus_align_mode)
+                return
             btn.SetLabel("Auto focus")
 
     def _getSpectrometerFocusingComponents(self, focuser):
