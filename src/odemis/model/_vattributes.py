@@ -790,11 +790,12 @@ class Continuous(object):
     It checks that any value set is min <= val <= max
     """
 
-    def __init__(self, range):
+    def __init__(self, rng):
         """
         :param range: (2-tuple)
         """
-        self._set_range(range)
+        self._check_range(rng)
+        self._range = tuple(rng)
         # Indicates whether clipping should occur when the range is changed
         self.clip_on_range = False
 
@@ -815,15 +816,13 @@ class Continuous(object):
     def range(self):
         del self._range
 
-    def _set_range(self, new_range):
-        """ Set the range after performing some basic constraint checks
-        """
-
+    def _check_range(self, rng):
+        """Basic validity checks on the range"""
         # Range should always have 2 elements
-        if len(new_range) != 2:
-            raise TypeError("Range '%s' is not a 2-tuple." % str(new_range))
+        if len(rng) != 2:
+            raise TypeError("Range '%s' is not a 2-tuple." % (rng,))
 
-        start, end = new_range
+        start, end = rng
         if not isinstance(start, collections.Iterable):
             start = (start,)
             end = (end,)
@@ -832,26 +831,36 @@ class Continuous(object):
             raise TypeError("Range min %s should be smaller than max %s." %
                             (start, end))
 
-        if hasattr(self, "value"):
-            if self.clip_on_range:
-                # If the range is changed and the current value is outside of
-                # this new range, the value will be adjusted so it falls within
-                # this new range.
+    def _set_range(self, new_range):
+        """ Set the range after performing some basic constraint checks
+        If the range is changed, the subscribers are called (with the VA value)
+        """
+        self._check_range(new_range)
 
-                self._range = tuple(new_range)
-                self.value = self.clip(self.value)
-                return
-            else:
-                if not isinstance(self.value, collections.Iterable):
-                    value = (self.value,)
-                else:
-                    value = self.value
+        new_range = tuple(new_range)
+        if self._range == new_range:
+            return
 
-                if not all(mn <= v <= mx for v, mn, mx in zip(value, start, end)):
-                    msg = "Current value '%s' is outside of the range %s->%s."
-                    raise IndexError(msg % (value, start, end))
+        if self.clip_on_range:
+            # If the range is changed and the current value is outside of the
+            # new range, the value will be adjusted so it falls within the new
+            # range.
 
-        self._range = tuple(new_range)
+            self._range = new_range
+            self._set_value(self.clip(self.value), must_notify=True)
+        else:
+            value = self.value
+            start, end = new_range
+            if not isinstance(value, collections.Iterable):
+                value = (value,)
+                start, end = (start,), (end,)
+
+            if not all(mn <= v <= mx for v, mn, mx in zip(value, start, end)):
+                msg = "Current value '%s' is outside of the range %s->%s."
+                raise IndexError(msg % (value, start, end))
+
+            self._range = new_range
+            self.notify(value)
 
     @property
     def min(self):
@@ -1052,8 +1061,8 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
     Also the speed must be >0
     """
     def __init__(self, value, range, unit="m/s", *args, **kwargs):
-        Continuous.__init__(self, range)
         assert(range[0] >= 0)
+        Continuous.__init__(self, range)
         VigilantAttribute.__init__(self, value, unit=unit, *args, **kwargs)
 
     # TODO detect whenever a value of the dict is changed

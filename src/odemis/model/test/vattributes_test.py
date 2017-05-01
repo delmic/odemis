@@ -255,9 +255,13 @@ class VigilantAttributeTest(unittest.TestCase):
         except TypeError:
             pass # as it should be
 
-        prop.unsubscribe(self.callback_test_notify)
-
         self.assertTrue(self.called == 2)
+
+        # "value" update for each change for range change
+        prop.range = [-4.0, 4.0]
+        self.assertTrue(self.called == 3)
+
+        prop.unsubscribe(self.callback_test_notify)
 
         # Test a bit the IntContinuous
         prop2 = model.IntContinuous(2, [1, 34], unit="px")
