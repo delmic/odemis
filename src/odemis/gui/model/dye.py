@@ -2,7 +2,7 @@
 """
 :created: 22 Feb 2013
 :author: Rinze de Laat
-:copyright: © 2013 Rinze de Laat, Delmic
+:copyright: © 2013-2017 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -43,6 +43,11 @@ DyeDatabase = None
 
 def _clean_up_name(name):
     name = name.strip()
+
+    # Some names are HTML escaped, we could use HTMLParser().unescape, but for
+    # now, we keep it simple, as there is only one character escaped
+    name = name.replace("&#39;", "'")
+
     # first letter upper-case
     name = name[:1].upper() + name[1:]
 
@@ -70,9 +75,6 @@ def LoadDyeDatabase():
     else:
         return False
 
-    # Name of the substance -> name of the substance + solvent
-    fullnames = {}
-
     # Load the main excitation and emission peak for each environment
     # For each environment, download it
     for eid, e in index.items():
@@ -90,7 +92,9 @@ def LoadDyeDatabase():
         except (IOError, ValueError):
             # no such file => no problem
             logging.debug("Failed to open %s", sname)
-        names.discard("") # just in case some names are empty
+
+        # Discard empty names or names made of one character
+        names = set(n for n in names if len(n) > 1)
         if not names:
             logging.debug("Skipping environment %d which has substance without name", eid)
 
@@ -150,32 +154,16 @@ def LoadDyeDatabase():
             else:
                 fullname = n + u" (in %s)" % solname
 
-            if n not in DyeDatabase:
-                DyeDatabase[n] = (xwl, ewl)
-                fullnames[n] = fullname
+            if fullname in DyeDatabase and DyeDatabase[fullname] != (xwl, ewl):
+                logging.info("Dropping duplicated dye %s", fullname)
+                continue
             else:
-                odye = DyeDatabase[n]
-                if odye == (xwl, ewl):
-                    continue
-
-                # Move the old simple name to its fullname
-                # Note, if there is no solvent, then it doesn't really move
-                del DyeDatabase[n]
-                DyeDatabase[fullnames[n]] = odye
-
-                # Add this new dye directly with its fullname
-                if fullname in DyeDatabase and DyeDatabase[fullname] != (xwl, ewl):
-                    logging.info("Dropping duplicated dye %s", fullname)
-
                 DyeDatabase[fullname] = (xwl, ewl)
-
-                if fullname == n:
-                    # This one had no solvent, so no real fullname
-                    fullnames[n] = fullname
 
     # TODO: also de-duplicate names in a case insensitive way
     logging.info("Loaded %d dye names from the database.", len(DyeDatabase))
     return True
+
 
 # Load the database the first time the module is imported
 if DyeDatabase is None:
@@ -187,7 +175,7 @@ if DyeDatabase is None:
         # For now, it seems to take 0.3 s => so let's say it's not needed
         # TODO: Don't use catchs-alls for exceptions.
         result = LoadDyeDatabase()
-    except:
+    except Exception:
         logging.exception("Failed to load the fluorophores database.")
     else:
         if not result:
