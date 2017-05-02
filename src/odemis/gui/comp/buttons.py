@@ -484,6 +484,17 @@ class BtnMixin(object):
             icon_y = (height // 2) - (icon.GetHeight() // 2)
             dc.DrawBitmap(icon, icon_x + dx, icon_y + dy)
 
+    def Enable(self, enable=True):
+        # Fixes a bug in GenButton: when it's disabled, OnLeftUp doesn't release
+        # the mouse capture. So it'd be holding the mouse forever when doing:
+        # Enable(True), OnLeftDown(), Enable(False), OnLeftUp().
+        # => Release the capture when disabling the button
+        # See ImageStateButton for example of safer OnLeftDown/Up()
+        if not enable and enable != self.IsEnabled() and self.HasCapture():
+            logging.debug("Button disabled while holding mouse capture")
+            self.ReleaseMouse()
+        super(BtnMixin, self).Enable(enable)
+
 
 class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):
     padding_x = 2
