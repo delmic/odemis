@@ -727,8 +727,38 @@ class StreamController(object):
 
         sld_hist, txt_low, txt_high = self.stream_panel.add_outliers_ctrls()
 
+        self._prev_drange = (self.stream.intensityRange.range[0][0],
+                             self.stream.intensityRange.range[1][1])
+
+        # The standard va_2_ctrl could almost work, but in some cases, if the
+        # range and value are completely changed, they need to be set in the
+        # right order. The slider expects to have first the range updated, then
+        # the new value. So always try to do the fast version, and if it failed,
+        # use a slower version which uses the latest known values of everything.
+        def _on_irange(val):
+            intensity_rng_va = self.stream.intensityRange
+            drange = (intensity_rng_va.range[0][0], intensity_rng_va.range[1][1])
+            if drange != self._prev_drange:
+                self._prev_drange = drange
+
+                sld_hist.SetRange(drange[0], drange[1])
+                # Setting the values should not be necessary as the value should have
+                # already been updated via the VA update
+                txt_low.SetValueRange(drange[0], drange[1])
+                txt_high.SetValueRange(drange[0], drange[1])
+
+            if not all(drange[0] <= v <= drange[1] for v in val):
+                # Value received is not fitting the current range, which is a
+                # sign that it's too old. Getting the latest one should fix it.
+                cval = intensity_rng_va.value
+                logging.debug("Updating latest irange %s to %s", val, cval)
+                val = cval
+
+            sld_hist.SetValue(val)
+            # TODO: also do the txt_low & txt_high .SetValue?
+
         se = SettingEntry(name="intensity_range", va=self.stream.intensityRange, stream=self.stream,
-                          value_ctrl=sld_hist, events=wx.EVT_SLIDER)
+                          value_ctrl=sld_hist, events=wx.EVT_SLIDER, va_2_ctrl=_on_irange)
         self.entries[se.name] = se
 
         if hasattr(self.stream, "auto_bc"):
@@ -778,20 +808,10 @@ class StreamController(object):
 
         def _on_histogram(hist):
             """ Display the new histogram data in the histogram slider
-
-            This closure has an attribute assigned to it (`prev_drange`), to keep track of dynamic
-            range changes. This solution was chosen, because in this manner we can avoid adding an
-            extra (possibly unused) attribute to the stream controller. Since every instance of this
-            function belongs to at most 1 stream (panel), we don't need to worried about conflicts.
-
-            :param hist: ndArray of integers, the contents is a list a values in [0.0..1.0]
-
-            TODO: don't update when folded: it's useless => unsubscribe
-            FIXME: Make sure this works as intended, see sandbox
-
+            hist (nd.array of N values): the content of the histogram, ordered
+              by bins.
             """
-
-            intensity_rng_va = self.stream.intensityRange
+            # TODO: don't update when folded: it's useless => unsubscribe
 
             if len(hist):
                 # a logarithmic histogram is easier to read
@@ -805,23 +825,10 @@ class StreamController(object):
             else:
                 norm_hist = []
 
-            data_range = (intensity_rng_va.range[0][0], intensity_rng_va.range[1][1])
-
-            if data_range != _on_histogram.prev_data_range:
-                _on_histogram.prev_data_range = data_range
-
-                sld_hist.SetRange(data_range[0], data_range[1])
-                # Setting the values should not be necessary as the value should have
-                # already been updated via the VA update
-                txt_low.SetValueRange(data_range[0], data_range[1])
-                txt_high.SetValueRange(data_range[0], data_range[1])
-
             sld_hist.SetContent(norm_hist)
-        _on_histogram.prev_data_range = (self.stream.intensityRange.range[0][0],
-                                         self.stream.intensityRange.range[1][1])
 
         # Again, we use an entry to keep a reference of the closure around
-        se = SettingEntry("_histogram_switch", va=self.stream.histogram, stream=self.stream,
+        se = SettingEntry("_histogram", va=self.stream.histogram, stream=self.stream,
                           va_2_ctrl=_on_histogram, ctrl_2_va=lambda x: x)
         self.entries[se.name] = se
 
