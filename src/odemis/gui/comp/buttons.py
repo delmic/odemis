@@ -31,7 +31,6 @@
 from __future__ import division
 
 import logging
-from operator import xor
 import wx
 import wx.lib.buttons as wxbuttons
 import math
@@ -130,10 +129,10 @@ class BtnMixin(object):
             height parameter must be set, and the default faces will be used.
         :param height: (int) optional height parameter that determines the button height and what
             button face is used to render the button. *Only* use this when button faces are not
-            explicity provided.
+            explicitly provided.
         :param face_colour: (str) optional name of the colour of the button faces to be used.
             Corresponds to the colour keys in the button faces dictionary.
-        :param icon: (wx.Bitmap) con to display on the button
+        :param icon: (wx.Bitmap) icon to display on the button
         :param icon_on: (wx.Bitmap) optional icon to display on the button when it is pressed down
         :param size: (int, int) optional explicit button size. If not provided, the size of the
             default button face will be used.
@@ -154,7 +153,7 @@ class BtnMixin(object):
         self.height = kwargs.pop('height', None)
 
         # Only height or bitmap must be provided, not both
-        if not xor(self.height is None, bmpLabel is None):
+        if (self.height is None) == (bmpLabel is None):  # not Xor
             raise ValueError("Either 'height' or 'bitmap' must be provided! Not both or neither.")
 
         # Fetch the button face colour
@@ -500,7 +499,7 @@ class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):
     padding_x = 2
 
 
-class ImageToggleButtonImageButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
+class ImageToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
     padding_x = 2
 
 
@@ -512,7 +511,7 @@ class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
     pass
 
 
-class ImageStateButton(ImageToggleButtonImageButton):
+class ImageStateButton(ImageToggleButton):
     """
     Multi-state graphical button that can switch between any number of states/images.
     The default bitmap image is used for state None, and bmpSelected* contain a
@@ -520,7 +519,7 @@ class ImageStateButton(ImageToggleButtonImageButton):
     0 to the number of images - 1 in bmpSelected.
     """
     def __init__(self, *args, **kwargs):
-        super(ImageToggleButtonImageButton, self).__init__(*args, **kwargs)
+        super(ImageToggleButton, self).__init__(*args, **kwargs)
         self.state = None
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):

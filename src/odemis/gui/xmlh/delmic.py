@@ -148,7 +148,7 @@ class ButtonFaceColourParam(params.RadioBox):
 buttons = [
     ('ImageButton', xh_delmic.ImageButtonHandler,
      'New button', 'Icon Button', False),
-    ('ImageToggleButtonImageButton', xh_delmic.ImageToggleButtonImageButtonHandler,
+    ('ImageToggleButtonImageButton', xh_delmic.ImageToggleButtonHandler,
      'New button', 'Icon Toggle Button', False),
     ('ImageTextButton', xh_delmic.ImageTextButtonHandler,
      'New button', 'Icon Text Button', True),
