@@ -2072,8 +2072,6 @@ class SparcStreamsController(StreamBarController):
 
     def on_tool_change(self, tool):
         """ Pause the SE and CLI streams when the Spot mode tool is activated """
-        # TODO: move to stream scheduler? Have a set of stream that require spot
-        # stream and a set that cannot play with spot stream?
         spots = self._tab_data_model.spotStream
         if tool == TOOL_SPOT:
             # Make sure the streams non compatible are not playing
@@ -2092,12 +2090,13 @@ class SparcStreamsController(StreamBarController):
             return
 
         if updated:
-            # Activate or deactive spot mode based on what the stream needs
+            # Activate or deactivate spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
             if isinstance(stream, self._spot_incompatible):
                 logging.info("Stopping spot mode because %s starts", stream)
-                self._tab_data_model.tool.value = TOOL_NONE
+                if self._tab_data_model.tool.value == TOOL_SPOT:
+                    self._tab_data_model.tool.value = TOOL_NONE
             elif isinstance(stream, self._spot_required):
                 logging.info("Starting spot mode because %s starts", stream)
                 spots = self._tab_data_model.spotStream

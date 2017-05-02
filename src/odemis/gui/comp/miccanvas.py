@@ -33,7 +33,8 @@ from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
-from odemis.gui.util import wxlimit_invocation, ignore_dead, img
+from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
+    call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -175,6 +176,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
             tab_data.tool.subscribe(self._on_tool, init=True)
 
+    @call_in_wx_main
     def _on_tool(self, tool_mode):
         """ Set the right mode and active overlays when a tool is selected """
 
@@ -190,15 +192,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tool_mode = guimodel.TOOL_NONE
 
         self.current_mode = tool_mode
+        self._set_tool_mode(tool_mode)
+
         cursor = wx.STANDARD_CURSOR
-
-        self._set_spot_mode(tool_mode)
-        self._set_dichotomy_mode(tool_mode)
-        self._set_point_select_mode(tool_mode)
-        self._set_line_select_mode(tool_mode)
-
-        self.update_drawing()
-
         if tool_mode == guimodel.TOOL_ROI:
             # self.current_mode = guimodel.TOOL_ROI
             # self.add_active_overlay(self.update_overlay)
@@ -211,6 +207,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             raise NotImplementedError()
 
         self.set_default_cursor(cursor)
+
+        self.request_drawing_update()
+
+    def _set_tool_mode(self, tool_mode):
+        self._set_spot_mode(tool_mode)
+        self._set_dichotomy_mode(tool_mode)
+        self._set_point_select_mode(tool_mode)
+        self._set_line_select_mode(tool_mode)
+
+        # TODO: return the cursor? return whether a redraw/refresh is needed?
 
     # Overlay creation and activation
 
@@ -227,7 +233,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _on_interpolate_content(self, activated):
         """ Activate or deactivate interpolation"""
-        self.update_drawing()
+        self.request_drawing_update()
 
     # FIXME: seems like it might still be called while the Canvas has been destroyed
     # => need to make sure that the object is garbage collected (= no more references) once it's
@@ -277,8 +283,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if self._spotmode_ol:
             self.microscope_view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
-
-        self.Refresh(eraseBackground=False)
 
     def _set_dichotomy_mode(self, tool_mode):
         """ Activate the dichotomy overlay if needed """
@@ -1099,9 +1103,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self._dc_region = None  # The dcRegion VA of the SEM concurrent
         self.driftcor_overlay = None
 
-    def _on_tool(self, tool_mode):
-        super(SparcAcquiCanvas, self)._on_tool(tool_mode)
-
+    def _set_tool_mode(self, tool_mode):
+        super(SparcAcquiCanvas, self)._set_tool_mode(tool_mode)
         self._set_roa_mode(tool_mode)
         self._set_dc_mode(tool_mode)
 
@@ -1110,14 +1113,12 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.roa_overlay.activate()
         elif self.roa_overlay:
             self.roa_overlay.deactivate()
-        self.Refresh(eraseBackground=False)
 
     def _set_dc_mode(self, tool_mode):
         if tool_mode == guimodel.TOOL_RO_ANCHOR:
             self.driftcor_overlay.activate()
         elif self.driftcor_overlay:
             self.driftcor_overlay.deactivate()
-        self.Refresh(eraseBackground=False)
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
