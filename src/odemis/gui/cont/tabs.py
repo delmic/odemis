@@ -1434,8 +1434,6 @@ class AnalysisTab(Tab):
 
         self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button)
 
-        self.tab_data_model.tool.subscribe(self._onTool)
-
     @property
     def stream_bar_controller(self):
         return self._stream_bar_controller
@@ -1776,18 +1774,6 @@ class AnalysisTab(Tab):
             raise ValueError("File '%s' not suitable" % fn)
 
         return fn
-
-    @guiutil.call_in_wx_main
-    def _onTool(self, tool):
-        """ Called when the tool (mode) is changed """
-
-        # Reset the viewports when the spot tool is not selected
-        # Doing it this way, causes some unnecessary calls to the reset method
-        # but it cannot be avoided. Subscribing to the tool VA will only
-        # tell us what the new tool is and not what the previous, if any, was.
-        # if tool != guimod.TOOL_POINT:
-        #     self.tab_data_model.visible_views.value = self._def_views
-        pass
 
     def _on_point_select(self, _):
         """ Bring the angular viewport to the front when a point is selected in the 1x1 view """
@@ -3160,7 +3146,7 @@ class Sparc2AlignTab(Tab):
             try:
                 spgr, dets, selector = self._getSpectrometerFocusingComponents(focuser)
             except LookupError as ex:
-                logging.error("Failed to focus: %s" % (ex,))
+                logging.error("Failed to focus: %s", ex)
                 # TODO: just run the standard autofocus procedure instead?
                 return
 
@@ -3203,6 +3189,9 @@ class Sparc2AlignTab(Tab):
                 btn = self.panel.btn_autofocus
             elif self._autofocus_align_mode == "fiber-align":
                 btn = self.panel.btn_fib_autofocus
+            else:
+                logging.error("Unexpected autofocus mode '%s'", self._autofocus_align_mode)
+                return
             btn.SetLabel("Auto focus")
 
     def _getSpectrometerFocusingComponents(self, focuser):
