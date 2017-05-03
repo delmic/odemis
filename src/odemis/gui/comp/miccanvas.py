@@ -980,9 +980,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         bbox = [None, None, None, None]  # ltrb in m
         if self.microscope_view is not None:
             streams = self.microscope_view.getStreams()
-            for stream in streams:
+            for s in streams:
                 try:
-                    s_bbox = stream.getBoundingBox()
+                    s_bbox = s.getBoundingBox()
                 except ValueError:
                     continue  # Stream has no data (yet)
                 if bbox[0] is None:

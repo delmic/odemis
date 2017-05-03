@@ -281,6 +281,9 @@ class MicroscopeViewport(ViewPort):
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
 
+        # Immediately sets the view FoV based on the current canvas size
+        self._set_fov_from_mpp()
+
         if microscope_view.fov_hw:
             logging.info("Tracking mpp on %s" % self)
             # The view FoV changes either when the mpp changes or on resize,  but resize typically
@@ -446,14 +449,11 @@ class MicroscopeViewport(ViewPort):
         # Note: no need to update fov_hw, as when the canvas is resized, it
         # updates the mpp in a way to ensure the fov_hw stays _constant_
         self.UpdateHFWLabel()
-        fov = self.get_fov_from_mpp()
-        if fov is not None and self.microscope_view is not None:
-            self.microscope_view.fov.value = fov
-            self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+        self._set_fov_from_mpp()
         evt.Skip()  # processed also by the parent
 
     def OnSliderIconClick(self, evt):
-        if self._microscope_view is None or not self.bottom_legend:
+        if not self._microscope_view or not self.bottom_legend:
             return
 
         if evt.GetEventObject() == self.bottom_legend.bmp_slider_left:
@@ -492,9 +492,7 @@ class MicroscopeViewport(ViewPort):
 
         The canvas calculates the new hfw value.
         """
-        fov = self.get_fov_from_mpp()
-        self.microscope_view.fov.value = fov
-        self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+        fov = self._set_fov_from_mpp()
 
         # Only change the FoV of the hardware if:
         # * this Viewport was *not* responsible for setting the mpp
@@ -577,6 +575,20 @@ class MicroscopeViewport(ViewPort):
             logging.debug("Setting view mpp to %s using given fov %s for %s", mpp, fov, self)
             self.self_set_mpp = True
             self.microscope_view.mpp.value = mpp
+
+    def _set_fov_from_mpp(self):
+        """
+        Updates the view.fov and .fov_buffer based on the canvas size (in px)
+          and the mpp
+
+        return (tuple of float): the FoV set
+        """
+        fov = self.get_fov_from_mpp()
+        if fov is not None and self.microscope_view:
+            self.microscope_view.fov.value = fov
+            self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+
+        return fov
 
     def show_stage_limit_overlay(self):
         if not self.stage_limit_overlay:
