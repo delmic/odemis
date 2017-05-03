@@ -23,19 +23,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import logging
 import numpy
 from odemis import model
+from odemis.acq.stream import RGBStream
+from odemis.dataio import tiff
 from odemis.gui import test
 from odemis.gui.comp.canvas import BufferedCanvas
-from odemis.dataio import tiff
 import unittest
 import wx
 
-from odemis.acq.stream import RGBStream
 import odemis.gui.comp.miccanvas as miccanvas
 
 
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 
 def get_rgb(im, x, y):
     # TODO: use DC.GetPixel()
@@ -94,6 +96,12 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.assertEqual(mpp, self.view.mpp.value)
         self.view.show_crosshair.value = False
 
+        # Disable auto fit because (1) it's not useful as we set everything
+        # manually, and (2) depending on whether it's called immediately after
+        # adding the first stream or only after the second stream, the result
+        # is different.
+        self.canvas.fit_view_to_next_image = False
+
         # add images
         im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
         px1_cent = (5, 5)
@@ -120,6 +128,11 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # reset the mpp of the view, as it's automatically set to the first  image
         test.gui_loop(0.5)
+        logging.debug("View pos = %s, fov = %s, mpp = %s",
+                      self.view.view_pos.value,
+                      self.view.fov_buffer.value,
+                      self.view.mpp.value)
+
         self.view.mpp.value = mpp
 
         shift = (63, 63)
@@ -130,7 +143,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.merge_ratio.value = ratio
         # self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        test.gui_loop(0.5)
         # it's supposed to update in less than 0.5s
         test.gui_loop(0.5)
 
@@ -153,7 +165,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # remove first picture
         self.view.removeStream(stream1)
-        test.gui_loop()
         test.gui_loop(0.5)
 
         result_im = get_image_from_buffer(self.canvas)
@@ -167,6 +178,12 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         mpp = 0.00001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
+
+        # Disable auto fit because (1) it's not useful as we set everything
+        # manually, and (2) depending on whether it's called immediately after
+        # adding the first stream or only after the second stream, the result
+        # is different.
+        self.canvas.fit_view_to_next_image = False
 
         im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
         px1_cent = (5, 5)
@@ -245,7 +262,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.canvas.shift_view(shift)
 
         test.gui_loop(0.5)
-        test.gui_loop(0.5)
         result_im = get_image_from_buffer(self.canvas)
 
         px1 = get_rgb(result_im,
@@ -256,7 +272,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # zoom in
         self.canvas.Zoom(2)
         self.assertEqual(mpp / (2 ** 2), self.view.mpp.value)
-        test.gui_loop(0.5)
         test.gui_loop(0.5)
         result_im = get_image_from_buffer(self.canvas)
 
@@ -438,6 +453,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
         self.view.show_crosshair.value = False
+        self.canvas.fit_view_to_next_image = False
 
         FILENAME = u"test" + tiff.EXTENSIONS[0]
         w = 201
@@ -475,7 +491,10 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
-        # reset the mpp of the view, as it's automatically set to the first  image
+        test.gui_loop(0.5)
+
+        self.canvas.shift_view((-200.5, 199.5))
+
         test.gui_loop(0.5)
 
         result_im = get_image_from_buffer(self.canvas)
@@ -496,7 +515,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.merge_ratio.value = ratio
         # self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        test.gui_loop(0.5)
         # it's supposed to update in less than 0.5s
         test.gui_loop(0.5)
 
@@ -519,7 +537,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # remove first picture
         self.view.removeStream(stream1)
-        test.gui_loop()
         test.gui_loop(0.5)
 
         result_im = get_image_from_buffer(self.canvas)
@@ -539,6 +556,11 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
         self.view.show_crosshair.value = False
+        self.canvas.fit_view_to_next_image = False
+
+        # There is no viewport, so FoV is not updated automatically => display
+        # everything possible
+        self.view.fov_buffer.value = (1.0, 1.0)
 
         init_pos = (200.5 * mpp, 199.5 * mpp)
 
@@ -576,9 +598,8 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         self.view.addStream(stream1)
         self.view.addStream(stream2)
-        self.view.fov_buffer.value = (1.0, 1.0)
 
-        # reset the mpp of the view, as it's automatically set to the first  image
+        self.canvas.shift_view((-200.5, 199.5))
         test.gui_loop(0.5)
 
         result_im = get_image_from_buffer(self.canvas)
@@ -619,23 +640,29 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.assertEqual(px2, (0, 0, 0))
 
         self.assertAlmostEqual(1e-05, self.view.mpp.value)
-        numpy.testing.assert_almost_equal([0.001375,  0.002625], self.view.view_pos.value)
+        numpy.testing.assert_almost_equal([0.001375, 0.002625], self.view.view_pos.value)
+
+        # Fit to content, and check it actually does
         self.canvas.fit_view_to_content(recenter=True)
         test.gui_loop(0.5)
-        self.assertAlmostEqual(1.3333333e-5, self.view.mpp.value)
+
+        exp_mpp = (mpp * w) / self.canvas.ClientSize[0]
+        self.assertAlmostEqual(exp_mpp, self.view.mpp.value)
         # after fitting, the center of the view should be the center of the image
         numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
+
         # remove green picture
         result_im = get_image_from_buffer(self.canvas)
-        #result_im.SaveFile('/home/gstiebler/Projetos/Delmic/tmp3.bmp', wx.BITMAP_TYPE_BMP)
+        # result_im.SaveFile('tmp3.bmp', wx.BITMAP_TYPE_BMP)
         self.view.removeStream(stream1)
         test.gui_loop(0.5)
         # copy the buffer into a nice image here
         result_im = get_image_from_buffer(self.canvas)
-        #result_im.SaveFile('/home/gstiebler/Projetos/Delmic/tmp4.bmp', wx.BITMAP_TYPE_BMP)
+        # result_im.SaveFile('tmp4.bmp', wx.BITMAP_TYPE_BMP)
         self.canvas.fit_view_to_content(recenter=True)
         # only .mpp changes, but the image keeps centered
-        self.assertAlmostEqual(5.89442e-06, self.view.mpp.value)
+        exp_mpp = (mpp * im2.shape[0]) / self.canvas.ClientSize[0]
+        self.assertAlmostEqual(exp_mpp, self.view.mpp.value)
         numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
         test.gui_loop(0.5)
 
@@ -660,6 +687,11 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
         self.view.show_crosshair.value = False
+        self.canvas.fit_view_to_next_image = False
+
+        # There is no viewport, so FoV is not updated automatically => display
+        # everything possible
+        self.view.fov_buffer.value = (1.0, 1.0)
 
         init_pos = (1.0, 2.0)
 
@@ -698,15 +730,18 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         self.view.addStream(stream1)
         self.view.addStream(stream2)
-        # insert a value greater than the maximu. This value will be croped
-        self.view.fov_buffer.value = (1.0, 1.0)
+
+        self.canvas.shift_view((-init_pos[0] / mpp, init_pos[1] / mpp))
+
+        test.gui_loop(0.5)
+
         self.view.mpp.value = mpp
 
         # reset the mpp of the view, as it's automatically set to the first  image
         test.gui_loop(0.5)
 
         result_im = get_image_from_buffer(self.canvas)
-        result_im.SaveFile('/home/gstiebler/Projetos/Delmic/big.bmp', wx.BITMAP_TYPE_BMP)
+        # result_im.SaveFile('big.bmp', wx.BITMAP_TYPE_BMP)
         px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
         # center pixel, 1/3 green, 2/3 blue. The red image is the largest image
         self.assertEqual(px2, (0, 76, 179))
