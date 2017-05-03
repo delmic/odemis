@@ -295,9 +295,9 @@ class ImageButtonHandler(_ImageButtonHandler):
 HANDLER_CLASS_LIST.append(ImageButtonHandler)
 
 
-class ImageToggleButtonImageButtonHandler(_ImageButtonHandler):
-    klass = btns.ImageToggleButtonImageButton
-HANDLER_CLASS_LIST.append(ImageToggleButtonImageButtonHandler)
+class ImageToggleButtonHandler(_ImageButtonHandler):
+    klass = btns.ImageToggleButton
+HANDLER_CLASS_LIST.append(ImageToggleButtonHandler)
 
 
 class ImageTextButtonHandler(_ImageButtonHandler):

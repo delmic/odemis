@@ -194,7 +194,7 @@ class StreamPanelHeader(wx.Control):
 
     def _add_visibility_btn(self):
         """ Add the visibility toggle button to the stream panel header """
-        visibility_btn = buttons.ImageToggleButtonImageButton(self,
+        visibility_btn = buttons.ImageToggleButton(self,
                                                               bitmap=img.getBitmap("icon/ico_eye_closed.png"))
         visibility_btn.bmpHover = img.getBitmap("icon/ico_eye_closed_h.png")
         visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
@@ -206,14 +206,14 @@ class StreamPanelHeader(wx.Control):
 
     def _add_update_btn(self):
         """ Add a button for (de)activation of the stream """
-        update_btn = buttons.ImageToggleButtonImageButton(self,
+        update_btn = buttons.ImageToggleButton(self,
                                                           bitmap=img.getBitmap("icon/ico_pause.png"))
         update_btn.bmpHover = img.getBitmap("icon/ico_pause_h.png")
         update_btn.bmpSelected = img.getBitmap("icon/ico_play.png")
         update_btn.bmpSelectedHover = img.getBitmap("icon/ico_play_h.png")
 
         # TODO: add a tooltip for when selected ("Turn off stream" vs "Activate stream")
-        # => on ImageToggleButtonImageButton
+        # => on ImageToggleButton
         update_btn.SetToolTipString("Update stream")
 
         self._vac_updated = VigilantAttributeConnector(

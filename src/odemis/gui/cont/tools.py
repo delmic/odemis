@@ -31,7 +31,7 @@ This module contains classes that allow to create ToolBars for the MicroscopeGUI
 from __future__ import division
 
 from odemis.gui import model, img
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButtonImageButton, darken_image
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
 from odemis.gui.util import call_in_wx_main
 import wx
 
@@ -218,7 +218,7 @@ class ToolBar(wx.Panel):
         self._buttons[tool_id] = btn
 
     def _add_mode_tool(self, tooltype, tool_id, va):
-        btn = self._add_button(ImageToggleButtonImageButton, tooltype.icon, tooltype.tooltip)
+        btn = self._add_button(ImageToggleButton, tooltype.icon, tooltype.tooltip)
         self._buttons[tool_id] = btn
 
         value_on = tooltype.value_on
