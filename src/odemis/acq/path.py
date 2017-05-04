@@ -174,10 +174,6 @@ SPARC2_MODES = {
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': 'off'},
-                 # FIXME: the settings for "filter" will be removed if it doesn't
-                 # affect the fiber-aligner, which is very likely the case.
-                 # => need to find out the right detector used during fiber
-                 # alignment, and decide whether the filter is affecting it.
                  'filter': {'band': 'pass-through'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
@@ -188,7 +184,8 @@ SPARC2_MODES = {
             'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
                 {'lens-switch': {'x': 'off'},
                  'filter': {'band': 'pass-through'},
-                 # TODO: should use affects to know whether to use spectrograph or spectrograph-dedicated?
+                 # In the current convention, only the spectrograph-dedicated
+                 # can be after the fiber, so no need to check for spectrograph
                  'spectrograph-dedicated': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
                 }),
@@ -329,6 +326,13 @@ class OpticalPathManager(object):
             for mode in self._modes:
                 det_role = self._modes[mode][0]
                 det = self._getComponent(det_role)
+                targets = {det.name}
+                # In case the "detector" (which might actually be any component)
+                # affects other components, also consider these affected
+                # components as the targets (as they are most probably the
+                # actual detectors).
+                targets.update(set(det.affects.value))
+
                 modeconf = self._modes[mode][1]
                 for act_role in modeconf.keys():
                     try:
@@ -337,7 +341,7 @@ class OpticalPathManager(object):
                         # TODO: just remove that move too?
                         logging.debug("Failed to find component %s, skipping it", act_role)
                         continue
-                    if not self.affects(act.name, det.name):
+                    if not any(self.affects(act.name, n) for n in targets):
                         logging.debug("Actuator %s doesn't affect %s, so removing it from mode %s",
                                       act_role, det_role, mode)
                         del modeconf[act_role]
