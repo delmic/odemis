@@ -25,7 +25,7 @@ SECOM: {
 # Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
-    role: none,
+    role: null,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
@@ -154,7 +154,7 @@ SECOM: {
 
 "Stage Actuators": {
     class: pigcs.Bus,
-    role: none,
+    role: null,
     init: {
         port: "/dev/ttyPIGCS",
         # axis -> controller, channel, closed-loop?

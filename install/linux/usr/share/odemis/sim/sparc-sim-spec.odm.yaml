@@ -13,7 +13,7 @@ SimSPARC: {
 # sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
-    role: none,
+    role: null,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {scanner: "SEM E-beam", detector0: "SEM Detector"}

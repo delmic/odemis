@@ -42,7 +42,7 @@ Spectra: {
 
 "SEM ExtXY": {
     class: tescan.SEM,
-    role: none,
+    role: null,
     init: {host: "192.168.92.116"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY",
@@ -190,7 +190,7 @@ Spectra: {
 
 PIGCS: {
     class: pigcs.FakeBus,
-    role: none,
+    role: null,
     init: {
         port: "/dev/ttyPIGCS",
         # axis -> controller, channel, closed-loop?

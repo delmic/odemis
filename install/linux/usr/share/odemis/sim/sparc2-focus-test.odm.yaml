@@ -45,7 +45,7 @@ SPARC2: {
 # This is a more realistic SEM simulator (image-wise, but less realistic HW-wise)
 "SEM Scan Interface": {
     class: simsem.SimSEM,
-    role: none,
+    role: null,
     init: {
            drift_period: 5, # s  (disable to get a the whole resolution of the image)
            image: "sparc-etd-gold-balls.h5",
