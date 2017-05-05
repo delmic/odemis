@@ -68,9 +68,12 @@ def gui_loop(slp=0):
     if app is None:
         return
 
-    while time.time() < (start + slp):
+    while True:
         wx.CallAfter(app.ExitMainLoop)
         app.MainLoop()
+
+        if time.time() > (start + slp):
+            break
 
 
 def sleep(ms=None):

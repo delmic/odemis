@@ -239,10 +239,11 @@ class RGBSpatialProjection(DataProjection):
             rng = self.rect.range
             return (rng[0][0], rng[0][1], rng[1][0], rng[1][1])
         else:
-            md = self.image.value.metadata
-            if self.image.value is None:
+            im = self.image.value
+            if im is None:
                 raise ValueError("Stream's image not defined")
-            shape = self.image.value.shape
+            md = im.metadata
+            shape = im.shape
             im_scale = md[model.MD_PIXEL_SIZE]
             w, h = shape[1] * im_scale[0], shape[0] * im_scale[1]
             c = md[model.MD_POS]

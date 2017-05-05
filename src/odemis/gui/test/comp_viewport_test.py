@@ -21,20 +21,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-import numpy
 from collections import deque
-import copy
+import logging
+import math
+import numpy
 import threading
-
+import time
 import unittest
 import wx
-import math
-import time
 
-import odemis.gui.comp.viewport as viewport
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.comp.viewport as viewport
 import odemis.gui.test as test
+
+logging.getLogger().setLevel(logging.DEBUG)
+
 
 MODES = [canvas.PLOT_MODE_POINT, canvas.PLOT_MODE_LINE, canvas.PLOT_MODE_BAR]
 
@@ -47,9 +49,13 @@ PLOTS = [
 ]
 
 BAD_PLOTS = [
-    ([6, 5, 8], [2, 3, 1]),  # X not ordered
     ([1, 2, 3, 4], [2, 3, 1]),  # x,y not the same size
-    ([0, 1, 3, 3, 4, 5], [0, 0, 5, 2, 4, 0]),
+]
+
+# Not proper X => should show warning
+INCORRECT_PLOTS = [
+    ([0, 1, 3, 3, 4, 5], [0, 0, 5, 2, 4, 0]),  # Duplicated X
+    ([6, 5, 8], [2, 3, 1]),  # X not ordered
 ]
 
 RANGED_PLOTS = [
@@ -82,7 +88,7 @@ class ViewportTestCase(test.GuiTestCase):
 
         return deque(sine_list)
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_threaded_plot(self):
         test.goto_manual()
 
@@ -101,19 +107,13 @@ class ViewportTestCase(test.GuiTestCase):
 
         def rotate(q, v):
             # v.bottom_legend.unit = 'm'
-
             scale = 1.001
 
-            timeout = time.time() + 600
-
-            while True:
-
+            timeout = time.time() + 8
+            while time.time() < timeout:
                 v.canvas.set_1d_data(xs, ys, unit_x='m', unit_y='g')
                 q[-1] *= scale
                 q.rotate(1)
-
-                if time.time() > timeout:
-                    break
 
                 v.bottom_legend.range = (min(xs), max(xs))
                 v.bottom_legend.SetToolTipString(u"Time (s)")
@@ -121,7 +121,7 @@ class ViewportTestCase(test.GuiTestCase):
                 v.left_legend.range = (min(ys), max(ys))
                 v.left_legend.SetToolTipString(u"Count per second")
 
-                # threading._sleep(0.000001)
+                time.sleep(0.0001)
             self.frame.Destroy()
 
         t = threading.Thread(target=rotate, args=(ys, vwp))
@@ -129,14 +129,15 @@ class ViewportTestCase(test.GuiTestCase):
         t.setDaemon(True)
         t.start()
 
-        test.gui_loop()
+        test.gui_loop(10)
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_plot_viewport(self):
 
         test.set_sleep_time(100)
 
-        vwp = viewport.PlotViewport(self.panel)
+#         vwp = viewport.PlotViewport(self.panel)
+        vwp = viewport.PointSpectrumViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
         self.add_control(vwp, wx.EXPAND, proportion=1)
         vwp.canvas.SetForegroundColour("#27C4CC")
@@ -146,19 +147,29 @@ class ViewportTestCase(test.GuiTestCase):
 
             for plot in BAD_RANGED_PLOTS:
                 with self.assertRaises(ValueError):
+                    logging.debug("Testing range X = %s, range Y = %s", plot[0], plot[1])
                     vwp.canvas.set_1d_data(plot[2],
                                            plot[3],
                                            range_x=plot[0],
                                            range_y=plot[1])
-                    test.gui_loop()
+                    vwp.canvas.draw()
+                    test.gui_loop(0.3)
 
             vwp.Refresh()
 
             for plot in BAD_PLOTS:
                 with self.assertRaises(ValueError):
-                    vwp.canvas.set_1d_data(plot[0],
-                                           plot[1])
+                    vwp.canvas.set_1d_data(plot[0], plot[1])
+                    vwp.canvas.draw()
                     test.gui_loop()
+
+            vwp.Refresh()
+
+            for plot in INCORRECT_PLOTS:
+                vwp.canvas.set_1d_data(plot[0], plot[1])
+                vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
+                vwp.left_legend.range = (min(plot[1]), max(plot[1]))
+                test.gui_loop()
 
             vwp.Refresh()
 
@@ -215,8 +226,10 @@ class MicroscopeViewportTestCase(test.GuiTestCase):
         self.canvas = vwp.canvas
         # sets the size of the buffer
         self.canvas.resize_buffer((2000.0, 2000.0))
+
+        test.gui_loop(0.1)
         # check the initial size of the buffer field of view
-        numpy.testing.assert_almost_equal((0.001554,  0.001025), self.view.fov_buffer.value)
+        numpy.testing.assert_almost_equal((0.001495, 0.001025), self.view.fov_buffer.value)
         self.view.mpp.value = 0.0002
         # check the new values of fov_buffer after changing .mpp
         numpy.testing.assert_almost_equal((0.4, 0.4), self.view.fov_buffer.value)
@@ -225,7 +238,7 @@ class MicroscopeViewportTestCase(test.GuiTestCase):
         self.canvas.resize_buffer((1200.0, 1300.0))
         vwp.OnSize(evt)
         # fov_buffer should change after resizing
-        numpy.testing.assert_almost_equal((0.24,  0.26), self.view.fov_buffer.value)
+        numpy.testing.assert_almost_equal((0.24, 0.26), self.view.fov_buffer.value)
 
 
 if __name__ == "__main__":

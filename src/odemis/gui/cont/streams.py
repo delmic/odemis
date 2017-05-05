@@ -1182,6 +1182,7 @@ class StreamBarController(object):
 
     def addStream(self, stream, **kwargs):
         """ Create a stream entry for the given existing stream
+        Must be run in the main GUI thread.
 
         :return StreamPanel: the panel created for the stream
         """
