@@ -2994,7 +2994,10 @@ class Sparc2AlignTab(Tab):
         for btn, m in self._alignbtn_to_mode.items():
             btn.SetToggle(mode == m)
 
-        assert(self.IsShown())
+        if not self.IsShown():
+            # Shouldn't happen, but for safety, double check
+            logging.warning("Alignment mode changed while alignment tab not shown")
+            return
 
         # Disable controls/streams which are useless (to guide the user)
         self._stream_controller.pauseStreams()
@@ -3085,9 +3088,14 @@ class Sparc2AlignTab(Tab):
         # have been changed to another one, while this fiber-align future only
         # finishes now. Without checking for this, the fiber selector position
         # will be listen to, while in another mode.
+        # Alternatively, it could happen that during a change to fiber-align,
+        # the tab is changed.
         if self.tab_data_model.align_mode.value != "fiber-align":
             logging.debug("Not listening fiber selector as mode is now %s",
                           self.tab_data_model.align_mode.value)
+            return
+        elif not self.IsShown():
+            logging.debug("Not listening fiber selector as alignment tab is not shown")
             return
 
         # Make sure the user can move the X axis only once at ACTIVE position
@@ -3368,6 +3376,12 @@ class Sparc2AlignTab(Tab):
         Called when the spec-selector (wrapper to the X axis of fiber-aligner)
           is moved (and the fiber align mode is active)
         """
+        if not self.IsShown():
+            # Should never happen, but for safety, we double check
+            logging.warning("Received active fiber position while outside of alignment tab")
+            return
+        # TODO: warn if pos is equal to the DEACTIVE value (within 1%)
+
         # Save the axis position as the "calibrated" one
         ss = self.tab_data_model.main.spec_sel
         logging.debug("Updating the active fiber position to %s", pos)
