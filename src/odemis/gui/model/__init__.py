@@ -1197,7 +1197,7 @@ class StreamView(View):
 
     def getStreams(self):
         """
-        :return: [Stream] list of streams that are displayed in the view
+        :return: [Stream or DataProjection] list of streams that are displayed in the view
 
         Do not modify directly, use addStream(), and removeStream().
         Note: use .stream_tree for getting the raw StreamTree
