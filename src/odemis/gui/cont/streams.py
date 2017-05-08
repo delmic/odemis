@@ -49,6 +49,7 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
+from odemis.acq.stream import DataProjection
 import odemis.gui.model as guimodel
 
 
@@ -1221,7 +1222,9 @@ class StreamBarController(object):
                 v = self._tab_data_model.focussedView.value
             else:
                 v = add_to_view
-            if hasattr(v, "stream_classes") and not isinstance(stream, v.stream_classes):
+            # get the inner stream, if stream parent is a DataProjection
+            leaf_stream = stream.stream if isinstance(stream, DataProjection) else stream
+            if hasattr(v, "stream_classes") and not isinstance(leaf_stream, v.stream_classes):
                 warn = "Adding %s stream incompatible with the view %s"
                 logging.warning(warn, stream.__class__.__name__, v.name.value)
             v.addStream(stream)

@@ -4902,7 +4902,17 @@
       <object class="sizeritem">
         <object class="wxBoxSizer">
           <object class="sizeritem">
-            <object class="LiveViewport" name="viewport">
+            <object class="LiveViewport" name="viewport_l">
+              <hidden>1</hidden>
+              <XRCED>
+                <assign_var>1</assign_var>
+              </XRCED>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="LiveViewport" name="viewport_r">
               <hidden>1</hidden>
               <XRCED>
                 <assign_var>1</assign_var>
@@ -4923,7 +4933,6 @@
                           <object class="sizeritem">
                             <object class="FoldPanelBar">
                               <object class="FoldPanelItem" name="fp_settings">
-                                <label>OPTICAL SETTINGS</label>
                                 <nocaption>1</nocaption>
                                 <fg>#1A1A1A</fg>
                                 <bg>#555555</bg>
@@ -4977,7 +4986,7 @@
                 <flag>wxEXPAND</flag>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel">
+                <object class="wxPanel" name="pnl_gauge">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
@@ -5035,9 +5044,13 @@
                     <orient>wxVERTICAL</orient>
                   </object>
                   <bg>#4D4D4D</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
                 <flag>wxEXPAND</flag>
               </object>
+              <orient>wxVERTICAL</orient>
               <object class="sizeritem">
                 <object class="wxPanel" name="pnl_buttons">
                   <object class="wxBoxSizer">
@@ -5051,7 +5064,6 @@
                 </object>
                 <flag>wxEXPAND</flag>
               </object>
-              <orient>wxVERTICAL</orient>
             </object>
             <flag>wxEXPAND</flag>
           </object>
