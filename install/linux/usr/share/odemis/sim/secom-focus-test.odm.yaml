@@ -27,7 +27,7 @@ Spectra: {
 
 "SEM ExtXY": {
     class: simsem.SimSEM,
-    role: none,
+    role: null,
     init: {
            image: "songbird-sim-sem.h5", # any large 16 bit image is fine
 #           drift_period: 5, # s, comment out to disable drift
@@ -135,7 +135,7 @@ Spectra: {
 
 PIGCS: {
     class: pigcs.FakeBus,
-    role: none,
+    role: null,
     init: {
         port: "/dev/ttyPIGCS",
         # axis -> controller, channel, closed-loop?

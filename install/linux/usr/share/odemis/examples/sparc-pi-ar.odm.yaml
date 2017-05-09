@@ -9,7 +9,7 @@ SPARC-AMOLF: {
 # Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM ExtXY": {
     class: semcomedi.SEMComedi,
-    role: none,
+    role: null,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}

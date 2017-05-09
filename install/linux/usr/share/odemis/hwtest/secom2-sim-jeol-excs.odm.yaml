@@ -196,7 +196,7 @@ SECOMv2: {
 
 "Stage Actuators": {
     class: pigcs.FakeBus,
-    role: none,
+    role: null,
     init: {
         port: "/dev/fake",
         # axis -> controller, channel, closed-loop?

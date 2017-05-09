@@ -37,7 +37,7 @@ Spectra: {
 # 
 # "SEM ExtXY": {
 #     class: simsem.SimSEM,
-#     role: none,
+#     role: null,
 #     init: {drift_period: 15}, # seconds
 #     # more detectors can be added, if necessary
 #     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}

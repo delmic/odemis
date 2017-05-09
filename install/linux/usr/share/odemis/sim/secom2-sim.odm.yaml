@@ -96,7 +96,7 @@ SECOMv2: {
 
 # "SEM Scan Interface": {
 #     class: simsem.SimSEM,
-#     role: none,
+#     role: null,
 #     init: {
 #            image: "simsem-fake-output.h5", # any large 16 bit image is fine
 #            drift_period: 5, # s, comment out to disable drift

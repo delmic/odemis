@@ -160,7 +160,7 @@ DELPHI: {
 # Use 2 MultiplexActuators to separate the axes of the TMCM over different roles
 "Objective Stage": {
     class: actuator.MultiplexActuator,
-    role: None,
+    role: null,
     affects: ["Camera"],
     children: {"x": "Sample Holder Actuators", "y": "Sample Holder Actuators"},
     init: {
@@ -186,7 +186,7 @@ DELPHI: {
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
 "Optical Focus": {
     class: actuator.MultiplexActuator,
-    role: None,
+    role: null,
     affects: ["Camera"],
     children: {"z": "Sample Holder Actuators"},
     init: {
@@ -196,8 +196,8 @@ DELPHI: {
 
 # Controller for the X, Y, Z axes of the optical lens
 "Sample Holder Actuators": {
-    class: tmcm.TMCM3110,
-    role: none,
+    class: tmcm.TMCLController,
+    role: null,
     init: {
         port: "/dev/fake",
         axes: ["x", "y", "z"],

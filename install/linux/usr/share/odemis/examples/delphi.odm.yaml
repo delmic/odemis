@@ -23,7 +23,7 @@ DELPHI: {
 # Connection to the Phenom, which must have API access activated
 "Phenom": {
     class: phenom.SEM,
-    role: none,
+    role: null,
     init: {
            # TODO: change to the Delphi correct password and serial number
            host: "http://Phenom-MVE0217221140.local:8888", 
@@ -186,7 +186,7 @@ DELPHI: {
 # Controller for the X, Y, Z axes of the optical lens
 "Sample Holder Actuators": {
     class: tmcm.TMCLController,
-    role: none,
+    role: null,
     init: {
         port: "/dev/ttyTMCM*",
         #port: "/dev/fake3",

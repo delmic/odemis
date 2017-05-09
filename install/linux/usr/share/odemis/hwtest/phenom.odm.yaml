@@ -10,7 +10,7 @@ PhenomProX: {
 # Connection to the Phenom, which must have API access activated
 "Phenom": {
     class: phenom.SEM,
-    role: none,
+    role: null,
     init: {
            host: "http://Phenom-MVE0206151080.local:8888", 
            username: "delmic",
