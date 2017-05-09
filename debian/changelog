@@ -1,3 +1,14 @@
+odemis (2.6.4-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6.4
+  * Main bugs fixed:
+    - Avoid stopping backend too hard, which sometimes prevented restart
+    - Make sure not to hold the mouse capture when the button is disabled
+    - Ensure that multiplex lights can reach the maximum power (SECOM)
+    - Fix spec-selector at the wrong position during fiber usage (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 09 May 2017 09:28:54 +0200
+
 odemis (2.6.3-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6.3
