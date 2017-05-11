@@ -98,14 +98,14 @@ class AlignmentProjection(stream.RGBSpatialProjection):
 
     def _updateImage(self):
         raw = self.stream.raw[0]
-        metadata = raw.metadata
+        metadata = self.stream._find_metadata(raw.metadata)
         grayscale_im = preprocess(raw, self._invert, self._flip, self._crop,
                                   self._gaussian_sigma, self._eqhis)
         rgb_im = img.DataArray2RGB(grayscale_im)
         if self._kp:
-            rgb_im = cv2.drawKeypoints(rgb_im, self._kp, None, color=(0, 255, 0), flags=0)
+            rgb_im = cv2.drawKeypoints(rgb_im, self._kp, None, color=(30, 30, 255), flags=0)
         if self._mkp:
-            rgb_im = cv2.drawKeypoints(rgb_im, self._mkp, None, color=(255, 0, 0), flags=0)
+            rgb_im = cv2.drawKeypoints(rgb_im, self._mkp, None, color=(0, 255, 0), flags=0)
 
         rgb_im = model.DataArray(rgb_im, metadata)
         rgb_im.flags.writeable = False
@@ -114,19 +114,20 @@ class AlignmentProjection(stream.RGBSpatialProjection):
 
 class AutomaticOverlayPlugin(Plugin):
     name = "Automatic Overlay"
-    __version__ = "1.0"
-    __author__ = "Guilherme Stiebler"
+    __version__ = "1.1"
+    __author__ = "Guilherme Stiebler, Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
         ("blur_ref", {
-            "label": "SEM Blur",
-            "tooltip": "Blur window size for the reference SEM image (right)",
+            "label": "Blur reference",
+            "tooltip": "Blur window size for the reference SEM image (left)",
         }),
         ("blur", {
-            "label": "Blur window size"
+            "label": "Blur new",
+            "tooltip": "Blur window size for the new EM image (right)",
         }),
         ("crop_top", {
             "label": "Crop top"
@@ -156,21 +157,28 @@ class AutomaticOverlayPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(AutomaticOverlayPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Overlay/Add && Align to SEM...", self.start)
+        self.addMenu("Overlay/Add && Align EM...", self.start)
+
+        # Projections of the reference and new data
+        self._rem_proj = None
+        self._nem_proj = None
 
         # On-the-fly keypoints and matching keypoints computed
-        self._tem_kp = None
-        self._tem_mkp = None
-        self._sem_kp = None
-        self._sem_mkp = None
+        self._nem_kp = None
+        self._nem_mkp = None
+        self._rem_kp = None
+        self._rem_mkp = None
 
-        self.blur_ref = model.IntContinuous(2, range=(0, 20), unit="pixels")
-        self.blur = model.IntContinuous(10, range=(0, 20), unit="pixels")
-        # TODO set the limits of the crop VAs based on the size of the image
-        self.crop_top = model.IntContinuous(0, range=(0, 200), unit="pixels")
-        self.crop_bottom = model.IntContinuous(0, range=(0, 200), unit="pixels")
-        self.crop_left = model.IntContinuous(0, range=(0, 200), unit="pixels")
-        self.crop_right = model.IntContinuous(0, range=(0, 200), unit="pixels")
+        self.blur_ref = model.IntContinuous(2, range=(0, 20), unit="px")
+        self.blur = model.IntContinuous(5, range=(0, 20), unit="px")
+        self.crop_top = model.IntContinuous(0, range=(0, 200), unit="px")
+        self.crop_top.clip_on_range = True
+        self.crop_bottom = model.IntContinuous(0, range=(0, 200), unit="px")
+        self.crop_bottom.clip_on_range = True
+        self.crop_left = model.IntContinuous(0, range=(0, 200), unit="px")
+        self.crop_left.clip_on_range = True
+        self.crop_right = model.IntContinuous(0, range=(0, 200), unit="px")
+        self.crop_right.clip_on_range = True
         # TODO: inverting the values doesn't seem to really affect the keypoints
         self.invert = model.BooleanVA(False)
         # TODO: ideally, the flip shouldn't be needed, but it seems the matchers
@@ -178,47 +186,67 @@ class AutomaticOverlayPlugin(Plugin):
         self.flip_x = model.BooleanVA(False)
         self.flip_y = model.BooleanVA(False)
         self.draw_kp = model.BooleanVA(True)
-        self.wta = model.IntContinuous(2, range=(2, 4))
-        self.scaleFactor = model.FloatContinuous(1.2, range=(1.01, 2))
-        self.nlevels = model.IntContinuous(8, range=(4, 48))
-        self.patchSize = model.IntContinuous(31, range=(4, 256))
+#         self.wta = model.IntContinuous(2, range=(2, 4))
+#         self.scaleFactor = model.FloatContinuous(1.2, range=(1.01, 2))
+#         self.nlevels = model.IntContinuous(8, range=(4, 48))
+#         self.patchSize = model.IntContinuous(31, range=(4, 256))
 
         # Any change on the VAs should update the stream
         self.blur_ref.subscribe(self._on_ref_stream)
-        self.blur.subscribe(self._on_next_stream)
-        self.crop_top.subscribe(self._on_next_stream)
-        self.crop_bottom.subscribe(self._on_next_stream)
-        self.crop_left.subscribe(self._on_next_stream)
-        self.crop_right.subscribe(self._on_next_stream)
-        self.invert.subscribe(self._on_next_stream)
-        self.flip_x.subscribe(self._on_next_stream)
-        self.flip_y.subscribe(self._on_next_stream)
+        self.blur.subscribe(self._on_new_stream)
+        self.crop_top.subscribe(self._on_new_stream)
+        self.crop_bottom.subscribe(self._on_new_stream)
+        self.crop_left.subscribe(self._on_new_stream)
+        self.crop_right.subscribe(self._on_new_stream)
+        self.invert.subscribe(self._on_new_stream)
+        self.flip_x.subscribe(self._on_new_stream)
+        self.flip_y.subscribe(self._on_new_stream)
         self.draw_kp.subscribe(self._on_draw_kp)
-        self.wta.subscribe(self._on_next_stream)
-        self.scaleFactor.subscribe(self._on_next_stream)
-        self.nlevels.subscribe(self._on_next_stream)
-        self.patchSize.subscribe(self._on_next_stream)
+#         self.wta.subscribe(self._on_new_stream)
+#         self.scaleFactor.subscribe(self._on_new_stream)
+#         self.nlevels.subscribe(self._on_new_stream)
+#         self.patchSize.subscribe(self._on_new_stream)
 
     def start(self):
+        sem_stream = self._get_sem_stream()
+        if not sem_stream:
+            box = wx.MessageDialog(self.main_app.main_frame,
+                                   "No EM stream found to use as reference.",
+                                   "Failed to find EM stream", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
+
+        tem_stream = self.open_image(self.main_app.main_frame)
+        if not tem_stream:
+            return
+
         dlg = AlignmentAcquisitionDialog(self, "Automatic image alignment",
                                          text="Adjust the parameters so that the two images looks similar\n"
                                               "and the key-points are detected at similar areas.")
 
         # removing the play overlay from the viewports
         dlg.viewport_l.canvas.remove_view_overlay(dlg.viewport_l.canvas.play_overlay)
+        dlg.viewport_l.canvas.fit_view_to_next_image = True
         dlg.viewport_r.canvas.remove_view_overlay(dlg.viewport_r.canvas.play_overlay)
+        dlg.viewport_r.canvas.fit_view_to_next_image = True
 
-        sem_stream = self._get_sem_stream()
-        sem_projection = AlignmentProjection(sem_stream)
-        self._semStream = sem_projection
+        rem_projection = AlignmentProjection(sem_stream)
+        self._rem_proj = rem_projection
+
+        nem_projection = AlignmentProjection(tem_stream)
+        self._nem_proj = nem_projection
+
         self._on_ref_stream()
-        dlg.addStream(sem_projection, 1)
-
+        self._on_new_stream()
         dlg.addSettings(self, self.vaconf)
+
+        dlg.addStream(rem_projection, 0)
+        dlg.addStream(nem_projection, 1)
+
         dlg.addButton("Align", self.align, face_colour='blue')
         dlg.addButton("Cancel", None)
         dlg.pnl_gauge.Hide()
-        self.open_image(dlg)
         dlg.ShowModal()
 
     def _get_sem_stream(self):
@@ -262,7 +290,6 @@ class AutomaticOverlayPlugin(Plugin):
                 raise ValueError("Coloured RGB image not supported")
         return data
 
-    @call_in_wx_main
     def open_image(self, dlg):
         tab = self.main_app.main_data.getTabByName("analysis")
         tab_data = tab.tab_data_model
@@ -286,8 +313,7 @@ class AutomaticOverlayPlugin(Plugin):
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
-            dlg.Destroy()
-            return
+            return None
 
         # Detect the format to use
         filename = dialog.GetPath()
@@ -295,24 +321,23 @@ class AutomaticOverlayPlugin(Plugin):
         data = udataio.open_acquisition(filename)[0]
         try:
             data = self._ensureGrayscale(data)
-        except ValueError as exception:
-            exception_msg = str(exception)
-            box = wx.MessageDialog(dlg, exception_msg, "Exit", wx.OK | wx.ICON_STOP)
+        except ValueError as ex:
+            box = wx.MessageDialog(dlg, str(ex), "Failed to open image",
+                                   wx.OK | wx.ICON_STOP)
             box.ShowModal()
             box.Destroy()
-            dlg.Destroy()
-            return
+            return None
+
+        self.crop_top.range = (0, data.shape[0] // 2)
+        self.crop_bottom.range = (0, data.shape[0] // 2)
+        self.crop_left.range = (0, data.shape[1] // 2)
+        self.crop_right.range = (0, data.shape[1] // 2)
 
         data.metadata[model.MD_POS] = (0, 0)
         data.metadata[model.MD_PIXEL_SIZE] = (1e-9, 1e-9)
 
         basename = os.path.splitext(os.path.split(filename)[1])[0]
-        s = stream.StaticSEMStream(basename, data)
-        tem_projection = AlignmentProjection(s)
-        self._temStream = tem_projection
-
-        self._on_next_stream()
-        dlg.addStream(tem_projection, 0)
+        return stream.StaticSEMStream(basename, data)
 
     @call_in_wx_main
     def align(self, dlg):
@@ -323,39 +348,41 @@ class AutomaticOverlayPlugin(Plugin):
         crop = (self.crop_top.value, self.crop_bottom.value,
                 self.crop_left.value, self.crop_right.value)
         flip = (self.flip_x.value, self.flip_y.value)
-        tem_img = preprocess(self._temStream.raw[0], self.invert.value, flip, crop,
+        tem_img = preprocess(self._nem_proj.raw[0], self.invert.value, flip, crop,
                              self.blur.value, True)
-        sem_img = preprocess(self._semStream.raw[0], False, (False, False), (0, 0, 0, 0),
+        sem_img = preprocess(self._rem_proj.raw[0], False, (False, False), (0, 0, 0, 0),
                              self.blur_ref.value, True)
         try:
-            tmat, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img, fd_type="ORB")
-        except ValueError as exception:
-            exception_msg = str(exception)
-            box = wx.MessageDialog(dlg, exception_msg, "Exit", wx.OK | wx.ICON_STOP)
+            tmat, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img)
+        except ValueError as ex:
+            box = wx.MessageDialog(dlg, str(ex), "Failed to align images",
+                                   wx.OK | wx.ICON_STOP)
             box.ShowModal()
             box.Destroy()
             return
 
         # get the metadata corresponding to the transformation
         transf_md = get_img_transformation_md(tmat, tem_img, sem_img)
+        logging.debug("Computed transformation metadata: %s", transf_md)
+
         # Shear is really big => something is gone wrong
         if abs(transf_md[model.MD_SHEAR]) > 1:
             logging.warning("Shear is %g, which means the alignment is probably wrong",
                             transf_md[model.MD_SHEAR])
             transf_md[model.MD_SHEAR] = 0
         # Pixel size ratio is more than 2 ? => something is gone wrong
+        # TODO: pixel size 100x bigger/smaller than the reference is also wrong
         pxs = transf_md[model.MD_PIXEL_SIZE]
-        if 0.5 <= pxs[0] / pxs[1] <= 2:
+        if not (0.5 <= pxs[0] / pxs[1] <= 2):
             logging.warning("Pixel size is %s, which means the alignment is probably wrong",
                             pxs)
             transf_md[model.MD_PIXEL_SIZE] = (pxs[0], pxs[0])
-
-        raw = preprocess(self._temStream.stream.raw[0], False, flip, crop, 0, False)
+        raw = preprocess(self._nem_proj.stream.raw[0], False, flip, crop, 0, False)
         raw.metadata.update(transf_md)
 
         # Add a new stream panel (removable)
         analysis_tab = self.main_app.main_data.getTabByName('analysis')
-        aligned_stream = stream.StaticSEMStream(self._temStream.stream.name.value, raw)
+        aligned_stream = stream.StaticSEMStream(self._nem_proj.stream.name.value, raw)
         scont = analysis_tab.stream_bar_controller.addStream(aligned_stream, add_to_view=True)
         scont.stream_panel.show_remove_btn(True)
 
@@ -365,41 +392,41 @@ class AutomaticOverlayPlugin(Plugin):
     @limit_invocation(0.3)
     def _precompute_kp(self):
         if self.draw_kp.value:
-            if not hasattr(self, "_temStream") or not hasattr(self, "_semStream"):
+            if not self._nem_proj or not self._rem_proj:
                 return
 
-            # TODO: pass extra args for the keypoint detector
-            dtkargs = {"WTA_K": self.wta.value,
-                       "scaleFactor": self.scaleFactor.value,
-                       "nlevels": self.nlevels.value,
-                       "patchSize": self.patchSize.value,
-                       "edgeThreshold": self.patchSize.value,  # should be equal
-                       }
+#             # TODO: pass extra args for the keypoint detector
+#             dtkargs = {"WTA_K": self.wta.value,
+#                        "scaleFactor": self.scaleFactor.value,
+#                        "nlevels": self.nlevels.value,
+#                        "patchSize": self.patchSize.value,
+#                        "edgeThreshold": self.patchSize.value,  # should be equal
+#                        }
             crop = (self.crop_top.value, self.crop_bottom.value,
                     self.crop_left.value, self.crop_right.value)
             flip = (self.flip_x.value, self.flip_y.value)
-            tem_img = preprocess(self._temStream.raw[0], self.invert.value, flip, crop,
+            tem_img = preprocess(self._nem_proj.raw[0], self.invert.value, flip, crop,
                                  self.blur.value, True)
-            sem_img = preprocess(self._semStream.raw[0], False, (False, False), (0, 0, 0, 0),
+            sem_img = preprocess(self._rem_proj.raw[0], False, (False, False), (0, 0, 0, 0),
                                  self.blur_ref.value, True)
             try:
-                tmat, self._tem_kp, self._sem_kp, self._tem_mkp, self._sem_mkp = \
-                         keypoint.FindTransform(tem_img, sem_img, fd_type="ORB")
+                tmat, self._nem_kp, self._rem_kp, self._nem_mkp, self._rem_mkp = \
+                         keypoint.FindTransform(tem_img, sem_img)
             except ValueError as ex:
                 logging.debug("No match found: %s", ex)
                 # TODO: if no match, still show the keypoints
-                self._tem_kp = None
-                self._tem_mkp = None
-                self._sem_kp = None
-                self._sem_mkp = None
+                self._nem_kp = None
+                self._nem_mkp = None
+                self._rem_kp = None
+                self._rem_mkp = None
         else:
-            self._tem_kp = None
-            self._tem_mkp = None
-            self._sem_kp = None
-            self._sem_mkp = None
+            self._nem_kp = None
+            self._nem_mkp = None
+            self._rem_kp = None
+            self._rem_mkp = None
 
         self._update_ref_stream()
-        self._update_stream()
+        self._update_new_stream()
 
     def _on_draw_kp(self, draw):
         self._precompute_kp()
@@ -408,21 +435,25 @@ class AutomaticOverlayPlugin(Plugin):
         self._precompute_kp()
         self._update_ref_stream()
 
-    def _on_next_stream(self, _=None):
+    def _on_new_stream(self, _=None):
         self._precompute_kp()
-        self._update_stream()
+        self._update_new_stream()
 
     def _update_ref_stream(self):
-        self._semStream.setPreprocessingParams(False, (False, False), (0, 0, 0, 0),
+        if not self._rem_proj:
+            return
+        self._rem_proj.setPreprocessingParams(False, (False, False), (0, 0, 0, 0),
                                                self.blur_ref.value, True,
-                                               self._sem_kp, self._sem_mkp)
-        self._semStream._shouldUpdateImage()
+                                               self._rem_kp, self._rem_mkp)
+        self._rem_proj._shouldUpdateImage()
 
-    def _update_stream(self):
+    def _update_new_stream(self):
+        if not self._nem_proj:
+            return
         crop = (self.crop_top.value, self.crop_bottom.value,
                 self.crop_left.value, self.crop_right.value)
         flip = (self.flip_x.value, self.flip_y.value)
-        self._temStream.setPreprocessingParams(self.invert.value, flip,
+        self._nem_proj.setPreprocessingParams(self.invert.value, flip,
                                                crop, self.blur.value, True,
-                                               self._tem_kp, self._tem_mkp)
-        self._temStream._shouldUpdateImage()
+                                               self._nem_kp, self._nem_mkp)
+        self._nem_proj._shouldUpdateImage()

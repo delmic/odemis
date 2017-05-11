@@ -31,17 +31,26 @@ from odemis import model
 from odemis.util import img
 
 
-USE_BF = True  # Use BruteForce matcher
+# The brute-force matcher works in theory a bit better than the Flann-based one,
+# but slower. In practice, it doesn't seem to show better results, and if they
+# are many keypoints (eg, 2000) the slow-down can be a couple of seconds.
+USE_BF = False  # Use BruteForce matcher
 USE_KNN = True  # Use k-nearest neighbour matching method
 
-def FindTransform(ima, imb, fd_type="ORB"):
+# Missing defines from OpenCV
+FLANN_INDEX_LINEAR = 0
+FLANN_INDEX_KDTREE = 1
+FLANN_INDEX_KMEANS = 2
+FLANN_INDEX_LSH = 6
+
+def FindTransform(ima, imb, fd_type=None):
     """
     ima(DataArray of shape YaXa with uint8): Image to be aligned
     imb(DataArray of shape YbXb with uint8): Base image
         Note that the shape doesn't have to be any relationship with the shape of the
         first dimension(doesn't even need to be the same ratio)
-    fd_type(string): Feature detector type. Must be 'SIFT' or 'ORB'. ORB is faster,
-        but SIFT usually has better results.
+    fd_type(None or str): Feature detector type. Must be 'SIFT' or 'ORB'. ORB is faster,
+        but SIFT usually has better results. If None, it will pick the best available.
     return (ndarray of shape 3, 3): transformation matrix to align the first image on the
         base image. (right column is translation)
     raises:
@@ -49,36 +58,43 @@ def FindTransform(ima, imb, fd_type="ORB"):
     """
 
     # Instantiate the feature detector and the matcher
-    # The brute force matcher used for ORB can be used also for SIFT,
-    # but the opposite is not true. The Flann matcher cannot be used on ORB.
-    # A Flann based matcher is used for SIFT because it is faster than the brute force
-    # used on ORB, and it also showed better results on the tests.
-    # TODO: in theory, the brute force matcher is supposed to give better results
-    # (although a little slower)
-    # TODO: try BRISK?
+    # TODO: try BRISK, AZAKE and other detectors?
+    if fd_type is None:
+        for fd in ("SIFT", "ORB"):
+            if hasattr(cv2, fd):
+                fd_type = fd
+                break
+
     if fd_type == "ORB":
         feature_detector = cv2.ORB()
         if USE_BF:
             matcher = cv2.BFMatcher(normType=cv2.NORM_HAMMING)
         else:
-            FLANN_INDEX_LSH = 6
             index_params = dict(algorithm=FLANN_INDEX_LSH,
                                 table_number=6,  # 12
                                 key_size=12,  # 20
                                 multi_probe_level=1)  # 2
-            search_params = dict(checks=50)
+            search_params = {}
             matcher = cv2.FlannBasedMatcher(index_params, search_params)
     elif fd_type == "SIFT":
-        feature_detector = cv2.SIFT()
+        # Extra arguments for SIFT
+#         contrastThreshold = 0.04
+#         edgeThreshold = 10
+#         sigma = 1.6  # TODO: no need for Gaussian as preprocess already does it?
+        feature_detector = cv2.SIFT(nfeatures=2000)  # avoid going crazy on keypoints
         if USE_BF:
             matcher = cv2.BFMatcher(normType=cv2.NORM_L2)
         else:
-            FLANN_INDEX_KDTREE = 1
-            index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-            search_params = dict(checks=50)
+            # Note: with KDTree, every call returns slightly different matches,
+            # which is quite annoying for reproducibility
+#             index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+            index_params = dict(algorithm=FLANN_INDEX_KMEANS)
+            search_params = dict(checks=32)  # default value
             matcher = cv2.FlannBasedMatcher(index_params, search_params)
     else:
         raise ValueError("Unknown feature detector %s" % (fd_type,))
+
+    logging.debug("Using feature detector %s", fd_type)
 
     # find and compute the descriptors
     ima_kp, ima_des = feature_detector.detectAndCompute(ima, None)
@@ -91,8 +107,9 @@ def FindTransform(ima, imb, fd_type="ORB"):
         matches = matcher.knnMatch(ima_des, imb_des, k=2)
 
         # store all the good matches as per Lowe's ratio test
+        dist_ratio = 0.75
         selected_matches = [m[0] for m in matches
-                            if len(m) == 2 and m[0].distance < m[1].distance * 0.75]
+                            if len(m) == 2 and m[0].distance < m[1].distance * dist_ratio]
     else:
         # For each keypoint, pick the closest one in the other image
         matches = matcher.match(ima_des, imb_des)
