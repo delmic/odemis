@@ -37,8 +37,9 @@ import functools
 import logging
 import math
 from odemis import model
-from odemis.acq import stream
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+
+from odemis.acq.stream import DataProjection
 
 
 class VAHolder(object):
@@ -54,6 +55,7 @@ class ManualOverlayPlugin(Plugin):
     def __init__(self, microscope, main_app):
         super(ManualOverlayPlugin, self).__init__(microscope, main_app)
         self.addMenu("Overlay/Manual corrections", self.start)
+        self._dlg = None
 
     def start(self):
         dlg = AcquisitionDialog(self, "Manually change the alignment",
@@ -61,6 +63,8 @@ class ManualOverlayPlugin(Plugin):
                                      "of any stream. The display is immediately updated, "
                                      "but you need to save the file (as a snapshot) for "
                                      "the changes to be permanent.")
+        self._dlg = dlg
+
         vah = VAHolder()
         vah._subscribers = []
         vaconf = OrderedDict()
@@ -73,11 +77,13 @@ class ManualOverlayPlugin(Plugin):
             poscor = stream.raw[0].metadata.get(model.MD_POS_COR, (0, 0))
             rotation = stream.raw[0].metadata.get(model.MD_ROTATION_COR, 0)
             scalecor = stream.raw[0].metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+            shear = stream.raw[0].metadata.get(model.MD_SHEAR_COR, 0)
             vatransx = model.FloatContinuous(-poscor[0], range=(-10e-6, 10e-6), unit="m")
             vatransy = model.FloatContinuous(-poscor[1], range=(-10e-6, 10e-6), unit="m")
             varot = model.FloatContinuous(rotation, range=(-math.pi, math.pi), unit="rad")
             vascalex = model.FloatContinuous(scalecor[0], range=(0.5, 1.5))
             vascaley = model.FloatContinuous(scalecor[1], range=(0.5, 1.5))
+            vashear = model.FloatContinuous(shear, range=(-1, 1))
 
             # Add the VAs to the holder, and to the vaconf mainly to force the order
             setattr(vah, "%dTransX" % i, vatransx)
@@ -85,11 +91,13 @@ class ManualOverlayPlugin(Plugin):
             setattr(vah, "%dRotation" % i, varot)
             setattr(vah, "%dScaleX" % i, vascalex)
             setattr(vah, "%dScaleY" % i, vascaley)
+            setattr(vah, "%dShear" % i, vashear)
             vaconf["%dTransX" % i] = {"label": "%s trans X" % stream.name.value}
             vaconf["%dTransY" % i] = {"label": "%s trans Y" % stream.name.value}
-            vaconf["%dRotation" % i] = {"label": "%s rotation X" % stream.name.value}
+            vaconf["%dRotation" % i] = {"label": "%s rotation" % stream.name.value}
             vaconf["%dScaleX" % i] = {"label": "%s scale X" % stream.name.value}
             vaconf["%dScaleY" % i] = {"label": "%s scale Y" % stream.name.value}
+            vaconf["%dShear" % i] = {"label": "%s shear" % stream.name.value}
 
             # Create listeners with information of the stream and dimension
             va_on_transx = functools.partial(self._on_trans, stream, 0)
@@ -97,22 +105,48 @@ class ManualOverlayPlugin(Plugin):
             va_on_rotation = functools.partial(self._on_rotation, stream)
             va_on_scalex = functools.partial(self._on_scale, stream, 0)
             va_on_scaley = functools.partial(self._on_scale, stream, 1)
+            va_on_shear = functools.partial(self._on_shear, stream)
+
             # We hold a reference to the listeners to prevent automatic subscription
             vah._subscribers.append(va_on_transx)
             vah._subscribers.append(va_on_transy)
             vah._subscribers.append(va_on_rotation)
             vah._subscribers.append(va_on_scalex)
             vah._subscribers.append(va_on_scaley)
+            vah._subscribers.append(va_on_shear)
             vatransx.subscribe(va_on_transx)
             vatransy.subscribe(va_on_transy)
             varot.subscribe(va_on_rotation)
             vascalex.subscribe(va_on_scalex)
             vascaley.subscribe(va_on_scaley)
+            vashear.subscribe(va_on_shear)
 
         dlg.addSettings(vah, vaconf)
         # TODO: add a 'reset' button
         dlg.addButton("Done", None, face_colour='blue')
         dlg.ShowModal()
+
+        # The end
+        dlg.Destroy()
+        vah._subscribers = []
+        self._dlg = None
+
+    def _force_update_proj(self, st):
+        """
+        Force updating the projection of the given stream
+        """
+        # Update in the view of the window, and also the current tab
+        views = [self._dlg.microscope_view]
+        views.extend(self.main_app.main_data.tab.value.tab_data_model.views.value)
+
+        for v in views:
+            for sp in v.getStreams():  # stream or projection
+                if isinstance(sp, DataProjection):
+                    s = sp.stream
+                else:
+                    s = sp
+                if s is st:
+                    sp._shouldUpdateImage()
 
     def _on_trans(self, stream, i, value):
         logging.debug("New trans = %f on stream %s", value, stream.name.value)
@@ -122,7 +156,7 @@ class ManualOverlayPlugin(Plugin):
         else:
             poscor = (poscor[0], -value)
         stream.raw[0].metadata[model.MD_POS_COR] = poscor
-        stream._shouldUpdateImage()
+        self._force_update_proj(stream)
 
     def _on_scale(self, stream, i, value):
         logging.debug("New scale = %f on stream %s", value, stream.name.value)
@@ -132,9 +166,14 @@ class ManualOverlayPlugin(Plugin):
         else:
             scalecor = (scalecor[0], value)
         stream.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = scalecor
-        stream._shouldUpdateImage()
+        self._force_update_proj(stream)
 
     def _on_rotation(self, stream, value):
         logging.debug("New rotation = %f on stream %s", value, stream.name.value)
         stream.raw[0].metadata[model.MD_ROTATION_COR] = value
-        stream._shouldUpdateImage()
+        self._force_update_proj(stream)
+
+    def _on_shear(self, stream, value):
+        logging.debug("New shear = %f on stream %s", value, stream.name.value)
+        stream.raw[0].metadata[model.MD_SHEAR_COR] = value
+        self._force_update_proj(stream)
