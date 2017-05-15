@@ -107,7 +107,7 @@ SECOMv2: {
 }
 
 "EBeam Focus": {
-    # Internal child of SUIPSEM, so no class
+    # Internal child of EXCSSEM, so no class
     role: ebeam-focus,
 }
 
