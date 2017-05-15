@@ -1769,7 +1769,7 @@ class SEMComedi(model.HwComponent):
         """
         rchannels = tuple(d.channel for d in detectors)
         rranges = tuple(d._range for d in detectors)
-        dmd = tuple(d.getMetadata() for d in detectors)
+        md = tuple(self._metadata.copy() for d in detectors)
 
         # get the scan values (automatically updated to the latest needs)
         (scan, period, shape, margin,
@@ -1777,21 +1777,23 @@ class SEMComedi(model.HwComponent):
         # TODO: immediately write the first position to give the beam a bit more
         # settling time while we are preparing the whole scan.
 
-        metadata = self._metadata.copy()
-        metadata[model.MD_ACQ_DATE] = time.time()  # time at the beginning
-        metadata[model.MD_DWELL_TIME] = period
-        metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
+        # Scanner metadata (note: MD_POS is expected to be on the base/e-beam metadata)
+        metadata = {
+            model.MD_ACQ_DATE: time.time(),  # time at the beginning
+            model.MD_DWELL_TIME: period,
+            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+        }
 
         # add scanner translation to the center
-        center = metadata.get(model.MD_POS, (0, 0))
+        center = self._metadata.get(model.MD_POS, (0, 0))
         trans = self._scanner.pixelToPhy(self._scanner.translation.value)
         metadata[model.MD_POS] = (center[0] + trans[0],
                                   center[1] + trans[1])
 
-        # metadata is the merge of the scanner MD + detector MD
-        md = tuple(metadata.copy() for d in detectors)
-        for dmdi, mdi in zip(dmd, md):
-            mdi.update(dmdi)
+        # metadata is the merge of the base MD + detector MD + scanner MD
+        for det, mdi in zip(detectors, md):
+            mdi.update(det.getMetadata())
+            mdi.update(metadata)
 
         # write and read the raw data
         rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
@@ -1846,7 +1848,7 @@ class SEMComedi(model.HwComponent):
                             u"100 µs. Automatically increasing the dwell time to "
                             u"%g s", self._scanner.dwellTime.value)
 
-        dmd = tuple(d.getMetadata() for d in detectors)
+        md = tuple(self._metadata.copy() for d in detectors)
 
         # get the scan values (automatically updated to the latest needs)
         (scan, period, shape, margin,
@@ -1854,21 +1856,23 @@ class SEMComedi(model.HwComponent):
         if osr != 1:
             logging.warning("osr = %d, while using counting detector", osr)
 
-        metadata = self._metadata.copy()
-        metadata[model.MD_ACQ_DATE] = time.time()  # time at the beginning
-        metadata[model.MD_DWELL_TIME] = period
-        metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
+        # Scanner metadata (note: MD_POS is expected to be on the base/e-beam metadata)
+        metadata = {
+            model.MD_ACQ_DATE: time.time(),  # time at the beginning
+            model.MD_DWELL_TIME: period,
+            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+        }
 
         # add scanner translation to the center
-        center = metadata.get(model.MD_POS, (0, 0))
+        center = self._metadata.get(model.MD_POS, (0, 0))
         trans = self._scanner.pixelToPhy(self._scanner.translation.value)
         metadata[model.MD_POS] = (center[0] + trans[0],
                                   center[1] + trans[1])
 
-        # metadata is the merge of the scanner MD + detector MD
-        md = tuple(metadata.copy() for d in detectors)
-        for dmdi, mdi in zip(dmd, md):
-            mdi.update(dmdi)
+        # metadata is the merge of the base MD + detector MD + scanner MD
+        for det, mdi in zip(detectors, md):
+            mdi.update(det.getMetadata())
+            mdi.update(metadata)
 
         # write and read the raw data
         rbuf = self.write_count_2d_data_raw(wchannels, wranges, counter,
