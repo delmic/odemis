@@ -47,6 +47,5 @@ class ClearPlugin(Plugin):
         self.addMenu("Help/Development/Clear data", self.clear)
 
     def clear(self):
-        self.main_app.tab_controller.open_tab('analysis')
-        analysis_tab = self.main_app.main_data.tab.value
+        analysis_tab = self.main_app.main_data.getTabByName('analysis')
         analysis_tab.display_new_data(None, None)

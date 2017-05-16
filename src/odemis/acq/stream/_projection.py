@@ -243,11 +243,10 @@ class RGBSpatialProjection(DataProjection):
             if im is None:
                 raise ValueError("Stream's image not defined")
             md = im.metadata
-            shape = im.shape
-            im_scale = md[model.MD_PIXEL_SIZE]
-            w, h = shape[1] * im_scale[0], shape[0] * im_scale[1]
-            c = md[model.MD_POS]
-            return [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
+            pxs = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+            pos = md.get(model.MD_POS, (0, 0))
+            w, h = im.shape[1] * pxs[0], im.shape[0] * pxs[1]
+            return [pos[0] - w / 2, pos[1] - h / 2, pos[0] + w / 2, pos[1] + h / 2]
 
     def _zFromMpp(self):
         """
@@ -266,7 +265,7 @@ class RGBSpatialProjection(DataProjection):
         """
         md = self.stream._das.metadata
         ps = md.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
-        pos = md.get(model.MD_POS, (0.0, 0.0))
+        pos = md.get(model.MD_POS, (0, 0))
         # Removes the center coordinates of the image. After that, rect will be centered on 0, 0
         rect = (
             rect[0] - pos[0],
