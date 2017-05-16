@@ -638,6 +638,7 @@ class AndorCam2(model.DigitalCamera):
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
+
         # For temporary stopping the acquisition (kludge for the andorshrk
         # SR303i which cannot communicate during acquisition)
         self.hw_lock = threading.Lock() # to be held during DRV_ACQUIRING (or shrk communicating)
@@ -649,6 +650,7 @@ class AndorCam2(model.DigitalCamera):
         self._got_event = threading.Event()
         self._late_events = collections.deque() # events which haven't been handled yet
         self._ready_for_acq_start = False
+        self._acq_sync_lock = threading.Lock()
 
         self.data = AndorCam2DataFlow(self)
         # Convenience event for the user to connect and fire
@@ -1980,14 +1982,16 @@ class AndorCam2(model.DigitalCamera):
          is synchronized, wait for the Event to be triggered.
         raises CancelledError if the acquisition must stop
         """
-        # catch up late events if we missed the start
-        if self._late_events:
-            event_time = self._late_events.popleft()
-            logging.warning("starting acquisition late by %g s", time.time() - event_time)
-            self.atcore.StartAcquisition()
-            return
+        with self._acq_sync_lock:
+            # catch up late events if we missed the start
+            if self._late_events:
+                event_time = self._late_events.popleft()
+                logging.warning("starting acquisition late by %g s", time.time() - event_time)
+                self.atcore.StartAcquisition()
+                return
+            else:
+                self._ready_for_acq_start = True
 
-        self._ready_for_acq_start = True
         try:
             # wait until onEvent was called (it will directly start acquisition)
             # or must stop
@@ -2012,15 +2016,17 @@ class AndorCam2(model.DigitalCamera):
         """
         Called by the Event when it is triggered
         """
-        if not self._ready_for_acq_start:
-            if self.acquire_thread and self.acquire_thread.isAlive():
-                logging.warning("Received synchronization event but acquisition not ready")
-                # queue the events, it's bad but less bad than skipping it
-                self._late_events.append(time.time())
-            return
+        with self._acq_sync_lock:
+            if not self._ready_for_acq_start:
+                if self.acquire_thread and self.acquire_thread.isAlive():
+                    logging.warning("Received synchronization event but acquisition not ready")
+                    # queue the events, it's bad but less bad than skipping it
+                    self._late_events.append(time.time())
+                return
 
         logging.debug("starting sync acquisition")
         self.atcore.StartAcquisition()
+        self._ready_for_acq_start = False
         self._got_event.set() # let the acquisition thread know it's starting
 
     def req_stop_flow(self):
