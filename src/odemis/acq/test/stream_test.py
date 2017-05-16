@@ -1070,7 +1070,7 @@ class SPARCTestCase(unittest.TestCase):
         sms = stream.SEMMDStream("test sem-md", sems, mcs)
 
         mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
-        sems.dcPeriod.value = 100
+        sems.dcPeriod.value = 5
         sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
         sems.dcDwellTime.value = 1e-06
 
@@ -1093,10 +1093,10 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(len(data), 2)
         mcsd = None
         for d in data:
-            if d.ndim >= 4 and d.shape[-4] > 1:
+            if d.ndim >= 4:
                 # anchor
                 # TODO: check anchor
-                self.assertGreaterEqual(d.shape[-4], 2)
+                self.assertGreaterEqual(d.shape[-4], 1)
             else:
                 self.assertEqual(d.shape, exp_res[::-1])
                 if model.MD_OUT_WL in d.metadata:  # monochromator data
@@ -1109,7 +1109,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Now same thing but with more pixels
         mcs.roi.value = (0.1, 0.1, 0.8, 0.8)
-        sems.dcPeriod.value = 5
+        sems.dcPeriod.value = 1
         sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
         sems.dcDwellTime.value = 1e-06
 
@@ -1129,7 +1129,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(len(data), 2)
         mcsd = None
         for d in data:
-            if d.ndim >= 4 and d.shape[-4] > 1:
+            if d.ndim >= 4:
                 # anchor
                 # TODO: check anchor
                 self.assertGreaterEqual(d.shape[-4], 2)
@@ -1141,6 +1141,8 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(len(data), len(sms.raw))
         md = mcsd.metadata
         self.assertIn(model.MD_POS, md)
+        numpy.testing.assert_allclose(md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(md[model.MD_PIXEL_SIZE], exp_pxs)
 
 #     @skip("simple")
     def test_count(self):
@@ -1211,7 +1213,7 @@ class SPARCTestCase(unittest.TestCase):
 
         time.sleep(2 * dur)
         mas.is_active.value = False
-        time.sleep(0.2)  # Give some time for the projection to be computed
+        time.sleep(0.5)  # Give some time for the projection to be computed
         im = mas.image.value
         X, Y, Z = im.shape
         self.assertEqual((X, Y), mas.repetition.value)
@@ -1231,7 +1233,7 @@ class SPARCTestCase(unittest.TestCase):
 
         time.sleep(3 * dur)
         mas.is_active.value = False
-        time.sleep(0.2)  # Give some time for the projection to be computed
+        time.sleep(0.5)  # Give some time for the projection to be computed
         im = mas.image.value
         X, Y, Z = im.shape
         self.assertEqual((X, Y), mas.repetition.value)
@@ -1266,6 +1268,7 @@ class SPARC2TestCase(unittest.TestCase):
         cls.spec = model.getComponent(role="spectrometer")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
+        cls.cl = model.getComponent(role="cl-detector")
         cls.spgp = model.getComponent(role="spectrograph")
         cls.stage = model.getComponent(role="stage")
         cls.sstage = model.getComponent(role="scan-stage")
@@ -1313,6 +1316,86 @@ class SPARC2TestCase(unittest.TestCase):
 
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
+
+
+    def test_acq_cl(self):
+        """
+        Test short & long acquisition for SEM MD CL intensity
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        mcs = stream.CLSettingsStream("test",
+                      self.cl, self.cl.data, self.ebeam,
+                      emtvas={"dwellTime", })
+        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+
+        mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        sems.dcPeriod.value = 100
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-6  # s
+
+        mcs.repetition.value = (500, 700)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+
+        # Both SEM and CL should have the same shape
+        self.assertEqual(len(sms._main_raw), 1)
+        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sms._rep_raw), 1)
+        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
+        sem_md = sms._main_raw[0].metadata
+        cl_md = sms._rep_raw[0].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        # Now same thing but with more pixels
+        mcs.roi.value = (0.3, 0.1, 1.0, 0.8)
+        sems.dcPeriod.value = 1
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        mcs.repetition.value = (3000, 4000)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+
+        # Start acquisition
+        timeout = 1 + 2.5 * sms.estimateAcquisitionTime()
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+        # Both SEM and CL should have the same shape
+        self.assertEqual(len(sms._main_raw), 1)
+        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sms._rep_raw), 1)
+        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
+        sem_md = sms._main_raw[0].metadata
+        cl_md = sms._rep_raw[0].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
 
     def test_acq_spec_sstage(self):
         """
