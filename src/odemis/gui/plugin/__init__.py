@@ -331,12 +331,12 @@ class AcquisitionDialog(xrcfr_plugin):
         # Create a minimal model for use in the streambar controller
 
         data_model = MicroscopyGUIData(plugin.main_app.main_data)
-        self.microscope_view = MicroscopeView("Plugin View")
-        data_model.focussedView = VigilantAttribute(self.microscope_view)
+        self.microscope_view = MicroscopeView("Plugin View left")
         self.viewport_l.setView(self.microscope_view, data_model)
-
-        self.microscope_view_r = MicroscopeView("Plugin View2")
+        self.microscope_view_r = MicroscopeView("Plugin View right")
         self.viewport_r.setView(self.microscope_view_r, data_model)
+        data_model.focussedView.value = self.microscope_view
+        data_model.views.value = [self.microscope_view, self.microscope_view_r]
 
         self.streambar_controller = StreamBarController(
             data_model,
@@ -420,17 +420,16 @@ class AcquisitionDialog(xrcfr_plugin):
 
         Note: If this method is not called, the stream panel and canvas are hidden.
 
-        stream(Stream): Stream to be added
-        index(0 or 1): Index of the viewport to add the stream.
-        returns (StreamController): the stream entry
+        stream(Stream or None): Stream to be added
+        index(0 or 1): Index of the viewport to add the stream. 0 = left, 1 = right
 
         """
         if index == 0:
             viewport = self.viewport_l
-            microscope_view = self.microscope_view
+            v = self.microscope_view
         else:
             viewport = self.viewport_r
-            microscope_view = self.microscope_view_r
+            v = self.microscope_view_r
 
         if not self.fp_streams.IsShown() or not viewport.IsShown():
             self.fp_streams.Show()
@@ -440,8 +439,7 @@ class AcquisitionDialog(xrcfr_plugin):
             self.Update()
 
         if stream:
-            self.streambar_controller.addStream(stream)
-            microscope_view.addStream(stream)
+            self.streambar_controller.addStream(stream, add_to_view=v)
 
     @call_in_wx_main
     def showProgress(self, future):
@@ -475,7 +473,6 @@ class AcquisitionDialog(xrcfr_plugin):
                 self.gauge_progress.Pulse()
 
             if hasattr(self.current_future, 'task_canceller'):
-
                 self.btn_cancel.Enable()
             else:
                 self.btn_cancel.Disable()
