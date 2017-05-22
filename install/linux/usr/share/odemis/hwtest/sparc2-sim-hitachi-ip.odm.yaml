@@ -81,13 +81,9 @@ SPARC2: {
     role: null,
     init: {
         channels: [0, 1],
-        limits: [[0, 5], [0, 5]],  # V
+        limits: [[0, 4], [0, 3]],  # V
         park: [0, 0], # V
-        # On Delmic scanning box v2, the voltage is x2, so need to specify twice smaller values than needed.
-        # TODO: update for Hitachi, officially it's 8 on one axis and 6 on another,
-        # but current values could be due to using square image instead of 4:3.
-        #limits: [[-2.75, 2.75], [-2.75, 2.75]],  # V
-        #park: [-4.3, -4.3], # V
+        # Ratio is 4:3.
         max_res: [4096, 3072], # px, to force 4:3 ratio
         # Digital output port mapping on the Delmic scanning box v2:
         # 0 = Relay
@@ -101,7 +97,6 @@ SPARC2: {
     },
 }
 
-# Must be connected on AI 0/AI GND
 "SEM Detector": { # aka ETD
     # Internal child of SEM Scan Interface, so no class
     role: se-detector,
@@ -143,6 +138,7 @@ SPARC2: {
 "Sample Stage": {
     # Internal child of SUIPSEM, so no class
     role: stage,
+    affects: ["SEM E-beam full"],
 }
 
 # CL PMT: composed of the control unit + the PMT output connected to the DAQ board

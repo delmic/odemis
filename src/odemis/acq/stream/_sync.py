@@ -310,16 +310,18 @@ class MultipleDetectorStream(Stream):
     def _getSpotPositions(self):
         """
         Compute the positions of the e-beam for each point in the ROI
-        return (numpy ndarray of floats of shape (X,Y,2)): each value is for a
-          given X/Y in the repetition grid -> 2 floats corresponding to the
-          translation.
+        return (numpy ndarray of floats of shape (Y,X,2)): each value is for a
+          given Y,X in the rep grid -> 2 floats corresponding to the
+          translation X,Y. Note that the dimension order is different between
+          index and content, because X should be scanned first, so it's last
+          dimension in the index.
         """
-        repetition = tuple(self._rep_stream.repetition.value)
+        rep = tuple(self._rep_stream.repetition.value)
         roi = self._rep_stream.roi.value
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
         # Take into account the "border" around each pixel
-        pxs = (width[0] / repetition[0], width[1] / repetition[1])
+        pxs = (width[0] / rep[0], width[1] / rep[1])
         lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
                roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
 
@@ -329,13 +331,13 @@ class MultipleDetectorStream(Stream):
         lim_main = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5),
                     shape[0] * (lim[2] - 0.5), shape[1] * (lim[3] - 0.5))
         logging.debug("Generating points in the SEM area %s, from rep %s and roi %s",
-                      lim_main, repetition, roi)
+                      lim_main, rep, roi)
 
-        pos = numpy.empty(repetition + (2,), dtype=numpy.float)
-        posx = pos[:, :, 0].swapaxes(0, 1)  # just a view to have X as last dim
-        posx[:, :] = numpy.linspace(lim_main[0], lim_main[2], repetition[0])
+        pos = numpy.empty((rep[1], rep[0], 2), dtype=numpy.float)
+        posy = pos[:, :, 1].swapaxes(0, 1)  # just a view to have Y as last dim
+        posy[:, :] = numpy.linspace(lim_main[1], lim_main[3], rep[1])
         # fill the X dimension
-        pos[:, :, 1] = numpy.linspace(lim_main[1], lim_main[3], repetition[1])
+        pos[:, :, 0] = numpy.linspace(lim_main[0], lim_main[2], rep[0])
         return pos
 
     def _getScanStagePositions(self):
@@ -450,8 +452,8 @@ class MultipleDetectorStream(Stream):
 
         rep (tuple of 2 0<ints): X/Y repetition
         roi (tupel of 3 0<floats<=1): region of interest in logical coordinates
-        data_list (list of M DataArray of shape (1, 1)): all the data received,
-        with X varying first, then Y.
+        data_list (list of M DataArray of shape (N, P)): all the data received,
+          with X varying first, then Y. The MD_POS and MD_PIXEL_SIZE is used.
         """
         assert len(data_list) > 0
 
@@ -692,7 +694,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
             dwell_time = self._emitter.dwellTime.value
             sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
             spot_pos = self._getSpotPositions()
-            logging.debug("Generating %s spots for %g (dt=%g) s", spot_pos.shape[:2], rep_time, dwell_time)
+            logging.debug("Generating %dx%d spots for %g (dt=%g) s",
+                          spot_pos.shape[1], spot_pos.shape[0], rep_time, dwell_time)
             rep = self._rep_stream.repetition.value
             roi = self._rep_stream.roi.value
             main_pxs = self._emitter.pixelSize.value
@@ -741,7 +744,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # while starting the next acquisition.
 
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
-                trans = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
+                trans = tuple(spot_pos[i])
                 cptrans = self._emitter.translation.clip(trans)
                 if cptrans != trans:
                     if self._dc_estimator:
@@ -1238,10 +1241,8 @@ class SEMMDStream(MultipleDetectorStream):
             if self._emitter.dwellTime.value != dt:
                 raise IOError("Expected hw dt = %f but got %f" % (dt, self._emitter.dwellTime.value))
             spot_pos = self._getSpotPositions()
+            pos_flat = spot_pos.reshape((-1, 2))  # X/Y together (X iterates first)
             rep = self._rep_stream.repetition.value
-            trans_list = []  # TODO: use a numpy array => faster
-            for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
-                trans_list.append((spot_pos[i[::-1]][0], spot_pos[i[::-1]][1]))
             roi = self._rep_stream.roi.value
             self._main_data = []
             self._rep_data = None
@@ -1255,7 +1256,7 @@ class SEMMDStream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
 
             # Translate dc_period to a number of pixels
-            if self._dc_estimator is not None:
+            if self._dc_estimator:
                 rep_time_psmt = self._estimateRawAcquisitionTime() / numpy.prod(rep)
                 pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
                                         self._main_stream.dcPeriod.value,
@@ -1279,12 +1280,17 @@ class SEMMDStream(MultipleDetectorStream):
                 cur_dc_period = min(cur_dc_period, tot_num - spots_sum)
 
                 # Scan drift correction number of pixels
+                # Note: it's done so that if the number of pixel is less than
+                # one full line, it will stop at the border => no change in Y.
                 n_x = numpy.clip(cur_dc_period, 1, rep[0])
                 n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
                 self._emitter.resolution.value = (n_x, n_y)
 
                 # Move the beam to the center of the frame
-                trans = tuple(numpy.mean(trans_list[spots_sum:(spots_sum + cur_dc_period)], axis=0))
+                trans = tuple(pos_flat[spots_sum:(spots_sum + cur_dc_period)].mean(axis=0))
+                if self._dc_estimator:
+                    trans = (trans[0] - self._dc_estimator.tot_drift[0],
+                             trans[1] - self._dc_estimator.tot_drift[1])
                 cptrans = self._emitter.translation.clip(trans)
                 if cptrans != trans:
                     if self._dc_estimator:
@@ -1336,7 +1342,7 @@ class SEMMDStream(MultipleDetectorStream):
                 self._updateProgress(future, time.time() - start, spots_sum, tot_num, anchor_time)
 
                 # Check if it is time for drift correction
-                if self._dc_estimator is not None:
+                if self._dc_estimator and spots_sum < tot_num:
                     cur_dc_period = pxs_dc_period.next()
 
                     # Cannot cancel during this time, but hopefully it's short
@@ -1347,8 +1353,7 @@ class SEMMDStream(MultipleDetectorStream):
                         raise CancelledError()
 
                     # Estimate drift and update next positions
-                    shift = self._dc_estimator.estimate()
-                    trans_list = [((x[0] - shift[0]), (x[1] - shift[1])) for x in trans_list]
+                    self._dc_estimator.estimate()  # updates .tot_drift
 
             self._main_df.unsubscribe(self._onMainImage)
             self._rep_df.unsubscribe(self._onRepetitionImage)
@@ -1358,11 +1363,12 @@ class SEMMDStream(MultipleDetectorStream):
                 self._acq_state = FINISHED
 
             main_one = self._assembleMainData(rep, roi, self._main_data)
+
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
             self._onMultipleDetectorData(main_one, rep_buf, rep)
 
-            if self._dc_estimator is not None:
+            if self._dc_estimator:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
