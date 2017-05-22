@@ -154,7 +154,7 @@ SECOMv2: {
         #max_res: [16384, 16384], # px
         settle_time: 10.e-6, # s
         hfw_nomag: 0.25, # m
-                # Digital output port mapping on the Delmic scanning box v2:
+        # Digital output port mapping on the Delmic scanning box v2:
         # 0 = Relay
         # 1 = Open drain output (Y0.0)
         # 2 = Digital Out 1

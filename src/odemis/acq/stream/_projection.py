@@ -64,8 +64,7 @@ class DataProjection(object):
 
         try:
             projection = wprojection()
-            stream = projection.stream
-            name = stream.name.value
+            name = "%s:%x" % (projection.stream.name.value, id(projection))
             im_needs_recompute = projection._im_needs_recompute
             # Only hold a weakref to allow the stream to be garbage collected
             # On GC, trigger im_needs_recompute so that the thread can end too
