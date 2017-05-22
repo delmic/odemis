@@ -301,6 +301,10 @@ class ProgressiveFutureConnector(object):
     def _on_done(self, future):
         """ Process the completion of the future """
         self._timer.Stop()
+        if self._future is None:
+            logging.warning("Received multiple times completion of future signal")
+            return
+
         if not future.cancelled():
             self._bar.Range = 100
             self._bar.Value = 100
