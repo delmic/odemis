@@ -456,7 +456,13 @@ class PH300(model.Detector):
         """
         # TODO: check if we need a lock (to avoid multithread access)
         rate = c_int()
-        self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
+        try:
+            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
+        except PHError as ex:
+            # TODO: GetFlags() + GetHardwareDebugInfo()
+            logging.warning("Will try again after: %s", ex)
+            time.sleep(0.1)
+            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
         return rate.value
 
     def ClearHistMem(self, block=0):
@@ -464,7 +470,16 @@ class PH300(model.Detector):
         block (0 <= int): block number to clear
         """
         assert(0 <= block)
-        self._dll.PH_ClearHistMem(self._idx, block)
+        # TODO: It seems that pretty much every function can actually fail with
+        # -36 or -37. In most cases, just waiting a little and trying again is
+        # enough, but might need to have more generic solution.
+        try:
+            self._dll.PH_ClearHistMem(self._idx, block)
+        except PHError as ex:
+            # TODO: GetFlags() + GetHardwareDebugInfo()
+            logging.warning("Will try again after: %s", ex)
+            time.sleep(0.1)
+            self.ClearHistMem()
 
     def StartMeas(self, tacq):
         """
@@ -493,7 +508,14 @@ class PH300(model.Detector):
         buf = numpy.empty((1, HISTCHAN), dtype=numpy.uint32)
 
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
-        self._dll.PH_GetHistogram(self._idx, buf_ct, block)
+        try:
+            self._dll.PH_GetHistogram(self._idx, buf_ct, block)
+        except PHError as ex:
+            # TODO: GetFlags() + GetHardwareDebugInfo()
+            logging.warning("Will try again after: %s", ex)
+            time.sleep(0.1)
+            self._dll.PH_GetHistogram(self._idx, buf_ct, block)
+
         return buf
 
     def GetElapsedMeasTime(self):
@@ -563,6 +585,11 @@ class PH300(model.Detector):
     # Acquisition methods
     def start_generate(self):
         self._genmsg.put("S")
+        if not self._generator.is_alive():
+            logging.warning("Restarting acquisition thread")
+            self._generator = threading.Thread(target=self._acquire,
+                                           name="PicoHarp300 acquisition thread")
+            self._generator.start()
 
     def stop_generate(self):
         self._genmsg.put("E")
