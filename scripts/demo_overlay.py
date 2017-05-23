@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 11 Feb 2014
@@ -22,25 +23,17 @@ odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
 
 from __future__ import division
 
+import argparse
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
+import math
 import numpy
 from odemis import model
-from odemis.dataio import hdf5
-from odemis.acq.align import images, coordinates, transform
+from odemis.acq.align import find_overlay
+from odemis.util import TimeoutError
 import sys
 import threading
-import time
-import operator
-import argparse
-import math
-import Image
-from scipy import ndimage
-from scipy import misc
-from odemis.util import img
-from odemis.acq import stream
-from odemis.acq.align import find_overlay
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -55,21 +48,24 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(description=
-                     "Automated AR acquisition at multiple spot locations")
+    parser = argparse.ArgumentParser()
 
-    parser.add_argument("--repetitions_x", "-x", dest="repetitions_x", required=True,
+    parser.add_argument("--repetitions_x", "-x", dest="repetitions_x",
+                        type=int, default=4,
                         help="repetitions defines the number of CL spots in the grid (x dimension)")
-    parser.add_argument("--repetitions_y", "-y", dest="repetitions_y", required=True,
+    parser.add_argument("--repetitions_y", "-y", dest="repetitions_y",
+                        type=int, default=4,
                         help="repetitions defines the number of CL spots in the grid (y dimension)")
     parser.add_argument("--dwell_time", "-t", dest="dwell_time", required=True,
+                        type=float,
                         help="dwell_time indicates the time to scan each spot (unit: s)")
     parser.add_argument("--max_allowed_diff", "-d", dest="max_allowed_diff", required=True,
+                        type=float,
                         help="max_allowed_diff indicates the maximum allowed difference in electron coordinates (unit: m)")
 
     options = parser.parse_args(args[1:])
-    repetitions = (int(options.repetitions_x), int(options.repetitions_y))
-    dwell_time = float(options.dwell_time)
+    repetitions = (options.repetitions_x, options.repetitions_y)
+    dwell_time = options.dwell_time
     max_allowed_diff = float(options.max_allowed_diff)
 
     try:
@@ -89,13 +85,13 @@ def main(args):
         if not all([escan, detector, ccd]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
-        
+
         # f_acq = SEMCCDAcquisition(escan, ccd, detector, light)
 
         # optical_image_1, optical_image_2, optical_image_3, electron_image = f_acq.result()
-        
+
         f = find_overlay.FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
-                                      skew=True)
+                                     skew=True)
         trans_val, cor_md = f.result()
         trans_md, skew_md = cor_md
         iscale = trans_md[model.MD_PIXEL_SIZE_COR]
