@@ -5415,6 +5415,9 @@ def __init_resources():
           </object>
           <fg>#E5E5E5</fg>
           <bg>#1A1A1A</bg>
+          <font>
+            <size>13</size>
+          </font>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

@@ -1211,21 +1211,19 @@ class StreamView(View):
         stream (acq.stream.Stream): stream to add
         If the stream is already present, nothing happens
         """
-        # store the original stream, so it can be used to check if
-        # the stream is compatible
-        orig_stream = stream
-        if not hasattr(stream, 'image'):
-            # if the stream is a StaticStream, create a RGBSpatialProjection for it
-            stream = RGBSpatialProjection(stream)
-
         # check if the stream is already present
-        if stream in self.stream_tree.getStreams():
+        if stream in self.stream_tree:
             logging.warning("Aborting the addition of a duplicate stream")
             return
 
-        if not isinstance(orig_stream, self.stream_classes):
+        if not isinstance(stream, self.stream_classes):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
             logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
+
+        if not hasattr(stream, 'image'):
+            # if the stream is a StaticStream, create a RGBSpatialProjection for it
+            logging.debug("Creating a projection for stream %s", stream)
+            stream = RGBSpatialProjection(stream)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations

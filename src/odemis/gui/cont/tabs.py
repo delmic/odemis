@@ -870,7 +870,7 @@ class SparcAcquisitionTab(Tab):
         self._acquisition_controller = acqcont.SparcAcquiController(
             tab_data,
             panel,
-            self.stream_controller
+            self._stream_controller
         )
 
         # Force SEM view fit to content when magnification is updated
@@ -878,7 +878,7 @@ class SparcAcquisitionTab(Tab):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     @property
-    def stream_controller(self):
+    def streambar_controller(self):
         return self._stream_controller
 
     def on_tool_change(self, tool):

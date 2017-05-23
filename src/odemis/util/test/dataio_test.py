@@ -21,7 +21,8 @@ import numpy
 from odemis import model
 from odemis.acq import stream
 from odemis.dataio import tiff
-from odemis.util.dataio import data_to_static_streams, open_acquisition
+from odemis.util.dataio import data_to_static_streams, open_acquisition, \
+    splitext
 import time
 import unittest
 
@@ -206,6 +207,20 @@ class TestDataIO(unittest.TestCase):
 
         self.assertEqual(fluo, 2)
         self.assertEqual(sem, 1)
+
+    def test_splitext(self):
+        # input, output
+        tio = (
+            ("/home/test/booo.tiff.png", ("/home/test/booo.tiff", ".png")),
+            (".test.doc", (".test", ".doc")),
+            ("test.ome.tiff", ("test", ".ome.tiff")),
+            ("ahhh....ome.tiff", ("ahhh...", ".ome.tiff")),
+            (".bashrc", (".bashrc", "")),
+        )
+
+        for inp, eo in tio:
+            ao = splitext(inp)
+            self.assertEqual(ao, eo, "Unexpected output for '%s': %s" % (inp, ao))
 
 
 if __name__ == "__main__":

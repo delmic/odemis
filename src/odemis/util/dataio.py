@@ -219,3 +219,24 @@ def open_acquisition(filename, fmt=None):
         logging.exception("Failed to open file '%s' with format %s", filename, fmt)
 
     return data
+
+
+def splitext(path):
+    """
+    Split a pathname into basename + ext (.XXX).
+    Does pretty much the same as os.path.splitext, but handles "double" extensions
+    like ".ome.tiff".
+    """
+    root, ext = os.path.splitext(path)
+
+    # See if there is a longer extension in the known formats
+    fmts = dataio.get_available_formats(mode=os.O_RDWR, allowlossy=True)
+    # Note, this one-liner also works, but brain-teasers are not good code:
+    # max((fe for fes in fmts.values() for fe in fes if path.endswith(fe)), key=len)
+    for fmtexts in fmts.values():
+        for fmtext in fmtexts:
+            if path.endswith(fmtext) and len(fmtext) > len(ext):
+                ext = fmtext
+
+    root = path[:len(path) - len(ext)]
+    return root, ext
