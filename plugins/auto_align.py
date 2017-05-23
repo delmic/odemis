@@ -4,7 +4,8 @@ Created on 10 April 2017
 
 @author: Guilherme Stiebler
 
-Gives ability to automatically change the overlay-metadata.
+Gives ability to automatically place a EM image so that it's aligned with
+another one (already present).
 
 Copyright © 2017 Éric Piel, Delmic
 
@@ -45,6 +46,7 @@ import odemis.util.dataio as udataio
 
 class AlignmentAcquisitionDialog(AcquisitionDialog):
 
+    # override the standard addStream() method to not create the stream panels.
     @call_in_wx_main
     def addStream(self, stream, index):
         """
@@ -113,7 +115,7 @@ class AlignmentProjection(stream.RGBSpatialProjection):
 
 
 class AutomaticOverlayPlugin(Plugin):
-    name = "Automatic Overlay"
+    name = "Automatic Alignment"
     __version__ = "1.1"
     __author__ = "Guilherme Stiebler, Éric Piel"
     __license__ = "GPLv2"
