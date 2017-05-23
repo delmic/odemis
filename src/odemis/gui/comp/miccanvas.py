@@ -426,7 +426,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         ims = []
         im_cache = {}
         images_cache = {}
-        for rgbim, blend_mode, name, stream in images:
+        for rgbim, blend_mode, name, _ in images:
             if isinstance(rgbim, tuple): # tuple of tuple of tiles
                 if len(rgbim) == 0 or len(rgbim[0]) == 0:
                     continue
