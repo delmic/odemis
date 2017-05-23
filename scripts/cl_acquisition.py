@@ -72,7 +72,7 @@ class Acquirer(object):
     def set_roi(self, rect):
         # save the resolution
         res = self.escan.resolution.value
-        center = ((rect[0] + rect[2]) / 2, (rect[1] - rect[3]) / 2)
+        center = ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2)
         width = (rect[2] - rect[0], rect[3] - rect[1])
         
         shape = self.escan.shape
