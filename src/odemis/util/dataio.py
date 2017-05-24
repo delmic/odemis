@@ -27,7 +27,6 @@ import numpy
 from odemis import model
 from odemis.acq import stream
 from odemis import dataio
-import odemis.gui.util as guiutil
 import os
 
 

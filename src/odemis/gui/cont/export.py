@@ -24,12 +24,11 @@ from __future__ import division
 
 from collections import OrderedDict
 import logging
-from odemis import model, dataio
+from odemis.util import dataio as udataio
 from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.util import formats_to_wildcards
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, images_to_export_data, line_to_export_data
 import os
 import time
@@ -126,16 +125,7 @@ class ExportController(object):
         if fi is not None and fi.file_name:
             basename = os.path.basename(fi.file_name)
             # Remove the extension
-            formats_to_ext = dataio.get_available_formats()
-            all_exts = sum(formats_to_ext.values(), [])
-            fexts = sorted((ext for ext in all_exts if basename.endswith(ext)),
-                           key=lambda s: len(s))
-            if fexts:
-                # Remove the biggest extension
-                basename = basename[:-len(fexts[-1])]
-            else:
-                # Try to remove whichever extension there is
-                basename, _ = os.path.splitext(basename)
+            basename, _ = udataio.splitext(basename)
 
             # Use stream name, if there is just one stream, otherwise use the view name
             streams = view.getStreams()

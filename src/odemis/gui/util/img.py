@@ -29,11 +29,10 @@ import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, conversion
-from odemis.util import polar, img
-from odemis.util import units
+from odemis.util import intersect, fluo, conversion, polar, img, units
 import time
 import wx
 
@@ -494,6 +493,7 @@ def set_images(im_args):
         8. name (str): name of the stream that the image originated from
         9. date (int): seconds since epoch
         10. stream (Stream): the stream from which the image corresponds to
+        11. metadata (dict): the metadata of the raw data
 
     returns (list of DataArray)
     """
@@ -504,7 +504,7 @@ def set_images(im_args):
         if args is None:
             images.append(None)
         else:
-            im, p_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name, date, stream = args
+            im, p_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name, date, stream, md = args
 
             if not blend_mode:
                 blend_mode = BLEND_DEFAULT
@@ -530,6 +530,7 @@ def set_images(im_args):
             im.metadata['name'] = name
             im.metadata['date'] = date
             im.metadata['stream'] = stream
+            im.metadata['metadata'] = md
 
             images.append(im)
 
@@ -1501,6 +1502,7 @@ def draw_export_legend(images, buffer_size, buffer_scale,
     sorted_im = sorted(images, key=lambda im: im.metadata['date'])
     for im in sorted_im:
         s = im.metadata['stream']
+        md = im.metadata['metadata']
         if s is stream:
             # in case of multifile/raw, spot this particular stream with a
             # circle next to the stream name
@@ -1527,7 +1529,7 @@ def draw_export_legend(images, buffer_size, buffer_scale,
 
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
-        for i, d in enumerate(_get_stream_legend_text(s)):
+        for i, d in enumerate(_get_stream_legend_text(md)):
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
             legend_ctx.show_text(d)
             if (i % 2 == 1):
@@ -1540,51 +1542,39 @@ def draw_export_legend(images, buffer_size, buffer_scale,
     return legend_rgb
 
 
-def _get_stream_legend_text(s):
+def _get_stream_legend_text(md):
     """
-    st (Stream)
+    md (dict): the metadata of the (raw) data
     return (list of str): Small pieces of text to display, ordered
     """
     captions = []
 
-    if not hasattr(s, "image") or s.image.value is None:
-        return captions
-
-    # FluoStreams are merged using the "Screen" method that handles colour
-    # merging without decreasing the intensity.
-    if isinstance(s.raw, tuple): #s.raw has tiles
-        md = s.raw[0][0].metadata
-    else:
-        md = s.raw[0].metadata
-
     try:
-        if md.get(model.MD_EXP_TIME, None):
-            if isinstance(s, acqstream.EMStream):
-                captions.append(u"Dwell time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
-            else:
-                captions.append(u"Exposure time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
-        if md.get(model.MD_DWELL_TIME, None):
+        if model.MD_EXP_TIME in md:
+            captions.append(u"Exposure time: %s" % units.readable_str(md[model.MD_EXP_TIME], "s", sig=3))
+        if model.MD_DWELL_TIME in md:
             captions.append(u"Dwell time: %s" % units.readable_str(md[model.MD_DWELL_TIME], "s", sig=3))
-        if md.get(model.MD_LENS_MAG, None):
+        if model.MD_LENS_MAG in md:
             captions.append(u"%s x" % units.readable_str(md[model.MD_LENS_MAG], sig=2))
-        if md.get(model.MD_FILTER_NAME, None):
+        if model.MD_FILTER_NAME in md:
             captions.append(md[model.MD_FILTER_NAME])
-        if md.get(model.MD_LIGHT_POWER, None):
+        if model.MD_LIGHT_POWER in md:
             captions.append(units.readable_str(md[model.MD_LIGHT_POWER], "W", sig=3))
-        if md.get(model.MD_EBEAM_VOLTAGE, None):
+        if model.MD_EBEAM_VOLTAGE in md:
             captions.append(units.readable_str(abs(md[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
-        if md.get(model.MD_EBEAM_CURRENT, None):
+        if model.MD_EBEAM_CURRENT in md:
             captions.append(units.readable_str(md[model.MD_EBEAM_CURRENT], "A", sig=3))
-        if md.get(model.MD_IN_WL, None):
+        if model.MD_IN_WL in md:
             captions.append(u"Excitation: %s" % units.readable_str(numpy.average(md[model.MD_IN_WL]), "m", sig=3))
-        if md.get(model.MD_OUT_WL, None):
+        if model.MD_OUT_WL in md:
             out_wl = md[model.MD_OUT_WL]
             if isinstance(out_wl, basestring):
                 captions.append(u"Emission: %s" % (out_wl,))
             else:
                 captions.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))
-        if isinstance(s, acqstream.StaticSpectrumStream) and model.hasVA(s, "spectrumBandwidth"):
-            captions.append(u"Wavelength: %s" % fluo.to_readable_band(s.spectrumBandwidth.value))
+        if model.MD_WL_LIST in md:
+            wll = md[model.MD_WL_LIST]
+            captions.append(u"Wavelength: %s" % fluo.to_readable_band((wll[0], wll[-1])))
     except Exception:
         logging.exception("Failed to export metadata fully")
 
@@ -1607,8 +1597,6 @@ def get_ordered_images(streams, raw=False):
             logging.error("StreamTree has a None stream")
             continue
 
-        # FluoStreams are merged using the "Screen" method that handles colour
-        # merging without decreasing the intensity.
         if not raw:
             if not hasattr(s, "image") or s.image.value is None:
                 continue
@@ -1636,14 +1624,27 @@ def get_ordered_images(streams, raw=False):
             # Split the bits in R,G,B,A
             data = _pack_data_into_rgba(data_raw)
 
-        # Sometimes sem streams contain the dt value as exposure time metadata.
-        # In that case handle it in special way
-        if isinstance(s, acqstream.OpticalStream):
-            images_opt.append((data, BLEND_SCREEN, s))
-        elif isinstance(s, (acqstream.SpectrumStream, acqstream.CLStream)):
-            images_spc.append((data, BLEND_DEFAULT, s))
+        ostream = s.stream if isinstance(s, DataProjection) else s
+
+        if isinstance(s.raw, tuple):  # s.raw has tiles
+            md = s.raw[0][0].metadata
         else:
-            images_std.append((data, BLEND_DEFAULT, s))
+            md = s.raw[0].metadata
+        # Sometimes SEM streams contain the dt value as exposure time metadata.
+        # In that case handle it in special way
+        if (isinstance(ostream, acqstream.EMStream) and
+            model.MD_EXP_TIME in md and model.MD_DWELL_TIME not in md):
+            md[model.MD_DWELL_TIME] = md[model.MD_EXP_TIME]
+            del md[model.MD_EXP_TIME]
+
+        # FluoStreams are merged using the "Screen" method that handles colour
+        # merging without decreasing the intensity.
+        if isinstance(ostream, acqstream.OpticalStream):
+            images_opt.append((data, BLEND_SCREEN, ostream, md))
+        elif isinstance(ostream, (acqstream.SpectrumStream, acqstream.CLStream)):
+            images_spc.append((data, BLEND_DEFAULT, ostream, md))
+        else:
+            images_std.append((data, BLEND_DEFAULT, ostream, md))
 
     # Sort by size, so that the biggest picture is first drawn (no opacity)
     def get_area(d):
@@ -1656,7 +1657,7 @@ def get_ordered_images(streams, raw=False):
     # Reset the first image to be drawn to the default blend operator to be
     # drawn full opacity (only useful if the background is not full black)
     if images_opt:
-        images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2])
+        images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2], images_opt[0][3])
 
     return images_opt + images_std + images_spc, im_min_type
 
@@ -1677,7 +1678,7 @@ def convert_streams_to_images(streams, raw=False):
 
     # add the images in order
     ims = []
-    for rgbim, blend_mode, stream in images:
+    for rgbim, blend_mode, stream, md in images:
         rgba_im = format_rgba_darray(rgbim)
         keepalpha = False
         date = rgbim.metadata.get(model.MD_ACQ_DATE, None)
@@ -1689,7 +1690,7 @@ def convert_streams_to_images(streams, raw=False):
 
         # TODO: directly put the metadata as set_images do?
         ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode,
-                    stream.name.value, date, stream))
+                    stream.name.value, date, stream, md))
 
     images = set_images(ims)
 
@@ -1882,13 +1883,8 @@ def images_to_export_data(streams, view_hfw, view_pos,
                                             view_hfw[0], im.metadata['date'],
                                             im.metadata['stream'], logo)
 
-            stream = im.metadata['stream']
-            if isinstance(stream.raw, tuple): # tiles
-                data_raw = img.mergeTiles(stream.raw)
-            else:
-                data_raw = stream.raw[0]
-            legend_as_raw = _adapt_rgb_to_raw(legend_rgb, data_raw, stream, im_min_type)
             new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
+            legend_as_raw = _adapt_rgb_to_raw(legend_rgb, new_data_to_draw)
             data_with_legend = numpy.append(new_data_to_draw, legend_as_raw, axis=0)
 
             md = {model.MD_DESCRIPTION: im.metadata['name']}
@@ -1907,20 +1903,14 @@ def images_to_export_data(streams, view_hfw, view_pos,
     return data_to_export
 
 
-def _adapt_rgb_to_raw(imrgb, data_raw, stream, dtype):
+def _adapt_rgb_to_raw(imrgb, data_raw):
     """
     imrgb (ndarray Y,X,4): RGB image to convert to a greyscale
-    data_raw (DataArray): Raw image
-    stream: corresponding stream: for the raw data
-    dtype: data type of the ouptut data
+    data_raw (DataArray): Raw image (to know the dtype and min/max)
     return (ndarray Y,X)
     """
-
-    if isinstance(stream, acqstream.OpticalStream):
-        blkval = data_raw.metadata.get(model.MD_BASELINE, 0)
-    else:
-        blkval = numpy.min(data_raw)
-
+    dtype = data_raw.dtype
+    blkval = numpy.min(data_raw)
     a = (numpy.max(data_raw) - blkval) / 255
     im_as_raw = imrgb[:, :, 0].astype(dtype)
     numpy.multiply(im_as_raw, a, out=im_as_raw, casting="unsafe")
