@@ -305,8 +305,11 @@ class SecomStateController(object):
     @call_in_wx_main
     def on_preparation(self, is_preparing):
         # Make sure cannot switch stream during preparation
-        self._sem_btn_ctrl.Enable(not is_preparing)
-        self._opt_btn_ctrl.Enable(not is_preparing)
+        if hasattr(self, "_sem_btn_ctrl"):
+            self._sem_btn_ctrl.Enable(not is_preparing)
+
+        if hasattr(self, "_opt_btn_ctrl"):
+            self._opt_btn_ctrl.Enable(not is_preparing)
         # TODO: should disable play/pause of streams + menu too
 
     def _subscribe_current_stream_active(self, streams):
@@ -400,8 +403,10 @@ class SecomStateController(object):
         # In any case, make sure the streams cannot be started
         if state == CHAMBER_VACUUM:
             # disabling the acquire button is done in the acquisition controller
-            self._sem_btn_ctrl.Enable(True)
-            self._opt_btn_ctrl.Enable(True)
+            if hasattr(self, "_sem_btn_ctrl"):
+                self._sem_btn_ctrl.Enable(True)
+            if hasattr(self, "_opt_btn_ctrl"):
+                self._opt_btn_ctrl.Enable(True)
             # TODO: enable overview move
             self._stream_controller.enableStreams(True)
 
