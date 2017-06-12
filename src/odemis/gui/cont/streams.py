@@ -1515,7 +1515,7 @@ class StreamBarController(object):
                 self.stream_controllers.remove(sc)
                 break
         else:
-            logging.info("Stream controller of %s no found", stream)
+            logging.info("Stream controller of %s not found", stream)
 
     def clear(self):
         """
@@ -1765,20 +1765,24 @@ class SparcStreamsController(StreamBarController):
         """
         semcls = self._tab_data_model.semStream
 
-        # For all MD streams in the acquisition view...
-        for mds in self._tab_data_model.acquisitionStreams.copy():
-            if not isinstance(mds, acqstream.MultipleDetectorStream):
-                continue
-            # Are all the sub streams of the MDStreams still there?
-            for ss in mds.streams:
-                # If not, remove the MD stream
-                if ss is not semcls and ss not in streams:
-                    if isinstance(ss, acqstream.SEMStream):
-                        logging.warning("Removing stream because %s is gone!", ss)
-                    logging.debug("Removing acquisition stream %s because %s is gone",
-                                  mds.name.value, ss.name.value)
-                    self._tab_data_model.acquisitionStreams.discard(mds)
-                    break
+        # Clean-up the acquisition streams
+        for acqs in self._tab_data_model.acquisitionStreams.copy():
+            if not isinstance(acqs, acqstream.MultipleDetectorStream):
+                if acqs not in streams:
+                    logging.debug("Removing stream %s from acquisition too",
+                                  acqs.name.value)
+                    self._tab_data_model.acquisitionStreams.discard(acqs)
+            else:
+                # Are all the sub streams of the MDStreams still there?
+                for ss in acqs.streams:
+                    # If not, remove the MD stream
+                    if ss is not semcls and ss not in streams:
+                        if isinstance(ss, acqstream.SEMStream):
+                            logging.warning("Removing stream because %s is gone!", ss)
+                        logging.debug("Removing acquisition stream %s because %s is gone",
+                                      acqs.name.value, ss.name.value)
+                        self._tab_data_model.acquisitionStreams.discard(acqs)
+                        break
 
         # clean up the ROI listeners
         for s in self._roi_listeners.keys():
@@ -1829,6 +1833,8 @@ class SparcStreamsController(StreamBarController):
     def addEBIC(self, **kwargs):
         # Need to use add_to_view=True to force only showing on the right
         # view (and not on the current view)
+        # TODO: should it be handled the same way as CLIntensity? (ie, respects
+        # the ROA)
         return super(SparcStreamsController, self).addEBIC(add_to_view=True, **kwargs)
 
     def _add_sem_stream(self, name, detector, **kwargs):
@@ -1855,6 +1861,9 @@ class SparcStreamsController(StreamBarController):
             s.auto_bc.value = False
             s.intensityRange.value = (0, 255)
 
+        # add the stream to the acquisition set
+        self._tab_data_model.acquisitionStreams.add(s)
+
         return self._add_stream(s, **kwargs)
 
     def _addRepStream(self, stream, mdstream, vas, axes, **kwargs):
@@ -1875,7 +1884,7 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(stream, add_to_view=True, **kwargs)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        # add the acquisition stream to the acquisition view
+        # add the acquisition stream to the acquisition set
         self._tab_data_model.acquisitionStreams.add(mdstream)
 
         stream_config = self._stream_config.get(type(stream), {})
