@@ -126,6 +126,7 @@ a = Analysis(
     datas=None,
     hiddenimports=[
         'cairo',
+        'odemis.acq.align.keypoint', # Not used in standard, but could be used by plugins
     ] + get_dataio_imports(),
     hookspath=[],
     runtime_hooks=[],

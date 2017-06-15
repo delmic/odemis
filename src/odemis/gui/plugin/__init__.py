@@ -52,10 +52,13 @@ def find_plugins():
     hf = get_home_folder()
     # Order of paths matters, so that the user can override a system plugin
     if os.name == "nt":
-        paths = (os.path.join(odemis.__path__[0], u"plugins/"),
+        # Typically, on Windows, the odemis package is a single file located into
+        # a dedicated OdemisViewer folder which contains also all the dependencies
+        # => search inside this folder
+        paths = (os.path.join(odemis.__path__[0], u"..", u"plugins"),
                  # There is no official place for putting per-user system
                  # overriding file, so just put with the config file.
-                 os.path.join(hf, u".config/odemis/plugins/")
+                 os.path.join(hf, u".config", u"odemis", u"plugins")
                  )
     else:  # hopefully this is Linux
         paths = (u"/usr/share/odemis/plugins/",
