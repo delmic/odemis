@@ -117,7 +117,7 @@ class AlignmentProjection(stream.RGBSpatialProjection):
 class AutomaticOverlayPlugin(Plugin):
     name = "Automatic Alignment"
     __version__ = "1.1"
-    __author__ = "Guilherme Stiebler, Éric Piel"
+    __author__ = u"Guilherme Stiebler, Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed

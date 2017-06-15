@@ -39,7 +39,7 @@ LIVE_UPDATE_PERIOD = 10  # s, time between two images in the GUI (during acquisi
 class SRAcqPlugin(Plugin):
     name = "Super-resolution acquisition"
     __version__ = "1.0"
-    __author__ = "Éric Piel"
+    __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed

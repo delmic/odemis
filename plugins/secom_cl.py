@@ -469,7 +469,7 @@ class GridAcquirer(object):
 class CLAcqPlugin(Plugin):
     name = "CL acquisition for SECOM"
     __version__ = "1.0"
-    __author__ = "Éric Piel, Lennard Voortman"
+    __author__ = u"Éric Piel, Lennard Voortman"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed
