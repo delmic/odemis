@@ -4,7 +4,7 @@ Created on 19 Dec 2013
 
 @author: Kimon Tsitsikas
 
-Copyright © 2012-2013 Kimon Tsitsikas, Delmic
+Copyright © 2012-2017 Kimon Tsitsikas, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import copy
@@ -33,9 +34,7 @@ from odemis import model
 from odemis import util
 from odemis.acq._futures import executeTask
 from odemis.dataio import tiff
-from odemis.util import TimeoutError
-from odemis.util import img
-from odemis.util import spot
+from odemis.util import TimeoutError, img, spot
 from odemis.util.img import Subtract
 import os
 import threading
@@ -83,7 +82,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
     f._done = threading.Event()
 
     # Create scanner for scan grid
-    f._scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector, bgsub)
+    f._gscanner = GridScanner(repetitions, dwell_time, escan, ccd, detector, bgsub)
 
     # Run in separate thread
     overlay_thread = threading.Thread(target=executeTask,
@@ -95,6 +94,8 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
     overlay_thread.start()
     return f
 
+class OverlayError(LookupError):
+    pass
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                    ccd, detector, skew=False):
@@ -109,7 +110,10 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     repetitions (tuple of ints): The number of CL spots are used
     dwell_time (float): Time to scan each spot (in s)
-    max_allowed_diff (float): Maximum allowed difference in electron coordinates #m
+    max_allowed_diff (float): Maximum allowed difference (in m) between the spot
+      coordinates and the estimated spot position based on the computed
+      transformation (in m). If no transformation can be found to fit this
+      limit, the procedure will fail.
     escan (model.Emitter): The e-beam scanner
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
@@ -125,138 +129,173 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
     """
     # TODO: drop the "skew" argument (to always True) once we are convinced it
     # works fine
+    # TODO: take the limits of the acceptable values for the metadata, and raise
+    # an error when the data is not within range (or retry)
     logging.debug("Starting Overlay...")
 
     try:
         # Repeat until we can find overlay (matching coordinates is feasible)
         for trial in range(MAX_TRIALS_NUMBER):
-            # Grid scan
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
+            logging.debug("Trying with dwell time = %g s...", future._gscanner.dwell_time)
+            # For making a report when a failure happens
+            report = OrderedDict()  # Description (str) -> value (str()'able)
+            optical_image = None
+            report["Grid size"] = repetitions
+            report["SEM magnification"] = escan.magnification.value
+            report["SEM pixel size"] = escan.pixelSize.value
+            report["SEM FoV"] = tuple(s * p for s, p in zip(escan.shape, escan.pixelSize.value))
+            report["Maximum difference allowed"] = max_allowed_diff
+            report["Dwell time"] = dwell_time
+            subimages = []
 
-            # Update progress of the future (it may be the second trial)
-            future.set_progress(end=time.time() +
-                                estimateOverlayTime(future._scanner.dwell_time,
-                                                    repetitions))
-
-            # Wait for ScanGrid to finish
-            optical_image, electron_coordinates, electron_scale = future._scanner.DoAcquisition()
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
-
-            # Update remaining time to 6secs (hardcoded estimation)
-            future.set_progress(end=time.time() + 6)
-
-            # Check if ScanGrid gave one image or list of images
-            # If it is a list, follow the "one image per spot" procedure
-            logging.debug("Isolating spots...")
-            if isinstance(optical_image, list):
-                opt_img_shape = optical_image[0].shape
-                subimages = []
-                subimage_coordinates = []
-                for img in optical_image:
-                    subspots, subspot_coordinates = coordinates.DivideInNeighborhoods(img, (1, 1), img.shape[0] / 2)
-                    subimages.append(subspots[0])
-                    subimage_coordinates.append(subspot_coordinates[0])
-            else:
-                # Distance between spots in the optical image (in optical pixels)
-                optical_dist = escan.pixelSize.value[0] * electron_scale[0] / optical_image.metadata[model.MD_PIXEL_SIZE][0]
-                opt_img_shape = optical_image.shape
-
-                # Isolate spots
+            try:
+                # Grid scan
                 if future._find_overlay_state == CANCELLED:
                     raise CancelledError()
-                subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
 
-            if not subimages:
-                raise ValueError("Overlay failure")
+                # Update progress of the future (it may be the second trial)
+                future.set_progress(end=time.time() +
+                                    estimateOverlayTime(future._gscanner.dwell_time,
+                                                        repetitions))
 
-            # Find the centers of the spots
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
-            logging.debug("Finding spot centers with %d subimages...", len(subimages))
-            spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
+                # Wait for ScanGrid to finish
+                optical_image, electron_coordinates, electron_scale = future._gscanner.DoAcquisition()
+                report["Spots coordinates in SEM ref"] = electron_coordinates
 
-            # Reconstruct the optical coordinates
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
-            optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
 
-            # Check if SEM calibration is correct. If this is not the case
-            # generate a warning message and provide the ratio of X/Y scale.
-            ratio = _computeGridRatio(optical_coordinates, repetitions)
-            if not (0.9 < ratio < 1.1):
-                logging.warning("SEM may needs calibration. X/Y ratio is %f.", ratio)
-            else:
-                logging.info("SEM X/Y ratio is %f.", ratio)
+                # Update remaining time to 6secs (hardcoded estimation)
+                future.set_progress(end=time.time() + 6)
 
-            opt_offset = (opt_img_shape[1] / 2, opt_img_shape[0] / 2)
+                # Check if ScanGrid gave one image or list of images
+                # If it is a list, follow the "one image per spot" procedure
+                logging.debug("Isolating spots...")
+                if isinstance(optical_image, list):
+                    report["Acquisition method"] = "One image per spot"
+                    opxs = optical_image[0].metadata[model.MD_PIXEL_SIZE]
+                    opt_img_shape = optical_image[0].shape
+                    subimage_coordinates = []
+                    for oimg in optical_image:
+                        subspots, subspot_coordinates = coordinates.DivideInNeighborhoods(oimg, (1, 1), oimg.shape[0] / 2)
+                        subimages.append(subspots[0])
+                        subimage_coordinates.append(subspot_coordinates[0])
+                else:
+                    report["Acquisition method"] = "Whole image"
+                    # Distance between spots in the optical image (in optical pixels)
+                    opxs = optical_image.metadata[model.MD_PIXEL_SIZE]
+                    optical_dist = escan.pixelSize.value[0] * electron_scale[0] / opxs[0]
+                    opt_img_shape = optical_image.shape
 
-            optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
+                    # Isolate spots
+                    if future._find_overlay_state == CANCELLED:
+                        raise CancelledError()
 
-            # Estimate the scale by measuring the distance between the closest
-            # two spots in optical and electron coordinates.
-            #  * For electrons, it's easy as we've placed them.
-            #  * For optical, we pick one spot, and measure the distance to the
-            #    closest spot.
-            p1 = optical_coordinates[0]
-            def dist_to_p1(p):
-                return math.hypot(p1[0] - p[0], p1[1] - p[1])
-            optical_dist = min(dist_to_p1(p) for p in optical_coordinates[1:])
-            scale = electron_scale[0] / optical_dist
+                    subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
 
-            # max_allowed_diff in pixels
-            max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
+                if not subimages:
+                    raise OverlayError("Overlay failure: failed to partition image")
+                report["Optical pixel size"] = opxs
+                report["Optical FoV"] = tuple(s * p for s, p in zip(opt_img_shape[::-1], opxs))
+                report["Coordinates of partitioned optical images"] = subimage_coordinates
 
-            # Match the electron to optical coordinates
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
+                if max_allowed_diff < opxs[0] * 4:
+                    logging.warning("The maximum distance is very small compared to the optical pixel size: "
+                                    "%g m vs %g m", max_allowed_diff, opxs[0])
 
-            logging.debug("Matching coordinates...")
-            known_ec, known_oc = coordinates.MatchCoordinates(optical_coordinates,
-                                                              electron_coordinates,
-                                                              scale,
-                                                              max_allowed_diff_px)
-            if known_ec:
-                break
-            else:
-                if trial < MAX_TRIALS_NUMBER - 1:
-                    future._scanner.dwell_time = future._scanner.dwell_time * 1.2 + 0.1
-                    logging.warning("Trying with dwell time = %g s...", future._scanner.dwell_time)
+                # Find the centers of the spots
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+                logging.debug("Finding spot centers with %d subimages...", len(subimages))
+                spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
+
+                # Reconstruct the optical coordinates
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+                optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+
+                # Check if SEM calibration is correct. If this is not the case
+                # generate a warning message and provide the ratio of X/Y scale.
+                ratio = _computeGridRatio(optical_coordinates, repetitions)
+                report["SEM X/Y ratio"] = ratio
+                if not (0.9 < ratio < 1.1):
+                    logging.warning("SEM may needs calibration. X/Y ratio is %f.", ratio)
+                else:
+                    logging.info("SEM X/Y ratio is %f.", ratio)
+
+                opt_offset = (opt_img_shape[1] / 2, opt_img_shape[0] / 2)
+                optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
+                report["Spots coordinates in Optical ref"] = optical_coordinates
+
+                # Estimate the scale by measuring the distance between the closest
+                # two spots in optical and electron coordinates.
+                #  * For electrons, it's easy as we've placed them.
+                #  * For optical, we pick one spot, and measure the distance to the
+                #    closest spot.
+                p1 = optical_coordinates[0]
+                def dist_to_p1(p):
+                    return math.hypot(p1[0] - p[0], p1[1] - p[1])
+                optical_dist = min(dist_to_p1(p) for p in optical_coordinates[1:])
+                scale = electron_scale[0] / optical_dist
+                report["Estimated scale"] = scale
+
+                # max_allowed_diff in pixels
+                max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
+
+                # Match the electron to optical coordinates
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+
+                logging.debug("Matching coordinates...")
+                try:
+                    known_ec, known_oc, max_diff = coordinates.MatchCoordinates(optical_coordinates,
+                                                                      electron_coordinates,
+                                                                      scale,
+                                                                      max_allowed_diff_px)
+                except LookupError as exp:
+                    raise OverlayError("Failed to match SEM and optical coordinates: %s" % (exp,))
+
+                report["Matched coordinates in SEM ref"] = known_ec
+                report["Matched coordinates in Optical ref"] = known_oc
+                report["Maximum distance between matches"] = max_diff
+
+                # Calculate transformation parameters
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+
+                # We are almost done... about 1 s left
+                future.set_progress(end=time.time() + 1)
+
+                logging.debug("Calculating transformation...")
+                try:
+                    ret = transform.CalculateTransform(known_ec, known_oc, skew)
+                except ValueError as exp:
+                    raise OverlayError("Failed to calculate transformation: %s" % (exp,))
+
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+
+                logging.debug("Calculating transform metadata...")
+                if skew is True:
+                    transform_d, skew_d = _transformMetadata(optical_image, ret, escan, ccd, skew)
+                    transform_data = (transform_d, skew_d)
+                else:
+                    transform_d = _transformMetadata(optical_image, ret, escan, ccd, skew)  # Also indicate which dwell time eventually worked
+                    transform_data = transform_d
+                transform_d[model.MD_DWELL_TIME] = dwell_time
+
+                # Everything went fine
+                # _MakeReport("No problem", report, optical_image, subimages)  # DEBUG
+                logging.debug("Overlay done.")
+                return ret, transform_data
+            except OverlayError as exp:
+                # Make failure report
+                _MakeReport(str(exp), report, optical_image, subimages)
+                # Maybe it's just due to a bad SNR => retry with longer dwell time
+                future._gscanner.dwell_time = future._gscanner.dwell_time * 1.2 + 0.1
         else:
-            # Make failure report
-            _MakeReport(optical_image, repetitions, escan.magnification.value, escan.pixelSize.value, dwell_time, electron_coordinates)
-            raise ValueError("Overlay failure")
+            raise ValueError("Overlay failure after %d attempts" % (MAX_TRIALS_NUMBER,))
 
-        # Calculate transformation parameters
-        if future._find_overlay_state == CANCELLED:
-            raise CancelledError()
-
-        # We are almost done... about 1 s left
-        future.set_progress(end=time.time() + 1)
-
-        logging.debug("Calculating transformation...")
-        try:
-            ret = transform.CalculateTransform(known_ec, known_oc, skew)
-        except ValueError as exp:
-            # Make failure report
-            _MakeReport(optical_image, repetitions, escan.magnification.value, escan.pixelSize.value, dwell_time, electron_coordinates)
-            raise ValueError("Overlay failure: %s" % (exp,))
-
-        if future._find_overlay_state == CANCELLED:
-            raise CancelledError()
-        logging.debug("Calculating transform metadata...")
-
-        if skew is True:
-            transform_d, skew_d = _transformMetadata(optical_image, ret, escan, ccd, skew)
-            transform_data = (transform_d, skew_d)
-        else:
-            transform_d = _transformMetadata(optical_image, ret, escan, ccd, skew)  # Also indicate which dwell time eventually worked
-            transform_data = transform_d
-        transform_d[model.MD_DWELL_TIME] = dwell_time
-
-        logging.debug("Overlay done.")
-        return ret, transform_data
     except CancelledError:
         pass
     except Exception as exp:
@@ -280,7 +319,7 @@ def _CancelFindOverlay(future):
         if future._find_overlay_state == FINISHED:
             return False
         future._find_overlay_state = CANCELLED
-        future._scanner.CancelAcquisition()
+        future._gscanner.CancelAcquisition()
         logging.debug("Overlay cancelled.")
 
     # Do not return until we are really done (modulo 10 seconds timeout)
@@ -369,28 +408,35 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=Fa
     return transform_md
 
 
-def _MakeReport(optical_image, repetitions, magnification, pixel_size, dwell_time, electron_coordinates):
+def _MakeReport(msg, data, optical_image=None, subimages=None):
     """
     Creates failure report in case we cannot match the coordinates.
-    optical_image (2d array): Image from CCD
-    repetitions (tuple of ints): The number of CL spots are used
-    dwell_time (float): Time to scan each spot (in s)
-    electron_coordinates (list of tuples): Coordinates of e-beam grid
+    msg (str): error message
+    data (dict str->value): description of the value -> value
+    optical_image (2d array or None): Image from CCD
+    subimages (list of 2d array or None): List of Image from CCD
     """
     path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report",
                         time.strftime(u"%Y%m%d-%H%M%S"))
     os.makedirs(path)
-    tiff.export(os.path.join(path, u"OpticalGrid.tiff"), optical_image)
-    report = open(os.path.join(path, u"report.txt"), 'w')
-    report.write("\n****Overlay Failure Report****\n\n" +
-                 "\nSEM magnification:\n" + str(magnification) +
-                 "\nSEM pixel size:\n" + str(pixel_size) +
-                 "\nGrid size:\n" + str(repetitions) +
-                 "\n\nMaximum dwell time used:\n" + str(dwell_time) +
-                 "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates) +
-                 "\n\nThe optical image of the grid can be seen in OpticalGrid.tiff\n\n")
-    report.close()
 
+    report = open(os.path.join(path, u"report.txt"), 'w')
+    report.write("****Overlay Failure Report****\n")
+    report.write("%s\n" % (msg,))
+
+    if optical_image is not None:
+        tiff.export(os.path.join(path, u"OpticalGrid.tiff"), optical_image)
+        report.write("The optical image of the grid can be seen in OpticalGrid.tiff\n")
+
+    if subimages is not None:
+        tiff.export(os.path.join(path, u"OpticalPartitions.tiff"), subimages)
+        report.write("The partitioned optical images can be seen in OpticalPartitions.tiff\n")
+
+    report.write("\n")
+    for desc, val in data.items():
+        report.write("%s:\t%s\n" % (desc, val))
+
+    report.close()
     logging.warning("Failed to find overlay. Please check the failure report in %s.",
                     path)
 
