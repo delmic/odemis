@@ -48,7 +48,7 @@ import time
 class AveragePlugin(Plugin):
     name = "Frame Average"
     __version__ = "1.0"
-    __author__ = "Éric Piel"
+    __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
     # Describe how the values should be displayed

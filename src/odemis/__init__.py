@@ -73,7 +73,7 @@ def _get_version():
                 path = os.path.join(os.path.dirname(sys.executable), 'version.txt')
                 if os.path.exists(path):
                     with open(path, 'r') as f:
-                        return f.readline()
+                        return f.readline().strip()
 
             logging.warning("Unable to find the actual version")
             return "Unknown"

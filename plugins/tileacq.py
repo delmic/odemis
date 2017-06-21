@@ -42,7 +42,7 @@ import time
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
     __version__ = "1.0"
-    __author__ = "Éric Piel"
+    __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed

@@ -39,7 +39,7 @@ from odemis.gui.plugin import Plugin
 class ClearPlugin(Plugin):
     name = "Clear Data"
     __version__ = "1.0"
-    __author__ = "Éric Piel"
+    __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
     def __init__(self, microscope, main_app):
