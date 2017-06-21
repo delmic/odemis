@@ -155,8 +155,6 @@ class TestOverlay(unittest.TestCase):
         """
         Test FindOverlay when the SEM image ratio is not 1:1 (but 4:3)
         """
-        # FIXME: This image doesn't work
-        # => the issue is that the SEM was using 4:3 ratio
         ebeam_kwargs = {
             "max_res": [4096, 3072],
             "hfw_nomag": 0.177,

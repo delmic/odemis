@@ -654,7 +654,7 @@ class GridScanner(object):
                      the spotted optical image, or a list of 2D images
                      containing the optical image for each spot.
                 (List of tuples):  Coordinates of spots in electron image
-                (Tuple of floats): Scaling of electron image (in optical px)
+                (Tuple of floats): Scaling of electron image
         """
         self._save_hw_settings()
         self._acq_state = RUNNING
@@ -676,8 +676,11 @@ class GridScanner(object):
         if sem_area > req_area:
             ratio = math.sqrt(req_area / sem_area)
 
-        scale = [(escan.resolution.range[1][0]) / rep[0],
-                 (escan.resolution.range[1][1]) / rep[1]]
+        # In case the resolution ratio is not 1:1, use the smallest dim, to get
+        # a squared grid
+        min_res = min(escan.resolution.range[1])
+        scale = (min_res / rep[0], min_res / rep[1])
+
         # Apply ratio
         scale = (scale[0] * ratio, scale[1] * ratio)
         if (scale[0] < 1) or (scale[1] < 1):
