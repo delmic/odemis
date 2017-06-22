@@ -67,11 +67,11 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
     # spot
     filtered_image = _BandPassFilter(filtered_image, 1, 20)
 
-    image = model.DataArray(filtered_image, data.metadata)
+    image = model.DataArray(filtered_image, data.metadata)  # TODO: why a DataArray?
     avg_intensity = numpy.average(image)
 
     spot_factor = 10
-    step = 1
+    step = 4
     sensitivity = 4
 
     # After filtering based on optical scale there is no need to adjust
@@ -90,8 +90,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
         data_min = filters.minimum_filter(image, filter_window_size)
 
         # Determine threshold
-        i = sensitivity
-        threshold = max_diff / i
+        threshold = max_diff / sensitivity
 
         # Filter the parts of the image with variance in intensity greater
         # than the threshold
@@ -103,17 +102,22 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
 
         slices = ndimage.find_objects(labeled)
 
-        (x_center_last, y_center_last) = (-10, -10)
+        # If too many features found, discards the ones too close from each other
+        # Note: the main danger is that if the scale is wrong (bigger than the
+        # real value), it will remove correct images
+        if len(slices) > numpy.prod(number_of_spots):
+            logging.debug("Found %d features that could be spots, will be picky",
+                          len(slices))
+            min_dist = max(4, scale / 2.1)  # px
+        else:
+            min_dist = max(4, scale / 8.1)  # px
 
         # Go through these parts and crop the subimages based on the neighborhood_size
         # value
+        x_center_last, y_center_last = 0, 0
         for dy, dx in slices:
             x_center = (dx.start + dx.stop - 1) / 2
             y_center = (dy.start + dy.stop - 1) / 2
-
-            # Make sure we don't detect spots on the top of each other
-            tab = tuple(map(operator.sub, (x_center_last, y_center_last),
-                            (x_center, y_center)))
 
             subimage = image[int(dy.start - 2.5):int(dy.stop + 2.5),
                              int(dx.start - 2.5):int(dx.stop + 2.5)]
@@ -125,7 +129,10 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
                 continue
 
             # if spots detected too close keep the brightest one
-            if (len(subimages) > 0) and (math.hypot(tab[0], tab[1]) < (scale / 2)):
+            # FIXME: it should do it globally: find groups of images too close,
+            # and pick the brightest point of each group
+            tab = (x_center_last - x_center, y_center_last - y_center)
+            if len(subimages) > 0 and math.hypot(tab[0], tab[1]) < min_dist:
                 if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
                     subimages.pop()
                     subimage_coordinates.pop()
@@ -135,7 +142,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
                 subimage_coordinates.append((x_center, y_center))
                 subimages.append(subimage)
 
-            (x_center_last, y_center_last) = (x_center, y_center)
+            x_center_last, y_center_last = x_center, y_center
 
         # Take care of outliers
         expected_spots = numpy.prod(number_of_spots)
@@ -145,9 +152,10 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
         if len(clean_subimages) >= numpy.prod(number_of_spots):
             break
 
-        if sensitivity > 4:
-            step = 4
         sensitivity += step
+    else:
+        logging.warning("Giving up finding %d partitions, only found %d",
+                        numpy.prod(number_of_spots), len(clean_subimages))
 
     return clean_subimages, clean_subimage_coordinates
 
@@ -198,14 +206,14 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     # If we removed more than 3 subimages give up and return the initial list
     # This is based on the assumption that each image would contain at maximum
     # 3 cosmic rays.
-    if (((len(subimages) - len(clean_subimages)) > 3) or (len(clean_subimages) == 0)):
+    if (len(subimages) - len(clean_subimages)) > 3 or not clean_subimages:
         clean_subimages = subimages
         clean_subimage_coordinates = subimage_coordinates
 
     # If we still have more spots than expected we discard the ones
     # with "stranger" distances from their closest spots. Only applied
     # if we have an at least 2x2 grid.
-    if (expected_spots >= 4) and (len(clean_subimage_coordinates) > expected_spots):
+    if expected_spots >= 4 and len(clean_subimage_coordinates) > expected_spots:
         points = numpy.array(clean_subimage_coordinates)
         tree = cKDTree(points, 5)
         distance, index = tree.query(clean_subimage_coordinates, 5)
@@ -245,11 +253,13 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
     input_coordinates (List of tuples): Coordinates of spots in optical image
     electron_coordinates (List of tuples): Coordinates of spots in electron image
     guess_scale (float): Guess scaling for the first transformation
-    max_allowed_diff (float): Maximum allowed difference in electron coordinates
+    max_allowed_diff (float): Maximum allowed difference in electron coordinates (in px)
     returns (List of tuples): Ordered list of coordinates in electron image with respect
                                 to the order in the electron image
             (List of tuples): List of coordinates in optical image corresponding to the
                                 ordered electron list
+    raises:
+        LookupError: if it couldn't find matches
     """
     # Remove large outliers
     if len(input_coordinates) > 1:
@@ -257,9 +267,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
         if len(optical_coordinates) > len(electron_coordinates):
             optical_coordinates = _FindInnerOutliers(optical_coordinates)
     else:
-        logging.warning("Cannot find overlay (only %s spot found).",
-                        len(input_coordinates))
-        return [], []
+        raise LookupError("Cannot find overlay (only 1 spot found).")
 
     # Informed guess
     guess_coordinates = _TransformCoordinates(optical_coordinates, (0, 0), 0, (guess_scale, guess_scale))
@@ -277,8 +285,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                                                                optical_coordinates,
                                                                electron_coordinates)
         except LookupError as ex:
-            logging.warning("Failed to get any coordinate match (%s)", ex)
-            return [], []
+            raise LookupError("No coordinate match (%s)", ex)
 
         # Calculate successful
         e_match_points = [not i for i in e_wrong_points]
@@ -308,7 +315,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                         max_diff, max_allowed_diff, step + 1)
         logging.warning("Optical coordinates found: %s", estimated_coordinates)
         logging.warning("SEM coordinates distances: %s", sort_diff)
-        return [], []
+        raise LookupError("Max distance too big after all iterations (%f px > %f px)" %
+                          (max_diff, max_allowed_diff))
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
     ordered_coordinates_index = zip(index1, electron_coordinates)
@@ -323,7 +331,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
         known_optical_coordinates = optical_coordinates
     else:
         known_optical_coordinates = list(compress(optical_coordinates, o_match_points))
-    return known_ordered_coordinates, known_optical_coordinates
+    return known_ordered_coordinates, known_optical_coordinates, max_diff
 
 
 def _KNNsearch(x_coordinates, y_coordinates):
