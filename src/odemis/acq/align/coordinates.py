@@ -103,6 +103,16 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
 
         slices = ndimage.find_objects(labeled)
 
+        # If too many features found, discards the ones too close from each other
+        # Note: the main danger is that if the scale is wrong (bigger than the
+        # real value), it will remove correct images
+        if len(slices) > numpy.prod(number_of_spots):
+            logging.debug("Found %d features that could be spots, will be picky",
+                          len(slices))
+            min_dist = max(4, scale / 2.1)  # px
+        else:
+            min_dist = max(4, scale / 8.1)  # px
+
         (x_center_last, y_center_last) = (-10, -10)
 
         # Go through these parts and crop the subimages based on the neighborhood_size
@@ -125,7 +135,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
                 continue
 
             # if spots detected too close keep the brightest one
-            if (len(subimages) > 0) and (math.hypot(tab[0], tab[1]) < (scale / 2)):
+            if (len(subimages) > 0) and (math.hypot(tab[0], tab[1]) < min_dist):
                 if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
                     subimages.pop()
                     subimage_coordinates.pop()
