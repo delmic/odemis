@@ -663,18 +663,17 @@ class GridScanner(object):
         escan = self.escan
         rep = self.repetitions
 
-        # Estimate the area of SEM and Optical FoV
+        # Estimate the SEM and Optical FoV, taking into account that the SEM
+        # pixels are at the center of each pixel.
         ccd_fov = self.get_ccd_fov()
         sem_fov = self.get_sem_fov()
-        ccd_area = (ccd_fov[2] - ccd_fov[0]) * (ccd_fov[3] - ccd_fov[1])
-        sem_area = (sem_fov[2] - sem_fov[0]) * (sem_fov[3] - sem_fov[1])
+        ccd_size = ((ccd_fov[2] - ccd_fov[0]), (ccd_fov[3] - ccd_fov[1]))
+        sem_size = ((sem_fov[2] - sem_fov[0]), (sem_fov[3] - sem_fov[1]))
+        sem_scan_size = tuple(s * (r - 1) / r for s, r in zip(sem_size, rep))
 
-        # If the SEM FoV > Optical FoV * 0.8 then limit the grid scanned by the
-        # SEM to be sure that it can be entirely seen by the CCD.
-        ratio = 1
-        req_area = ccd_area * 0.8
-        if sem_area > req_area:
-            ratio = math.sqrt(req_area / sem_area)
+        # If the scanned SEM FoV > 80% of Optical FoV, then limit the scanned area
+        # to be sure that it can be entirely seen by the CCD.
+        ratio = min(1, min(c * 0.8 / s for c, s in zip(ccd_size, sem_scan_size)))
 
         # In case the resolution ratio is not 1:1, use the smallest dim, to get
         # a squared grid

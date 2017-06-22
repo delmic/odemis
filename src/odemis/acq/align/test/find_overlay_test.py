@@ -169,6 +169,24 @@ class TestOverlay(unittest.TestCase):
         self.assertIn(model.MD_PIXEL_SIZE_COR, opt_md)
         self.assertIn(model.MD_SHEAR_COR, sem_md)
 
+    def test_ratio_3_4(self):
+        """
+        Try also (unsual) 3:4
+        """
+        ebeam_kwargs = {
+            "max_res": [3072, 4096],
+            "hfw_nomag": 0.132,
+        }
+        # SEM mag = 150x  ~ SEM pxs size = 288e-9 m
+        self._prepare_hardware(ebeam_kwargs, 150, "overlay_4_4_test_2.tiff")
+
+        f = align.FindOverlay((4, 4), 0.001, 10e-06, self.ebeam, self.ccd, self.sed, skew=True)
+
+        t, (opt_md, sem_md) = f.result()
+        self.assertEqual(len(t), 5)
+        self.assertIn(model.MD_PIXEL_SIZE_COR, opt_md)
+        self.assertIn(model.MD_SHEAR_COR, sem_md)
+
 
 if __name__ == '__main__':
     unittest.main()
