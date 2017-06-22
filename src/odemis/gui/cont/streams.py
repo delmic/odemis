@@ -1758,20 +1758,24 @@ class SparcStreamsController(StreamBarController):
         # The acquisition streams
         acq_streams = self._tab_data_model.acquisitionView.getStreams()
 
-        # For all MD streams in the acquisition view...
-        for mds in acq_streams:
-            if not isinstance(mds, acqstream.MultipleDetectorStream):
-                continue
-            # Are all the sub streams of the MDStreams still there?
-            for ss in mds.streams:
-                # If not, remove the MD stream
-                if ss is not semcls and ss not in streams:
-                    if isinstance(ss, acqstream.SEMStream):
-                        logging.warning("Removing stream because %s is gone!", ss)
-                    logging.debug("Removing acquisition stream %s because %s is gone",
-                                  mds.name.value, ss.name.value)
-                    self._tab_data_model.acquisitionView.removeStream(mds)
-                    break
+        # Clean-up the acquisition streams
+        for acqs in acq_streams:
+            if not isinstance(acqs, acqstream.MultipleDetectorStream):
+                if acqs not in streams:
+                    logging.debug("Removing stream %s from acquisition too",
+                                  acqs.name.value)
+                    self._tab_data_model.acquisitionView.removeStream(acqs)
+            else:
+                # Are all the sub streams of the MDStreams still there?
+                for ss in acqs.streams:
+                    # If not, remove the MD stream
+                    if ss is not semcls and ss not in streams:
+                        if isinstance(ss, acqstream.SEMStream):
+                            logging.warning("Removing stream because %s is gone!", ss)
+                        logging.debug("Removing acquisition stream %s because %s is gone",
+                                      acqs.name.value, ss.name.value)
+                        self._tab_data_model.acquisitionView.removeStream(acqs)
+                        break
 
         # clean up the ROI listeners
         for s in self._roi_listeners.keys():
@@ -1847,6 +1851,9 @@ class SparcStreamsController(StreamBarController):
             model.hasVA(detector, "brightness")):
             s.auto_bc.value = False
             s.intensityRange.value = (0, 255)
+
+        # add the stream to the acquisition set
+        self._tab_data_model.acquisitionView.addStream(s)
 
         return self._add_stream(s, **kwargs)
 
