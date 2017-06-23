@@ -2521,10 +2521,12 @@ class SMOController(Controller):
             # that should be the default, but for safety we force it
             self.SetServo(a, False)
             self._position[a] = 0
+            # Unknown range => give room
+            self.pos_rng[a] = (-1, 1)  # m
 
             # Don't authorize different speeds or accels
             self._speed_base = speed_base
-            self.speed_rng = (speed_base, speed_base)  # m/s
+            self.speed_rng[a] = (speed_base, speed_base)  # m/s
             self._speed[a] = speed_base  # m/s
             self._accel[a] = 0.01  # m/s² (actually I've got no idea)
 
