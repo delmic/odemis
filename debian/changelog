@@ -1,3 +1,14 @@
+odemis (2.6.5-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6.5
+  * Main bugs fixed:
+    - Fix synchronised CCD frame sometimes not being sent (SPARC)
+    - Fix EBIC streams not being part of the acquisition (SPARC)
+    - Fix fine alignment not working when SEM image ratio is not 1:1 (SECOM)
+    - Fix fine alignment not working if actual SEM mag is 2x bigger than indicated (SECOM)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 22 Jun 2017 13:34:33 +0200
+
 odemis (2.6.4-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6.4
