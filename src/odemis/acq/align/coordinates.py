@@ -258,6 +258,9 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                                 to the order in the electron image
             (List of tuples): List of coordinates in optical image corresponding to the
                                 ordered electron list
+            float: maximum distance between the theoritical position of a spot
+              and its corresponding position by using the transformation on the
+              optical image
     raises:
         LookupError: if it couldn't find matches
     """
