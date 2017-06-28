@@ -316,20 +316,31 @@ class SEMStream(LiveStream):
         width = [max(a, b) for a, b in zip(width, min_width)]
 
         # Recompute the ROI so that it fits
-        roi = (center[0] - width[0] / 2, center[1] - width[1] / 2,
-               center[0] + width[0] / 2, center[1] + width[1] / 2)
-        if roi[0] < 0:
-            center[0] += roi[0]
-        elif roi[2] > 1:
-            center[0] -= roi[2] - 1
-        if roi[1] < 0:
-            center[1] += roi[1]
-        elif roi[3] > 1:
-            center[3] -= roi[3] - 1
-        roi = (center[0] - width[0] / 2, center[1] - width[1] / 2,
-               center[0] + width[0] / 2, center[1] + width[1] / 2)
+        roi = [center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2]
 
-        return roi
+        # Ensure it's not too big
+        if roi[2] - roi[0] > 1:
+            roi[2] = roi[0] + 1
+        if roi[3] - roi[1] > 1:
+            roi[3] = roi[1] + 1
+
+        # shift the ROI if it's now slightly outside the possible area
+        if roi[0] < 0:
+            roi[2] = min(1, roi[2] - roi[0])
+            roi[0] = 0
+        elif roi[2] > 1:
+            roi[0] = max(0, roi[0] - (roi[2] - 1))
+            roi[2] = 1
+
+        if roi[1] < 0:
+            roi[3] = min(1, roi[3] - roi[1])
+            roi[1] = 0
+        elif roi[3] > 1:
+            roi[1] = max(0, roi[1] - (roi[3] - 1))
+            roi[3] = 1
+
+        return tuple(roi)
 
     def estimateAcquisitionTime(self):
 
