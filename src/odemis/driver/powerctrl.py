@@ -105,9 +105,9 @@ class PowerControlUnit(model.PowerSupplier):
             # This is in particular to handle some cases where the device resets
             # when turning on the power. One or more trials and the
             logging.exception("Failure during turning on initial power.")
-            raise HwError("Device had an error when initialising power: %s. "
-                          "Try again or contact support if the problem persists.",
-                          ex)
+            raise HwError("Device error when initialising power: %s. "
+                          "Try again or contact support if the problem persists." %
+                          (ex,))
 
         self.memoryIDs = model.VigilantAttribute(None, readonly=True, getter=self._getIdentities)
 
@@ -146,10 +146,13 @@ class PowerControlUnit(model.PowerSupplier):
             if apply_delay:
                 delay = self._delay.get(comp, 0)
             else:
-                delay = 0
-            state = self.supplied.value[comp]
+                # We still wait a little, to avoid starting all components
+                # _exactly_ at the same time, which could cause a power peak.
+                delay = 1
+
             if val:
                 self._sendCommand("PWR " + str(pin) + " 1")
+                state = self.supplied.value[comp]
                 if state:
                     # Already on, wait the time remaining
                     remaining = (self._last_start[comp] + delay) - time.time()
@@ -158,8 +161,14 @@ class PowerControlUnit(model.PowerSupplier):
                     # wait full time
                     self._last_start[comp] = time.time()
                     time.sleep(delay)
+
+                # Check it really worked
+                ans = self._sendCommand("PWR? " + str(pin))
+                if ans != "1":
+                    logging.warning("Failed to turn on component %s", comp)
             else:
                 self._sendCommand("PWR " + str(pin) + " 0")
+
         self._updateSupplied()
 
     def _updateSupplied(self):
