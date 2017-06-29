@@ -285,7 +285,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                                                                optical_coordinates,
                                                                electron_coordinates)
         except LookupError as ex:
-            raise LookupError("No coordinate match (%s)", ex)
+            raise LookupError("No coordinate match (%s)" % (ex,))
 
         # Calculate successful
         e_match_points = [not i for i in e_wrong_points]
