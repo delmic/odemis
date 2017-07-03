@@ -1942,7 +1942,7 @@ class SEMComedi(model.HwComponent):
             try:
                 device = comedi.open(n)
             except comedi.ComediError:
-                    continue
+                continue
             try:
                 logging.debug("Checking comedi device '%s'", n)
 
