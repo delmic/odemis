@@ -233,7 +233,9 @@ class SEMComedi(model.HwComponent):
 
         self._check_test_device()
 
-        # Since ebb657babf, (Kernel 3.15+) needs NI_TRIG_AI_START1 as trig number instead of 0
+        # Since ebb657babf, (Kernel 3.15+) needs NI_TRIG_AI_START1 as internal
+        # trig number instead of 0 if it's what was passed to the command as trigger
+        # Since kernel 4.8, both 0 and the expected trigger are allowed.
         if self._lnx_ver >= (3, 15, 0):
             self._ao_trig = NI_TRIG_AI_START1
         else:
@@ -1309,6 +1311,9 @@ class SEMComedi(model.HwComponent):
                     comedi.data_write(self._device, self._ao_subdevice,
                           wchannels[i], wranges[i], comedi.AREF_GROUND, int(p))
             else:
+                # Warning (2017-07-03): In kernels 4.6 - 4.12, there is a bug in
+                # the NI driver which makes the period 50ns less than requested.
+                # It should eventually be backported to kernels 4.7+
                 self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
                             start_src=comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
                             start_arg=NI_TRIG_AI_START1,  # when the AI starts reading
