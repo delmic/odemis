@@ -1260,7 +1260,7 @@ def line_to_export_data(stream, raw):
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return data
     else:
-        images = set_images([(spectrum, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None)])
+        images = set_images([(spectrum, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None, {})])
         # TODO: just use a standard tuple, instead of wx.Size
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         im = images[0]  # just one image
@@ -1909,7 +1909,7 @@ def _adapt_rgb_to_raw(imrgb, data_raw):
     data_raw (DataArray): Raw image (to know the dtype and min/max)
     return (ndarray Y,X)
     """
-    dtype = data_raw.dtype
+    dtype = data_raw.dtype.type
     blkval = numpy.min(data_raw)
     a = (numpy.max(data_raw) - blkval) / 255
     im_as_raw = imrgb[:, :, 0].astype(dtype)
