@@ -29,6 +29,10 @@ find "$ODEMIS_SRC" -name "*.py" -size +20c -exec grep -IL "from __future__ impor
 #grep -IrL "from __future__ import.*division" --include=*.py "$ODEMIS_SRC"
 echo "---"
 
+echo "These files have old style classes (with \"object\" as parent)"
+grep -IrE --colour "class .+\(\).*:" --include=*.py "$ODEMIS_SRC"
+echo "---"
+
 echo "These files do not have the license header:"
 grep -LIr "GNU General Public License" --include=*.py "$ODEMIS_SRC"
 echo "---"
