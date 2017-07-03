@@ -81,7 +81,7 @@ def _discard_data(df, data):
     pass
 
 
-class ArrowFocus():
+class ArrowFocus(object):
     """
     Use keyboard arrows to move focus actuators by stepsize.
     """
@@ -304,6 +304,9 @@ def man_calib(logpath):
                     print "\033[1;31mSample holder hole detection failed.\033[1;m"
             else:
                 break
+
+        # TODO: do SEM calibration now, as it's possible, and the sample is
+        # (almost) at the right place, and the focus is good.
 
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
