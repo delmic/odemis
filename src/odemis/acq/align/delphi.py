@@ -318,6 +318,56 @@ def _DoDelphiCalibration(future, main_data):
             logger.exception("Failure while looking for sample holder holes")
             raise IOError("Failed to find sample holder holes (%s)." % (ex,))
 
+        # Update progress of the future
+        future.set_progress(end=time.time() + 13.5 * 60)
+        logger.info("Calculating shift parameters...")
+
+        # Resetting shift parameters, to not take them into account during calib
+        blank_md = dict.fromkeys(MD_CALIB_SEM, (0, 0))
+        main_data.ebeam.updateMetadata(blank_md)
+
+        try:
+            # We measure the shift in the area just behind the hole where there
+            # are always some features plus the edge of the sample carrier. For
+            # that reason we use the focus measured in the hole detection step
+            sem_stage.moveAbs(SHIFT_DETECTION).result()
+            main_data.ebeam_focus.moveAbsSync({"z": hfoc})
+
+            # Compute spot shift ratio
+            future.running_subf = ScaleShiftFactor(main_data.bsd, main_data.ebeam,
+                                                   logpath)
+            scaleshift = future.running_subf.result()
+            calib_values["scale_shift"] = scaleshift
+            logger.debug("Spot shift: %s", scaleshift)
+
+            # Compute resolution-related values.
+            future.running_subf = ResolutionShiftFactor(main_data.bsd,
+                                                        main_data.ebeam,
+                                                        logpath)
+            resa, resb = future.running_subf.result()
+            calib_values["resolution_a"] = resa
+            calib_values["resolution_b"] = resb
+            logger.debug("Resolution A: %s Resolution B: %s", resa, resb)
+
+            # Compute HFW-related values
+            future.running_subf = HFWShiftFactor(main_data.bsd, main_data.ebeam, logpath)
+            hfwa = future.running_subf.result()
+            calib_values["hfw_a"] = hfwa
+            logger.debug("HFW A: %s", hfwa)
+        except CancelledError:
+            raise
+        except Exception as ex:
+            logger.exception("Failure during SEM image calibration")
+            raise IOError("Failed to measure SEM image calibration (%s)." % (ex,))
+
+        # Update the SEM metadata to have the spots already at corrected place
+        main_data.ebeam.updateMetadata({
+            model.MD_RESOLUTION_SLOPE: resa,
+            model.MD_RESOLUTION_INTERCEPT: resb,
+            model.MD_HFW_SLOPE: hfwa,
+            model.MD_SPOT_SHIFT: scaleshift
+        })
+
         # expected good focus value when focusing on the glass
         good_focus = hfoc - GOOD_FOCUS_OFFSET
         future.running_subf = main_data.ebeam_focus.moveAbs({"z": good_focus})
@@ -327,7 +377,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 13.5 * 60)
+        future.set_progress(end=time.time() + 8.5 * 60)
         logger.info("Moving SEM stage to expected offset %s...", position)
         f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
         f.result()
@@ -378,7 +428,7 @@ def _DoDelphiCalibration(future, main_data):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 10 * 60)
+        future.set_progress(end=time.time() + 5 * 60)
         logger.info("Measuring rotation and scaling...")
         try:
             future.running_subf = RotationAndScaling(main_data.ccd, main_data.bsd,
@@ -432,7 +482,7 @@ def _DoDelphiCalibration(future, main_data):
             logger.warning("Failed to find a spot, twin stage calibration might have failed")
 
         # Update progress of the future
-        future.set_progress(end=time.time() + 7.5 * 60)
+        future.set_progress(end=time.time() + 2.5 * 60)
 
         # Proper hfw for spot grid to be within the ccd fov
         main_data.ebeam.horizontalFoV.value = 80e-06
@@ -497,48 +547,6 @@ def _DoDelphiCalibration(future, main_data):
         calib_values["image_rotation"] = irot
         calib_values["image_shear"] = ishear
         logger.debug("Image Rotation: %f (rad) Scaling: %s XY Scaling: %s Shear: %f", irot, iscale, iscale_xy, ishear)
-
-        # Update progress of the future
-        future.set_progress(end=time.time() + 5 * 60)
-        logger.info("Calculating shift parameters...")
-
-        # Resetting shift parameters, to not take them into account during calib
-        blank_md = dict.fromkeys(MD_CALIB_SEM, (0, 0))
-        main_data.ebeam.updateMetadata(blank_md)
-
-        try:
-            # We measure the shift in the area just behind the hole where there
-            # are always some features plus the edge of the sample carrier. For
-            # that reason we use the focus measured in the hole detection step
-            sem_stage.moveAbs(SHIFT_DETECTION).result()
-            main_data.ebeam_focus.moveAbsSync({"z": hfoc})
-
-            # Compute spot shift ratio
-            future.running_subf = ScaleShiftFactor(main_data.bsd, main_data.ebeam,
-                                                   logpath)
-            scaleshift = future.running_subf.result()
-            calib_values["scale_shift"] = scaleshift
-            logger.debug("Spot shift: %s", scaleshift)
-
-            # Compute resolution-related values.
-            future.running_subf = ResolutionShiftFactor(main_data.bsd,
-                                                        main_data.ebeam,
-                                                        logpath)
-            resa, resb = future.running_subf.result()
-            calib_values["resolution_a"] = resa
-            calib_values["resolution_b"] = resb
-            logger.debug("Resolution A: %s Resolution B: %s", resa, resb)
-
-            # Compute HFW-related values
-            future.running_subf = HFWShiftFactor(main_data.bsd, main_data.ebeam, logpath)
-            hfwa = future.running_subf.result()
-            calib_values["hfw_a"] = hfwa
-            logger.debug("HFW A: %s", hfwa)
-        except CancelledError:
-            raise
-        except Exception as ex:
-            logger.exception("Failure during SEM image calibration")
-            raise IOError("Failed to measure SEM image calibration (%s)." % (ex,))
 
         return htop, hbot, hfoc, ofoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift
 
