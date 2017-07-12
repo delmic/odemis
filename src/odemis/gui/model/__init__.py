@@ -565,15 +565,15 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
                   "lens_mover": (50e-6, [5e-6, 500e-6], "lens_mover", None),
-                  "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", ("focus",)),
+                  "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
                   }
         if main.role == "sparc":
             # Mirror on SPARC is a bit more complicated as it has 4 axes and Y
             # usually needs to be 10x bigger than X
             ss_def.update({
-                "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", ("x",)),
-                "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", ("y",)),
-                "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", ("ry", "rz"))
+                "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", {"x"}),
+                "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", {"y"}),
+                "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"})
             })
         elif main.role == "sparc2":
             ss_def.update({
@@ -592,8 +592,13 @@ class ActuatorGUIData(MicroscopyGUIData):
         for ss, (v, r, an, axn) in ss_def.items():
             if getattr(main, an) is not None:
                 self.stepsizes[ss] = FloatContinuous(v, r)
-                if axn is None:
-                    axn = getattr(main, an).axes
+
+                all_axn = set(getattr(main, an).axes.keys())
+                if axn is None: # take all of them
+                    axn = all_axn
+                else: # take only the one listed
+                    axn &= all_axn
+
                 for a in axn:
                     self._axis_to_act_ss[(an, a)] = (an, ss)
                     logging.debug("Add axis %s/%s to stepsize %s", an, a, ss)
