@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+    <mime-type type="image/x-ome-tiff">
+        <comment>Microscopy image</comment>
+        <sub-class-of type="image/tiff"/>
+        <glob pattern="*.ome.tiff"/>
+        <glob pattern="*.ome.tif"/>
+    </mime-type>
+</mime-info>

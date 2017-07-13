@@ -11,4 +11,4 @@ Categories=Utility;
 #StartupWMClass=main.py
 StartupWMClass=Odemis-standalone
 StartupNotify=true
-MimeType=image/tiff;application/x-hdf;
+MimeType=image/x-ome-tiff;image/tiff;application/x-hdf;
