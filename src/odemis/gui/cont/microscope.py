@@ -1031,8 +1031,8 @@ class DelphiStateController(SecomStateController):
             model.MD_PIXEL_SIZE_COR: iscale_xy,
         })
 
-        # update detector metadata with the SEM image and spot shift correction
-        self._main_data.bsd.updateMetadata({
+        # Update ebeam scanner with the SEM image and spot shift correction
+        self._main_data.ebeam.updateMetadata({
             model.MD_RESOLUTION_SLOPE: resa,
             model.MD_RESOLUTION_INTERCEPT: resb,
             model.MD_HFW_SLOPE: hfwa,
