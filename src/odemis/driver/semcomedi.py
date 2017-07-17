@@ -269,6 +269,8 @@ class SEMComedi(model.HwComponent):
         self._acquisition_mng_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
         self._acq_cmd_q = Queue.Queue()
+        # TODO: The .wait() of this event is never used, which is a sign it's
+        # probably not useful anymore => just check if _acquisitions is empty?
         self._acquisition_must_stop = threading.Event()
         self._acquisitions = set()  # detectors currently active
 
@@ -304,13 +306,13 @@ class SEMComedi(model.HwComponent):
             self._min_dt_config.append(self.find_best_oversampling_rate(0, i + 1))
 
         if not self._detectors and not self._counters:
-            raise KeyError("SEMComedi device '%s' was not given any 'detectorN' or 'counterN' child" % device)
+            raise ValueError("SEMComedi device '%s' was not given any 'detectorN' or 'counterN' child" % device)
 
         # create the scanner child "scanner" (must be _after_ the detectors)
         try:
             ckwargs = children["scanner"]
         except (KeyError, TypeError):
-            raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
+            raise ValueError("SEMComedi device '%s' was not given a 'scanner' child" % device)
         self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
         # for scanner.newPosition
@@ -2717,7 +2719,8 @@ class Scanner(model.Emitter):
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
-        # via calibration. We assume that image is square, i.e., VFW = HFW
+        # via calibration. We assume that pixels are square, i.e., max_res ratio
+        # = physical ratio
         if not 0 <= hfw_nomag < 1:
             raise ValueError("hfw_nomag is %g m, while it should be between 0 and 1 m."
                              % hfw_nomag)
