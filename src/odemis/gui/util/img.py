@@ -1624,18 +1624,25 @@ def get_ordered_images(streams, raw=False):
             # Split the bits in R,G,B,A
             data = _pack_data_into_rgba(data_raw)
 
-        ostream = s.stream if isinstance(s, DataProjection) else s
-
         if isinstance(s.raw, tuple):  # s.raw has tiles
             md = s.raw[0][0].metadata
         else:
             md = s.raw[0].metadata
+
+        ostream = s.stream if isinstance(s, DataProjection) else s
+
         # Sometimes SEM streams contain the dt value as exposure time metadata.
         # In that case handle it in special way
         if (isinstance(ostream, acqstream.EMStream) and
             model.MD_EXP_TIME in md and model.MD_DWELL_TIME not in md):
             md[model.MD_DWELL_TIME] = md[model.MD_EXP_TIME]
             del md[model.MD_EXP_TIME]
+        elif isinstance(ostream, acqstream.SpectrumStream):
+            # The spectrum stream projection is limited to the selected bandwidth
+            # => update the metadata (note that we are subverting this metadata
+            # as it should have as many entries as C dim, but the C dim has been
+            # flatten, so we put two, to convey center/width info)
+            md[model.MD_WL_LIST] = ostream.spectrumBandwidth.value
 
         # FluoStreams are merged using the "Screen" method that handles colour
         # merging without decreasing the intensity.
