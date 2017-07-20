@@ -694,9 +694,9 @@ class SEMComedi(model.HwComponent):
         subdevice (int): the subdevice index
         channel (list of int): the channel index for each value of the last dim
         ranges (list of int): the range index for each value of the last dim
-        data (numpy.ndarray): the array to convert, its last dimension must be the
-          same as the channels and ranges
-        return (numpy.ndarray of the same shape as data): raw values, the dtype
+        data (numpy.ndarray of shape ...L): the array to convert, its last
+          dimension (L) must be the same as the length of channels and ranges
+        return (numpy.ndarray of shape ..., L): raw values, the dtype
           fits the subdevice
         """
         # FIXME: this is very slow (2us/element), might need to go into numba,
@@ -3180,10 +3180,12 @@ class Scanner(model.Emitter):
             self._ranges = ranges
 
             # computes the limits in raw values
+            # Note: _array_from_phys expects the channel as last dim
+            rlimits = numpy.array(roi_limits, dtype=numpy.double).T
             limits = self.parent._array_from_phys(self.parent._ao_subdevice,
                                                   self._channels, ranges,
-                                                  numpy.array(roi_limits, dtype=numpy.double))
-            scan_raw = self._generate_scan_array(shape, limits, margin)
+                                                  rlimits)
+            scan_raw = self._generate_scan_array(shape, limits.T, margin)
             self._scan_array = scan_raw
         else:
             limits = numpy.array(roi_limits, dtype=numpy.double)
