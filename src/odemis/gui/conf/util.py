@@ -36,6 +36,7 @@ import odemis.gui
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import NotApplicableError
+from odemis.util import fluo
 from odemis.util.conversion import reproduce_typed_value
 from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
     si_scale_val, readable_time
@@ -469,38 +470,98 @@ def format_choices(choices):
 
     """
 
-    if choices:
-        choices_si_prefix = None
-
-        # choice_fmt is an iterable of tuples: (choice, formatted choice)
-        if isinstance(choices, dict):
-            # In this case we assume that the values are already formatted
-            choices_formatted = choices.items()
-        elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
-            try:
-                choices = sorted(choices)
-                # Can we fit them (more or less) all with the same unit prefix?
-                mn_non0 = min(c for c in choices if c != 0)
-                if abs(choices[-1] / mn_non0) < 1000:
-                    fmt, choices_si_prefix = utun.si_scale_list(choices)
-                    fmt = [utun.to_string_pretty(c, 3) for c in fmt]
-                    choices_formatted = zip(choices, fmt)
-                else:
-                    fmt = [to_string_si_prefix(c, sig=3) for c in choices]
-                    return zip(choices, fmt), None
-            except Exception:
-                logging.exception("Formatting error for %s", choices)
-                choices_formatted = [(c, choice_to_str(c)) for c in choices]
-        else:
-            choices_formatted = [(c, choice_to_str(c)) for c in choices]
-
-        if not isinstance(choices, OrderedDict):
-            choices_formatted = sorted(choices_formatted)
-
-        return choices_formatted, choices_si_prefix
-
-    else:
+    if not choices:
         return None, None
+
+    choices_si_prefix = None
+
+    # choice_fmt is an iterable of tuples: (choice, formatted choice)
+    if isinstance(choices, dict):
+        # In this case we assume that the values are already formatted
+        choices_formatted = choices.items()
+    elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
+        try:
+            choices = sorted(choices)
+            # Can we fit them (more or less) all with the same unit prefix?
+            mn_non0 = min(c for c in choices if c != 0)
+            if abs(choices[-1] / mn_non0) < 1000:
+                fmt, choices_si_prefix = utun.si_scale_list(choices)
+                fmt = [utun.to_string_pretty(c, 3) for c in fmt]
+                choices_formatted = zip(choices, fmt)
+            else:
+                fmt = [to_string_si_prefix(c, sig=3) for c in choices]
+                return zip(choices, fmt), None
+        except Exception:
+            logging.exception("Formatting error for %s", choices)
+            choices_formatted = [(c, choice_to_str(c)) for c in choices]
+    else:
+        choices_formatted = [(c, choice_to_str(c)) for c in choices]
+
+    if not isinstance(choices, OrderedDict):
+        choices_formatted = sorted(choices_formatted)
+
+    return choices_formatted, choices_si_prefix
+
+
+def format_axis_choices(name, axis_def):
+    """
+    Transform the given choices for an axis into an user friendly display
+
+    name (str): the name of the axis
+    axis_def (Axis): the axis definition
+
+    returns:
+      choices_formatted (None or list of (value, str): axis value/user-friendly
+         display name (including the unit). None if axis doesn't support choices.
+    """
+
+    try:
+        choices = axis_def.choices
+    except AttributeError:
+        return None
+
+    if not choices:
+        return None
+
+    unit = axis_def.unit
+
+    if isinstance(choices, dict):
+        choices_formatted = choices.items()
+        # In this case, normally the values are already formatted, but for
+        # wavelength band, the "formatted" value is still a band info (ie, two
+        # values in m)
+        if name == "band":
+
+            def to_readable_band(v):
+                if (isinstance(v, (tuple, list)) and len(v) > 1 and
+                    all(isinstance(c, numbers.Real) for c in v)):
+                    return fluo.to_readable_band(v)
+                else:
+                    return v
+
+            choices_formatted = [(k, to_readable_band(v)) for k, v in choices_formatted]
+    elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
+        choices_formatted = None
+        try:
+            choices = sorted(choices)
+            # Can we fit them (more or less) all with the same unit prefix?
+            mn_non0 = min(c for c in choices if c != 0)
+            if abs(choices[-1] / mn_non0) < 1000:
+                fmt, choices_si_prefix = utun.si_scale_list(choices)
+                fmt = [utun.to_string_pretty(c, 3, unit) for c in fmt]
+                choices_formatted = zip(choices, fmt)
+        except Exception:
+            logging.exception("Formatting error for %s", choices)
+        if choices_formatted is None:
+            choices_formatted = [(c, utun.readable_str(c, unit=unit, sig=3)) for c in choices]
+    else:
+        choices_formatted = [(c, u"%s %s" % (choice_to_str(c), unit)) for c in choices]
+
+    if not isinstance(choices, OrderedDict):
+        # sort 2-tuples = according to first value in tuple
+        choices_formatted = sorted(choices_formatted)
+
+    return choices_formatted
 
 
 def create_formatted_setter(value_ctrl, val, unit, sig=3, pretty_time=False):
@@ -906,29 +967,13 @@ def create_axis_entry(container, name, comp, conf=None):
         # FIXME: should be readonly, but it fails with GetInsertionPoint (wx.CB_READONLY)
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
 
-        # format the choices
-        choices = ad.choices
-
-        if isinstance(choices, dict):
-            # it's then already value -> string (user-friendly display)
-            choices_fmt = choices.items()
-            unit = None
-        elif (unit and len(choices) > 1 and
-              all([isinstance(c, numbers.Real) for c in choices])):
-            # TODO: need same update as add_value
-            fmt, prefix = utun.si_scale_list(choices)
-            choices_fmt = zip(choices, [u"%g" % c for c in fmt])
-            unit = prefix + unit
-        else:
-            choices_fmt = [(c, choice_to_str(c)) for c in choices]
-
-        choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
+        choices_fmt = format_axis_choices(name, ad)
 
         # Set choices
         if unit is None:
             unit = ""
         for choice, formatted in choices_fmt:
-            value_ctrl.Append(u"%s %s" % (formatted, unit), choice)
+            value_ctrl.Append(formatted, choice)
 
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)
