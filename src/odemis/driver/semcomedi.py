@@ -269,6 +269,8 @@ class SEMComedi(model.HwComponent):
         self._acquisition_mng_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
         self._acq_cmd_q = Queue.Queue()
+        # TODO: The .wait() of this event is never used, which is a sign it's
+        # probably not useful anymore => just check if _acquisitions is empty?
         self._acquisition_must_stop = threading.Event()
         self._acquisitions = set()  # detectors currently active
 
@@ -304,13 +306,13 @@ class SEMComedi(model.HwComponent):
             self._min_dt_config.append(self.find_best_oversampling_rate(0, i + 1))
 
         if not self._detectors and not self._counters:
-            raise KeyError("SEMComedi device '%s' was not given any 'detectorN' or 'counterN' child" % device)
+            raise ValueError("SEMComedi device '%s' was not given any 'detectorN' or 'counterN' child" % device)
 
         # create the scanner child "scanner" (must be _after_ the detectors)
         try:
             ckwargs = children["scanner"]
         except (KeyError, TypeError):
-            raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
+            raise ValueError("SEMComedi device '%s' was not given a 'scanner' child" % device)
         self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
         # for scanner.newPosition
@@ -692,9 +694,9 @@ class SEMComedi(model.HwComponent):
         subdevice (int): the subdevice index
         channel (list of int): the channel index for each value of the last dim
         ranges (list of int): the range index for each value of the last dim
-        data (numpy.ndarray): the array to convert, its last dimension must be the
-          same as the channels and ranges
-        return (numpy.ndarray of the same shape as data): raw values, the dtype
+        data (numpy.ndarray of shape ...L): the array to convert, its last
+          dimension (L) must be the same as the length of channels and ranges
+        return (numpy.ndarray of shape ..., L): raw values, the dtype
           fits the subdevice
         """
         # FIXME: this is very slow (2us/element), might need to go into numba,
@@ -2717,7 +2719,8 @@ class Scanner(model.Emitter):
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
-        # via calibration. We assume that image is square, i.e., VFW = HFW
+        # via calibration. We assume that pixels are square, i.e., max_res ratio
+        # = physical ratio
         if not 0 <= hfw_nomag < 1:
             raise ValueError("hfw_nomag is %g m, while it should be between 0 and 1 m."
                              % hfw_nomag)
@@ -3177,10 +3180,12 @@ class Scanner(model.Emitter):
             self._ranges = ranges
 
             # computes the limits in raw values
+            # Note: _array_from_phys expects the channel as last dim
+            rlimits = numpy.array(roi_limits, dtype=numpy.double).T
             limits = self.parent._array_from_phys(self.parent._ao_subdevice,
                                                   self._channels, ranges,
-                                                  numpy.array(roi_limits, dtype=numpy.double))
-            scan_raw = self._generate_scan_array(shape, limits, margin)
+                                                  rlimits)
+            scan_raw = self._generate_scan_array(shape, limits.T, margin)
             self._scan_array = scan_raw
         else:
             limits = numpy.array(roi_limits, dtype=numpy.double)

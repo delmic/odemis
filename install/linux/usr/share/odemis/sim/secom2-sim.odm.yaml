@@ -149,7 +149,7 @@ SECOMv2: {
     role: e-beam,
     init: {
         channels: [1, 0],
-        limits: [[0, 5], [0, 5]],  # V
+        limits: [[-8, 8], [0, 5]],  # V
         park: [-5, -5], # V
         #max_res: [16384, 16384], # px
         settle_time: 10.e-6, # s
