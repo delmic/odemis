@@ -47,7 +47,7 @@ class MonochromatorScanStream(stream.Stream):
     spectrograph and acquiring with a monochromator
     """
 
-    def __init__(self, name, detector, emitter, spectrograph):
+    def __init__(self, name, detector, emitter, spectrograph, opm=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the monochromator
@@ -60,6 +60,9 @@ class MonochromatorScanStream(stream.Stream):
         self._detector = detector
         self._emitter = emitter
         self._sgr = spectrograph
+        self._opm = opm
+
+        self.is_active = model.BooleanVA(False)
 
         wlr = spectrograph.axes["wavelength"].range
         self.startWavelength = model.FloatContinuous(400e-9, wlr, unit="m")
@@ -94,6 +97,10 @@ class MonochromatorScanStream(stream.Stream):
         Runs the acquisition
         returns Future that will have as a result a DataArray with the spectrum
         """
+        # Make sure every stream is prepared, not really necessary to check _prepared
+        f = self.prepare()
+        f.result()
+
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + self.estimateAcquisitionTime())
@@ -174,7 +181,7 @@ class MonochromatorScanStream(stream.Stream):
             # Convert the sequence of data into one spectrum in a DataArray
 
             if wls > wle:  # went backward? => sort back the spectrum
-                logging.debug("Inversing spectrum as acquisition went from %g to %g m", wls, wls)
+                logging.debug("Inverting spectrum as acquisition went from %g to %g m", wls, wls)
                 self._data.reverse()
                 wllist.reverse()
 
@@ -243,6 +250,7 @@ def acquire_spec(wls, wle, res, dt, filename):
     sed = model.getComponent(role="se-detector")
     mchr = model.getComponent(role="monochromator")
     sgrh = model.getComponent(role="spectrograph")
+    opm = acq.path.OpticalPathManager(model.getMicroscope())
 
     prev_dt = ebeam.dwellTime.value
     prev_res = ebeam.resolution.value
@@ -251,7 +259,7 @@ def acquire_spec(wls, wle, res, dt, filename):
     prev_wl = sgrh.position.value["wavelength"]
 
     # Create a stream for monochromator scan
-    mchr_s = MonochromatorScanStream("Spectrum", mchr, ebeam, sgrh)
+    mchr_s = MonochromatorScanStream("Spectrum", mchr, ebeam, sgrh, opm=opm)
     mchr_s.startWavelength.value = wls
     mchr_s.endWavelength.value = wle
     mchr_s.numberOfPixels.value = res
@@ -401,7 +409,8 @@ class MonoScanPlugin(Plugin):
         self._survey_s = None
 
         # Create a stream for monochromator scan
-        self._mchr_s = MonochromatorScanStream("Spectrum", self.mchr, self.ebeam, self.sgrh)
+        self._mchr_s = MonochromatorScanStream("Spectrum", self.mchr, self.ebeam, self.sgrh,
+                                               opm=main_app.main_data.opm)
 
         # The settings to be displayed in the dialog
         # Trick: we use the same VAs as the stream, so they are directly synchronised
@@ -505,18 +514,23 @@ class MonoScanPlugin(Plugin):
         exporter = dataio.find_fittest_converter(fn)
 
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
-        str_ctrl = self.main_app.main_data.tab.value.stream_controller
+        try:
+            str_ctrl = self.main_app.main_data.tab.value.streambar_controller
+        except AttributeError:  # Odemis v2.6 and earlier
+            str_ctrl = self.main_app.main_data.tab.value.stream_controller
         stream_paused = str_ctrl.pauseStreams()
 
         try:
             # opm is the optical path manager, that ensures the path is set to the monochromator
-            f = acq.acquire(strs, opm=self.main_app.main_data.opm)
+            f = acq.acquire(strs)
             dlg.showProgress(f)
             das, e = f.result()
         except CancelledError:
             pass
         finally:
-            str_ctrl.resumeStreams(stream_paused)
+            # The new convention is to not restart the streams afterwards
+            # str_ctrl.resumeStreams(stream_paused)
+            pass
 
         if not f.cancelled() and das:
             if e:

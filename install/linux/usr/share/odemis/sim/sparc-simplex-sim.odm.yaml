@@ -2,7 +2,7 @@
 SPARC-Lund-sim: {
     class: Microscope,
     role: sparc-simplex,  # same as sparc, but no alignment supported in GUI
-    children: ["SEM E-beam", "SEM Detector", "Spectrometer", "PMT", "EBIC"],
+    children: ["SEM E-beam", "SEM Detector", "Spectrometer", "PMT", "EBIC", "Spec CCD Flipper"],
 }
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
