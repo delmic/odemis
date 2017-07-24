@@ -2074,14 +2074,24 @@ class SparcStreamsController(StreamBarController):
         sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator",
                                                   sem_stream, monoch_stream)
 
-        # No light filter for the spectrum stream: typically useless
+        # TODO: all the axes, including the filter band should be local. The
+        # band should be set to the pass-through by default
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg,
+                "slit-monochromator": spg,
+               }
+
+        # Also add light filter if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.monochromator.name in fw.affects.value:
+                axes["band"] = fw
+
         return self._addRepStream(monoch_stream, sem_monoch_stream,
                                   vas=("repetition", "pixelSize"),
-                                  axes={"wavelength": spg,
-                                        "grating": spg,
-                                        "slit-in": spg,
-                                        "slit-monochromator": spg,
-                                        },
+                                  axes=axes,
                                   play=False
                                   )
 
