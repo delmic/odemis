@@ -5,24 +5,24 @@ Created on 12 Nov 2014
 
 @author: Kimon Tsitsikas
 
-Copyright © 2013-2014 Kimon Tsitsikas, Delmic
+Copyright © 2014-2017 Kimon Tsitsikas, Éric Piel, Delmic
 
-This is a script to test the HFW and resolution-related shift of Phenom
-scanning
+This is a script to test the HFW and resolution-related shift of Phenom scanning
 
 run as:
 python delphi_sem_calib.py
 
-You first need to run the odemis backend with the SECOM config:
-odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
+The the odemis backend should be running with the Delphi or Phenom model.
 """
 
 from __future__ import division, print_function, absolute_import
 
 import logging
 from odemis import model
-from odemis.acq.align import delphi
+from odemis.acq.align import delphi, autofocus
 import sys
+import argparse
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -33,18 +33,29 @@ def main(args):
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
+    parser = argparse.ArgumentParser(description="Measure the needed SEM calibration")
+
+    parser.add_argument("--move", dest="move", action='store_true',
+                        help="First to move to the standard location for Delphi calibration on the sample")
+    parser.add_argument("--autofocus", "-f", dest="focus", action='store_true',
+                        help="Auto focus the SEM image before calibrating")
+    options = parser.parse_args(args[1:])
+
     try:
-        escan = None
-        bsd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                escan = c
-            elif c.role == "bs-detector":
-                bsd = c
-        if not all([escan, bsd]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+        escan = model.getComponent(role="e-beam")
+        bsd = model.getComponent(role="bs-detector")
+
+        # This moves the SEM stage precisely on the hole, as the calibration does it
+        if options.move:
+            semstage = model.getComponent(role="sem-stage")
+            semstage.moveAbs(delphi.SHIFT_DETECTION).result()
+
+        if options.focus:
+            efocus = model.getComponent(role="ebeam-focus")
+            efocus.moveAbs({"z": delphi.SEM_KNOWN_FOCUS}).result()
+            f = autofocus.AutoFocus(bsd, escan, efocus)
+            focus, fm_level = f.result()
+            print("SEM focused @ %g m" % (focus,))
 
         logging.debug("Starting Phenom SEM calibration...")
 
