@@ -1,3 +1,16 @@
+odemis (2.6.6-1ubuntu1) precise; urgency=medium
+
+  * New version: 2.6.6
+  * Main bugs fixed:
+    - Fix open-loop usage of PI C867 actuators (SECOM)
+    - Avoid turning on all the component simultaneously at startup (SPARC)
+    - Fix drift-correction ROI error when resizing it (SPARC)
+    - Fix monochromator-scan plugin (SPARC)
+    - Fix SEM scanning when one axis range < 5V and another > 5V
+    - Fix SEM comedi simulator on 32 bits systems
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 25 Jul 2017 16:22:27 +0200
+
 odemis (2.6.5-1ubuntu1) precise; urgency=medium
 
   * New version: 2.6.5
