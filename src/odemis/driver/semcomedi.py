@@ -451,9 +451,12 @@ class SEMComedi(model.HwComponent):
         """
         returns (int): maximum write period supported by the hardware in ns
         """
-        # Try the maximum fitting on an uint32 (with 2 channels)
         try:
-            return self._get_closest_period(self._ao_subdevice, 2, 2 ** 32 - 1)
+            # Try the maximum fitting on an uint32 (with 2 channels)
+            # Due to rounding issues in the comedi driver, it's safer to ask
+            # the maximum value minus the minimum period
+            minp = self._get_closest_period(self._ao_subdevice, 2, 0)
+            return self._get_closest_period(self._ao_subdevice, 2, 2 ** 32 - 1 - minp)
         except IOError:
             return 2 ** 20 * 1000  # Whatever (for test driver)
 
