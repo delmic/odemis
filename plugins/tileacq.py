@@ -33,10 +33,12 @@ from odemis.acq.stream import Stream, SEMStream, CameraStream, DataProjection
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.util import img, TimeoutError
 from odemis.util import dataio as udataio
+from odemis.util import img, TimeoutError
 import os
 import time
+
+from odemis.acq import stitching
 
 
 class TileAcqPlugin(Plugin):
@@ -64,11 +66,15 @@ class TileAcqPlugin(Plugin):
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
         }),
+        ("Stitch", {
+            "tooltip": "Use all the tiles to create a large-scale image"
+        }),
         ("expectedDuration", {
         }),
         ("totalArea", {
             "tooltip": "Approximate area covered by all the streams"
         }),
+
     ))
 
     def __init__(self, microscope, main_app):
@@ -88,6 +94,11 @@ class TileAcqPlugin(Plugin):
         self.filename = model.StringVA("a.ome.tiff")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
+        self.stitch = model.BooleanVA(True)
+
+        # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
+        # of the ROI and linearly interpolate)
+        # TODO: on SECOM allow to do fine alignment for each tile
 
         self.nx.subscribe(self._update_exp_dur)
         self.ny.subscribe(self._update_exp_dur)
@@ -123,6 +134,12 @@ class TileAcqPlugin(Plugin):
 
         # 0.5 s for move between tile
         tat = (at + 0.5) * (self.nx.value * self.ny.value)
+
+        # TODO: if Delphi +5s per tile for SEM alignment
+
+        # 1s per tile for large-scale image (very roughly!)
+        if self.stitch.value:
+            tat = 1 * (self.nx.value * self.ny.value)
 
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(tat), force_write=True)
@@ -294,18 +311,26 @@ class TileAcqPlugin(Plugin):
 
         ss = self._get_streams()
         acqt = acq.estimateTime(ss)
-        end = time.time() + (acqt + 0.5) * nb  # same formula as in _update_exp_dur()
+        if self.stitch.value:
+            stitcht = nb * 1
+        else:
+            stitcht = 0
+        end = time.time() + (acqt + 0.5) * nb + stitcht  # same formula as in _update_exp_dur()
+
         ft = model.ProgressiveFuture(end=end)
         ft.task_canceller = lambda l: True  # To allow cancelling while it's running
         ft.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(ft)
+
+        # For stitching only
+        da_streams = []  # for each stream, a list of DataArrays
 
         i = 0
         try:
             for ix, iy in self._generate_scanning_indices(trep):
                 # Update the progress bar
                 left = nb - i
-                dur = (acqt + 0.5) * left
+                dur = (acqt + 0.5) * left + stitcht
                 ft.set_progress(end=time.time() + dur)
 
                 self._move_to_tile((ix, iy), orig_pos, sfov)
@@ -331,6 +356,18 @@ class TileAcqPlugin(Plugin):
                     logging.debug("Acquisition cancelled")
                     return
 
+                if self.stitch.value:
+                    # We need to keep the data of each stream together
+                    # TODO use more clever way (ie, either based on which stream
+                    # correspond to which DA, or by using MD similarity)
+                    das = sorted(das, key=lambda d: d.metadata.get(model.MD_ACQ_DATE, 0))
+
+                    if not da_streams:
+                        da_streams = [[da] for da in das]
+                    else:
+                        for da, stream in zip(das, da_streams):
+                            stream.append(da)
+
                 # Check the FoV is correct using the data, and if not update
                 if i == 0:
                     afovs = [self._get_fov(d) for d in das]
@@ -341,6 +378,27 @@ class TileAcqPlugin(Plugin):
                         sfov = asfov
 
                 i += 1
+
+            if ft.cancelled():
+                logging.debug("Acquisition cancelled")
+                return
+
+            if self.stitch.value:
+                logging.info("Acquisition completed, now stitching...")
+                ft.set_progress(end=time.time() + stitcht)
+
+                st_data = []
+                for da_in in da_streams:
+                    logging.info("Computing big image out of %d images", len(da_in))
+                    da = stitching.collageWeaver(da_in)
+                    st_data.append(da)
+
+                exporter = dataio.find_fittest_converter(fn)
+                if exporter.CAN_SAVE_PYRAMID:
+                    exporter.export(fn, st_data, pyramid=True)
+                else:
+                    logging.warning("File format doesn't support saving image in pyramidal form")
+                    exporter.export(fn, st_data)
 
             ft.set_result(None)  # Indicate it's over
 
