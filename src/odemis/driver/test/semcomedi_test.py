@@ -31,18 +31,19 @@ import pickle
 import threading
 import time
 import unittest
+import gc
 
-"""
-If you don't have a real DAQ comedi device, you can create one that can still
-pass all the tests by doing this:
-sudo modprobe comedi comedi_num_legacy_minors=4
-sudo modprobe comedi_test
-sudo chmod a+rw /dev/comedi0
-sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 
-Be aware that comedi_test might crash the system while running those tests (much
-less likely with kernels >= 3.5).
-"""
+# If you don't have a real DAQ comedi device, you can create one that can still
+# pass all the tests by doing this:
+# sudo modprobe comedi comedi_num_legacy_minors=4
+# sudo modprobe comedi_test
+# sudo chmod a+rw /dev/comedi0
+# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+#
+# Be aware that comedi_test might crash the system while running those tests (much
+# less likely with kernels >= 3.5).
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
@@ -78,10 +79,15 @@ class TestSEMStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("Opening device %s, %s" % (name, kwargs["device"]))
             sem = semcomedi.SEMComedi("test", "sem", **kwargs)
             self.assertTrue(sem.selfTest(), "SEM self test failed.")
             sem.terminate()
+
+            # Needed to properly clean-up everything and not have issue when
+            # starting another SEMComedi
+            del sem
+            gc.collect()
 
     def test_creation(self):
         """
@@ -832,7 +838,7 @@ class TestSEMCounter(unittest.TestCase):
         """
         # it's ok (for now) that the SED returns empty array
         if image.shape == (0,):
-            print "Received empty array"
+            print("Received empty array")
         else:
             self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
