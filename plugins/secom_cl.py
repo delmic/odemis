@@ -291,7 +291,10 @@ class GridAcquirer(object):
         """
         # put a not too short dwell time to avoid acquisition to keep repeating,
         # and not too long to avoid using too much memory for acquiring one point.
-        self.escan.dwellTime.value = self.ccd.exposureTime.value / 2
+        # Note: on the Delphi, the dwell time in spot mode is longer than what
+        # is reported (fixed to ~50ms)
+        dt = self.ccd.exposureTime.value / 2
+        self.escan.dwellTime.value = self.escan.dwellTime.clip(dt)
 
         # only one point
         self.escan.scale.value = (1, 1)  # just to be sure
