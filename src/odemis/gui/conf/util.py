@@ -651,7 +651,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     if control_type == odemis.gui.CONTROL_READONLY:
         val = va.value  # only format if it's a number
         accuracy = conf.get('accuracy', 3)
-        lbl_ctrl, value_ctrl = container.add_readonly_field(label_text, val)
+        val_str = readable_str(val, unit, sig=accuracy)
+        lbl_ctrl, value_ctrl = container.add_readonly_field(label_text, val_str)
         value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy, pretty_time=True)
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
@@ -660,7 +661,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     elif control_type == odemis.gui.CONTROL_TEXT:
         val = va.value  # only format if it's a number
         accuracy = conf.get('accuracy', 3)
-        lbl_ctrl, value_ctrl = container.add_text_field(label_text, val)
+        val_str = readable_str(val, unit, sig=accuracy)
+        lbl_ctrl, value_ctrl = container.add_text_field(label_text, val_str)
         value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
