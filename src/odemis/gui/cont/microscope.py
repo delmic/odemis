@@ -674,6 +674,12 @@ class DelphiStateController(SecomStateController):
             # calibration should have already been done. Otherwise request
             # ejecting the sample holder
             try:
+                # TODO: if the opt stage/focus are not referenced => do something
+                # clever. Note: it's probably because Odemis backend just started
+                # while the SEM is loaded. With some chance the stage was referenced
+                # but Odemis doesn't know. Alternatively, it has never been
+                # referenced, which is bad. => reference and try to move back to
+                # the previous position.
                 self._load_holder_calib()
                 ccd_md = self._main_data.ccd.getMetadata()
                 good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
