@@ -1116,6 +1116,9 @@ class StreamBarController(object):
         """
         # TODO: special Stream? => need to have a "Emission" as a RO based on
         # the MD_OUT_WL of the detector.
+        # As there is only one stream per detector, we can put its VAs directly
+        # instead of them being a local copy. This also happens to work around
+        # an issue with detecting IntContinuous in local VAs.
         s = acqstream.FluoStream(
             "Confocal %s" % (detector.name,),
             detector,
@@ -1124,7 +1127,7 @@ class StreamBarController(object):
             self._main_data_model.light_filter,
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
-            detvas=get_local_vas(detector),  # TODO: just all of them
+            hwdetvas=get_local_vas(detector),
             emtvas={"power"}  # TODO: more VAs? Eg: frequency
         )
         self._ensure_power_non_null(s)
