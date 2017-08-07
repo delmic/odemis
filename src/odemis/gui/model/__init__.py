@@ -1212,17 +1212,15 @@ class StreamView(View):
 
     def getStreams(self):
         """
-        :return: [Stream or DataProjection] list of streams that are displayed in the view
+        :return: [Stream] list of streams that are displayed in the view
 
         Do not modify directly, use addStream(), and removeStream().
-        Note: use .stream_tree for getting the raw StreamTree
+        Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
         """
-        # TODO: should it just always return the streams? As addStream() and
-        # removeStream() automatically convert Stream -> projection.
-        # [s.stream if isinstance(s, DataProjection) else s for s in ss]
-        # It'd still be possible to get the projection by directly asking the
-        # stream_tree.
-        return self.stream_tree.getStreams()
+        ss = self.stream_tree.getStreams()
+        # ss is a list of either Streams or DataProjections, so need to convert
+        # back to only streams.
+        return [s.stream if isinstance(s, DataProjection) else s for s in ss]
 
     def addStream(self, stream):
         """

@@ -370,7 +370,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         #   widget is unspecifying anyway.
         # The merge ratio actually corresponds to the opacity of the last image drawn
 
-        streams = self.microscope_view.getStreams()
+        # Use the stream tree, to get the DataProjection if there is one
+        streams = self.microscope_view.stream_tree.getStreams()
         images_opt = []
         images_spc = []
         images_std = []
@@ -983,7 +984,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Find bounding box of all the content
         bbox = [None, None, None, None]  # ltrb in m
         if self.microscope_view is not None:
-            streams = self.microscope_view.getStreams()
+            streams = self.microscope_view.stream_tree.getStreams()
             for s in streams:
                 try:
                     s_bbox = s.getBoundingBox()
@@ -1211,7 +1212,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
-        streams = self.microscope_view.getStreams()
+        streams = self.microscope_view.stream_tree.getStreams()
         ims = []
 
         # order and display the images
@@ -1548,7 +1549,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         """
 
         # Normally the view.streamtree should have only one image anyway
-        streams = self.microscope_view.getStreams()
+        streams = self.microscope_view.stream_tree.getStreams()
 
         # add the images in order
         ims = []

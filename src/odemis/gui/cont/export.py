@@ -211,7 +211,7 @@ class ExportController(object):
         """
         fview = self._data_model.focussedView.value
         vp = self.get_viewport_by_view(fview)
-        streams = fview.getStreams()
+        streams = fview.stream_tree.getStreams()  # Stream tree to get the DataProjection
         if export_type == 'AR':
             exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':

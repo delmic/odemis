@@ -2185,7 +2185,7 @@ class SparcStreamsController(StreamBarController):
 
         fv = self._tab_data_model.focussedView.value
         if (isinstance(stream, fv.stream_classes) and  # view is compatible
-                not stream in fv.getStreams()):
+            stream not in fv.stream_tree):
             # Add to the view
             fv.addStream(stream)
             # Update the graphical display
