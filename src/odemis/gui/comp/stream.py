@@ -930,7 +930,9 @@ class StreamPanel(wx.Panel):
         """ Adds a value to the control panel that cannot directly be changed by the user
 
         :param label_text: (str) Label text to display
-        :param value: (None or object) Value to display next to the label
+        :param value: (None or object) Value to display next to the label.
+           If None, only the label will be displayed. The object should be
+           "stringable", so the safest is to ensure it's a string.
         :param selectable: (boolean) whether the value can be selected for copying by the user
 
         :return: (Ctrl, Ctrl or None) Label and value control
@@ -939,7 +941,7 @@ class StreamPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
 
-        if value:
+        if value is not None:
             if selectable:
                 value_ctrl = wx.TextCtrl(self._panel, value=unicode(value),
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
