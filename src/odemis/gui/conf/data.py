@@ -209,6 +209,45 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "laser-mirror":
+        OrderedDict((
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Pixel integration time",
+                "range": (1e-9, 10),
+                "scale": "log",
+                "type": "float",
+                "accuracy": 2,
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("scale", {
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Pixel resolution preset",
+                # means will make sure both dimensions are treated as one
+                "choices": util.binning_1d_from_2d,
+            }),
+            ("resolution", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": util.resolution_from_range,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            # TODO: might be useful if it's not read-only
+            ("rotation", {
+#                 "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # what we don't want to display:
+            ("translation", {
+#                 "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
     "spectrometer":
         OrderedDict((
             ("exposureTime", {
@@ -351,6 +390,25 @@ HW_SETTINGS_CONFIG = {
                 "accuracy": 3,
             },
         },
+    "photo-detector0":  # TODO: for every photo-detector*
+        OrderedDict((
+            ("gain", {
+                "accuracy": 3,
+            }),
+            ("offset", {
+                "accuracy": 3,
+            }),
+            ("protection", {
+                #"control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "pinhole":
+        OrderedDict((
+            ("d", {
+                "label": "Pinhole",
+                "tooltip": "Pinhole diameter",
+            }),
+        )),
 }
 
 # Allows to override some values based on the microscope role

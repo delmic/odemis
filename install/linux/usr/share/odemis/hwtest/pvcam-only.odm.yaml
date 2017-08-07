@@ -1,6 +1,6 @@
 Optical: {
     class: Microscope,
-    role: brightfield,
+    role: optical,
     emitters: ["Nikon Super Duper", "MultiBand Fixed Filter"],
     detectors: [Pixis], # ST133
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],

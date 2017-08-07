@@ -106,6 +106,8 @@ class MainGUIData(object):
         "bs-detector": "bsd",
         "ebic-detector": "ebic",
         "cl-detector": "cld",
+        "laser-mirror": "laser_mirror",
+        # photo-detectorN -> photo_ds[]
         "spectrometer": "spectrometer",
         "spectrometer-integrated": "spectrometer_int",
         "spectrograph": "spectrograph",
@@ -116,6 +118,7 @@ class MainGUIData(object):
         "stage": "stage",
         "scan-stage": "scan_stage",
         "focus": "focus",
+        "pinhole": "pinhole",
         "ebeam-focus": "ebeam_focus",
         "overview-focus": "overview_focus",
         "mirror": "mirror",
@@ -152,7 +155,10 @@ class MainGUIData(object):
         self.stage = None
         self.scan_stage = None  # fast stage to scan, instead of the ebeam (SPARC)
         self.focus = None  # actuator to change the camera focus
+        self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
+        self.laser_mirror = None  # the scanner on confocal SECOM
+        self.photo_ds = []  # List of all the photo detectors on confocal SECOM
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
@@ -199,7 +205,9 @@ class MainGUIData(object):
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
                 except KeyError:
-                    pass  # not interested by this component
+                    if c.role.startswith("photo-detector"):
+                        self.photo_ds.append(c)
+                    # Otherwise, just not interested by this component
 
             # Spectrograph is not directly a child, but a sub-comp of spectrometer
             # TODO: now it's also a direct child. Code can be removed once all installs have been updated
@@ -211,7 +219,7 @@ class MainGUIData(object):
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 
-            if not any((self.ccd, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer)):
+            if not any((self.ccd, self.photo_ds, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer)):
                 raise KeyError("No detector found in the microscope")
 
             if not self.light and not self.ebeam:
@@ -247,7 +255,7 @@ class MainGUIData(object):
             # magnification control, .magnification is writeable, and they typically
             # don't have a .horizontalFoV (but that shouldn't be a problem).
             if self.ebeam is not None:
-                self.ebeamControlsMag = self.ebeam.magnification.readonly
+                self.ebeamControlsMag = self.ebeam.magnification.readonly and hasVA(self.ebeam, "horizontalFoV")
                 if (not self.ebeamControlsMag and
                     hasVA(self.ebeam, "horizontalFoV") and
                     not self.ebeam.horizontalFoV.readonly):
@@ -426,6 +434,8 @@ class LiveViewGUIData(MicroscopyGUIData):
         hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
 
         if self.main.ccd:
+            self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        elif self.main.photo_ds:  # Confocal
             self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
         if self.main.ebeam:
@@ -884,6 +894,11 @@ class StreamView(View):
             self.stream_classes = stream_classes
         self._stage = stage
 
+        # TODO: need more generic API to report the FoV.
+        # Maybe something like .fov, and internally, the StreamView would do the
+        # "Right Thing", whether it is done by updating the FoV on the stream,
+        # change the horizontalFoV in the hardware, or change the scale/res/trans
+        # on the hardware.
         self.fov_hw = fov_hw
 
         self.fov = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
@@ -1202,6 +1217,11 @@ class StreamView(View):
         Do not modify directly, use addStream(), and removeStream().
         Note: use .stream_tree for getting the raw StreamTree
         """
+        # TODO: should it just always return the streams? As addStream() and
+        # removeStream() automatically convert Stream -> projection.
+        # [s.stream if isinstance(s, DataProjection) else s for s in ss]
+        # It'd still be possible to get the projection by directly asking the
+        # stream_tree.
         return self.stream_tree.getStreams()
 
     def addStream(self, stream):

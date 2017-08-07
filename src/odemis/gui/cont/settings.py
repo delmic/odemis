@@ -470,15 +470,15 @@ class SecomSettingsController(SettingsBarController):
             # Hide exposureTime as it's in local settings of the stream
             self.add_hw_component(main_data.ccd, self._optical_panel, hidden={"exposureTime"})
 
-            # TODO once Power (light) is now by each stream individually. The
-            # following code block can be disabled.
-            #
-            # if main_data.light:
-            #     self._optical_panel.panel.add_divider()
-            #
-            #     self._optical_panel.add_setting_entry("power", main_data.light.power,
-            #                                           main_data.light,
-            #                                           self._va_config["light"]["power"])
+        if main_data.laser_mirror:
+            self.add_hw_component(main_data.laser_mirror, self._optical_panel)
+
+        if main_data.pinhole:
+            for a in ("d",):
+                if a not in main_data.pinhole.axes:
+                    continue
+                conf = self._va_config["pinhole"].get(a)
+                self._optical_panel.add_axis(a, main_data.pinhole, conf)
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)
@@ -687,8 +687,6 @@ class SparcAlignSettingsController(SettingsBarController):
     def __init__(self, tab_panel, tab_data):
         super(SparcAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
-        self.hw_settings_config = get_hw_settings_config(main_data.role)
-
         self._ar_setting_cont = AngularSettingsController(tab_panel.fp_ma_settings_ar,
                                                           "No angle-resolved camera found")
         self._spect_setting_cont = SpectrumSettingsController(tab_panel.fp_ma_settings_spectrum,
@@ -709,5 +707,5 @@ class SparcAlignSettingsController(SettingsBarController):
                     logging.debug("Skipping non existent axis %s on component %s",
                                   a, comp.name)
                     continue
-                conf = self.hw_settings_config[comp.role].get(a)
+                conf = self._va_config[comp.role].get(a)
                 self._spect_setting_cont.add_axis(a, comp, conf)

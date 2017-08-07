@@ -1108,6 +1108,32 @@ class StreamBarController(object):
 
         return self._add_stream(s, **kwargs)
 
+    def addConfocal(self, detector, **kwargs):
+        """
+        Creates a new confocal stream and panel in the stream bar
+        detector (Detector): the photo-detector to use
+        returns (StreamController): the stream panel created
+        """
+        # TODO: special Stream? => need to have a "Emission" as a RO based on
+        # the MD_OUT_WL of the detector.
+        # As there is only one stream per detector, we can put its VAs directly
+        # instead of them being a local copy. This also happens to work around
+        # an issue with detecting IntContinuous in local VAs.
+        s = acqstream.FluoStream(
+            "Confocal %s" % (detector.name,),
+            detector,
+            detector.data,
+            self._main_data_model.light,
+            self._main_data_model.light_filter,
+            focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm,
+            hwdetvas=get_local_vas(detector),
+            emtvas={"power"}  # TODO: more VAs? Eg: frequency
+        )
+        self._ensure_power_non_null(s)
+
+        return self._add_stream(s, **kwargs)
+
     def addSEMSED(self, **kwargs):
         """ Creates a new SED stream and panel in the stream bar
         return (StreamController) The controller created for the SED stream
@@ -1603,6 +1629,21 @@ class SecomStreamsController(StreamBarController):
 
         if self._main_data_model.backlight and self._main_data_model.ccd:
             self.add_action("Dark-field", self.addDarkfield, brightfield_capable)
+
+        def confocal_capable(detector):
+            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                   guimodel.CHAMBER_UNKNOWN}
+            # Only allow one stream with the detector at a time
+            present = any(s.detector is detector for s in self._tab_data_model.streams.value)
+            view = self._tab_data_model.focussedView.value
+            compatible = view.is_compatible(acqstream.FluoStream)
+            return enabled and compatible and not present
+
+        if self._main_data_model.laser_mirror:
+            for pd in self._main_data_model.photo_ds:
+                act = functools.partial(self.addConfocal, detector=pd)
+                cap = functools.partial(confocal_capable, detector=pd)
+                self.add_action("Confocal %s" % (pd.name,), act, cap)
 
         def sem_capable():
             """ Check if focussed view is compatible with a SEM stream """

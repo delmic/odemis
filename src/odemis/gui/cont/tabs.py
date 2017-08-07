@@ -598,9 +598,13 @@ class SecomStreamsTab(Tab):
             has_opt = any(isinstance(s, acqstream.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
-                self._streambar_controller.addFluo(add_to_view=True, play=False)
-                # don't forbid to remove it, as for the user it can be easier to
-                # remove than change all the values
+                # We don't forbid to remove it, as for the user it can be easier
+                # to remove than change all the values
+                if self.main_data.ccd:
+                    self._streambar_controller.addFluo(add_to_view=True, play=False)
+                elif self.main_data.photo_ds:
+                    pd0 = min(self.main_data.photo_ds, key=lambda d: d.name)
+                    self._streambar_controller.addConfocal(detector=pd0, add_to_view=True, play=False)
 
         if hasattr(self.tab_data_model, 'emState'):
             has_sem = any(isinstance(s, acqstream.EMStream)
@@ -1508,6 +1512,10 @@ class AnalysisTab(Tab):
         if filename is None:
             return
 
+        # TODO: currently, when adding streams, they appear added before the old
+        # streams are removed. That seems to incur extra time => Make sure every
+        # stream entry is deleted fast.
+
         new_visible_views = list(self._def_views)  # Use a copy
 
         # Create a new file info model object
@@ -1651,6 +1659,8 @@ class AnalysisTab(Tab):
                 self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
         self.tab_data_model.visible_views.value = new_visible_views
+        # TODO: if all the views are either empty or contain the same streams,
+        # display in full screen by default (with the first view which has streams)
 
         gc.collect()
 
