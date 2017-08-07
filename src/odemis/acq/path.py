@@ -241,6 +241,7 @@ class OpticalPathManager(object):
         """
         self.microscope = microscope
         self._graph = affectsGraph(self.microscope)
+        self._chamber_view_own_focus = False
 
         # Use subset for modes guessed
         if microscope.role == "sparc2":
@@ -305,7 +306,6 @@ class OpticalPathManager(object):
             self._enabled_fan_temp = None
 
         # Handle different focus for chamber-view (in SPARCv2)
-        self._chamber_view_own_focus = False
         if "chamber-view" in self._modes:
             self._focus_in_chamber_view = None
             self._focus_out_chamber_view = None
@@ -364,7 +364,10 @@ class OpticalPathManager(object):
                 except IOError as e:
                     logging.info("Actuator move failed giving the error %s", e)
 
-        self._executor.shutdown(wait=False)
+        try:
+            self._executor.shutdown(wait=False)
+        except AttributeError:
+            pass  # Not created
 
     def _getComponent(self, role):
         """
