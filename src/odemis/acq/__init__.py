@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from collections import OrderedDict
 import collections
 from concurrent import futures
 from concurrent.futures import CancelledError
@@ -201,7 +202,9 @@ class AcquisitionTask(object):
         # when setting its state to running.
         self._future.set_progress(end=time.time() + expected_time)
 
-        raw_images = {} # stream -> list of raw images
+        # Keep order so that the DataArrays are returned in the order they were
+        # acquired. Not absolutely needed, but nice for the user in some cases.
+        raw_images = OrderedDict()  # stream -> list of raw images
         try:
             for s in self._streams:
 

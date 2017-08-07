@@ -29,6 +29,7 @@ import logging
 import numpy
 from odemis import dataio, model
 import odemis
+from odemis.acq import stitching
 from odemis.util import spectrum
 import os
 import sys
@@ -176,6 +177,33 @@ def minus(data_a, data_b):
     return ret
 
 
+def weave(infns):
+
+    # Connect similar streams of each file together
+    # TODO: use open_data/DataArrayShadow when converter support it
+    da_streams = []  # for each stream, a list of DataArrays
+    for fn in infns:
+        converter = dataio.find_fittest_converter(fn)
+        das = converter.read_data(fn)
+        logging.debug("Got %d streams from file %s", len(das), fn)
+
+        # TODO use more clever way (aka MD_DESCRIPTION, MD_OUT_WL, MD_IN_WL...) to detect similar streams
+        das = sorted(das, key=lambda d: d.metadata.get(model.MD_ACQ_DATE, 0))
+        if not da_streams:
+            da_streams = [[da] for da in das]
+        else:
+            for da, stream in zip(das, da_streams):
+                stream.append(da)
+
+    big_das = []
+    for da_in in da_streams:
+        logging.info("Computing big image out of %d images", len(da_in))
+        da = stitching.collageWeaver(da_in)
+        big_das.append(da)
+
+    return big_das
+
+
 def main(args):
     """
     Handles the command line arguments
@@ -189,6 +217,8 @@ def main(args):
                         help="show program's version number and exit")
     parser.add_argument("--input", "-i", dest="input",
                         help="name of the input file")
+    parser.add_argument("--tiles", "-t", dest="tiles", nargs="+",
+                        help="list of files acquired in tiles to re-assemble")
     parser.add_argument("--effcomp", dest="effcomp",
                         help="name of a spectrum efficiency compensation table (in CSV format)")
     fmts = dataio.get_available_formats(os.O_WRONLY)
@@ -219,20 +249,26 @@ def main(args):
         return 0
 
     infn = options.input
+    tifns = options.tiles
     ecfn = options.effcomp
     outfn = options.output
 
-    if not (infn or ecfn) or not outfn:
-        raise ValueError("--input/--effcomp and --output arguments must be provided.")
+    if not (infn or tifns or ecfn) or not outfn:
+        raise ValueError("--input/--tiles/--effcomp and --output arguments must be provided.")
 
-    if infn and ecfn:
-        raise ValueError("--input and --effcomp should not be provided simultaneously.")
+    if sum(not not o for o in (infn, tifns, ecfn)) != 1:
+        raise ValueError("--input, --tiles, --effcomp cannot be provided simultaneously.")
 
     if infn:
         data, thumbs = open_acq(infn)
         logging.info("File contains %d %s (and %d %s)",
                      len(data), ngettext("image", "images", len(data)),
                      len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
+    elif tifns:
+        data = weave(tifns)
+        thumbs = []
+        logging.info("File contains %d %s",
+                     len(data), ngettext("stream", "streams", len(data)))
     elif ecfn:
         data = open_ec(ecfn)
         thumbs = []
@@ -249,6 +285,7 @@ def main(args):
     save_acq(outfn, data, thumbs, options.pyramid)
 
     logging.info("Successfully generated file %s", outfn)
+
 
 if __name__ == '__main__':
     try:
