@@ -341,6 +341,8 @@ class GridAcquirer(object):
         """
         self._sem_data.append(data)
         self._sem_data_received.set()
+        if data.shape != (1,1):
+            logging.warning("SEM data shape is %s while expected a spot", data.shape)
 
     def stop_acquisition(self):
         self._must_stop = True
@@ -362,11 +364,11 @@ class GridAcquirer(object):
 
     def acquire_ar(self, x, y, ccd_roi_idx):
         """
-        Acquire N images from the CCD while having the e-beam at a spot position
+        Acquire an image from the CCD while having the e-beam at a spot position
         x, y (floats): spot position in the ebeam coordinates
         ccd_roi_idx: slice to crop the CCD image
-        return (model.DataArray of shape (N,Y,X): the data, with first dimension the
-         images acquired in time
+        return (model.DataArray of shape (Y,X), model.DataArray of shape (1,1)):
+          the CCD image and the SEM data (at the spot)
         """
         self.move_spot(x, y)
 
