@@ -407,17 +407,8 @@ class MicroscopeViewport(ViewPort):
                     self.bottom_legend.set_stream_type(wx.LEFT, EMStream)
                     self.bottom_legend.set_stream_type(wx.RIGHT, SpectrumStream)
                 else:
-                    sc = self._microscope_view.stream_tree[0]
-                    # if sc is an instance of DataProjection, get the inner stream
-                    if isinstance(sc, DataProjection):
-                        sc = sc.stream
-                    self.bottom_legend.set_stream_type(wx.LEFT, sc.__class__)
-
-                    sc = self._microscope_view.stream_tree[1]
-                    # if sc is an instance of DataProjection, get the inner stream
-                    if isinstance(sc, DataProjection):
-                        sc = sc.stream
-                    self.bottom_legend.set_stream_type(wx.RIGHT, sc.__class__)
+                    self.bottom_legend.set_stream_type(wx.LEFT, streams[0].__class__)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, streams[1].__class__)
 
                 self.ShowMergeSlider(True)
         else:
