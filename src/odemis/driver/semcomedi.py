@@ -3694,7 +3694,7 @@ class SEMDataFlow(model.DataFlow):
         """
         Block until the Event on which the dataflow is synchronised has been
           received. If the DataFlow is not synchronised on any event, this
-          method immediatly returns
+          method immediately returns
         """
         if self._sync_event:
             self._evtq.get()
