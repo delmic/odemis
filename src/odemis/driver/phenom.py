@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import Queue
 from abc import abstractmethod, ABCMeta
 import base64
 import collections
@@ -31,7 +32,7 @@ import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, oneway
 import re
 import suds
 from suds.client import Client
@@ -723,6 +724,11 @@ class Detector(model.Detector):
                         timeout=SOCKET_TIMEOUT)
         self._acq_device = acq_client.service
 
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
+        self.updateMetadata({model.MD_DET_TYPE: model.MD_DT_NORMAL})
+
     @isasync
     def applyAutoContrast(self):
         # Create ProgressiveFuture and update its state to RUNNING
@@ -1084,6 +1090,7 @@ class Detector(model.Detector):
                 with self._acquisition_init_lock:
                     if self._acquisition_must_stop.is_set():
                         break
+                self.data._waitSync()
                 callback(self._acquire_image(is_first))
                 is_first = False
         except CancelledError:
@@ -1122,6 +1129,9 @@ class SEMDataFlow(model.DataFlow):
         model.DataFlow.__init__(self)
         self.component = weakref.ref(detector)
 
+        self._sync_event = None  # event to be synchronised on, or None
+        self._evtq = None  # a Queue to store received events (= float, time of the event)
+
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
         try:
@@ -1137,6 +1147,51 @@ class SEMDataFlow(model.DataFlow):
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
+
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the scanner will start a new acquisition/scan.
+          The DataFlow can be synchronized only with one Event at a time.
+          However each DataFlow can be synchronized, separately. The scan will
+          only start once each active DataFlow has received an event.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        """
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._sync_event.subscribe(self)
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._evtq.empty():
+            logging.warning("Received synchronization event but already %d queued",
+                            self._evtq.qsize())
+
+        self._evtq.put(time.time())
+
+    def _waitSync(self):
+        """
+        Block until the Event on which the dataflow is synchronised has been
+          received. If the DataFlow is not synchronised on any event, this
+          method immediately returns
+        """
+        if self._sync_event:
+            self._evtq.get()
 
 
 class Stage(model.Actuator):
