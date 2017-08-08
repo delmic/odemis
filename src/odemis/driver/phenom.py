@@ -964,19 +964,36 @@ class Detector(model.Detector):
                 shift = (trans[0] + spot_shift[0] + res_hfw_shift[0],
                          trans[1] + spot_shift[1] + res_hfw_shift[1])
                 scan_params, need_set = self._get_viewing_mode(SPOT_RES, 1, shift, 0)
+                scan_params.HDR = (bpp == 16)
+                scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
+                # TODO: allow the user to select the dwell time?
 
                 if self._acquisition_must_stop.is_set():
                     raise CancelledError()
                 if need_set:
                     self._acq_device.SetSEMViewingMode(scan_params, 'SEM-SCAN-MODE-IMAGING')
-                # HACK: Ideally we'd sleep the dwell time, but the dwell time
-                # range is very small which would cause lots of (fake) data sent
-                # to the client. => Hard code sleep time to something useful
-                if self._acquisition_must_stop.wait(0.1):
+
+                # Get the actual data (as average of the whole "scan")
+                img_str = self._acq_device.SEMGetLiveImageCopy(0)
+
+                if self._acquisition_must_stop.is_set():
                     raise CancelledError()
-                # TODO: set MD_POS to the exact spot position
-                logging.debug("Returning fake SEM image for spot")
-                return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
+
+                dtype = {8: numpy.uint8, 16: numpy.uint16}[img_str.image.descriptor.bits]
+                sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
+                                           dtype=dtype)
+                if sem_img.size != (256 * 256):
+                    logging.warning("Got data of length %d instead of 256*256", sem_img.size)
+                sem_img = numpy.array(numpy.mean(sem_img).astype(sem_img.dtype))
+                sem_img.shape = (1, 1)
+
+                metadata[model.MD_EBEAM_VOLTAGE] = abs(img_str.aAcqState.highVoltage)
+                metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
+                metadata[model.MD_DWELL_TIME] = (img_str.aAcqState.dwellTime * img_str.aAcqState.integrations * sem_img.size)
+                metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
+
+                logging.debug("Returning spot SEM image with data %d", sem_img[0, 0])
+                return model.DataArray(sem_img, metadata)
             elif res[0] <= 128 or res[1] <= 128:
                 # Scan spot by spot (as fast as possible)
                 logging.debug("Grid scanning of %s...", res)
