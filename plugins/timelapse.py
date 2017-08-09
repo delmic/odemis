@@ -39,6 +39,7 @@ from odemis import model, dataio, acq
 from odemis.acq import stream
 from odemis.acq.stream._base import UNDEFINED_ROI
 import odemis.gui
+from odemis.util import dataio as udataio
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import os
@@ -86,7 +87,7 @@ class TimelapsePlugin(Plugin):
         self.numberOfAcquisitions.subscribe(self._update_exp_dur)
 
         self._dlg = None
-        self.addMenu("Acquisition/Timelapse...", self.start)
+        self.addMenu("Acquisition/Timelapse...\tCtrl+T", self.start)
 
     def _get_new_filename(self):
         conf = get_acqui_conf()
@@ -117,7 +118,7 @@ class TimelapsePlugin(Plugin):
         ss = self._get_acq_streams()
         sacqt = acq.estimateTime(ss)
 
-        return max(sacqt, period)
+        return min(max(sacqt, period), self.period.range[1])
 
     def _get_streams(self):
         """
@@ -216,6 +217,10 @@ class TimelapsePlugin(Plugin):
 
         # TODO: disable "acquire" button if no stream selected
 
+        # TODO: don't even try to display streams which have no spactial projection
+
+        # TODO: also display the repetition and axis settings for the SPARC streams.
+
         ans = dlg.ShowModal()
 
         if ans == 0:
@@ -230,6 +235,11 @@ class TimelapsePlugin(Plugin):
         p = self.period.value
         ss = self._get_acq_streams()
 
+        fn = self.filename.value
+        exporter = dataio.find_fittest_converter(fn)
+        bs, ext = udataio.splitext(fn)
+        fn_pat = bs + "-%.5d" + ext
+
         sacqt = acq.estimateTime(ss)
         intp = max(0, p - sacqt)
         if p < sacqt:
@@ -238,23 +248,23 @@ class TimelapsePlugin(Plugin):
                 sacqt, p
             )
 
-        exporter = dataio.find_fittest_converter(self.filename.value)
+        # TODO: if drift correction, use it over all the time
 
         f = model.ProgressiveFuture()
         f.task_canceller = lambda l: True  # To allow cancelling while it's running
         f.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(f)
 
-        das = []
         for i in range(nb):
             left = nb - i
             dur = sacqt * left + intp * (left - 1)
             startt = time.time()
             f.set_progress(end=startt + dur)
-            d, e = acq.acquire(ss).result()
-            das.extend(d)
+            das, e = acq.acquire(ss).result()
             if f.cancelled():
                 return
+
+            exporter.export(fn_pat % (i,), das)
 
             # Wait the period requested, excepted the last time
             if left > 1:
@@ -264,7 +274,6 @@ class TimelapsePlugin(Plugin):
                 else:
                     logging.info("Immediately starting next acquisition, %g s late", -sleept)
 
-        exporter.export(self.filename.value, das)
         f.set_result(None)  # Indicate it's over
 
         # self.showAcquisition(self.filename.value)
