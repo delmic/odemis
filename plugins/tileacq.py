@@ -29,7 +29,7 @@ from collections import OrderedDict
 import logging
 import math
 from odemis import model, acq, dataio, util
-from odemis.acq.stream import Stream, SEMStream, CameraStream, DataProjection
+from odemis.acq.stream import Stream, SEMStream, CameraStream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -86,7 +86,7 @@ class TileAcqPlugin(Plugin):
             # Check if microscope supports tiling (= has a sample stage)
             main_data = self.main_app.main_data
             if main_data.stage:
-                self.addMenu("Acquisition/Tile...", self.show_dlg)
+                self.addMenu("Acquisition/Tile...\tCtrl+G", self.show_dlg)
 
         self.nx = model.IntContinuous(5, (1, 1000))
         self.ny = model.IntContinuous(5, (1, 1000))
@@ -117,7 +117,7 @@ class TileAcqPlugin(Plugin):
             return []
         ss = self._dlg.microscope_view.getStreams()
         logging.debug("View has %d streams", len(ss))
-        return [s.stream if isinstance(s, DataProjection) else s for s in ss]
+        return ss
 
     def _get_new_filename(self):
         conf = get_acqui_conf()

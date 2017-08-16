@@ -1414,24 +1414,22 @@ class StreamBar(wx.Panel):
         """
         Removes a stream panel
         Deletion of the actual stream must be done separately.
+        Must be called in the main GUI thread
         """
         self.stream_panels.remove(spanel)
-        # CallAfter is used to make sure all GUI updates occur in the main
-        # thread. (Note: this was causing issues with the garbage collection of Streams, because
-        # StreamPanel have a direct reference to Streams, which should be moved to the controller)
-        #
-        # Interesting side note: with CallAfter every time the same image was loaded, Odemis would
-        # leak 11 MB, when Destroyed is called directly, it would leak 9 MB each time
-        wx.CallAfter(spanel.Destroy)
+        spanel.Destroy()
 
     def clear(self):
-        """ Remove all stream panels """
+        """
+        Remove all stream panels
+        Must be called in the main GUI thread
+        """
         for p in list(self.stream_panels):
             # Only refit the (empty) bar after all streams are gone
             p.Unbind(wx.EVT_WINDOW_DESTROY, source=p, handler=self.on_streamp_destroy)
             self.remove_stream_panel(p)
 
-        wx.CallAfter(self.fit_streams)
+        self.fit_streams()
 
     def _set_warning(self):
         """ Display a warning text when no streams are present, or show it

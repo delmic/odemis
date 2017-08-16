@@ -199,7 +199,7 @@ class TestSEM(unittest.TestCase):
 
     def compute_expected_duration(self):
         dwell = self.scanner.dwellTime.value
-        settle =  self.scanner.settleTime
+        settle = self.scanner.settleTime
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 

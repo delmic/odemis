@@ -1014,7 +1014,7 @@ def _dtype2OMEtype(dtype):
     elif dtype.kind == "b":
         return "bit"
     else:
-        raise NotImplementedError("data type %s is not support by OME" % dtype)
+        raise NotImplementedError("Data type %s is not supported by OME" % dtype)
 
 
 def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):

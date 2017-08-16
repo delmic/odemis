@@ -235,10 +235,6 @@ class AcquisitionTask(object):
                 # update the time left
                 expected_time -= self._streamTimes[s]
                 self._future.set_progress(end=time.time() + expected_time)
-
-            # Update metadata using OverlayStream (if there was one)
-            self._adjust_metadata(raw_images)
-
         except CancelledError:
             raise
         except Exception as e:
@@ -256,6 +252,9 @@ class AcquisitionTask(object):
             self._streams_left.clear()
             self._current_stream = None
             self._current_future = None
+
+        # Update metadata using OverlayStream (if there was one)
+        self._adjust_metadata(raw_images)
 
         # merge all the raw data (= list of DataArrays) into one long list
         ret = sum(raw_images.values(), [])

@@ -205,7 +205,7 @@ class MainGUIData(object):
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
                 except KeyError:
-                    if c.role.startswith("photo-detector"):
+                    if c.role and c.role.startswith("photo-detector"):
                         self.photo_ds.append(c)
                     # Otherwise, just not interested by this component
 
