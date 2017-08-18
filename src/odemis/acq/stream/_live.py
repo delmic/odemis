@@ -408,12 +408,6 @@ class AlignedSEMStream(SEMStream):
         self.calibrated = model.BooleanVA(False)  # whether the calibration has been already done
         self._last_pos = stage.position.value.copy()
         self._last_pos.update(focus.position.value)  # last known position of the stage
-        self._shift = (0, 0)  # (float, float): shift to apply in meters
-        self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
-        # In case initialization takes place in unload position the
-        # calibration values are not obtained yet. Thus we avoid to initialize
-        # cur_trans before spot alignment takes place.
-        self._cur_trans = None
         stage.position.subscribe(self._onMove)
         focus.position.subscribe(self._onMove)
         self._executor = ThreadPoolExecutor(max_workers=1)
@@ -431,7 +425,6 @@ class AlignedSEMStream(SEMStream):
             return
         self._last_pos.update(pos)
 
-        # if self.is_active.value:
         self.calibrated.value = False
 
         # just reset status
@@ -450,14 +443,6 @@ class AlignedSEMStream(SEMStream):
         # always in this order
         self._emitter.resolution.value = res
         self._emitter.shift.value = shift
-
-    def _compensateShift(self):
-        """
-        Compensate the SEM shift, using either beam shift or metadata update
-        """
-        # update the correction metadata
-        logging.debug("Update metadata for SEM image shift")
-        self._detector.updateMetadata({MD_POS_COR: self._shift})
 
     def _prepare(self):
         """
@@ -498,17 +483,11 @@ class AlignedSEMStream(SEMStream):
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
                 self._beamshift = shift
-                # Also update the last beam shift in order to be used for stage
-                # offset correction in the next stage moves
-                self._last_shift = (0.75 * self._last_shift[0] - 0.25 * shift[0],
-                                    0.75 * self._last_shift[1] - 0.25 * shift[1])
                 cur_trans = self._stage.getMetadata().get(model.MD_POS_COR, (0, 0))
-                self._cur_trans = (cur_trans[0] - self._last_shift[0],
-                                   cur_trans[1] - self._last_shift[1])
-                self._stage.updateMetadata({
-                    model.MD_POS_COR: self._cur_trans
-                })
-                logging.debug("Compensated stage translation %s m,m", self._cur_trans)
+                cur_trans = (cur_trans[0] + 0.25 * shift[0],
+                             cur_trans[1] + 0.25 * shift[1])
+                self._stage.updateMetadata({model.MD_POS_COR: cur_trans})
+
                 if self._shiftebeam == MTD_EBEAM_SHIFT:
                     # First align using shift
                     self._applyROI()
@@ -536,8 +515,8 @@ class AlignedSEMStream(SEMStream):
                 self._getEmitterVA("dwellTime").subscribe(self._onDwellTime)
                 self._getEmitterVA("resolution").subscribe(self._onResolution)
 
-            self._shift = shift
-            self._compensateShift()
+            logging.debug("Updating metadata for SEM image shift by %s m,m", shift)
+            self._detector.updateMetadata({MD_POS_COR: shift})
 
             # Update the optical path if needed
             self._prepare_opm().result()
