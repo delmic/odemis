@@ -145,8 +145,8 @@ def decompose_si_prefix(str_val, unit=None):
 
     Args:
         str_val: (string) A string representation of a value with a si prefixed unit
-        unit: (string or None) If the unit is provided and a different unit is detected, a
-            ValueError will be raised
+        unit: (string or None) If the unit is provided and a different unit is detected
+          it will return the str_val as-is.
 
     Returns:
         (string) str_val, (string) si prefix, (string) unit
@@ -156,20 +156,22 @@ def decompose_si_prefix(str_val, unit=None):
 
     """
 
-    if unit and unit.isalpha():
-        match = re.match("([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
+    if unit:
+        match = re.match(r"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
                          str_val.strip())
-    else:
-        match = re.match("([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
+    else:  # Look for any unit
+        match = re.match(r"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
                          str_val.strip())
 
     if match:
-        val, prefix, unit = match.group(1, 2, 3)
-        # If we found a prefix but no unit, the prefix is the unit
-        if prefix is not None and unit is None:
-            prefix, unit = unit, prefix
-        prefix = u"µ" if prefix == "u" else prefix
-        return val, prefix, unit
+        val, rprefix, runit = match.group(1, 2, 3)
+        # If we found a "prefix" but no unit (eg, "1 m"), assume it's the unit
+        if (rprefix is not None and runit is None and
+            (not unit or rprefix == unit)):
+            rprefix, runit = runit, rprefix
+        if rprefix == "u":
+            rprefix = u"µ"
+        return val, rprefix, runit
     else:
         return str_val, None, None
 

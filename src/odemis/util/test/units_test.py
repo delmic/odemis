@@ -162,6 +162,21 @@ class TestUnits(unittest.TestCase):
         for str_in, tuple_out in values:
             self.assertEqual(units.decompose_si_prefix(str_in), tuple_out)
 
+    def test_decompose_si_prefix_explicit_unit(self):
+
+        values = [
+            (("-12 nm", "m"), ("-12", "n", "m")),
+            (("-12 nm", "s"), ("-12 nm", None, None)),
+            (("12 u", "s"), ("12", u"µ", None)),
+            (("12 m", "s"), ("12", "m", None)),
+            (("0.12 rad", "s"), ("0.12 rad", None, None)),
+            (("0.12 rad", "rad"), ("0.12", None, "rad")),
+        ]
+
+        for args_in, exp_out in values:
+            self.assertEqual(units.decompose_si_prefix(*args_in), exp_out)
+
+
 
 if __name__ == "__main__":
     unittest.main()
