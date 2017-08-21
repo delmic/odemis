@@ -608,6 +608,31 @@ def label_to_human(camel_label):
     return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
 
 
+def str_to_value(text, va):
+    """
+    Attempt to fit the given text as a value for the given VA
+    text (str): "Free-form" entry from a user
+    va (Vigilant Attribute): the VA that would receive the value
+    return (value): a value that might fit the VA
+    raise ValueError: if cannot convert
+    """
+    logging.debug("Parsing free text value %s", text)
+    va_val = va.value
+    # Try to find a good corresponding value inside the string
+    str_val, str_si, _ = decompose_si_prefix(text, unit=va.unit)
+    new_val = reproduce_typed_value(va_val, str_val)
+
+    # In case of list, be lenient by dropping the extra values if it's too many
+    if isinstance(new_val, collections.Iterable):
+        new_val = new_val[:len(va_val)]
+
+    # If an SI prefix was found, scale the new value
+    # TODO: support iterables too
+    if isinstance(new_val, numbers.Real):
+        new_val = si_scale_val(new_val, str_si)
+
+    return new_val
+
 def create_setting_entry(container, name, va, hw_comp, conf=None, change_callback=None):
     """ Determine what type on control to use for a setting and have the container create it
 
@@ -664,9 +689,26 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         val_str = readable_str(val, unit, sig=accuracy)
         lbl_ctrl, value_ctrl = container.add_text_field(label_text, val_str)
         value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
+
+        # function to retrieve the actual value
+        def text_get(ctrl=value_ctrl, va=va):
+            ctrl_value = ctrl.GetValue()
+            va_val = va.value
+            try:
+                new_val = str_to_value(ctrl_value, va)
+            except (ValueError, TypeError):
+                logging.warning("Value %s couldn't be understood", ctrl_value, exc_info=True)
+                new_val = va_val  # To force going back to last value
+
+            # if it ends up being the same value as before the VA will
+            # not update, so force reformatting it
+            if va_val == new_val:
+                value_formatter(va_val)
+            return new_val
+
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                     va_2_ctrl=value_formatter,
+                                     va_2_ctrl=value_formatter, ctrl_2_va=text_get,
                                      events=wx.EVT_TEXT_ENTER)
 
     elif control_type in (odemis.gui.CONTROL_SAVE_FILE, odemis.gui.CONTROL_OPEN_FILE):
@@ -859,22 +901,12 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                               ctrl.GetClientData(i))
                 return ctrl.GetClientData(i)
             else:
-                logging.debug("Parsing combobox free text value %s", ctrl_value)
                 va_val = va.value
-                # Try to find a good corresponding value inside the string
-                str_val, str_si, _ = decompose_si_prefix(ctrl_value, unit=u)
                 try:
-                    new_val = reproduce_typed_value(va_val, str_val)
+                    new_val = str_to_value(ctrl_value, va)
                 except (ValueError, TypeError):
-                    logging.warning("Value %s couldn't be understood", str_val, exc_info=True)
+                    logging.warning("Value %s couldn't be understood", ctrl_value, exc_info=True)
                     new_val = va_val  # To force going back to last value
-
-                # In case of list, be lenient by dropping the extra values if it's too many
-                if isinstance(new_val, collections.Iterable):
-                    new_val = new_val[:len(va_val)]
-
-                # If an SI prefix was found, scale the new value
-                new_val = si_scale_val(new_val, str_si)
 
                 # if it ends up being the same value as before the combobox will
                 # not update, so force it now
