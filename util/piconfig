@@ -115,17 +115,30 @@ def write_param(cont, f):
         else:
             return e
 
-    # Write each parameters (in order, to be clearer in case of error)
-    for a, p in sorted(params.keys(), key=nd_first_order):
-        v = params[a, p]
-        try:
-            cont.SetParameter(a, p, v)
-        except ValueError:
-            logging.error("Failed to write axis %d parameter 0x%x to %s", a, p, v)
-            # still continue
-        except Exception:
-            logging.exception("Failed to write axis %d parameter 0x%x", a, p)
-            raise
+    # Some parameters only work after other parameters are written, so sometimes
+    # you need to try a couple of times
+    retry_params = {}
+    while True:
+        # Write each parameters (in order, to be clearer in case of error)
+        for a, p in sorted(params.keys(), key=nd_first_order):
+            v = params[a, p]
+            try:
+                cont.SetParameter(a, p, v)
+            except ValueError:
+                logging.warning("Failed to write axis %d parameter 0x%x to %s, will retry", a, p, v)
+                retry_params[a, p] = v
+                # still continue
+            except Exception:
+                logging.exception("Failed to write axis %d parameter 0x%x", a, p)
+                raise
+
+        if not retry_params:
+            break
+        elif len(params) == len(retry_params):  # No improvement
+            logging.error("Failed to write %d parameters", len(retry_params))
+            break
+        params = retry_params
+        retry_params = {}
 
     # save to flash
     cont._sendOrderCommand("WPA 100\n")
