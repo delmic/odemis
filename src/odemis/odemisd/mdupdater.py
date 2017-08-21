@@ -138,7 +138,7 @@ class MetadataUpdater(model.Component):
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
 
     def observeLens(self, lens, comp):
-        if comp.role not in ("ccd", "sp-ccd"):
+        if comp.role not in ("ccd", "sp-ccd", "laser-mirror"):
             logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
             return
 
@@ -149,12 +149,20 @@ class MetadataUpdater(model.Component):
         md = {model.MD_LENS_NAME: lens.hwVersion}
         comp.updateMetadata(md)
 
+        if model.hasVA(comp, "binning"):
+            binva = comp.binning
+        elif model.hasVA(comp, "scale"):
+            binva = comp.scale
+        else:
+            logging.debug("No binning")
+            binva = None
+
         # we need to keep the information on the detector to update
-        def updatePixelDensity(unused, lens=lens, comp=comp):
+        def updatePixelDensity(unused, lens=lens, comp=comp, binva=binva):
             # the formula is very simple: actual MpP = CCD MpP * binning / Mag
-            try:
-                binning = comp.binning.value
-            except AttributeError:
+            if binva is not None:
+                binning = binva.value
+            else:
                 binning = 1, 1
             mag = lens.magnification.value
             mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag)
@@ -164,11 +172,11 @@ class MetadataUpdater(model.Component):
 
         lens.magnification.subscribe(updatePixelDensity, init=True)
         self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
-        try:
-            comp.binning.subscribe(updatePixelDensity)
-            self._onTerminate.append((comp.binning.unsubscribe, (updatePixelDensity,)))
-        except AttributeError:
-            pass
+        # TODO: instead of updating PIXEL_SIZE everytime the CCD changes binning,
+        # just let the CCD component compute the value based on its sensor
+        # pixel size + MAG?
+        binva.subscribe(updatePixelDensity)
+        self._onTerminate.append((binva.unsubscribe, (updatePixelDensity,)))
 
         # update pole position, if available
         if model.hasVA(lens, "polePosition"):

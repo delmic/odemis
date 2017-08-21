@@ -89,7 +89,7 @@ Light: {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 100.0}, # ratio
-    affects: ["PMT1", "PMT2", "PMT3"]
+    affects: ["Galvano Mirror"]
 }
 
 "Optical Emission Filter": {
@@ -103,7 +103,7 @@ Light: {
     class: simulated.Stage,
     role: stage,
     init: {axes: ["x", "y"]},
-    affects: [Camera],
+    affects: ["Galvano Mirror"],
     properties: {
         speed: {'x':0.1, 'y':0.1} #m/s
     }
@@ -113,7 +113,7 @@ Light: {
 "Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
-    affects: [Camera],
+    affects: ["Galvano Mirror"],
     children: {"x": "Optical Stage", "y": "Optical Stage"},
     init: {
         axes_map: {"x": "x", "y": "y"},
@@ -126,7 +126,7 @@ Light: {
 "Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
-    affects: [Camera],
+    affects: ["Galvano Mirror"],
     children: {"z": "Optical Stage"},
     init: {
         axes_map: {"z": "z"}
