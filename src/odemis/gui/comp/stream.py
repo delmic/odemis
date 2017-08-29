@@ -1300,8 +1300,6 @@ class StreamBar(wx.Panel):
 
         self.SetSize((-1, h))
 
-        # The panel size is cached in the _PanelSize attribute.
-        # Make sure it's updated by calling ResizePanel
         p = self.Parent
         while not isinstance(p, FoldPanelItem):
             p = p.Parent
@@ -1342,19 +1340,20 @@ class StreamBar(wx.Panel):
         """
         Called when user request to remove a stream via the stream panel
         """
+        st = evt.spanel.stream
         logging.debug("StreamBar received remove event %r", evt)
         # delete stream panel
         self.remove_stream_panel(evt.spanel)
 
         # Publish removal notification
         logging.debug("Sending stream.remove message")
-        pub.sendMessage("stream.remove", stream=evt.spanel.stream)
+        pub.sendMessage("stream.remove", stream=st)
 
     def on_streamp_destroy(self, evt):
         """
         Called when a stream panel is completely removed
         """
-        wx.CallAfter(self.fit_streams)
+        self.fit_streams()
 
     # === API of the stream panel
     def show_add_button(self):
