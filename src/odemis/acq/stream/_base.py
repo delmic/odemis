@@ -517,7 +517,7 @@ class Stream(object):
         returns (model.ProgressiveFuture): Progress of preparation
         """
         if self.is_active.value:
-            logging.warning("Prepare of stream %s called while already active")
+            logging.warning("Prepare of stream %s called while already active", self.name.value)
             # TODO: raise an error
         return self._prepare()
 
