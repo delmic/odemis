@@ -1270,9 +1270,6 @@ class StreamBar(wx.Panel):
         self.SetSizer(self._sz)
 
         msg = "No streams available."
-
-        # logging.debug("Point size %s" % self.GetFont().GetPointSize())
-
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
@@ -1293,6 +1290,14 @@ class StreamBar(wx.Panel):
         self.fit_streams()
 
     def fit_streams(self):
+        # When the whole window/app is destroyed, each widget receives a destroy
+        # event. In such a case, it's not worthy re-fitting the streams, and
+        # especially it can fail because some other objects have already been
+        # destroyed.
+        if self.IsBeingDeleted():
+            logging.debug("Stream panelbar is being deleted, not reffiting")
+            return
+
         logging.debug("Refitting stream panels")
         self._set_warning()
 
@@ -1300,8 +1305,6 @@ class StreamBar(wx.Panel):
 
         self.SetSize((-1, h))
 
-        # The panel size is cached in the _PanelSize attribute.
-        # Make sure it's updated by calling ResizePanel
         p = self.Parent
         while not isinstance(p, FoldPanelItem):
             p = p.Parent
@@ -1342,19 +1345,19 @@ class StreamBar(wx.Panel):
         """
         Called when user request to remove a stream via the stream panel
         """
-        logging.debug("StreamBar received remove event %r", evt)
+        st = evt.spanel.stream
+        logging.debug("User removed stream (panel) %s", st.name.value)
         # delete stream panel
         self.remove_stream_panel(evt.spanel)
 
         # Publish removal notification
-        logging.debug("Sending stream.remove message")
-        pub.sendMessage("stream.remove", stream=evt.spanel.stream)
+        pub.sendMessage("stream.remove", stream=st)
 
     def on_streamp_destroy(self, evt):
         """
         Called when a stream panel is completely removed
         """
-        wx.CallAfter(self.fit_streams)
+        self.fit_streams()
 
     # === API of the stream panel
     def show_add_button(self):
@@ -1435,5 +1438,4 @@ class StreamBar(wx.Panel):
         """ Display a warning text when no streams are present, or show it
         otherwise.
         """
-        if self.txt_no_stream is not None:
-            self.txt_no_stream.Show(self.is_empty())
+        self.txt_no_stream.Show(self.is_empty())

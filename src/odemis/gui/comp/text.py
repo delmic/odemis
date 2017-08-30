@@ -495,19 +495,15 @@ class _NumberValidator(wx.PyValidator):
 
     def on_char(self, event):
         """ This method prevents the entry of illegal characters """
-
-        key = event.GetKeyCode()
-
-        # Allow control keys to propagate
-        if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
+        ukey = event.GetUnicodeKey()
+        # Allow control keys to propagate (most of them are WXK_NONE in unicode)
+        if ukey < wx.WXK_SPACE:
             event.Skip()
             return
 
         field_val = unicode(self._get_str_value())
-
         start, end = self.GetWindow().GetSelection()
-
-        field_val = field_val[:start] + chr(key) + field_val[end:]
+        field_val = field_val[:start] + unichr(ukey) + field_val[end:]
 
         if not field_val or self.entry_pattern.match(field_val):
             # logging.debug("Field value %s accepted using %s", "field_val", self.entry_regex)
