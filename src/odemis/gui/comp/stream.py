@@ -1295,14 +1295,13 @@ class StreamBar(wx.Panel):
         # especially it can fail because some other objects have already been
         # destroyed.
         if self.IsBeingDeleted():
-            logging.debug("Stream panelbar is being deleted, not reffiting")
+            logging.debug("Stream panelbar is being deleted, not refitting")
             return
 
         logging.debug("Refitting stream panels")
         self._set_warning()
 
         h = self._sz.GetMinSize().GetHeight()
-
         self.SetSize((-1, h))
 
         p = self.Parent
@@ -1419,6 +1418,10 @@ class StreamBar(wx.Panel):
         Deletion of the actual stream must be done separately.
         Must be called in the main GUI thread
         """
+        # Remove it from the sizer explicitly, because even if the sizer will
+        # eventually detect it (via the destroy event), that will be later, and
+        # until then the fit_stream will not be correct.
+        self._sz.Detach(spanel)
         self.stream_panels.remove(spanel)
         spanel.Destroy()
 
