@@ -172,14 +172,16 @@ class VigilantAttribute(VigilantAttributeBase):
 
     def _get_value(self):
         """The value of this VA"""
-        if self._getter is None:
-            return self._value
-        else:
+        if self._getter:
             try:
+                # Store the value for the setter to know if the value has changed
                 # TODO: any way to not avoid calling the getter during serialization?
-                return self._getter()
+                self._value = self._getter()
             except WeakRefLostError:
-                return self._value
+                logging.warning("Getter for VA %s is gone", self)
+                self._getter = None
+
+        return self._value
 
     # cannot be oneway because we need the exception in case of error
     def _set_value(self, value, must_notify=False, force_write=False):

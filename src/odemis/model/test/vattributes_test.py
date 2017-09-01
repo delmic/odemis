@@ -23,25 +23,25 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+import numpy
 from odemis import model
 import pickle
+import time
 import unittest
 from unittest.case import skip
 import weakref
-import numpy
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-class VigilantAttributeTest(unittest.TestCase):
 
+class VigilantAttributeTest(unittest.TestCase):
 
     def setUp(self):
         pass
 
-
     def tearDown(self):
         pass
-
 
     def callback_test_notify(self, value):
         self.called += 1
@@ -318,7 +318,6 @@ class VigilantAttributeTest(unittest.TestCase):
         for v in prop.choices:
             prop.value = v # they all should work
 
-
     def test_resolution(self):
         va = model.ResolutionVA((10,10), ((1,1), (100, 150)))
         self.assertEqual(va.value, (10,10))
@@ -428,6 +427,32 @@ class VigilantAttributeTest(unittest.TestCase):
         prop.value = ((),) # +1
         self.assertEqual(self.called, 4, "Called has value %s" % self.called)
 
+        prop.unsubscribe(self.callback_test_notify)
+
+    def delegate_get_float(self):
+        return time.time()  # Extreme: changes everytime it's read
+
+    def test_getter_setter(self):
+        """
+        check the delegation to getter and setter
+        """
+        propt = model.FloatVA(time.time(), getter=self.delegate_get_float,
+                              setter=self.delegate_set_float, unit="s")
+
+        self.called = 0
+        # now count
+        propt.subscribe(self.callback_test_notify)
+
+        t1 = propt.value  # time now
+        propt.value = 10.0  # will "set" 11 != time, => +1 change
+        t2 = propt.value  # new time
+        self.assertGreater(t2, t1)
+
+        self.assertEqual(self.called, 1)
+
+        propt.unsubscribe(self.callback_test_notify)
+
+
 class LittleObject(object):
     def __init__(self):
         self.called = 0
@@ -435,6 +460,6 @@ class LittleObject(object):
     def callback(self, value):
         self.called += 1
 
+
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
