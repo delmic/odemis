@@ -71,6 +71,21 @@ class FluoTestCase(unittest.TestCase):
             out = fluo.get_one_center_em(*args)
             self.assertEqual(exp, out, "Failed while running with %s and got %s" % (args, out))
 
+    def test_one_band_ex(self):
+        ex_band = (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)
+        ex_bands = ((650e-9, 660e-9, 675e-9, 678e-9, 680e-9),
+                    (780e-9, 785e-9, 790e-9, 800e-9, 812e-9),
+                    (1034e-9, 1080e-9, 1100e-9, 1200e-9, 1500e-9))
+        # Excitation band should be smaller than the emission band used
+        in_exp = [((ex_band, (490e-9, 510e-9)), ex_band),  # only one band
+                  ((ex_bands, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)), ex_bands[0]),  # nothing fitting, but should pick the smallest
+                  ((ex_bands, (690e-9, 697e-9, 700e-9, 703e-9, 710e-9)), ex_bands[0]),  # biggest below 700nm
+                  ((ex_bands, (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), ex_bands[1]),  # biggest below 800nm
+                  ]
+        for args, exp in in_exp:
+            out = fluo.get_one_band_ex(*args)
+            self.assertEqual(exp, out, "Failed while running with %s and got %s" % (args, out))
+
     def test_one_center_ex(self):
         ex_band = (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)
         ex_bands = ((650e-9, 660e-9, 675e-9, 678e-9, 680e-9),
