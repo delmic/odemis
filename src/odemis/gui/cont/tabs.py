@@ -1865,40 +1865,68 @@ class SecomAlignTab(Tab):
             vpv
         )
 
-        # Create CCD stream
-        # Force the "temperature" VA to be displayed by making it a hw VA
-        hwdetvas = set()
-        if model.hasVA(main_data.ccd, "temperature"):
-            hwdetvas.add("temperature")
-        ccd_stream = acqstream.CameraStream("Optical CL",
-                                            main_data.ccd,
-                                            main_data.ccd.data,
-                                            # main_data.light,
-                                            emitter=None,
-                                            focuser=main_data.focus,
-                                            hwdetvas=hwdetvas,
-                                            detvas=get_local_vas(main_data.ccd),
-                                            forcemd={model.MD_ROTATION: 0,
-                                                     model.MD_SHEAR: 0}
-                                            )
-        ccd_stream.should_update.value = True
+        if main_data.ccd:
+            # Create CCD stream
+            # Force the "temperature" VA to be displayed by making it a hw VA
+            hwdetvas = set()
+            if model.hasVA(main_data.ccd, "temperature"):
+                hwdetvas.add("temperature")
+            opt_stream = acqstream.CameraStream("Optical CL",
+                                                main_data.ccd,
+                                                main_data.ccd.data,
+                                                emitter=None,
+                                                focuser=main_data.focus,
+                                                hwdetvas=hwdetvas,
+                                                detvas=get_local_vas(main_data.ccd),
+                                                forcemd={model.MD_ROTATION: 0,
+                                                         model.MD_SHEAR: 0}
+                                                )
 
-        # Synchronise the fine alignment dwell time with the CCD settings
-        ccd_stream.detExposureTime.value = main_data.fineAlignDwellTime.value
-        ccd_stream.detBinning.value = ccd_stream.detBinning.range[0]
-        ccd_stream.detResolution.value = ccd_stream.detResolution.range[1]
-        ccd_stream.detExposureTime.subscribe(self._update_fa_dt)
-        ccd_stream.detBinning.subscribe(self._update_fa_dt)
-        self.tab_data_model.tool.subscribe(self._update_fa_dt)
+            # Synchronise the fine alignment dwell time with the CCD settings
+            opt_stream.detExposureTime.value = main_data.fineAlignDwellTime.value
+            opt_stream.detBinning.value = opt_stream.detBinning.range[0]
+            opt_stream.detResolution.value = opt_stream.detResolution.range[1]
+            opt_stream.detExposureTime.subscribe(self._update_fa_dt)
+            opt_stream.detBinning.subscribe(self._update_fa_dt)
+            self.tab_data_model.tool.subscribe(self._update_fa_dt)
+        elif main_data.photo_ds and main_data.laser_mirror:
+            # We use arbitrarily the detector with the first name in alphabetical order, just
+            # for reproducibility.
+            photod = min(main_data.photo_ds, key=lambda d: d.role)
+            # A SEM stream fits better than a CameraStream to the confocal
+            # hardware with scanner + det (it could be called a ScannedStream).
+            # The scanner settings are local just to easily display them.
+            # TODO: if the dwellTime and scale were local, would that help?
+            # TODO: have a special stream which can combine the data from all
+            # the photodectors, to get more signal. The main annoyance is what
+            # to do with the settings (gain/offset) for all of these detectors).
+            opt_stream = acqstream.SEMStream("Optical CL",
+                                             photod,
+                                             photod.data,
+                                             main_data.laser_mirror,
+                                             hwdetvas=get_local_vas(photod),
+                                             hwemtvas=get_local_vas(main_data.laser_mirror),
+                                             forcemd={model.MD_ROTATION: 0,
+                                                      model.MD_SHEAR: 0}
+                                             )
+            # Store settings for the scanner when out of the alignment tab
+            # TODO: could using a special "Confocal spot mode" stream simplify?
+            self._lm_settings = (None, None, None, None)
 
-        self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
-        self._ccd_stream = ccd_stream
+            # For now fine alignment is not supported on confocal
+            panel.btn_fine_align.Show(False)
+        else:
+            logging.error("No optical detector found for SECOM alignment")
+
+        opt_stream.should_update.value = True
+        self.tab_data_model.streams.value.insert(0, opt_stream) # current stream
+        self._opt_stream = opt_stream
         # To ensure F6 (play/pause) works: very simple stream scheduler
-        ccd_stream.should_update.subscribe(self._on_ccd_should_update)
+        opt_stream.should_update.subscribe(self._on_ccd_should_update)
         self._ccd_view = panel.vp_align_ccd.microscope_view
-        self._ccd_view.addStream(ccd_stream)
+        self._ccd_view.addStream(opt_stream)
         # create CCD stream panel entry
-        ccd_spe = StreamController(self.panel.pnl_opt_streams, ccd_stream, self.tab_data_model)
+        ccd_spe = StreamController(panel.pnl_opt_streams, opt_stream, self.tab_data_model)
         ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
         panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
@@ -1966,15 +1994,21 @@ class SecomAlignTab(Tab):
         fa_sizer.Add(scale_win, proportion=3, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
         fa_sizer.Layout()
 
-        self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
-                                                          panel,
-                                                          main_frame)
+        if main_data.ccd:
+            # TODO: make these controllers also work on confocal
+            # For Fine alignment, the procedure might need to be completely reviewed
+            # For auto centering, it's mostly a matter of updating align.AlignSpot()
+            # to know about scanners.
+            self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
+                                                              panel,
+                                                              main_frame)
 
-        self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
-                                                           self._aligner_xy,
-                                                           panel)
+            self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
+                                                               self._aligner_xy,
+                                                               panel)
 
         # Documentation text on the left panel
+        # TODO: need different instructions in case of confocal microscope
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/alignment.html")
         panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
         panel.html_alignment_doc.LoadPage(doc_path)
@@ -1992,7 +2026,7 @@ class SecomAlignTab(Tab):
         """
         Very basic stream scheduler (just one stream)
         """
-        self._ccd_stream.is_active.value = update
+        self._opt_stream.is_active.value = update
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -2013,6 +2047,22 @@ class SecomAlignTab(Tab):
             main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
+
+        # Store/restore previous confocal settings when entering/leaving the tab
+        lm = main_data.laser_mirror
+        if lm:
+            if show:
+                self._lm_settings = (lm.scale.value,
+                                     lm.resolution.value,
+                                     lm.translation.value,
+                                     lm.dwellTime.value)
+            else:
+                if None not in self._lm_settings:
+                    # Order matters
+                    lm.scale.value = self._lm_settings[0]
+                    lm.resolution.value = self._lm_settings[1]
+                    lm.translation.value = self._lm_settings[2]
+                    lm.dwellTime.value = self._lm_settings[3]
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
@@ -2041,6 +2091,12 @@ class SecomAlignTab(Tab):
             self.panel.pnl_move_to_center.Show(False)
             self.panel.pnl_align_tools.Show(True)
 
+            if self.tab_data_model.main.laser_mirror:  # confocal => go back to scan
+                # TODO: restore the previous values
+                self._opt_stream.scale.value = self._opt_stream.scale.clip((8, 8))
+                self._opt_stream.roi.value = (0, 0, 1, 1)
+                self._opt_stream.dwellTime.value = self._opt_stream.dwellTime.range[0]
+
         if tool != guimod.TOOL_SPOT:
             self._spot_stream.should_update.value = False
             self._spot_stream.is_active.value = False
@@ -2053,6 +2109,14 @@ class SecomAlignTab(Tab):
         if tool == guimod.TOOL_DICHO:
             self.panel.pnl_move_to_center.Show(True)
             self.panel.pnl_align_tools.Show(False)
+
+            if self.tab_data_model.main.laser_mirror:  # confocal => got spot mode
+                # TODO: store the previous values
+                # The scale ensures that _the_ pixel takes the whole screen
+                self._opt_stream.scale.value = self._opt_stream.scale.range[1]
+                self._opt_stream.roi.value = (0.5, 0.5, 0.5, 0.5)
+                self._opt_stream.dwellTime.value = self._opt_stream.dwellTime.clip(0.1)
+            # TODO: with a standard CCD, it'd make sense to also use a very large binning
         elif tool == guimod.TOOL_SPOT:
             # Do not show the SEM settings being changed during spot mode, and
             # do not allow to change the resolution/scale
@@ -2112,8 +2176,8 @@ class SecomAlignTab(Tab):
         # dwell time is the based on the exposure time for the spot, as this is
         # the best clue on what works with the sample.
         main_data = self.tab_data_model.main
-        binning = self._ccd_stream.detBinning.value
-        dt = self._ccd_stream.detExposureTime.value * numpy.prod(binning)
+        binning = self._opt_stream.detBinning.value
+        dt = self._opt_stream.detExposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
     # "Move to center" functions

@@ -1114,16 +1114,15 @@ class StreamBarController(object):
         detector (Detector): the photo-detector to use
         returns (StreamController): the stream panel created
         """
-        # TODO: special Stream? => need to have a "Emission" as a RO based on
-        # the MD_OUT_WL of the detector.
         # As there is only one stream per detector, we can put its VAs directly
         # instead of them being a local copy. This also happens to work around
         # an issue with detecting IntContinuous in local VAs.
-        s = acqstream.FluoStream(
+        s = acqstream.ScannedFluoStream(
             "Confocal %s" % (detector.name,),
             detector,
             detector.data,
             self._main_data_model.light,
+            self._main_data_model.laser_mirror,
             self._main_data_model.light_filter,
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
