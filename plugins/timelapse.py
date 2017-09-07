@@ -39,12 +39,36 @@ from odemis import model, dataio, acq
 from odemis.acq import stream
 from odemis.acq.stream._base import UNDEFINED_ROI
 import odemis.gui
-from odemis.util import dataio as udataio
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import os
 import time
 import wx
+
+try:
+    from odemis.util.dataio import splitext
+except ImportError:
+    # This is a fallback for Odemis 2.6, which doesn't have this function
+    # When Odemis v2.7 is released, this can go away
+    def splitext(path):
+        """
+        Split a pathname into basename + ext (.XXX).
+        Does pretty much the same as os.path.splitext, but handles "double" extensions
+        like ".ome.tiff".
+        """
+        root, ext = os.path.splitext(path)
+
+        # See if there is a longer extension in the known formats
+        fmts = dataio.get_available_formats(mode=os.O_RDWR, allowlossy=True)
+        # Note, this one-liner also works, but brain-teasers are not good code:
+        # max((fe for fes in fmts.values() for fe in fes if path.endswith(fe)), key=len)
+        for fmtexts in fmts.values():
+            for fmtext in fmtexts:
+                if path.endswith(fmtext) and len(fmtext) > len(ext):
+                    ext = fmtext
+
+        root = path[:len(path) - len(ext)]
+        return root, ext
 
 
 class TimelapsePlugin(Plugin):
@@ -237,7 +261,7 @@ class TimelapsePlugin(Plugin):
 
         fn = self.filename.value
         exporter = dataio.find_fittest_converter(fn)
-        bs, ext = udataio.splitext(fn)
+        bs, ext = splitext(fn)
         fn_pat = bs + "-%.5d" + ext
 
         sacqt = acq.estimateTime(ss)
