@@ -292,8 +292,12 @@ class OpticalPathManager(object):
             try:
                 ccd = self._getComponent("ccd")
             except LookupError:
-                logging.warning("Expect a CCD but found none")
                 ccd = None
+                # Check that at least it's a confocal microscope
+                try:
+                    lm = self._getComponent("laser-mirror")
+                except LookupError:
+                    logging.warning("Couldn't find a CCD on a SECOM/DELPHI")
 
             self._has_fan_speed = model.hasVA(ccd, "fanSpeed")
             self._has_fan_temp = (model.hasVA(ccd, "targetTemperature") and
@@ -398,8 +402,7 @@ class OpticalPathManager(object):
         if self._modes is SECOM_MODES:
             if quality == ACQ_QUALITY_FAST:
                 # Restore the fan (if it was active before)
-                ccd = self._getComponent("ccd")
-                self._setFan(ccd, True)
+                self._setCCDFan(True)
             # Don't turn off the fan if BEST: first wait for setPath()
 
     def setPath(self, mode):
@@ -430,18 +433,16 @@ class OpticalPathManager(object):
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             comp_role = self._modes[mode][0]
-            comp = self._getComponent(comp_role)
-            target = comp.name
+            target = self._getComponent(comp_role)
 
-        logging.debug("Going to optical path '%s', with target detector %s.", mode, target)
+        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
 
         # Special SECOM mode: just look at the fan and be done
         if self._modes is SECOM_MODES:
-            ccd = self._getComponent("ccd")
             if self.quality == ACQ_QUALITY_FAST:
-                self._setFan(ccd, True)
+                self._setCCDFan(True)
             elif self.quality == ACQ_QUALITY_BEST:
-                self._setFan(ccd, target == ccd.name)
+                self._setCCDFan(target.role == "ccd")
 
         fmoves = []  # moves in progress
 
@@ -565,7 +566,7 @@ class OpticalPathManager(object):
                 logging.debug("%s not an actuator", comp_role)
 
         # Now take care of the selectors based on the target detector
-        fmoves.extend(self.selectorsToPath(target))
+        fmoves.extend(self.selectorsToPath(target.name))
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
@@ -677,9 +678,9 @@ class OpticalPathManager(object):
 
     def getStreamDetector(self, path_stream):
         """
-        Given a stream find the detector.
+        Given a stream find the optical detector.
         path_stream (object): The given stream
-        returns (str): detector name
+        returns (HwComponent): detector
         raises:
                 IOError if given object is not a stream
                 LookupError: if stream has no detector
@@ -696,21 +697,20 @@ class OpticalPathManager(object):
                     # more likely to be the optical detector
                     # TODO: handle setting multiple optical paths? => return all the detectors
                     role = st.detector.role
-                    name = st.detector.name
                     for conf in self.guessed.values():
                         if conf[0] == role:
-                            return name
-                    dets.append(name)
+                            return st.detector
+                    dets.append(st.detector)
                 except AttributeError:
                     pass
             if dets:
                 logging.warning("No detector on stream %s has a known optical role", path_stream.name.value)
                 return dets[0]
         elif isinstance(path_stream, stream.OverlayStream):
-            return path_stream._ccd.name
+            return path_stream._ccd
         else:
             try:
-                return path_stream.detector.name
+                return path_stream.detector
             except AttributeError:
                 pass  # will raise error just after
 
@@ -764,7 +764,7 @@ class OpticalPathManager(object):
                     return new_path
         return None
 
-    def _setFan(self, comp, enable):
+    def _setCCDFan(self, enable):
         """
         Turn on/off the fan of the CCD
         enable (boolean): True to turn on/restore the fan, and False to turn if off
@@ -775,6 +775,8 @@ class OpticalPathManager(object):
         if self._fan_enabled == enable:
             return
         self._fan_enabled = enable
+
+        comp = self._getComponent("ccd")
 
         if enable:
             if self._enabled_fan_speed is not None:
