@@ -37,6 +37,7 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
+from concurrent.futures import CancelledError
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -44,6 +45,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
+SECOM_CONFOCAL_CONFIG = CONFIG_PATH + "sim/secom2-confocal.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 
@@ -632,6 +634,199 @@ class SECOMTestCase(unittest.TestCase):
         short_at = fs.estimateAcquisitionTime()
         fs.detExposureTime.value *= 2
         self.assertGreater(fs.estimateAcquisitionTime(), short_at)
+
+
+class SECOMConfocalTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SECOM confocal
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SECOM_CONFOCAL_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find detectors & SEM components
+        cls.laser_mirror = model.getComponent(role="laser-mirror")
+        cls.light = model.getComponent(role="light")
+#        cls.light_filter = model.getComponent(role="filter")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.photo_ds = []
+        for i in range(10): # very ugly way, that works
+            try:
+                cls.photo_ds.append(model.getComponent(role="photo-detector%d" % (i,)))
+            except LookupError:
+                pass
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+        self._image = None
+        self.updates = 0
+        self.done = False
+
+    def _on_image(self, im):
+        self._image = im
+
+    def _on_done(self, future):
+        self.done = True
+
+    def _on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
+        self.updates += 1
+
+    def test_live_conf(self):
+        """
+        Check the live view of confocal streams
+        """
+        det = self.photo_ds[0]
+        s1 = stream.ScannedFluoStream("fluo1", det, det.data, self.light,
+                                      self.laser_mirror, None)
+        # Not too fast scan, to avoid acquiring too many images
+        self.laser_mirror.scale.value = (8, 8)
+        self.laser_mirror.resolution.value = (256, 256)
+        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = self.laser_mirror.resolution.value
+
+        # Check we manage to get at least one image
+        s1.image.subscribe(self._on_image)
+
+        s1.should_update.value = True
+        s1.is_active.value = True
+
+        time.sleep(2)
+        s1.is_active.value = False
+
+        self.assertFalse(self._image is None, "No image received after 2s")
+
+        self.assertEqual(len(s1.raw), 1)
+        raw = s1.raw[0]
+        self.assertEqual(raw.shape, exp_shape)
+        self.assertIn(model.MD_OUT_WL, raw.metadata)
+
+        rgb = s1.image.value
+        self.assertEqual(rgb.shape, exp_shape + (3,))
+
+    def test_acq_conf_one_det(self):
+        """
+        Check the acquisition of one confocal stream
+        Note: for the code, it's actually a corner-case, as it's made to support
+        N detectors
+        """
+        # TODO: also test with an optical path manager
+
+        det = self.photo_ds[0]
+        s1 = stream.ScannedFluoStream("fluo1", det, det.data, self.light,
+                                      self.laser_mirror, None)
+        acqs = stream.ScannedFluoMDStream("acq fluo", [s1])
+
+        # Not too fast scan, to avoid acquiring too many images
+        self.laser_mirror.scale.value = (8, 8)
+        self.laser_mirror.resolution.value = (256, 256)
+        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = self.laser_mirror.resolution.value
+
+        self.assertGreater(acqs.estimateAcquisitionTime(), 0.5)
+
+        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+        f = acqs.acquire()
+        f.add_update_callback(self._on_progress_update)
+        f.add_done_callback(self._on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0].shape, exp_shape)
+        self.assertGreaterEqual(self.updates, 1)  # at least 1 update
+        self.assertLessEqual(self.end, time.time())
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+    def test_acq_conf_multi_det(self):
+        """
+        Check the acquisition of several confocal streams
+        """
+        sfluos = []
+        for d in self.photo_ds:
+            s = stream.ScannedFluoStream("fluo %s" % (d.name,), d, d.data, self.light,
+                                         self.laser_mirror, None)
+            sfluos.append(s)
+
+        assert len(sfluos) > 1
+        acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
+
+        # Not too fast scan, to avoid acquiring too many images
+        self.laser_mirror.scale.value = (8, 8)
+        self.laser_mirror.resolution.value = (256, 256)
+        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = self.laser_mirror.resolution.value
+
+        self.assertGreater(acqs.estimateAcquisitionTime(), 0.5)
+
+        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+        f = acqs.acquire()
+        f.add_update_callback(self._on_progress_update)
+        f.add_done_callback(self._on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), len(self.photo_ds))
+        for d in data:
+            self.assertEqual(d.shape, exp_shape)
+            self.assertIn(model.MD_OUT_WL, d.metadata)
+
+        self.assertGreaterEqual(self.updates, 1)  # at least 1 update
+        self.assertLessEqual(self.end, time.time())
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+    def test_acq_conf_cancel(self):
+        """
+        Check cancelling the acquisition of confocal streams
+        """
+        sfluos = []
+        for d in self.photo_ds:
+            s = stream.ScannedFluoStream("fluo %s" % (d.name,), d, d.data, self.light,
+                                         self.laser_mirror, None)
+            sfluos.append(s)
+
+        acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
+
+        # Slow scan, to have time cancelling
+        self.laser_mirror.scale.value = (1, 1)
+        self.laser_mirror.resolution.value = self.laser_mirror.resolution.range[1]
+        self.laser_mirror.dwellTime.value = 1e-6  # s ~ 5s for a whole image
+
+        self.assertGreater(acqs.estimateAcquisitionTime(), 4)
+
+        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+        f = acqs.acquire()
+        f.add_update_callback(self._on_progress_update)
+        f.add_done_callback(self._on_done)
+
+        time.sleep(0.5)
+        f.cancel()
+
+        with self.assertRaises(CancelledError):
+            f.result(timeout)
+
+        self.assertGreaterEqual(self.updates, 1)  # at least at the end
+        self.assertLessEqual(self.end, time.time())
+        self.assertTrue(f.cancelled())
 
 
 # @skip("faster")

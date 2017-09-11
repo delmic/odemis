@@ -17,6 +17,12 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # This contains "synchronised streams", which handle acquisition from multiple
 # detector simultaneously.
+# On the SPARC, this allows to acquire the secondary electrons and an optical
+# detector simultaneously. In theory, it could support even 3 or 4 detectors
+# at the same time, but this is not current supported.
+# On the SECOM with a confocal optical microscope which has multiple detectors,
+# all the detectors can run simultaneously (each receiving a different wavelength
+# band).
 
 from __future__ import division
 
@@ -38,6 +44,7 @@ import threading
 import time
 
 from ._base import Stream, UNDEFINED_ROI
+from functools import partial
 
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
@@ -45,9 +52,12 @@ from ._base import Stream, UNDEFINED_ROI
 # simultaneously because the two optical detectors need the same light, and a
 # mirror is used to select which path is taken. In addition, the AR stream will
 # typically have a lower repetition (even if it has same ROI). So it's easier
-# and faster to acquire them sequentially. The only trick is that if drift
-# correction is used, the same correction must be used for the entire
-# acquisition.
+# and faster to acquire them sequentially.
+# TODO: for now, when drift correction is used, it's reset between each MDStream
+# acquisition. The same correction should be used for the entire acquisition.
+# They all should rely on the same initial anchor acquisition, and keep the
+# drift information between them. Possibly, this could be done by passing a
+# common DriftEstimator to each MDStream.
 
 class MultipleDetectorStream(Stream):
     """
@@ -58,6 +68,9 @@ class MultipleDetectorStream(Stream):
     """
     __metaclass__ = ABCMeta
 
+    # TODO: do not force to have precisely 2 streams. Either pass a list of
+    # streams and either the type or the order matters, or pass a "main" stream
+    # and a list of dependent streams.
     def __init__(self, name, main_stream, rep_stream, stage=None):
         self.name = model.StringVA(name)
         self._streams = [main_stream, rep_stream]
@@ -1651,3 +1664,233 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
             # in case of exception, so drop it immediately on the log too
             logging.exception("Failure to compute moment of inertia")
             raise
+
+
+class ScannedFluoMDStream(MultipleDetectorStream):
+    """
+    Stream to acquire multiple ScannedFluoStreams simultaneously
+    """
+    def __init__(self, name, streams):
+        """
+        streams (list of ScannedFluoStreams): they should all have the same scanner
+          and emitter (just a different detector). At least one stream should be
+          provided.
+        """
+        # TODO: for now it's not possible to call super() because MultipleDetectorStream
+        # is made precisely for 2 streams.
+
+        self.name = model.StringVA(name)
+        assert len(streams) >= 1
+        self._streams = tuple(streams)
+
+        s0 = streams[0]
+        for s in streams[1:]:
+            assert s0.emitter == s.emitter
+            assert s0.scanner == s.scanner
+            assert s0._opm == s._opm
+        self._opm = s0._opm
+
+        self.should_update = model.BooleanVA(False)
+        self.is_active = model.BooleanVA(False)
+
+        # For the acquisition
+        self._acq_done = threading.Event()
+        self._acq_lock = threading.Lock()
+        self._acq_state = RUNNING
+        # To indicate for each detector whether it has received the data.
+        # Could be replaced by a simpler structure, eg atomic add + 1 event
+        self._acq_complete = tuple(threading.Event() for s in streams)
+        self._acq_thread = None  # thread
+        self._acq_start = 0  # time of acquisition beginning
+        self._acq_min_date = None  # minimum acquisition time for the data to be acceptable
+
+        self._current_future = None
+
+    @property
+    def streams(self):
+        return self._streams
+
+    @property
+    def raw(self):
+        # We can use the .raw of the substreams, as the live streams are the same format
+        r = []
+        for s in self._streams:
+            r.extend(s.raw)
+
+        return r
+
+    # Methods required by MultipleDetectorStream
+    def _estimateRawAcquisitionTime(self):
+        """
+        return (float): time in s for acquiring the whole image, without drift
+         correction
+        """
+        # It takes the same time as just one stream
+        return self.streams[0].estimateAcquisitionTime()
+
+    def estimateAcquisitionTime(self):
+        # No drift correction supported => easy
+        return self._estimateRawAcquisitionTime()
+
+    def _onMultipleDetectorData(self, raw_data):
+        """
+        called at the end of an entire acquisition
+        raw_data (list of DataArray): the stream data corresponding to each stream
+        """
+        pass
+
+    def _adjustHardwareSettings(self):
+        """
+        Adapt the emitter/scanner/detector settings.
+        return (float): estimated time per acquisition
+        """
+        return self.estimateAcquisitionTime()
+
+    def acquire(self):
+        # Make sure every stream is prepared, not really necessary to check _prepared
+        f = self.prepare()
+        f.result()
+
+        for s in self._streams:
+            s._linkHwVAs()
+
+        # TODO: if already acquiring, queue the Future for later acquisition
+        if self._current_future is not None and not self._current_future.done():
+            raise IOError("Cannot do multiple acquisitions simultaneously")
+
+        if not self._acq_done.is_set():
+            if self._acq_thread and self._acq_thread.isAlive():
+                logging.debug("Waiting for previous acquisition to fully finish")
+                self._acq_thread.join(10)
+                if self._acq_thread.isAlive():
+                    logging.error("Previous acquisition not ending")
+
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateAcquisitionTime())
+        self._current_future = f
+        self._acq_state = RUNNING  # TODO: move to per acquisition
+        f.task_canceller = self._cancelAcquisition
+
+        # run task in separate thread
+        self._acq_thread = threading.Thread(target=_futures.executeTask,
+                              name="Multiple detector confocal acquisition",
+                              args=(f, self._runAcquisition, f))
+        self._acq_thread.start()
+        return f
+
+    def _cancelAcquisition(self, future):
+        with self._acq_lock:
+            if self._acq_state == FINISHED:
+                return False  # too late
+            self._acq_state = CANCELLED
+
+        logging.debug("Cancelling acquisition of components %s and %s",
+                      self._streams[0].emitter.name,
+                      self._streams[0].scanner.name)
+
+        # set the events, so the acq thread doesn't wait for them
+        for i in range(len(self._streams)):
+            self._acq_complete[i].set()
+        self._streams[0]._dataflow.synchronizedOn(None)
+
+        # Wait for the thread to be complete (and hardware state restored)
+        self._acq_done.wait(5)
+        return True
+
+    def _onData(self, n, df, data):
+        logging.debug("Stream %d data received", n)
+        s = self._streams[n]
+        if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
+            # This is a sign that the e-beam might have been at the wrong (old)
+            # position while Rep data is acquiring
+            logging.warning("Dropping data because it seems started %g s too early",
+                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            if n == 0:
+                # As the first detector is synchronised, we need to restart it
+                # TODO: probably not necessary, as the typical reason it arrived
+                # early is that the detectors were already running, in which case
+                # they haven't "consumed" the previous trigger yet
+                s.detector.softwareTrigger.notify()
+            return
+
+        if not self._acq_complete[n].is_set():
+            s._onNewData(s._dataflow, data)
+            self._acq_complete[n].set()
+            # TODO: unsubscribe here?
+
+    def _runAcquisition(self, future):
+        """
+        Acquires images from the multiple detectors via software synchronisation.
+        Warning: can be quite memory consuming if the grid is big
+        returns (list of DataArray): all the data acquired
+        raises:
+          CancelledError() if cancelled
+          Exceptions if error
+        """
+        det0 = self._streams[0].detector
+        df0 = self._streams[0]._dataflow
+        try:
+            self._acq_done.clear()
+            acq_time = self._adjustHardwareSettings()
+
+            # Synchronise one detector, so that it's possible to subscribe without
+            # the acquisition immediately starting. Once all the detectors are
+            # subscribed, we'll notify the detector and it will start.
+            df0.synchronizedOn(det0.softwareTrigger)
+            for s in self.streams[1:]:
+                s._dataflow.synchronizedOn(None)  # Just to be sure
+
+            subscribers = []  # to keep a ref
+            for i, s in enumerate(self._streams):
+                p_subscriber = partial(self._onData, i)
+                subscribers.append(p_subscriber)
+                s._dataflow.subscribe(p_subscriber)
+                self._acq_complete[i].clear()
+
+            if self._acq_state == CANCELLED:
+                raise CancelledError()
+
+            self._acq_min_date = time.time()
+            det0.softwareTrigger.notify()
+            logging.debug("Starting confocal acquisition")
+
+            # TODO: immediately remove the synchronisation? It's not needed after
+            # the start.
+
+            # Wait until all the data is received
+            for i, s in enumerate(self._streams):
+                # TODO: It should arrive at the same time, so after the first stream less timeout
+                if not self._acq_complete[i].wait(3 + acq_time * 1.5):
+                    raise IOError("Confocal acquisition hasn't received data after %g s" %
+                                  (time.time() - self._acq_min_date,))
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                s._dataflow.synchronizedOn(None)  # Just to be sure
+                s._dataflow.unsubscribe(subscribers[i])
+
+            logging.debug("All confocal acquisition data received")
+            # Done
+            self._onMultipleDetectorData(self.raw)
+
+        except Exception as exp:
+            if not isinstance(exp, CancelledError):
+                logging.exception("Acquisition of confocal multiple detectors failed")
+            else:
+                logging.debug("Confocal acquisition cancelled")
+
+            for i, s in enumerate(self._streams):
+                s._dataflow.synchronizedOn(None)  # Just to be sure
+                s._dataflow.unsubscribe(subscribers[i])
+
+            if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
+                logging.warning("Converting exception to cancellation")
+                raise CancelledError()
+            raise
+        else:
+            return self.raw
+        finally:
+            for s in self._streams:
+                s._unlinkHwVAs()
+            self._current_future = None
+            self._acq_done.set()
