@@ -103,7 +103,7 @@ class Stream(object):
             self.raw = []
         elif isinstance(raw[0], model.DataArrayShadow):
             self._das = raw[0]
-            self.raw =  (())
+            self.raw = (())
         else:
             self.raw = raw
 
