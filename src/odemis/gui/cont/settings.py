@@ -152,8 +152,9 @@ class SettingsController(object):
         ne = create_axis_entry(self.panel, name, comp, conf)
         self.entries.append(ne)
 
-        if self.highlight_change:
-            bind_setting_context_menu(ne)
+        # TODO: uncomment this once bind_setting_context_meny supports AxisSettingEntry
+#         if self.highlight_change:
+#             bind_setting_context_menu(ne)
 
         self.panel.Parent.Parent.Layout()
 
