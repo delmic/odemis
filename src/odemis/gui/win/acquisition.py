@@ -28,7 +28,7 @@ import logging
 import math
 from odemis import acq, model, dataio
 from odemis.acq import stream, path
-from odemis.acq.stream import EMStream, OpticalStream
+from odemis.acq.stream import EMStream, OpticalStream, ScannedFluoStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.conf import get_acqui_conf
@@ -117,7 +117,7 @@ class AcquisitionDialog(xrcfr_acq):
                 if isinstance(s, EMStream):
                     em_det = s.detector
                     em_emt = s.emitter
-                elif isinstance(s, OpticalStream):
+                elif isinstance(s, OpticalStream) and not isinstance(s, ScannedFluoStream):
                     opt_det = s.detector
             self._ovrl_stream = stream.OverlayStream("Fine alignment", opt_det, em_emt, em_det,
                                                      opm=self._main_data_model.opm)
@@ -244,8 +244,10 @@ class AcquisitionDialog(xrcfr_acq):
             return False
 
         # check for an optical stream
+        # TODO: allow it also for ScannedFluoStream once fine alignment is supported
+        # on confocal SECOM.
         for s in streams:
-            if isinstance(s, OpticalStream):
+            if isinstance(s, OpticalStream) and not isinstance(s, ScannedFluoStream):
                 break
         else:
             return False
