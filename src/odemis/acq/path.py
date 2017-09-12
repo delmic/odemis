@@ -191,7 +191,7 @@ SPARC2_MODES = {
                 }),
          }
 
-# Currently not used as-is.
+# Currently not used as-is, mostly here to make guessMode() happy.
 # The only thing it does is to turns on the fan iff SEM acquisition in best
 # acquisition quality. This is done via dedicated code. The precise rule is the
 # following:
@@ -199,8 +199,14 @@ SPARC2_MODES = {
 # * In acquisition BEST, the fan is turned off for every stream not using the CCD
 # One difficulty is to detect that the fan is not in used even for optical
 # streams (eg, because the CCD is water-cooled).
+
+# TODO: for confocal, detect fluo mode for _any_ photo-detector
+# TODO: handle time-correlator and det-selector (using axis choice pos -> detectors)
 SECOM_MODES = {'fluo': ("ccd",
                 {'ccd': {'fanSpeed': 1},
+                }),
+               'confocal': ("photo-detectorN",
+                {
                 }),
                'overlay': ("ccd",
                 {'ccd': {'fanSpeed': 1},
@@ -407,7 +413,15 @@ class OpticalPathManager(object):
 
     def setPath(self, mode):
         """
-        Just a wrapper of _doSetPath
+        Given a particular mode it sets all the necessary components of the
+        optical path (found through the microscope component) to the
+        corresponding positions.
+        path (stream.Stream or str): The stream or the optical path mode
+        return (Future): a Future allowing to follow the status of the path
+          update.
+        raises (via the future):
+            ValueError if the given mode does not exist
+            IOError if a detector is missing
         """
         f = self._executor.submit(self._doSetPath, mode)
 
@@ -415,16 +429,14 @@ class OpticalPathManager(object):
 
     def _doSetPath(self, path):
         """
-        Given a particular mode it sets all the necessary components of the
-        optical path (found through the microscope component) to the
-        corresponding positions.
-        path (stream.Stream or str): The stream or the optical path mode
-        raises:
-                ValueError if the given mode does not exist
-                IOError if a detector is missing
+        Actual implementation of setPath()
         """
         if isinstance(path, stream.Stream):
-            mode = self.guessMode(path)
+            try:
+                mode = self.guessMode(path)
+            except LookupError:
+                logging.debug("%s doesn't require optical path change", path)
+                return
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             target = self.getStreamDetector(path)  # target detector

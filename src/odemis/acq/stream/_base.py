@@ -535,16 +535,12 @@ class Stream(object):
         return self._prepare_opm()
 
     def _prepare_opm(self):
-        if self._opm is not None:
-            try:
-                f = self._opm.setPath(self)
-            except LookupError:
-                logging.debug("%s doesn't require optical path change", self.name.value)
-                f = model.InstantaneousFuture()
-            else:
-                logging.debug("Setting optical path for %s", self.name.value)
-            return f
-        return model.InstantaneousFuture()
+        if self._opm is None:
+            return model.InstantaneousFuture()
+
+        logging.debug("Setting optical path for %s", self.name.value)
+        f = self._opm.setPath(self)
+        return f
 
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current
