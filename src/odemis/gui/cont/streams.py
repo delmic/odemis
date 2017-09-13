@@ -1639,7 +1639,8 @@ class SecomStreamsController(StreamBarController):
             return enabled and compatible and not present
 
         if self._main_data_model.laser_mirror:
-            for pd in self._main_data_model.photo_ds:
+            ds = sorted(self._main_data_model.photo_ds, key=lambda d: d.name)
+            for pd in ds:
                 act = functools.partial(self.addConfocal, detector=pd)
                 cap = functools.partial(confocal_capable, detector=pd)
                 self.add_action("Confocal %s" % (pd.name,), act, cap)
