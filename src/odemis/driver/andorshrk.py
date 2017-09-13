@@ -653,7 +653,8 @@ class Shamrock(model.Actuator):
 
     def WavelengthReset(self):
         """
-        Resets the wavelength to 0 nm.
+        Resets the wavelength to 0 nm, and go to the first grating.
+        (Probably this also ensures the wavelength axis is referenced again.)
         """
         # Same as ShamrockGotoZeroOrder()
         with self._hw_access:
