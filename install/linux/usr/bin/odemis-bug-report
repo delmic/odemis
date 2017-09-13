@@ -24,7 +24,7 @@ fi
 
 # Compress in background
 # (Only displays a warning if a file doesn't exists)
-zip -jr $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf /var/log/syslog $HOME/odemis-mic-selector.log &
+zip -jr $fn /var/log/odemis.log $HOME/odemis-gui.log $HOME/odemis-gui.log.1 "${MODEL[@]}" /etc/odemis.conf /var/log/syslog $HOME/odemis-mic-selector.log &
 
 
 # Take a screenshot if the GUI is there
