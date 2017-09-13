@@ -24,6 +24,7 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError
 import copy
+import gc
 import logging
 import math
 from odemis import acq, model, dataio
@@ -93,6 +94,9 @@ class AcquisitionDialog(xrcfr_acq):
         # The streams currently displayed are the one visible
         self.add_all_streams()
 
+        # The list of streams ready for acquisition (just used as a cache)
+        self._acq_streams = {}
+
         # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
@@ -153,12 +157,8 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: use the presets VAs and subscribe to each of them, instead of
         # using pub/sub messages
         pub.subscribe(self.on_setting_change, 'setting.changed')
-
-        # TODO: we should actually listen to the stream tree, but it's not
-        # currently possible. => listen to .flat once it's there
-        # Currently just use view.lastUpdate which should be "similar"
-        # (but doesn't work if the stream contains no image)
-        self._view.lastUpdate.subscribe(self.on_streams_changed)
+        # To update the estimated time when streams are removed/added
+        self._view.stream_tree.flat.subscribe(self.on_streams_changed)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -209,6 +209,23 @@ class AcquisitionDialog(xrcfr_acq):
             local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
             for lva in local_vas:
                 lva.unsubscribe(self.on_setting_change)
+
+        self._acq_streams = {}  # also empty the cache
+
+        gc.collect()  # To help reclaiming some memory
+
+    def get_acq_streams(self):
+        """
+        return (list of Streams): the streams to be acquired
+        """
+        # Only acquire the streams which are displayed
+        streams = self._view.getStreams()
+
+        # Add the overlay stream if requested, and folds all the streams
+        if streams and self.chkbox_fine_align.Value:
+            streams.append(self._ovrl_stream)
+        self._acq_streams = acq.foldStreams(streams, self._acq_streams)
+        return self._acq_streams
 
     def find_current_preset(self):
         """
@@ -297,10 +314,8 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.SetValue(preset_name)
 
     def update_acquisition_time(self):
-        streams = self._view.getStreams()
+        streams = self.get_acq_streams()
         if streams:
-            if self.chkbox_fine_align.Value:
-                streams.append(self._ovrl_stream)
             acq_time = acq.estimateTime(streams)
             acq_time = math.ceil(acq_time)  # round a bit pessimisticly
             txt = "The estimated acquisition time is {}."
@@ -390,7 +405,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.remove_all_streams()
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
-        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
 
         self.EndModal(wx.ID_CANCEL)
 
@@ -402,7 +417,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.remove_all_streams()
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
-        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
 
         self.EndModal(wx.ID_OPEN)
         logging.debug("My return code is %d", self.GetReturnCode())
@@ -436,25 +451,19 @@ class AcquisitionDialog(xrcfr_acq):
         # disable estimation time updates during acquisition
         self._view.lastUpdate.unsubscribe(self.on_streams_changed)
 
-        # TODO: freeze all the settings so that it's not possible to change anything
+        # Freeze all the settings so that it's not possible to change anything
         self._pause_settings()
 
         self.gauge_acq.Show()
         self.Layout()  # to put the gauge at the right place
-
-        # start acquisition + connect events to callback
-        streams = self._view.getStreams()
-
-        # Add the overlay stream if the fine alignment check box is checked
-        if self.chkbox_fine_align.Value:
-            streams.append(self._ovrl_stream)
 
         # For now, always indicate the best quality (even if the preset is set
         # to "live")
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
-        # It should never be possible to reach here with no streams
+        # Note: It should never be possible to reach here with no streams
+        streams = self.get_acq_streams()
         self.acq_future = acq.acquire(streams)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
