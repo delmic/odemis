@@ -1791,6 +1791,10 @@ def images_to_export_data(streams, view_hfw, view_pos,
     # Find min pixel size
     min_pxs = min(im.metadata['dc_scale'] for im in images)
 
+    # TODO: first crop the view_hfw + view_pos to the data, and then compute
+    # the maximum resolution. Currently, it might be made very small just
+    # because the data is shown at low mag.
+
     # Check that resolution of all images remains within limits if we use
     # the smallest pixel size, otherwise adjust it
     min_res = CROP_RES_LIMIT, CROP_RES_LIMIT * view_hfw[1] / view_hfw[0]

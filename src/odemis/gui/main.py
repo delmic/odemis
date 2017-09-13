@@ -182,6 +182,11 @@ class OdemisGUIApp(wx.App):
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
 
+            # TODO: instead of roles + label, have a class method on each
+            # StreamTab class that takes the microscope as input, and return a
+            # label or None if it shouldn't be displayed. (+ a "priority" to
+            # decide which one is the default?)
+
             tab_defs = [
                 {
                     # Unique name of the tab

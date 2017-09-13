@@ -1404,6 +1404,8 @@ class StreamBar(wx.Panel):
                               flag=self.DEFAULT_STYLE,
                               border=self.DEFAULT_BORDER)
 
+        # TODO: instead of a stream_remove message, just take a callable to call
+        # when the stream needs to be removed
         spanel.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
         spanel.Bind(wx.EVT_WINDOW_DESTROY, self.on_streamp_destroy, source=spanel)
         spanel.Layout()

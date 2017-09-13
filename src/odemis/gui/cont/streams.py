@@ -2076,6 +2076,8 @@ class SparcStreamsController(StreamBarController):
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM " + name,
                                                         sem_stream, spec_stream)
 
+        # TODO: all the axes, including the filter band should be local. The
+        # band should be set to the pass-through by default
         axes = {"wavelength": spg,
                 "grating": spg,
                 "slit-in": spg,
