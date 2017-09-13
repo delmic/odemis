@@ -1666,6 +1666,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
             raise
 
 
+# TODO: ideally it should inherit from FluoStream
 class ScannedFluoMDStream(MultipleDetectorStream):
     """
     Stream to acquire multiple ScannedFluoStreams simultaneously
@@ -1744,6 +1745,11 @@ class ScannedFluoMDStream(MultipleDetectorStream):
         Adapt the emitter/scanner/detector settings.
         return (float): estimated time per acquisition
         """
+        # All streams have the same excitation, so do it only once
+        self._streams[0]._setup_excitation()
+        for s in self._streams:
+            s._setup_emission()
+
         return self.estimateAcquisitionTime()
 
     def acquire(self):
@@ -1869,6 +1875,7 @@ class ScannedFluoMDStream(MultipleDetectorStream):
                 s._dataflow.synchronizedOn(None)  # Just to be sure
                 s._dataflow.unsubscribe(subscribers[i])
 
+            self._streams[0]._stop_light()
             logging.debug("All confocal acquisition data received")
             # Done
             self._onMultipleDetectorData(self.raw)
@@ -1879,6 +1886,7 @@ class ScannedFluoMDStream(MultipleDetectorStream):
             else:
                 logging.debug("Confocal acquisition cancelled")
 
+            self._streams[0]._stop_light()
             for i, s in enumerate(self._streams):
                 s._dataflow.synchronizedOn(None)  # Just to be sure
                 s._dataflow.unsubscribe(subscribers[i])
