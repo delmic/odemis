@@ -1895,8 +1895,6 @@ class SecomAlignTab(Tab):
             photod = min(main_data.photo_ds, key=lambda d: d.role)
             # A SEM stream fits better than a CameraStream to the confocal
             # hardware with scanner + det (it could be called a ScannedStream).
-            # The scanner settings are local just to easily display them.
-            # TODO: if the dwellTime and scale were local, would that help?
             # TODO: have a special stream which can combine the data from all
             # the photodectors, to get more signal. The main annoyance is what
             # to do with the settings (gain/offset) for all of these detectors).
@@ -1904,17 +1902,19 @@ class SecomAlignTab(Tab):
                                              photod,
                                              photod.data,
                                              main_data.laser_mirror,
+                                             focuser=main_data.focus,
                                              hwdetvas=get_local_vas(photod),
-                                             hwemtvas=get_local_vas(main_data.laser_mirror),
+                                             emtvas=get_local_vas(main_data.laser_mirror),
                                              forcemd={model.MD_ROTATION: 0,
                                                       model.MD_SHEAR: 0}
                                              )
-            # Store settings for the scanner when out of the alignment tab
-            # TODO: could using a special "Confocal spot mode" stream simplify?
+            opt_stream.emtScale.value = opt_stream.emtScale.clip((8, 8))
+            opt_stream.emtDwellTime.value = opt_stream.emtDwellTime.range[0]
+            # They are 3 settings for the laser-mirror:
+            # * in standard/spot mode (full FoV acquisition)
+            # * in dichotomy mode (center of FoV acquisition)
+            # * outside of this tab (stored with _lm_settings)
             self._lm_settings = (None, None, None, None)
-
-            # For now fine alignment is not supported on confocal
-            panel.btn_fine_align.Show(False)
         else:
             logging.error("No optical detector found for SECOM alignment")
 
@@ -2031,6 +2031,16 @@ class SecomAlignTab(Tab):
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
+        # Store/restore previous confocal settings when entering/leaving the tab
+        main_data = self.tab_data_model.main
+        lm = main_data.laser_mirror
+        if show and lm:
+            # Must be done before starting the stream
+            self._lm_settings = (lm.scale.value,
+                                 lm.resolution.value,
+                                 lm.translation.value,
+                                 lm.dwellTime.value)
+
         # Turn on/off the streams as the tab is displayed.
         # Also directly modify is_active, as there is no stream scheduler
         for s in self.tab_data_model.streams.value:
@@ -2039,30 +2049,24 @@ class SecomAlignTab(Tab):
             else:
                 s.is_active.value = False
 
+        if not show and lm and None not in self._lm_settings:
+            # Must be done _after_ stopping the stream
+            # Order matters
+            lm.scale.value = self._lm_settings[0]
+            lm.resolution.value = self._lm_settings[1]
+            lm.translation.value = self._lm_settings[2]
+            lm.dwellTime.value = self._lm_settings[3]
+            # To be sure that if it's called when already not shown, we don't
+            # put old values again
+            self._lm_settings = (None, None, None, None)
+
         # Freeze the stream settings when an alignment is going on
-        main_data = self.tab_data_model.main
         if show:
             # as we expect no acquisition active when changing tab, it will always
             # lead to subscriptions to VA
             main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
-
-        # Store/restore previous confocal settings when entering/leaving the tab
-        lm = main_data.laser_mirror
-        if lm:
-            if show:
-                self._lm_settings = (lm.scale.value,
-                                     lm.resolution.value,
-                                     lm.translation.value,
-                                     lm.dwellTime.value)
-            else:
-                if None not in self._lm_settings:
-                    # Order matters
-                    lm.scale.value = self._lm_settings[0]
-                    lm.resolution.value = self._lm_settings[1]
-                    lm.translation.value = self._lm_settings[2]
-                    lm.dwellTime.value = self._lm_settings[3]
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
@@ -2089,13 +2093,22 @@ class SecomAlignTab(Tab):
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
             self.panel.pnl_move_to_center.Show(False)
-            self.panel.pnl_align_tools.Show(True)
+            self.panel.pnl_align_tools.Show(self.tab_data_model.main.ccd is not None)
 
             if self.tab_data_model.main.laser_mirror:  # confocal => go back to scan
                 # TODO: restore the previous values
-                self._opt_stream.scale.value = self._opt_stream.scale.clip((8, 8))
-                self._opt_stream.roi.value = (0, 0, 1, 1)
-                self._opt_stream.dwellTime.value = self._opt_stream.dwellTime.range[0]
+                if self._opt_stream.roi.value == (0.5, 0.5, 0.5, 0.5):
+                    self._opt_stream.is_active.value = False
+                    self._opt_stream.roi.value = (0, 0, 1, 1)
+                    self._opt_stream.emtScale.value = self._opt_stream.emtScale.clip((8, 8))
+                    self._opt_stream.emtDwellTime.value = self._opt_stream.emtDwellTime.range[0]
+                    self._opt_stream.is_active.value = self._opt_stream.should_update.value
+                    # Workaround the fact that the stream has no local res,
+                    # so the hardware limits the dwell time based on the previous
+                    # resolution used.
+                    # TODO: fix the stream to set the dwell time properly (set the res earlier)
+                    self._opt_stream.emtDwellTime.value = self._opt_stream.emtDwellTime.range[0]
+                    self.panel.vp_align_ccd.canvas.fit_view_to_next_image = True
 
         if tool != guimod.TOOL_SPOT:
             self._spot_stream.should_update.value = False
@@ -2111,11 +2124,18 @@ class SecomAlignTab(Tab):
             self.panel.pnl_align_tools.Show(False)
 
             if self.tab_data_model.main.laser_mirror:  # confocal => got spot mode
+                # Start the new settings immediately after
+                self._opt_stream.is_active.value = False
+                # TODO: could using a special "Confocal spot mode" stream simplify?
                 # TODO: store the previous values
-                # The scale ensures that _the_ pixel takes the whole screen
-                self._opt_stream.scale.value = self._opt_stream.scale.range[1]
                 self._opt_stream.roi.value = (0.5, 0.5, 0.5, 0.5)
-                self._opt_stream.dwellTime.value = self._opt_stream.dwellTime.clip(0.1)
+                # The scale ensures that _the_ pixel takes the whole screen
+                # TODO: if the refit works properly, it shouldn't be needed
+                self._opt_stream.emtScale.value = self._opt_stream.emtScale.range[1]
+                self._opt_stream.emtDwellTime.value = self._opt_stream.emtDwellTime.clip(0.1)
+                self.panel.vp_align_ccd.canvas.fit_view_to_next_image = True
+                self._opt_stream.is_active.value = self._opt_stream.should_update.value
+                self._opt_stream.emtDwellTime.value = self._opt_stream.emtDwellTime.clip(0.1)
             # TODO: with a standard CCD, it'd make sense to also use a very large binning
         elif tool == guimod.TOOL_SPOT:
             # Do not show the SEM settings being changed during spot mode, and
