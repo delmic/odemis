@@ -2627,13 +2627,14 @@ class Sparc2AlignTab(Tab):
         tab_data = guimod.Sparc2AlignGUIData(main_data)
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # Reference and move the lens to its default position
-        if not main_data.lens_mover.referenced.value["x"]:
-            # TODO: have the actuator automatically reference on init?
-            f = main_data.lens_mover.reference({"x"})
-            f.add_done_callback(self._moveLensToActive)
-        else:
-            self._moveLensToActive()
+        if main_data.lens_mover:
+            # Reference and move the lens to its default position
+            if not main_data.lens_mover.referenced.value["x"]:
+                # TODO: have the actuator automatically reference on init?
+                f = main_data.lens_mover.reference({"x"})
+                f.add_done_callback(self._moveLensToActive)
+            else:
+                self._moveLensToActive()
 
         # Documentation text on the right panel for mirror alignement
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_goals.html")
@@ -2950,10 +2951,11 @@ class Sparc2AlignTab(Tab):
         self._layoutModeButtons()
         tab_data.align_mode.subscribe(self._onAlignMode)
 
-        # Make sure the calibration light is off
-        emissions = [0.] * len(main_data.brightlight.emissions.value)
-        main_data.brightlight.emissions.value = emissions
-        main_data.brightlight.power.value = main_data.brightlight.power.range[0]
+        if main_data.brightlight:
+            # Make sure the calibration light is off
+            emissions = [0.] * len(main_data.brightlight.emissions.value)
+            main_data.brightlight.emissions.value = emissions
+            main_data.brightlight.power.value = main_data.brightlight.power.range[0]
 
         # Bind moving buttons & keys
         self._actuator_controller = ActuatorController(tab_data, panel, "")
@@ -3496,7 +3498,8 @@ class Sparc2AlignTab(Tab):
 
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
-            main.lens_mover.position.subscribe(self._onLensPos)
+            if main.lens_mover:
+                main.lens_mover.position.subscribe(self._onLensPos)
             main.mirror.position.subscribe(self._onMirrorPos)
         else:
             # when hidden, the new tab shown is in charge to request the right
@@ -3505,7 +3508,8 @@ class Sparc2AlignTab(Tab):
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
 
-            main.lens_mover.position.unsubscribe(self._onLensPos)
+            if main.lens_mover:
+                main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
                 main.spec_sel.position.unsubscribe(self._onFiberPos)

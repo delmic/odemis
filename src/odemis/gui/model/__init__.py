@@ -688,6 +688,10 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         if not main.spectrograph:
             amodes[0] = "spot-mirror-align"
 
+        # If no lens-mover (happens in some hybrid/custom SPARC), don't try to align
+        if not main.lens_mover:
+            amodes.remove("lens-align")
+
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
