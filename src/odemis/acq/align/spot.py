@@ -29,13 +29,11 @@ import math
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.acq.align import coordinates
-from odemis.acq.align.autofocus import AcquireNoBackground
+from odemis.acq.align import coordinates, autofocus
+from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.util.spot import FindCenterCoordinates
 import threading
 import time
-
-from . import autofocus
 
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
@@ -186,7 +184,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
                 # When Autofocus set binning 8 if possible, and use exhaustive
                 # method to be sure not to miss the spot.
                 ccd.binning.value = ccd.binning.clip((8, 8))
-                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method="exhaustive")
+                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=MTD_EXHAUSTIVE)
                 lens_pos, fm_level = future._autofocusf.result()
                 # Update progress of the future
                 future.set_progress(end=time.time() +
