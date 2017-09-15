@@ -52,11 +52,13 @@ The microscope component can have as role:
  * delphi
 
 Typical detectors found in a microscope can be of the following roles:
- * ccd: the main optical camera
+ * ccd: the main optical camera.
  * se-detector: secondary electron detector of the SEM
  * bs-detector: backscattered electron detector of the SEM
  * ebic-detector: EBIC detector of the SEM
  * cl-detector: a cathodoluminescence detector, synchronised with the e-beam
+ * photo-detector(N): a 0D photon detector (eg, PMT or APD). It's currently used
+   only in confocal microscopes.
  * spectrometer: A detector to acquire multiple wavelengths information
    simultaneously. It provides the same interface as a DigitalCamera,
    but the Y dimension of the shape is 1. If the device has actuators, for
@@ -65,25 +67,27 @@ Typical detectors found in a microscope can be of the following roles:
  * spectrometer-integrated: same as the spectrometer, but the detector is also
    used as a 'ccd'.
  * monochromator: A detector to acquire one wavelength at a time.
- * overview-ccd: a (optical) view of the whole sample from above
- * chamber-ccd: a (optical) view of the inside chamber
+ * overview-ccd: a (optical) view of the whole sample from above.
+ * chamber-ccd: a (optical) view of the inside chamber.
  * time-correlator: a one-dimension detector with "T", the time, as dimension.
    It reports the energy emission over time (from a specific event).
 
 Typical emitters can be of the following roles:
- * light: controls the excitation light of the fluorescence microscope
- * lens: the lens on the optical path of the optical microscope (or of the SPARC)
+ * light: controls the excitation light of the fluorescence microscope.
+ * lens: the lens on the optical path of the optical microscope (or of the SPARC).
  * e-beam: scanner of the SEM.
+ * laser-mirror: scanner of a confocal microscope.
 
 Typical actuators found can be of the following roles:
  * stage: it can have 3 linear axes ("x", "y", and "z"), and 3 rotational axes
-   ("rx", "ry", and "rz")
+   ("rx", "ry", and "rz").
  * focus: Changes the lens distance to the sample. Must have "z" axis.
  * ebeam-focus: Changes the focus of the e-beam. Must have "z" axis.
  * chamber: manages the pressure and/or sample loading.
    It must have a "pressure" axis.
- * mirror: To move the mirror of the SPARC, can have four axes: x, y, rz (yaw), ry (pitch)
- * align: alignment actuator for the SECOM and DELPHI microscopes. 
+ * pinhole: To change the size of the pinhoe in a confocal microscope. Must have "d" axis.
+ * mirror: To move the mirror of the SPARC, can have four axes: x, y, rz (yaw), ry (pitch).
+ * align: alignment actuator for the SECOM and DELPHI microscopes.
    For the SECOM, it must have two axes: "a" and "b".
    For the DELPHI, it must have two axes: "x" and "y".
  * sem-stage: the stage of the DELPHI that moves the (whole) sample holder.
@@ -113,6 +117,15 @@ The figure below represents the different roles in a `secom`.
     :align: center
 
     Schema of a SECOM and the roles of the components
+
+The figure below represents the different roles in a `secom` with confocal optical microscope.
+
+.. figure:: secom-confocal-roles.*
+    :width: 50 %
+    :align: center
+
+    Schema of a SECOM confocal and the roles of the components
+
 
 
 The figure below represents the different roles in a `sparc2`, with every
