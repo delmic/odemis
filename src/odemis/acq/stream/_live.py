@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-import collections
 from concurrent.futures.thread import ThreadPoolExecutor
 import gc
 import logging
