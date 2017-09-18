@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from PIL import Image
 import unittest
 from odemis.acq.stitching import register
-from decompose import decomposeImage
+from registrar_test import decomposeImage
 from odemis import model
 
 class TestStitching(unittest.TestCase):
