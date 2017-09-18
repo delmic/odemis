@@ -40,13 +40,37 @@ class TestStitching(unittest.TestCase):
         [tiles,pos] = decomposeImage(img,overlap,numTiles,"horizontalZigzag")
         
         updatedTiles = register(tiles,"REGISTER_SHIFT")
-        
+
         for i in range(len(updatedTiles)):
             calculatedPosition = updatedTiles[i].metadata[model.MD_POS]
             self.assertAlmostEqual(calculatedPosition[0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPosition[1],pos[i][1],places=1)
         
+    # @unittest.skip("skip")
+    def test_dep_tiles(self):
+        """
+        Test register wrapper function, when dependent tiles are present
+        """
+        
+        img = Image.open("images/test3.tiff")
+        numTiles = 2
+        overlap = 0.2
+        [tiles,pos] = decomposeImage(img,overlap,numTiles,"horizontalZigzag")
+        newTiles = []
+        for i in range(len(tiles)):
+            newTiles.append(tuple((tiles[i],tiles[i])))
+        updatedTiles = register(newTiles,"REGISTER_SHIFT")
 
+        for i in range(len(updatedTiles)):
+            calculatedPosition = updatedTiles[i][0].metadata[model.MD_POS]
+            self.assertAlmostEqual(calculatedPosition[0],pos[i][0],places=1)
+            self.assertAlmostEqual(calculatedPosition[1],pos[i][1],places=1)
+            
+            # Dependent tile
+            calculatedPosition = updatedTiles[i][1].metadata[model.MD_POS]
+            self.assertAlmostEqual(calculatedPosition[0],pos[i][0],places=1)
+            self.assertAlmostEqual(calculatedPosition[1],pos[i][1],places=1)
+        
     
 if __name__ == '__main__':
     unittest.main()
