@@ -37,6 +37,7 @@ class IdentityRegistrar(object):
     
     def __init__(self):
         self.tiles = []
+        self.num_dep_tiles = 0
         
     def addTile(self,tile,dependent_tiles=None):
         """ 
@@ -48,6 +49,8 @@ class IdentityRegistrar(object):
         for the computation of the final position.
         """
         self.tiles.append(tile)
+        if dependent_tiles != None:
+            self.num_dep_tiles = len(dependent_tiles)
         
     def getPositions(self):
         """ 
@@ -61,7 +64,12 @@ class IdentityRegistrar(object):
         for i in range(len(self.tiles)):
             positions.append(self.tiles[i].metadata[model.MD_POS])
             
-        return positions
+        # Return same positions for dependent tiles
+        dep_tile_positions = []
+        for i in range(self.num_dep_tiles):
+            dep_tile_positions.append(positions)
+        
+        return positions, dep_tile_positions
         
         
 class ShiftRegistrar(object):
@@ -90,6 +98,9 @@ class ShiftRegistrar(object):
         # List of 2D indices for grid positions in order of acquisition
         self.acqOrder = []
         
+        self.num_dep_tiles = 0 # required in getPositions() function
+
+       
     def addTile(self,tile,dependent_tiles = None):
         """ 
         Extends grid by one tile. 
@@ -101,6 +112,9 @@ class ShiftRegistrar(object):
         """  
         
         self.size = tile.metadata[model.MD_PIXEL_SIZE][0]
+        
+        if dependent_tiles != None:
+            self.num_dep_tiles = len(dependent_tiles) 
         
         # Find position of the tile in the grid. Indices of grid position are given as posX, posY.
         if self.tiles[0][0] == None:
@@ -165,8 +179,13 @@ class ShiftRegistrar(object):
         tile_positions = []
         for i in range(len(self.acqOrder)):
             shift = self.shifts[self.acqOrder[i][0]][self.acqOrder[i][1]]
-            tile_positions.append(tuple(numpy.add(shift,firstPosition))) 
-        return tile_positions
+            tile_positions.append(tuple(numpy.add(shift,firstPosition)))
+        
+        # Return same positions for dependent tiles
+        dep_tile_positions = []
+        for i in range(self.num_dep_tiles):
+            dep_tile_positions.append(tile_positions)
+        return tile_positions, dep_tile_positions
     
     def _updateGrid(self,direction):
         """ extends grid by one row (direction = "y") or one column (direction = "x") """

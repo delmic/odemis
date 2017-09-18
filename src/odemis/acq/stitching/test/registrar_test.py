@@ -64,7 +64,7 @@ class TestIdentityRegistrar(unittest.TestCase):
         registrar.addTile(intile)
         
         
-        self.assertEqual(registrar.getPositions()[0], intile.metadata[model.MD_POS])
+        self.assertEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS])
 
         # Same thing but with a typical SEM data
         img8 = np.zeros((256, 356), dtype=np.uint8) + 40
@@ -80,7 +80,7 @@ class TestIdentityRegistrar(unittest.TestCase):
         registrar = IdentityRegistrar()
         registrar.addTile(intile)
 
-        self.assertAlmostEqual(registrar.getPositions()[0], intile.metadata[model.MD_POS],5)
+        self.assertAlmostEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS],5)
         
         
 class TestShiftRegistrar(unittest.TestCase):   
@@ -106,7 +106,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar.addTile(intile)
         
         
-        self.assertEqual(registrar.getPositions()[0], intile.metadata[model.MD_POS])
+        self.assertEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS])
 
         # Same thing but with a typical SEM data
         img8 = np.zeros((256, 356), dtype=np.uint8) + 40
@@ -122,7 +122,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar = ShiftRegistrar()
         registrar.addTile(intile)
 
-        self.assertAlmostEqual(registrar.getPositions()[0], intile.metadata[model.MD_POS],5)
+        self.assertAlmostEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS],5)
         
         
     def test1(self):
@@ -136,7 +136,7 @@ class TestShiftRegistrar(unittest.TestCase):
     
         for i in range(len(pos)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()
+            calculatedPositions = registrar.getPositions()[0]
             self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
             
@@ -150,7 +150,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar = ShiftRegistrar()
         for i in range(len(pos)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()
+            calculatedPositions = registrar.getPositions()[0]
             self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
 
@@ -164,7 +164,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar = ShiftRegistrar()
         for i in range(len(pos)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()
+            calculatedPositions = registrar.getPositions()[0]
             self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
            
@@ -178,7 +178,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar = ShiftRegistrar()
         for i in range(len(pos)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()
+            calculatedPositions = registrar.getPositions()[0]
             self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
 
@@ -192,7 +192,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar = ShiftRegistrar()
         for i in range(len(pos)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()
+            calculatedPositions = registrar.getPositions()[0]
             self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
             
@@ -206,7 +206,7 @@ class TestShiftRegistrar(unittest.TestCase):
         registrar = ShiftRegistrar()
         for i in range(len(pos)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()
+            calculatedPositions = registrar.getPositions()[0]
             self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
             self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
                 
@@ -227,7 +227,7 @@ class TestShiftRegistrar(unittest.TestCase):
             })
         registrar.addTile(tile1)
         registrar.addTile(tile2)
-        calculatedPositions = registrar.getPositions()
+        calculatedPositions = registrar.getPositions()[0]
         self.assertAlmostEqual(calculatedPositions[1][0],522,places=1)
         self.assertAlmostEqual(calculatedPositions[1][1],204,places=1)          
     
