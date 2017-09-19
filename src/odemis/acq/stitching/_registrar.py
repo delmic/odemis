@@ -111,7 +111,8 @@ class ShiftRegistrar(object):
         for the computation of the final position.
         """  
         
-        self.size = tile.metadata[model.MD_PIXEL_SIZE][0]
+        self.size = tile.shape[0]
+        self.px_size = tile.metadata[model.MD_PIXEL_SIZE]
         
         if dependent_tiles != None:
             self.num_dep_tiles = len(dependent_tiles) 
@@ -136,8 +137,8 @@ class ShiftRegistrar(object):
                             md_pos_prev = self.tiles[i][j].metadata[model.MD_POS]
             
             # Insert new tile either to the right or to the bottom of the closest tile.
-            ver_diff = abs(md_pos[0]-md_pos_prev[0])
-            hor_diff = abs(md_pos[1]-md_pos_prev[1])
+            ver_diff = abs(md_pos[1]-md_pos_prev[1])
+            hor_diff = abs(md_pos[0]-md_pos_prev[0])
             if ver_diff > hor_diff:
                 self.posY = pos_prev[0] + 1
                 self.posX = pos_prev[1]
@@ -153,18 +154,18 @@ class ShiftRegistrar(object):
             # Calculate overlap. The overlap is assumed to be identical for all tiles and is
             # only calculated after the second tile is added.
             if len(self.shifts)==2 and len(self.shifts[0])==1:
-                size_meter = 2*self.tiles[0][0].metadata[model.MD_POS][0]
-                diff = tile.metadata[model.MD_POS][0] - self.tiles[0][0].metadata[model.MD_POS][0]
-                self.ovrlp = abs(size_meter-diff)/size_meter
+                size_meter = 2*self.tiles[0][0].metadata[model.MD_POS][1]
+                diff = abs(tile.metadata[model.MD_POS][1] - self.tiles[0][0].metadata[model.MD_POS][1])
+                self.ovrlp = 1-(abs(size_meter-diff)/size_meter)
             
             elif len(self.shifts)==1 and len(self.shifts[0])==2:
-                size_meter = 2*self.tiles[0][0].metadata[model.MD_POS][1]
+                size_meter = 2*self.tiles[0][0].metadata[model.MD_POS][0]
                 
-                diff = tile.metadata[model.MD_POS][1] - self.tiles[0][0].metadata[model.MD_POS][1]
-                self.ovrlp = abs(size_meter-diff)/size_meter
+                diff = abs(tile.metadata[model.MD_POS][0] - self.tiles[0][0].metadata[model.MD_POS][0])
+                self.ovrlp = numpy.round(abs(size_meter-diff)/size_meter,decimals=2)
       
-        self.osize = int(self.size * self.ovrlp)  # overlap size in pixels    
-        self.tsize = int(self.size - self.osize)    
+        self.osize = self.size * self.ovrlp  # overlap size in pixels  
+        self.tsize = int(self.size - self.osize)  
         
         self._stitch(tile,self.posY,self.posX)              
              
@@ -175,12 +176,11 @@ class ShiftRegistrar(object):
         dep_tile_positions (list of tuples of tuples): the adjusted position for each dependent tile 
         (in the order they were passed)
         """   
-        firstPosition = self.tiles[0][0].metadata[model.MD_POS]
+        firstPosition = numpy.divide(self.tiles[0][0].metadata[model.MD_POS],self.px_size)
         tile_positions = []
         for i in range(len(self.acqOrder)):
             shift = self.shifts[self.acqOrder[i][0]][self.acqOrder[i][1]]
-            tile_positions.append(tuple(numpy.add(shift,firstPosition)))
-        
+            tile_positions.append(((shift[0]+firstPosition[0])*self.px_size[0],(firstPosition[1]-shift[1])*self.px_size[1]))
         # Return same positions for dependent tiles
         dep_tile_positions = []
         for i in range(self.num_dep_tiles):
