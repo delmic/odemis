@@ -79,7 +79,7 @@ def MomentOfInertia(data, background=None):
     diff = XX + YY
     totDist = numpy.sqrt(diff)
     rmsDist = data0 * totDist
-    Mdist = rmsDist.sum() / data_sum
+    Mdist = float(rmsDist.sum() / data_sum)
     # In case of just one bright pixel, avoid returning 0 and return unknown
     # instead.
     if Mdist == 0:
@@ -113,7 +113,7 @@ def SpotIntensity(data, background=None):
     neighborhood = data0[(center[1] - 1):(center[1] + 2),
                          (center[0] - 1):(center[0] + 2)]
     intens = neighborhood.sum() / total
-    return intens
+    return float(intens)
 
 
 # def FindSubCenterCoordinates(subimages):
