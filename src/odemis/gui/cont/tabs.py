@@ -49,7 +49,7 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
-from odemis.util import units
+from odemis.util import units, spot
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 import os.path
 import pkg_resources
@@ -2613,10 +2613,6 @@ class SparcAlignTab(Tab):
                 s.is_active.value = False
 
 
-# Moment of inertia ROI width
-MOI_ROI_WIDTH = 0.5  # => take half of the full frame (in each dimension)
-
-
 class Sparc2AlignTab(Tab):
     """
     Tab for the mirror/fiber alignment on the SPARCv2. Note that the basic idea
@@ -2655,23 +2651,20 @@ class Sparc2AlignTab(Tab):
             (self.panel.vp_align_lens,
                 {
                     "name": "Lens alignment",
-                    "stream_classes": acqstream.BrightfieldStream,
+                    "stream_classes": acqstream.CameraStream,
                 }
             ),
             (self.panel.vp_moi,
                 {
-                    "cls": guimod.ContentView,
-                    "name": "Moment of Inertia",
-                    "stream_classes": acqstream.MomentOfInertiaLiveStream,
-                    # To allow to move the mirror by dragging / double click:
-                    "stage": main_data.mirror_xy,
+                    "name": "Mirror alignment",
+                    "stream_classes": acqstream.CameraStream,
                 }
             ),
             (self.panel.vp_align_center,
                 {
                     "cls": guimod.ContentView,
                     "name": "Center alignment",
-                    "stream_classes": acqstream.BrightfieldStream,
+                    "stream_classes": acqstream.CameraStream,
                 }
             ),
             (self.panel.vp_align_fiber,
@@ -2681,27 +2674,26 @@ class Sparc2AlignTab(Tab):
                 }
             ),
         ))
-        # Add connection to SEM hFoV if possible
-        if main_data.ebeamControlsMag:
-            vpv[self.panel.vp_moi]["fov_hw"] = main_data.ebeam
-            self.panel.vp_moi.canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # The streams:
-        # * MomentOfInertia stream (mois): used to align the mirror. Used both
-        #   for the spatial image and the spot size measurement, and for the
-        #   chronograph of the MoI at center.
+        # * Alignement/AR CCD (ccd): Used to show CL spot during the alignment
+        #   of the lens1, _and_ to show the mirror shadow in center alignment.
         # * spectrograph line (specline): used for focusing/showing a line in
         #   lens alignment.
-        # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
-        #   _and_ to show the mirror shadow in center alignment
+        # * Alignment/AR CCD (ccd): Same stream, but use in the mirror alignment
+        #   mode.
         # * Spectrum count (speccnt): Used to show how much light is received
         #   by the spectrometer over time (30s).
         # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
         #   and center alignment.
+        # Note: the mirror alignment used a MomentOfInertia stream, it's
+        #   supposed to make things easier (and almost automatic) but it doesn't
+        #   work in all cases/samples. So we use now just rely on the direct CCD
+        #   view.
 
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
@@ -2709,7 +2701,7 @@ class Sparc2AlignTab(Tab):
         hwdetvas = set()
         if model.hasVA(main_data.ccd, "temperature"):
             hwdetvas.add("temperature")
-        ccd_stream = acqstream.BrightfieldStream(
+        ccd_stream = acqstream.CameraStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
@@ -2748,7 +2740,7 @@ class Sparc2AlignTab(Tab):
         # there is no such system)
         if ccd_focuser:
             # Add a stream to see the focus, and the slit for lens alignment
-            speclines = acqstream.BrightfieldStream(
+            speclines = acqstream.CameraStream(
                                 "Spectrograph line",
                                 main_data.ccd,
                                 main_data.ccd.data,
@@ -2809,46 +2801,35 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.pnl_fib_focus.Show(False)
 
-        # MomentOfInertiaStream needs an SEM stream and a CCD stream
-        self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
-        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data,
-                                     main_data.ebeam)
-        mois = acqstream.MomentOfInertiaLiveStream("MoI",
-                           main_data.ccd, main_data.ccd.data, main_data.ebeam,
-                           moisem,
-                           hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
-                           # we don't want resolution to mess up with detROI
-                           detvas=get_local_vas(main_data.ccd, hidden={"resolution"}))
-        # Pick some typically good settings
-        mois.repetition.value = (9, 9)
-        mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
+        # The "MoI" stream is actually a standard stream, with extra
+        # entries at the bottom of the stream panel showing the moment of inertia
+        # and spot intensity.
+        mois = acqstream.CameraStream(
+                            "Alignement CCD for mirror",
+                            main_data.ccd,
+                            main_data.ccd.data,
+                            emitter=None,
+                            hwdetvas=hwdetvas,
+                            detvas=get_local_vas(main_data.ccd),
+                            forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                     model.MD_ROTATION: 0}  # Force the CCD as-is
+                            )
+        # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if hasattr(mois, "detBinning"):
-            mois.detBinning.value = mois.detBinning.clip((8, 8))
-        if hasattr(mois, "detReadoutRate"):
-            try:
-                mois.detReadoutRate.value = mois.detReadoutRate.range[1]
-            except AttributeError:
-                mois.detReadoutRate.value = max(mois.detReadoutRate.choices)
+            mois.detBinning.value = mois.detBinning.clip((2, 2))
         self._moi_stream = mois
-        # Update ROI based on the lens pole position
-        if model.hasVA(main_data.lens, "polePosition"):
-            main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
-        else:
-            # Leave the ROI at the center
-            mois.detROI.value = (MOI_ROI_WIDTH / 2, MOI_ROI_WIDTH / 2,
-                                 1 - (MOI_ROI_WIDTH / 2), 1 - (MOI_ROI_WIDTH / 2))
+
         mois_spe = self._stream_controller.addStream(mois,
                          add_to_view=self.panel.vp_moi.microscope_view)
         mois_spe.stream_panel.flatten()  # No need for the stream name
-        # TODO: add ways to show:
-        # * Chronograph of the MoI at the center
+
         self._addMoIEntries(mois_spe.stream_panel)
         mois.image.subscribe(self._onNewMoI)
 
-        # The center align view share the same CCD stream (and settings)
-        self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
-
         if "center-align" in tab_data.align_mode.choices:
+            # The center align view share the same CCD stream (and settings)
+            self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
+
             # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
             mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
             lens = main_data.lens
@@ -2926,7 +2907,6 @@ class Sparc2AlignTab(Tab):
         # * fiber-align: move x, y of the fibaligner with mean of spectrometer as feedback
         self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
-            (panel.btn_align_spot, "spot-mirror-align"),
             (panel.btn_align_mirror, "mirror-align"),
             (panel.btn_align_centering, "center-align"),
             (panel.btn_align_fiber, "fiber-align"),
@@ -2935,7 +2915,6 @@ class Sparc2AlignTab(Tab):
         # The GUI mode to the optical path mode
         self._mode_to_opm = {
             "mirror-align": "mirror-align",
-            "spot-mirror-align": "mirror-align",
             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
             "center-align": "ar",
             "fiber-align": "fiber-align",
@@ -2994,31 +2973,13 @@ class Sparc2AlignTab(Tab):
             pos = (i // width, i % width)
             gb_sizer.SetItemPosition(btn, pos)
 
-    def _onPolePosition(self, pole_pos):
-        """
-        Called when the polePosition VA is updated
-        """
-        ccd = self.tab_data_model.main.ccd
-        cntr_roi = (pole_pos[0] / ccd.shape[0],
-                    pole_pos[1] / ccd.shape[1])
-        # Clip center so we have enough space before the bounds
-        h_width = MOI_ROI_WIDTH / 2
-        cntr_roi = numpy.clip(cntr_roi, (h_width, h_width), (1 - h_width, 1 - h_width))
-        self._moi_stream.detROI.value = (cntr_roi[0] - h_width, cntr_roi[1] - h_width,
-                                         cntr_roi[0] + h_width, cntr_roi[1] + h_width)
-
     def _addMoIEntries(self, cont):
         """
-        Add the chronogram, MoI value entry and spot size entry
+        Add the MoI value entry and spot size entry
         :param stream_cont: (Container aka StreamPanel)
 
         """
-        # Add a intensity/time graph
-        # self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
-        # self.spec_graph.SetBackgroundColour("#000000")
-        # setting_cont.add_widgets(self.spec_graph)
-
-        # the "MoI" value bellow the chronogram
+        # the "MoI" value bellow the streams
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
         tooltip_txt = "Moment of inertia at the center (smaller is better), and range"
         lbl_moi.SetToolTipString(tooltip_txt)
@@ -3125,14 +3086,6 @@ class Sparc2AlignTab(Tab):
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
-        elif mode == "spot-mirror-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
-            self._ccd_stream.should_update.value = True
-            self.panel.pnl_mirror.Enable(True)
-            self.panel.pnl_lens_mover.Enable(False)  # Should be hidden anyway
-            self.panel.pnl_focus.Enable(False)  # Should be hidden anyway
-            self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
         elif mode == "mirror-align":
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
             self._moi_stream.should_update.value = True
@@ -3195,7 +3148,8 @@ class Sparc2AlignTab(Tab):
             return
 
         # Make sure the user can move the X axis only once at ACTIVE position
-        self.tab_data_model.main.spec_sel.position.subscribe(self._onFiberPos)
+        if self.tab_data_model.main.spec_sel:
+            self.tab_data_model.main.spec_sel.position.subscribe(self._onFiberPos)
         self.panel.btn_m_fibaligner_x.Enable(True)
         self.panel.btn_p_fibaligner_x.Enable(True)
         self.panel.btn_m_fibaligner_y.Enable(True)
@@ -3407,7 +3361,8 @@ class Sparc2AlignTab(Tab):
         """
         # Stop the acquisition, and pass that data to the MoI stream
         df.unsubscribe(self._on_bkg_data)
-        self._moi_stream.background.value = data
+        # self._moi_stream.background.value = data
+        # TODO: add support for background subtraction to the MoI CameraStream.
         self._moi_stream.should_update.value = True
 
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
@@ -3420,20 +3375,17 @@ class Sparc2AlignTab(Tab):
         MoI and spot size info to display.
         rgbim (DataArray): RGB image of the MoI
         """
-        if rgbim is None:
-            return
+        try:
+            data = self._moi_stream.raw[0]
+        except IndexError:
+            return  # No data => next time will be better
 
-        # Note: center position is typically 4,4 as the repetition is fixed to 9x9.
-        # To be sure, we recompute it every time
-        center = (rgbim.shape[1] - 1) // 2, (rgbim.shape[0] - 1) // 2  # px
-        moi, moi_mm = self._moi_stream.getRawValue(center)
-        ss = self._moi_stream.getSpotIntensity()
+        background = None
+        moi = spot.MomentOfInertia(data, background)
+        ss = spot.SpotIntensity(data, background)
 
         # If value is None => text is ""
         txt_moi = units.readable_str(moi, sig=3)
-        if moi_mm is not None:
-            mn, mx = moi_mm
-            txt_moi += u" (%s → %s)" % (units.readable_str(mn, sig=3), units.readable_str(mx, sig=3))
         self._txt_moi.SetValue(txt_moi)
 
         self._txt_ss.SetValue(units.readable_str(ss, sig=3))

@@ -683,13 +683,10 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
-        # If no (direct) spectrograph, the lens 1 doesn't need to be aligned.
-        # => change the lens-align mode to spot-mirror-align mode
-        if not main.spectrograph:
-            amodes[0] = "spot-mirror-align"
-
-        # If no lens-mover (happens in some hybrid/custom SPARC), don't try to align
-        if not main.lens_mover:
+        # If no direct spectrograph (eg, SPARC-compact), the lens 1 doesn't
+        # need to be aligned. Same thing if no lens-mover (happens in some
+        # hybrid/custom SPARC)
+        if not main.spectrograph or not main.lens_mover:
             amodes.remove("lens-align")
 
         if main.lens and model.hasVA(main.lens, "polePosition"):
