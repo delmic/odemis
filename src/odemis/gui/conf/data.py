@@ -21,6 +21,7 @@ This file is part of Odemis.
 from __future__ import division
 
 from collections import OrderedDict
+import copy
 from odemis.acq import stream
 import odemis.gui
 from odemis.model import getVAs
@@ -700,7 +701,7 @@ def get_hw_settings_config(role=None):
 
     """
 
-    hw_settings = HW_SETTINGS_CONFIG.copy()
+    hw_settings = copy.deepcopy(HW_SETTINGS_CONFIG)
     if role in HW_SETTINGS_CONFIG_PER_ROLE:
         recursive_dict_update(hw_settings, HW_SETTINGS_CONFIG_PER_ROLE[role])
     return hw_settings
