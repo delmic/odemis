@@ -72,6 +72,34 @@ def register(tiles, method="REGISTER_SHIFT"):
         
     return updatedTiles
 
-def weave(tiles, method="WEAVER_MEAN"):
-    pass
 
+def weave(tiles, method="WEAVER_MEAN"):
+    """
+    tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles to compute the registration. 
+    If it's tuples, the first tile of each tuple is the “main tile”, and the following ones are dependent tiles.
+    method (WEAVER_*): WEAVER_MEAN → MeanWeaver, WEAVER_COLLAGE → CollageWeaver
+    return:
+        tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles as passed, but with updated MD_POS metadata
+    """
+    
+    if method == "WEAVER_MEAN":
+        weaver = MeanWeaver()
+        
+    elif method == "WEAVER_COLLAGE":
+        weaver = CollageWeaver()
+    
+        
+    
+    for i in range(len(tiles)):
+        # Separate tile and dependent_tiles
+        tile = tiles[i]
+        weaver.addTile(tile)
+        
+    stitched_image = weaver.getFullImage()
+            
+    return stitched_image
+    
+    
+    
+    
+    
