@@ -2716,7 +2716,7 @@ class Sparc2AlignTab(Tab):
                 self._moveLensToActive()
 
         # Documentation text on the right panel for mirror alignement
-        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_goals.html")
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_alignment.html")
         panel.html_moi_doc.SetBorders(0)
         panel.html_moi_doc.LoadPage(doc_path)
 
