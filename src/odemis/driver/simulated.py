@@ -36,10 +36,13 @@ import time
 
 class Light(model.Emitter):
     """
-    Simulated bright light component. Just pretends to be always on with wide
-    spectrum emitted (white).
+    Simulated bright light component. Just pretends to be generating one source.
     """
-    def __init__(self, name, role, max_power=10.0, **kwargs):
+    def __init__(self, name, role, max_power=10.0, spectra=None, **kwargs):
+        """
+        max_power (0 < float): the maximum power (in W)
+        spectra (list of list of 5 tuple): output spectrum, as 5 wavelengths in m
+        """
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._shape = ()
@@ -48,9 +51,13 @@ class Light(model.Emitter):
         # just one band: white
         # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
         self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
+
         # list of 5-tuples of floats
-        self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
-                                    unit="m", readonly=True)
+        if spectra is None:
+            spectra = [(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)] # White
+        if len(spectra) != 1 or len(spectra[0]) != 5:
+            raise ValueError("spectra argument must be a list of list of 5 values")
+        self.spectra = model.ListVA([tuple(spectra[0])], unit="m", readonly=True)
 
     def _updatePower(self, value):
         if value == 0:
