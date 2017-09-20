@@ -61,7 +61,7 @@ class TestCamera(unittest.TestCase):
             self.assertEqual(len(cam_trp), len(set(cam_trp)))
 
             # Test shape
-            shp_user = cam._transposeShapeToUser(shp)
+            shp_user = cam._transposeSizeToUser(shp)
             logging.info("Pretends shape = %s", shp_user)
             self.assertEqual(len(shp), len(shp_user))
             self.assertEqual(cam.shape, shp_user)
@@ -136,7 +136,7 @@ class TestCamera(unittest.TestCase):
             self.assertEqual(len(cam_trp), len(set(cam_trp)))
 
             # Test shape
-            shp_user = cam._transposeShapeToUser(shp)
+            shp_user = cam._transposeSizeToUser(shp)
             logging.info("Pretends shape = %s", shp_user)
             self.assertEqual(len(shp), len(shp_user))
             self.assertEqual(cam.shape, shp_user)

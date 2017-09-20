@@ -255,7 +255,17 @@ class HwComponent(Component):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, power_supplier=None, *args, **kwargs):
+    def __init__(self, name, role, power_supplier=None, transp=None, *args, **kwargs):
+        """
+        power_supplier (None or Component): Component that handles the power
+          on/off of this hardware component (via .supplied). When provided, a
+          .powerSupply VA will be available with a boolean to turn on/off the
+          actual hardware.
+        transp (None or list of int): list of axes (indexed from 1).
+         Allows to rotate/mirror the CCD image. For each axis of the output data
+         is the corresponding axis of the detector indicated. Each detector axis
+         must be indicated precisely once.
+        """
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
         self._power_supplier = power_supplier  # PowerSupplier if available
@@ -282,6 +292,22 @@ class HwComponent(Component):
             logging.debug("Component %s creates powerSupply VA", name)
             self.powerSupply = _vattributes.BooleanVA(self._power_supplier.supplied.value[name], setter=self._setPowerSupply)
             self._power_supplier.supplied.subscribe(self._onSupplied)
+
+        if transp is not None:
+            # check a bit it's valid
+            transp = tuple(transp)
+            if len(set(abs(v) for v in transp)) != len(transp):
+                raise ValueError("Transp argument contains multiple times "
+                                 "the same axis: %s" % (transp,))
+            # Shape not yet defined, so can't check precisely all the axes are there
+            if (not 1 <= len(transp) <= 5 or 0 in transp or
+                any(abs(v) > 5 for v in transp)):
+                raise ValueError("Transp argument does not define each axis "
+                                 "of the camera once: %s" % (transp,))
+            # Indicate there is nothing to do, if so
+            if transp == tuple(range(len(transp))):
+                transp = None
+        self._transpose = transp
 
     @roattribute
     def role(self):
@@ -351,97 +377,8 @@ class HwComponent(Component):
 #    def scan(self):
 #        pass
 
-
-class Microscope(HwComponent):
-    """
-    A component which represent the whole microscope.
-    It does nothing by itself, just contains other components.
-    """
-
-    def __init__(self, name, role, children=None, model=None, daemon=None, **kwargs):
-        """
-        model (dict str-> dict): the python representation of the model AST
-        """
-        HwComponent.__init__(self, name, role, children=children, daemon=daemon)
-
-        if model is None:
-            model = {}
-        self._model = model
-
-        if kwargs:
-            raise ValueError("Microscope component cannot have initialisation arguments.")
-
-        # These 2 VAs should not modified, but by the backend
-        self.alive = _vattributes.VigilantAttribute(set())  # set of components
-        # dict str -> int or Exception: name of component -> State
-        self.ghosts = _vattributes.VigilantAttribute(dict())
-
-    @roattribute
-    def model(self):
-        return self._model
-
-
-class Detector(HwComponent):
-    """
-    A component which represents a detector.
-    This is an abstract class that should be inherited.
-    """
-    __metaclass__ = ABCMeta
-
-    def __init__(self, name, role, transpose=None, transp=None, **kwargs):
-        """
-        transp (None or list of int): list of axes (indexed from 1).
-         Allows to rotate/mirror the CCD image. For each axis of the output data
-         is the corresponding axis of the detector indicated. Each detector axis
-         must be indicated precisely once.
-        transpose: same as transp, but with a bug that causes - to be applied
-          on the wrong dimension. Only there for compatibility.
-        """
-        HwComponent.__init__(self, name, role, **kwargs)
-
-        if transpose is not None:
-            if transp is not None:
-                raise ValueError("Cannot specify transp and transpose simultaneously")
-            # Convert transpose to trans
-            transp = [abs(v) for v in transpose]
-            transp = [v * cmp(s, 0) for v, s in zip(transp, reversed(transpose))]
-
-        if transp is not None:
-            # check a bit it's valid
-            transp = tuple(transp)
-            if len(set(abs(v) for v in transp)) != len(transp):
-                raise ValueError("Transp argument contains multiple times "
-                                 "the same axis: %s" % (transp,))
-            # Shape not yet defined, so can't check precisely all the axes are there
-            if (not 1 <= len(transp) <= 5 or 0 in transp or
-                any(abs(v) > 5 for v in transp)):
-                raise ValueError("Transp argument does not define each axis "
-                                 "of the camera once: %s" % (transp,))
-            # Indicate there is nothing to do, if so
-            if transp == tuple(range(len(transp))):
-                transp = None
-        self._transpose = transp
-
-        # Maximum value of each dimension of the detector (including the
-        # intensity). A CCD camera 2560x1920 with 12 bits intensity has a 3D
-        # shape (2560,1920,2048).
-        self._shape = (0,)
-        # Data-flow coming from this detector.
-        # normally a detector doesn't affect anything
-        self.data = None
-
-    @roattribute
-    def transpose(self):
-        if self._transpose is None:
-            return tuple(range(len(self.shape) - 1))
-        else:
-            return self._transpose
-
-    @roattribute
-    def shape(self):
-        return self._transposeShapeToUser(self._shape)
-
-    # helper functions for handling transpose
+    # Helper functions for handling transpose. The component _must_ provide a
+    # ._shape attribute that contains the dimensions of each axis.
     def _transposePosToUser(self, v):
         """
         For position, etc., origin is top-left
@@ -478,25 +415,28 @@ class Detector(HwComponent):
 
     def _transposeSizeToUser(self, v):
         """
-        For resolution, binning... where mirroring has no effect.
+        For resolution, binning, scale... where mirroring has no effect.
         v (tuple of Numbers): logical position of a point (X, Y...)
+        return (tuple of Numbers): v transposed, and every extra value not in
+          _transpose are passed as-is.
         """
         if self._transpose is None:
             return v
 
         typev = type(v)
-        vt = typev(v[abs(idx) - 1] for idx in self._transpose)
+        # Decompose into the transposable part and the left over (ex, shape has
+        # one extra value for the depth)
+        v_spatial, v_extra = v[:len(self._transpose)], v[len(self._transpose):]
+        vt = typev(v_spatial[abs(idx) - 1] for idx in self._transpose) + v_extra
         return vt
 
     def _transposeShapeToUser(self, v):
         """
         For shape, where the last element is the depth (so unaffected)
+        DEPRECATED: use _transposeSizeToUser()
         v (tuple of Numbers): logical position of a point (X, Y...)
         """
-        if self._transpose is None:
-            return v
-
-        return self._transposeSizeToUser(v[:-1]) + v[-1:]
+        return self._transposeSizeToUser(v)
 
     def _transposePosFromUser(self, v):
         """
@@ -575,6 +515,81 @@ class Detector(HwComponent):
 
         v = v[tuple(slc)]
         return v
+
+
+class Microscope(HwComponent):
+    """
+    A component which represent the whole microscope.
+    It does nothing by itself, just contains other components.
+    """
+
+    def __init__(self, name, role, children=None, model=None, daemon=None, **kwargs):
+        """
+        model (dict str-> dict): the python representation of the model AST
+        """
+        HwComponent.__init__(self, name, role, children=children, daemon=daemon)
+
+        if model is None:
+            model = {}
+        self._model = model
+
+        if kwargs:
+            raise ValueError("Microscope component cannot have initialisation arguments.")
+
+        # These 2 VAs should not modified, but by the backend
+        self.alive = _vattributes.VigilantAttribute(set())  # set of components
+        # dict str -> int or Exception: name of component -> State
+        self.ghosts = _vattributes.VigilantAttribute(dict())
+
+    @roattribute
+    def model(self):
+        return self._model
+
+
+class Detector(HwComponent):
+    """
+    A component which represents a detector.
+    This is an abstract class that should be inherited.
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self, name, role, transpose=None, transp=None, **kwargs):
+        """
+        transp (None or list of int): list of axes (indexed from 1).
+         Allows to rotate/mirror the CCD image. For each axis of the output data
+         is the corresponding axis of the detector indicated. Each detector axis
+         must be indicated precisely once.
+        transpose: same as transp, but with a bug that causes - to be applied
+          on the wrong dimension. Only there for compatibility.
+        """
+        if transpose is not None:
+            if transp is not None:
+                raise ValueError("Cannot specify transp and transpose simultaneously")
+            # Convert transpose to trans
+            transp = [abs(v) for v in transpose]
+            transp = [v * cmp(s, 0) for v, s in zip(transp, reversed(transpose))]
+
+        HwComponent.__init__(self, name, role, transp=transp, **kwargs)
+
+        # Maximum value of each dimension of the detector (including the
+        # intensity). A CCD camera 2560x1920 with 12 bits intensity has a 3D
+        # shape (2560, 1920, 2048).
+        self._shape = (0,)
+
+        # Data-flow coming from this detector.
+        # normally a detector doesn't affect anything
+        self.data = None
+
+    @roattribute
+    def transpose(self):
+        if self._transpose is None:
+            return tuple(range(len(self._shape) - 1))
+        else:
+            return self._transpose
+
+    @roattribute
+    def shape(self):
+        return self._transposeSizeToUser(self._shape)
 
 
 class DigitalCamera(Detector):
@@ -951,11 +966,11 @@ class Emitter(HwComponent):
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
 
-        self._shape = (0)  # must be initialised by the sub-class
+        self._shape = (0,)  # must be initialised by the sub-class
 
     @roattribute
     def shape(self):
-        return self._shape
+        return self._transposeSizeToUser(self._shape)
 
     # An EnumeratedVA called blanker can be included. It is None if blanking
     # is automatically applied when no scanning is taking place and True/False
