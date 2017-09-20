@@ -198,7 +198,8 @@ def weave(infns):
     big_das = []
     for da_in in da_streams:
         logging.info("Computing big image out of %d images", len(da_in))
-        da = stitching.collageWeaver(da_in)
+        da_registered = stitching.register(da_in)
+        da = stitching.weave(da_registered)
         big_das.append(da)
 
     return big_das
