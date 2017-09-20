@@ -235,13 +235,16 @@ HW_SETTINGS_CONFIG = {
             }),
             # TODO: might be useful if it's not read-only
             ("rotation", {
-#                 "control_type": odemis.gui.CONTROL_NONE,
+                "control_type": odemis.gui.CONTROL_NONE,
             }),
             # what we don't want to display:
             ("translation", {
-#                 "control_type": odemis.gui.CONTROL_NONE,
+                "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("scanDelay", {  # TODO: that VA is probably going to disappear after DEBUG
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("depthOfField", {
@@ -390,16 +393,49 @@ HW_SETTINGS_CONFIG = {
                 "accuracy": 3,
             },
         },
-    "photo-detector0":  # TODO: for every photo-detector*
+    "photo-detector0":  # TODO: for every photo-detector* => make it a regex
         OrderedDict((
             ("gain", {
                 "accuracy": 3,
+                "tooltip": "Reducing the gain also reset the over-current protection",
+            }),
+            ("offset", {
+                "accuracy": 3,
+            }),
+            # TODO: it's possible to reset the protection by reducing the gain,
+            # so it shouldn't be necessary, but it's good to have some feedback
+            # for now, until we are sure it works properly.
+            ("protection", {
+                "tooltip": "PMT over-current protection",
+                #"control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "photo-detector1":
+        OrderedDict((
+            ("gain", {
+                "accuracy": 3,
+                "tooltip": "Reducing the gain also reset the over-current protection",
             }),
             ("offset", {
                 "accuracy": 3,
             }),
             ("protection", {
-                #"control_type": odemis.gui.CONTROL_NONE,
+                "tooltip": "PMT over-current protection",
+                # "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "photo-detector3":
+        OrderedDict((
+            ("gain", {
+                "accuracy": 3,
+                "tooltip": "Reducing the gain also reset the over-current protection",
+            }),
+            ("offset", {
+                "accuracy": 3,
+            }),
+            ("protection", {
+                "tooltip": "PMT over-current protection",
+                # "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
     "pinhole":

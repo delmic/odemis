@@ -44,6 +44,7 @@ class OpticalStream:
 OpticalStream.register(CameraStream)
 OpticalStream.register(StaticFluoStream)
 OpticalStream.register(StaticBrightfieldStream)
+OpticalStream.register(ScannedFluoMDStream)
 
 
 class EMStream:

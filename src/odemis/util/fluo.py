@@ -40,7 +40,7 @@ def get_center(band):
     if isinstance(band, basestring):
         raise TypeError("Band must be a list or a tuple")
 
-    if isinstance(band[0], collections.Iterable):
+    if isinstance(next(iter(band)), collections.Iterable):
         return tuple(get_center(b) for b in band)
 
     if len(band) % 2 == 0:
@@ -50,76 +50,91 @@ def get_center(band):
     return center
 
 
-def get_one_band_em(band, ex_band):
+def get_one_band_em(bands, ex_band):
     """
     Return the band given or if it's a multi-band, return just the most likely
     one based on the current excitation band
-    band ((list of) tuple of 2 or 5 floats): emission band(s)
+    bands ((list of) tuple of 2 or 5 floats): emission band(s)
     ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
     return (tuple of 2 or 5 floats): emission band
     """
-    if isinstance(band[0], collections.Iterable):
-        # Need to guess: the closest above the excitation wavelength
-        if isinstance(ex_band[0], collections.Iterable):
-            # It's getting tricky, but at least above the smallest one
-            ex_center = min(get_center(ex_band))
-        else:
-            ex_center = get_center(ex_band)
+    if not isinstance(next(iter(bands)), collections.Iterable):
+        return bands
 
-        # Force each band as a tuple to make sure the key is hashable
-        em_b2c = {tuple(b): get_center(b) for b in band}
-        bands_above = [b for b, c in em_b2c.items() if c > ex_center]
-        if bands_above:
-            em_band = min(bands_above, key=em_b2c.get)
-        else:
-            # excitation and emission don't seem to match, so fallback to the
-            # less crazy value
-            em_band = max(band, key=em_b2c.get)
-
-        return em_band
+    # Need to guess: the closest above the excitation wavelength
+    if isinstance(next(iter(ex_band)), collections.Iterable):
+        # It's getting tricky, but at least above the smallest one
+        ex_center = min(get_center(ex_band))
     else:
-        return band
+        ex_center = get_center(ex_band)
+
+    # Force each band as a tuple to make sure the key is hashable
+    em_b2c = {tuple(b): get_center(b) for b in bands}
+    bands_above = [b for b, c in em_b2c.items() if c > ex_center]
+    if bands_above:
+        em_band = min(bands_above, key=em_b2c.get)
+    else:
+        # excitation and emission don't seem to match, so fallback to the
+        # less crazy value
+        em_band = max(bands, key=em_b2c.get)
+
+    return em_band
 
 
-def get_one_center_em(band, ex_band):
+def get_one_center_em(bands, ex_band):
     """
     Return the center of an emission band, and if it's a multi-band, return just
     one of the centers based on the current excitation band
-    band ((list of) tuple of 2 or 5 floats): emission band(s)
+    bands ((list of) tuple of 2 or 5 floats): emission band(s)
     ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
     return (float): wavelength in m
     """
-    return get_center(get_one_band_em(band, ex_band))
+    return get_center(get_one_band_em(bands, ex_band))
 
 
-def get_one_center_ex(band, em_band):
+def get_one_band_ex(bands, em_band):
     """
-    Return the center of an excitation band, and if it's a multi-band, return
-    just one of the centers based on the current emission band
-    band ((list of) tuple of 2 or 5 floats): excitation band(s)
+    Return the excitation band, and if it's a multi-band, return the band
+      fitting best the current emission band: the first excitation wavelength
+      below the emission.
+    bands ((list of) tuple of 2 or 5 floats): excitation band(s)
     em_band ((list of) tuple of 2 or 5 floats): emission band(s)
     return (float): wavelength in m
     """
-    if isinstance(band[0], collections.Iterable):
-        # Need to guess: the closest below the emission wavelength
-        if isinstance(em_band[0], collections.Iterable):
-            # It's getting tricky, but at least below the biggest one
-            em_center = max(get_center(em_band))
-        else:
-            em_center = get_center(em_band)
+    # FIXME: make it compatible with sets instead of list
+    if not isinstance(next(iter(bands)), collections.Iterable):
+        return bands
 
-        ex_centers = get_center(band)
-        ex_centers_below = [c for c in ex_centers if c < em_center]
-        if ex_centers_below:
-            ex_center = max(ex_centers_below)
-        else:
-            # excitation and emission don't seem to match, so fallback to the
-            # less crazy value
-            ex_center = min(ex_centers)
-
-        return ex_center
+    # Need to guess: the closest below the emission wavelength
+    if isinstance(next(iter(em_band)), collections.Iterable):
+        # It's getting tricky, but at least below the biggest one
+        em_center = max(get_center(em_band))
     else:
-        return get_center(band)
+        em_center = get_center(em_band)
+
+    # Force each band as a tuple to make sure the key is hashable
+    ex_b2c = {tuple(b): get_center(b) for b in bands}
+    # ex_centers = get_center(bands)
+    ex_bands_below = [b for b, c in ex_b2c.items() if c < em_center]
+    if ex_bands_below:
+        ex_band = max(ex_bands_below, key=ex_b2c.get)
+    else:
+        # excitation and emission don't seem to match, so fallback to the
+        # less crazy value
+        ex_band = min(bands, key=ex_b2c.get)
+
+    return ex_band
+
+
+def get_one_center_ex(bands, em_band):
+    """
+    Return the center of an excitation band, and if it's a multi-band, return
+    just one of the centers based on the current emission band
+    bands ((list of) tuple of 2 or 5 floats): excitation band(s)
+    em_band ((list of) tuple of 2 or 5 floats): emission band(s)
+    return (float): wavelength in m
+    """
+    return get_center(get_one_band_ex(bands, em_band))
 
 
 def get_one_center(band):

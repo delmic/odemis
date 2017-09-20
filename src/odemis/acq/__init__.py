@@ -35,7 +35,7 @@ import math
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, \
-    OverlayStream, OpticalStream, EMStream, SEMMDStream
+    OverlayStream, OpticalStream, EMStream, SEMMDStream, ScannedFluoStream, ScannedFluoMDStream
 from odemis.util import img, fluo
 import sys
 import threading
@@ -44,7 +44,6 @@ import time
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
 # because it's a bit strange dependency. => just move to a acq.manager module?
-
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
 # background. You are in charge of ensuring that no other acquisition is
@@ -100,6 +99,64 @@ def estimateTime(streams):
 
     return tot_time
 
+
+def foldStreams(streams, reuse=None):
+    """
+    Merge (aka "fold) streams which can be acquired simultaneously into
+     multi-detector streams.
+    Note: currently only supports folding ScannedFluoMDStreams, not the SPARC
+      streams.
+    streams (list of Streams): Streams to be folded
+    reuse (list of Streams, or None): list of streams which was previously output
+      by this function. If it's present, the streams will be reused when possible,
+      for optimisation.
+    return (list of Streams): The list of streams, with the ones that can be
+      folded replaced by a MD streams, the other streams are pass as-is.
+    """
+    # TODO: support SPARC streams
+    if reuse is None:
+        reuse = []
+
+    # Copy the streams as-is, excepted for the ScannedFluoStream, which must
+    # be "folded" into a ScannedFluoMDStream.
+
+    folds = set()
+    scan_fluos = []  # List of sets of ScannedFluoStream with compatible settings
+    for s in streams:
+        if isinstance(s, ScannedFluoStream):
+            # Store it for folding
+            for sfs in scan_fluos:
+                sf = next(iter(sfs))
+                # "compatible" means: same emitter/scanner/excitation
+                if (sf.emitter is s.emitter and
+                    sf.scanner is s.scanner and
+                    sf.excitation.value == s.excitation.value):
+                    sfs.add(s)
+                    break
+            else:
+                scan_fluos.append({s})
+        else:
+            folds.add(s)
+
+    # Generate the MD streams
+    for sfs in scan_fluos:
+        # Try to reuse current ScannedFluoMDStreams (optimisation)
+        for s in reuse:
+            if not isinstance(s, ScannedFluoMDStream):
+                continue
+            if sfs == set(s.streams):
+                logging.debug("Reusing %s", s)
+                folds.add(s)
+                break
+        else:
+            logging.debug("Creating a new FluoMDStream for %d streams", len(sfs))
+            name = "Combined %s" % (", ".join(sf.name.value for sf in sfs),)
+            s = ScannedFluoMDStream(name, tuple(sfs))
+            folds.add(s)
+
+    return folds
+
+
 def computeThumbnail(streamTree, acqTask):
     """
     compute the thumbnail of a given (finished) acquisition according to a
@@ -137,8 +194,12 @@ def _weight_stream(stream):
     stream (acq.stream.Stream): a stream to weight
     returns (number): priority (the higher the more it should be done first)
     """
-    if isinstance(stream, FluoStream):
+    if isinstance(stream, (FluoStream, ScannedFluoMDStream)):
         # Fluorescence ASAP to avoid bleaching
+        if isinstance(stream, ScannedFluoMDStream):
+            # Just take one of the streams, to keep things "simple"
+            stream = stream.streams[0]
+
         # If multiple fluorescence acquisitions: prefer the long emission
         # wavelengths first because there is no chance their emission light
         # affects the other dyes (and which could lead to a little bit of

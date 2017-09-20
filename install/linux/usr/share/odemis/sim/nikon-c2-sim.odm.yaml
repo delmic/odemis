@@ -1,11 +1,27 @@
 # Configuration to use just a Nikon C2
-CONFOCAL: {
+ConfocalFLuo: {
     class: Microscope,
     role: optical,
     children: ["Light", "Optical Objective", "Optical Emission Filter",
-               "Galvano Mirror", "PMT1", "PMT2", "PMT3", "Pinhole",
+               "Galvano Mirror", "PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "Pinhole",
                "Sample Stage", "Objective Stage", "Optical Focus"]
 }
+
+# We cannot control the power of the laser by software. At best, it could be 
+# possible to turn it on/off _if it's set to use the external clock_ by setting the
+# trigger frequency to 0. So for now, just a simulated component, to make Odemis
+# happy, and to be able to store the actual power used in the metadata.
+Light: {
+    class: simulated.Light,
+    role: light,
+    init: {
+        max_power: 0.5, # W
+        # generated wavelength -> 99% low, 25% low, centre, 25% high, 99% high in m
+        spectra: [[475.0e-9, 580.0e-9, 485.0e-9, 490.0e-9, 495.0e-9]] # m
+    },
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"],
+}
+
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
 "Nikon C2": {
@@ -13,14 +29,14 @@ CONFOCAL: {
     role: null,
     init: {
         host: "fake", # Use "fake" to use a simulator
-        port: 6666,    
+        port: 6666,
     },
     # detectors can be added or removed, up to 4
     children: {
         scanner: "Galvano Mirror",
-        detector0: "PMT1",
-        detector1: "PMT2",
-        detector2: "PMT3",
+        detector0: "PMT1 @ 447/60",
+        detector1: "PMT2 @ 525/50",
+        detector2: "PMT3 @ 561LP",
         pinhole: "Pinhole",
     }
 }
@@ -28,41 +44,43 @@ CONFOCAL: {
 "Galvano Mirror": {
     # Internal child of Nikon C2, so no class
     role: laser-mirror,
-#    role: e-beam,
     init: {
         hfw_nomag: 10.0e-3,  # m # The horizontal field of view if the lens is 1x
         #galvano_enabled: False,  # When "False", everything will behave the same
                                  # in software but the mirror will not move. 
     },
-    affects: ["PMT1", "PMT2", "PMT3"] # affects the CCD in case of cathodoluminescence
+    properties: {
+        scale: [8, 8], # (ratio), start with a pretty fast scan
+        resolution: [256, 256],
+    },
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"] # affects the CCD in case of cathodoluminescence
 }
 
-"PMT1": {
+# The light goes first through a dichroic mirror
+
+"PMT1 @ 447/60": {
     # Internal child of Nikon C2, so no class
     role: photo-detector0,
-#    role: se-detector,
     init: {
         channel: 0,
     },
     metadata: {
-        # TODO: put proper band info
-        OUT_WL: [250.0e-9, 650.0e-9], # m
+        OUT_WL: [417.0e-9, 477.0e-9], # m
     }
 }
 
-"PMT2": {
+"PMT2 @ 525/50": {
     # Internal child of Nikon C2, so no class
     role: photo-detector1,
-#    role: bs-detector,
     init: {
         channel: 2,
     },
     metadata: {
-        OUT_WL: [250.0e-9, 650.0e-9], # m
+        OUT_WL: [500.e-9, 550.e-9], # m
     }
 }
 
-"PMT3": {
+"PMT3 @ 561LP": {
     # Internal child of Nikon C2, so no class
     role: photo-detector2,
     #role: cl-detector,
@@ -70,7 +88,7 @@ CONFOCAL: {
         channel: 2,
     },
     metadata: {
-        OUT_WL: [250.0e-9, 650.0e-9], # m
+        OUT_WL: [561.e-9, 1361.e-9], # m
     }
 }
 
@@ -79,16 +97,14 @@ CONFOCAL: {
     role: pinhole,
 }
 
-Light: {
-    class: simulated.Light,
-    role: light,
-    affects: ["PMT1", "PMT2", "PMT3"],
-}
-
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 100.0}, # ratio
+    init: {
+       mag: 100.0, # ratio, (actually of the complete light path)
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+    },
     affects: ["Galvano Mirror"]
 }
 

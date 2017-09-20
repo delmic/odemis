@@ -139,7 +139,7 @@ SECOMv2: {
     # more detectors can be added, if necessary
     children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
 }
- 
+
 # Connect:
 # X -> AO 0
 # Y -> AO 1
