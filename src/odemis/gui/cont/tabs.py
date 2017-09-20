@@ -1060,24 +1060,28 @@ class ChamberTab(Tab):
         # at the bottom.
         self.panel.vp_chamber.SetFlip(wx.VERTICAL)
 
-        # Just one stream: chamber view
-        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
-            ccd_focuser = main_data.focus
+        if main_data.ccd:
+            # Just one stream: chamber view
+            if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
+                ccd_focuser = main_data.focus
+            else:
+                ccd_focuser = None
+            self._ccd_stream = acqstream.CameraStream("Chamber view",
+                                                      main_data.ccd, main_data.ccd.data,
+                                                      emitter=None,
+                                                      focuser=ccd_focuser,
+                                                      detvas=get_local_vas(main_data.ccd))
+            # Make sure image has square pixels and full FoV
+            if hasattr(self._ccd_stream, "detBinning"):
+                self._ccd_stream.detBinning.value = (1, 1)
+            if hasattr(self._ccd_stream, "detResolution"):
+                self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
+            ccd_spe = self._stream_controller.addStream(self._ccd_stream)
+            ccd_spe.stream_panel.flatten()  # No need for the stream name
+            self._ccd_stream.should_update.value = True
         else:
-            ccd_focuser = None
-        self._ccd_stream = acqstream.CameraStream("Chamber view",
-                                                  main_data.ccd, main_data.ccd.data,
-                                                  emitter=None,
-                                                  focuser=ccd_focuser,
-                                                  detvas=get_local_vas(main_data.ccd))
-        # Make sure image has square pixels and full FoV
-        if hasattr(self._ccd_stream, "detBinning"):
-            self._ccd_stream.detBinning.value = (1, 1)
-        if hasattr(self._ccd_stream, "detResolution"):
-            self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
-        ccd_spe = self._stream_controller.addStream(self._ccd_stream)
-        ccd_spe.stream_panel.flatten()  # No need for the stream name
-        self._ccd_stream.should_update.value = True
+            # For some very limited SPARCs
+            logging.info("No CCD found, so chamber view will have no stream")
 
         panel.btn_switch_mirror.Bind(wx.EVT_BUTTON, self._on_switch_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
@@ -1314,7 +1318,8 @@ class ChamberTab(Tab):
         Tab.Show(self, show=show)
 
         # Start chamber view when tab is displayed, and otherwise, stop it
-        self._ccd_stream.should_update.value = show
+        if self.tab_data_model.main.ccd:
+            self._ccd_stream.should_update.value = show
 
         # If there is an actuator, disable the lens
         if show:
@@ -2773,36 +2778,47 @@ class Sparc2AlignTab(Tab):
         #   work in all cases/samples. So we use now just rely on the direct CCD
         #   view.
 
-        # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
-
-        # Force the "temperature" VA to be displayed by making it a hw VA
-        hwdetvas = set()
-        if model.hasVA(main_data.ccd, "temperature"):
-            hwdetvas.add("temperature")
-        ccd_stream = acqstream.CameraStream(
-                            "Angle-resolved sensor",
-                            main_data.ccd,
-                            main_data.ccd.data,
-                            emitter=None,
-                            # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
-                            hwdetvas=hwdetvas,
-                            detvas=get_local_vas(main_data.ccd),
-                            forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                     model.MD_ROTATION: 0}  # Force the CCD as-is
-                            )
-        # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
-        if hasattr(ccd_stream, "detBinning"):
-            ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
-        self._ccd_stream = ccd_stream
-
-        ccd_spe = self._stream_controller.addStream(ccd_stream,
-                            add_to_view=self.panel.vp_align_lens.microscope_view)
-        ccd_spe.stream_panel.flatten()
-
         if "lens-align" not in tab_data.align_mode.choices:
             self.panel.pnl_lens_mover.Show(False)
             # In such case, there is no focus affecting the ccd, so the
             # pnl_focus will also be hidden later on, by the ccd_focuser code
+
+        # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
+
+        # Force a spot at the center of the FoV
+        # Not via stream controller, so we can avoid the scheduler
+        spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
+                                              main_data.sed.data, main_data.ebeam)
+        spot_stream.should_update.value = True
+        self._spot_stream = spot_stream
+
+        if main_data.ccd:
+            # Force the "temperature" VA to be displayed by making it a hw VA
+            hwdetvas = set()
+            if model.hasVA(main_data.ccd, "temperature"):
+                hwdetvas.add("temperature")
+            ccd_stream = acqstream.CameraStream(
+                                "Angle-resolved sensor",
+                                main_data.ccd,
+                                main_data.ccd.data,
+                                emitter=None,
+                                # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
+                                hwdetvas=hwdetvas,
+                                detvas=get_local_vas(main_data.ccd),
+                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                         model.MD_ROTATION: 0}  # Force the CCD as-is
+                                )
+            # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
+            if hasattr(ccd_stream, "detBinning"):
+                ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
+            self._ccd_stream = ccd_stream
+
+            ccd_spe = self._stream_controller.addStream(ccd_stream,
+                                add_to_view=self.panel.vp_align_lens.microscope_view)
+            ccd_spe.stream_panel.flatten()
+
+            # To activate the SEM spot when the CCD plays
+            ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
 
         # For running autofocus (can only one at a time)
         self._autofocus_f = model.InstantaneousFuture()
@@ -2810,7 +2826,7 @@ class Sparc2AlignTab(Tab):
         self._pfc_autofocus = None  # For showing the autofocus progress
 
         # Focuser on stream so menu controller believes it's possible to autofocus.
-        if main_data.focus and main_data.ccd.name in main_data.focus.affects.value:
+        if main_data.focus and main_data.ccd and main_data.ccd.name in main_data.focus.affects.value:
             ccd_focuser = main_data.focus
         else:
             ccd_focuser = None
@@ -2879,30 +2895,34 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.pnl_fib_focus.Show(False)
 
-        # The "MoI" stream is actually a standard stream, with extra
-        # entries at the bottom of the stream panel showing the moment of inertia
-        # and spot intensity.
-        mois = acqstream.CameraStream(
-                            "Alignement CCD for mirror",
-                            main_data.ccd,
-                            main_data.ccd.data,
-                            emitter=None,
-                            hwdetvas=hwdetvas,
-                            detvas=get_local_vas(main_data.ccd),
-                            forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                     model.MD_ROTATION: 0}  # Force the CCD as-is
-                            )
-        # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
-        if hasattr(mois, "detBinning"):
-            mois.detBinning.value = mois.detBinning.clip((2, 2))
-        self._moi_stream = mois
+        self._moi_stream = None
+        if main_data.ccd:
+            # The "MoI" stream is actually a standard stream, with extra
+            # entries at the bottom of the stream panel showing the moment of inertia
+            # and spot intensity.
+            mois = acqstream.CameraStream(
+                                "Alignement CCD for mirror",
+                                main_data.ccd,
+                                main_data.ccd.data,
+                                emitter=None,
+                                hwdetvas=hwdetvas,
+                                detvas=get_local_vas(main_data.ccd),
+                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                         model.MD_ROTATION: 0}  # Force the CCD as-is
+                                )
+            # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
+            if hasattr(mois, "detBinning"):
+                mois.detBinning.value = mois.detBinning.clip((2, 2))
+            self._moi_stream = mois
 
-        mois_spe = self._stream_controller.addStream(mois,
-                         add_to_view=self.panel.vp_moi.microscope_view)
-        mois_spe.stream_panel.flatten()  # No need for the stream name
+            mois_spe = self._stream_controller.addStream(mois,
+                             add_to_view=self.panel.vp_moi.microscope_view)
+            mois_spe.stream_panel.flatten()  # No need for the stream name
 
-        self._addMoIEntries(mois_spe.stream_panel)
-        mois.image.subscribe(self._onNewMoI)
+            self._addMoIEntries(mois_spe.stream_panel)
+            mois.image.subscribe(self._onNewMoI)
+        else:
+            self.panel.btn_bkg_acquire.Show(False)
 
         if "center-align" in tab_data.align_mode.choices:
             # The center align view share the same CCD stream (and settings)
@@ -2926,15 +2946,6 @@ class Sparc2AlignTab(Tab):
             # CPU load, without reason. Ideally, the view controller/canvas
             # should be clever enough to detect this and not actually cause a
             # redraw.
-
-        # Force a spot at the center of the FoV
-        # Not via stream controller, so we can avoid the scheduler
-        spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
-        spot_stream.should_update.value = True
-        self._spot_stream = spot_stream
-        # Make sure it only plays when the CCD (or spec count) stream plays
-        ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
 
         # chronograph of spectrometer if "fiber-align" mode is present
         self._speccnt_stream = None
@@ -3166,7 +3177,8 @@ class Sparc2AlignTab(Tab):
             # AR image). Problem is that it takes about 10s.
         elif mode == "mirror-align":
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
-            self._moi_stream.should_update.value = True
+            if self._moi_stream:
+                self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
@@ -3182,7 +3194,8 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_fibaligner.Enable(False)
         elif mode == "fiber-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
-            self._speccnt_stream.should_update.value = True
+            if self._speccnt_stream:
+                self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
