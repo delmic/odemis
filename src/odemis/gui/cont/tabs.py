@@ -72,26 +72,25 @@ import odemis.gui.util.align as align
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, name, button, panel, main_frame, tab_data, label=None):
+    def __init__(self, name, button, panel, main_frame, tab_data):
         """
         :type name: str
         :type button: odemis.gui.comp.buttons.TabButton
         :type panel: wx.Panel
         :type main_frame: odemis.gui.main_xrc.xrcfr_main
         :type tab_data: odemis.gui.model.LiveViewGUIData
-        :type label: str or None
 
         """
         logging.debug("Initialising tab %s", name)
 
         self.name = name
-        self.label = label
         self.button = button
         self.panel = panel
         self.main_frame = main_frame
         self.tab_data_model = tab_data
         self.highlighted = False
         self.focussed_viewport = None
+        self.label = None
 
     def Show(self, show=True):
         self.button.SetToggle(show)
@@ -229,10 +228,11 @@ class Tab(object):
         pass
 
     def set_label(self, label):
+        """
+        label (str): Text displayed at the tab selector
+        """
+        self.label = label
         self.button.SetLabel(label)
-
-    def get_label(self):
-        return self.button.GetLabel()
 
     def highlight(self, on=True):
         """ Put the tab in 'highlighted' mode to indicate a change has occurred """
@@ -253,6 +253,17 @@ class Tab(object):
             logging.warn("Could not make the '%s' tab default, '%s' already is.",
                          self, self.tab_data_model.main.tab.value.name)
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        """
+        Check whether the tab should be displayed for the current microscope
+          configuration, and reports important it should be selected at init.
+        main_data: odemis.gui.model.MainGUIData
+        return (0<=int or None): the "priority", where bigger is more likely to
+          be selected by default. None specifies the tab shouldn't be displayed.
+        """
+        raise NotImplementedError("Child must provide priority")
+
 
 # Preferable autofocus values to be set when triggering autofocus in delphi
 AUTOFOCUS_BINNING = (8, 8)
@@ -271,6 +282,7 @@ class SecomStreamsTab(Tab):
 
         tab_data = guimod.LiveViewGUIData(main_data)
         super(SecomStreamsTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("STREAMS")
 
         self.main_data = main_data
 
@@ -665,11 +677,20 @@ class SecomStreamsTab(Tab):
         if not show:
             self._streambar_controller.pauseStreams()
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SECOM/DELPHI and all simple microscopes
+        if main_data.role in ("secom", "delphi", "sem", "optical"):
+            return 2
+        else:
+            return None
+
 
 class SparcAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.SparcAcquisitionGUIData(main_data)
         super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ACQUISITION")
 
         # Create the streams (first, as SEM viewport needs SEM concurrent stream):
         # * SEM (survey): live stream displaying the current SEM view (full FoV)
@@ -973,6 +994,14 @@ class SparcAcquisitionTab(Tab):
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SPARCs
+        if main_data.role in ("sparc-simplex", "sparc", "sparc2"):
+            return 1
+        else:
+            return None
+
 
 # Different states of the mirror stage positions
 MIRROR_NOT_REFD = 0
@@ -992,6 +1021,7 @@ class ChamberTab(Tab):
 
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("CHAMBER")
 
         # future to handle the move
         self._move_future = model.InstantaneousFuture()
@@ -1003,11 +1033,6 @@ class ChamberTab(Tab):
             self._pos_engaged = main_data.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
         except KeyError:
             raise ValueError("Mirror actuator has no metadata FAV_POS_ACTIVE")
-
-        mstate = self._get_mirror_state()
-        # If mirror stage not engaged, make this tab the default
-        if mstate != MIRROR_ENGAGED:
-            self.make_default()
 
         self._update_mirror_status()
 
@@ -1066,24 +1091,29 @@ class ChamberTab(Tab):
         main_data.mirror.position.subscribe(self._update_progress_bar, init=True)
         self._pulse_timer = wx.PyTimer(self._pulse_progress_bar)  # only used during referencing
 
-    def _get_mirror_state(self):
+    @classmethod
+    def _get_mirror_state(cls, mirror):
         """
         Return the state of the mirror stage (in term of position)
         Note: need self._pos_engaged
         return (MIRROR_*)
         """
-        mirror = self.tab_data_model.main.mirror
         if not all(mirror.referenced.value.values()):
             return MIRROR_NOT_REFD
 
         pos = mirror.position.value
         dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
                                  pos["s"] - MIRROR_POS_PARKED["s"])
-        dist_engaged = math.hypot(pos["l"] - self._pos_engaged["l"],
-                                  pos["s"] - self._pos_engaged["s"])
         if dist_parked <= MIRROR_ONPOS_RADIUS:
             return MIRROR_PARKED
-        elif dist_engaged <= MIRROR_ONPOS_RADIUS:
+
+        try:
+            pos_engaged = mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        except KeyError:
+            return MIRROR_BAD
+        dist_engaged = math.hypot(pos["l"] - pos_engaged["l"],
+                                  pos["s"] - pos_engaged["s"])
+        if dist_engaged <= MIRROR_ONPOS_RADIUS:
             return MIRROR_ENGAGED
         else:
             return MIRROR_BAD
@@ -1153,8 +1183,8 @@ class ChamberTab(Tab):
         # Note: s axis can only be moved when near engaged pos. So:
         #  * when parking/referencing => move s first, then l
         #  * when engaging => move l first, then s
-        mstate = self._get_mirror_state()
         mirror = self.tab_data_model.main.mirror
+        mstate = self._get_mirror_state(mirror)
         if mstate == MIRROR_PARKED:
             # => Engage
             f1 = (mirror.moveAbs, {"l": self._pos_engaged["l"]})
@@ -1246,7 +1276,7 @@ class ChamberTab(Tab):
         text based on this.
         Note: must be called within the main GUI thread
         """
-        mstate = self._get_mirror_state()
+        mstate = self._get_mirror_state(self.tab_data_model.main.mirror)
 
         if mstate == MIRROR_NOT_REFD:
             txt_warning = ("Parking the mirror at least once is required in order "
@@ -1300,6 +1330,23 @@ class ChamberTab(Tab):
     def terminate(self):
         self._ccd_stream.is_active.value = False
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SPARCs with a "parkable" mirror.
+        # Note: that's actually just the SPARCv2 + one "hybrid" SPARCv1 with a
+        # redux stage
+        if main_data.role in ("sparc", "sparc2"):
+            mirror = main_data.mirror
+            if mirror and set(mirror.axes.keys()) == {"l", "s"}:
+                mstate = cls._get_mirror_state(mirror)
+                # If mirror stage not engaged, make this tab the default
+                if mstate != MIRROR_ENGAGED:
+                    return 10
+                else:
+                    return 2
+
+        return None
+
 
 class AnalysisTab(Tab):
     """ Handle the loading and displaying of acquisition files
@@ -1337,6 +1384,11 @@ class AnalysisTab(Tab):
         # displayed
         tab_data = guimod.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
+        if main_data.role in ("sparc-simplex", "sparc", "sparc2"):
+            # Different name on the SPARC to reflect the slightly different usage
+            self.set_label("ANALYSIS")
+        else:
+            self.set_label("GALLERY")
 
         # Connect viewports
         viewports = panel.pnl_inspection_grid.viewports
@@ -1801,6 +1853,10 @@ class AnalysisTab(Tab):
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        return 0
+
 
 class SecomAlignTab(Tab):
     """ Tab for the lens alignment on the SECOM and SECOMv2 platform
@@ -1816,6 +1872,7 @@ class SecomAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.SecomAlignGUIData(main_data)
         super(SecomAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ALIGNMENT")
         panel.vp_align_sem.ShowLegend(False)
 
         # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 45°)
@@ -2304,6 +2361,13 @@ class SecomAlignTab(Tab):
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        if main_data.role == "secom":
+            return 1
+        else:
+            return None
+
 
 class SparcAlignTab(Tab):
     """
@@ -2316,6 +2380,7 @@ class SparcAlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.SparcAlignGUIData(main_data)
         super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ALIGNMENT")
 
         self._settings_controller = settings.SparcAlignSettingsController(
             panel,
@@ -2612,6 +2677,18 @@ class SparcAlignTab(Tab):
             if s:
                 s.is_active.value = False
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SPARCv1, (with no "parkable" mirror)
+        if main_data.role == "sparc":
+            mirror = main_data.mirror
+            if mirror and set(mirror.axes.keys()) == {"l", "s"}:
+                return None # => will use the Sparc2AlignTab
+            else:
+                return 5
+
+        return None
+
 
 class Sparc2AlignTab(Tab):
     """
@@ -2622,6 +2699,7 @@ class Sparc2AlignTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.Sparc2AlignGUIData(main_data)
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        self.set_label("ALIGNMENT")
 
         if main_data.lens_mover:
             # Reference and move the lens to its default position
@@ -3474,6 +3552,16 @@ class Sparc2AlignTab(Tab):
         self._stream_controller.pauseStreams()
         self.tab_data_model.autofocus_active.value = False
 
+    @classmethod
+    def get_display_priority(cls, main_data):
+        # For SPARCs with a "parkable" mirror.
+        if main_data.role in ("sparc", "sparc2"):
+            mirror = main_data.mirror
+            if mirror and set(mirror.axes.keys()) == {"l", "s"}:
+                return 5
+
+        return None
+
 
 class TabBarController(object):
     def __init__(self, tab_defs, main_frame, main_data):
@@ -3564,16 +3652,18 @@ class TabBarController(object):
         main_sizer = main_frame.GetSizer()
         index = 1
         default_tab = None
+        max_prio = -1
 
         for tab_def in tab_defs:
-            if role in tab_def["roles"]:
+            priority = tab_def["controller"].get_display_priority(main_data)
+            if priority is not None:
                 tpnl = tab_def["panel"](self.main_frame)
                 main_sizer.Insert(index, tpnl, flag=wx.EXPAND, proportion=1)
                 index += 1
-                tab = tab_def["controller"](tab_def["name"], tab_def["button"], tpnl, main_frame,
-                                            main_data)
-                tab.set_label(tab_def["roles"][role].get("label", tab_def["label"]))
-                if tab_def["roles"][role].get("default", False):
+                tab = tab_def["controller"](tab_def["name"], tab_def["button"],
+                                            tpnl, main_frame, main_data)
+                if max_prio < priority:
+                    max_prio = priority
                     default_tab = tab
                 tabs.append(tab)
             else:
