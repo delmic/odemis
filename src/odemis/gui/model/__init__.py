@@ -975,7 +975,7 @@ class StreamView(View):
             self.view_pos.value[0] + half_fov[0],
             self.view_pos.value[1] - half_fov[1],
         )
-        streams = self.getStreams()
+        streams = self.stream_tree.getStreams()
         for stream in streams:
             if hasattr(stream, 'rect'): # the stream is probably pyramidal
                 stream.rect.value = stream.rect.clip(view_rect)
