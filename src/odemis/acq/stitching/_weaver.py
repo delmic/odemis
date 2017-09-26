@@ -20,6 +20,7 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.util import img
+import copy
 
 
 # This is a series of classes which use different methods to generate a large
@@ -143,7 +144,6 @@ class MeanWeaver(object):
     def addTile(self,tile):
         self.tiles.append(tile)
     
-    
     def getFullImage(self):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
@@ -160,7 +160,7 @@ class MeanWeaver(object):
         
         for t in tiles:
             img.mergeMetadata(t.metadata)
-    
+
         # Compute the bounding box of each tile and the global bounding box
     
         # Get a fixed pixel size by using the first one
@@ -184,7 +184,7 @@ class MeanWeaver(object):
     
         # Compute the bounding-boxes in pixel coordinates
         tbbx_px = []
-
+        
         glt = gbbx_phy[0], gbbx_phy[3]  # that's the origin (Y is max as Y is inverted)
         for bp, t in zip(tbbx_phy, tiles):
             lt = (int((bp[0] - glt[0]) / pxs[0]), int(-(bp[3] - glt[1]) / pxs[1]))
@@ -197,7 +197,7 @@ class MeanWeaver(object):
                    max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
     
         assert gbbx_px[0] == gbbx_px[1] == 0
-
+       
         # TODO: warn if the global area is much bigger than the sum of the tile area
     
         # Paste each tile
@@ -213,35 +213,51 @@ class MeanWeaver(object):
             sz_m = 2*tiles[0].metadata[model.MD_POS][0]
             ovrlp = (sz_m-diff)/sz_m
             
-            prev_t = None
-            prev_b = None
             prev_im = None
             
             for b, t in zip(tbbx_px, tiles):
                 im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = t
-                
+            
                 # Take mean of overlap region from previous and current stitched image
                 if prev_im != None:
-                    if t.metadata[model.MD_POS][0] > prev_t.metadata[model.MD_POS][0]:
-                        # horizontal
-                        prev_cropped = prev_im[prev_b[1]:prev_b[1] + t.shape[0], prev_b[0]+(1-ovrlp)*t.shape[0]:prev_b[0] + t.shape[1]]
-                        im_cropped = im[prev_b[1]:prev_b[1] + t.shape[0], prev_b[0]+(1-ovrlp)*t.shape[0]:prev_b[0] + t.shape[1]]                    
+                   
+                    # horizontal
+                    if b[0] >tiles[0].metadata[model.MD_POS][0]:
+                        prev_cropped = prev_im[b[1]:b[1] + t.shape[0], b[0]:b[0] + ovrlp * t.shape[1]]
+                        im_cropped = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + ovrlp * t.shape[1]]                    
                         
-                        im[prev_b[1]:prev_b[1] + t.shape[0], prev_b[0]+(1-ovrlp)*t.shape[0]:prev_b[0] + t.shape[1]] =\
-                           numpy.mean([prev_cropped,im_cropped],axis=0)
+                        # Use different weights of tiles when calculating mean, depending on the 
+                        # position of the columns (tile closer to the column will be weighted more 
+                        # strongly)
+                        means=numpy.empty([len(prev_cropped),len(prev_cropped[0])])
+                        for row in range(len(prev_cropped)):
+                            for col in range(len(prev_cropped[0])):
+                                perc = col/len(prev_cropped[0])
+                                mean = numpy.add((1-perc)*prev_cropped[row][col],perc*im_cropped[row][col])
+                                means[row][col] = mean
+                        
+
+                        x = int(ovrlp*t.shape[0]/4) # only update part of the region, avoids empty stripes between tiles
+                      
+                        im[b[1]:b[1] + t.shape[0], b[0]:b[0] + ovrlp * t.shape[1]-x] =\
+                           means[:,:-x]
+                        
                            
-                    else:
-                        prev_cropped = prev_im[prev_b[1]+(1-ovrlp)*t.shape[0]:prev_b[1] + t.shape[0], prev_b[0]:prev_b[0] + t.shape[1]]
-                        im_cropped = im[prev_b[1]+(1-ovrlp)*t.shape[0]:prev_b[1] + t.shape[0], prev_b[0]:prev_b[0] + t.shape[1]]
+                    if b[1]>tiles[0].metadata[model.MD_POS][1]:
+                        prev_cropped = prev_im[b[1]:b[1] + ovrlp * t.shape[0], b[0]:b[0] + t.shape[1]]
+                        im_cropped = im[b[1]:b[1] + ovrlp * t.shape[0], b[0]:b[0] + t.shape[1]]
     
+                        means=[]
+                        for i in range(len(prev_cropped)):
+                            perc = i/len(prev_cropped)
+                            mean = numpy.add((1-perc)*prev_cropped[i],perc*im_cropped[i])
+                            means.append(mean)
                         
-                        im[prev_b[1]+(1-ovrlp)*t.shape[0]:prev_b[1] + t.shape[0], prev_b[0]:prev_b[0] + t.shape[1]] =\
-                           numpy.mean([prev_cropped,im_cropped],axis=0)              
+                        im[b[1]:b[1] + ovrlp * t.shape[0]-x, b[0]:b[0] + t.shape[1]] =\
+                           means[:-x][:]#numpy.mean([prev_cropped[:-10,:],im_cropped[10:,:]],axis=0)              
+                    
                 
-                
-                prev_im = im
-                prev_b = b
-                prev_t = t
+                prev_im = copy.deepcopy(im)
                 
         else:
             im = tiles[0]
@@ -255,6 +271,6 @@ class MeanWeaver(object):
     
         return model.DataArray(im, md)
     
-    
-    
+
+   
     
