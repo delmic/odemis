@@ -5,16 +5,7 @@
   <body text="#BBBBBB" bgcolor="#333333">
 
         <font size="2">
-        <!-- TODO: More information needs to be gathered to get the precise numbers
-        <b><font size="3">Minimum spot intensity required</font></b>
-        <ul>
-            <li>Angular resolved: &gt; 0.1</li>
-            <li>CL intensity: &gt; 0.1</li>
-            <li>Spectrum: &gt; 0.5</li>
-        </ul>
-	<br/>
-	<br/> -->
-	<b><font size="3">Auto focus procedure (Lens)</font></b>
+	<b><font size="3">Spectrograph auto focus (Lens)</font></b>
         <ol>
             <li>Turn off all the lights in the chamber</li>
             <li>Blank the beam</li>
@@ -23,20 +14,21 @@
         </ol>
         <br/>
 	<br/>
-        <b><font size="3">Mirror alignment procedure</font></b>
+        <b><font size="3">Mirror alignment</font></b>
         <ol>
             <li>Ensure on the SEM image that the mirror hole is roughly correctly centered</li>
             <li>Turn off all the lights in the chamber</li>
+            <!-- TODO: once background acquisition is supported
             <li>Blank the beam</li>
             <li>Acquire background image</li>
-            <li>Unblank the beam</li>
-            <li>Move X and Y axis to position the brightest point (moment of inertia) at the
-            center</li>
-            <li>Move Z axis to reduce the moment of inertia and increase spot intensity</li>
+            <li>Unblank the beam</li>-->
+            <li>Bring the sample less than 1.5 mm from the mirror (by moving the Z axis up)</li>
+            <li>Move X and Y axes to make the spot image symmetric horizontally</li>
+            <li>Move Z axis up to increase spot intensity and reiterate from step 4</li>
         </ol>
         <br/>
 	<br/>
-        <b><font size="3">Lens alignment procedure</font></b>
+        <b><font size="3">Lens alignment</font></b>
         <ol>
             <li>Unblank the beam</li>
             <li>Move the X axis of the lens to center the CL spot on the blue vertical line</li>

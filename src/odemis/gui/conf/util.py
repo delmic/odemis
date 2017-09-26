@@ -760,8 +760,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         # The event configuration determines what event will signal that the
         # setting entry has changed value.
         update_event = conf.get("event", wx.EVT_SLIDER)
-        if update_event not in (wx.EVT_SCROLL_CHANGED, wx.EVT_SLIDER):
-            raise ValueError("Illegal event type %d for Slider setting entry!" % (update_event,))
+        if update_event.typeId not in (wx.EVT_SCROLL_CHANGED.typeId, wx.EVT_SLIDER.typeId):
+            raise ValueError("Illegal event type %d for Slider setting entry!" % (update_event.typeId,))
 
         ctrl_conf = {
             'min_val': min_val,

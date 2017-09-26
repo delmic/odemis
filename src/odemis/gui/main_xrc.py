@@ -202,7 +202,6 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         # Define variables for the controls, bind event handlers
         self.pnl_mode_btns = xrc.XRCCTRL(self, "pnl_mode_btns")
         self.btn_align_lens = xrc.XRCCTRL(self, "btn_align_lens")
-        self.btn_align_spot = xrc.XRCCTRL(self, "btn_align_spot")
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
@@ -2533,29 +2532,6 @@ def __init_resources():
                         </object>
                         <flag>wxEXPAND</flag>
                         <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="GraphicRadioButton" name="btn_align_spot">
-                          <icon>img_icon_ico_ang_png</icon>
-                          <icon_on>img_icon_ico_ang_green_png</icon_on>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>SPOT</label>
-                          <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxEXPAND</flag>
-                        <cellpos>0,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_mirror">
