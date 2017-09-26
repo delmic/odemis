@@ -37,6 +37,8 @@ import time
 
 import cv2
 
+MTD_BINARY = 0
+MTD_EXHAUSTIVE = 1
 
 MAX_STEPS_NUMBER = 100  # Max steps to perform autofocus
 MAX_BS_NUMBER = 1  # Maximum number of applying binary search with a smaller max_step
@@ -145,11 +147,11 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector: model.DigitalCamera or model.Detector
     emt (None or model.Emitter): In case of a SED this is the scanner used
-    focus (model.Actuator): The optical focus
+    focus (model.Actuator): The focus actuator (with a "z" axis)
     dfbkg (model.DataFlow): dataflow of se- or bs- detector
     good_focus (float): if provided, an already known good focus position to be
       taken into consideration while autofocusing
-    rng_focus (tuple): if provided, the search of the best focus position is limited
+    rng_focus (tuple of floats): if provided, the search of the best focus position is limited
       within this range
     returns:
         (float): Focus position (m)
@@ -159,14 +161,19 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             IOError if procedure failed
     """
     # TODO: dfbkg is mis-named, as it's the dataflow to use to _activate_ the
-    # emitter. To acquire the background, it's specifically not used.
+    # emitter. It's necessary to acquire the background, as otherwise we assume
+    # the emitter is always active, but during background acquisition, that
+    # emitter is explicitly _disabled_.
+    # => change emt to "scanner", and "dfbkg" to "emitter". Or pass a stream?
+    # Note: the emt is almost not used, only to estimate completion time,
+    # and read the depthOfField.
 
     # It does a dichotomy search on the focus level. In practice, it means it
     # will start going into the direction that increase the focus with big steps
     # until the focus decreases again. Then it'll bounce back and forth with
     # smaller and smaller steps.
     # The tricky parts are:
-    # * it's hard to estimate the focus level (on a random image)
+    # * it's hard to estimate the focus level (on an arbitrary image)
     # * two acquisitions at the same focus position can have (slightly) different
     #   focus levels (due to noise and sample degradation)
     # * if the focus actuator is not precise (eg, open loop), it's hard to
@@ -181,6 +188,9 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             # All the digital cameras have a depthOfField, which is updated based
             # on the optical lens properties... but the depthOfField in this
             # case depends on the e-beam lens.
+            # TODO: or better rely on which component the focuser affects? If it
+            # affects (also) the emitter, use this one first? (but in the
+            # current models the focusers affects nothing)
             avail_depths = (emt, detector)
         for c in avail_depths:
             if model.hasVA(c, "depthOfField"):
@@ -497,7 +507,7 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     return steps * exposure_time
 
 
-def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None, method='binary'):
+def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None, method=MTD_BINARY):
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
     procedure or even cancel it.
@@ -513,8 +523,8 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
       taken into consideration while autofocusing
     rng_focus (tuple): if provided, the search of the best focus position is limited
       within this range
-    method (str): focusing method, if 'binary' we follow a binary method while in
-      case of 'exhaustive' we iterate through the whole provided range
+    method (MTD_*): focusing method, if BINARY we follow a dichotomic method while in
+      case of EXHAUSTIVE we iterate through the whole provided range
     returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
             Focus position (m)
             Focus level
@@ -538,9 +548,9 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
     f.task_canceller = _CancelAutoFocus
 
     # Run in separate thread
-    if method == "exhaustive":
+    if method == MTD_EXHAUSTIVE:
         autofocus_fn = _DoExhaustiveFocus
-    elif method == "binary":
+    elif method == MTD_BINARY:
         autofocus_fn = _DoBinaryFocus
     else:
         raise ValueError("Unknown autofocus method")
