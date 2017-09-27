@@ -24,6 +24,7 @@ from odemis import model, util
 from odemis.model import HwError
 from odemis.util import driver
 import os
+import random
 import re
 import serial
 import threading
@@ -85,13 +86,14 @@ class Ammeter(model.Detector):
 
         # Force range to auto
         self._sendOrder(":CURR:RANG:AUTO ON")
-        # TODO: have a _checkError(), which throws an error if an error was on the queue
-        n, msg = self.ReadNextError()  # DEBUG
+        self._checkError()
         # Prepare to measure current
         self.ConfigureCurrent()
+        self._checkError()
 
         # TODO: that's probably very Keithley 6485
         rate = self.GetIntegrationRate()
+        self._checkError()
         # Note: the lowest noise is at rate between 1 and 10, so ~20ms to 200ms
         # The max rate is the line frequency (=> 1 s)
         self.dwellTime = model.FloatContinuous(rate / self._lfr, (0.01 / self._lfr, 1),
@@ -107,12 +109,12 @@ class Ammeter(model.Detector):
         self.stop_generate()
 
         if self._serial:
-            # TODO: Stop measurement ?
-
+            # There doesn't seem any command to stop the measurement
             with self._ser_access:
                 self._serial.close()
                 self._serial = None
-                self._file.close()
+                if self._file:
+                    self._file.close()
 
     @staticmethod
     def _openSerialPort(port, baudrate):
@@ -155,10 +157,12 @@ class Ammeter(model.Detector):
         raises:
             IOError: if no device are found
         """
-        # TODO: For debugging purpose
-#         if ports == "/dev/fake":
-#             self._serial = SCPISimulator(timeout=1)
-#             return ports
+        # For debugging purpose
+        if ports == "/dev/fake":
+            self._serial = K6485Simulator(timeout=1)
+            self._file = None
+            idn = self.GetIdentification()
+            return ports, idn
 
         if os.name == "nt":
             raise NotImplementedError("Windows not supported")
@@ -295,8 +299,6 @@ class Ammeter(model.Detector):
         except TypeError, ValueError:
             raise IOError("Failed to read measurement (got %s)" % (res,))
 
-        if err:
-            logging.debug("Measurement has ")
         return val, ts, err
 
     def SetIntegrationRate(self, rate):
@@ -322,6 +324,15 @@ class Ammeter(model.Detector):
         # Returns 50 or 60
         res = self._sendQuery("SYST:LFR?")
         return float(res)
+
+    def _checkError(self):
+        """
+        Check if an error is reported by the hardware
+        raise SCPIError: if the hardware has an error queued
+        """
+        n, msg = self.ReadNextError()
+        if n is not None:
+            raise SCPIError("%s (%d)" % (msg, n))
 
     # For the Odemis API
 
@@ -384,4 +395,112 @@ class BasicDataFlow(model.DataFlow):
     def stop_generate(self):
         self._detector.stop_generate()
 
-# TODO simulator
+
+class K6485Simulator(object):
+    """
+    Simulates a Keithley 6485
+    Same interface as the serial port
+    """
+
+    def __init__(self, timeout=1, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = ""  # what the commands sends back to the "host computer"
+        self._input_buf = ""  # what we receive from the "host computer"
+
+        self._lfr = 50
+        self._nplc = 5
+        self._time_start = time.time()
+
+        self._errorq = [] # list of int
+
+    def write(self, data):
+        self._input_buf += data
+        msgs = self._input_buf.split("\r")
+        for m in msgs[:-1]:
+            self._parseMessage(m)  # will update _output_buf
+
+        self._input_buf = msgs[-1]
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def flush(self):
+        pass
+
+    def flushInput(self):
+        self._output_buf = ""
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _addError(self, err):
+        self._errorq.append(err)
+
+    def _sendAnswer(self, ans):
+        self._output_buf += "%s\r" % (ans,)
+
+    def _parseMessage(self, msg):
+        """
+        msg (str): the message to parse (without the \r)
+        return None: self._output_buf is updated if necessary
+        """
+        logging.debug("SIM: parsing %s", msg)
+        m = re.match(r"(?P<com>\*?[A-Za-z:]+\??)\W*(?P<args>.*)", msg)
+        if not m:
+            logging.error("Received unexpected message %s", msg)
+            return
+
+        com = m.group("com").upper()
+
+        if m.group("args"):
+            args = m.group("args").strip()
+        else:
+            args = None
+
+        logging.debug("SIM: decoded message as %s %s", com, args)
+
+        # decode the command
+        if com == "*IDN?":
+            self._sendAnswer("KEITHLEY INSTRUMENTS INC.,MODEL 6485,123456,C01   Sep 27 2017 12:22:00/A02  /J")
+        elif com == "*CLS":
+            pass
+        elif com == "*STB?":
+            self._sendAnswer("0")  # It's all fine
+        elif com == "STAT:QUE?":
+            if not self._errorq:
+                self._sendAnswer("0,\"No error\"")
+            else:
+                err = self._errorq.pop(0)
+                self._sendAnswer("%d,\"Error %d\"" % (err, err))
+        elif com == "CONF:CURR":
+            pass
+        elif com == ":CURR:RANG:AUTO":
+            pass
+        elif com == "SYST:LFR?":
+            self._sendAnswer("%g" % self._lfr)
+        elif com == ":NPLC?":
+            self._sendAnswer("%g" % self._nplc)
+        elif com == ":NPLC":
+            if not args:
+                self._addError(6)
+            else:
+                self._nplc = float(args)
+        elif com in ("MEAS:CURR?", "READ?"):
+            dur = (self._nplc / self._lfr) * 3 + 0.01
+            time.sleep(dur)
+            ts = time.time() - self._time_start
+            val = random.uniform(-1e-9, 1e-9)
+            self._sendAnswer("%EA,%E,%E" % (val, ts, 0))
+        else:
+            logging.warning("SIM: Unsupported instruction %s", com)
+            # TODO: add an error to the queue
+            self._addError(1)

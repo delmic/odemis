@@ -42,8 +42,8 @@ CONFIG_K6485 = {"name": "Keithley 6485", "role": "pc-detector",
                 "idn": "KEITHLEY.+MODEL 6485.+4126216"
 }
 
-# if TEST_NOHW:
-#    CONFIG_PH["device"] = "fake"
+if TEST_NOHW:
+   CONFIG_K6485["port"] = "/dev/fake"
 
 
 class TestK6485(unittest.TestCase):
