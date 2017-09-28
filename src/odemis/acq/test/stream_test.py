@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division
 
+from concurrent.futures import CancelledError
 import gc
 import logging
 import math
@@ -37,7 +38,8 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-from concurrent.futures import CancelledError
+
+from odemis.acq.leech import ProbeCurrentAcquirer
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -1439,6 +1441,26 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(imd[model.MD_PIXEL_SIZE], semmd[model.MD_PIXEL_SIZE])
 
 
+class Fake0DDetector(model.Detector):
+    """
+    Imitates a probe current detector, but you need to send the data yourself (using
+    comp.data.notify(d)
+    """
+    def __init__(self, name):
+        model.Detector.__init__(self, name, "fakedet", parent=None)
+        self.data = Fake0DDataFlow()
+        self._shape = (float("inf"),)
+
+
+class Fake0DDataFlow(model.DataFlow):
+    """
+    Mock object just sufficient for the ProbeCurrentAcquirer
+    """
+    def get(self):
+        da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
+        return da
+
+
 class SPARC2TestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARCv2
@@ -1511,7 +1533,6 @@ class SPARC2TestCase(unittest.TestCase):
 
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
-
 
     def test_acq_cl(self):
         """
@@ -1864,6 +1885,110 @@ class SPARC2TestCase(unittest.TestCase):
                                        spec_md[model.MD_PIXEL_SIZE][1] / res_upscale[1]))
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acq_spec_leech(self):
+        """
+        Test Spectrometer acquisition with ProbeCurrentAcquirer (leech)
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        pcd = Fake0DDetector("test")
+        pca = ProbeCurrentAcquirer(pcd)
+        sems.leeches.append(pca)
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        self.spec.exposureTime.value = 0.3  # s
+        specs.repetition.value = (5, 6)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        pca.period.value = 0.6  # ~every second pixel
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        pcmd = spec_md[model.MD_EBEAM_CURRENT_TIME]
+        self.assertGreater(len(pcmd), 5 * 6 / 2)
+
+    def test_acq_cl_leech(self):
+        """
+        Test acquisition for SEM MD CL intensity + leech
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        mcs = stream.CLSettingsStream("test",
+                      self.cl, self.cl.data, self.ebeam,
+                      emtvas={"dwellTime", })
+        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+
+        pcd = Fake0DDetector("test")
+        pca = ProbeCurrentAcquirer(pcd)
+        sems.leeches.append(pca)
+
+        mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        sems.dcPeriod.value = 100
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-6  # s
+        mcs.repetition.value = (500, 700)
+        pca.period.value = 4900e-6  # ~every 10 lines
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sms.estimateAcquisitionTime() + (0.3 * 700 / 10)
+        logging.debug("Expecting acquisition of %g s", timeout)
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+
+        # Both SEM and CL should have the same shape
+        self.assertEqual(len(sms._main_raw), 1)
+        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sms._rep_raw), 1)
+        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
+        sem_md = sms._main_raw[0].metadata
+        cl_md = sms._rep_raw[0].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        pcmd = cl_md[model.MD_EBEAM_CURRENT_TIME]
+        self.assertGreater(len(pcmd), 500 / 10)
+
 
 # @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):

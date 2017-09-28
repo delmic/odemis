@@ -30,21 +30,19 @@ from abc import ABCMeta, abstractmethod
 from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
+from functools import partial
 import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.acq import _futures
-from odemis.acq import drift
+from odemis.acq import _futures, drift, leech
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
-from odemis.util import img, units
-from odemis.util import spot
+from odemis.util import img, units, spot
 import random
 import threading
 import time
 
 from ._base import Stream, UNDEFINED_ROI
-from functools import partial
 
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
@@ -58,7 +56,6 @@ from functools import partial
 # They all should rely on the same initial anchor acquisition, and keep the
 # drift information between them. Possibly, this could be done by passing a
 # common DriftEstimator to each MDStream.
-
 class MultipleDetectorStream(Stream):
     """
     Abstract class for all specialised streams which are actually a combination
@@ -140,6 +137,16 @@ class MultipleDetectorStream(Stream):
                 if da.shape != (0,):  # don't add empty array
                     r.append(da)
         return r
+
+    @property
+    def leeches(self):
+        """
+        tuple of leech used during acquisition
+        """
+        r = []
+        for s in (self._main_stream, self._rep_stream):
+            r.extend(s.leeches)
+        return tuple(r)
 
     @abstractmethod
     def _estimateRawAcquisitionTime(self):
@@ -741,6 +748,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 dc_acq_time = 0
                 n_til_dc = tot_num
 
+            leech_np = []
+            for l in self.leeches:
+                np = l.start(rep_time, (rep[1], rep[0]))
+                leech_np.append(np)
+
             dc_period = n_til_dc  # approx. (just for time estimation)
 
             # We need to use synchronisation event because without it, either we
@@ -870,6 +882,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         shift = self._dc_estimator.estimate()
                         spot_pos[:, :, 0] -= shift[0]
                         spot_pos[:, :, 1] -= shift[1]
+
+                    # Check if it's time to run a leech
+                    for li, l in enumerate(self.leeches):
+                        if leech_np[li] is None:
+                            continue
+                        leech_np[li] -= 1
+                        if leech_np[li] == 0:
+                            np = l.next([self._main_data[-1], rep_buf[-1]])
+                            leech_np[li] = np
+
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
@@ -894,6 +916,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             if self._dc_estimator is not None:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
+
+            for l in self.leeches:
+                l.complete(self.raw)
+
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of multiple detectors failed")
@@ -1003,6 +1029,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 dc_acq_time = 0
                 n_til_dc = tot_num
 
+            leech_np = []
+            for l in self.leeches:
+                np = l.start(rep_time, (rep[1], rep[0]))
+                leech_np.append(np)
+
             dc_period = n_til_dc  # approx. (just for time estimation)
             # We need to use synchronisation event because without it, either we
             # use .get() but it's not possible to cancel the acquisition, or we
@@ -1014,6 +1045,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 # Move the scan stage to the next position
                 spos = stage_pos[i[::-1]][0], stage_pos[i[::-1]][1]
+                # TODO: apply drift correction on the ebeam. As it's normally at
+                # the center, it should very rarely go out of bound.
                 cspos = {"x": spos[0] - drift_shift[0],
                          "y": spos[1] - drift_shift[1]}
                 if not (spos_rng[0] <= cspos["x"] <= spos_rng[2] and
@@ -1147,6 +1180,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         drift_shift = (drift_shift[0] + shift[0] * main_pxs[0],
                                        drift_shift[1] - shift[1] * main_pxs[1]) # Y is upside down
 
+                    # Check if it's time to run a leech
+                    for li, l in enumerate(self.leeches):
+                        if leech_np[li] is None:
+                            continue
+                        leech_np[li] -= 1
+                        if leech_np[li] == 0:
+                            np = l.next([self._main_data[-1], rep_buf[-1]])
+                            leech_np[li] = np
+
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
@@ -1168,6 +1210,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
             self._onMultipleDetectorData(main_one, rep_buf, rep)
+
+            if self._dc_estimator is not None:
+                self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
+
+            for l in self.leeches:
+                l.complete(self.raw)
 
         except Exception as exp:
             if not isinstance(exp, CancelledError):
@@ -1284,23 +1332,26 @@ class SEMMDStream(MultipleDetectorStream):
                 dc_acq_time = 0
                 cur_dc_period = tot_num
 
+            leech_np = []
+            for l in self.leeches:
+                np = l.start(dt, (rep[1], rep[0]))
+                leech_np.append(np)
+
             trigger = self._rep_det.softwareTrigger
 
             # number of spots scanned so far
             spots_sum = 0
             while spots_sum < tot_num:
-                # don't get crazy if dcPeriod is longer than the whole acquisition
-                cur_dc_period = min(cur_dc_period, tot_num - spots_sum)
-
-                # Scan drift correction number of pixels
-                # Note: it's done so that if the number of pixel is less than
-                # one full line, it will stop at the border => no change in Y.
-                n_x = numpy.clip(cur_dc_period, 1, rep[0])
-                n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
+                # Acquire the maximum amount of pixels until next leech
+                npixels = min(leech_np + [cur_dc_period])
+                n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), spots_sum, npixels)
+                npixels = n_x * n_y
+                # get_next_rectangle() takes care of always fitting in the
+                # acquisition shape, even at the end.
                 self._emitter.resolution.value = (n_x, n_y)
 
-                # Move the beam to the center of the frame
-                trans = tuple(pos_flat[spots_sum:(spots_sum + cur_dc_period)].mean(axis=0))
+                # Move the beam to the center of the sub-frame
+                trans = tuple(pos_flat[spots_sum:(spots_sum + npixels)].mean(axis=0))
                 if self._dc_estimator:
                     trans = (trans[0] - self._dc_estimator.tot_drift[0],
                              trans[1] - self._dc_estimator.tot_drift[1])
@@ -1314,7 +1365,7 @@ class SEMMDStream(MultipleDetectorStream):
                         logging.error("Unexpected clipping in the scan spot position %s", trans)
                 self._emitter.translation.value = cptrans
 
-                spots_sum += cur_dc_period
+                spots_sum += npixels
 
                 # and now the acquisition
                 self._acq_main_complete.clear()
@@ -1327,7 +1378,7 @@ class SEMMDStream(MultipleDetectorStream):
                 self._main_df.subscribe(self._onMainImage)
                 trigger.notify()
                 # Time to scan a frame
-                frame_time = dt * cur_dc_period
+                frame_time = dt * npixels
                 if not self._acq_rep_complete.wait(frame_time * 10 + 5):
                     raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
                                        % (self._emitter.translation.value, frame_time * 10 + 5))
@@ -1349,7 +1400,7 @@ class SEMMDStream(MultipleDetectorStream):
 
                 rep_buf.append(self._rep_data)
 
-                # guess how many drift anchors to acquire
+                # guess how many drift anchors left to acquire
                 n_anchor = (tot_num - spots_sum) // cur_dc_period
                 anchor_time = n_anchor * dc_acq_time
                 self._updateProgress(future, time.time() - start, spots_sum, tot_num, anchor_time)
@@ -1368,6 +1419,18 @@ class SEMMDStream(MultipleDetectorStream):
                     # Estimate drift and update next positions
                     self._dc_estimator.estimate()  # updates .tot_drift
 
+                # Check if it's time to run a leech
+                for li, l in enumerate(self.leeches):
+                    if leech_np[li] is None:
+                        continue
+                    leech_np[li] -= npixels
+                    if leech_np[li] < 0:
+                        logging.error("Acquired too many pixels, and skipped leech %s", l)
+                        leech_np[li] = 0
+                    if leech_np[li] == 0:
+                        np = l.next([self._main_data[-1], rep_buf[-1]])
+                        leech_np[li] = np
+
             self._main_df.unsubscribe(self._onMainImage)
             self._rep_df.unsubscribe(self._onRepetitionImage)
             with self._acq_lock:
@@ -1383,6 +1446,10 @@ class SEMMDStream(MultipleDetectorStream):
 
             if self._dc_estimator:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
+
+            for l in self.leeches:
+                l.complete(self.raw)
+
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of multiple detectors failed")

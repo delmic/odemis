@@ -44,6 +44,7 @@ import time
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
 # because it's a bit strange dependency. => just move to a acq.manager module?
+
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
 # background. You are in charge of ensuring that no other acquisition is
@@ -53,6 +54,7 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
+
 def acquire(streams):
     """ Start an acquisition task for the given streams.
 

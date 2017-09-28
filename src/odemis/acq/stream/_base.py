@@ -125,6 +125,10 @@ class Stream(object):
         # is_active set to True will keep the acquisition going on
         self.is_active = model.BooleanVA(False, setter=self._is_active_setter)
 
+        # Leech to use during acquisition.
+        # Note: for now only some streams actually use them (MDStreams*)
+        self.leeches = []
+
         # Hardware VA that the stream is directly linked to
         self.hw_vas = {}
         self.hw_vas.update(self._getVAs(detector, hwdetvas or set()))
