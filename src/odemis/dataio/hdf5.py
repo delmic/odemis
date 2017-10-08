@@ -1066,6 +1066,7 @@ def _findImageGroups(das):
     Note: it's a slightly different function from tiff._findImageGroups()
     """
     # We consider images to be part of the same group if they have:
+    # * MD_IN_WL and MD_OUT_WL (ie, are fluorescence image)
     # * same shape
     # * metadata that show they were acquired by the same instrument
     # * same position
@@ -1079,17 +1080,20 @@ def _findImageGroups(das):
             # If C != 1 => not possible to merge
             if da.shape[0] != 1: # C is always first dimension
                 continue
+            if model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata:
+                continue
             da0 = das[g[0]]
             if da0.shape != da.shape:
                 continue
             if (da0.metadata.get(model.MD_HW_NAME) != da.metadata.get(model.MD_HW_NAME)
-                or da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)):
+                or da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)
+               ):
                 continue
             if (da0.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
                 or da0.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
                 or da0.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
                 or da0.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
-                ):
+               ):
                 continue
             # Found!
             g.append(i)
@@ -1103,7 +1107,7 @@ def _findImageGroups(das):
 
 def _adjustDimensions(da):
     """
-    Ensure the DataArray has 5 dimensions ordered CTZXY (as dictated by the HDF5 
+    Ensure the DataArray has 5 dimensions ordered CTZXY (as dictated by the HDF5
     SVI convention). If it seems to contain RGB data, an exception is made to
     return just CYX data.
     da (DataArray)
@@ -1167,12 +1171,12 @@ def _groupImages(das):
     """
     # For each image: adjust dimensions
     adas = [_adjustDimensions(da) for da in das]
-    
+
     # For each image, if C = 1, try to merge it to an existing group
     groups = _findImageGroups(adas)
-    
+
     acq, mds = [], []
-    
+
     # For each group:
     # * if alone, do nothing
     # * if many, merge along C
