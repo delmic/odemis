@@ -31,7 +31,7 @@ from numpy import fft
 
 # TODO: move and rename to something more explicit. Eg acq.align.MeasureShift (CrossCorrelation)
 
-def CalculateDrift(previous_img, current_img, precision=1):
+def MeasureShift(previous_img, current_img, precision=1):
     """
     Given two images, it calculates the drift in x and y axis. It first computes
     the cross-correlation of the two images and then locates the peak. The coordinates

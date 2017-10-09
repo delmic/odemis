@@ -30,7 +30,7 @@ from scipy import misc
 import threading
 import cv2
 
-from .calculation import CalculateDrift
+from odemis.acq.align.shift import MeasureShift
 
 MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
 MAX_PIXELS = 128 ** 2  # px
@@ -164,13 +164,13 @@ class AnchoredEstimator(object):
             # Note: prev_drift and drift, don't represent exactly the same
             # value as the previous image also had drifted. So we need to
             # include also the drift of the previous image.
-            # Also, CalculateDrift return the shift in image pixels, which is
+            # Also, MeasureShift return the shift in image pixels, which is
             # different (usually bigger) from the SEM px.
-            prev_drift = CalculateDrift(self.raw[-2], self.raw[-1], 10)
+            prev_drift = MeasureShift(self.raw[-2], self.raw[-1], 10)
             prev_drift = (prev_drift[0] * self._scale[0] + self.drift[0],
                           prev_drift[1] * self._scale[1] + self.drift[1])
 
-            orig_drift = CalculateDrift(self.raw[0], self.raw[-1], 10)
+            orig_drift = MeasureShift(self.raw[0], self.raw[-1], 10)
             self.drift = (orig_drift[0] * self._scale[0],
                           orig_drift[1] * self._scale[1])
 

@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 
 from __future__ import division
-from odemis.acq.drift import CalculateDrift
+from odemis.acq.drift import MeasureShift
 import numpy
 import math
 from odemis import model
@@ -305,7 +305,7 @@ class ShiftRegistrar(object):
         a=prev_tile[t1:b1,l1:r1]
         b=tile[t2:b2,l2:r2] 
         
-        [x,y]=CalculateDrift(b,a)
+        [x,y]=MeasureShift(b,a)
         return x,y
 
     def _mean_shift(self, row, col, coords_array):
