@@ -36,8 +36,8 @@ class IdentityRegistrar(object):
     """ Returns position as-is """
     
     def __init__(self):
-        self.tiles = []
-        self.num_dep_tiles = 0
+        self.tile_pos = []
+        self.dep_tiles_pos = []
         
     def addTile(self,tile,dependent_tiles=None):
         """ 
@@ -48,28 +48,21 @@ class IdentityRegistrar(object):
         can be considered fixed relative to the main tile. Their content and metadata are not used
         for the computation of the final position.
         """
-        self.tiles.append(tile)
+        self.tile_pos.append(tile.metadata[model.MD_POS])
         if dependent_tiles != None:
-            self.num_dep_tiles = len(dependent_tiles)
-        
+            pos = []
+            for t in dependent_tiles:
+                pos.append(t.metadata[model.MD_POS])
+            self.dep_tiles_pos.append(pos)
+                
     def getPositions(self):
         """ 
         returns:
-        tile_positions (list of tuples): the adjusted position in X/Y for each tile, in the order they were added
-        dep_tile_positions (list of tuples of tuples): the adjusted position for each dependent tile 
+        tile_positions (list of N tuples of 2 floats)): the adjusted position in X/Y for each tile, in the order they were added
+        dep_tile_positions (list of N tuples of tuples of 2 floats): the adjusted position for each dependent tile 
         (in the order they were passed)
-        """ 
-        
-        positions = []
-        for i in range(len(self.tiles)):
-            positions.append(self.tiles[i].metadata[model.MD_POS])
-            
-        # Return same positions for dependent tiles
-        dep_tile_positions = []
-        for i in range(self.num_dep_tiles):
-            dep_tile_positions.append(positions)
-        
-        return positions, dep_tile_positions
+        """       
+        return self.tile_pos, self.dep_tiles_pos
         
         
 class ShiftRegistrar(object):
@@ -99,6 +92,7 @@ class ShiftRegistrar(object):
         self.acqOrder = []
         
         self.num_dep_tiles = 0 # required in getPositions() function
+        self.shift_tile_dep_tiles = [] # shift between main tile and dependent tiles
 
        
     def addTile(self,tile,dependent_tiles = None):
@@ -109,9 +103,12 @@ class ShiftRegistrar(object):
         dependent_tiles (list of DataArray or None): each of the dependent tile, where their position 
         can be considered fixed relative to the main tile. Their content and metadata are not used
         for the computation of the final position.
+        Not every random order of adding tiles is supported: the first tile has to be in the left top 
+        position, any following tile must either be inserted to the right of an existing tile or to
+        the bottom. The grid has to be filled up from top to bottom, moving from the bottom up is not 
+        supported.
         """  
         
-        self.size = tile.shape[0]
         self.px_size = tile.metadata[model.MD_PIXEL_SIZE]
         
         if dependent_tiles != None:
@@ -119,9 +116,21 @@ class ShiftRegistrar(object):
         
         # Find position of the tile in the grid. Indices of grid position are given as posX, posY.
         if self.tiles[0][0] == None:
+            self.size = tile.shape
             self.posX = 0
             self.posY = 0
+            if dependent_tiles != None:
+            # Shift between tile and its dependent tiles
+                for i in range(len(dependent_tiles)):
+                    self.shift_tile_dep_tiles.append([])                   
+
+            self.pos_prev_x = 0 # used to determine if tile should be compared to right or left tile
         else:
+            if tile.shape != self.tiles[0][0].shape:
+                raise ValueError(
+                    "Tile shape differs from previous tile shapes %s != %s"%(tile.shape,self.tiles[0][0].shape)
+                    )
+            
             md_pos = tile.metadata[model.MD_POS]
    
             # Find the registered tile that is closest to the new tile.
@@ -137,54 +146,76 @@ class ShiftRegistrar(object):
                             md_pos_prev = self.tiles[i][j].metadata[model.MD_POS]
             
             # Insert new tile either to the right or to the bottom of the closest tile.
-            ver_diff = abs(md_pos[1]-md_pos_prev[1])
-            hor_diff = abs(md_pos[0]-md_pos_prev[0])
-            if ver_diff > hor_diff:
-                self.posY = pos_prev[0] + 1
-                self.posX = pos_prev[1]
-                if len(self.shifts) <= self.posY:
-                    self._updateGrid("y") # extend grid in y direction
+            ver_diff = md_pos[1]-md_pos_prev[1]
+            hor_diff = md_pos[0]-md_pos_prev[0]
+            if abs(ver_diff) > abs(hor_diff):
+                if ver_diff < 0:
+                    self.posY = pos_prev[0] + 1
+                    self.posX = pos_prev[1]
+                    if len(self.shifts) <= self.posY:
+                        self._updateGrid("y") # extend grid in y direction
+                else:
+                    self.posY = pos_prev[0] - 1
+                    self.posX = pos_prev[1]
             else:
-                self.posY = pos_prev[0]
-                self.posX = pos_prev[1] + 1    
-                if len(self.shifts[0]) <= self.posX:
-                    self._updateGrid("x") # extend grid in x direction
-     
-               
-            # Calculate overlap. The overlap is assumed to be identical for all tiles and is
-            # only calculated after the second tile is added.
-            if len(self.shifts)==2 and len(self.shifts[0])==1:
-                size_meter = 2*self.tiles[0][0].metadata[model.MD_POS][1]
-                diff = abs(tile.metadata[model.MD_POS][1] - self.tiles[0][0].metadata[model.MD_POS][1])
-                self.ovrlp = 1-(abs(size_meter-diff)/size_meter)
+                if hor_diff > 0:
+                    self.posY = pos_prev[0]
+                    self.posX = pos_prev[1] + 1    
+                    if len(self.shifts[0]) <= self.posX:
+                        self._updateGrid("x") # extend grid in x direction
+                else:
+                    self.posY = pos_prev[0]
+                    self.posX = pos_prev[1] - 1 
             
-            elif len(self.shifts)==1 and len(self.shifts[0])==2:
-                size_meter = 2*self.tiles[0][0].metadata[model.MD_POS][0]
+            self.pos_prev_x = pos_prev[1]
+            # Calculate overlap
+            if abs(ver_diff) > abs(hor_diff):
+                size_meter = self.size[0] * self.px_size[1]
+                diff = abs(tile.metadata[model.MD_POS][1] - md_pos_prev[1])
+                self.ovrlp = abs(size_meter - diff) / size_meter
+                # self.size is given as YX, MD_POS as XY
+                self.osize = self.size[0] * self.ovrlp  # overlap size in pixels  
+                self.tsize = int(self.size[0] - self.osize)
+            else:
+                size_meter = self.size[1] * self.px_size[0]
+                diff = abs(tile.metadata[model.MD_POS][0] - md_pos_prev[0])
+                self.ovrlp = abs(size_meter-diff) / size_meter
+               
+                self.osize = self.size[1] * self.ovrlp  # overlap size in pixels  
+                self.tsize = int(self.size[1] - self.osize)
                 
-                diff = abs(tile.metadata[model.MD_POS][0] - self.tiles[0][0].metadata[model.MD_POS][0])
-                self.ovrlp = numpy.round(abs(size_meter-diff)/size_meter,decimals=2)
-      
-        self.osize = self.size * self.ovrlp  # overlap size in pixels  
-        self.tsize = int(self.size - self.osize)  
-        
-        self._stitch(tile,self.posY,self.posX)              
+        if dependent_tiles != None:
+            for i in range(len(dependent_tiles)):                 
+                self.shift_tile_dep_tiles[i].append(numpy.subtract(dependent_tiles[i].metadata[model.MD_POS], \
+                                                                tile.metadata[model.MD_POS]))
+
+        self._compute_registration(tile,self.posY,self.posX)              
              
     def getPositions(self):
         """ 
         returns:
         tile_positions (list of tuples): the adjusted position in X/Y for each tile, in the order they were added
-        dep_tile_positions (list of tuples of tuples): the adjusted position for each dependent tile 
-        (in the order they were passed)
+        dep_tile_positions (list of N tuples of tuples of 2 floats): for each tile, it returns 
+        the adjusted position of each dependent tile (in the order they were passed)
         """   
         firstPosition = numpy.divide(self.tiles[0][0].metadata[model.MD_POS],self.px_size)
         tile_positions = []
         for i in range(len(self.acqOrder)):
             shift = self.shifts[self.acqOrder[i][0]][self.acqOrder[i][1]]
             tile_positions.append(((shift[0]+firstPosition[0])*self.px_size[0],(firstPosition[1]-shift[1])*self.px_size[1]))
-        # Return same positions for dependent tiles
+
+        # Return positions for dependent tiles
         dep_tile_positions = []
-        for i in range(self.num_dep_tiles):
-            dep_tile_positions.append(tile_positions)
+        if self.num_dep_tiles > 0:
+            for i in range(len(self.shift_tile_dep_tiles)):
+                pos = []
+                for j in range(len(self.shift_tile_dep_tiles[0])): 
+                    pos.append((tile_positions[j][0] + self.shift_tile_dep_tiles[i][j][0], 
+                               tile_positions[j][1] + self.shift_tile_dep_tiles[i][j][1]))
+                
+                dep_tile_positions.append(pos) 
+
+               
         return tile_positions, dep_tile_positions
     
     def _updateGrid(self,direction):
@@ -209,21 +240,21 @@ class ShiftRegistrar(object):
         shift (2 ints): shift on the roi
         return (2 tuples of 4 ints): left, top, right, bottom pixels in each tile
         """
-        if (shift[0] >= self.size) or (shift[1] >= self.size):
+        if (shift[0] >= self.size[1]) or (shift[1] >= self.size[0]):
             raise ValueError("There is no overlap between tiles for the shift given %s", shift)
         
         # different sizes when shift is negative     
         # reference image
-        l1 = max(0, min(self.size, shift[0]))
-        t1 = max(0, min(self.size, shift[1]))
-        r1 = max(0, min(self.size, shift[0] + self.size))
-        b1 = max(0, min(self.size, shift[1] + self.size))
+        l1 = max(0, min(self.size[1], shift[0]))
+        t1 = max(0, min(self.size[0], shift[1]))
+        r1 = max(0, min(self.size[1], shift[0] + self.size[1]))
+        b1 = max(0, min(self.size[0], shift[1] + self.size[0]))
         
         # shifted image
-        l2 = max(0, min(self.size, - shift[0]))
-        t2 = max(0, min(self.size, - shift[1]))
-        r2 = max(0, min(self.size, self.size - shift[0]))
-        b2 = max(0, min(self.size, self.size - shift[1]))
+        l2 = max(0, min(self.size[1], - shift[0]))
+        t2 = max(0, min(self.size[0], - shift[1]))
+        r2 = max(0, min(self.size[1], self.size[1] - shift[0]))
+        b2 = max(0, min(self.size[0], self.size[0] - shift[1]))
         
         
         return (l1, t1, r1, b1), (l2, t2, r2, b2)
@@ -304,7 +335,7 @@ class ShiftRegistrar(object):
         tile = self.tiles[row][col]
         # the expected shift vector between the two tiles if the scanning would be ideal
         exp_shift = (self.tsize, 0)
-        #exp_shift = (0,self.tsize)
+
         if col > 0:
             prev_pos = self.shifts[row][col - 1]
             prev_tile = self.tiles[row][col - 1]
@@ -341,7 +372,64 @@ class ShiftRegistrar(object):
                 self.coords_hor[row][col] = x, y
        
             # calculate the new position based on the shift with respect to the left neighbor position (prev_pos)
-            pos = (int(prev_pos[0] + (self.size * (1-self.ovrlp)) - x), int(prev_pos[1] - y))
+            pos = (int(prev_pos[0] + (self.size[1] * (1-self.ovrlp)) - x), int(prev_pos[1] - y))
+        
+        return pos, match
+    
+    def _pos_to_right(self, row, col):
+        """
+        Returns the position of the new tile after calculating the shift with the
+        neighbor on the right
+        """
+        # shift compared to left
+        x, y = 0, 0
+        
+        # calculate the shift compared to the neighbor on the left if possible
+        pos = None
+        match = 0
+        
+        tile = self.tiles[row][col]
+        # the expected shift vector between the two tiles if the scanning would be ideal
+        exp_shift = (self.tsize, 0)
+
+        if col > 0:
+            prev_pos = self.shifts[row][col + 1]
+            prev_tile = self.tiles[row][col + 1]
+            x,y = self._get_shift(tile, prev_tile, exp_shift)
+            y=-y
+            x=-x
+            match = self._estimateMatch(prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
+
+            if match < BEST_MATCH and (row > 1 or col > 1):
+                # if the shift calculated does not give a sufficient match, 
+                # try the horizontal mean shift along this row and column if possible
+                try:
+                    mean_x, mean_y = self._mean_shift(row, col, self.coords_hor)
+                except ValueError:
+                    # if a mean value is not available try the last horizontal shift measured
+                    mean_x, mean_y = self.last_hor
+                match_c = self._estimateMatch(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
+                if match_c > match:
+                    x, y = mean_x, mean_y
+                    match = match_c
+
+                if (mean_x, mean_y) != (0, 0):
+                    # try to calculate shift from here, maybe it works better now
+                    drift = self._get_shift(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
+                    mean_x += drift[0]
+                    mean_y += drift[1]
+                    match_c = self._estimateMatch(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
+                    if match_c > match:
+                        x, y = mean_x, mean_y
+                        match = match_c
+
+            # store the new horizontal shift computed
+            self.last_hor = x, y
+            if match >= BEST_MATCH:
+                self.coords_hor[row][col] = x, y
+       
+            # calculate the new position based on the shift with respect to the left neighbor position (prev_pos)
+            pos = (int(prev_pos[0] + (self.size[1] * (1-self.ovrlp)) - x), int(prev_pos[1] - y))
         
         return pos, match
 
@@ -395,14 +483,14 @@ class ShiftRegistrar(object):
                 self.coords_ver[row][col] = x, y
 
             # calculate the new position based on the shift with respect to the top neighbor position (prev_pos)
-            pos = (int(prev_pos[0] - x), int(prev_pos[1] + (self.size * (1-self.ovrlp)) - y))
+            pos = (int(prev_pos[0] - x), int(prev_pos[1] + (self.size[0] * (1-self.ovrlp)) - y))
 
         return pos, match
 
-    def _stitch(self, tile, row, col):
+    def _compute_registration(self, tile, row, col):
         """
         Stitches one tile to the overall image. Tiles should be inserted in an
-        order such that the previous top and left tiles have already been inserted.
+        order such that the previous top or previous left tiles have already been inserted.
         tile (PyPhenom.Image): Tile to be stitched
         row (0<=int): Row of the tile position
         col (0<=int): Column of the tile position
@@ -414,21 +502,27 @@ class ShiftRegistrar(object):
         self.tiles[row][col] = tile
 
         # expected tile position, if there would be no shift
-        ox = int(col * (self.size * (1-self.ovrlp))) # we avoid using tsize to not loose precision due to rounding
-        oy = int(row * (self.size * (1-self.ovrlp)))
+        ox = int(col * (self.size[1] * (1-self.ovrlp))) # we avoid using tsize to not loose precision due to rounding
+        oy = int(row * (self.size[0] * (1-self.ovrlp)))
+        
+        pos = None
+        pos2 = None
+        
+        if self.pos_prev_x <= col:
+            if (row != 0 or col != 0) and self.tiles[row][col - 1] != None:
+                # calculate the shift compared to the neighbor on the left if possible
+                pos, match = self._pos_to_left(row, col)
 
-        if self.tiles[row][col - 1] != None:
-            # calculate the shift compared to the neighbor on the left if possible
-            pos, match = self._pos_to_left(row, col)
-        else:
-            pos = None
-            
-        if self.tiles[row-1][col] != None:
+        if self.pos_prev_x > col:
+            if (row != 0 or col != 0) and self.tiles[row][col + 1] != None:
+                # calculate the shift compared to the neighbor on the right if possible
+                pos, match = self._pos_to_right(row, col)              
+ 
+        if (row != 0 or col != 0) and self.tiles[row-1][col] != None:
             # calculate the shift compared to the neighbor on the top if possible
             pos2, match2 = self._pos_to_top(row, col)
-        else:
-            pos2 = None
 
+                
         # get rid of extreme values
         if (pos is None) and (pos2 is None):
             # draw with a shift on position for putting a margin around the global image
@@ -436,14 +530,14 @@ class ShiftRegistrar(object):
         elif (pos is None):
             pos = pos2
         elif (pos2 is None):
-            pass # use pos
+            pass
         elif match > GOOD_MATCH and match2 > GOOD_MATCH:
             # if the match is not really bad, then take the average position
             pos = (int((pos[0] + pos2[0]) / 2), int((pos[1] + pos2[1]) / 2))
         elif match2 > match:
             # otherwise just keep the best one
             pos = pos2
-
+        
         # store the position of the tile
         self.shifts[row][col] = pos
         

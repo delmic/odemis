@@ -4,7 +4,7 @@ Created on 26 Jul 2017
 
 @author: Éric Piel, Philip Winkler
 
-Copyright © 2017 Éric Piel, Delmic
+Copyright © 2017 Éric Piel, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -21,275 +21,500 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
-import random
 import logging
 from odemis import model
-import numpy as np
-import time
+import numpy
 import unittest
+import random
+import copy
+import os
 
-
-from odemis.acq.stitching import *
-
-from PIL import Image
-
-
+from odemis.acq.stitching import IdentityRegistrar, ShiftRegistrar, decompose_image
+from odemis.dataio import tiff
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# TODO: test more than one tile using IdentityRegistrar
-# TODO: test ShiftRegistrar on white image
+
+# Find path for test images
+path = os.path.relpath("acq/align/test/images", "acq/stitching/test")
+imgs = [path + "/Slice69_stretched.tif"]
 
 # @unittest.skip("skip")
 class TestIdentityRegistrar(unittest.TestCase):
 
-    # @unittest.skip("skip")
-    def test_one_tile(self):
-        """
-        Test that when there is only one tile, it's returned as-is
-        """
-        img12 = np.zeros((2048, 1937), dtype=np.uint16) + 4000
-        md = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",  # tiff doesn't support É (but XML does)
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
-            model.MD_POS: (1e-3, -30e-3),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-        }
-        intile = model.DataArray(img12, md)
-
-        registrar = IdentityRegistrar()
-        registrar.addTile(intile)
+    def setUp(self):
+        random.seed(1)
+         
+    def test_synthetic_images(self):
+        """ Test on synthetic images with rectangles """        
         
+        # Image with large rectangle, different shifts, datatypes and tile sizes
+        shifts = [(0,0),(10,10),(0,10),(8,5),(-6,5)]
+        t_sizes = [(500,500),(300,400),(500,200)]
+        dtypes = [numpy.int8,numpy.int16]
         
-        self.assertEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS])
-
-        # Same thing but with a typical SEM data
-        img8 = np.zeros((256, 356), dtype=np.uint8) + 40
-        md8 = {
-            model.MD_DESCRIPTION: u"test sem",  # tiff doesn't support É (but XML does)
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
-            model.MD_POS: (10e-3, 30e-3),  # m
-            model.MD_DWELL_TIME: 1.2e-6,  # s
-        }
-        intile = model.DataArray(img8, md8)
-        
-        registrar = IdentityRegistrar()
-        registrar.addTile(intile)
-
-        self.assertAlmostEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS],5)
-        
-        
-class TestShiftRegistrar(unittest.TestCase):   
-    def test_one_tile(self):
-        """
-        Test that when there is only one tile, it's returned as-is
-        """
-        img12 = np.zeros((2048, 1937), dtype=np.uint16) + 4000
-        md = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",  # tiff doesn't support É (but XML does)
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
-            model.MD_POS: (1e-3, -30e-3),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-        }
-        intile = model.DataArray(img12, md)
-
-        registrar = ShiftRegistrar()
-        registrar.addTile(intile)
-        
-        
-        self.assertEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS])
-
-        # Same thing but with a typical SEM data
-        img8 = np.zeros((256, 356), dtype=np.uint8) + 40
-        md8 = {
-            model.MD_DESCRIPTION: u"test sem",  # tiff doesn't support É (but XML does)
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
-            model.MD_POS: (10e-3, 30e-3),  # m
-            model.MD_DWELL_TIME: 1.2e-6,  # s
-        }
-        intile = model.DataArray(img8, md8)
-        
-        registrar = ShiftRegistrar()
-        registrar.addTile(intile)
-
-        self.assertAlmostEqual(registrar.getPositions()[0][0], intile.metadata[model.MD_POS],5)
-        
-        
-    def test1(self):
-        """ Test on decomposed image with known shift """
-        img = Image.open("images/test3.tiff")
-        numTiles = 2
-        overlap = 0.2
-        [tiles,pos] = decomposeImage(img,overlap,numTiles)
-        
-        registrar = ShiftRegistrar()
+        for shift in shifts:
+            for size in t_sizes:
+                for dtype in dtypes:
+                    img = 255 * numpy.ones(size,dtype=dtype)
+                    
+                    # Rectangle
+                    l = int(0.9 * size[1])
+                    h = int(0.9 * size[0])
+                    idx1 = int(0.05 * size[0])
+                    idx2 = int(0.05 * size[1])
+                    img[idx1:idx1 + h,idx2:idx2 + l] = numpy.zeros((h,l),dtype=dtype)
+                    
+                    # Crop two tiles with different shifts
+                    tile1 = img[0.3 * size[0]:0.6 * size[0], 0:0.6 * size[1]]
+                    tile2 = img[0.5 * size[0] + shift[0]:0.8 * size[0] + shift[0], shift[1]:0.6 * size[1] + shift[1]]
     
-        for i in range(len(pos)):
-            registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
-            self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
-            
-    def test2(self):
-        """ Test different overlap """
-        img = Image.open("images/test3.tiff")
-        numTiles = 2
-        overlap = 0.1
-        [tiles,pos] = decomposeImage(img,overlap,numTiles)
+                    
+                    px_size = (1e-6, 2e-5)
+                    md1 = {
+                        model.MD_POS: (1e-3, -30e-3),
+                        model.MD_PIXEL_SIZE: px_size
+                    }
+                    md2 = {
+                        model.MD_POS:(1e-3 + 0.6 * size[0] * px_size[0], -30e-3),
+                        model.MD_PIXEL_SIZE: px_size
+                    }
+                            
+                    tiles = [model.DataArray(tile1,md1),model.DataArray(tile2,md2)]
+                    registrar = IdentityRegistrar()
+                    for t in tiles:
+                        registrar.addTile(t)
+                    
+                    diff = numpy.subtract(registrar.getPositions()[0][0], md1[model.MD_POS])
+                    self.assertLessEqual(diff[0] * px_size[0], 1) # one pixel difference allowed
+                    self.assertLessEqual(diff[1] * px_size[1], 1) 
+                    
+                    # Shift is ignored by IdentityRegistrar
+                    diff = (registrar.getPositions()[0][1][0] - (md2[model.MD_POS][0]),
+                            registrar.getPositions()[0][1][1] - (md2[model.MD_POS][1]))
+                    self.assertLessEqual(diff[0], 1) # one pixel difference allowed
+                    self.assertLessEqual(diff[1], 1) 
         
-        registrar = ShiftRegistrar()
-        for i in range(len(pos)):
-            registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
-            self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
-
-    def test3(self):
-        """ Test more tiles """
-        img = Image.open("images/test3.tiff")
-        numTiles = 4
-        overlap = 0.4
-        [tiles,pos] = decomposeImage(img,overlap,numTiles)
         
-        registrar = ShiftRegistrar()
-        for i in range(len(pos)):
-            registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
-            self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
+    def test_white_image(self):
+        """ Position should be left as-is in case of white images """
+        tile1 = 255 * numpy.ones((200,200))
+        size_m = 200 * 1.3e-6
+        
+        md1 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3, 30e-3),  # m
+        }
+        
+        tile2 = 255 * numpy.ones((200,200))
+        md2 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3, 30e-3 + size_m / 2 - size_m * 0.2),  # m
+        }
+        
+        tile3 = 255 * numpy.ones((200,200))
+        md3 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3 + size_m / 2 - size_m * 0.2, 30e-3),  # m
+        }
+        
+        tile4 = 255 * numpy.ones((200,200))
+        md4 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3 + size_m / 2 - size_m * 0.2, 30e-3 + size_m / 2 - size_m * 0.2),  # m
+        }
+        
+        pos = [md1[model.MD_POS], md2[model.MD_POS], md3[model.MD_POS], md4[model.MD_POS]]
            
-    def test4(self):
-        """ Test on different image """
-        img = Image.open("images/test2.tiff")
-        numTiles = 2
-        overlap = 0.2
-        [tiles,pos] = decomposeImage(img,overlap,numTiles)
+        tiles = [model.DataArray(tile1, md1),model.DataArray(tile2,md2),
+                 model.DataArray(tile3, md3),model.DataArray(tile4,md4)]
         
-        registrar = ShiftRegistrar()
-        for i in range(len(pos)):
+        registrar = IdentityRegistrar()  
+        for i in range(len(tiles)):
             registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
-            self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
+            calculatedPositions = registrar.getPositions()[0]                       
+            diff1 = abs(calculatedPositions[i][0] - pos[i][0])
+            diff2 = abs(calculatedPositions[i][1] - pos[i][1])
+            
+            # should return initial position value, small error of 0.01 allowed
+            self.assertLessEqual(diff1, 1.3e-6)
+            self.assertLessEqual(diff2, 1.3e-6)    
+            
+                   
+    def test_shift_real(self):
+        """ Test on decomposed image with known shift """
+        numTiles = [2,3]
+        overlap = [0.2,0.3,0.4]
+        acq = ["horizontalLines","verticalLines","horizontalZigzag"]
+        
+        for img in imgs:
+            data = numpy.array(tiff.read_data(img)[0])
+            for num in numTiles:
+                for o in overlap: 
+                    for a in acq:               
+                        [tiles,pos] = decompose_image(data,o,num,a,False)                
+                        registrar = IdentityRegistrar()         
+                        for i in range(len(pos)):
+                            registrar.addTile(tiles[i])
+                            calculatedPositions = registrar.getPositions()[0]                       
+                            diff1 = abs(calculatedPositions[i][0] - pos[i][0])
+                            diff2 = abs(calculatedPositions[i][1] - pos[i][1])
+                            # allow difference of 10% of overlap
+                            px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
+                            margin1 = 0.01 * tiles[i].shape[0] * px_size[0] # allow error of 1% of tileSize
+                            margin2 = 0.01 * tiles[i].shape[1] * px_size[1]
 
-    def test5(self):
-        """ Test acquisition in vertical direction """
-        img = Image.open("images/test2.tiff")
-        numTiles = 2
-        overlap = 0.2
-        [tiles,pos] = decomposeImage(img,overlap,numTiles,"verticalLines")
-        
-        registrar = ShiftRegistrar()
-        for i in range(len(pos)):
-            registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            
-            self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
-            self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
-            
-    def test6(self):
-        """ Test acquisition in horizontal zigzag direction  """
-        img = Image.open("images/test2.tiff")
-        numTiles = 2
-        overlap = 0.2
-        [tiles,pos] = decomposeImage(img,overlap,numTiles,"horizontalZigzag")
-        
-        registrar = ShiftRegistrar()
-        for i in range(len(pos)):
-            registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            self.assertAlmostEqual(calculatedPositions[i][0],pos[i][0],places=1)
-            self.assertAlmostEqual(calculatedPositions[i][1],pos[i][1],places=1)
-                
-    def test7(self):
+                            self.assertLessEqual(diff1, margin1,
+                                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                                 " %f != %f"%(calculatedPositions[i][0], pos[i][0]))
+                            self.assertLessEqual(diff2, margin2,
+                                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                                 " %f != %f"%(calculatedPositions[i][1], pos[i][1]))
+                        
+                               
+    def test_shift_real_manual(self):
         """ Test case not generated by decompose.py file and manually cropped """
-        img = Image.open("images/test.png")
-        cropped1 = img.crop((0,0,400,400))
-        cropped2 = img.crop((322,4,722,404))
+
+        img = tiff.read_data(imgs[0])[0]
+        cropped1 = img[0:400,0:400]
+        cropped2 = img[4:404,322:722]
   
-        registrar = ShiftRegistrar()
-        tile1 = model.DataArray(np.array(cropped1.convert("L")),{
-                model.MD_PIXEL_SIZE: [1/20,1/20],  # m/px
-                model.MD_POS: (200/20, img.size[1]/20-200/20),  # m
+        registrar = IdentityRegistrar()
+        tile1 = model.DataArray(numpy.array(cropped1),{
+                model.MD_PIXEL_SIZE: [1 / 20,1 / 20],  # m/px
+                model.MD_POS: (200 / 20, img.shape[1] / 20 - 200 / 20),  # m
             })
-        tile2 = model.DataArray(np.array(cropped2.convert("L")),{
-                model.MD_PIXEL_SIZE: [1/20,1/20],  # m/px
-                model.MD_POS: (520/20, img.size[1]/20-200/20),  # m
+        tile2 = model.DataArray(numpy.array(cropped2),{
+                model.MD_PIXEL_SIZE: [1 / 20,1 / 20],  # m/px
+                model.MD_POS: (520 / 20, img.shape[1] / 20 - 200 / 20),  # m
             })
         registrar.addTile(tile1)
         registrar.addTile(tile2)
         calculatedPositions = registrar.getPositions()[0]
-        self.assertAlmostEqual(calculatedPositions[1][0],522/20,places=1)
-        self.assertAlmostEqual(calculatedPositions[1][1],img.size[1]/20-204/20,places=1)          
+        self.assertAlmostEqual(calculatedPositions[1][0],520 / 20,places=1)
+        self.assertAlmostEqual(calculatedPositions[1][1],img.shape[1] / 20 - 200 / 20, places=1)          
+
+      
+    def test_dependent_tiles(self):
+        """ Tests functionality for dependent tiles """
         
-def decomposeImage(img, overlap=0.1, numTiles = 5, method="horizontalLines"):
-    """ 
-    Decomposes image into tiles for testing. The tiles overlap and their center positions are subject to random noise.
-    Returns list of tiles and list of the actual positions. 
-    img: square image obtained by PIL module
-    numTiles: number of desired tiles in each direction
-    method: acquisition method, "horizontalLines" scans image by row and starts at the left for each row,
-    "verticalLines" scans image by columns starting at the top for each row, and "horizontalZigzag" scans 
-    a row, then scans the next row in reverse, etc. mimicking the behaviour of DELMIC microscopes. 
+        # Test on 3 layers of the same image create by decompose_image   
+        img = tiff.read_data(imgs[0])[0]
+        num = 2
+        o = 0.2
+        a = "horizontalZigzag"
+        [tiles,pos] = decompose_image(img,o,num,a,False)                
+        registrar = IdentityRegistrar()         
+        for i in range(len(pos)):
+            registrar.addTile(tiles[i],(tiles[i],tiles[i]))
+            tile_pos, dep_tile_pos = registrar.getPositions()  
+                     
+            diff1 = abs(tile_pos[i][0] - pos[i][0])
+            diff2 = abs(tile_pos[i][1] - pos[i][1])
+            # allow difference of 10% of overlap
+            px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
+            margin = 0.01 * tiles[i].shape[0] * px_size[0]
+            self.assertLessEqual(diff1, margin,
+                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                 " %f != %f"%(tile_pos[i][0], pos[i][0]))
+            self.assertLessEqual(diff2, margin,
+                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                     " %f != %f"%(tile_pos[i][1], pos[i][1]))
+            
+            for j in range(len(dep_tile_pos[0])):
+                diff1 = abs(dep_tile_pos[i][j][0] - pos[i][0])
+                self.assertLessEqual(diff1, margin,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(dep_tile_pos[i][j][0], pos[i][0])) 
+                
+                diff2 = abs(dep_tile_pos[i][j][1] - pos[i][1])
+                self.assertLessEqual(diff2, margin,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(dep_tile_pos[i][j][1], pos[i][1])) 
+                
+                
+        # Test with shifted dependent tiles
+        [tiles,pos] = decompose_image(img,o,num,a,False)                
+        registrar = IdentityRegistrar()  
+        
+        # Add shift
+        dep_tiles = copy.deepcopy(tiles)
+        rnd1 = [random.randrange(-20, 20) for _ in range(len(pos))]
+        rnd2 = [random.randrange(-20, 20) for _ in range(len(pos))]
+        for i in range(len(dep_tiles)):
+            p = (dep_tiles[i].metadata[model.MD_POS][0] + rnd1[i],
+                 dep_tiles[i].metadata[model.MD_POS][1] + rnd2[i])
+            dep_tiles[i].metadata[model.MD_POS] = p
+       
+        for i in range(len(pos)):
+            registrar.addTile(tiles[i],(tiles[i],tiles[i]))
+            tile_pos, dep_tile_pos = registrar.getPositions()  
+                     
+            diff1 = abs(tile_pos[i][0]-pos[i][0])
+            # allow difference of 10% of overlap
+            margin = 0.1 * o * tiles[i].shape[0]
+            self.assertLessEqual(diff1, margin,
+                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                 " %f != %f"%(tile_pos[i][0],pos[i][0]))
+            
+            for j in range(2):
+                diff1 = abs(dep_tile_pos[i][j][0] - pos[i][0])
+                self.assertLessEqual(diff1, margin,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(dep_tile_pos[i][j][0],pos[i][0]+rnd1[i])) 
+                
+                diff2 = abs(dep_tile_pos[i][j][1] - pos[i][1])
+                self.assertLessEqual(diff2, margin,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(dep_tile_pos[i][j][1],pos[i][1]+rnd2[i])) 
+        
+        
+        
+class TestShiftRegistrar(unittest.TestCase): 
     """
-    
-    tileSize = int(img.size[0]/numTiles)
-    
-    pos = []
-    tiles = []
-    for i in range(numTiles):
-        for j in range(numTiles):
-            # Positions top left            
-            if method == "verticalLines":
-                posX = int(i*(1-overlap)*tileSize)
-                posY = int(j*(1-overlap)*tileSize)
-            elif method == "horizontalLines":
-                posX = int(j*(1-overlap)*tileSize)
-                posY = int(i*(1-overlap)*tileSize)
-            elif method == "horizontalZigzag":  
-                if i%2 == 0:
-                    posX = int(j*(1-overlap)*tileSize)
-                else:
-                    posX = int((numTiles-j-1)*(1-overlap)*tileSize) # reverse direction for every second row
-                posY = int(i*(1-overlap)*tileSize)
+    Tests ShiftRegistrar on synthetic and real images (simulated with decompose_image function)
+    with known positions
+    """
+         
+    def setUp(self):
+        random.seed(1)
+         
+    def test_synthetic_images(self):
+        """ Test on synthetic images with rectangles """        
+        
+        # Image with large rectangle, different shifts, datatypes and tile sizes
+        shifts = [(0,0),(10,10),(0,10),(8,5),(-6,5)]
+        t_sizes = [(500,500),(300,400),(500,200)]
+        dtypes = [numpy.int8,numpy.int16]
+        
+        for shift in shifts:
+            for size in t_sizes:
+                for dtype in dtypes:
+                    img = 255 * numpy.ones(size,dtype=dtype)
+                    
+                    # Rectangle
+                    l = int(0.9 * size[1])
+                    h = int(0.9 * size[0])
+                    idx1 = int(0.05 * size[0])
+                    idx2 = int(0.05 * size[1])
+                    img[idx1:idx1 + h,idx2:idx2 + l] = numpy.zeros((h,l),dtype=dtype)
+                    
+                    # Crop two tiles with different shifts
+                    tile1 = img[:0.3 * size[0], 0:0.6 * size[1]]
+                    tile2 = img[0.2 * size[0] + shift[0]:0.5 * size[0] + shift[0], shift[1]:0.6 * size[1] + shift[1]]
+                    
+                    px_size = (1e-6, 2e-5)
+                    md1 = {
+                        model.MD_POS: (0.15 * size[0] * px_size[0], 30e-3),
+                        model.MD_PIXEL_SIZE: px_size
+                    }
+                    md2 = {
+                        model.MD_POS:(0.35 * size[0] * px_size[0], 30e-3),
+                        model.MD_PIXEL_SIZE: px_size
+                    }
+                            
+                    tiles = [model.DataArray(tile1,md1),model.DataArray(tile2,md2)]
+                    registrar = ShiftRegistrar()
+                    for t in tiles:
+                        registrar.addTile(t)
+                    
+                    diff = numpy.subtract(registrar.getPositions()[0][0],md1[model.MD_POS])
+                    self.assertLessEqual(diff[0], 1) # one pixel difference allowed
+                    self.assertLessEqual(diff[1], 1) 
+                    
+                    diff = (registrar.getPositions()[0][1][0] - (md2[model.MD_POS][0] + shift[0] * px_size[0]),
+                            registrar.getPositions()[0][1][1] - (md2[model.MD_POS][1] + shift[1] * px_size[1]))
+                    self.assertLessEqual(diff[0], 1) # one pixel difference allowed
+                    self.assertLessEqual(diff[1], 1) 
+        
+        
+    def test_white_image(self):
+        """ Position should be left as-is in case of white images """
+        tile1 = 255 * numpy.ones((200,200))
+        size_m = 200 * 1.3e-6
+        
+        md1 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3, 300e-3),  # m
+        }
+        
+        tile2 = 255 * numpy.ones((200,200))
+        md2 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3, 300e-3 - size_m + size_m * 0.2),  # m
+        }
+        
+        tile3 = 255 * numpy.ones((200,200))
+        md3 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3 + size_m - size_m * 0.2, 300e-3),  # m
+        }
+        
+        tile4 = 255 * numpy.ones((200,200))
+        md4 = {
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3 + size_m - size_m * 0.2, 300e-3 - size_m + size_m * 0.2),  # m
+        }
+        
+        pos = [md1[model.MD_POS], md2[model.MD_POS], md3[model.MD_POS], md4[model.MD_POS]]
+           
+        tiles = [model.DataArray(tile1, md1),model.DataArray(tile2,md2),
+                 model.DataArray(tile3, md3),model.DataArray(tile4,md4)]
+        
+        registrar = ShiftRegistrar()  
+        for i in range(len(tiles)):
+            registrar.addTile(tiles[i])
+            calculatedPositions = registrar.getPositions()[0]                       
+            diff1 = abs(calculatedPositions[i][0] - pos[i][0])
+            diff2 = abs(calculatedPositions[i][1] - pos[i][1])
             
-            yMax = numTiles*(1-overlap)*tileSize    
-            md = {
-                model.MD_PIXEL_SIZE: [0.01,0.01],  # m/px
-                model.MD_POS: ((posX+tileSize/2)*0.01,(yMax-posY+tileSize/2)*0.01),  # m
-            }
-             
-            # Add noise
-            maxNoise = int(0.2*overlap*tileSize)
-            random.seed(1)
-            noise = [random.randrange(-maxNoise,maxNoise) for _ in range(2)]
-            if i>0 or j>0:
-                posX = max(0,int(posX + noise[0]))
-                posY = max(0,int(posY + noise[1]))
+            # should return initial position value, small error of 0.01 allowed
+            self.assertLessEqual(diff1, 1.3e-6)
+            self.assertLessEqual(diff2, 1.3e-6)    
+                   
+    def test_shift_real(self):
+        """ Test on decomposed image with known shift """
+        numTiles = [2,3]
+        overlap = [0.5,0.3,0.2]
+        acq = ["horizontalLines","horizontalZigzag","verticalLines"]
+        
+        for img in imgs:
+            data = numpy.array(tiff.read_data(img)[0])
+            for num in numTiles:
+                for o in overlap: 
+                    for a in acq:               
+                        [tiles,pos] = decompose_image(data,o,num,a)                
+                        registrar = ShiftRegistrar()         
+                        for i in range(len(pos)):
+                            registrar.addTile(tiles[i])
+                            calculatedPositions = registrar.getPositions()[0]                       
+                            diff1 = abs(calculatedPositions[i][0] - pos[i][0])
+                            diff2 = abs(calculatedPositions[i][1] - pos[i][1])
+                            # allow difference of 10% of overlap
+                            px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
+                            margin1 = 0.01 * tiles[i].shape[0] * px_size[0] # allow error of 1% of tileSize
+                            margin2 = 0.01 * tiles[i].shape[1] * px_size[1]
+
+                            self.assertLessEqual(diff1, margin1,
+                                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                                 " %f != %f"%(calculatedPositions[i][0],pos[i][0]))
+                            self.assertLessEqual(diff2, margin2,
+                                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                                 " %f != %f"%(calculatedPositions[i][1],pos[i][1]))
+              
+                               
+    def test_shift_real_manual(self):
+        """ Test case not generated by decompose.py file and manually cropped """
+
+        img = tiff.read_data(imgs[0])[0]
+        cropped1 = img[0:400,0:400]
+        cropped2 = img[4:404,322:722]
+  
+        registrar = ShiftRegistrar()
+        tile1 = model.DataArray(numpy.array(cropped1),{
+                model.MD_PIXEL_SIZE: [1/20,1/20],  # m/px
+                model.MD_POS: (200 / 20, img.shape[1] / 20-200 / 20),  # m
+            })
+        tile2 = model.DataArray(numpy.array(cropped2),{
+                model.MD_PIXEL_SIZE: [1 / 20,1 / 20],  # m/px
+                model.MD_POS: (520 / 20, img.shape[1] / 20-200 / 20),  # m
+            })
+        registrar.addTile(tile1)
+        registrar.addTile(tile2)
+        calculatedPositions = registrar.getPositions()[0]
+        diff1 = calculatedPositions[1][0] - 522 / 20
+        self.assertLessEqual(diff1,1 / 20)
+        diff2 = calculatedPositions[1][1] - img.shape[1] / 20 - 204 / 20
+        self.assertLessEqual(diff2 ,1 / 20)        
+
+      
+    def test_dependent_tiles(self):
+        """ Tests functionality for dependent tiles """
+        
+        # Test on 3 layers of the same image create by decompose_image   
+        img = tiff.read_data(imgs[0])[0]
+        num = 4
+        o = 0.2
+        a = "horizontalZigzag"
+        [tiles,pos] = decompose_image(img,o,num,a)                
+        registrar = ShiftRegistrar()         
+        for i in range(len(pos)):
+            registrar.addTile(tiles[i], (tiles[i],tiles[i]))
+            tile_pos, dep_tile_pos = registrar.getPositions()  
+                     
+            diff1 = abs(tile_pos[i][0] - pos[i][0])
+            diff2 = abs(tile_pos[i][1] - pos[i][1])
+            # allow difference of 10% of overlap
+            px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
+            margin1 = int(1 + 0.01 * tiles[i].shape[0]) * px_size[0]
+            margin2 = int(1 + 0.01 * tiles[i].shape[1]) * px_size[1]
+            self.assertLessEqual(diff1, margin1,
+                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                 " %f != %f"%(tile_pos[i][0], pos[i][0]))
+            self.assertLessEqual(diff2, margin2,
+                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                     " %f != %f"%(tile_pos[i][1], pos[i][1]))
+        
+        
+        for i in range(len(dep_tile_pos)):
+            for j in range(len(dep_tile_pos[0])):
+        
+                diff1 = abs(dep_tile_pos[i][j][0] - pos[j][0])
+                self.assertLessEqual(diff1, margin1,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(dep_tile_pos[i][j][0],pos[i][0])) 
+                
+
+                self.assertLessEqual(diff2, margin2,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(dep_tile_pos[i][j][1],pos[i][1])) 
+                
+                
+        # Test with shifted dependent tiles
+        [tiles,pos] = decompose_image(img,o,num,a)                
+        registrar = ShiftRegistrar()  
+        
+        # Add different shift for every dependent tile
+        dep_tiles = copy.deepcopy(tiles)
+        rnd1 = [random.randrange(-1000, 1000) for _ in range(len(pos))] # x-shift for each dependent tile in px
+        rnd2 = [random.randrange(-1000, 1000) for _ in range(len(pos))] # y-shift for each dependent tile in px
+        # Change metadata of dependent tiles
+        for i in range(len(dep_tiles)):
+            p = (dep_tiles[i].metadata[model.MD_POS][0] + rnd1[i] * px_size[0],
+                 dep_tiles[i].metadata[model.MD_POS][1] + rnd2[i] * px_size[1])
+            dep_tiles[i].metadata[model.MD_POS] = p
+        
+        for i in range(len(pos)):
+            # Register tiles
+            registrar.addTile(tiles[i],(dep_tiles[i], dep_tiles[i])) # 2 layers of dependent tiles with the same pos
+            tile_pos, dep_tile_pos = registrar.getPositions()  
             
-            # Crop images
-            cropped = img.crop((posX,posY,posX+tileSize,posY+tileSize))
-            tile = np.array(cropped.convert('L'))
+            # Test main tile 
+            diff1 = abs(tile_pos[i][0] - pos[i][0])
+            diff2 = abs(tile_pos[i][1] - pos[i][1])
             
-            # Create list of tiles and positions
-            tile = model.DataArray(tile, md)
+            margin1 = 0.1 * tiles[i].shape[0] * px_size[0] # allow difference of 10% of overlap
+            margin2 = 0.1 * tiles[i].shape[1] * px_size[1]
+            self.assertLessEqual(diff1, margin1,
+                                 "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                 " %f != %f"%(tile_pos[i][0], pos[i][0]))
+            self.assertLessEqual(diff2, margin2,
+                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                     " %f != %f"%(tile_pos[i][0], pos[i][0]))
             
-            tiles.append(tile)
-            pos.append([(posX+tileSize/2)*0.01,(yMax-posY+tileSize/2)*0.01])
-            
-    return [tiles, pos] 
-    
+        # Test dependent tiles
+        for layer in dep_tile_pos: 
+            for j in range(len(layer)): 
+                diff1 = abs(layer[j][0] - pos[j][0] - rnd1[j] * px_size[0])
+                self.assertLessEqual(diff1, margin1,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(layer[j][0], pos[j][0] + rnd1[j] * px_size[0])) 
+                
+                diff2 = abs(layer[j][1] - pos[j][1] - rnd2[j] * px_size[1])
+                self.assertLessEqual(diff2,margin2,
+                                     "Failed for %s tiles, %s overlap and %s method," %(num,o,a) + \
+                                     " %f != %f"%(layer[j][1], pos[j][1] + rnd2[j] * px_size[1])) 
+                
+                  
 if __name__ == '__main__':
     unittest.main()
