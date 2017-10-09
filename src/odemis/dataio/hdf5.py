@@ -640,6 +640,18 @@ def _parse_physical_data(pdgroup, da):
             pass
 
         try:
+            ds = pdgroup["EmissionCurrentOverTime"]
+            state = _h5svi_get_state(ds)
+            if state and state[i] in (ST_INVALID, ST_DEFAULT):
+                raise ValueError
+            # It should contain an array of float of Nx2, where the second dim
+            # contains time (s since epoch) & current (A)
+            cot = ds[i].tolist()  # A
+            md[model.MD_EBEAM_CURRENT_TIME] = cot
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
             ds = pdgroup["PolePosition"]
             pp = tuple(ds[i]) # px
             state = _h5svi_get_state(ds)
@@ -931,6 +943,7 @@ def _add_image_metadata(group, image, mds):
     gp["ExcitationPhotonCount"] = [1] * len(mds) # photons
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
+    # Below are additional metadata from us (Delmic)
     # Not official by SVI, but nice to keep info for the SEM images
     evolt = [md.get(model.MD_EBEAM_VOLTAGE) for md in mds]
     if any(evolt):
@@ -944,7 +957,25 @@ def _add_image_metadata(group, image, mds):
         state = [ST_INVALID if v is None else ST_REPORTED for v in ecurrent]
         _h5svi_set_state(gp["EmissionCurrent"], state)
 
-    # Below are additional metadata from us (Delmic)
+    cots = [md.get(model.MD_EBEAM_CURRENT_TIME) for md in mds]
+    if any(cots):
+        # Make all the metadata the same length, to fit in an array.
+        # Normally, with such metadata there should only be one image anyway.
+        mxlen = max(len(c) for c in cots if c is not None)
+        cots_sl = []
+        for c in cots:
+            if c is None:
+                c = [(0, 0)] * mxlen
+            elif len(c) < mxlen:
+                c = list(c) + [(0, 0)] * (mxlen - len(c))
+                logging.warning("DA merged while MD_EBEAM_CURRENT_TIME has different length (%d vs %d)",
+                                len(c), mxlen)
+            cots_sl.append(c)
+
+        gp["EmissionCurrentOverTime"] = cots_sl
+        state = [ST_INVALID if v is None else ST_REPORTED for v in cots]
+        _h5svi_set_state(gp["EmissionCurrentOverTime"], state)
+
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
     for md in mds:

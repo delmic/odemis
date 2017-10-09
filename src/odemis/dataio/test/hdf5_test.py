@@ -412,6 +412,11 @@ class TestHDF5IO(unittest.TestCase):
         Checks that we can read back the metadata of an image
         """
         sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
+        # Create fake current over time report
+        cot = [[time.time(), 1e-12]]
+        for i in range(1, 171):
+            cot.append([cot[0][0] + i, i * 1e-12])
+
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -435,6 +440,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
+                     model.MD_EBEAM_CURRENT_TIME: cot,
                     },
                     ]
         # create 2 simple greyscale images
@@ -489,6 +495,12 @@ class TestHDF5IO(unittest.TestCase):
             elif model.MD_WL_LIST in md:
                 wl = md[model.MD_WL_LIST]
                 self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+
+            if model.MD_EBEAM_CURRENT_TIME in md:
+                # Note: technically, it could be a list or tuple and still be fine
+                # but we know that hdf5 returns a list of list
+                cot = md[model.MD_EBEAM_CURRENT_TIME]
+                self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT_TIME], cot)
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

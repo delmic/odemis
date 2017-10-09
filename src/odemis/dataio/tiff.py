@@ -41,6 +41,7 @@ from odemis.model import DataArrayShadow, AcquisitionData
 import libtiff.libtiff_ctypes as T  # for the constant names
 import xml.etree.ElementTree as ET
 from odemis.util.conversion import get_tile_md_pos
+from datetime import datetime
 
 
 #pylint: disable=E1101
@@ -299,10 +300,10 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 #        + Microscope      # set of emitter/detector.
 #        + LightSource (*)
 #          . LightSourceID
-#        + Detector (*)
-#          . DetectorID
 #          . Power (?)
 #          . PowerUnit (?) # default is mW - new in 2015
+#        + Detector (*)
+#          . DetectorID
 #        + Objective (*)
 #        + Filter (*)
 #      + Image (*)         # To describe a set of images by the same instrument
@@ -323,6 +324,8 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 #            + LightSourceSettings
 #              . LightSourceID
 #              . Attenuation (?)
+#              . Current   # Extension: EBEAM_CURRENT
+#              + Current * # Extension: EBEAM_CURRENT_TIME
 #          + Plane (*)     # physical dimensions/position of each images
 #          + TiffData (*)  # where to find the data in the tiff file (IFD)
 #                          # we explicitly reference each DataArray to avoid
@@ -406,11 +409,15 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
                                 "ID": "Detector:%d" % did,
                                 "Model": da0.metadata[model.MD_HW_NAME]})
 
-        if model.MD_LIGHT_POWER in da0.metadata:
-            pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3 # in mW
-            obj = ET.SubElement(instr, "LightSource", attrib={
-                                "ID": "LightSource:%d" % did,
-                                "Power": "%.15f" % pwr})
+        if (model.MD_LIGHT_POWER in da0.metadata or
+            model.MD_EBEAM_CURRENT in da0.metadata or
+            model.MD_EBEAM_CURRENT_TIME in da0.metadata
+           ):
+            obj = ET.SubElement(instr, "LightSource",
+                                attrib={"ID": "LightSource:%d" % did})
+            if model.MD_LIGHT_POWER in da0.metadata:
+                pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3  # in mW
+                obj.attrib["Power"] = "%.15f" % pwr
 
         if model.MD_LENS_MAG in da0.metadata:
             mag = da0.metadata[model.MD_LENS_MAG]
@@ -626,7 +633,7 @@ def _updateMDFromOME(root, das, basename):
             if d_settings is not None:
                 try:
                     bin_str = d_settings.attrib["Binning"]
-                    m = re.match("(?P<b1>\d+)\s*x\s*(?P<b2>\d+)", bin_str)
+                    m = re.match(r"(?P<b1>\d+)\s*x\s*(?P<b2>\d+)", bin_str)
                     mdc[model.MD_BINNING] = (int(m.group("b1")), int(m.group("b2")))
                 except KeyError:
                     pass
@@ -649,10 +656,39 @@ def _updateMDFromOME(root, das, basename):
             if ls_settings is not None:
                 try:
                     ls = _findElementByID(root, ls_settings.attrib["ID"], "LightSource")
-                    pwr = float(ls.attrib["Power"]) * 1e-3 # mW -> W
-                    mdc[model.MD_LIGHT_POWER] = pwr
+                    try:
+                        pwr = float(ls.attrib["Power"]) * 1e-3  # mW -> W
+                        mdc[model.MD_LIGHT_POWER] = pwr
+                    except (KeyError, ValueError):
+                        pass
                 except (KeyError, LookupError):
                     logging.info("LightSourceSettings without LightSource")
+                try:
+                    cur = float(ls_settings.attrib["Current"])  # A
+                    mdc[model.MD_EBEAM_CURRENT] = cur
+                except (KeyError, ValueError):
+                    pass
+
+                cot = []
+                for cure in ls_settings.findall("Current"):
+                    try:
+                        st = cure.attrib["Time"]
+                        dt = datetime.strptime(st, "%Y-%m-%dT%H:%M:%S.%f")
+                        # TODO: with Python 3, replace by dt.replace(tzinfo=timezone.utc).timestamp()
+                        epoch = datetime(1970, 1, 1)
+                        t = (dt - epoch).total_seconds()
+                    except (KeyError, ValueError):
+                        logging.debug("Skipping current (over time) entry without time")
+                        continue
+                    try:
+                        cur = float(cure.text)
+                    except ValueError:
+                        logging.debug("Failed to parse current (over time) value")
+                    cot.append((t, cur))
+
+                if cot:
+                    cot.sort(key=lambda e: e[0])  # Sort by time
+                    mdc[model.MD_EBEAM_CURRENT_TIME] = cot
 
             # update all the IFDs related to this channel
             try:
@@ -976,7 +1012,7 @@ def _findImageGroups(das):
             # or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
             or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
             or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
-            ):
+           ):
             # new group
             group_ifd = current_ifd
         groups.setdefault(group_ifd, []).append(da)
@@ -1249,13 +1285,25 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 attrib["ID"] = "Detector:%d" % ifd
                 ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
 
-            # Add info on the light source: same structure as Detector, but
-            # all the interesting info is already on the LightSource
+            # Add info on the light source: same structure as Detector
             attrib = {}
-            if model.MD_LIGHT_POWER in da.metadata:
-                attrib = {"ID": "LightSource:%d" % ifd}
-            if attrib:
+            if model.MD_EBEAM_CURRENT in da.metadata:
+                attrib["Current"] = "%.15f" % da.metadata[model.MD_EBEAM_CURRENT]  # A
+
+            cot = da.metadata.get(model.MD_EBEAM_CURRENT_TIME)
+            if attrib or cot or model.MD_LIGHT_POWER in da.metadata:
+                attrib["ID"] = "LightSource:%d" % ifd
                 ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
+                # This is a non-standard metadata, it defines the emitter, which
+                # OME considers to always be a LightSource (although in this case it's
+                # an e-beam). To associate time -> current, we use a series of elements
+                # "Current" with an attribute date (same format as AcquisitionDate),
+                # and the current in A as the value.
+                if cot:
+                    for t, cur in cot:
+                        st = datetime.utcfromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S.%f")
+                        cote = ET.SubElement(ds, "Current", attrib={"Time": st})
+                        cote.text = "%.18f" % cur
 
             subid += 1
 
