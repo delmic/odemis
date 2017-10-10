@@ -480,6 +480,10 @@ class SparcAcquiController(object):
         # also listen to .semStream, which is not in .streams
         for va in self._get_settings_vas(tab_data.semStream):
             va.subscribe(self._onAnyVA)
+        # Extra options affecting the acquisitions globally
+        tab_data.pcdActive.subscribe(self._onAnyVA)
+        # TODO: should also listen to the VAs of the leeches on semStream
+        tab_data.useScanStage.subscribe(self._onAnyVA)
 
         self._roa = tab_data.semStream.roi
         self._roa.subscribe(self._onROA, init=True)
