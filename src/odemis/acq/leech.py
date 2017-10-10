@@ -73,8 +73,13 @@ class LeechAcquirer(object):
         self._dt = None  # s
         self._shape = None  # tuple of int
 
-    # TODO: also provide a way to estimate the extra acquisition time for the
-    # complete acquisition.
+    def estimateAcquisitionTime(self, dt, shape):
+        """
+        Compute an approximation of how long the leech will increase the
+        time of an acquisition.
+        return (0<float): time in s added to the whole acquisition
+        """
+        return 0
 
     # TODO: also pass the stream?
     def start(self, dt, shape):
@@ -164,7 +169,26 @@ class ProbeCurrentAcquirer(LeechAcquirer):
         self._tot_acqs = 1  # How many acquisitions should be done (including the first one)
 
         # Ordered measurements done so far
-        self._measurements = [] # (float, float) -> time, current (Amp)
+        self._measurements = []  # (float, float) -> time, current (Amp)
+
+    def estimateAcquisitionTime(self, dt, shape):
+        # It's pretty easy to know how many times the leech will run, it's a lot
+        # harder to know how long it takes to acquire one probe current reading.
+
+        nacqs = 1 + math.ceil(dt * numpy.prod(shape) / self.period.value)
+        if model.hasVA(self._detector, "dwellTime"):
+            at = self._detector.dwellTime.value
+        else:
+            at = 0.1
+        if self._selector:
+            # The time it takes probably depends a lot on the hardware, and
+            # there is not much info (maybe the .speed could be used).
+            # For now, we just use the time the only hardware we support takes
+            at += 0.1 * 2  # doubled as it has go back and forth
+
+        at += 0.1  # for overhead
+
+        return nacqs * at
 
     def _get_next_pixels(self):
         """
@@ -191,7 +215,7 @@ class ProbeCurrentAcquirer(LeechAcquirer):
         return np
 
     def _acquire(self):
-        logging.debug("Acquiring probe current #%d", self._acqs + 1)
+        logging.debug("Acquiring probe current #%d", self._acqs)
         if self._selector:
             self._selector.moveAbsSync({"x": True})
 
@@ -226,7 +250,7 @@ class ProbeCurrentAcquirer(LeechAcquirer):
         self._pxs = tot_px / acqs  # spread evenly
 
         # If more than 2 lines at a time, round it to N lines
-        if self._pxs > 2 * shape[-1]:
+        if len(shape) >= 2 and self._pxs > 2 * shape[-1]:
             nlines = self._pxs // shape[-1]
             logging.debug("Rounding probe current acquisition to %d lines", nlines)
             self._pxs = nlines * shape[-1]

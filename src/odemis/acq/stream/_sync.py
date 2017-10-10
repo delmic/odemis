@@ -160,10 +160,12 @@ class MultipleDetectorStream(Stream):
         # Time required without drift correction
         total_time = self._estimateRawAcquisitionTime()
 
+        rep = self._rep_stream.repetition.value
+        npixels = numpy.prod(rep)
+        dt = total_time / npixels
+
         # Estimate time spent in scanning the anchor region
         if self._main_stream.dcRegion.value != UNDEFINED_ROI:
-            npixels = numpy.prod(self._rep_stream.repetition.value)
-            dt = total_time / npixels
 
             dc_estimator = drift.AnchoredEstimator(self._emitter,
                                  self._main_det,
@@ -172,7 +174,7 @@ class MultipleDetectorStream(Stream):
             period = dc_estimator.estimateCorrectionPeriod(
                                                self._main_stream.dcPeriod.value,
                                                dt,
-                                               self._rep_stream.repetition.value)
+                                               rep)
             # number of times the anchor will be acquired
             n_anchor = 1 + npixels // period.next()
             anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
@@ -180,6 +182,13 @@ class MultipleDetectorStream(Stream):
             total_time += anchor_time
             logging.debug("Estimated overhead time for drift correction: %g s / %g s",
                           anchor_time, total_time)
+
+        # Estimate time spent for the leeches
+        for l in self.leeches:
+            l_time = l.estimateAcquisitionTime(dt, (rep[1], rep[0]))
+            total_time += l_time
+            logging.debug("Estimated overhead time for leech %s: %g s / %g s",
+                          type(l), l_time, total_time)
 
         if model.hasVA(self._rep_stream, "useScanStage") and self._rep_stream.useScanStage.value:
             sstage = self._rep_stream._sstage
