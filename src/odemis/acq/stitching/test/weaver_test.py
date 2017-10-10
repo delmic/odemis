@@ -24,18 +24,27 @@ import numpy
 from odemis import model
 import time
 import unittest
-from PIL import Image
+import os
+import random
 
-from odemis.acq.stitching._weaver import CollageWeaver, MeanWeaver 
-from odemis.acq.stitching import weave
-
+from odemis.acq.stitching._weaver import CollageWeaver, MeanWeaver
+from odemis.dataio import tiff
+from odemis.acq.stitching import decompose_image
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-
+# Find path for test images
+path = os.path.relpath("acq/align/test/images", "acq/stitching/test")
+imgs = [path + "/Slice69_stretched.tif"]
+img = tiff.read_data(imgs[0])[0]
 
 # @unittest.skip("skip")
+
+
 class TestCollageWeaver(unittest.TestCase):
+
+    def setUp(self):
+        random.seed(1)
 
     # @unittest.skip("skip")
     def test_one_tile(self):
@@ -45,7 +54,8 @@ class TestCollageWeaver(unittest.TestCase):
         img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
         md = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",  # tiff doesn't support É (but XML does)
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -55,7 +65,7 @@ class TestCollageWeaver(unittest.TestCase):
             model.MD_IN_WL: (500e-9, 520e-9),  # m
         }
         intile = model.DataArray(img12, md)
-        
+
         weaver = CollageWeaver()
         weaver.addTile(intile)
         outd = weaver.getFullImage()
@@ -67,7 +77,8 @@ class TestCollageWeaver(unittest.TestCase):
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            model.MD_DESCRIPTION: u"test sem",  # tiff doesn't support É (but XML does)
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test sem",
             model.MD_ACQ_DATE: time.time(),
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
             model.MD_POS: (10e-3, 30e-3),  # m
@@ -75,33 +86,47 @@ class TestCollageWeaver(unittest.TestCase):
         }
         intile = model.DataArray(img8, md8)
 
-        outd = weave([intile])
+        weaver = MeanWeaver()
+        weaver.addTile(intile)
+        outd = weaver.getFullImage()
 
         self.assertEqual(outd.shape, intile.shape)
         numpy.testing.assert_array_equal(outd, intile)
         self.assertEqual(outd.metadata, intile.metadata)
-        
-    def test1(self):
+
+    def test_no_seam(self):
         """
-        Test on synthetic image
+        Test on decomposed image
         """
 
-        img = Image.open("images/test3.tiff")
-        numTiles = 2
-        overlap = 0.2
-        [tiles,pos] = decomposeImageExact(img,overlap,numTiles)
-        
-        weaver = CollageWeaver()
-        for i in range(len(pos)):
-            weaver.addTile(tiles[i])
-        
-        sz = len(weaver.getFullImage())
-        self.assertTrue((numpy.array_equal(weaver.getFullImage(),numpy.array(img)[:sz,:sz])))
+        numTiles = [2, 3, 4]
+        overlap = [0.2]
+
+        for n in numTiles:
+            for o in overlap:
+                [tiles, _] = decompose_image(
+                    img, o, n, "horizontalZigzag", False)
+
+                weaver = CollageWeaver()
+                for t in tiles:
+                    weaver.addTile(t)
+
+                sz = len(weaver.getFullImage())
+                w = weaver.getFullImage()
+                im = img[:sz, :sz]
+
+                for i in range(len(img[:sz, :sz])):
+                    for j in range(len(img[:sz, :sz])):
+                        self.assertLessEqual(
+                            abs(w[i][j] - im[i][j]), 1, "%s %s" % (o, n))
 
 
 # @unittest.skip("skip")
 class TestMeanWeaver(unittest.TestCase):
 
+    def setUp(self):
+        random.seed(1)
+
     # @unittest.skip("skip")
     def test_one_tile(self):
         """
@@ -110,7 +135,8 @@ class TestMeanWeaver(unittest.TestCase):
         img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
         md = {
             model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",  # tiff doesn't support É (but XML does)
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 2),  # px, px
@@ -120,7 +146,7 @@ class TestMeanWeaver(unittest.TestCase):
             model.MD_IN_WL: (500e-9, 520e-9),  # m
         }
         intile = model.DataArray(img12, md)
-        
+
         weaver = MeanWeaver()
         weaver.addTile(intile)
         outd = weaver.getFullImage()
@@ -132,7 +158,8 @@ class TestMeanWeaver(unittest.TestCase):
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            model.MD_DESCRIPTION: u"test sem",  # tiff doesn't support É (but XML does)
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test sem",
             model.MD_ACQ_DATE: time.time(),
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
             model.MD_POS: (10e-3, 30e-3),  # m
@@ -140,78 +167,178 @@ class TestMeanWeaver(unittest.TestCase):
         }
         intile = model.DataArray(img8, md8)
 
-        outd = weave([intile])
+        weaver = MeanWeaver()
+        weaver.addTile(intile)
+        outd = weaver.getFullImage()
 
         self.assertEqual(outd.shape, intile.shape)
         numpy.testing.assert_array_equal(outd, intile)
         self.assertEqual(outd.metadata, intile.metadata)
-        
-    def test1(self):
+
+    def test_real_perfect_overlap(self):
         """
-        Test on synthetic image
+        Test on decomposed image
         """
 
-        img = Image.open("images/test3.tiff")
-        numTiles = 2
-        overlap = 0.2
-        [tiles,pos] = decomposeImageExact(img,overlap,numTiles)
-        
+        numTiles = [2, 3, 4]
+        overlap = [0.2]
+
+        for n in numTiles:
+            for o in overlap:
+                [tiles, _] = decompose_image(
+                    img, o, n, "horizontalZigzag", False)
+
+                weaver = MeanWeaver()
+                for t in tiles:
+                    weaver.addTile(t)
+
+                sz = len(weaver.getFullImage())
+                w = weaver.getFullImage()
+                im = img[:sz, :sz]
+
+                for i in range(len(img[:sz, :sz])):
+                    for j in range(len(img[:sz, :sz][0])):
+                        self.assertLessEqual(
+                            abs(int(w[i][j]) - int(im[i][j])), 2, "%s %s" % (w[i][j], im[i][j]))
+
+    def test_synthetic_perfect_overlap(self):
+        """
+        Test on synthetic image with exactly matching overlap, weaved image should be equal to original image
+        """
+
+        img0 = numpy.zeros((100, 100))
+        img1 = numpy.zeros((100, 100))
+
+        img0[:, 80:90] = 1
+        img1[:, 10:20] = 1
+
+        exp_out = numpy.zeros((100, 170))
+        exp_out[:, 80:90] = 1
+
+        md0 = {
+            model.MD_SW_VERSION: "1.0-test",
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (50, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in0 = model.DataArray(img0, md0)
+
+        md1 = {
+            model.MD_SW_VERSION: "1.0-test",
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (120, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in1 = model.DataArray(img1, md1)
+
         weaver = MeanWeaver()
-        for i in range(len(pos)):
-            weaver.addTile(tiles[i])
-        
-        sz = len(weaver.getFullImage())
-        self.assertTrue((numpy.array_equal(weaver.getFullImage(),numpy.array(img)[:sz,:sz])))
-        
-               
-def decomposeImageExact(img, overlap=0.1, numTiles = 5, method="horizontalLines"):
-    """ 
-    Same as decomposeImage() from registrar_test, except it cuts the image exactly at the specified
-    positions, without adding noise
-    """
-    
-    tileSize = int(img.size[0]/numTiles)
-    
-    pos = []
-    tiles = []
-    for i in range(numTiles):
-        for j in range(numTiles):
-            # Positions top left            
-            if method == "verticalLines":
-                posX = int(i*(1-overlap)*tileSize)
-                posY = int(j*(1-overlap)*tileSize)
-            elif method == "horizontalLines":
-                posX = int(j*(1-overlap)*tileSize)
-                posY = int(i*(1-overlap)*tileSize)
-            elif method == "horizontalZigzag":  
-                if i%2 == 0:
-                    posX = int(j*(1-overlap)*tileSize)
-                else:
-                    posX = int((numTiles-j-1)*(1-overlap)*tileSize) # reverse direction for every second row
-                posY = int(i*(1-overlap)*tileSize)
-            
-            yMax = numTiles*(1-overlap)*tileSize    
-            md = {
-                model.MD_PIXEL_SIZE: [0.01,0.01],  # m/px
-                model.MD_POS: ((posX+tileSize/2)*0.01,(yMax-posY+tileSize/2)*0.01),  # m
-            }
-            
-            
-            # Crop images
-            cropped = img.crop((posX,posY,posX+tileSize,posY+tileSize))
-            tile = numpy.array(cropped.convert('L'))
-            
-            # Create list of tiles and positions
-            tile = model.DataArray(tile, md)
-            
-            tiles.append(tile)
-            pos.append([(posX+tileSize/2)*0.01,(yMax-posY+tileSize/2)*0.01])
-            
-    return [tiles, pos] 
+        weaver.addTile(in0)
+        weaver.addTile(in1)
+        outd = weaver.getFullImage()
+
+        self.assertTrue((numpy.array(outd) == exp_out).all())
+
+    def test_gradient(self):
+        """
+        Test if gradient appears in two images with different constant values
+        """
+
+        img0 = numpy.ones((100, 100)) * 256
+        img1 = numpy.zeros((100, 100))
+
+        md0 = {
+            model.MD_SW_VERSION: "1.0-test",
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (50, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in0 = model.DataArray(img0, md0)
+
+        md1 = {
+            model.MD_SW_VERSION: "1.0-test",
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (120, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in1 = model.DataArray(img1, md1)
+
+        weaver = MeanWeaver()
+        weaver.addTile(in0)
+        weaver.addTile(in1)
+        outd = weaver.getFullImage()
+
+        # Visualize overlap mask
+        #from PIL import Image
+        # Image.fromarray(outd).show()
+
+        # Test that values in overlapping region decrease from left to right
+        col_prev = 100000
+        o = outd[:, 70:100]
+        for row in o:
+            col_prev = 10000
+            for col in row:
+                self.assertLess(col, col_prev)
+                col_prev = col
 
 
+"""
+# Visualize weaved result after bad stitching
+img = path + "/g_009_cropped.tif"
+img = tiff.read_data(img)[0]
+numTiles = 10
+overlap = 0.2
+[tiles, pos] = decompose_image(
+    img, overlap, numTiles, "horizontalZigzag")
+
+from odemis.acq.stitching import register, REGISTER_SHIFT
+updatedTiles = register(tiles, REGISTER_SHIFT)
+
+weaver = MeanWeaver()
+
+for i in range(len(updatedTiles)):
+    weaver.addTile(updatedTiles[i])
+
+image = weaver.getFullImage()
+
+from PIL import Image
+im = Image.fromarray(image)
+im.show()
+
+weaver = CollageWeaver()
+
+for i in range(len(updatedTiles)):
+    weaver.addTile(updatedTiles[i])
+
+image = weaver.getFullImage()
+
+from PIL import Image
+im = Image.fromarray(image)
+im.show()
+"""
 
 if __name__ == '__main__':
     unittest.main()
-    
-    

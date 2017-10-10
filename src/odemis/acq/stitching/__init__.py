@@ -19,7 +19,7 @@ from __future__ import division
 from ._registrar import *
 from ._weaver import *
 
-from copy import deepcopy
+import copy
 import random
 
 REGISTER_IDENTITY = 0

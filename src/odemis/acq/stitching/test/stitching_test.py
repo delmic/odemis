@@ -21,17 +21,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 import unittest
-from odemis.acq.stitching import register, REGISTER_IDENTITY, REGISTER_SHIFT
-from registrar_test import decompose_image
+from odemis.acq.stitching import register, weave, REGISTER_IDENTITY, REGISTER_SHIFT, WEAVER_COLLAGE, WEAVER_MEAN, decompose_image
 from odemis import model
 from odemis.dataio import tiff
 import os
 import random
 import copy
+import numpy
 
 # Find path for test images
 path = os.path.relpath("acq/align/test/images", "acq/stitching/test")
 imgs = [path + "/Slice69_stretched.tif"]
+img = tiff.read_data(imgs[0])[0]
 
 
 class TestRegister(unittest.TestCase):
@@ -161,6 +162,73 @@ class TestRegister(unittest.TestCase):
                 self.assertLessEqual(diff2, margin2,
                                      "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
                                      " %f != %f" % (dep_pos[j][1], pos[i][1] + rnd2[i] * px_size[1]))
+
+
+class TestWeave(unittest.TestCase):
+
+    def test_one_tile(self):
+        """
+        Test that when there is only one tile, it's returned as-is
+        """
+        img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
+        md = {
+            model.MD_SW_VERSION: "1.0-test",
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_POS: (1e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        intile = model.DataArray(img12, md)
+
+        outd = weave([intile], WEAVER_COLLAGE)
+
+        self.assertEqual(outd.shape, intile.shape)
+        numpy.testing.assert_array_equal(outd, intile)
+        self.assertEqual(outd.metadata, intile.metadata)
+
+        # Same thing but with a typical SEM data
+        img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
+        md8 = {
+            # tiff doesn't support É (but XML does)
+            model.MD_DESCRIPTION: u"test sem",
+            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
+            model.MD_POS: (10e-3, 30e-3),  # m
+            model.MD_DWELL_TIME: 1.2e-6,  # s
+        }
+        intile = model.DataArray(img8, md8)
+
+        outd = weave([intile], WEAVER_MEAN)
+
+        self.assertEqual(outd.shape, intile.shape)
+        numpy.testing.assert_array_equal(outd, intile)
+        self.assertEqual(outd.metadata, intile.metadata)
+
+    def test_no_seam(self):
+        """
+        Test on decomposed image
+        """
+
+        numTiles = [2, 3, 4]
+        overlap = [0.2]
+
+        for n in numTiles:
+            for o in overlap:
+                [tiles, _] = decompose_image(
+                    img, o, n, "horizontalZigzag", False)
+
+                w = weave(tiles, WEAVER_MEAN)
+                sz = len(w)
+
+                im = img[:sz, :sz]
+
+                for i in range(len(img[:sz, :sz])):
+                    for j in range(len(img[:sz, :sz])):
+                        self.assertLessEqual(
+                            abs(int(w[i][j]) - int(im[i][j])), 2)
 
 
 if __name__ == '__main__':
