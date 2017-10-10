@@ -170,7 +170,7 @@ class FW102c(model.Actuator):
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=1  # s
+            timeout=10  # s (can take time when filter changes)
         )
 
         return ser
