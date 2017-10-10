@@ -224,18 +224,27 @@ class MeanWeaver(object):
 
             # Create weight matrix with decreasing values from its center that
             # has the same size as the tile.
-            if len(roi) % 2 == 0:
-                L = len(roi) / 2
-                x = numpy.arange(-L, L, 1)
-                y = numpy.arange(-L, L, 1)
+            L1 = len(roi) // 2
+            L2 = len(roi[0]) // 2
+            if len(roi) % 2 == 0:  # not very elegant way of dealing with even/odd tile sizes
+                if len(roi[0]) % 2 == 0:
+                    x = numpy.arange(-L2, L2, 1)
+                    y = numpy.arange(-L1, L1, 1)
+                else:
+                    x = numpy.arange(-L2, L2 + 1, 1)
+                    y = numpy.arange(-L1, L1, 1)
             else:
-                L = len(roi) // 2
-                x = numpy.arange(-L, L + 1, 1)
-                y = numpy.arange(-L, L + 1, 1)
+                if len(roi[0]) / 2 == 0:
+                    x = numpy.arange(-L2, L2, 1)
+                    y = numpy.arange(-L1, L1 + 1, 1)
+                else:
+                    x = numpy.arange(-L2, L2 + 1, 1)
+                    y = numpy.arange(-L1, L1 + 1, 1)
 
-            xx, yy = numpy.meshgrid(x, y)
+            xx, yy = numpy.meshgrid(x**3 / L1**3, y**3 / L2**3)
+
             # maximum looks better than euclidean distance
-            w = 1 - (numpy.maximum(abs(xx), abs(yy)) / L)
+            w = 1 - (numpy.power(abs(xx)**2 + abs(yy)**2, 1 / 2))
 
             # Element-wise multiplication with tile and image roi
             t_weighted = numpy.multiply(t, w)
