@@ -566,18 +566,19 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
                   "lens_mover": (50e-6, [5e-6, 500e-6], "lens_mover", None),
                   "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
+                  "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"}),
                   }
-        if main.role == "sparc":
-            # Mirror on SPARC is a bit more complicated as it has 4 axes and Y
-            # usually needs to be 10x bigger than X
+        # Use mirror_xy preferably, and fallback to mirror
+        if main.mirror_xy:
+            # Typically for the SPARCv2
+            ss_def.update({
+                "mirror": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
+            })
+        elif main.mirror:
+            # SPARC mirror Y usually needs to be 10x bigger than X
             ss_def.update({
                 "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", {"x"}),
                 "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", {"y"}),
-                "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"})
-            })
-        elif main.role == "sparc2":
-            ss_def.update({
-                "mirror": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
             })
 
         # str -> VA: name (as the name of the attribute) -> step size (m)
