@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
+import numpy
 from odemis import model
 import time
 import unittest
@@ -172,6 +173,45 @@ class PCAcquirerTestCase(unittest.TestCase):
         # Data should be small
         assert 0 < cot[0][1] < 1e-3
 
+    def test_shape_1(self):
+        """
+        When the shape is just (1), a single acquisition
+        """
+        det = Fake0DDetector("test")
+        pca = ProbeCurrentAcquirer(det)
+
+        # Period longer than the acquisition => just before and after
+        pca.period.value = 1
+        np = pca.start(0.1, (1,))
+        self.assertEqual(np, 1)
+        da = model.DataArray(numpy.ones((230, 42)), {model.MD_ACQ_DATE: time.time()})
+        np = pca.next([da])
+
+        # Should add the metadata to the acquisition
+        pca.complete([da])
+        cot = da.metadata[model.MD_EBEAM_CURRENT_TIME]
+        self.assertEqual(len(cot), 2)
+        # Dates should be ordered
+        assert cot[0][0] < cot[1][0]
+        # Data should be small
+        assert 0 < cot[0][1] < 1e-3
+
+        # Period shorter than the acquisition, but only one pixel, so just
+        # before and after too
+        pca.period.value = 0.1
+        np = pca.start(1, (1,))
+        self.assertEqual(np, 1)
+        da = model.DataArray(numpy.ones((230, 42)), {model.MD_ACQ_DATE: time.time()})
+        np = pca.next([da])
+
+        # Should add the metadata to the acquisition
+        pca.complete([da])
+        cot = da.metadata[model.MD_EBEAM_CURRENT_TIME]
+        self.assertEqual(len(cot), 2)
+        # Dates should be ordered
+        assert cot[0][0] < cot[1][0]
+        # Data should be small
+        assert 0 < cot[0][1] < 1e-3
 
 if __name__ == "__main__":
     unittest.main()

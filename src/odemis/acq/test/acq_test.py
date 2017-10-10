@@ -30,8 +30,9 @@ import time
 import unittest
 from unittest.case import skip
 
-import odemis.acq.stream as stream
+from odemis.acq.leech import ProbeCurrentAcquirer
 import odemis.acq.path as path
+import odemis.acq.stream as stream
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -39,6 +40,27 @@ logging.getLogger().setLevel(logging.DEBUG)
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
+
+
+class Fake0DDetector(model.Detector):
+    """
+    Imitates a probe current detector, but you need to send the data yourself (using
+    comp.data.notify(d)
+    """
+    def __init__(self, name):
+        model.Detector.__init__(self, name, "fakedet", parent=None)
+        self.data = Fake0DDataFlow()
+        self._shape = (float("inf"),)
+
+
+class Fake0DDataFlow(model.DataFlow):
+    """
+    Mock object just sufficient for the ProbeCurrentAcquirer
+    """
+    def get(self):
+        da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
+        return da
+
 
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything
@@ -322,6 +344,69 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(self.lenswitch.position.value, exp_pos["lens-switch"])
         self.assertEqual(self.spec_det_sel.position.value, exp_pos["spec-det-selector"])
         self.assertEqual(self.ar_spec_sel.position.value, exp_pos["ar-spec-selector"])
+
+    def test_leech(self):
+        """
+        try acquisition with leech
+        """
+        # Create the streams and streamTree
+        semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
+        st = stream.StreamTree(streams=[semsur, semars])
+
+        pcd = Fake0DDetector("test")
+        pca = ProbeCurrentAcquirer(pcd)
+        sems.leeches.append(pca)
+        semsur.leeches.append(pca)
+
+        # SEM survey settings are via the current hardware settings
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        # SEM/AR settings are via the AR stream
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        mx_brng = self.ccd.binning.range[1]
+        binning = tuple(min(4, mx) for mx in mx_brng)  # try binning 4x4
+        self.ccd.binning.value = binning
+        self.ccd.exposureTime.value = 1  # s
+        ars.repetition.value = (2, 3)
+        num_ar = numpy.prod(ars.repetition.value)
+
+        pca.period.value = 10  # Only at beginning and end
+
+        est_time = acq.estimateTime(st.getStreams())
+
+        # prepare callbacks
+        self.start = None
+        self.end = None
+        self.updates = 0
+        self.done = 0
+
+        # Run acquisition
+        start = time.time()
+        f = acq.acquire(st.getStreams())
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data, e = f.result()
+        dur = time.time() - start
+        self.assertGreaterEqual(dur, est_time / 2)  # Estimated time shouldn't be too small
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
+        self.assertEqual(len(data), num_ar + 2)
+
+        thumb = acq.computeThumbnail(st, f)
+        self.assertIsInstance(thumb, model.DataArray)
+
+        self.assertGreaterEqual(self.updates, 1)  # at least one update at end
+        self.assertLessEqual(self.end, time.time())
+        self.assertEqual(self.done, 1)
+        self.assertTrue(not f.cancelled())
+
+        for da in data:
+            pcmd = da.metadata[model.MD_EBEAM_CURRENT_TIME]
+            self.assertEqual(len(pcmd), 2)
 
     def on_done(self, future):
         self.done += 1
