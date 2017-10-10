@@ -49,7 +49,7 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
-from odemis.util import units, spot
+from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 import os.path
 import pkg_resources
@@ -2921,6 +2921,9 @@ class Sparc2AlignTab(Tab):
 
             self._addMoIEntries(mois_spe.stream_panel)
             mois.image.subscribe(self._onNewMoI)
+
+            # To activate the SEM spot when the CCD plays
+            mois.should_update.subscribe(self._on_ccd_stream_play)
         else:
             self.panel.btn_bkg_acquire.Show(False)
 
@@ -3254,14 +3257,12 @@ class Sparc2AlignTab(Tab):
         """
         # Especially useful for the hardware which force the SEM external scan
         # when the SEM stream is playing. Because that allows the user to see
-        # the SEM image in the original SEM software while still being able to
-        # move the mirror
+        # the SEM image in the original SEM software (by pausing the stream),
+        # while still being able to move the mirror.
         ccdupdate = self._ccd_stream.should_update.value
-        if self._speccnt_stream:
-            spcupdate = self._speccnt_stream.should_update.value
-        else:
-            spcupdate = False
-        self._spot_stream.is_active.value = any((ccdupdate, spcupdate))
+        spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
+        moiupdate = self._moi_stream and self._moi_stream.should_update.value
+        self._spot_stream.is_active.value = any((ccdupdate, spcupdate, moiupdate))
 
     def _onClickFocus(self, evt):
         """
@@ -3458,7 +3459,7 @@ class Sparc2AlignTab(Tab):
 
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
 
-    @call_in_wx_main
+    @limit_invocation(1)  # max 1 Hz
     def _onNewMoI(self, rgbim):
         """
         Called when a new MoI image is available.
@@ -3471,15 +3472,21 @@ class Sparc2AlignTab(Tab):
         except IndexError:
             return  # No data => next time will be better
 
+        # Note: this can take a long time (on a large image), so we must not do
+        # it in the main GUI thread. limit_invocation() ensures we are in a
+        # separate thread, and that's why the GUI update is separated.
         background = None
         moi = spot.MomentOfInertia(data, background)
         ss = spot.SpotIntensity(data, background)
+        self._updateMoIValues(moi, ss)
 
+    @call_in_wx_main
+    def _updateMoIValues(self, moi, ss):
         # If value is None => text is ""
         txt_moi = units.readable_str(moi, sig=3)
         self._txt_moi.SetValue(txt_moi)
-
-        self._txt_ss.SetValue(units.readable_str(ss, sig=3))
+        # Convert spot intensity from ratio to %
+        self._txt_ss.SetValue(u"%.4f %%" % (ss * 100,))
 
     def _onSEMMag(self, mag):
         """
