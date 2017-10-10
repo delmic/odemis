@@ -20,7 +20,6 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.util import img
-import copy
 
 
 # This is a series of classes which use different methods to generate a large
@@ -44,42 +43,40 @@ class CollageWeaver(object):
     return (2D DataArray): same dtype as the tiles, with shape corresponding to
       the bounding box.
     """
-    
+
     def __init__(self):
         self.tiles = []
 
-    def addTile(self,tile):
+    def addTile(self, tile):
         """
         tile (2D DataArray): the image must have at least MD_POS and
         MD_PIXEL_SIZE metadata. All provided tiles should have the same dtype.
         """
-        
+
         self.tiles.append(tile)
-    
-       
+
     def getFullImage(self):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
         """
-             
-        # Sort the tiles by time, to avoid random order in "Z", and high-light the
-        # acquisition order.
-        tiles = sorted(self.tiles, key=lambda t: t.metadata.get(model.MD_ACQ_DATE, 0))
-       
+
+        tiles = self.tiles
+
         # Merge the correction metadata inside each image (to keep the rest of the
         # code simple)
 
         tiles = [model.DataArray(t, t.metadata.copy()) for t in tiles]
-        
+
         for t in tiles:
             img.mergeMetadata(t.metadata)
-    
+
         # Compute the bounding box of each tile and the global bounding box
-    
+
         # Get a fixed pixel size by using the first one
-        # TODO: use the mean, in case they are all slightly different due to correction?
+        # TODO: use the mean, in case they are all slightly different due to
+        # correction?
         pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
-        
+
         tbbx_phy = []  # tuples of ltrb in physical coordinates
         for t in tiles:
             c = t.metadata[model.MD_POS]
@@ -89,84 +86,86 @@ class CollageWeaver(object):
                                 c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
             bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
                    c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
-            
+
             tbbx_phy.append(bbx)
-    
+
         gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
                     max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
-    
+
         # Compute the bounding-boxes in pixel coordinates
         tbbx_px = []
 
-        glt = gbbx_phy[0], gbbx_phy[3]  # that's the origin (Y is max as Y is inverted)
+        # that's the origin (Y is max as Y is inverted)
+        glt = gbbx_phy[0], gbbx_phy[3]
         for bp, t in zip(tbbx_phy, tiles):
-            lt = (int((bp[0] - glt[0]) / pxs[0]), int(-(bp[3] - glt[1]) / pxs[1]))
+            lt = (int((bp[0] - glt[0]) / pxs[0]),
+                  int(-(bp[3] - glt[1]) / pxs[1]))
             w = t.shape[-1], t.shape[-2]
             bbx = (lt[0], lt[1],
                    lt[0] + w[0], lt[1] + w[1])
             tbbx_px.append(bbx)
-            
+
         gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
                    max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
-    
+
         assert gbbx_px[0] == gbbx_px[1] == 0
 
-        # TODO: warn if the global area is much bigger than the sum of the tile area
-    
+        # TODO: warn if the global area is much bigger than the sum of the tile
+        # area
+
         # Paste each tile
-        logging.debug("Generating global image of size %dx%d px", gbbx_px[-2], gbbx_px[-1])
+        logging.debug("Generating global image of size %dx%d px",
+                      gbbx_px[-2], gbbx_px[-1])
         im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
         # Use minimum of the values in the tiles for background
         im[:] = numpy.amin(tiles)
         for b, t in zip(tbbx_px, tiles):
             im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = t
             # TODO: border
-    
+
         # Update metadata
         # TODO: check this is also correct based on lt + half shape * pxs
-        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2, (gbbx_phy[1] + gbbx_phy[3]) / 2)
+        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2,
+                 (gbbx_phy[1] + gbbx_phy[3]) / 2)
         md = tiles[0].metadata.copy()
         md[model.MD_POS] = c_phy
-    
+
         return model.DataArray(im, md)
-    
-       
-    
+
+
 class MeanWeaver(object):
     """
     Pixels of the final image which are corresponding to several tiles are computed as an 
     average of the pixel of each tile.
     """
-    
+
     def __init__(self):
         self.tiles = []
-    
-    def addTile(self,tile):
+
+    def addTile(self, tile):
         self.tiles.append(tile)
-    
+
     def getFullImage(self):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
         """
-             
-        # Sort the tiles by time, to avoid random order in "Z", and high-light the
-        # acquisition order.
-        tiles = sorted(self.tiles, key=lambda t: t.metadata.get(model.MD_ACQ_DATE, 0))
-       
         # Merge the correction metadata inside each image (to keep the rest of the
         # code simple)
 
+        tiles = self.tiles
+
         tiles = [model.DataArray(t, t.metadata.copy()) for t in tiles]
-        
+
         for t in tiles:
             img.mergeMetadata(t.metadata)
 
         # Compute the bounding box of each tile and the global bounding box
-    
+
         # Get a fixed pixel size by using the first one
-        # TODO: use the mean, in case they are all slightly different due to correction?
+        # TODO: use the mean, in case they are all slightly different due to
+        # correction?
         pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
-        
+
         tbbx_phy = []  # tuples of ltrb in physical coordinates
         for t in tiles:
             c = t.metadata[model.MD_POS]
@@ -176,101 +175,84 @@ class MeanWeaver(object):
                                 c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
             bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
                    c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
-            
+
             tbbx_phy.append(bbx)
-    
+
         gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
                     max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
-    
+
         # Compute the bounding-boxes in pixel coordinates
         tbbx_px = []
-        
-        glt = gbbx_phy[0], gbbx_phy[3]  # that's the origin (Y is max as Y is inverted)
+
+        # that's the origin (Y is max as Y is inverted)
+        glt = gbbx_phy[0], gbbx_phy[3]
         for bp, t in zip(tbbx_phy, tiles):
-            lt = (int((bp[0] - glt[0]) / pxs[0]), int(-(bp[3] - glt[1]) / pxs[1]))
+            lt = (int((bp[0] - glt[0]) / pxs[0]),
+                  int(-(bp[3] - glt[1]) / pxs[1]))
             w = t.shape[-1], t.shape[-2]
             bbx = (lt[0], lt[1],
                    lt[0] + w[0], lt[1] + w[1])
             tbbx_px.append(bbx)
-   
+
         gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
                    max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
-    
-        assert gbbx_px[0] == gbbx_px[1] == 0
-       
-        # TODO: warn if the global area is much bigger than the sum of the tile area
-    
-        # Paste each tile
-        logging.debug("Generating global image of size %dx%d px", gbbx_px[-2], gbbx_px[-1])
-        im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
-        # TODO: what value to use for background? Use minimum of the values in the tiles
-        im[:] = numpy.amin(tiles)
-       
-        if len(tiles) > 1:
-            # Overlap
-            diff = max(tiles[1].metadata[model.MD_POS][0]-tiles[0].metadata[model.MD_POS][0],
-                       tiles[1].metadata[model.MD_POS][1]-tiles[0].metadata[model.MD_POS][1])
-            sz_m = 2*tiles[0].metadata[model.MD_POS][0]
-            ovrlp = (sz_m-diff)/sz_m
-            
-            prev_im = None
-            
-            for b, t in zip(tbbx_px, tiles):
-                im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = t
-            
-                # Take mean of overlap region from previous and current stitched image
-                if prev_im != None:
-                   
-                    # horizontal
-                    if b[0] >tiles[0].metadata[model.MD_POS][0]:
-                        prev_cropped = prev_im[b[1]:b[1] + t.shape[0], b[0]:b[0] + ovrlp * t.shape[1]]
-                        im_cropped = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + ovrlp * t.shape[1]]                    
-                        
-                        # Use different weights of tiles when calculating mean, depending on the 
-                        # position of the columns (tile closer to the column will be weighted more 
-                        # strongly)
-                        means=numpy.empty([len(prev_cropped),len(prev_cropped[0])])
-                        for row in range(len(prev_cropped)):
-                            for col in range(len(prev_cropped[0])):
-                                perc = col/len(prev_cropped[0])
-                                mean = numpy.add((1-perc)*prev_cropped[row][col],perc*im_cropped[row][col])
-                                means[row][col] = mean
-                        
 
-                        x = int(ovrlp*t.shape[0]/4) # only update part of the region, avoids empty stripes between tiles
-                      
-                        im[b[1]:b[1] + t.shape[0], b[0]:b[0] + ovrlp * t.shape[1]-x] =\
-                           means[:,:-x]
-                        
-                           
-                    if b[1]>tiles[0].metadata[model.MD_POS][1]:
-                        prev_cropped = prev_im[b[1]:b[1] + ovrlp * t.shape[0], b[0]:b[0] + t.shape[1]]
-                        im_cropped = im[b[1]:b[1] + ovrlp * t.shape[0], b[0]:b[0] + t.shape[1]]
-    
-                        means=[]
-                        for i in range(len(prev_cropped)):
-                            perc = i/len(prev_cropped)
-                            mean = numpy.add((1-perc)*prev_cropped[i],perc*im_cropped[i])
-                            means.append(mean)
-                        
-                        im[b[1]:b[1] + ovrlp * t.shape[0]-x, b[0]:b[0] + t.shape[1]] =\
-                           means[:-x][:]#numpy.mean([prev_cropped[:-10,:],im_cropped[10:,:]],axis=0)              
-                    
-                
-                prev_im = copy.deepcopy(im)
-                
-        else:
-            im = tiles[0]
-            
+        assert gbbx_px[0] == gbbx_px[1] == 0
+
+        # TODO: warn if the global area is much bigger than the sum of the tile
+        # area
+
+        # Paste each tile
+        logging.debug("Generating global image of size %dx%d px",
+                      gbbx_px[-2], gbbx_px[-1])
+        im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
+        # Use minimum of the values in the tiles for background
+        im[:] = 0
+        mask = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
+        mask[:] = 0
+
+        for b, t in zip(tbbx_px, tiles):
+            # Part of image overlapping with tile
+            roi = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
+            moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
+
+            # Insert image at positions that are still empty
+            roi[moi == 0] = t[moi == 0]
+
+            # Create gradient in overlapping region. Ratio between old image and new tile values determined by
+            # distance to the center of the tile
+
+            # Create weight matrix with decreasing values from its center that
+            # has the same size as the tile.
+            if len(roi) % 2 == 0:
+                L = len(roi) / 2
+                x = numpy.arange(-L, L, 1)
+                y = numpy.arange(-L, L, 1)
+            else:
+                L = len(roi) // 2
+                x = numpy.arange(-L, L + 1, 1)
+                y = numpy.arange(-L, L + 1, 1)
+
+            xx, yy = numpy.meshgrid(x, y)
+            # maximum looks better than euclidean distance
+            w = 1 - (numpy.maximum(abs(xx), abs(yy)) / L)
+
+            # Element-wise multiplication with tile and image roi
+            t_weighted = numpy.multiply(t, w)
+            roi_weighted = numpy.multiply(roi, 1 - w)
+
+            # Update region that overlaps with previous image
+            roi[moi != 0] = 2 * numpy.mean(
+                [t_weighted[moi != 0], roi_weighted[moi != 0]], axis=0)
+
+            # Update mask
+            mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = 1
 
         # Update metadata
         # TODO: check this is also correct based on lt + half shape * pxs
-        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2, (gbbx_phy[1] + gbbx_phy[3]) / 2)
+        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2,
+                 (gbbx_phy[1] + gbbx_phy[3]) / 2)
         md = tiles[0].metadata.copy()
         md[model.MD_POS] = c_phy
-    
-        return model.DataArray(im, md)
-    
 
-   
-    
+        return model.DataArray(im, md)
