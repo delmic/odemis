@@ -82,7 +82,7 @@ class Acquirer(object):
         
         lprng = self.light.power.range
         if not (lprng[0] < lpower < lprng[1]):
-            raise ValueError("starting light power value must be between %s", lprng)
+            raise ValueError("starting light power value must be between %s" % (lprng,))
 
         # counter-intuitively, to get the smaller pixel size, no sub-pixel
         # should be used. That's because when there is no sub-pixel we can use
