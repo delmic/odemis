@@ -81,12 +81,9 @@ class ShiftRegistrar(object):
         # added.
         self.nx = 1
         self.ny = 1
-        self.coords_ver = [
-            [None for _ in range(self.nx)] for _ in range(self.ny)]
-        self.coords_hor = [
-            [None for _ in range(self.nx)] for _ in range(self.ny)]
-        self.shifts = [[(0, 0) for _ in range(self.nx)]
-                       for _ in range(self.ny)]
+        self.coords_ver = [[None for _ in range(self.nx)] for _ in range(self.ny)]
+        self.coords_hor = [[None for _ in range(self.nx)] for _ in range(self.ny)]
+        self.shifts = [[(0, 0) for _ in range(self.nx)] for _ in range(self.ny)]
         self.tiles = [[None for _ in range(self.nx)] for _ in range(self.ny)]
         self.last_ver = (0, 0)  # last vertical shift measured
         self.last_hor = (0, 0)  # last horizontal shift measured
@@ -135,10 +132,8 @@ class ShiftRegistrar(object):
             self.pos_prev_x = 0  # used to determine if tile should be compared to right or left tile
         else:
             if tile.shape != self.tiles[0][0].shape:
-                raise ValueError(
-                    "Tile shape differs from previous tile shapes %s != %s" % (
-                        tile.shape, self.tiles[0][0].shape)
-                )
+                raise ValueError("Tile shape differs from previous tile shapes %s != %s" %
+                                 (tile.shape, self.tiles[0][0].shape))
 
             md_pos = tile.metadata[model.MD_POS]
 
@@ -197,10 +192,10 @@ class ShiftRegistrar(object):
                     self.ovrlp  # overlap size in pixels
                 self.tsize = int(self.size[1] - self.osize)
 
-        if dependent_tiles != None:
-            for i in range(len(dependent_tiles)):
-                self.shift_tile_dep_tiles[i].append(numpy.subtract(dependent_tiles[i].metadata[model.MD_POS],
-                                                                   tile.metadata[model.MD_POS]))
+        if dependent_tiles:
+            for shift_dt, dt in zip(self.shift_tile_dep_tiles, dependent_tiles):
+                sdt = numpy.subtract(dt.metadata[model.MD_POS], tile.metadata[model.MD_POS])
+                shift_dt.append(sdt)
 
         self._compute_registration(tile, self.posY, self.posX)
 
@@ -331,8 +326,7 @@ class ShiftRegistrar(object):
               [coords_array[i][col]
                   for i in range(1, row) if coords_array[i][col] is not None]
         if not val:
-            raise ValueError(
-                "Not enough data to compute mean horizontal shift")
+            raise ValueError("Not enough data to compute mean horizontal shift")
         mean_x = int(sum(v[0] for v in val) / len(val))
         mean_y = int(sum(v[1] for v in val) / len(val))
         return mean_x, mean_y
@@ -367,14 +361,13 @@ class ShiftRegistrar(object):
                 # try the horizontal mean shift along this row and column if
                 # possible
                 try:
-                    mean_x, mean_y = self._mean_shift(
-                        row, col, self.coords_hor)
+                    mean_x, mean_y = self._mean_shift(row, col, self.coords_hor)
                 except ValueError:
                     # if a mean value is not available try the last horizontal
                     # shift measured
                     mean_x, mean_y = self.last_hor
-                match_c = self._estimateMatch(
-                    prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
+                match_c = self._estimateMatch(prev_tile, tile,
+                                              (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
                 if match_c > match:
                     x, y = mean_x, mean_y
                     match = match_c
@@ -399,8 +392,8 @@ class ShiftRegistrar(object):
 
             # calculate the new position based on the shift with respect to the
             # left neighbor position (prev_pos)
-            pos = (int(prev_pos[0] + (self.size[1] *
-                                      (1 - self.ovrlp)) - x), int(prev_pos[1] - y))
+            pos = (int(prev_pos[0] + (self.size[1] * (1 - self.ovrlp)) - x),
+                   int(prev_pos[1] - y))
 
         return pos, match
 

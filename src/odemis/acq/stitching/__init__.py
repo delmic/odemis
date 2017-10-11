@@ -44,7 +44,7 @@ def register(tiles, method=REGISTER_SHIFT):
     elif method == REGISTER_IDENTITY:
         registrar = IdentityRegistrar()
     else:
-        raise ValueError("Invalid registrar %s" % (method))
+        raise ValueError("Invalid registrar %s" % (method,))
 
     # Register tiles
     updatedTiles = []
