@@ -48,7 +48,7 @@ SPARC_MODES = {'ar': ("ccd",
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': 0},
                 }),
-         'cli': ("cl-detector",  # cli
+         'cli': ("cl-detector",  # CL-intencity: PMT just after the parabolic mirror
                 {'lens-switch': {'rx': math.radians(90)},
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': math.radians(90)},
