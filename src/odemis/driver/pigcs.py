@@ -4182,9 +4182,10 @@ class DaisyChainSimulator(object):
         self.port = port
         self.timeout = timeout
         self._subports = kwargs["subports"]
-        self._output_buf = "" # TODO: probably cleaner to user lock to access it
+        self._output_buf = ""
+        self._obuf_lock = threading.Lock()
 
-        # TODO: for each port, put a thread listening on the read and push to output
+        # For each port, put a thread listening on the read and push to output
         self._is_terminated = False
         for p in self._subports:
             t = threading.Thread(target=self._thread_read_serial, args=(p,))
@@ -4206,14 +4207,16 @@ class DaisyChainSimulator(object):
         # simulate timeout
         end_time = time.time() + self.timeout
 
-        ret = self._output_buf[:size]
-        self._output_buf = self._output_buf[len(ret):]
+        with self._obuf_lock:
+            ret = self._output_buf[:size]
+            self._output_buf = self._output_buf[len(ret):]
 
         while len(ret) < size:
             time.sleep(0.01)
             left = size - len(ret)
-            ret += self._output_buf[:left]
-            self._output_buf = self._output_buf[len(ret):]
+            with self._obuf_lock:
+                ret += self._output_buf[:left]
+                self._output_buf = self._output_buf[len(ret):]
             if self.timeout and time.time() > end_time:
                 break
 
@@ -4229,7 +4232,8 @@ class DaisyChainSimulator(object):
                 if len(c) == 0:
                     time.sleep(0.01)
                 else:
-                    self._output_buf += c
+                    with self._obuf_lock:
+                        self._output_buf += c
         except Exception:
             logging.exception("Fake daisy chain thread received an exception")
 
