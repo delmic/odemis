@@ -61,14 +61,14 @@ def find_plugins():
                  os.path.join(hf, u".config", u"odemis", u"plugins")
                  )
     else:  # hopefully this is Linux
-        paths = (u"/usr/share/odemis/plugins/",
-                 u"/usr/share/local/odemis/plugins/",
-                 os.path.join(hf, u".local/share/odemis/plugins/"),
+        paths = (u"/usr/share/odemis/plugins",
+                 u"/usr/share/local/odemis/plugins",
+                 os.path.join(hf, u".local/share/odemis/plugins"),
                  )
 
     plugins = {}  # script name -> full path
     for p in paths:
-        for fn in glob.glob(p + u"*.py"):
+        for fn in glob.glob(os.path.join(p, u"*.py")):
             if os.path.isfile(fn):
                 # Discard previous plugin with same name
                 sn = os.path.basename(fn)
@@ -401,6 +401,10 @@ class AcquisitionDialog(xrcfr_plugin):
             # Wrap the callback, to run in a separate thread, so it doesn't block
             # the GUI.
             def button_callback_wrapper(evt, btnid=btnid):
+                # TODO: disable the button while the callback is running, so that
+                # it's not possible for the user to press twice in a row and cause
+                # the code to run twice simultaneously (without very explicitly
+                # allowing that).
                 try:
                     self.SetReturnCode(btnid)
                     t = threading.Thread(target=callback, args=(self,),
