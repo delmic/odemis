@@ -184,7 +184,7 @@ class ProbeCurrentAcquirer(LeechAcquirer):
             # The time it takes probably depends a lot on the hardware, and
             # there is not much info (maybe the .speed could be used).
             # For now, we just use the time the only hardware we support takes
-            at += 0.1 * 2  # doubled as it has go back and forth
+            at += 3.0 * 2  # doubled as it has go back and forth
 
         at += 0.1  # for overhead
 
