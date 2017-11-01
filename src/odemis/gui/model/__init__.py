@@ -106,6 +106,7 @@ class MainGUIData(object):
         "bs-detector": "bsd",
         "ebic-detector": "ebic",
         "cl-detector": "cld",
+        "pc-detector": "pcd",
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
         "spectrometer": "spectrometer",
@@ -127,6 +128,7 @@ class MainGUIData(object):
         "fiber-aligner": "fibaligner",
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
         "spec-selector": "spec_sel",
+        "pcd-selector": "pcd_sel",
         "chamber": "chamber",
         "light": "light",
         "brightlight": "brightlight",
@@ -174,6 +176,7 @@ class MainGUIData(object):
         self.bsd = None  # backscattered electron detector
         self.ebic = None  # electron beam-induced current detector
         self.cld = None  # cathodoluminescnence detector (aka PMT)
+        self.pcd = None  # Probe current detector (to measure actual e-beam current)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrometer_int = None  # second spectrometer, which has its detector also usable for AR (SPARCv2)
         self.spectrograph = None  # actuator to change the wavelength/grating (on SPARCv2, it's directly on the optical path)
@@ -181,6 +184,7 @@ class MainGUIData(object):
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
+        self.pcd_sel = None  # actuator to activate the path to the probe current
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None  # view of inside the chamber
         self.chamber_light = None   # Light illuminating the chamber
@@ -478,7 +482,8 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         self.acquisitionStreams = set()
 
         # The SEM concurrent stream that is used to select the acquisition settings
-        # eg, ROI (aka ROA), dcPeriod, dcRegion.
+        # eg, ROI (aka ROA), dcPeriod, dcRegion. It also gets Leeches to run during
+        # the entire series of acquisition.
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
@@ -491,6 +496,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         # Whether to use a scan stage (if there is one)
         self.useScanStage = model.BooleanVA(False, readonly=(main.scan_stage is None))
+
+        # Whether to acquire the probe current (via a Leech)
+        self.pcdActive = model.BooleanVA(False, readonly=(main.pcd is None))
 
 
 class ChamberGUIData(MicroscopyGUIData):

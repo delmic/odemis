@@ -599,6 +599,18 @@ STREAM_SETTINGS_CONFIG = {
                 "range": (1, 300),  # s, the VA allows a wider range, not typically needed
                 "accuracy": 2,
             }),
+            ("pcdActive", {
+                "label": "Probe current acq.",
+                "tooltip": u"Activate probe current readings",
+            }),
+            ("pcdPeriod", {
+                "label": "Acquisition period",
+                "tooltip": u"Time between probe current readings",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (1, 3600),  # s, the VA allows a wider range, not typically needed
+                "accuracy": 2,
+            }),
             ("useScanStage", {
                 "tooltip": u"Scans the area using the scan stage, "
                            u"instead of the e-beam. "

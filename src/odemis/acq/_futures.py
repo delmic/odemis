@@ -122,6 +122,14 @@ class SimpleStreamFuture(futures.Future):
         """
         estt = self._stream.estimateAcquisitionTime()
 
+        # The standard is_active acquisition doesn't care about the leeches,
+        # so when imitating .acquire(), we need to call the leeches too.
+        # We acquire just a single time, which we state by a shape of (1).
+        leech_np = []
+        for l in self._stream.leeches:
+            np = l.start(estt, (1,))
+            leech_np.append(np)
+
         # call prepare explicitly just to make sure that the preparation is
         # already done once we start waiting for the acquisition
         f = self._stream.prepare()
@@ -143,6 +151,12 @@ class SimpleStreamFuture(futures.Future):
         with self._condition:
             if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                 raise CancelledError()
+
+        # Call leeches for both first pixel acquired and end of acquisition
+        for l, np in zip(self._stream.leeches, leech_np):
+            if np is not None:
+                l.next(self._stream.raw)
+            l.complete(self._stream.raw)
 
         return self._stream.raw # the acquisition data
 

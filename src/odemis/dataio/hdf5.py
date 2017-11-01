@@ -640,6 +640,18 @@ def _parse_physical_data(pdgroup, da):
             pass
 
         try:
+            ds = pdgroup["EmissionCurrentOverTime"]
+            state = _h5svi_get_state(ds)
+            if state and state[i] in (ST_INVALID, ST_DEFAULT):
+                raise ValueError
+            # It should contain an array of float of Nx2, where the second dim
+            # contains time (s since epoch) & current (A)
+            cot = ds[i].tolist()  # A
+            md[model.MD_EBEAM_CURRENT_TIME] = cot
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
             ds = pdgroup["PolePosition"]
             pp = tuple(ds[i]) # px
             state = _h5svi_get_state(ds)
@@ -931,6 +943,7 @@ def _add_image_metadata(group, image, mds):
     gp["ExcitationPhotonCount"] = [1] * len(mds) # photons
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
+    # Below are additional metadata from us (Delmic)
     # Not official by SVI, but nice to keep info for the SEM images
     evolt = [md.get(model.MD_EBEAM_VOLTAGE) for md in mds]
     if any(evolt):
@@ -944,7 +957,25 @@ def _add_image_metadata(group, image, mds):
         state = [ST_INVALID if v is None else ST_REPORTED for v in ecurrent]
         _h5svi_set_state(gp["EmissionCurrent"], state)
 
-    # Below are additional metadata from us (Delmic)
+    cots = [md.get(model.MD_EBEAM_CURRENT_TIME) for md in mds]
+    if any(cots):
+        # Make all the metadata the same length, to fit in an array.
+        # Normally, with such metadata there should only be one image anyway.
+        mxlen = max(len(c) for c in cots if c is not None)
+        cots_sl = []
+        for c in cots:
+            if c is None:
+                c = [(0, 0)] * mxlen
+            elif len(c) < mxlen:
+                c = list(c) + [(0, 0)] * (mxlen - len(c))
+                logging.warning("DA merged while MD_EBEAM_CURRENT_TIME has different length (%d vs %d)",
+                                len(c), mxlen)
+            cots_sl.append(c)
+
+        gp["EmissionCurrentOverTime"] = cots_sl
+        state = [ST_INVALID if v is None else ST_REPORTED for v in cots]
+        _h5svi_set_state(gp["EmissionCurrentOverTime"], state)
+
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
     for md in mds:
@@ -1066,6 +1097,7 @@ def _findImageGroups(das):
     Note: it's a slightly different function from tiff._findImageGroups()
     """
     # We consider images to be part of the same group if they have:
+    # * MD_IN_WL and MD_OUT_WL (ie, are fluorescence image)
     # * same shape
     # * metadata that show they were acquired by the same instrument
     # * same position
@@ -1079,17 +1111,20 @@ def _findImageGroups(das):
             # If C != 1 => not possible to merge
             if da.shape[0] != 1: # C is always first dimension
                 continue
+            if model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata:
+                continue
             da0 = das[g[0]]
             if da0.shape != da.shape:
                 continue
             if (da0.metadata.get(model.MD_HW_NAME) != da.metadata.get(model.MD_HW_NAME)
-                or da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)):
+                or da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)
+               ):
                 continue
             if (da0.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
                 or da0.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
                 or da0.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
                 or da0.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
-                ):
+               ):
                 continue
             # Found!
             g.append(i)
@@ -1103,7 +1138,7 @@ def _findImageGroups(das):
 
 def _adjustDimensions(da):
     """
-    Ensure the DataArray has 5 dimensions ordered CTZXY (as dictated by the HDF5 
+    Ensure the DataArray has 5 dimensions ordered CTZXY (as dictated by the HDF5
     SVI convention). If it seems to contain RGB data, an exception is made to
     return just CYX data.
     da (DataArray)
@@ -1167,12 +1202,12 @@ def _groupImages(das):
     """
     # For each image: adjust dimensions
     adas = [_adjustDimensions(da) for da in das]
-    
+
     # For each image, if C = 1, try to merge it to an existing group
     groups = _findImageGroups(adas)
-    
+
     acq, mds = [], []
-    
+
     # For each group:
     # * if alone, do nothing
     # * if many, merge along C

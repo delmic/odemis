@@ -31,7 +31,7 @@ import logging
 import math
 import numpy
 from odemis import dataio, model
-from odemis.acq import calibration
+from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream, RGBStream
@@ -846,8 +846,10 @@ class SparcAcquisitionTab(Tab):
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
-        # TODO: move the entry to the "acquisition" panel?
-        # We add on the SEM live stream panel, the VA for the SEM concurrent stream
+        # Display on the SEM live stream panel, the extra settings of the SEM concurrent stream
+        # * Drift correction period
+        # * Probe current activation & period (if supported)
+        # * Scan stage (if supported)
         self.sem_dcperiod_ent = sem_stream_cont.add_setting_entry(
             "dcPeriod",
             semcl_stream.dcPeriod,
@@ -856,15 +858,26 @@ class SparcAcquisitionTab(Tab):
         )
         semcl_stream.dcRegion.subscribe(self._onDCRegion, init=True)
 
-        # On the sparc-simplex, there is no alignment tab, so no way to check
-        # the CCD temperature. => add it at the bottom of the SEM stream
-        if main_data.role == "sparc-simplex" and model.hasVA(main_data.spectrometer, "temperature"):
-            self._ccd_temp_ent = sem_stream_cont.add_setting_entry(
-                "ccdTemperature",
-                main_data.spectrometer.temperature,
-                main_data.spectrometer,
-                get_stream_settings_config()[acqstream.SEMStream]["ccdTemperature"]
+        if main_data.pcd:
+            # Create a "leech" that we can add/remove to the SEM stream
+            self._pcd_acquirer = leech.ProbeCurrentAcquirer(main_data.pcd, main_data.pcd_sel)
+            self.pcd_active_ent = sem_stream_cont.add_setting_entry(
+                "pcdActive",
+                tab_data.pcdActive,
+                None,  # component
+                get_stream_settings_config()[acqstream.SEMStream]["pcdActive"]
             )
+            self.pcdperiod_ent = sem_stream_cont.add_setting_entry(
+                "pcdPeriod",
+                self._pcd_acquirer.period,
+                None,  # component
+                get_stream_settings_config()[acqstream.SEMStream]["pcdPeriod"]
+            )
+            # Drop the top border from the period entry to get it closer
+            for si in sem_stream_cont.stream_panel.gb_sizer.GetChildren():
+                if si.GetWindow() in (self.pcdperiod_ent.lbl_ctrl, self.pcdperiod_ent.value_ctrl):
+                    si.Flag &= ~wx.TOP
+            tab_data.pcdActive.subscribe(self._on_pcd_active, init=True)
 
         # add "Use scan stage" check box if scan_stage is present
         sstage = main_data.scan_stage
@@ -889,6 +902,16 @@ class SparcAcquisitionTab(Tab):
                    ssaxes["x"].range[1] - posc["x"],
                    ssaxes["y"].range[1] - posc["y"])
             panel.vp_sparc_tl.set_stage_limits(roi)
+
+        # On the sparc-simplex, there is no alignment tab, so no way to check
+        # the CCD temperature. => add it at the bottom of the SEM stream
+        if main_data.role == "sparc-simplex" and model.hasVA(main_data.spectrometer, "temperature"):
+            self._ccd_temp_ent = sem_stream_cont.add_setting_entry(
+                "ccdTemperature",
+                main_data.spectrometer.temperature,
+                main_data.spectrometer,
+                get_stream_settings_config()[acqstream.SEMStream]["ccdTemperature"]
+            )
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
@@ -959,6 +982,23 @@ class SparcAcquisitionTab(Tab):
         Use the sem stream dwell time as the anchor dwell time
         """
         self.tab_data_model.semStream.dcDwellTime.value = dt
+
+    @call_in_wx_main
+    def _on_pcd_active(self, active):
+        acq_leeches = self.tab_data_model.semStream.leeches
+        if active:
+            # ensure the leech is present
+            if self._pcd_acquirer not in acq_leeches:
+                acq_leeches.append(self._pcd_acquirer)
+        else:
+            # ensure the leech is not present
+            try:
+                acq_leeches.remove(self._pcd_acquirer)
+            except ValueError:
+                pass
+
+        self.pcdperiod_ent.lbl_ctrl.Enable(active)
+        self.pcdperiod_ent.value_ctrl.Enable(active)
 
     def _on_use_scan_stage(self, use):
         if use:
@@ -3159,7 +3199,7 @@ class Sparc2AlignTab(Tab):
         if mode != "fiber-align" and main.spec_sel:
             main.spec_sel.position.unsubscribe(self._onFiberPos)
 
-        # This is blocking on the hardware => run in a separate thread
+        # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
         f = main.opm.setPath(op_mode)
 

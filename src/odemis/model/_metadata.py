@@ -62,6 +62,13 @@ MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends pe
 MD_EBEAM_VOLTAGE = "Electron beam acceleration voltage" # V (float), voltage used to accelerate the electron beam
 MD_EBEAM_CURRENT = "Electron beam emission current"  # A (float), emission current of the electron beam (typically, the probe current is a bit smaller and the spot diameter is linearly proportional)
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)
+
+# This one is a kind of a hack, to store the evolution of the current over the time
+# of an acquisition.
+# tuple of (float, float) -> s since epoch, A
+# The entries should be ordered by time (the earliest the first)
+MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
+
 # The following two express the same thing (in different ways), so they should
 # not be used simultaneously.
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
