@@ -22,11 +22,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import Queue
 import logging
 import math
 import numpy
 from odemis import model, util, dataio
-from odemis.model import isasync
+from odemis.model import isasync, oneway
 from odemis.util import img
 import os
 import random
@@ -365,6 +366,9 @@ class Detector(model.Detector):
         if parent._drift_period:
             self._update_drift_timer.start()
 
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
 
     def terminate(self):
@@ -501,6 +505,10 @@ class Detector(model.Detector):
                 duration = numpy.prod(resolution) * dwelltime
                 if self._acquisition_must_stop.wait(duration):
                     break
+                # TODO: it's not a very proper simulation for multiple detectors,
+                # as in Odemis the convention for SEM is that the ebeam waits
+                # for _all_ the detectors to be ready before scanning.
+                self.data._waitSync()
                 callback(self._simulate_image())
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
@@ -523,6 +531,9 @@ class SEMDataFlow(model.DataFlow):
         model.DataFlow.__init__(self)
         self.component = weakref.ref(detector)
 
+        self._sync_event = None  # event to be synchronised on, or None
+        self._evtq = None  # a Queue to store received events (= float, time of the event)
+
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
         try:
@@ -539,6 +550,50 @@ class SEMDataFlow(model.DataFlow):
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the scanner will start a new acquisition/scan.
+          The DataFlow can be synchronized only with one Event at a time.
+          However each DataFlow can be synchronized, separately. The scan will
+          only start once each active DataFlow has received an event.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        """
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._sync_event.subscribe(self)
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._evtq.empty():
+            logging.warning("Received synchronization event but already %d queued",
+                            self._evtq.qsize())
+
+        self._evtq.put(time.time())
+
+    def _waitSync(self):
+        """
+        Block until the Event on which the dataflow is synchronised has been
+          received. If the DataFlow is not synchronised on any event, this
+          method immediately returns
+        """
+        if self._sync_event:
+            self._evtq.get()
 
 class EbeamFocus(model.Actuator):
     """
