@@ -107,7 +107,7 @@ class RGBCLIntensity(Plugin):
         self.filter3 = model.FloatEnumerated(fbvalues[min(2, len(fbvalues) - 1)],
                                              choices=fbchoices)
 
-        self._filters = [self.filter1.value, self.filter2.value, self.filter3.value]
+        self._filters = [self.filter1, self.filter2, self.filter3]
         self._colours = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]  # B, G, R
 
         self.filename = model.StringVA("a.tiff")
@@ -201,6 +201,16 @@ class RGBCLIntensity(Plugin):
         logging.warning("No CL intensity stream found")
         return None
 
+    def _pause_streams(self):
+        """
+        return (list of streams): the streams paused
+        """
+        try:
+            str_ctrl = self.main_app.main_data.tab.value.streambar_controller
+        except AttributeError:  # Odemis v2.6 and earlier versions
+            str_ctrl = self.main_app.main_data.tab.value.stream_controller
+        return str_ctrl.pauseStreams()
+
     def start(self):
         # Check the acquisition tab is open, and a CL-intensity stream is available
         ct = self.main_app.main_data.tab.value
@@ -217,7 +227,10 @@ class RGBCLIntensity(Plugin):
             dlg.Destroy()
             return
 
-        # TODO: immediately switch optical path, to save time
+        self._pause_streams()
+
+        # immediately switch optical path, to save time
+        self.main_app.main_data.opm.setPath(cls)  # non-blocking
 
         # Get survey stream too
         self._survey_s = self._get_sem_survey()
@@ -249,11 +262,7 @@ class RGBCLIntensity(Plugin):
 
     def acquire(self, dlg):
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
-        try:
-            str_ctrl = self.main_app.main_data.tab.value.streambar_controller
-        except AttributeError: # Odemis v2.6 and earlier versions
-            str_ctrl = self.main_app.main_data.tab.value.stream_controller
-        stream_paused = str_ctrl.pauseStreams()
+        self._pause_streams()
 
         # We use the acquisition CL intensity stream, so there is a concurrent
         # SEM acquisition (just the survey). The drift correction is run both
@@ -312,8 +321,8 @@ class RGBCLIntensity(Plugin):
 
             # Loop over the filters, for now it's fixed to 3 but this could be flexible
             for fb, co in zip(self._filters, self._colours):
-                logging.info("Moving to band %s with component %s", fb, self.filterwheel.name)
-                self.filterwheel.moveAbs({"band": fb}).result()
+                logging.info("Moving to band %s with component %s", fb.value, self.filterwheel.name)
+                self.filterwheel.moveAbs({"band": fb.value}).result()
                 ft.set_progress(end=time.time() + dur)
 
                 # acquire CL stream
