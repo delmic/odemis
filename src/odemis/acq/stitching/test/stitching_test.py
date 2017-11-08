@@ -235,7 +235,8 @@ def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shif
     shift : Boolean variable indicating whether or not to add a shift to the positions
     """
 
-    tileSize = int(min(img.shape[0], img.shape[1]) / numTiles)
+    # img.shape = tileSize + numTiles * (tileSize - overlap * tileSize) --> formula
+    tileSize = int(min(img.shape[0], img.shape[1]) / (numTiles * (1 - overlap) + 1))
 
     pos = []
     tiles = []
