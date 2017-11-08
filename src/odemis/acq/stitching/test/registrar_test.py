@@ -29,8 +29,10 @@ import random
 import copy
 import os
 
-from odemis.acq.stitching import IdentityRegistrar, ShiftRegistrar, decompose_image
+from odemis.acq.stitching import IdentityRegistrar, ShiftRegistrar
 from odemis.dataio import tiff
+
+from stitching_test import decompose_image
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -137,11 +139,11 @@ class TestIdentityRegistrar(unittest.TestCase):
                  model.DataArray(tile3, md3), model.DataArray(tile4, md4)]
 
         registrar = IdentityRegistrar()
-        for i in range(len(tiles)):
-            registrar.addTile(tiles[i])
-            calculatedPositions = registrar.getPositions()[0]
-            diff1 = abs(calculatedPositions[i][0] - pos[i][0])
-            diff2 = abs(calculatedPositions[i][1] - pos[i][1])
+        calculatedPositions, _ = registrar.getPositions()
+        for t, cp, p in zip(tiles, calculatedPositions, pos):
+            registrar.addTile(t)
+            diff1 = abs(cp[0] - p[0])
+            diff2 = abs(cp[1] - p[1])
 
             # should return initial position value, small error of 0.01 allowed
             self.assertLessEqual(diff1, 1.3e-6)
@@ -302,8 +304,8 @@ class TestShiftRegistrar(unittest.TestCase):
                     h = int(0.9 * size[0])
                     idx1 = int(0.05 * size[0])
                     idx2 = int(0.05 * size[1])
-                    img[idx1:idx1 + h, idx2:idx2 +
-                        l] = numpy.zeros((h, l), dtype=dtype)
+                    img[idx1:idx1 + h, idx2:idx2 + l] = \
+                            numpy.zeros((h, l), dtype=dtype)
 
                     # Crop two tiles with different shifts
                     tile1 = img[:0.3 * size[0], 0:0.6 * size[1]]
@@ -320,14 +322,14 @@ class TestShiftRegistrar(unittest.TestCase):
                         model.MD_PIXEL_SIZE: px_size
                     }
 
-                    tiles = [model.DataArray(
-                        tile1, md1), model.DataArray(tile2, md2)]
+                    tiles = [model.DataArray(tile1, md1),
+                             model.DataArray(tile2, md2)]
                     registrar = ShiftRegistrar()
                     for t in tiles:
                         registrar.addTile(t)
 
-                    diff = numpy.subtract(registrar.getPositions()[
-                                          0][0], md1[model.MD_POS])
+                    diff = numpy.subtract(registrar.getPositions()[0][0],
+                                          md1[model.MD_POS])
                     # one pixel difference allowed
                     self.assertLessEqual(diff[0], 1)
                     self.assertLessEqual(diff[1], 1)

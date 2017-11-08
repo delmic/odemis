@@ -29,7 +29,8 @@ import random
 
 from odemis.acq.stitching._weaver import CollageWeaver, MeanWeaver
 from odemis.dataio import tiff
-from odemis.acq.stitching import decompose_image
+
+from stitching_test import decompose_image
 
 logging.getLogger().setLevel(logging.DEBUG)
 
