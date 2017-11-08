@@ -139,10 +139,17 @@ class TimelapsePlugin(Plugin):
 
     def _setPeriod(self, period):
         # It should be at least as long as the acquisition time of all the streams
-        ss = self._get_acq_streams()
-        sacqt = acq.estimateTime(ss)
+        tot_time = 0
+        for s in self._get_acq_streams():
+            acqt = s.estimateAcquisitionTime()
+            # Normally we round-up in order to be pessimistic on the duration,
+            # but here it's better to be a little optimistic and allow the user
+            # to pick a really short period (if each stream has a very short
+            # acquisition time).
+            acqt = max(1e-3, acqt - stream.Stream.SETUP_OVERHEAD)
+            tot_time += acqt
 
-        return min(max(sacqt, period), self.period.range[1])
+        return min(max(tot_time, period), self.period.range[1])
 
     def _get_streams(self):
         """
