@@ -29,11 +29,9 @@ import math
 from numpy import arange
 from numpy import fft
 
-# TODO: move and rename to something more explicit. Eg acq.align.MeasureShift (CrossCorrelation)
-
 def MeasureShift(previous_img, current_img, precision=1):
     """
-    Given two images, it calculates the drift in x and y axis. It first computes
+    Given two images, it calculates the shift in x and y axis. It first computes
     the cross-correlation of the two images and then locates the peak. The coordinates
     of the peak of the cross-correlation define the shift vector between the two images.
     This implementation is based on the "Efficient subpixel image registration by

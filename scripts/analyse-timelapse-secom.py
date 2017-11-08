@@ -23,7 +23,7 @@ import argparse
 import glob
 import logging
 from odemis import dataio, model, acq
-from odemis.acq import drift
+from odemis.acq.align.shift import MeasureShift
 from odemis.acq.align import autofocus
 import os
 import sys
@@ -84,19 +84,19 @@ def read_timelapse(infn, emfn, fmfn):
                 fmdriftm = 0, 0
                 fmpdriftm = 0, 0
             else:
-                emdrift = drift.CalculateDrift(emda0, emda, 10)  # in pixels
+                emdrift = MeasureShift(emda0, emda, 10)  # in pixels
                 emdriftm = emdrift[0] * empxs[0], emdrift[1] * empxs[1]
                 logging.info("Computed total EM drift of %s px = %s m", emdrift, emdriftm)
                 
-                empdrift = drift.CalculateDrift(emda_prev, emda, 10)  # in pixels
+                empdrift = MeasureShift(emda_prev, emda, 10)  # in pixels
                 empdriftm = empdrift[0] * empxs[0], empdrift[1] * empxs[1]
                 logging.info("Computed previous EM drift of %s px = %s m", empdrift, empdriftm)
 
-                fmdrift = drift.CalculateDrift(fmda0, fmda, 10)  # in pixels
+                fmdrift = MeasureShift(fmda0, fmda, 10)  # in pixels
                 fmdriftm = fmdrift[0] * fmpxs[0], fmdrift[1] * fmpxs[1]
                 logging.info("Computed total FM drift of %s px = %s m", fmdrift, fmdriftm)
 
-                fmpdrift = drift.CalculateDrift(fmda_prev, fmda, 10)  # in pixels
+                fmpdrift = MeasureShift(fmda_prev, fmda, 10)  # in pixels
                 fmpdriftm = fmpdrift[0] * fmpxs[0], fmpdrift[1] * fmpxs[1]
                 logging.info("Computed previous FM drift of %s px = %s m", fmpdrift, fmpdriftm)
 
