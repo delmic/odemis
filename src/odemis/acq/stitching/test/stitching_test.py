@@ -153,16 +153,8 @@ class TestRegister(unittest.TestCase):
                                  " %f != %f" % (tile_pos[1], pos[i][1]))
 
             for j in range(2):
-                diff1 = abs(dep_pos[j][0] - rnd1[i] * px_size[0] - pos[i][0])
-                self.assertLessEqual(diff1, margin1,
-                                     "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                     " %f != %f" % (dep_pos[j][0], pos[i][0] + rnd1[i] * px_size[0]))
-
-                diff2 = abs(dep_pos[j][1] - rnd2[i] * px_size[1] - pos[i][1])
-                self.assertLessEqual(diff2, margin2,
-                                     "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                     " %f != %f" % (dep_pos[j][1], pos[i][1] + rnd2[i] * px_size[1]))
-
+                self.assertAlmostEqual(dep_pos[j][0], tile_pos[0] + rnd1[i] * px_size[0])
+                self.assertAlmostEqual(dep_pos[j][1], tile_pos[1] + rnd2[i] * px_size[1])
 
 class TestWeave(unittest.TestCase):
 

@@ -16,8 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-from ._registrar import *
-from ._weaver import *
+from odemis.acq.stitching._registrar import *
+from odemis.acq.stitching._weaver import *
 
 import copy
 import random
@@ -74,8 +74,8 @@ def register(tiles, method=REGISTER_SHIFT):
             # Update dependent tiles
             tilesNew = [tileUpd]
             for j in range(len(dep_tiles)):
-                md = copy.deepcopy(dep_tiles[j][i].metadata)
-                md[model.MD_POS] = registrar.getPositions()[1][j][i]
+                md = copy.deepcopy(dep_tiles[j].metadata)
+                md[model.MD_POS] = registrar.getPositions()[1][i][j]
                 tilesNew.append(model.DataArray(tile, md))
             tileUpd = tuple(tilesNew)
 
