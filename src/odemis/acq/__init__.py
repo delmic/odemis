@@ -34,8 +34,8 @@ import logging
 import math
 from odemis import model
 from odemis.acq import _futures
-from odemis.acq.stream import FluoStream, SEMCCDMDStream, \
-    OverlayStream, OpticalStream, EMStream, SEMMDStream, ScannedFluoStream, ScannedFluoMDStream
+from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, \
+    OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream
 from odemis.util import img, fluo
 import sys
 import threading
@@ -86,6 +86,7 @@ def acquire(streams):
     # return the interface to manipulate the task
     return future
 
+
 def estimateTime(streams):
     """
     Computes the approximate time it will take to run the acquisition for the
@@ -94,7 +95,7 @@ def estimateTime(streams):
     return (0 <= float): estimated time in s.
     """
     tot_time = 0
-    # We don't use mergeStreams() as it creates new streams at every call, and
+    # We don't use foldStreams() as it creates new streams at every call, and
     # anyway sum of each stream should give already a good estimation.
     for s in streams:
         tot_time += s.estimateAcquisitionTime()
@@ -188,6 +189,7 @@ def computeThumbnail(streamTree, acqTask):
     # add some basic info to the image
     iim.metadata[model.MD_DESCRIPTION] = "Composited image preview"
     return iim
+
 
 def _weight_stream(stream):
     """
