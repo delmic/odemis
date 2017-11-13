@@ -3749,7 +3749,7 @@ class TabBarController(object):
         self.main_frame.Layout()
 
     def terminate(self):
-        """ Terminate each tab (i.e.,indicate they are not used anymore)CameraViewport """
+        """ Terminate each tab (i.e., indicate they are not used anymore) """
 
         for t in self._tabs.choices:
             t.terminate()

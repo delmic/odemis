@@ -297,7 +297,7 @@ class DataFlow(DataFlowBase):
         """
         Acquires one image and return it
         asap (boolean): if True, returns the first image received, otherwise
-         ensures that the image has been acquired after the call to this function 
+         ensures that the image has been acquired after the call to this function
         return (DataArray)
         Default implementation: it subscribes and, after receiving the first
          image, unsubscribes. It's inefficient but simple and works in every case.
