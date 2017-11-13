@@ -72,6 +72,7 @@ class PITuner(object):
         # 1 = commanded position
         # 2 = actual position
         # 3 = position error
+        # 73 = motor output
         cont.SetRecordConfig(1, axis, 1)
         cont.SetRecordConfig(2, axis, 2)
         try:

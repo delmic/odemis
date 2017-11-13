@@ -208,7 +208,17 @@ class SEMStream(LiveStream):
     Warning: do not use local .resolution and .translation, but use the ROI.
     Local VA .resolution is supported, but only as read-only.
     """
+    # TODO: It could probably make more sense to have a generic ScannedStream
+    # class, which takes a detector, and emitter, and a scanner. It could be
+    # used both for SEM and confocal. However, currently, the SEM components
+    # are just detector/emitter, where the emitter is both the e-beam source
+    # (with .accelVotage, .spotSize, .power) and the scanner (with .resolution,
+    # .scale, .rotation, etc). They'd need to be decoupled to fit this model.
+
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        emitter (Emitter): this is the scanner, with a .resolution and a .dwellTime
+        """
         super(SEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
         # To restart directly acquisition if settings change
@@ -261,7 +271,7 @@ class SEMStream(LiveStream):
         # translation is distance from center (situated at 0.5, 0.5), can be floats
         trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
         # resolution is the maximum resolution at the scale in proportion of the width
-        scale = self._emitter.scale.value
+        scale = self._getEmitterVA("scale").value
         res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                max(1, int(round(shape[1] * width[1] / scale[1]))))
 
@@ -367,7 +377,7 @@ class SEMStream(LiveStream):
         self._applyROI()
 
         if self.dcRegion.value != UNDEFINED_ROI:
-            raise NotImplementedError("SEM drift correction on simple SEM "
+            raise NotImplementedError("Drift correction on simple SEM "
                                       "acquisition not yet implemented")
 
         super(SEMStream, self)._startAcquisition()
@@ -818,51 +828,49 @@ class FluoStream(CameraStream):
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Light): the HwComponent to modify the light excitation
-        em_filter (Filter): the HwComponent to modify the emission light filtering
+        em_filter (Filter or None): the HwComponent to modify the emission light
+          filtering. If None, it will assume it's fixed and indicated on the
+          MD_OUT_WL of the detector.
         """
         super(FluoStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._em_filter = em_filter
 
         # Emission and excitation are based on the hardware capacities.
-        # For excitation, compared to the hardware, only one band at a time can
-        # be selected. The difficulty comes to pick the default value. The best
-        # would be to use the current hardware value, but if the light is off
-        # there is no default value. In that case, we pick the emission value
-        # and try to pick a compatible excitation value: the first excitation
-        # wavelength below the emission. However, the emission value might also
-        # be difficult to know if there is a multi-band filter. In that case we
-        # just pick the lowest value.
-        # TODO: once the streams have their own version of the hardware settings
-        # and in particular light.power, it should be possible to turn off the
-        # light just by stopping the power, and so leaving the emissions as is.
+        # For excitation, contrary to the hardware, only one band at a time can
+        # be selected. The difficulty comes to pick the default value. We try
+        # to use the current hardware value, but if the light is off there is no
+        # default value. In that case, we pick the emission value that matches
+        # best the excitation value.
 
-        em_choices = em_filter.axes["band"].choices.copy()
-        # convert any list into tuple, as lists cannot be put in a set
-        for k, v in em_choices.items():
-            em_choices[k] = conversion.ensure_tuple(v)
+        if em_filter:
+            em_choices = em_filter.axes["band"].choices.copy()
+            # convert any list into tuple, as lists cannot be put in a set
+            for k, v in em_choices.items():
+                em_choices[k] = conversion.ensure_tuple(v)
 
-        # invert the dict, to directly convert the emission to the position value
-        self._emission_to_idx = {v: k for k, v in em_choices.items()}
+            # invert the dict, to directly convert the emission to the position value
+            self._emission_to_idx = {v: k for k, v in em_choices.items()}
 
-        cur_pos = em_filter.position.value["band"]
-        current_em = em_choices[cur_pos]
-        if isinstance(current_em[0], collections.Iterable):
-            # if multiband => pick the first one
-            em_band = current_em[0]
+            cur_pos = em_filter.position.value["band"]
+            current_em = em_choices[cur_pos]
         else:
-            em_band = current_em
-        center_em = fluo.get_center(em_band)
+            # TODO: is that a good idea? On a system with multiple detectors
+            # (eg, confocal with several photo-detectors), should we just have a
+            # filter per detector, instead of having this "shortcut"?
+            try:
+                current_em = detector.getMetadata()[model.MD_OUT_WL]
+            except KeyError:
+                raise ValueError("No em_filter passed, and detector has not MD_OUT_WL")
+            current_em = conversion.ensure_tuple(current_em)
+            em_choices = {None: current_em}
+            # No ._emission_to_idx
+
+        center_em = fluo.get_one_center(current_em)
 
         exc_choices = set(emitter.spectra.value)
         current_exc = self._get_current_excitation()
         if current_exc is None:
-            # pick the closest below the current emission
-            current_exc = min(exc_choices, key=lambda b: b[2])  # default to the smallest
-            for b in exc_choices:
-                # Works because exc_choices only contains 5-float tuples
-                if (b[2] < center_em and
-                    center_em - b[2] < center_em - current_exc[2]):
-                    current_exc = b
+            current_exc = fluo.get_one_band_ex(exc_choices, current_em)
             logging.debug("Guessed excitation is %s, based on emission %s",
                           current_exc, current_em)
 
@@ -914,10 +922,11 @@ class FluoStream(CameraStream):
         Set-up the hardware for the right emission light (light path between
         the sample and the CCD).
         """
-        em = self.emission.value
-        em_idx = self._emission_to_idx[em]
-        f = self._em_filter.moveAbs({"band": em_idx})
-        f.result()  # wait for the move to be finished
+        if self._em_filter:
+            em = self.emission.value
+            em_idx = self._emission_to_idx[em]
+            f = self._em_filter.moveAbs({"band": em_idx})
+            f.result()  # wait for the move to be finished
 
     def _setup_excitation(self):
         """
@@ -932,13 +941,74 @@ class FluoStream(CameraStream):
         self._emitter.emissions.value = emissions
 
     def _onNewData(self, dataflow, data):
-        # Add some metadata on the fluorescence
-        # Just use the best guess as dataio can't do that better
-        em_band = fluo.get_one_band_em(self.emission.value, self.excitation.value)
-        data.metadata[model.MD_OUT_WL] = em_band
+        if model.MD_OUT_WL not in data.metadata:
+            # Add some metadata on the fluorescence
+            # Just use the best guess as dataio can't do that better
+            em_band = fluo.get_one_band_em(self.emission.value, self.excitation.value)
+            data.metadata[model.MD_OUT_WL] = em_band
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self)._onNewData(dataflow, data)
+
+
+class ScannedFluoStream(FluoStream):
+    """ Stream containing images obtained via epifluorescence using a "scanner"
+      (ie, a confocal microscope).
+
+    It's pretty much the same as a standard CCD-based FluoStream, but keeps
+    track of the scanner and supports ROI selection.
+
+    To configure the acquisition area and resolution, you should set the scanner
+    .scale (to specify the distance between each pixel) and the .roi (the left-
+    top, and right-bottom points of the scanned area).
+    """
+    def __init__(self, name, detector, dataflow, emitter, scanner, em_filter, **kwargs):
+        """
+        name (string): user-friendly name of this stream
+        detector (Detector): the detector which has the dataflow
+        dataflow (Dataflow): the dataflow from which to get the data
+        scanner (Emitter): to configure the image resolution/position
+        emitter (Light): the HwComponent to modify the light excitation
+        em_filter (Filter or None): the HwComponent to modify the emission light
+          filtering. If None, it will assume it's fixed and indicated on the
+          MD_OUT_WL of the detector.
+        """
+        # TODO: for now it's not possible to have local VAs for the scanner.
+        super(ScannedFluoStream, self).__init__(name, detector, dataflow, emitter,
+                                                em_filter, **kwargs)
+        self._scanner = scanner
+
+        # TODO: support ROI via the .roi + scanner (cf SEMStream)
+
+    @property
+    def scanner(self):
+        return self._scanner
+
+    def estimateAcquisitionTime(self):
+        # The same as SEMStream
+        try:
+            # Compute the number of pixels to acquire
+            shape = self._scanner.shape
+            scale = self._scanner.scale.value
+            roi = self.roi.value
+            width = (roi[2] - roi[0], roi[3] - roi[1])
+            res = [max(1, int(round(shape[0] * width[0] / scale[0]))),
+                   max(1, int(round(shape[1] * width[1] / scale[1])))]
+
+            # Typically there are a few more pixels inserted at the beginning of
+            # each line for the settle time of the beam. We don't take this into
+            # account and so tend to slightly under-estimate.
+
+            # Each pixel x the dwell time in seconds
+            duration = self._scanner.dwellTime.value * numpy.prod(res)
+            # Add the setup time
+            duration += self.SETUP_OVERHEAD
+
+            return duration
+        except Exception:
+            msg = "Exception while estimating acquisition time of %s"
+            logging.exception(msg, self.name.value)
+            return Stream.estimateAcquisitionTime(self)
 
 
 class RGBCameraStream(CameraStream):

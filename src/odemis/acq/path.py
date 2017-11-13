@@ -48,7 +48,7 @@ SPARC_MODES = {'ar': ("ccd",
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': 0},
                 }),
-         'cli': ("cl-detector",  # cli
+         'cli': ("cl-detector",  # CL-intencity: PMT just after the parabolic mirror
                 {'lens-switch': {'rx': math.radians(90)},
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': math.radians(90)},
@@ -191,7 +191,7 @@ SPARC2_MODES = {
                 }),
          }
 
-# Currently not used as-is.
+# Currently not used as-is, mostly here to make guessMode() happy.
 # The only thing it does is to turns on the fan iff SEM acquisition in best
 # acquisition quality. This is done via dedicated code. The precise rule is the
 # following:
@@ -199,8 +199,14 @@ SPARC2_MODES = {
 # * In acquisition BEST, the fan is turned off for every stream not using the CCD
 # One difficulty is to detect that the fan is not in used even for optical
 # streams (eg, because the CCD is water-cooled).
+
+# TODO: for confocal, detect fluo mode for _any_ photo-detector
+# TODO: handle time-correlator and det-selector (using axis choice pos -> detectors)
 SECOM_MODES = {'fluo': ("ccd",
                 {'ccd': {'fanSpeed': 1},
+                }),
+               'confocal': ("photo-detectorN",
+                {
                 }),
                'overlay': ("ccd",
                 {'ccd': {'fanSpeed': 1},
@@ -292,8 +298,12 @@ class OpticalPathManager(object):
             try:
                 ccd = self._getComponent("ccd")
             except LookupError:
-                logging.warning("Expect a CCD but found none")
                 ccd = None
+                # Check that at least it's a confocal microscope
+                try:
+                    lm = self._getComponent("laser-mirror")
+                except LookupError:
+                    logging.warning("Couldn't find a CCD on a SECOM/DELPHI")
 
             self._has_fan_speed = model.hasVA(ccd, "fanSpeed")
             self._has_fan_temp = (model.hasVA(ccd, "targetTemperature") and
@@ -398,13 +408,20 @@ class OpticalPathManager(object):
         if self._modes is SECOM_MODES:
             if quality == ACQ_QUALITY_FAST:
                 # Restore the fan (if it was active before)
-                ccd = self._getComponent("ccd")
-                self._setFan(ccd, True)
+                self._setCCDFan(True)
             # Don't turn off the fan if BEST: first wait for setPath()
 
     def setPath(self, mode):
         """
-        Just a wrapper of _doSetPath
+        Given a particular mode it sets all the necessary components of the
+        optical path (found through the microscope component) to the
+        corresponding positions.
+        path (stream.Stream or str): The stream or the optical path mode
+        return (Future): a Future allowing to follow the status of the path
+          update.
+        raises (via the future):
+            ValueError if the given mode does not exist
+            IOError if a detector is missing
         """
         f = self._executor.submit(self._doSetPath, mode)
 
@@ -412,16 +429,14 @@ class OpticalPathManager(object):
 
     def _doSetPath(self, path):
         """
-        Given a particular mode it sets all the necessary components of the
-        optical path (found through the microscope component) to the
-        corresponding positions.
-        path (stream.Stream or str): The stream or the optical path mode
-        raises:
-                ValueError if the given mode does not exist
-                IOError if a detector is missing
+        Actual implementation of setPath()
         """
         if isinstance(path, stream.Stream):
-            mode = self.guessMode(path)
+            try:
+                mode = self.guessMode(path)
+            except LookupError:
+                logging.debug("%s doesn't require optical path change", path)
+                return
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             target = self.getStreamDetector(path)  # target detector
@@ -430,18 +445,16 @@ class OpticalPathManager(object):
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             comp_role = self._modes[mode][0]
-            comp = self._getComponent(comp_role)
-            target = comp.name
+            target = self._getComponent(comp_role)
 
-        logging.debug("Going to optical path '%s', with target detector %s.", mode, target)
+        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
 
         # Special SECOM mode: just look at the fan and be done
         if self._modes is SECOM_MODES:
-            ccd = self._getComponent("ccd")
             if self.quality == ACQ_QUALITY_FAST:
-                self._setFan(ccd, True)
+                self._setCCDFan(True)
             elif self.quality == ACQ_QUALITY_BEST:
-                self._setFan(ccd, target == ccd.name)
+                self._setCCDFan(target.role == "ccd")
 
         fmoves = []  # moves in progress
 
@@ -565,7 +578,7 @@ class OpticalPathManager(object):
                 logging.debug("%s not an actuator", comp_role)
 
         # Now take care of the selectors based on the target detector
-        fmoves.extend(self.selectorsToPath(target))
+        fmoves.extend(self.selectorsToPath(target.name))
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
@@ -677,9 +690,9 @@ class OpticalPathManager(object):
 
     def getStreamDetector(self, path_stream):
         """
-        Given a stream find the detector.
+        Given a stream find the optical detector.
         path_stream (object): The given stream
-        returns (str): detector name
+        returns (HwComponent): detector
         raises:
                 IOError if given object is not a stream
                 LookupError: if stream has no detector
@@ -696,21 +709,20 @@ class OpticalPathManager(object):
                     # more likely to be the optical detector
                     # TODO: handle setting multiple optical paths? => return all the detectors
                     role = st.detector.role
-                    name = st.detector.name
                     for conf in self.guessed.values():
                         if conf[0] == role:
-                            return name
-                    dets.append(name)
+                            return st.detector
+                    dets.append(st.detector)
                 except AttributeError:
                     pass
             if dets:
                 logging.warning("No detector on stream %s has a known optical role", path_stream.name.value)
                 return dets[0]
         elif isinstance(path_stream, stream.OverlayStream):
-            return path_stream._ccd.name
+            return path_stream._ccd
         else:
             try:
-                return path_stream.detector.name
+                return path_stream.detector
             except AttributeError:
                 pass  # will raise error just after
 
@@ -764,7 +776,7 @@ class OpticalPathManager(object):
                     return new_path
         return None
 
-    def _setFan(self, comp, enable):
+    def _setCCDFan(self, enable):
         """
         Turn on/off the fan of the CCD
         enable (boolean): True to turn on/restore the fan, and False to turn if off
@@ -775,6 +787,8 @@ class OpticalPathManager(object):
         if self._fan_enabled == enable:
             return
         self._fan_enabled = enable
+
+        comp = self._getComponent("ccd")
 
         if enable:
             if self._enabled_fan_speed is not None:

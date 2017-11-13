@@ -106,6 +106,7 @@ class MainGUIData(object):
         "bs-detector": "bsd",
         "ebic-detector": "ebic",
         "cl-detector": "cld",
+        "pc-detector": "pcd",
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
         "spectrometer": "spectrometer",
@@ -127,6 +128,7 @@ class MainGUIData(object):
         "fiber-aligner": "fibaligner",
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
         "spec-selector": "spec_sel",
+        "pcd-selector": "pcd_sel",
         "chamber": "chamber",
         "light": "light",
         "brightlight": "brightlight",
@@ -174,6 +176,7 @@ class MainGUIData(object):
         self.bsd = None  # backscattered electron detector
         self.ebic = None  # electron beam-induced current detector
         self.cld = None  # cathodoluminescnence detector (aka PMT)
+        self.pcd = None  # Probe current detector (to measure actual e-beam current)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrometer_int = None  # second spectrometer, which has its detector also usable for AR (SPARCv2)
         self.spectrograph = None  # actuator to change the wavelength/grating (on SPARCv2, it's directly on the optical path)
@@ -181,6 +184,7 @@ class MainGUIData(object):
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
+        self.pcd_sel = None  # actuator to activate the path to the probe current
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None  # view of inside the chamber
         self.chamber_light = None   # Light illuminating the chamber
@@ -478,7 +482,8 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         self.acquisitionStreams = set()
 
         # The SEM concurrent stream that is used to select the acquisition settings
-        # eg, ROI (aka ROA), dcPeriod, dcRegion.
+        # eg, ROI (aka ROA), dcPeriod, dcRegion. It also gets Leeches to run during
+        # the entire series of acquisition.
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
@@ -491,6 +496,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         # Whether to use a scan stage (if there is one)
         self.useScanStage = model.BooleanVA(False, readonly=(main.scan_stage is None))
+
+        # Whether to acquire the probe current (via a Leech)
+        self.pcdActive = model.BooleanVA(False, readonly=(main.pcd is None))
 
 
 class ChamberGUIData(MicroscopyGUIData):
@@ -565,19 +573,20 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
                   "lens_mover": (50e-6, [5e-6, 500e-6], "lens_mover", None),
-                  "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", ("focus",)),
+                  "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
+                  "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"}),
                   }
-        if main.role == "sparc":
-            # Mirror on SPARC is a bit more complicated as it has 4 axes and Y
-            # usually needs to be 10x bigger than X
-            ss_def.update({
-                "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", ("x",)),
-                "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", ("y",)),
-                "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", ("ry", "rz"))
-            })
-        elif main.role == "sparc2":
+        # Use mirror_xy preferably, and fallback to mirror
+        if main.mirror_xy:
+            # Typically for the SPARCv2
             ss_def.update({
                 "mirror": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
+            })
+        elif main.mirror:
+            # SPARC mirror Y usually needs to be 10x bigger than X
+            ss_def.update({
+                "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", {"x"}),
+                "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", {"y"}),
             })
 
         # str -> VA: name (as the name of the attribute) -> step size (m)
@@ -592,8 +601,13 @@ class ActuatorGUIData(MicroscopyGUIData):
         for ss, (v, r, an, axn) in ss_def.items():
             if getattr(main, an) is not None:
                 self.stepsizes[ss] = FloatContinuous(v, r)
-                if axn is None:
-                    axn = getattr(main, an).axes
+
+                all_axn = set(getattr(main, an).axes.keys())
+                if axn is None: # take all of them
+                    axn = all_axn
+                else: # take only the one listed
+                    axn &= all_axn
+
                 for a in axn:
                     self._axis_to_act_ss[(an, a)] = (an, ss)
                     logging.debug("Add axis %s/%s to stepsize %s", an, a, ss)
@@ -678,10 +692,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
-        # If no (direct) spectrograph, the lens 1 doesn't need to be aligned.
-        # => change the lens-align mode to spot-mirror-align mode
-        if not main.spectrograph:
-            amodes[0] = "spot-mirror-align"
+        # If no direct spectrograph (eg, SPARC-compact), the lens 1 doesn't
+        # need to be aligned. Same thing if no lens-mover (happens in some
+        # hybrid/custom SPARC)
+        if not main.spectrograph or not main.lens_mover:
+            amodes.remove("lens-align")
 
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
@@ -969,7 +984,7 @@ class StreamView(View):
             self.view_pos.value[0] + half_fov[0],
             self.view_pos.value[1] - half_fov[1],
         )
-        streams = self.getStreams()
+        streams = self.stream_tree.getStreams()
         for stream in streams:
             if hasattr(stream, 'rect'): # the stream is probably pyramidal
                 stream.rect.value = stream.rect.clip(view_rect)

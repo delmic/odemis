@@ -136,7 +136,7 @@ def data_to_static_streams(data):
                     result_streams.extend(data_to_static_streams(subdas))
                     continue
 
-            name = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
+            name = d.metadata.get(model.MD_DESCRIPTION, "Electrons")
             klass = stream.StaticSEMStream
 
         if issubclass(klass, stream.Static2DStream):

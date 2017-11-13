@@ -179,8 +179,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Maximize()  # must be done before Show()
 
             # List of all possible tabs used in Odemis' main GUI
-            # microscope role(s), internal name, class, tab btn, tab panel
-            # order matters, as the first matching tab is be the default one
 
             # TODO: instead of roles + label, have a class method on each
             # StreamTab class that takes the microscope as input, and return a
@@ -191,15 +189,6 @@ class OdemisGUIApp(wx.App):
                 {
                     # Unique name of the tab
                     "name": "secom_live",
-                    # Default label for the tab (Might be overridden in the roles section
-                    "label": "STREAMS",
-                    # The microscope roles for which the tab is valid
-                    "roles": {
-                        "secom": {},
-                        "delphi": {},
-                        "sem": {},
-                        "optical": {},
-                    },
                     # Tab controller for this tab
                     "controller": tabs.SecomStreamsTab,
                     # Tab button for this tab
@@ -209,69 +198,36 @@ class OdemisGUIApp(wx.App):
                 },
                 {
                     "name": "secom_align",
-                    "label": "LENS ALIGNMENT",
-                    "roles": {
-                        "secom": {},
-                    },
                     "controller": tabs.SecomAlignTab,
                     "button": self.main_frame.btn_tab_secom_align,
                     "panel": main_xrc.xrcpnl_tab_secom_align
                 },
                 {
                     "name": "sparc_align",
-                    "label": "ALIGNMENT",
-                    "roles": {
-                        "sparc": {},
-                    },
                     "controller": tabs.SparcAlignTab,
                     "button": self.main_frame.btn_tab_sparc_align,
                     "panel": main_xrc.xrcpnl_tab_sparc_align
                 },
                 {
                     "name": "sparc2_align",
-                    "label": "ALIGNMENT",
-                    "roles": {
-                        "sparc2": {"default": True},
-                    },
                     "controller": tabs.Sparc2AlignTab,
                     "button": self.main_frame.btn_tab_sparc2_align,
                     "panel": main_xrc.xrcpnl_tab_sparc2_align
                 },
                 {
                     "name": "sparc_acqui",
-                    "label": "ACQUISITION",
-                    "roles": {
-                        "sparc-simplex": {},
-                        "sparc": {},
-                        "sparc2": {},
-                    },
                     "controller": tabs.SparcAcquisitionTab,
                     "button": self.main_frame.btn_tab_sparc_acqui,
                     "panel": main_xrc.xrcpnl_tab_sparc_acqui
                 },
                 {
                     "name": "sparc_chamber",
-                    "label": "CHAMBER",
-                    "roles": {
-                        "sparc2": {},
-                    },
                     "controller": tabs.ChamberTab,
                     "button": self.main_frame.btn_tab_sparc_chamber,
                     "panel": main_xrc.xrcpnl_tab_sparc_chamber
                 },
                 {
                     "name": "analysis",
-                    "label": "GALLERY",
-                    "roles": {
-                        None: {},
-                        "secom": {},
-                        "delphi": {},
-                        "sem": {},
-                        "optical": {},
-                        "sparc-simplex": {"label": "ANALYSIS"},
-                        "sparc": {"label": "ANALYSIS"},
-                        "sparc2": {"label": "ANALYSIS"},
-                    },
                     "controller": tabs.AnalysisTab,
                     "button": self.main_frame.btn_tab_inspection,
                     "panel": main_xrc.xrcpnl_tab_inspection

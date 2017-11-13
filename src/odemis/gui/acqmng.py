@@ -143,12 +143,19 @@ def preset_hq(entries):
                 pass
 
         elif entry.name == "dwellTime":
-            # SNR improves logarithmically with the dwell time => x4
-            value = entry.vigilattr.value * 4
+            if entry.hw_comp and entry.hw_comp.role == "e-beam":
+                # For detectors of type MD_DT_NORMAL, the signal level doesn't
+                # depend on time, so we can increase it. That's typical of e-beam
+                # (and not for laser-mirror of confocal)
+                # TODO: detect that the streams using with the given scanner
+                # have detectors of type MD_DT_NORMAL or MD_DT_INTEGRATING.
 
-            # make sure it still fits
-            if isinstance(entry.vigilattr.range, collections.Iterable):
-                value = sorted(list(entry.vigilattr.range) + [value])[1] # clip
+                # SNR improves logarithmically with the dwell time => x4
+                value = entry.vigilattr.value * 4
+
+                # make sure it still fits
+                if isinstance(entry.vigilattr.range, collections.Iterable):
+                    value = sorted(list(entry.vigilattr.range) + [value])[1]  # clip
 
         elif entry.name == "scale": # for scanners only
             # Double the current resolution (in each dimensions)

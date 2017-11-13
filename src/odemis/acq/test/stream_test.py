@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division
 
+from concurrent.futures import CancelledError
 import gc
 import logging
 import math
@@ -38,12 +39,15 @@ import unittest
 from unittest.case import skip
 import weakref
 
+from odemis.acq.leech import ProbeCurrentAcquirer
+
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
+SECOM_CONFOCAL_CONFIG = CONFIG_PATH + "sim/secom2-confocal.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 
@@ -632,6 +636,199 @@ class SECOMTestCase(unittest.TestCase):
         short_at = fs.estimateAcquisitionTime()
         fs.detExposureTime.value *= 2
         self.assertGreater(fs.estimateAcquisitionTime(), short_at)
+
+
+class SECOMConfocalTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SECOM confocal
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SECOM_CONFOCAL_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find detectors & SEM components
+        cls.laser_mirror = model.getComponent(role="laser-mirror")
+        cls.light = model.getComponent(role="light")
+#        cls.light_filter = model.getComponent(role="filter")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.photo_ds = []
+        for i in range(10): # very ugly way, that works
+            try:
+                cls.photo_ds.append(model.getComponent(role="photo-detector%d" % (i,)))
+            except LookupError:
+                pass
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+        self._image = None
+        self.updates = 0
+        self.done = False
+
+    def _on_image(self, im):
+        self._image = im
+
+    def _on_done(self, future):
+        self.done = True
+
+    def _on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
+        self.updates += 1
+
+    def test_live_conf(self):
+        """
+        Check the live view of confocal streams
+        """
+        det = self.photo_ds[0]
+        s1 = stream.ScannedFluoStream("fluo1", det, det.data, self.light,
+                                      self.laser_mirror, None)
+        # Not too fast scan, to avoid acquiring too many images
+        self.laser_mirror.scale.value = (8, 8)
+        self.laser_mirror.resolution.value = (256, 256)
+        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = self.laser_mirror.resolution.value
+
+        # Check we manage to get at least one image
+        s1.image.subscribe(self._on_image)
+
+        s1.should_update.value = True
+        s1.is_active.value = True
+
+        time.sleep(2)
+        s1.is_active.value = False
+
+        self.assertFalse(self._image is None, "No image received after 2s")
+
+        self.assertEqual(len(s1.raw), 1)
+        raw = s1.raw[0]
+        self.assertEqual(raw.shape, exp_shape)
+        self.assertIn(model.MD_OUT_WL, raw.metadata)
+
+        rgb = s1.image.value
+        self.assertEqual(rgb.shape, exp_shape + (3,))
+
+    def test_acq_conf_one_det(self):
+        """
+        Check the acquisition of one confocal stream
+        Note: for the code, it's actually a corner-case, as it's made to support
+        N detectors
+        """
+        # TODO: also test with an optical path manager
+
+        det = self.photo_ds[0]
+        s1 = stream.ScannedFluoStream("fluo1", det, det.data, self.light,
+                                      self.laser_mirror, None)
+        acqs = stream.ScannedFluoMDStream("acq fluo", [s1])
+
+        # Not too fast scan, to avoid acquiring too many images
+        self.laser_mirror.scale.value = (8, 8)
+        self.laser_mirror.resolution.value = (256, 256)
+        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = self.laser_mirror.resolution.value
+
+        self.assertGreater(acqs.estimateAcquisitionTime(), 0.5)
+
+        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+        f = acqs.acquire()
+        f.add_update_callback(self._on_progress_update)
+        f.add_done_callback(self._on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0].shape, exp_shape)
+        self.assertGreaterEqual(self.updates, 1)  # at least 1 update
+        self.assertLessEqual(self.end, time.time())
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+    def test_acq_conf_multi_det(self):
+        """
+        Check the acquisition of several confocal streams
+        """
+        sfluos = []
+        for d in self.photo_ds:
+            s = stream.ScannedFluoStream("fluo %s" % (d.name,), d, d.data, self.light,
+                                         self.laser_mirror, None)
+            sfluos.append(s)
+
+        assert len(sfluos) > 1
+        acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
+
+        # Not too fast scan, to avoid acquiring too many images
+        self.laser_mirror.scale.value = (8, 8)
+        self.laser_mirror.resolution.value = (256, 256)
+        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = self.laser_mirror.resolution.value
+
+        self.assertGreater(acqs.estimateAcquisitionTime(), 0.5)
+
+        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+        f = acqs.acquire()
+        f.add_update_callback(self._on_progress_update)
+        f.add_done_callback(self._on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), len(self.photo_ds))
+        for d in data:
+            self.assertEqual(d.shape, exp_shape)
+            self.assertIn(model.MD_OUT_WL, d.metadata)
+
+        self.assertGreaterEqual(self.updates, 1)  # at least 1 update
+        self.assertLessEqual(self.end, time.time())
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+    def test_acq_conf_cancel(self):
+        """
+        Check cancelling the acquisition of confocal streams
+        """
+        sfluos = []
+        for d in self.photo_ds:
+            s = stream.ScannedFluoStream("fluo %s" % (d.name,), d, d.data, self.light,
+                                         self.laser_mirror, None)
+            sfluos.append(s)
+
+        acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
+
+        # Slow scan, to have time cancelling
+        self.laser_mirror.scale.value = (1, 1)
+        self.laser_mirror.resolution.value = self.laser_mirror.resolution.range[1]
+        self.laser_mirror.dwellTime.value = 1e-6  # s ~ 5s for a whole image
+
+        self.assertGreater(acqs.estimateAcquisitionTime(), 4)
+
+        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+        f = acqs.acquire()
+        f.add_update_callback(self._on_progress_update)
+        f.add_done_callback(self._on_done)
+
+        time.sleep(0.5)
+        f.cancel()
+
+        with self.assertRaises(CancelledError):
+            f.result(timeout)
+
+        self.assertGreaterEqual(self.updates, 1)  # at least at the end
+        self.assertLessEqual(self.end, time.time())
+        self.assertTrue(f.cancelled())
 
 
 # @skip("faster")
@@ -1244,6 +1441,26 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(imd[model.MD_PIXEL_SIZE], semmd[model.MD_PIXEL_SIZE])
 
 
+class Fake0DDetector(model.Detector):
+    """
+    Imitates a probe current detector, but you need to send the data yourself (using
+    comp.data.notify(d)
+    """
+    def __init__(self, name):
+        model.Detector.__init__(self, name, "fakedet", parent=None)
+        self.data = Fake0DDataFlow()
+        self._shape = (float("inf"),)
+
+
+class Fake0DDataFlow(model.DataFlow):
+    """
+    Mock object just sufficient for the ProbeCurrentAcquirer
+    """
+    def get(self):
+        da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
+        return da
+
+
 class SPARC2TestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARCv2
@@ -1316,7 +1533,6 @@ class SPARC2TestCase(unittest.TestCase):
 
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
-
 
     def test_acq_cl(self):
         """
@@ -1669,6 +1885,110 @@ class SPARC2TestCase(unittest.TestCase):
                                        spec_md[model.MD_PIXEL_SIZE][1] / res_upscale[1]))
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acq_spec_leech(self):
+        """
+        Test Spectrometer acquisition with ProbeCurrentAcquirer (leech)
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        pcd = Fake0DDetector("test")
+        pca = ProbeCurrentAcquirer(pcd)
+        sems.leeches.append(pca)
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        self.spec.exposureTime.value = 0.3  # s
+        specs.repetition.value = (5, 6)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        pca.period.value = 0.6  # ~every second pixel
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        pcmd = spec_md[model.MD_EBEAM_CURRENT_TIME]
+        self.assertGreater(len(pcmd), 5 * 6 / 2)
+
+    def test_acq_cl_leech(self):
+        """
+        Test acquisition for SEM MD CL intensity + leech
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        mcs = stream.CLSettingsStream("test",
+                      self.cl, self.cl.data, self.ebeam,
+                      emtvas={"dwellTime", })
+        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+
+        pcd = Fake0DDetector("test")
+        pca = ProbeCurrentAcquirer(pcd)
+        sems.leeches.append(pca)
+
+        mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        sems.dcPeriod.value = 100
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-6  # s
+        mcs.repetition.value = (500, 700)
+        pca.period.value = 4900e-6  # ~every 10 lines
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sms.estimateAcquisitionTime() + (0.3 * 700 / 10)
+        logging.debug("Expecting acquisition of %g s", timeout)
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+
+        # Both SEM and CL should have the same shape
+        self.assertEqual(len(sms._main_raw), 1)
+        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sms._rep_raw), 1)
+        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
+        sem_md = sms._main_raw[0].metadata
+        cl_md = sms._rep_raw[0].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        pcmd = cl_md[model.MD_EBEAM_CURRENT_TIME]
+        self.assertGreater(len(pcmd), 500 / 10)
+
 
 # @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):

@@ -886,10 +886,12 @@ class StreamBarController(object):
         """
         :param tab_data: (MicroscopyGUIData) the representation of the microscope Model
         :param stream_bar: (StreamBar) an empty stream bar
-        :param static: (bool) Treat streams as static
+        :param static: (bool) Treat streams as static (can't play/pause)
         :param locked: (bool) Don't allow to add/remove/hide/show streams
-        :param ignore_view: (bool) don't change the visible panels on focussed view change
-
+        :param ignore_view: (bool) don't change the visible panels on focussed
+           view change. If False and not locked, it will show the panels
+           compatible with the focussed view. If False and locked, it will show
+           the panels which are seen in the focussed view?
         """
 
         self._tab_data_model = tab_data
@@ -897,6 +899,12 @@ class StreamBarController(object):
 
         self._stream_bar = stream_bar
         self.stream_controllers = []
+
+        # This attribute indicates whether live data is processed by the streams
+        # in the controller, or that they just display static data.
+        self.static_mode = static
+        # Disable all controls
+        self.locked_mode = locked
 
         self.menu_actions = collections.OrderedDict()  # title => callback
 
@@ -914,12 +922,6 @@ class StreamBarController(object):
         # FIXME: don't use pubsub events, but either wxEVT or VAs. For now every
         # stream controller is going to try to remove the stream.
         pub.subscribe(self.removeStream, 'stream.remove')
-
-        # This attribute indicates whether live data is processed by the streams
-        # in the controller, or that they just display static data.
-        self.static_mode = static
-        # Disable all controls
-        self.locked_mode = locked
 
         # Stream preparation future
         self.preparation_future = model.InstantaneousFuture()
@@ -1114,16 +1116,15 @@ class StreamBarController(object):
         detector (Detector): the photo-detector to use
         returns (StreamController): the stream panel created
         """
-        # TODO: special Stream? => need to have a "Emission" as a RO based on
-        # the MD_OUT_WL of the detector.
         # As there is only one stream per detector, we can put its VAs directly
         # instead of them being a local copy. This also happens to work around
         # an issue with detecting IntContinuous in local VAs.
-        s = acqstream.FluoStream(
+        s = acqstream.ScannedFluoStream(
             "Confocal %s" % (detector.name,),
             detector,
             detector.data,
             self._main_data_model.light,
+            self._main_data_model.laser_mirror,
             self._main_data_model.light_filter,
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
@@ -1314,11 +1315,17 @@ class StreamBarController(object):
         if not view or self.ignore_view:
             return
 
-        # hide/show the stream panels which are compatible with the view
-        allowed_classes = view.stream_classes
-        for e in self._stream_bar.stream_panels:
-            e.Show(isinstance(e.stream, allowed_classes))
-        # self.Refresh()
+        if self.locked_mode:
+            # hide/show the stream panels of the streams visible in the view
+            allowed_streams = view.getStreams()
+            for e in self._stream_bar.stream_panels:
+                e.Show(e.stream in allowed_streams)
+        else:
+            # hide/show the stream panels which are compatible with the view
+            allowed_classes = view.stream_classes
+            for e in self._stream_bar.stream_panels:
+                e.Show(isinstance(e.stream, allowed_classes))
+
         self._stream_bar.fit_streams()
 
         # update the "visible" icon of each stream panel to match the list
@@ -1640,7 +1647,8 @@ class SecomStreamsController(StreamBarController):
             return enabled and compatible and not present
 
         if self._main_data_model.laser_mirror:
-            for pd in self._main_data_model.photo_ds:
+            ds = sorted(self._main_data_model.photo_ds, key=lambda d: d.name)
+            for pd in ds:
                 act = functools.partial(self.addConfocal, detector=pd)
                 cap = functools.partial(confocal_capable, detector=pd)
                 self.add_action("Confocal %s" % (pd.name,), act, cap)

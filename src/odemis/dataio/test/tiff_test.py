@@ -468,6 +468,11 @@ class TestTiffIO(unittest.TestCase):
         """
         Checks that we can read back the metadata of a spectrum image
         """
+        # Create fake current over time report
+        cot = [(time.time(), 1e-12)]
+        for i in range(1, 171):
+            cot.append((cot[0][0] + i, i * 1e-12))
+
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -479,6 +484,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (500e-9, 520e-9), # m
                      model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
+                     model.MD_EBEAM_CURRENT: 20e-6,  # A
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake spec",
@@ -490,6 +496,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
                      model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
+                     model.MD_EBEAM_CURRENT_TIME: cot,
                     },
                     ]
         # create 2 simple greyscale images
@@ -538,6 +545,14 @@ class TestTiffIO(unittest.TestCase):
                     numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
                 else:
                     numpy.testing.assert_allclose(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+
+            if model.MD_EBEAM_CURRENT_TIME in md:
+                ocot = md[model.MD_EBEAM_CURRENT_TIME]
+                rcot = im.metadata[model.MD_EBEAM_CURRENT_TIME]
+                assert len(ocot) == len(rcot)
+                for (od, oc), (rd, rc) in zip(ocot, rcot):
+                    self.assertAlmostEqual(od, rd)
+                    self.assertAlmostEqual(oc, rc)
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)
@@ -640,8 +655,8 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata[model.MD_AR_PARABOLA_F], md[model.MD_AR_PARABOLA_F])
             if model.MD_LENS_MAG in md:
                 self.assertAlmostEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
-            # if model.MD_EBEAM_CURRENT in md:
-            #    self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT], md[model.MD_EBEAM_CURRENT])
+            if model.MD_EBEAM_CURRENT in md:
+                self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT], md[model.MD_EBEAM_CURRENT])
             if model.MD_EBEAM_VOLTAGE in md:
                 self.assertEqual(im.metadata[model.MD_EBEAM_VOLTAGE], md[model.MD_EBEAM_VOLTAGE])
 

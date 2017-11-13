@@ -66,9 +66,6 @@ KB_SPARC = {
     wx.WXK_NUMPAD6: ("mirror", "rz", 1),
     wx.WXK_NUMPAD2: ("mirror", "ry", 1),
     wx.WXK_NUMPAD8: ("mirror", "ry", -1),
-    # TODO: This one never exists
-    wx.WXK_PAGEDOWN: ("focus_sem", "z", -1),
-    wx.WXK_PAGEUP: ("focus_sem", "z", 1),
 }
 
 KB_SPARC2 = {
@@ -151,6 +148,12 @@ class ActuatorController(object):
             tab_panel.pnl_xy_align.Show()
         if ("aligner", "a") in tab_data.axes:
             tab_panel.pnl_ab_align.Show()
+
+        # On SPARC, show the Yaw/Pitch only if available
+        if hasattr(tab_panel, 'pnl_sparc_rot'):
+            showrot = (("mirror", "ry") in tab_data.axes or
+                       ("mirror", "rz") in tab_data.axes)
+            tab_panel.pnl_sparc_rot.Show(showrot)
 
         # On SPARC, show the fiber aligner only if needed
         if hasattr(tab_panel, 'pnl_fibaligner'):

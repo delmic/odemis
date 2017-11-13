@@ -24,13 +24,15 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import cv2
 import logging
 import math
 from numpy import array, linalg
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.acq.align import transform, spot
+from odemis.acq.align import transform, spot, autofocus, FindOverlay
+from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.acq.drift import MeasureShift
 from odemis.dataio import tiff
 from odemis.util import img
@@ -38,12 +40,6 @@ import os
 from scipy.ndimage import zoom
 import threading
 import time
-
-from autofocus import AcquireNoBackground
-import cv2
-
-from . import FindOverlay
-from . import autofocus
 
 
 logger = logging.getLogger(__name__)
@@ -513,7 +509,7 @@ def _DoDelphiCalibration(future, main_data):
             if future._task_state == CANCELLED:
                 raise CancelledError()
             future.running_subf = autofocus.AutoFocus(main_data.ccd, None, main_data.focus, dfbkg=det_dataflow,
-                                                      rng_focus=FOCUS_RANGE, method="exhaustive")
+                                                      rng_focus=FOCUS_RANGE, method=MTD_EXHAUSTIVE)
             future.running_subf.result()
             ofoc = main_data.focus.position.value["z"]
             calib_values["optical_focus"] = ofoc
@@ -909,7 +905,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                     # If failed to find spot, try first to focus
                     ccd.binning.value = ccd.binning.clip((8, 8))
                     future._autofocus_f = autofocus.AutoFocus(ccd, None, focus, dfbkg=det_dataflow,
-                                                              rng_focus=FOCUS_RANGE, method="exhaustive")
+                                                              rng_focus=FOCUS_RANGE, method=MTD_EXHAUSTIVE)
                     future._autofocus_f.result()
                     if future._task_state == CANCELLED:
                         raise CancelledError()

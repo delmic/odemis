@@ -100,15 +100,19 @@ class TestHDF5IO(unittest.TestCase):
 
 #    @skip("Doesn't work")
     def testExportMultiPage(self):
-        # create a simple greyscale image
+        # create two greyscale images corresponding to two fluorescence images
         size = (512, 256)
-        white = (12, 52) # non symmetric position
-        dtype = numpy.dtype("uint8")
+        white = (52, 12) # non symmetric position
+        dtype = numpy.uint8
         ldata = []
         num = 2
         for i in range(num):
-            a = model.DataArray(numpy.zeros(size[-1:-3:-1], dtype))
-            a[white[-1:-3:-1]] = 124
+            md = {model.MD_IN_WL: (300e-6, 400e-6),
+                  model.MD_OUT_WL: (500e-6 + i * 100e-6, 550e-6 + i * 100e-6)
+                 }
+            d = numpy.zeros(size[::-1], dtype)
+            a = model.DataArray(d, md)
+            a[white] = 124 + i
             ldata.append(a)
 
         # export
@@ -124,7 +128,7 @@ class TestHDF5IO(unittest.TestCase):
         for i in range(num):
             subim = im[i, 0, 0] # just one channel
             self.assertEqual(subim.shape, size[::-1])
-            self.assertEqual(subim[white[::-1]], 124)
+            self.assertEqual(subim[white], 124 + i)
 
         os.remove(FILENAME)
 
@@ -132,11 +136,15 @@ class TestHDF5IO(unittest.TestCase):
     def testExportThumbnail(self):
         # create 2 simple greyscale images
         size = (512, 256)
-        dtype = numpy.dtype("uint16")
+        dtype = numpy.uint16
         ldata = []
         num = 2
         for i in range(num):
-            ldata.append(model.DataArray(numpy.zeros(size[::-1], dtype)))
+            md = {model.MD_IN_WL: (300e-6, 400e-6),
+                  model.MD_OUT_WL: (500e-6 + i * 100e-6, 550e-6 + i * 100e-6)
+            }
+            d = numpy.zeros(size[::-1], dtype)
+            ldata.append(model.DataArray(d, md))
 
         # thumbnail : small RGB completely red
         tshape = (size[1] // 8, size[0] // 8, 3)
@@ -168,7 +176,7 @@ class TestHDF5IO(unittest.TestCase):
         im = numpy.array(f["Acquisition0/ImageData/Image"])
         for i in range(num):
             subim = im[i, 0, 0] # just one channel
-            self.assertEqual(subim.shape, size[-1::-1])
+            self.assertEqual(subim.shape, size[::-1])
 
 
     def testExportCube(self):
@@ -176,7 +184,7 @@ class TestHDF5IO(unittest.TestCase):
         Check it's possible to export a 3D data (typically: 2D area with full
          spectrum for each point)
         """
-        dtype = numpy.dtype("uint16")
+        dtype = numpy.uint16
         size3d = (512, 256, 220) # X, Y, C
         size = (512, 256)
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
@@ -251,7 +259,7 @@ class TestHDF5IO(unittest.TestCase):
         Check it's possible to export a 3D data (typically: 2D area with full
          spectrum for each point)
         """
-        dtype = numpy.dtype("uint8")
+        dtype = numpy.uint8
         size = (3, 512, 256) # C, X, Y
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_DESCRIPTION: u"test",
@@ -348,7 +356,6 @@ class TestHDF5IO(unittest.TestCase):
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
 
-
     def testExportRead(self):
         """
         Checks that we can read back an image and a thumbnail
@@ -374,7 +381,6 @@ class TestHDF5IO(unittest.TestCase):
         thumbnail[blue[::-1]] = [0, 0, 255]
         thumbnail.metadata[model.MD_POS] = (0.1, -2)
         thumbnail.metadata[model.MD_PIXEL_SIZE] = (13e-6, 13e-6)
-
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
@@ -406,6 +412,11 @@ class TestHDF5IO(unittest.TestCase):
         Checks that we can read back the metadata of an image
         """
         sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
+        # Create fake current over time report
+        cot = [[time.time(), 1e-12]]
+        for i in range(1, 171):
+            cot.append([cot[0][0] + i, i * 1e-12])
+
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -429,6 +440,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
+                     model.MD_EBEAM_CURRENT_TIME: cot,
                     },
                     ]
         # create 2 simple greyscale images
@@ -483,6 +495,12 @@ class TestHDF5IO(unittest.TestCase):
             elif model.MD_WL_LIST in md:
                 wl = md[model.MD_WL_LIST]
                 self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+
+            if model.MD_EBEAM_CURRENT_TIME in md:
+                # Note: technically, it could be a list or tuple and still be fine
+                # but we know that hdf5 returns a list of list
+                cot = md[model.MD_EBEAM_CURRENT_TIME]
+                self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT_TIME], cot)
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

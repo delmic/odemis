@@ -21,6 +21,7 @@ This file is part of Odemis.
 from __future__ import division
 
 from collections import OrderedDict
+import copy
 from odemis.acq import stream
 import odemis.gui
 from odemis.model import getVAs
@@ -235,13 +236,16 @@ HW_SETTINGS_CONFIG = {
             }),
             # TODO: might be useful if it's not read-only
             ("rotation", {
-#                 "control_type": odemis.gui.CONTROL_NONE,
+                "control_type": odemis.gui.CONTROL_NONE,
             }),
             # what we don't want to display:
             ("translation", {
-#                 "control_type": odemis.gui.CONTROL_NONE,
+                "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("scanDelay", {  # TODO: that VA is probably going to disappear after DEBUG
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("depthOfField", {
@@ -390,16 +394,49 @@ HW_SETTINGS_CONFIG = {
                 "accuracy": 3,
             },
         },
-    "photo-detector0":  # TODO: for every photo-detector*
+    "photo-detector0":  # TODO: for every photo-detector* => make it a regex
         OrderedDict((
             ("gain", {
                 "accuracy": 3,
+                "tooltip": "Reducing the gain also reset the over-current protection",
+            }),
+            ("offset", {
+                "accuracy": 3,
+            }),
+            # TODO: it's possible to reset the protection by reducing the gain,
+            # so it shouldn't be necessary, but it's good to have some feedback
+            # for now, until we are sure it works properly.
+            ("protection", {
+                "tooltip": "PMT over-current protection",
+                #"control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "photo-detector1":
+        OrderedDict((
+            ("gain", {
+                "accuracy": 3,
+                "tooltip": "Reducing the gain also reset the over-current protection",
             }),
             ("offset", {
                 "accuracy": 3,
             }),
             ("protection", {
-                #"control_type": odemis.gui.CONTROL_NONE,
+                "tooltip": "PMT over-current protection",
+                # "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "photo-detector3":
+        OrderedDict((
+            ("gain", {
+                "accuracy": 3,
+                "tooltip": "Reducing the gain also reset the over-current protection",
+            }),
+            ("offset", {
+                "accuracy": 3,
+            }),
+            ("protection", {
+                "tooltip": "PMT over-current protection",
+                # "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
     "pinhole":
@@ -562,6 +599,18 @@ STREAM_SETTINGS_CONFIG = {
                 "range": (1, 300),  # s, the VA allows a wider range, not typically needed
                 "accuracy": 2,
             }),
+            ("pcdActive", {
+                "label": "Probe current acq.",
+                "tooltip": u"Activate probe current readings",
+            }),
+            ("pcdPeriod", {
+                "label": "Acquisition period",
+                "tooltip": u"Time between probe current readings",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (1, 3600),  # s, the VA allows a wider range, not typically needed
+                "accuracy": 2,
+            }),
             ("useScanStage", {
                 "tooltip": u"Scans the area using the scan stage, "
                            u"instead of the e-beam. "
@@ -664,7 +713,7 @@ def get_hw_settings_config(role=None):
 
     """
 
-    hw_settings = HW_SETTINGS_CONFIG.copy()
+    hw_settings = copy.deepcopy(HW_SETTINGS_CONFIG)
     if role in HW_SETTINGS_CONFIG_PER_ROLE:
         recursive_dict_update(hw_settings, HW_SETTINGS_CONFIG_PER_ROLE[role])
     return hw_settings

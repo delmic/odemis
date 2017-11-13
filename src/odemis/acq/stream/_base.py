@@ -125,6 +125,10 @@ class Stream(object):
         # is_active set to True will keep the acquisition going on
         self.is_active = model.BooleanVA(False, setter=self._is_active_setter)
 
+        # Leech to use during acquisition.
+        # Note: for now only some streams actually use them (MDStreams*)
+        self.leeches = []
+
         # Hardware VA that the stream is directly linked to
         self.hw_vas = {}
         self.hw_vas.update(self._getVAs(detector, hwdetvas or set()))
@@ -397,7 +401,7 @@ class Stream(object):
     # Order in which VAs should be set to ensure the values are kept as-is.
     # This should be the behaviour of the hardware component... but the driver
     # might be buggy, so beware!
-    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation")
+    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation", "DwellTime")
     def _index_in_va_order(self, va_entry):
         """
         return the position of the VA name in VA_ORDER
@@ -535,16 +539,12 @@ class Stream(object):
         return self._prepare_opm()
 
     def _prepare_opm(self):
-        if self._opm is not None:
-            try:
-                f = self._opm.setPath(self)
-            except LookupError:
-                logging.debug("%s doesn't require optical path change", self.name.value)
-                f = model.InstantaneousFuture()
-            else:
-                logging.debug("Setting optical path for %s", self.name.value)
-            return f
-        return model.InstantaneousFuture()
+        if self._opm is None:
+            return model.InstantaneousFuture()
+
+        logging.debug("Setting optical path for %s", self.name.value)
+        f = self._opm.setPath(self)
+        return f
 
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current

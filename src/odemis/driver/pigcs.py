@@ -1795,6 +1795,11 @@ class CLRelController(Controller):
     Note that it knows if there is a reference or a limit switch only based on
     what is written in the controller parameters. If none are available,
     referencing will not be available.
+    Note: when the axis is used unreferenced, the range (params 0x15 and 0x30),
+    should be doubled so that where ever the axis is when the controller is
+    powered (aka 0), it is still possible to reach any position. For instance,
+    if the controller is powered while the axis is at a limit, to reach the other
+    limit, it would need to travel the entire range in a direction.
     """
 #     TODO: For now, only relative moves are supported.
 #           For supporting absolute moves, we need to add querying and requesting
@@ -1846,7 +1851,7 @@ class CLRelController(Controller):
                 raise IOError("Controller %d configured with unit %s, but only "
                               "millimeters (mm) is supported." % (address, unit))
 
-            # To be taken when reading position or affecting encorder reading
+            # To be taken when reading position or affecting encoder reading
             self._pos_lock[a] = threading.RLock()
 
             # We have two modes for auto_suspend:
@@ -1888,24 +1893,23 @@ class CLRelController(Controller):
             # * if not referenced => disable reference mode to be able to
             # move relatively (until referencing happens). Use the position as
             # is, so that if no referencing ever happens, at least the position
-            # is correctly as long as the controller is powered.
-            # * if referenced => beleive it and stay in this mode.
+            # is correct as long as the controller is powered.
+            # * if referenced => believe it and stay in this mode.
 
-            # At start, the encoder is either on or (probably) off. In any
-            # case, the current position is the most likely one: either it has
-            # moved with the encoder off, and the position is entirely unknown
-            # anyway, or it hasn't moved and the position is correct.
+            # At start (and unreferenced) the controller was either already
+            # powered on from a previous session or has just been turned on. In
+            # any case, the current position is the most likely one: either it
+            # has moved with the encoder off, and the position is entirely
+            # unknown anyway, or it hasn't moved and the position is correct.
+            # TODO: a slightly more likely position would be to reuse the last
+            # position of the previous session. That would basically involve
+            # storing in a file the current position during terminate(), and
+            # reading it back at init.
 
-            # Movement range before referencing is max range in both directions
-            pos = self.GetPosition(a) * self._upm[a]
-            width = (self.GetMaxPosition(a) - self.GetMinPosition(a)) * self._upm[a]
-            # TODO: check that if the stage starts at a limit, it's still possible
-            # to reach the other side (with relative moves) even if the travel
-            # range limits it.
-            # If not => need to read the range from non-volative memory, and
-            # then double the range (not just in Python but also) in volatile
-            # memory.
-            self.pos_rng[a] = (pos - width, pos + width)
+            # To know the actual range width, one could look at params 0x17 + 0x2f
+            # (ie, distance between limit switches and origin).
+            self.pos_rng[a] = (self.GetMinPosition(a) * self._upm[a],
+                               self.GetMaxPosition(a) * self._upm[a])
 
             # Read speed/accel ranges
             self._speed[a] = self.GetCLVelocity(a) * self._upm[a] # m/s
@@ -2781,7 +2785,6 @@ class Bus(model.Actuator):
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
 
-                # TODO if closed-loop, the ranges should be updated after homing
                 rng = controller.pos_rng[c]
                 speed_rng = controller.speed_rng[c]
                 # Just to make sure it doesn't go too fast
@@ -4179,9 +4182,10 @@ class DaisyChainSimulator(object):
         self.port = port
         self.timeout = timeout
         self._subports = kwargs["subports"]
-        self._output_buf = "" # TODO: probably cleaner to user lock to access it
+        self._output_buf = ""
+        self._obuf_lock = threading.Lock()
 
-        # TODO: for each port, put a thread listening on the read and push to output
+        # For each port, put a thread listening on the read and push to output
         self._is_terminated = False
         for p in self._subports:
             t = threading.Thread(target=self._thread_read_serial, args=(p,))
@@ -4203,14 +4207,16 @@ class DaisyChainSimulator(object):
         # simulate timeout
         end_time = time.time() + self.timeout
 
-        ret = self._output_buf[:size]
-        self._output_buf = self._output_buf[len(ret):]
+        with self._obuf_lock:
+            ret = self._output_buf[:size]
+            self._output_buf = self._output_buf[len(ret):]
 
         while len(ret) < size:
             time.sleep(0.01)
             left = size - len(ret)
-            ret += self._output_buf[:left]
-            self._output_buf = self._output_buf[len(ret):]
+            with self._obuf_lock:
+                ret += self._output_buf[:left]
+                self._output_buf = self._output_buf[len(ret):]
             if self.timeout and time.time() > end_time:
                 break
 
@@ -4226,7 +4232,8 @@ class DaisyChainSimulator(object):
                 if len(c) == 0:
                     time.sleep(0.01)
                 else:
-                    self._output_buf += c
+                    with self._obuf_lock:
+                        self._output_buf += c
         except Exception:
             logging.exception("Fake daisy chain thread received an exception")
 

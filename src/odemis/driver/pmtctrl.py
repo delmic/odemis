@@ -199,9 +199,12 @@ class PMTDataFlow(model.DataFlow):
 
 
 # Min and max gain values in V
-MIN_GAIN = 0
-MAX_GAIN = 1.1
-
+MIN_VOLT = 0
+MAX_VOLT = 1.1
+MIN_PCURR = 0
+MAX_PCURR = 100  # Note: the new "oslo" board only supports 40 µAmp
+MIN_PTIME = 0.000001
+MAX_PTIME = 100
 
 class PMTControl(model.PowerSupplier):
     '''
@@ -211,7 +214,7 @@ class PMTControl(model.PowerSupplier):
      * gain = 0
      * power up
     '''
-    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6,
+    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=30e-6,
                  relay_cycle=None, powered=None, **kwargs):
         '''
         port (str): port name
@@ -257,7 +260,7 @@ class PMTControl(model.PowerSupplier):
                                           getter=self._getProtection)
         self._setProtection(True)
 
-        gain_rng = (MIN_GAIN, MAX_GAIN)
+        gain_rng = (MIN_VOLT, MAX_VOLT)
         gain = self._getGain()
         self.gain = model.FloatContinuous(gain, gain_rng, unit="V",
                                           setter=self._setGain)
@@ -430,7 +433,7 @@ class PMTControl(model.PowerSupplier):
         """
         ser = serial.Serial(
             port=port,
-            timeout=5  # s
+            timeout=1  # s
         )
 
         # Purge
@@ -444,6 +447,7 @@ class PMTControl(model.PowerSupplier):
                 break
         logging.debug("Nothing left to read, PMT Control Unit can safely initialize.")
 
+        ser.timeout = 5  # Sometimes the software-based USB can have some hiccups
         return ser
 
     def _findDevice(self, ports):
@@ -534,12 +538,6 @@ class PMTControlError(IOError):
 
 
 # Ranges similar to real PMT Control firmware
-MAX_VOLT = 1.1
-MIN_VOLT = 0
-MAX_PCURR = 100
-MIN_PCURR = 0
-MAX_PTIME = 100
-MIN_PTIME = 0.000001
 IDN = "Delmic Analog PMT simulator 1.0"
 
 

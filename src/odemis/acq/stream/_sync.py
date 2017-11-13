@@ -17,6 +17,12 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # This contains "synchronised streams", which handle acquisition from multiple
 # detector simultaneously.
+# On the SPARC, this allows to acquire the secondary electrons and an optical
+# detector simultaneously. In theory, it could support even 3 or 4 detectors
+# at the same time, but this is not current supported.
+# On the SECOM with a confocal optical microscope which has multiple detectors,
+# all the detectors can run simultaneously (each receiving a different wavelength
+# band).
 
 from __future__ import division
 
@@ -24,15 +30,14 @@ from abc import ABCMeta, abstractmethod
 from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
+from functools import partial
 import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.acq import _futures
-from odemis.acq import drift
+from odemis.acq import _futures, drift, leech
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
-from odemis.util import img, units
-from odemis.util import spot
+from odemis.util import img, units, spot
 import random
 import threading
 import time
@@ -45,10 +50,12 @@ from ._base import Stream, UNDEFINED_ROI
 # simultaneously because the two optical detectors need the same light, and a
 # mirror is used to select which path is taken. In addition, the AR stream will
 # typically have a lower repetition (even if it has same ROI). So it's easier
-# and faster to acquire them sequentially. The only trick is that if drift
-# correction is used, the same correction must be used for the entire
-# acquisition.
-
+# and faster to acquire them sequentially.
+# TODO: for now, when drift correction is used, it's reset between each MDStream
+# acquisition. The same correction should be used for the entire acquisition.
+# They all should rely on the same initial anchor acquisition, and keep the
+# drift information between them. Possibly, this could be done by passing a
+# common DriftEstimator to each MDStream.
 class MultipleDetectorStream(Stream):
     """
     Abstract class for all specialised streams which are actually a combination
@@ -58,6 +65,9 @@ class MultipleDetectorStream(Stream):
     """
     __metaclass__ = ABCMeta
 
+    # TODO: do not force to have precisely 2 streams. Either pass a list of
+    # streams and either the type or the order matters, or pass a "main" stream
+    # and a list of dependent streams.
     def __init__(self, name, main_stream, rep_stream, stage=None):
         self.name = model.StringVA(name)
         self._streams = [main_stream, rep_stream]
@@ -128,6 +138,16 @@ class MultipleDetectorStream(Stream):
                     r.append(da)
         return r
 
+    @property
+    def leeches(self):
+        """
+        tuple of leech used during acquisition
+        """
+        r = []
+        for s in (self._main_stream, self._rep_stream):
+            r.extend(s.leeches)
+        return tuple(r)
+
     @abstractmethod
     def _estimateRawAcquisitionTime(self):
         """
@@ -140,10 +160,12 @@ class MultipleDetectorStream(Stream):
         # Time required without drift correction
         total_time = self._estimateRawAcquisitionTime()
 
+        rep = self._rep_stream.repetition.value
+        npixels = numpy.prod(rep)
+        dt = total_time / npixels
+
         # Estimate time spent in scanning the anchor region
         if self._main_stream.dcRegion.value != UNDEFINED_ROI:
-            npixels = numpy.prod(self._rep_stream.repetition.value)
-            dt = total_time / npixels
 
             dc_estimator = drift.AnchoredEstimator(self._emitter,
                                  self._main_det,
@@ -152,7 +174,7 @@ class MultipleDetectorStream(Stream):
             period = dc_estimator.estimateCorrectionPeriod(
                                                self._main_stream.dcPeriod.value,
                                                dt,
-                                               self._rep_stream.repetition.value)
+                                               rep)
             # number of times the anchor will be acquired
             n_anchor = 1 + npixels // period.next()
             anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
@@ -160,6 +182,13 @@ class MultipleDetectorStream(Stream):
             total_time += anchor_time
             logging.debug("Estimated overhead time for drift correction: %g s / %g s",
                           anchor_time, total_time)
+
+        # Estimate time spent for the leeches
+        for l in self.leeches:
+            l_time = l.estimateAcquisitionTime(dt, (rep[1], rep[0]))
+            total_time += l_time
+            logging.debug("Estimated overhead time for leech %s: %g s / %g s",
+                          type(l), l_time, total_time)
 
         if model.hasVA(self._rep_stream, "useScanStage") and self._rep_stream.useScanStage.value:
             sstage = self._rep_stream._sstage
@@ -728,6 +757,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 dc_acq_time = 0
                 n_til_dc = tot_num
 
+            leech_np = []
+            for l in self.leeches:
+                np = l.start(rep_time, (rep[1], rep[0]))
+                leech_np.append(np)
+
             dc_period = n_til_dc  # approx. (just for time estimation)
 
             # We need to use synchronisation event because without it, either we
@@ -857,6 +891,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         shift = self._dc_estimator.estimate()
                         spot_pos[:, :, 0] -= shift[0]
                         spot_pos[:, :, 1] -= shift[1]
+
+                    # Check if it's time to run a leech
+                    for li, l in enumerate(self.leeches):
+                        if leech_np[li] is None:
+                            continue
+                        leech_np[li] -= 1
+                        if leech_np[li] == 0:
+                            np = l.next([self._main_data[-1], rep_buf[-1]])
+                            leech_np[li] = np
+
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
@@ -881,6 +925,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             if self._dc_estimator is not None:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
+
+            for l in self.leeches:
+                l.complete(self.raw)
+
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of multiple detectors failed")
@@ -990,6 +1038,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 dc_acq_time = 0
                 n_til_dc = tot_num
 
+            leech_np = []
+            for l in self.leeches:
+                np = l.start(rep_time, (rep[1], rep[0]))
+                leech_np.append(np)
+
             dc_period = n_til_dc  # approx. (just for time estimation)
             # We need to use synchronisation event because without it, either we
             # use .get() but it's not possible to cancel the acquisition, or we
@@ -1001,6 +1054,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 # Move the scan stage to the next position
                 spos = stage_pos[i[::-1]][0], stage_pos[i[::-1]][1]
+                # TODO: apply drift correction on the ebeam. As it's normally at
+                # the center, it should very rarely go out of bound.
                 cspos = {"x": spos[0] - drift_shift[0],
                          "y": spos[1] - drift_shift[1]}
                 if not (spos_rng[0] <= cspos["x"] <= spos_rng[2] and
@@ -1134,6 +1189,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         drift_shift = (drift_shift[0] + shift[0] * main_pxs[0],
                                        drift_shift[1] - shift[1] * main_pxs[1]) # Y is upside down
 
+                    # Check if it's time to run a leech
+                    for li, l in enumerate(self.leeches):
+                        if leech_np[li] is None:
+                            continue
+                        leech_np[li] -= 1
+                        if leech_np[li] == 0:
+                            np = l.next([self._main_data[-1], rep_buf[-1]])
+                            leech_np[li] = np
+
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
@@ -1155,6 +1219,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
             self._onMultipleDetectorData(main_one, rep_buf, rep)
+
+            if self._dc_estimator is not None:
+                self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
+
+            for l in self.leeches:
+                l.complete(self.raw)
 
         except Exception as exp:
             if not isinstance(exp, CancelledError):
@@ -1271,23 +1341,26 @@ class SEMMDStream(MultipleDetectorStream):
                 dc_acq_time = 0
                 cur_dc_period = tot_num
 
+            leech_np = []
+            for l in self.leeches:
+                np = l.start(dt, (rep[1], rep[0]))
+                leech_np.append(np)
+
             trigger = self._rep_det.softwareTrigger
 
             # number of spots scanned so far
             spots_sum = 0
             while spots_sum < tot_num:
-                # don't get crazy if dcPeriod is longer than the whole acquisition
-                cur_dc_period = min(cur_dc_period, tot_num - spots_sum)
-
-                # Scan drift correction number of pixels
-                # Note: it's done so that if the number of pixel is less than
-                # one full line, it will stop at the border => no change in Y.
-                n_x = numpy.clip(cur_dc_period, 1, rep[0])
-                n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
+                # Acquire the maximum amount of pixels until next leech
+                npixels = min(leech_np + [cur_dc_period])
+                n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), spots_sum, npixels)
+                npixels = n_x * n_y
+                # get_next_rectangle() takes care of always fitting in the
+                # acquisition shape, even at the end.
                 self._emitter.resolution.value = (n_x, n_y)
 
-                # Move the beam to the center of the frame
-                trans = tuple(pos_flat[spots_sum:(spots_sum + cur_dc_period)].mean(axis=0))
+                # Move the beam to the center of the sub-frame
+                trans = tuple(pos_flat[spots_sum:(spots_sum + npixels)].mean(axis=0))
                 if self._dc_estimator:
                     trans = (trans[0] - self._dc_estimator.tot_drift[0],
                              trans[1] - self._dc_estimator.tot_drift[1])
@@ -1301,7 +1374,7 @@ class SEMMDStream(MultipleDetectorStream):
                         logging.error("Unexpected clipping in the scan spot position %s", trans)
                 self._emitter.translation.value = cptrans
 
-                spots_sum += cur_dc_period
+                spots_sum += npixels
 
                 # and now the acquisition
                 self._acq_main_complete.clear()
@@ -1314,7 +1387,7 @@ class SEMMDStream(MultipleDetectorStream):
                 self._main_df.subscribe(self._onMainImage)
                 trigger.notify()
                 # Time to scan a frame
-                frame_time = dt * cur_dc_period
+                frame_time = dt * npixels
                 if not self._acq_rep_complete.wait(frame_time * 10 + 5):
                     raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
                                        % (self._emitter.translation.value, frame_time * 10 + 5))
@@ -1336,7 +1409,7 @@ class SEMMDStream(MultipleDetectorStream):
 
                 rep_buf.append(self._rep_data)
 
-                # guess how many drift anchors to acquire
+                # guess how many drift anchors left to acquire
                 n_anchor = (tot_num - spots_sum) // cur_dc_period
                 anchor_time = n_anchor * dc_acq_time
                 self._updateProgress(future, time.time() - start, spots_sum, tot_num, anchor_time)
@@ -1355,6 +1428,18 @@ class SEMMDStream(MultipleDetectorStream):
                     # Estimate drift and update next positions
                     self._dc_estimator.estimate()  # updates .tot_drift
 
+                # Check if it's time to run a leech
+                for li, l in enumerate(self.leeches):
+                    if leech_np[li] is None:
+                        continue
+                    leech_np[li] -= npixels
+                    if leech_np[li] < 0:
+                        logging.error("Acquired too many pixels, and skipped leech %s", l)
+                        leech_np[li] = 0
+                    if leech_np[li] == 0:
+                        np = l.next([self._main_data[-1], rep_buf[-1]])
+                        leech_np[li] = np
+
             self._main_df.unsubscribe(self._onMainImage)
             self._rep_df.unsubscribe(self._onRepetitionImage)
             with self._acq_lock:
@@ -1370,6 +1455,10 @@ class SEMMDStream(MultipleDetectorStream):
 
             if self._dc_estimator:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
+
+            for l in self.leeches:
+                l.complete(self.raw)
+
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of multiple detectors failed")
@@ -1651,3 +1740,241 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
             # in case of exception, so drop it immediately on the log too
             logging.exception("Failure to compute moment of inertia")
             raise
+
+
+# TODO: ideally it should inherit from FluoStream
+class ScannedFluoMDStream(MultipleDetectorStream):
+    """
+    Stream to acquire multiple ScannedFluoStreams simultaneously
+    """
+    def __init__(self, name, streams):
+        """
+        streams (list of ScannedFluoStreams): they should all have the same scanner
+          and emitter (just a different detector). At least one stream should be
+          provided.
+        """
+        # TODO: for now it's not possible to call super() because MultipleDetectorStream
+        # is made precisely for 2 streams.
+
+        self.name = model.StringVA(name)
+        assert len(streams) >= 1
+        self._streams = tuple(streams)
+
+        s0 = streams[0]
+        for s in streams[1:]:
+            assert s0.emitter == s.emitter
+            assert s0.scanner == s.scanner
+            assert s0._opm == s._opm
+        self._opm = s0._opm
+
+        self.should_update = model.BooleanVA(False)
+        self.is_active = model.BooleanVA(False)
+
+        # For the acquisition
+        self._acq_done = threading.Event()
+        self._acq_lock = threading.Lock()
+        self._acq_state = RUNNING
+        # To indicate for each detector whether it has received the data.
+        # Could be replaced by a simpler structure, eg atomic add + 1 event
+        self._acq_complete = tuple(threading.Event() for s in streams)
+        self._acq_thread = None  # thread
+        self._acq_start = 0  # time of acquisition beginning
+        self._acq_min_date = None  # minimum acquisition time for the data to be acceptable
+
+        self._current_future = None
+
+    @property
+    def streams(self):
+        return self._streams
+
+    @property
+    def raw(self):
+        # We can use the .raw of the substreams, as the live streams are the same format
+        r = []
+        for s in self._streams:
+            r.extend(s.raw)
+
+        return r
+
+    # Methods required by MultipleDetectorStream
+    def _estimateRawAcquisitionTime(self):
+        """
+        return (float): time in s for acquiring the whole image, without drift
+         correction
+        """
+        # It takes the same time as just one stream
+        return self.streams[0].estimateAcquisitionTime()
+
+    def estimateAcquisitionTime(self):
+        # No drift correction supported => easy
+        return self._estimateRawAcquisitionTime()
+
+    def _onMultipleDetectorData(self, raw_data):
+        """
+        called at the end of an entire acquisition
+        raw_data (list of DataArray): the stream data corresponding to each stream
+        """
+        pass
+
+    def _adjustHardwareSettings(self):
+        """
+        Adapt the emitter/scanner/detector settings.
+        return (float): estimated time per acquisition
+        """
+        # All streams have the same excitation, so do it only once
+        self._streams[0]._setup_excitation()
+        for s in self._streams:
+            s._setup_emission()
+
+        return self.estimateAcquisitionTime()
+
+    def acquire(self):
+        # Make sure every stream is prepared, not really necessary to check _prepared
+        f = self.prepare()
+        f.result()
+
+        for s in self._streams:
+            s._linkHwVAs()
+
+        # TODO: if already acquiring, queue the Future for later acquisition
+        if self._current_future is not None and not self._current_future.done():
+            raise IOError("Cannot do multiple acquisitions simultaneously")
+
+        if not self._acq_done.is_set():
+            if self._acq_thread and self._acq_thread.isAlive():
+                logging.debug("Waiting for previous acquisition to fully finish")
+                self._acq_thread.join(10)
+                if self._acq_thread.isAlive():
+                    logging.error("Previous acquisition not ending")
+
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateAcquisitionTime())
+        self._current_future = f
+        self._acq_state = RUNNING  # TODO: move to per acquisition
+        f.task_canceller = self._cancelAcquisition
+
+        # run task in separate thread
+        self._acq_thread = threading.Thread(target=_futures.executeTask,
+                              name="Multiple detector confocal acquisition",
+                              args=(f, self._runAcquisition, f))
+        self._acq_thread.start()
+        return f
+
+    def _cancelAcquisition(self, future):
+        with self._acq_lock:
+            if self._acq_state == FINISHED:
+                return False  # too late
+            self._acq_state = CANCELLED
+
+        logging.debug("Cancelling acquisition of components %s and %s",
+                      self._streams[0].emitter.name,
+                      self._streams[0].scanner.name)
+
+        # set the events, so the acq thread doesn't wait for them
+        for i in range(len(self._streams)):
+            self._acq_complete[i].set()
+        self._streams[0]._dataflow.synchronizedOn(None)
+
+        # Wait for the thread to be complete (and hardware state restored)
+        self._acq_done.wait(5)
+        return True
+
+    def _onData(self, n, df, data):
+        logging.debug("Stream %d data received", n)
+        s = self._streams[n]
+        if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
+            # This is a sign that the e-beam might have been at the wrong (old)
+            # position while Rep data is acquiring
+            logging.warning("Dropping data because it seems started %g s too early",
+                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            if n == 0:
+                # As the first detector is synchronised, we need to restart it
+                # TODO: probably not necessary, as the typical reason it arrived
+                # early is that the detectors were already running, in which case
+                # they haven't "consumed" the previous trigger yet
+                s.detector.softwareTrigger.notify()
+            return
+
+        if not self._acq_complete[n].is_set():
+            s._onNewData(s._dataflow, data)
+            self._acq_complete[n].set()
+            # TODO: unsubscribe here?
+
+    def _runAcquisition(self, future):
+        """
+        Acquires images from the multiple detectors via software synchronisation.
+        Warning: can be quite memory consuming if the grid is big
+        returns (list of DataArray): all the data acquired
+        raises:
+          CancelledError() if cancelled
+          Exceptions if error
+        """
+        det0 = self._streams[0].detector
+        df0 = self._streams[0]._dataflow
+        try:
+            self._acq_done.clear()
+            acq_time = self._adjustHardwareSettings()
+
+            # Synchronise one detector, so that it's possible to subscribe without
+            # the acquisition immediately starting. Once all the detectors are
+            # subscribed, we'll notify the detector and it will start.
+            df0.synchronizedOn(det0.softwareTrigger)
+            for s in self.streams[1:]:
+                s._dataflow.synchronizedOn(None)  # Just to be sure
+
+            subscribers = []  # to keep a ref
+            for i, s in enumerate(self._streams):
+                p_subscriber = partial(self._onData, i)
+                subscribers.append(p_subscriber)
+                s._dataflow.subscribe(p_subscriber)
+                self._acq_complete[i].clear()
+
+            if self._acq_state == CANCELLED:
+                raise CancelledError()
+
+            self._acq_min_date = time.time()
+            det0.softwareTrigger.notify()
+            logging.debug("Starting confocal acquisition")
+
+            # TODO: immediately remove the synchronisation? It's not needed after
+            # the start.
+
+            # Wait until all the data is received
+            for i, s in enumerate(self._streams):
+                # TODO: It should arrive at the same time, so after the first stream less timeout
+                if not self._acq_complete[i].wait(3 + acq_time * 1.5):
+                    raise IOError("Confocal acquisition hasn't received data after %g s" %
+                                  (time.time() - self._acq_min_date,))
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                s._dataflow.synchronizedOn(None)  # Just to be sure
+                s._dataflow.unsubscribe(subscribers[i])
+
+            self._streams[0]._stop_light()
+            logging.debug("All confocal acquisition data received")
+            # Done
+            self._onMultipleDetectorData(self.raw)
+
+        except Exception as exp:
+            if not isinstance(exp, CancelledError):
+                logging.exception("Acquisition of confocal multiple detectors failed")
+            else:
+                logging.debug("Confocal acquisition cancelled")
+
+            self._streams[0]._stop_light()
+            for i, s in enumerate(self._streams):
+                s._dataflow.synchronizedOn(None)  # Just to be sure
+                s._dataflow.unsubscribe(subscribers[i])
+
+            if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
+                logging.warning("Converting exception to cancellation")
+                raise CancelledError()
+            raise
+        else:
+            return self.raw
+        finally:
+            for s in self._streams:
+                s._unlinkHwVAs()
+            self._current_future = None
+            self._acq_done.set()
