@@ -20,7 +20,6 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.util import img
-from warnings import warn
 
 
 # This is a series of classes which use different methods to generate a large
@@ -107,7 +106,7 @@ class CollageWeaver(object):
 
         if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
             # Overlap > 50% or missing tiles
-            warn("Global area much bigger than sum of tile areas")
+            logging.warning("Global area much bigger than sum of tile areas")
 
         # Paste each tile
         logging.debug("Generating global image of size %dx%d px",
@@ -192,7 +191,7 @@ class MeanWeaver(object):
         assert gbbx_px[0] == gbbx_px[1] == 0
         if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
             # Overlap > 50% or missing tiles
-            warn("Global area much bigger than sum of tile areas")
+            logging.warning("Global area much bigger than sum of tile areas")
 
         # Weave tiles by using a smooth gradient. The part of the tile that does not overlap
         # with any previous tiles is inserted into the part of the
@@ -223,7 +222,7 @@ class MeanWeaver(object):
             moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
 
             # Insert image at positions that are still empty
-            roi[-moi] = t[-moi]
+            roi[~moi] = t[~moi]
 
             # Create gradient in overlapping region. Ratio between old image and new tile values determined by
             # distance to the center of the tile

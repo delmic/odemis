@@ -32,7 +32,6 @@ from odemis.dataio import hdf5
 
 from stitching_test import decompose_image
 import odemis
-from wx.lib.floatcanvas.FloatCanvas import ArrowLine
 
 logging.getLogger().setLevel(logging.DEBUG)
 
