@@ -56,15 +56,14 @@ def register(tiles, method=REGISTER_SHIFT):
         else:
             tile = ts
             dep_tiles = None
-
         registrar.addTile(tile, dep_tiles)
 
     # Update positions
-    for i in range(len(tiles)):
+    for i, ts in enumerate(tiles):
         # Return tuple of positions if dependent tiles are present
-        if isinstance(tiles[i], tuple):
-            tile = tiles[i][0]
-            dep_tiles = tiles[i][1:]
+        if isinstance(ts, tuple):
+            tile = ts[0]
+            dep_tiles = ts[1:]
 
             # Update main tile
             md = copy.deepcopy(tile.metadata)
@@ -73,19 +72,18 @@ def register(tiles, method=REGISTER_SHIFT):
 
             # Update dependent tiles
             tilesNew = [tileUpd]
-            for j in range(len(dep_tiles)):
-                md = copy.deepcopy(dep_tiles[j].metadata)
+            for j, dt in enumerate(dep_tiles):
+                md = copy.deepcopy(dt.metadata)
                 md[model.MD_POS] = registrar.getPositions()[1][i][j]
-                tilesNew.append(model.DataArray(tile, md))
+                tilesNew.append(model.DataArray(ts, md))
             tileUpd = tuple(tilesNew)
 
         else:
-            tile = tiles[i]
             dep_tiles = None
 
-            md = copy.deepcopy(tile.metadata)
+            md = copy.deepcopy(ts.metadata)
             md[model.MD_POS] = registrar.getPositions()[0][i]
-            tileUpd = model.DataArray(tile, md)
+            tileUpd = model.DataArray(ts, md)
 
         updatedTiles.append(tileUpd)
 

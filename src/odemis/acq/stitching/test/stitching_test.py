@@ -23,16 +23,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import unittest
 from odemis.acq.stitching import register, weave, REGISTER_IDENTITY, REGISTER_SHIFT, WEAVER_COLLAGE, WEAVER_MEAN
 from odemis import model
-from odemis.dataio import tiff
+from odemis.dataio import hdf5
 import os
 import random
 import copy
 import numpy
+import odemis
 
 # Find path for test images
-path = os.path.relpath("acq/align/test/images", "acq/stitching/test")
-imgs = [path + "/Slice69_stretched.tif"]
-img = tiff.read_data(imgs[0])[0]
+IMG_PATH = os.path.dirname(odemis.__file__) + "/driver/"
+IMGS = [IMG_PATH + "songbird-sim-sem.h5"]
+img = hdf5.read_data(IMGS[0])[0][0][0][0]
 
 
 class TestRegister(unittest.TestCase):
@@ -42,7 +43,6 @@ class TestRegister(unittest.TestCase):
         """
         Test register wrapper function
         """
-        img = tiff.read_data(imgs[0])[0]
         num = 2
         o = 0.2
         a = "horizontalZigzag"
@@ -59,7 +59,6 @@ class TestRegister(unittest.TestCase):
         """
         Test register wrapper function
         """
-        img = tiff.read_data(imgs[0])[0]
         num = 2
         o = 0.2
         a = "horizontalZigzag"
@@ -78,9 +77,8 @@ class TestRegister(unittest.TestCase):
         Test register wrapper function, when dependent tiles are present
         """
         # Test on 3 layers of the same image create by decompose_image
-        img = tiff.read_data(imgs[0])[0]
         num = 3
-        o = 0.2
+        o = 0.3
         a = "horizontalZigzag"
         [tiles, pos] = decompose_image(img, o, num, a)
 
@@ -185,7 +183,6 @@ class TestWeave(unittest.TestCase):
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test sem",
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
             model.MD_POS: (10e-3, 30e-3),  # m
@@ -205,7 +202,7 @@ class TestWeave(unittest.TestCase):
         """
 
         numTiles = [2, 3, 4]
-        overlap = [0.2]
+        overlap = [0.4]
 
         for n in numTiles:
             for o in overlap:
@@ -214,13 +211,7 @@ class TestWeave(unittest.TestCase):
 
                 w = weave(tiles, WEAVER_MEAN)
                 sz = len(w)
-
-                im = img[:sz, :sz]
-
-                for i in range(len(img[:sz, :sz])):
-                    for j in range(len(img[:sz, :sz])):
-                        self.assertLessEqual(
-                            abs(int(w[i][j]) - int(im[i][j])), 2)
+                numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
 
 
 def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shift=True):
@@ -235,8 +226,9 @@ def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shif
     shift : Boolean variable indicating whether or not to add a shift to the positions
     """
 
-    # img.shape = tileSize + numTiles * (tileSize - overlap * tileSize) --> formula
-    tileSize = int(min(img.shape[0], img.shape[1]) / (numTiles * (1 - overlap) + 1))
+    # img.shape = tileSize + (numTiles-1) * (tileSize - overlap * tileSize) --> formula (+1 to
+    # ensure that the tiles are never bigger than the image)
+    tileSize = int(min(img.shape[0], img.shape[1]) / (numTiles - numTiles * overlap + overlap + 1))
 
     pos = []
     tiles = []
@@ -294,7 +286,7 @@ def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shif
             pos.append([(posX + tileSize / 2) * px_size,
                         (yMax - posY - tileSize / 2) * px_size])
 
-    return [tiles, pos]
+    return tiles, pos
 
 
 if __name__ == '__main__':

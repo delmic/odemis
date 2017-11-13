@@ -20,6 +20,7 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.util import img
+from warnings import warn
 
 
 # This is a series of classes which use different methods to generate a large
@@ -29,7 +30,6 @@ from odemis.util import img
 # TODO: take into account skew and rotation to compute position, or even to
 # directly copy the image already transformed.
 # TODO: handle higher dimensions by just copying them as-is
-# TODO: test with just one tile
 
 class CollageWeaver(object):
     """
@@ -52,7 +52,9 @@ class CollageWeaver(object):
         tile (2D DataArray): the image must have at least MD_POS and
         MD_PIXEL_SIZE metadata. All provided tiles should have the same dtype.
         """
-
+        # Merge the correction metadata inside each image (to keep the rest of the
+        # code simple)
+        img.mergeMetadata(tile.metadata)
         self.tiles.append(tile)
 
     def getFullImage(self):
@@ -61,14 +63,7 @@ class CollageWeaver(object):
         """
 
         tiles = self.tiles
-
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-
         tiles = [model.DataArray(t, t.metadata.copy()) for t in tiles]
-
-        for t in tiles:
-            img.mergeMetadata(t.metadata)
 
         # Compute the bounding box of each tile and the global bounding box
 
@@ -110,8 +105,9 @@ class CollageWeaver(object):
 
         assert gbbx_px[0] == gbbx_px[1] == 0
 
-        # TODO: warn if the global area is much bigger than the sum of the tile
-        # area
+        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
+            # Overlap > 50% or missing tiles
+            warn("Global area much bigger than sum of tile areas")
 
         # Paste each tile
         logging.debug("Generating global image of size %dx%d px",
@@ -143,21 +139,17 @@ class MeanWeaver(object):
         self.tiles = []
 
     def addTile(self, tile):
+        # Merge the correction metadata inside each image (to keep the rest of the
+        # code simple)
+        img.mergeMetadata(tile.metadata)
         self.tiles.append(tile)
 
     def getFullImage(self):
         """
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
         """
-        # Merge the correction metadata inside each image (to keep the rest of the
-        # code simple)
-
         tiles = self.tiles
-
         tiles = [model.DataArray(t, t.metadata.copy()) for t in tiles]
-
-        for t in tiles:
-            img.mergeMetadata(t.metadata)
 
         # Compute the bounding box of each tile and the global bounding box
 
@@ -198,18 +190,32 @@ class MeanWeaver(object):
                    max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
 
         assert gbbx_px[0] == gbbx_px[1] == 0
+        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
+            # Overlap > 50% or missing tiles
+            warn("Global area much bigger than sum of tile areas")
 
-        # TODO: warn if the global area is much bigger than the sum of the tile
-        # area
+        # Weave tiles by using a smooth gradient. The part of the tile that does not overlap
+        # with any previous tiles is inserted into the part of the
+        # ovv image that is still empty. This part is determined by a mask, which indicates
+        # the parts of the image that already contain image data (True) and the ones that are still
+        # empty (False). For the overlapping parts, the tile is multiplied with weights corresponding
+        # to a gradient that has its maximum at the center of the tile and
+        # smoothly decreases toward the edges. The function for creating the weights is
+        # a distance measure resembling the l5-norm, i.e. a rectangle with smooth edges.
+        # The part of the overview image that overlaps with the new tile is multiplied with the
+        # reverse of the weights (1 -  weights) and the weighted overlapping parts of the new tile and
+        # the ovv image are added, so the resulting image contains a gradient in the overlapping regions
+        # between all the tiles that have been inserted before and the newly inserted tile.
 
         # Paste each tile
         logging.debug("Generating global image of size %dx%d px",
                       gbbx_px[-2], gbbx_px[-1])
         im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
         # Use minimum of the values in the tiles for background
-        im[:] = 0
-        mask = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
-        mask[:] = 0
+        im[:] = numpy.amin(tiles)
+        
+        # The mask is multiplied with the tile, thereby creating a tile with a gradient
+        mask = numpy.zeros((gbbx_px[-1], gbbx_px[-2]), dtype=numpy.bool)
 
         for b, t in zip(tbbx_px, tiles):
             # Part of image overlapping with tile
@@ -217,45 +223,34 @@ class MeanWeaver(object):
             moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
 
             # Insert image at positions that are still empty
-            roi[moi == 0] = t[moi == 0]
+            roi[-moi] = t[-moi]
 
             # Create gradient in overlapping region. Ratio between old image and new tile values determined by
             # distance to the center of the tile
 
             # Create weight matrix with decreasing values from its center that
             # has the same size as the tile.
-            L1 = len(roi) // 2
-            L2 = len(roi[0]) // 2
-            if len(roi) % 2 == 0:  # not very elegant way of dealing with even/odd tile sizes
-                if len(roi[0]) % 2 == 0:
-                    x = numpy.arange(-L2, L2, 1)
-                    y = numpy.arange(-L1, L1, 1)
-                else:
-                    x = numpy.arange(-L2, L2 + 1, 1)
-                    y = numpy.arange(-L1, L1, 1)
+            hh, hw = numpy.divide(roi.shape, 2)  # half-height, half-width
+            # Deal with even/odd tile sizes
+            sz = roi.shape
+            if sz[1] % 2 == 0:
+                x = numpy.arange(-hw, hw, 1)
             else:
-                if len(roi[0]) / 2 == 0:
-                    x = numpy.arange(-L2, L2, 1)
-                    y = numpy.arange(-L1, L1 + 1, 1)
-                else:
-                    x = numpy.arange(-L2, L2 + 1, 1)
-                    y = numpy.arange(-L1, L1 + 1, 1)
+                x = numpy.arange(-hw, hw + 1, 1)
 
-            xx, yy = numpy.meshgrid(x**3 / L1**3, y**3 / L2**3)
+            if sz[0] % 2 == 0:
+                y = numpy.arange(-hh, hh, 1)
+            else:
+                y = numpy.arange(-hh, hh + 1, 1)
 
-            # maximum looks better than euclidean distance
-            w = 1 - (numpy.power(abs(xx)**2 + abs(yy)**2, 1 / 2))
+            xx, yy = numpy.meshgrid(x ** 3 / hh ** 3, y ** 3 / hw ** 3)
+            w = numpy.hypot(xx, yy)  # function determined experimentally: sqrt(abs(x)^5)
 
-            # Element-wise multiplication with tile and image roi
-            t_weighted = numpy.multiply(t, w)
-            roi_weighted = numpy.multiply(roi, 1 - w)
-
-            # Update region that overlaps with previous image
-            roi[moi != 0] = 2 * numpy.mean(
-                [t_weighted[moi != 0], roi_weighted[moi != 0]], axis=0)
+            # Use weights to create gradient in overlapping region
+            roi[moi] = (t * (1 - w))[moi] + (roi * w)[moi]
 
             # Update mask
-            mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = 1
+            mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = True
 
         # Update metadata
         # TODO: check this is also correct based on lt + half shape * pxs

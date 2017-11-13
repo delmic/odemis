@@ -27,17 +27,20 @@ import unittest
 import os
 import random
 
-from odemis.acq.stitching._weaver import CollageWeaver, MeanWeaver
-from odemis.dataio import tiff
+from odemis.acq.stitching import CollageWeaver, MeanWeaver
+from odemis.dataio import hdf5
 
 from stitching_test import decompose_image
+import odemis
+from wx.lib.floatcanvas.FloatCanvas import ArrowLine
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Find path for test images
-path = os.path.relpath("acq/align/test/images", "acq/stitching/test")
-imgs = [path + "/Slice69_stretched.tif"]
-img = tiff.read_data(imgs[0])[0]
+IMG_PATH = os.path.dirname(odemis.__file__) + "/driver/"
+IMGS = [IMG_PATH + "songbird-sim-sem.h5"]
+
+img = hdf5.read_data(IMGS[0])[0][0][0][0]
 
 # @unittest.skip("skip")
 
@@ -45,7 +48,7 @@ img = tiff.read_data(imgs[0])[0]
 class TestCollageWeaver(unittest.TestCase):
 
     def setUp(self):
-        random.seed(1)
+        random.seed(1)  # for reproducibility
 
     # @unittest.skip("skip")
     def test_one_tile(self):
@@ -55,7 +58,6 @@ class TestCollageWeaver(unittest.TestCase):
         img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
         md = {
             model.MD_SW_VERSION: "1.0-test",
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
@@ -78,7 +80,6 @@ class TestCollageWeaver(unittest.TestCase):
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test sem",
             model.MD_ACQ_DATE: time.time(),
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
@@ -101,7 +102,7 @@ class TestCollageWeaver(unittest.TestCase):
         """
 
         numTiles = [2, 3, 4]
-        overlap = [0.2]
+        overlap = [0.4]
 
         for n in numTiles:
             for o in overlap:
@@ -114,12 +115,8 @@ class TestCollageWeaver(unittest.TestCase):
 
                 sz = len(weaver.getFullImage())
                 w = weaver.getFullImage()
-                im = img[:sz, :sz]
 
-                for i in range(len(img[:sz, :sz])):
-                    for j in range(len(img[:sz, :sz])):
-                        self.assertLessEqual(
-                            abs(w[i][j] - im[i][j]), 1, "%s %s" % (o, n))
+                numpy.testing.assert_array_almost_equal(w, img[:sz, :sz], decimal=1)
 
 
 # @unittest.skip("skip")
@@ -136,7 +133,6 @@ class TestMeanWeaver(unittest.TestCase):
         img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
         md = {
             model.MD_SW_VERSION: "1.0-test",
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
@@ -159,7 +155,6 @@ class TestMeanWeaver(unittest.TestCase):
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
         md8 = {
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test sem",
             model.MD_ACQ_DATE: time.time(),
             model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
@@ -182,7 +177,7 @@ class TestMeanWeaver(unittest.TestCase):
         """
 
         numTiles = [2, 3, 4]
-        overlap = [0.2]
+        overlap = [0.4]
 
         for n in numTiles:
             for o in overlap:
@@ -195,12 +190,8 @@ class TestMeanWeaver(unittest.TestCase):
 
                 sz = len(weaver.getFullImage())
                 w = weaver.getFullImage()
-                im = img[:sz, :sz]
 
-                for i in range(len(img[:sz, :sz])):
-                    for j in range(len(img[:sz, :sz][0])):
-                        self.assertLessEqual(
-                            abs(int(w[i][j]) - int(im[i][j])), 2, "%s %s" % (w[i][j], im[i][j]))
+                numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
 
     def test_synthetic_perfect_overlap(self):
         """
@@ -218,7 +209,6 @@ class TestMeanWeaver(unittest.TestCase):
 
         md0 = {
             model.MD_SW_VERSION: "1.0-test",
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
@@ -232,7 +222,6 @@ class TestMeanWeaver(unittest.TestCase):
 
         md1 = {
             model.MD_SW_VERSION: "1.0-test",
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
@@ -249,7 +238,7 @@ class TestMeanWeaver(unittest.TestCase):
         weaver.addTile(in1)
         outd = weaver.getFullImage()
 
-        self.assertTrue((numpy.array(outd) == exp_out).all())
+        numpy.testing.assert_equal(outd, exp_out)
 
     def test_gradient(self):
         """
@@ -261,7 +250,6 @@ class TestMeanWeaver(unittest.TestCase):
 
         md0 = {
             model.MD_SW_VERSION: "1.0-test",
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
@@ -275,7 +263,6 @@ class TestMeanWeaver(unittest.TestCase):
 
         md1 = {
             model.MD_SW_VERSION: "1.0-test",
-            # tiff doesn't support É (but XML does)
             model.MD_DESCRIPTION: u"test",
             model.MD_ACQ_DATE: time.time(),
             model.MD_BPP: 12,
@@ -305,41 +292,6 @@ class TestMeanWeaver(unittest.TestCase):
                 self.assertLess(col, col_prev)
                 col_prev = col
 
-
-"""
-# Visualize weaved result after bad stitching
-img = path + "/g_009_cropped.tif"
-img = tiff.read_data(img)[0]
-numTiles = 10
-overlap = 0.2
-[tiles, pos] = decompose_image(
-    img, overlap, numTiles, "horizontalZigzag")
-
-from odemis.acq.stitching import register, REGISTER_SHIFT
-updatedTiles = register(tiles, REGISTER_SHIFT)
-
-weaver = MeanWeaver()
-
-for i in range(len(updatedTiles)):
-    weaver.addTile(updatedTiles[i])
-
-image = weaver.getFullImage()
-
-from PIL import Image
-im = Image.fromarray(image)
-im.show()
-
-weaver = CollageWeaver()
-
-for i in range(len(updatedTiles)):
-    weaver.addTile(updatedTiles[i])
-
-image = weaver.getFullImage()
-
-from PIL import Image
-im = Image.fromarray(image)
-im.show()
-"""
 
 if __name__ == '__main__':
     unittest.main()
