@@ -390,7 +390,9 @@ class TileAcqPlugin(Plugin):
                 st_data = []
                 for da_in in da_streams:
                     logging.info("Computing big image out of %d images", len(da_in))
-                    da = stitching.collageWeaver(da_in)
+                    
+                    da_registered = stitching.register(da_in)
+                    da = stitching.weave(da_registered)
                     st_data.append(da)
 
                 exporter = dataio.find_fittest_converter(fn)

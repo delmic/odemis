@@ -33,7 +33,7 @@ from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform, spot, autofocus, FindOverlay
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
-from odemis.acq.drift import CalculateDrift
+from odemis.acq.drift import MeasureShift
 from odemis.dataio import tiff
 from odemis.util import img
 import os
@@ -1481,7 +1481,7 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
                                              crop_res[0] // 2: 3 * crop_res[0] // 2]
                 resampled_image = zoom(cropped_image, zoom=zoom_f)
                 # Apply phase correlation
-                shift_px = CalculateDrift(smaller_image, resampled_image, 10)
+                shift_px = MeasureShift(smaller_image, resampled_image, 10)
                 if logpath:
                     tiff.export(os.path.join(logpath, "hfw_shift_%d_um.tiff" % (cur_hfw * 1e6,)),
                                 [smaller_image, model.DataArray(resampled_image)])
@@ -1628,7 +1628,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
             # Resample the smaller image to fit the resolution of the larger image
             resampled_image = zoom(smaller_image, max_resolution / smaller_image.shape[0])
             # Apply phase correlation
-            shift_px = CalculateDrift(largest_image, resampled_image, 10)
+            shift_px = MeasureShift(largest_image, resampled_image, 10)
             logger.debug("Computed resolution shift of %s px @ res=%d", shift_px, cur_resolution)
 
             if abs(shift_px[0]) > 400 or abs(shift_px[1]) > 100:
@@ -1797,7 +1797,7 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
                                              crop_res[0] // 2: 3 * crop_res[0] // 2]
                 resampled_image = zoom(cropped_image, zoom=zoom_f)
                 # Apply phase correlation
-                shift_px = CalculateDrift(smaller_image, resampled_image, 10)
+                shift_px = MeasureShift(smaller_image, resampled_image, 10)
                 if logpath:
                     tiff.export(os.path.join(logpath, "scale_shift_%f_um.tiff" % (cur_scale,)),
                                 [smaller_image, model.DataArray(resampled_image)])

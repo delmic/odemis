@@ -26,14 +26,14 @@ import unittest
 import math
 
 from odemis.dataio import hdf5
-from odemis.acq.drift import calculation
+from odemis.acq.align.shift import MeasureShift
 from numpy import fft
 from numpy import random
 
 # @unittest.skip("skip")
-class TestDriftCalculation(unittest.TestCase):
+class TestShiftCalculation(unittest.TestCase):
     """
-    Test CalculateDrift
+    Test MeasureShift
     """
     # @unittest.skip("skip")
     def setUp(self):
@@ -94,7 +94,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for input of identical images.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data[0], 1)
+        drift = MeasureShift(self.data[0], self.data[0], 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 1)
 
     # @unittest.skip("skip")
@@ -102,7 +102,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by known drift value.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_drifted[0], 1)
+        drift = MeasureShift(self.data[0], self.data_drifted[0], 1)
         numpy.testing.assert_almost_equal(drift, (-3, 5), 1)
 
     # @unittest.skip("skip")
@@ -110,7 +110,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 10)
+        drift = MeasureShift(self.data[0], self.data_random_drifted, 10)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 1)
 
     # @unittest.skip("skip")
@@ -118,23 +118,23 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value using different precisions.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 1)
+        drift = MeasureShift(self.data[0], self.data_random_drifted, 1)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 0)
 
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 10)
+        drift = MeasureShift(self.data[0], self.data_random_drifted, 10)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 1)
 
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 100)
+        drift = MeasureShift(self.data[0], self.data_random_drifted, 100)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 2)
 
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 1000)
+        drift = MeasureShift(self.data[0], self.data_random_drifted, 1000)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 3)
 
     def test_identical_inputs_noisy(self):
         """
         Tests for input of identical images after noise is added.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_noisy, 1)
+        drift = MeasureShift(self.data[0], self.data_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 1)
 
     # @unittest.skip("skip")
@@ -142,7 +142,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by known drift value after noise is added.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_drifted_noisy, 1)
+        drift = MeasureShift(self.data[0], self.data_drifted_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (-3, 5), 1)
 
     # @unittest.skip("skip")
@@ -150,7 +150,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value after noise is added.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 10)
+        drift = MeasureShift(self.data[0], self.data_random_drifted_noisy, 10)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 1)
 
     # @unittest.skip("skip")
@@ -158,16 +158,16 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value using different precisions after noise is added.
         """
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 1)
+        drift = MeasureShift(self.data[0], self.data_random_drifted_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 0)
 
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 10)
+        drift = MeasureShift(self.data[0], self.data_random_drifted_noisy, 10)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 1)
 
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 100)
+        drift = MeasureShift(self.data[0], self.data_random_drifted_noisy, 100)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 2)
 
-        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 1000)
+        drift = MeasureShift(self.data[0], self.data_random_drifted_noisy, 1000)
         numpy.testing.assert_almost_equal(drift, (self.deltac, self.deltar), 2)
 
     # @unittest.skip("skip")
@@ -175,7 +175,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for input of identical images.
         """
-        drift = calculation.CalculateDrift(self.small_data, self.small_data, 1)
+        drift = MeasureShift(self.small_data, self.small_data, 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 0)
 
     # @unittest.skip("skip")
@@ -183,7 +183,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value.
         """
-        drift = calculation.CalculateDrift(self.small_data, self.small_data_random_drifted, 10)
+        drift = MeasureShift(self.small_data, self.small_data_random_drifted, 10)
         numpy.testing.assert_almost_equal(drift, (self.small_deltac, self.small_deltar), 0)
 
     # @unittest.skip("skip")
@@ -191,7 +191,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for input of identical images after noise is added.
         """
-        drift = calculation.CalculateDrift(self.small_data, self.small_data_noisy, 1)
+        drift = MeasureShift(self.small_data, self.small_data_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 0)
 
     # @unittest.skip("skip")
@@ -199,7 +199,7 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value after noise is added.
         """
-        drift = calculation.CalculateDrift(self.small_data, self.small_data_random_drifted_noisy, 10)
+        drift = MeasureShift(self.small_data, self.small_data_random_drifted_noisy, 10)
         numpy.testing.assert_almost_equal(drift, (self.small_deltac, self.small_deltar), 0)
 
 if __name__ == '__main__':
