@@ -100,8 +100,8 @@ class ShiftRegistrar(object):
         self.shift_tile_dep_tiles = []  # N x K list. N: number of tiles, K: number of dep_tiles.
         # Shift between main tile and dependent tiles
 
-        self.px_size = None  # Tuple of 2 floats. (X,Y) pixel size of the current tile
-        self.size = None  # Tuple of 2 floats. (Y,X) shape of the current tile
+        self.px_size = None  # Tuple of 2 ints. (X,Y) pixel size of the current tile in m/px.
+        self.size = None  # Tuple of 2 ints. (Y,X) shape of the current tile in px.
         self.posX = None  # int. Position of the current tile in the grid. (0,0) is the top left, posX
         # increases when moving to the right
         self.posY = None  # int. Y position, increases when moving down.
@@ -353,7 +353,7 @@ class ShiftRegistrar(object):
         """
         Returns the position of the new tile after calculating the shift with the
         neighbor on the left or right
-        xdir: 1 - left, -1 - right
+        xdir: LEFT, RIGHT
         """
         # shift compared to left
         x, y = 0, 0
