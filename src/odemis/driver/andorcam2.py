@@ -603,7 +603,15 @@ class AndorCam2(model.DigitalCamera):
             # recommended one, but higher speeds can be used, given that the voltage
             # is increased. The drawback of higher clock voltage is that it can
             # introduce extra noise.
-            vror_choices = self._getVerticalReadoutRates()
+            try:
+                vror_choices = self._getVerticalReadoutRates()
+            except AndorV2Error as ex:
+                # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
+                if ex.errno == 20991:  # DRV_NOT_SUPPORTED
+                    logging.debug("VSSpeed cannot be set, will not provide control for it")
+                    vror_choices = {None}
+                else:
+                    raise
             if len(vror_choices) > 1:  # Some cameras have just one "choice" => no need
                 vror_choices.add(None)  # means "use recommended rate"
                 self.verticalReadoutRate = model.VAEnumerated(None, vror_choices,

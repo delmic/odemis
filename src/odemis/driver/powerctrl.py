@@ -295,7 +295,7 @@ class PowerControlUnit(model.PowerSupplier):
         """
         ser = serial.Serial(
             port=port,
-            timeout=5  # s
+            timeout=1  # s
         )
 
         # Purge
@@ -309,6 +309,7 @@ class PowerControlUnit(model.PowerSupplier):
                 break
         logging.debug("Nothing left to read, Power Control Unit can safely initialize.")
 
+        ser.timeout = 5  # Sometimes the software-based USB can have some hiccups
         return ser
 
     def _findDevice(self, ports):
