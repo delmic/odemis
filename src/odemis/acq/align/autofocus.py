@@ -109,28 +109,55 @@ def MeasureOpticalFocus(image):
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
-def AcquireNoBackground(ccd, dfbkg=None):
+def AcquireNoBackground(det, dfbkg=None, timeout=None):
     """
     Performs optical acquisition with background subtraction if possible.
     Particularly used in order to eliminate the e-beam source background in the
     Delphi.
-    ccd (model.DigitalCamera): detector from which to acquire an image
+    det (model.Detector): detector from which to acquire an image
     dfbkg (model.DataFlow or None): dataflow of se- or bs- detector to
     start/stop the source. If None, a standard acquisition is performed (without
     background subtraction)
+    timeout (None or 0<float): maximum time to wait
     returns (model.DataArray):
         Image (with subtracted background if requested)
+    raise:
+        IOError: if it timed out
     """
+    # Code based on Dataflow.get(), to support timeout
+    min_time = time.time()  # asap=False
+    is_received = threading.Event()
+    data_shared = [None] # in python2 we need to create a new container object
+
+    def receive_one_image(df, data):
+        if data.metadata.get(model.MD_ACQ_DATE, float("inf")) >= min_time:
+            df.unsubscribe(receive_one_image)
+            data_shared[0] = data
+            is_received.set()
+
     if dfbkg is not None:
-        bg_image = ccd.data.get(asap=False)
+        # acquire background
+        det.data.subscribe(receive_one_image)
+        if not is_received.wait(timeout):
+            det.data.unsubscribe(receive_one_image)
+            raise IOError("No (background) data received after %g s" % (timeout,))
+        bg_image = data_shared[0]
+
+        # acquire with signal
         dfbkg.subscribe(_discard_data)
-        image = ccd.data.get(asap=False)
+        det.data.subscribe(receive_one_image)
+        if not is_received.wait(timeout):
+            det.data.unsubscribe(receive_one_image)
+            raise IOError("No data received after %g s" % (timeout,))
+
         dfbkg.unsubscribe(_discard_data)
-        ret_data = Subtract(image, bg_image)
-        return ret_data
+        return Subtract(data_shared[0], bg_image)
     else:
-        image = ccd.data.get(asap=False)
-        return image
+        det.data.subscribe(receive_one_image)
+        if not is_received.wait(timeout):
+            det.data.unsubscribe(receive_one_image)
+            raise IOError("No data received after %g s" % (timeout,))
+        return data_shared[0]
 
 
 def _discard_data(df, data):
@@ -181,6 +208,9 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
     logging.debug("Starting binary autofocus on detector %s...", detector.name)
 
     try:
+        # Big timeout, most important being that it's shorter than eternity
+        timeout = 3 + 2 * estimateAcquisitionTime(detector, emt)
+
         # use the .depthOfField on detector or emitter as maximum stepsize
         avail_depths = (detector, emt)
         if model.hasVA(emt, "dwellTime"):
@@ -235,13 +265,13 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
         step_factor = 2 ** 7
         if good_focus is not None:
             current_pos = focus.position.value['z']
-            image = AcquireNoBackground(detector, dfbkg)
+            image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_current = Measure(image)
             logging.debug("Focus level at %f is %f", current_pos, fm_current)
             focus_levels[current_pos] = fm_current
 
             focus.moveAbsSync({"z": good_focus})
-            image = AcquireNoBackground(detector, dfbkg)
+            image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_good = Measure(image)
             logging.debug("Focus level at %f is %f", good_focus, fm_good)
             focus_levels[good_focus] = fm_good
@@ -278,7 +308,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             if (not max_reached or last_pos == center) and center in focus_levels:
                 fm_center = focus_levels[center]
             else:
-                image = AcquireNoBackground(detector, dfbkg)
+                image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_center = Measure(image)
                 logging.debug("Focus level (center) at %f is %f", center, fm_center)
                 focus_levels[center] = fm_center
@@ -291,7 +321,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             else:
                 focus.moveAbsSync({"z": right})
                 right = focus.position.value["z"]
-                image = AcquireNoBackground(detector, dfbkg)
+                image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_right = Measure(image)
                 logging.debug("Focus level (right) at %f is %f", right, fm_right)
                 focus_levels[right] = fm_right
@@ -304,7 +334,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             else:
                 focus.moveAbsSync({"z": left})
                 left = focus.position.value["z"]
-                image = AcquireNoBackground(detector, dfbkg)
+                image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_left = Measure(image)
                 logging.debug("Focus level (left) at %f is %f", left, fm_left)
                 focus_levels[left] = fm_left
@@ -378,6 +408,9 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
     logging.debug("Starting exhaustive autofocus on detector %s...", detector.name)
 
     try:
+        # Big timeout, most important being that it's shorter than eternity
+        timeout = 3 + 2 * estimateAcquisitionTime(detector, emt)
+
         # use the .depthOfField on detector or emitter as maximum stepsize
         avail_depths = (detector, emt)
         if model.hasVA(emt, "dwellTime"):
@@ -434,7 +467,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         # expected to be precisely a multiple of the step anyway
         for next_pos in numpy.arange(orig_pos, upper_bound, step):
             focus.moveAbsSync({"z": next_pos})
-            image = AcquireNoBackground(detector, dfbkg)
+            image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
             focus_levels.append(new_fm)
             logging.debug("Focus level at %f is %f", next_pos, new_fm)
@@ -454,7 +487,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         focus.moveAbsSync({"z": orig_pos})
         for next_pos in numpy.arange(orig_pos - step, lower_bound, -step):
             focus.moveAbsSync({"z": next_pos})
-            image = AcquireNoBackground(detector, dfbkg)
+            image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
             focus_levels.append(new_fm)
             logging.debug("Focus level at %f is %f", next_pos, new_fm)
@@ -499,12 +532,37 @@ def _CancelAutoFocus(future):
     return True
 
 
-# TODO: drop steps, which is unused, or use it
-def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
+def estimateAcquisitionTime(detector, scanner=None):
     """
+    Estimate how long one acquisition will take
+    detector (model.DigitalCamera or model.Detector): Detector on which to
+      improve the focus quality
+    scanner (None or model.Emitter): In case of a SED this is the scanner used
+    return (0<float): time in s
+    """
+    # Check if there is a scanner (focusing = SEM)
+    if model.hasVA(scanner, "dwellTime"):
+        et = scanner.dwellTime.value * numpy.prod(scanner.resolution.value)
+    elif model.hasVA(detector, "exposureTime"):
+        et = detector.exposureTime.value
+        # TODO: also add readoutRate * resolution if present
+    else:
+        # Completely random... but we are in a case where probably that's the last
+        # thing the caller will care about.
+        et = 1
+
+    return et
+
+
+# TODO: drop steps, which is unused, or use it
+def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
+    """
+    detector (model.DigitalCamera or model.Detector): Detector on which to
+      improve the focus quality
+    scanner (None or model.Emitter): In case of a SED this is the scanner used
     Estimates overlay procedure duration
     """
-    return steps * exposure_time
+    return steps * estimateAcquisitionTime(detector, scanner)
 
 
 def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None, method=MTD_BINARY):
@@ -531,18 +589,8 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    # Check if the emitter is a scanner (focusing = SEM)
-    if model.hasVA(emt, "dwellTime"):
-        et = emt.dwellTime.value * numpy.prod(emt.resolution.value)
-    elif model.hasVA(detector, "exposureTime"):
-        et = detector.exposureTime.value
-    else:
-        # Completely random... but we are in a case where probably that's the last
-        # thing the caller will care about.
-        et = 1
-
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateAutoFocusTime(et))
+                                end=est_start + estimateAutoFocusTime(detector, emt))
     f._autofocus_state = RUNNING
     f._autofocus_lock = threading.Lock()
     f.task_canceller = _CancelAutoFocus
@@ -592,18 +640,11 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
 
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    detector = detectors[0]
-    if model.hasVA(detector, "exposureTime"):
-        et = detector.exposureTime.value
-    else:
-        # Completely random... but we are in a case where probably that's the last
-        # thing the caller will care about.
-        et = 1
-
+    et = estimateAutoFocusTime(detectors[0], None)
     # 1 time / grating + 1 time / extra detector
     cnts = len(spectrograph.axes["grating"].choices) + (len(detectors) - 1)
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + cnts * estimateAutoFocusTime(et))
+                                end=est_start + cnts * et)
     f.task_canceller = _CancelAutoFocusSpectrometer
     # Extra info for the canceller
     f._autofocus_state = RUNNING
