@@ -53,6 +53,7 @@ class CollageWeaver(object):
         """
         # Merge the correction metadata inside each image (to keep the rest of the
         # code simple)
+        tile = model.DataArray(tile, tile.metadata.copy())
         img.mergeMetadata(tile.metadata)
         self.tiles.append(tile)
 
@@ -62,7 +63,6 @@ class CollageWeaver(object):
         """
 
         tiles = self.tiles
-        tiles = [model.DataArray(t, t.metadata.copy()) for t in tiles]
 
         # Compute the bounding box of each tile and the global bounding box
 
@@ -140,6 +140,7 @@ class MeanWeaver(object):
     def addTile(self, tile):
         # Merge the correction metadata inside each image (to keep the rest of the
         # code simple)
+        tile = model.DataArray(tile, tile.metadata.copy())
         img.mergeMetadata(tile.metadata)
         self.tiles.append(tile)
 
@@ -148,7 +149,6 @@ class MeanWeaver(object):
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
         """
         tiles = self.tiles
-        tiles = [model.DataArray(t, t.metadata.copy()) for t in tiles]
 
         # Compute the bounding box of each tile and the global bounding box
 
