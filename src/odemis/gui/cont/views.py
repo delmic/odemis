@@ -23,15 +23,20 @@ This file is part of Odemis.
 from __future__ import division
 
 import logging
-from odemis.acq.stream import EMStream
+import numpy
+import wx
+import copy
+
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
 from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
-from odemis.model import MD_PIXEL_SIZE
-import wx
+from odemis.util import limit_invocation
+from odemis.model import MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS
+from odemis.gui.util.img import insert_tile_to_image, merge_screen
+import odemis.acq.stream as acqstream
 
 
 class ViewPortController(object):
@@ -285,22 +290,73 @@ class ViewPortController(object):
 
         logging.debug("Failed to find any view compatible with stream %s", stream.name.value)
 
+OVV_DIMENSION = (0.02, 0.02)  # m
 
 class OverviewController(object):
-    """ Small class to connect stage history and overview canvas together """
+    """ Class to connect stage history and overview canvas together and to control the overview image  """
 
-    def __init__(self, tab_data, overview_canvas):
-
+    def __init__(self, main_data, tab_data, overview_canvas, m_view):
         self._data_model = tab_data
-        self.overview_canvas = overview_canvas
+        self.canvas = overview_canvas
+        self.m_view = m_view
+        self.main_data = main_data
+
+        self.curr_s = None
 
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
             tab_data.main.chamberState.subscribe(self._on_chamber_state)
+            tab_data.streams.subscribe(self._on_current_stream)
+
+        # Global overview image (Delphi)
+        overview_stream = None
+        if main_data.overview_ccd:
+            # Overview camera can be RGB => in that case len(shape) == 4
+            if len(main_data.overview_ccd.shape) == 4:
+                overview_stream = acqstream.RGBCameraStream("Overview", main_data.overview_ccd,
+                                                            main_data.overview_ccd.data, None)
+            else:
+                overview_stream = acqstream.BrightfieldStream("Overview", main_data.overview_ccd,
+                                                              main_data.overview_ccd.data, None)
+            self.m_view.addStream(overview_stream)
+            # TODO: add it to self.tab_data_model.streams?
+
+        # Built-up overview image
+        # Initialize the size of the ovv image with the stage size if the stage is small (< 5cm),
+        # otherwise fall back to OVV_DIMENSION
+        ax_x = self.main_data.stage.axes["x"]
+        ax_y = self.main_data.stage.axes["y"]
+        if (hasattr(ax_x, "range") and hasattr(ax_y, "range")):
+            max_x = ax_x.range[1] - ax_x.range[0]
+            max_y = ax_y.range[1] - ax_y.range[0]
+            if max_x < 0.05 and max_y < 0.05:
+                ovv_shape = (2 * int(max_y / self.m_view.mpp.value),
+                             2 * int(max_x / self.m_view.mpp.value), 3)
+            else:
+                ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
+                             int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
+        else:
+            ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
+                         int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
+
+        self.ovv_im = DataArray(numpy.zeros(ovv_shape, dtype=numpy.uint8))
+        self.ovv_im.metadata[MD_DIMS] = "YXC"
+        self.ovv_im.metadata[MD_PIXEL_SIZE] = (self.m_view.mpp.value, self.m_view.mpp.value)
+        self.ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
+
+        # Initialize individual ovv images for optical and sem stream
+        self.im_opt = copy.deepcopy(self.ovv_im)
+        self.im_sem = copy.deepcopy(self.ovv_im)
+
+        # Add stream to view
+        self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im)
+        self.m_view.addStream(self.upd_stream)
 
     def on_stage_pos_change(self, p_pos):
-        """ Store the new position in the overview history when the stage moves """
+        """ Store the new position in the overview history when the stage moves,
+        update the overview image """
 
+        # History
         p_size = self.calc_stream_size()
         p_center = (p_pos['x'], p_pos['y'])
         stage_history = self._data_model.stage_history.value
@@ -317,6 +373,31 @@ class OverviewController(object):
         stage_history.append((p_center, p_size))
         self._data_model.stage_history.value = stage_history
 
+        # Update overview image
+        self._update_ovv()
+
+    def _on_current_stream(self, streams):
+        """
+        Called when some VAs affecting the current stream change
+        """
+        # Unsubscribe from previous stream
+        if self.curr_s:
+            self.curr_s.image.unsubscribe(self._onNewImage)
+
+        # Try to get the current stream
+        try:
+            self.curr_s = streams[0]
+        except IndexError:
+            self.curr_s = None
+
+        if self.curr_s:
+            self.curr_s.image.subscribe(self._onNewImage)
+
+    @limit_invocation(1)  # max 1 Hz
+    def _onNewImage(self, _):
+        # update overview whenever the streams change, limited to a frequency of 1 Hz
+        self._update_ovv()
+
     def _on_chamber_state(self, state):
         # We don't wait for CHAMBER_VACUUM, as the optical stream can already
         # be used as soon as the sample is inserted
@@ -325,31 +406,47 @@ class OverviewController(object):
             # sample have probably nothing in common with this new sample
             self._data_model.stage_history.value = self._data_model.stage_history.value[-1:]
 
+    def _update_ovv(self):
+        """ Update the overview image with the currently active stream. """
+        if self.curr_s and self.curr_s.image.value is not None:
+            s = self.curr_s
+            img = s.image.value
+            if isinstance(s, acqstream.OpticalStream):
+                self.im_opt = insert_tile_to_image(img, self.im_opt)
+            elif isinstance(s, acqstream.EMStream):
+                self.im_sem = insert_tile_to_image(img, self.im_opt)
+            else:
+                logging.info("%s not added to overview image as it's not optical nor EM", s)
+
+            # Merge optical and sem overview images
+            self.ovv_im = merge_screen(self.im_opt, self.im_sem)
+
+            # Update display
+            self.upd_stream.update(self.ovv_im)
+            self.canvas.fit_view_to_content()
+
     def calc_stream_size(self):
         """ Calculate the physical size of the current view """
 
         p_size = None
-
-        # Calculate the stream size if the the ebeam is active
+        # Calculate the stream size (by using the latest stream used)
         for strm in self._data_model.streams.value:
-            if strm.is_active and isinstance(strm, EMStream):
-                image = strm.image.value
-                if image is not None:
-                    pixel_size = image.metadata.get(MD_PIXEL_SIZE, None)
-                    if pixel_size is not None:
-                        x, y, _ = image.shape
-                        p_size = (x * pixel_size[0], y * pixel_size[1])
-
-                        # TODO: tracking doesn't work, since the  pixel size
-                        # might not be updated before `track_hfw_history` is
-                        # called
-
-                        # for view in self._tab_data_model.views.value:
-                        #     if strm in view.stream_tree:
-                        #         view.mpp.subscribe(self.track_hfw_history)
-                        #         break
-
-                        break
+            image = strm.image.value
+            if image is not None:
+                try:
+                    pixel_size = image.metadata[MD_PIXEL_SIZE]
+                    x, y, _ = image.shape
+                    p_size = (x * pixel_size[0], y * pixel_size[1])
+                    break
+                except KeyError:
+                    pass
+        if p_size is None:
+            if self.main_data.ebeam:
+                # fallback to using the SEM FoV (if no stream has any image)
+                p_size = (self.main_data.ebeam.shape[0] * self.main_data.ebeam.pixelSize.value[0],
+                          self.main_data.ebeam.shape[1] * self.main_data.ebeam.pixelSize.value[1])
+            else:
+                p_size = (5, 5)
         return p_size
 
 
