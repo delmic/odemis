@@ -34,7 +34,8 @@ from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
-    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream, RGBStream
+    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
+    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -280,22 +281,11 @@ class SecomStreamsTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Special overview button selection
-        self.overview_controller = viewcont.OverviewController(tab_data,
-                                                               panel.vp_overview_sem.canvas)
-        ovv = self.panel.vp_overview_sem.microscope_view
-        if main_data.overview_ccd:
-            # Overview camera can be RGB => in that case len(shape) == 4
-            if len(main_data.overview_ccd.shape) == 4:
-                overview_stream = acqstream.RGBCameraStream("Overview", main_data.overview_ccd,
-                                                            main_data.overview_ccd.data, None)
-            else:
-                overview_stream = acqstream.BrightfieldStream("Overview", main_data.overview_ccd,
-                                                              main_data.overview_ccd.data, None)
+        self.overview_controller = viewcont.OverviewController(main_data, tab_data,
+                                                               panel.vp_overview_sem.canvas,
+                                                               self.panel.vp_overview_sem.microscope_view,
+                                                               )
 
-            ovv.addStream(overview_stream)
-            # TODO: add it to self.tab_data_model.streams?
-            # In any case, to support displaying Overview in the normal 2x2
-            # views we'd need to have a special Overview class
 
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
@@ -477,7 +467,7 @@ class SecomStreamsTab(Tab):
                 "cls": guimod.OverviewView,
                 "name": "Overview",
                 "stage": main_data.stage,
-                "stream_classes": (RGBCameraStream, BrightfieldStream),
+                "stream_classes": (RGBUpdatableStream, RGBCameraStream, BrightfieldStream),
             }
 
         # Add connection to SEM hFoV if possible (on SEM-only views)

@@ -35,6 +35,7 @@ from odemis.gui.comp.overlay.base import Label
 from odemis.util import intersect, fluo, conversion, polar, img, units
 import time
 import wx
+import copy
 
 import odemis.acq.stream as acqstream
 import odemis.gui.img as guiimg
@@ -2098,3 +2099,107 @@ def wxImageScaleKeepRatio(im, size, quality=wx.IMAGE_QUALITY_NORMAL):
     sim.Resize(size, lt, 0, 0, 0)
 
     return sim
+
+
+def insert_tile_to_image(tile, ovv):
+    """ 
+    Inserts a tile into a larger (overview) image. The entire tile is inserted into the
+    corresponding part of the ovv and the previous content at this part of the ovv is
+    deleted. If the tile reaches beyond the borders of the ovv, it is cropped.
+    tile: 3D DataArray (RGB or RGBA) with MD_PIXEL_SIZE and MD_POS metadata
+    ovv: 3D DataArray (RGB or RGBA) with MD_PIXEL_SIZE metadata
+    Returns 3D DataArray with the same shape as tile (updated ovv)
+    """
+    # TODO: use cairo to insert images. Not required for current specification, but
+    # 'blend_screen' mode insertion might be necessary to overlay multiple optical images
+    # in future implementations.
+
+    # Tile parameters
+    tile_pos_m = tile.metadata[model.MD_POS]
+    tile_mpp = tile.metadata[model.MD_PIXEL_SIZE]
+    x, y, c = tile.shape
+    tile_size_m = (x * tile_mpp[0], y * tile_mpp[1])
+
+    # Ovv parameters
+    ovv_mpp = ovv.metadata[model.MD_PIXEL_SIZE]
+    ovv_sz = ovv.shape[1], ovv.shape[0]
+
+    # Tile size, pos in ovv image (px)
+    tile_sz_px = (int(tile_size_m[0] / ovv_mpp[0]), int(tile_size_m[1] / ovv_mpp[1]), c)
+    tile_pos_px = (int(tile_pos_m[0] / ovv_mpp[0]), int(tile_pos_m[1] / ovv_mpp[1]))
+    # Change origin of coordinates from center of the image to top left of ovv image,
+    # the position indicates the top left part of the tile, not its center.
+    pos_top_left = (int(tile_pos_px[0] + ovv_sz[0] / 2 - tile_sz_px[0] / 2),
+                    int(ovv_sz[1] / 2 - tile_pos_px[1] - tile_sz_px[1] / 2))
+
+    # Crop tile on edges of overview image
+    if pos_top_left[0] + tile_sz_px[0] > ovv_sz[0]:
+        diff_x2 = pos_top_left[0] + tile_sz_px[0] - ovv_sz[0]
+        x_right = tile_sz_px[0] - diff_x2
+    else:
+        diff_x2 = 0
+        x_right = tile_sz_px[0]
+
+    if pos_top_left[0] < 0:
+        diff_x = -pos_top_left[0]
+        pos_top_left = (0, pos_top_left[1])
+    else:
+        diff_x = 0
+
+    if pos_top_left[1] + tile_sz_px[1] > ovv_sz[1]:
+        diff_y2 = pos_top_left[1] + tile_sz_px[1] - ovv_sz[1]
+        y_right = tile_sz_px[1] - diff_y2
+    else:
+        diff_y2 = 0
+        y_right = tile_sz_px[1]
+
+    if pos_top_left[1] < 0:
+        diff_y = -pos_top_left[1]
+        pos_top_left = (pos_top_left[0], 0)
+    else:
+        diff_y = 0
+
+    ovv[pos_top_left[1]: pos_top_left[1] + tile_sz_px[1] - diff_y - diff_y2,
+        pos_top_left[0]: pos_top_left[0] + tile_sz_px[0] - diff_x - diff_x2] = \
+        img.rescale_hq(tile, (tile_sz_px[1], tile_sz_px[0], c))[diff_y:y_right, diff_x:x_right]
+    return ovv
+
+def merge_screen(im, background):
+    """ 
+    Merges two images (im and background) into one using the "screen" operator:
+    f(xA,xB) = xA + xB − xA·xB (with values between 0 and 1, with each channel independent)
+    im, background: DataArray with im.shape = background.shape (either RGB or RGBA)
+    returns RGB DataArray (of the same shape as im)
+    """
+    assert im.shape == background.shape, "Images have different shapes."
+    if im.shape[-1] != 3 and im.shape[-1] != 4:
+        raise ValueError("Ovv images have an invalid number of channels: %d" % (im.shape[-1]))
+
+    md = im.metadata.copy()
+    md["dc_keepalpha"] = True
+    im = format_rgba_darray(im, 255)  # convert to BGRA
+    im = model.DataArray(im, md)
+    background = format_rgba_darray(background, 255)
+
+    height, width, _ = im.shape
+    buffer_size = (width, height)
+    buffer_top_left = (0, 0)
+    buffer_scale = (1, 1)
+
+    # Combine images
+    surface = cairo.ImageSurface.create_for_data(
+        background, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
+    ctx = cairo.Context(surface)
+
+    draw_image(ctx, im, buffer_top_left, buffer_top_left, buffer_scale,
+               buffer_size, 1, blend_mode=BLEND_SCREEN)
+
+    # Convert back to RGB
+    rgb = numpy.empty((im.shape[0], im.shape[1], 3), dtype=numpy.uint8)
+    rgb[:, :, 0] = background[:, :, 2]
+    rgb[:, :, 1] = background[:, :, 1]
+    rgb[:, :, 2] = background[:, :, 0]
+    rgb = model.DataArray(rgb, md)
+
+    return rgb
+
