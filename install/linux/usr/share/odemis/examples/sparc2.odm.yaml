@@ -16,7 +16,7 @@ SPARC2: {
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 "Power Control Unit": {
@@ -32,7 +32,7 @@ SPARC2: {
             "CL PMT control unit": 0,
             "Camera": 3,
             "Spectral Camera": 3,
-            "Spectrograph": 70, # SR-193 needs a looong time to initialise
+            "Spectrograph": 90, # SR-193 needs a looong time to initialise
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
@@ -83,7 +83,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Camera", "Spectral Camera", "Spectrometer"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI1/AI9 (differential)
@@ -105,7 +105,7 @@ SPARC2: {
     role: null,
     init: {
         channel: 0,
-        limits: [3, 0], # V, with contrast reversed
+        limits: [-2.5, 2.5], # V, with contrast reversed
     },
 }
 
@@ -116,7 +116,7 @@ SPARC2: {
     init: {
         port: "/dev/ttyPMT*",
         prot_time: 0.0002,  # s
-        prot_curr: 50.e-6,  # A
+        prot_curr: 30.e-6,  # A
     }
 }
 
@@ -185,7 +185,7 @@ SPARC2: {
         },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 "Spectrograph focus": {
@@ -195,18 +195,22 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 "Spec CCD Flipper": {
-    class: actuator.MultiplexActuator,
+    class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
     children: {"rx": "Spectrograph"},
     init: {
-        axes_map: {"rx": "flip-out"},
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera"],
+            1.5707963267948966: ["Spectral Camera", "Spectrometer"],
+        },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -217,7 +221,7 @@ SPARC2: {
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 "Optical Path Properties": {
@@ -235,7 +239,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera"]
+    affects: ["Camera", "Spectral Camera", "Spectrometer"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -262,13 +266,14 @@ SPARC2: {
     role: "lens-mover",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "l1"}
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
     },
     metadata: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.0226112848} # m
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -283,7 +288,7 @@ SPARC2: {
             -0.048192: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -298,7 +303,7 @@ SPARC2: {
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -309,11 +314,11 @@ SPARC2: {
     init: {
         axis_name: "cl-sel",
         positions: {
-            0.00123453: "on",
-            0.0388107: "off"
+            0.003: ["CL Detector"],
+            0.01: ["Spec CCD Flipper"]
         },
     },
-    affects: ["Camera", "Spectral Camera", "CL Detector"],
+    affects: ["Camera", "Spectral Camera", "CL Detector", "Spectrometer"],
 }
 
 "CL Filter Wheel": {
@@ -328,7 +333,7 @@ SPARC2: {
             0: [420.e-9, 460.e-9],        # 1
             0.785398: [500.e-9, 550.e-9], # 2
             1.570796: "polariser",        # 3
-            3.9269908: "pass-through",    # 5
+            3.9269908: "pass-through",    # 6
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
@@ -337,6 +342,7 @@ SPARC2: {
 
 # Controller for moving the 'Redux' stage
 # DIP must be configured with address 4 (= 0010000)
+# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {
     class: tmcm.TMCLController,
     role: "mirror",
@@ -361,20 +367,8 @@ SPARC2: {
     role: "mirror-xy",
     children: {"orig": "Mirror Actuators"},
     init: {
-        axes: ["s", "l"], # mapped respectively to X, Y
+        axes: ["s", "l"], # mapped respectively to X, Y (swap to mirror axes)
         rotation: 1.04719755, # rad (= 60°)
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }
-
-# Controller for moving the 'Deltabot' stage
-# "Mirror Actuators": {
-#     class: tmcm.TMCLController,
-#     role: mirror,
-#     init: {
-#         port: "/dev/fake",
-#         axes: ["a", "b", "c"],
-#         ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-#         refproc: "Standard",
-#     },
-#}
