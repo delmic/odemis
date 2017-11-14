@@ -60,19 +60,7 @@ class RGBStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
-        # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
-        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
-            raw = [raw.getData()]
-        else:
-            raw = [raw]
-
-        # Check it's RGB
-        for d in raw:
-            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
-            ci = dims.find("C")  # -1 if not found
-            if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
-                raise ValueError("Data must be RGB(A)")
-
+        raw = self._clean_raw(raw)
         super(RGBStream, self).__init__(name, raw)
 
     def _init_projection_vas(self):
@@ -85,6 +73,24 @@ class RGBStream(StaticStream):
             TODO remove this function when all the streams become projectionless
         '''
         pass
+
+    def _clean_raw(self, raw):
+        '''
+        Returns cleaned raw data or raises error if raw is not RGB(A) 
+        '''
+        # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
+        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
+            raw = [raw.getData()]
+        else:
+            raw = [raw]
+
+        # Check it's RGB
+        for d in raw:
+            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+            ci = dims.find("C")  # -1 if not found
+            if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
+                raise ValueError("Data must be RGB(A)")
+        return raw
 
 
 class Static2DStream(StaticStream):
@@ -934,4 +940,46 @@ class StaticSpectrumStream(StaticStream):
         called when spectrumBandwidth is changed
         """
         self._updateHistogram()
+        self._shouldUpdateImage()
+
+# TODO: It would make sense to inherit from RGBStream, however, it relies on
+# DataProjection, and currently the DataProjection doesn't support .raw being
+# updated. So we need to use the "old" way of directly computing the projection,
+# as for the live streams. Eventually, when DataProjection supports updated .raw,
+# we could simplify/merge the two stream classes.
+
+class RGBUpdatableStream(StaticStream):
+    """ 
+    Similar to RGBStream, but contains an update function that allows to modify the
+    raw data.
+    """
+
+    def __init__(self, name, raw):
+        raw = self._clean_raw(raw)
+        super(RGBUpdatableStream, self).__init__(name, raw)
+
+    def _clean_raw(self, raw):
+        '''
+        Returns cleaned raw data or raises error if raw is not RGB(A) 
+        '''
+        # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
+        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
+            raw = [raw.getData()]
+        else:
+            raw = [raw]
+
+        # Check it's RGB
+        for d in raw:
+            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+            ci = dims.find("C")  # -1 if not found
+            if not (dims in ("CYX", "YXC") and d.shape[ci] in (3, 4)):
+                raise ValueError("Data must be RGB(A)")
+        return raw
+
+    def update(self, raw):
+        """
+        Updates self.raw with new data
+        """
+
+        self.raw = self._clean_raw(raw)
         self._shouldUpdateImage()
