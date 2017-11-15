@@ -1239,13 +1239,15 @@ class StreamBarController(object):
             # Insert it as first, so it's considered the latest stream used
             self._tab_data_model.streams.value.insert(0, stream)
 
+        fview = self._tab_data_model.focussedView.value
+
         if add_to_view is True:
             for v in self._tab_data_model.views.value:
                 if hasattr(v, "stream_classes") and isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
             if add_to_view is False:
-                v = self._tab_data_model.focussedView.value
+                v = fview
             else:
                 v = add_to_view
             if hasattr(v, "stream_classes") and not isinstance(stream, v.stream_classes):
@@ -1266,10 +1268,14 @@ class StreamBarController(object):
         stream.should_update.value = play
 
         if visible:
-            # Hide the stream panel if the stream doesn't match the focused view and the view should
-            # not be ignored.
-            show_panel = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
-            show_panel |= self.ignore_view
+            if self.ignore_view:  # Always show the stream panel
+                show_panel = True
+            elif self.locked_mode:  # (and don't ignore_view)
+                # Show the stream panel iif the view is showing the stream
+                show_panel = stream in fview.getStreams()
+            else:  # (standard = not locked and don't ignore_view)
+                # Show the stream panel iif the view could display the stream
+                show_panel = isinstance(stream, fview.stream_classes)
 
             stream_cont = self._add_stream_cont(stream,
                                                 show_panel,
