@@ -891,7 +891,7 @@ class StreamBarController(object):
         :param ignore_view: (bool) don't change the visible panels on focussed
            view change. If False and not locked, it will show the panels
            compatible with the focussed view. If False and locked, it will show
-           the panels which are seen in the focussed view?
+           the panels which are seen in the focussed view.
         """
 
         self._tab_data_model = tab_data

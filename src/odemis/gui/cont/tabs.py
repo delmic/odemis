@@ -2764,12 +2764,10 @@ class Sparc2AlignTab(Tab):
         self._stream_controller = streamcont.StreamBarController(
             tab_data,
             panel.pnl_streams,
-            locked=True
+            locked=True  # streams cannot be hidden/removed and fixed to the current view
         )
 
-        # Create the views. Note that lens/center views use BrightfieldStream,
-        # instead of the more generic CameraStream, to avoid picking up
-        # CameraCountStream.
+        # Create the views.
         vpv = collections.OrderedDict((
             (self.panel.vp_align_lens,
                 {
@@ -2803,12 +2801,12 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # The streams:
-        # * Alignement/AR CCD (ccd): Used to show CL spot during the alignment
+        # * Alignment/AR CCD (ccd): Used to show CL spot during the alignment
         #   of the lens1, _and_ to show the mirror shadow in center alignment.
-        # * spectrograph line (specline): used for focusing/showing a line in
-        #   lens alignment.
-        # * Alignment/AR CCD (ccd): Same stream, but use in the mirror alignment
-        #   mode.
+        # * spectrograph line (specline): used for focusing/showing a (blue)
+        #   line in lens alignment.
+        # * Alignment/AR CCD (mois): Also show CL spot, but used in the mirror
+        #   alignment mode with MoI and spot intensity info on the panel.
         # * Spectrum count (speccnt): Used to show how much light is received
         #   by the spectrometer over time (30s).
         # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
@@ -2873,8 +2871,10 @@ class Sparc2AlignTab(Tab):
         # TODO: handle if there are two spectrometers with focus (but for now,
         # there is no such system)
         if ccd_focuser:
-            # Add a stream to see the focus, and the slit for lens alignment
-            speclines = acqstream.CameraStream(
+            # Add a stream to see the focus, and the slit for lens alignment.
+            # As it is a BrightfieldStream, it will turn on the emitter when
+            # active.
+            speclines = acqstream.BrightfieldStream(
                                 "Spectrograph line",
                                 main_data.ccd,
                                 main_data.ccd.data,
@@ -2937,8 +2937,8 @@ class Sparc2AlignTab(Tab):
 
         self._moi_stream = None
         if main_data.ccd:
-            # The "MoI" stream is actually a standard stream, with extra
-            # entries at the bottom of the stream panel showing the moment of inertia
+            # The "MoI" stream is actually a standard stream, with extra entries
+            # at the bottom of the stream panel showing the moment of inertia
             # and spot intensity.
             mois = acqstream.CameraStream(
                                 "Alignement CCD for mirror",
@@ -3340,12 +3340,12 @@ class Sparc2AlignTab(Tab):
                 # TODO: just run the standard autofocus procedure instead?
                 return
 
+            # Go to the special focus mode (=> close the slit & turn on the lamp)
             fopm = main.opm.setPath(opath)
 
             btn.SetLabel("Cancel")
             self._stream_controller.pauseStreams()
 
-            # Go to the special focus mode (=> close the slit & turn on the lamp)
             bl = main.brightlight
             bl.power.value = bl.power.range[1]
             if s:
