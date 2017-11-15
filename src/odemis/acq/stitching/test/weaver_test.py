@@ -28,7 +28,8 @@ import os
 import random
 
 from odemis.acq.stitching import CollageWeaver, MeanWeaver
-from odemis.dataio import hdf5
+from odemis.dataio import find_fittest_converter
+from odemis.util.img import ensure2DImage
 
 from stitching_test import decompose_image
 import odemis
@@ -36,10 +37,9 @@ import odemis
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Find path for test images
-IMG_PATH = os.path.dirname(odemis.__file__) + "/driver/"
-IMGS = [IMG_PATH + "songbird-sim-sem.h5"]
-
-img = hdf5.read_data(IMGS[0])[0][0][0][0]
+IMG_PATH = os.path.dirname(odemis.__file__)
+IMGS = [IMG_PATH + "/driver/songbird-sim-sem.h5",
+        IMG_PATH + "/acq/align/test/images/Slice69_stretched.tif"]
 
 # @unittest.skip("skip")
 
@@ -102,20 +102,23 @@ class TestCollageWeaver(unittest.TestCase):
 
         numTiles = [2, 3, 4]
         overlap = [0.4]
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            data = conv.read_data(img)[0]
+            img = ensure2DImage(data)
+            for n in numTiles:
+                for o in overlap:
+                    [tiles, _] = decompose_image(
+                        img, o, n, "horizontalZigzag", False)
 
-        for n in numTiles:
-            for o in overlap:
-                [tiles, _] = decompose_image(
-                    img, o, n, "horizontalZigzag", False)
+                    weaver = CollageWeaver()
+                    for t in tiles:
+                        weaver.addTile(t)
 
-                weaver = CollageWeaver()
-                for t in tiles:
-                    weaver.addTile(t)
+                    sz = len(weaver.getFullImage())
+                    w = weaver.getFullImage()
 
-                sz = len(weaver.getFullImage())
-                w = weaver.getFullImage()
-
-                numpy.testing.assert_array_almost_equal(w, img[:sz, :sz], decimal=1)
+                    numpy.testing.assert_array_almost_equal(w, img[:sz, :sz], decimal=1)
 
 
 # @unittest.skip("skip")
@@ -178,19 +181,24 @@ class TestMeanWeaver(unittest.TestCase):
         numTiles = [2, 3, 4]
         overlap = [0.4]
 
-        for n in numTiles:
-            for o in overlap:
-                [tiles, _] = decompose_image(
-                    img, o, n, "horizontalZigzag", False)
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            data = conv.read_data(img)[0]
+            img = ensure2DImage(data)
 
-                weaver = MeanWeaver()
-                for t in tiles:
-                    weaver.addTile(t)
+            for n in numTiles:
+                for o in overlap:
+                    [tiles, _] = decompose_image(
+                        img, o, n, "horizontalZigzag", False)
 
-                sz = len(weaver.getFullImage())
-                w = weaver.getFullImage()
+                    weaver = MeanWeaver()
+                    for t in tiles:
+                        weaver.addTile(t)
 
-                numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
+                    sz = len(weaver.getFullImage())
+                    w = weaver.getFullImage()
+
+                    numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
 
     def test_synthetic_perfect_overlap(self):
         """

@@ -23,7 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import unittest
 from odemis.acq.stitching import register, weave, REGISTER_IDENTITY, REGISTER_SHIFT, WEAVER_COLLAGE, WEAVER_MEAN
 from odemis import model
-from odemis.dataio import hdf5
+from odemis.dataio import find_fittest_converter
+from odemis.util.img import ensure2DImage
 import os
 import random
 import copy
@@ -31,9 +32,9 @@ import numpy
 import odemis
 
 # Find path for test images
-IMG_PATH = os.path.dirname(odemis.__file__) + "/driver/"
-IMGS = [IMG_PATH + "songbird-sim-sem.h5"]
-img = hdf5.read_data(IMGS[0])[0][0][0][0]
+IMG_PATH = os.path.dirname(odemis.__file__)
+IMGS = [IMG_PATH + "/driver/songbird-sim-sem.h5",
+        IMG_PATH + "/acq/align/test/images/Slice69_stretched.tif"]
 
 
 class TestRegister(unittest.TestCase):
@@ -43,33 +44,41 @@ class TestRegister(unittest.TestCase):
         """
         Test register wrapper function
         """
-        num = 2
-        o = 0.2
-        a = "horizontalZigzag"
-        [tiles, pos] = decompose_image(img, o, num, a)
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            data = conv.read_data(img)[0]
+            img = ensure2DImage(data)
+            num = 2
+            o = 0.2
+            a = "horizontalZigzag"
+            [tiles, pos] = decompose_image(img, o, num, a)
 
-        upd_tiles = register(tiles, method=REGISTER_SHIFT)
+            upd_tiles = register(tiles, method=REGISTER_SHIFT)
 
-        for i in range(len(upd_tiles)):
-            calculatedPosition = upd_tiles[i].metadata[model.MD_POS]
-            self.assertAlmostEqual(calculatedPosition[0], pos[i][0], places=1)
-            self.assertAlmostEqual(calculatedPosition[1], pos[i][1], places=1)
+            for i in range(len(upd_tiles)):
+                calculatedPosition = upd_tiles[i].metadata[model.MD_POS]
+                self.assertAlmostEqual(calculatedPosition[0], pos[i][0], places=1)
+                self.assertAlmostEqual(calculatedPosition[1], pos[i][1], places=1)
 
     def test_real_images_identity(self):
         """
         Test register wrapper function
         """
-        num = 2
-        o = 0.2
-        a = "horizontalZigzag"
-        [tiles, pos] = decompose_image(img, o, num, a, False)
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            data = conv.read_data(img)[0]
+            img = ensure2DImage(data)
+            num = 2
+            o = 0.2
+            a = "horizontalZigzag"
+            [tiles, pos] = decompose_image(img, o, num, a, False)
 
-        upd_tiles = register(tiles, method=REGISTER_IDENTITY)
+            upd_tiles = register(tiles, method=REGISTER_IDENTITY)
 
-        for i in range(len(upd_tiles)):
-            calculatedPosition = upd_tiles[i].metadata[model.MD_POS]
-            self.assertAlmostEqual(calculatedPosition[0], pos[i][0], places=1)
-            self.assertAlmostEqual(calculatedPosition[1], pos[i][1], places=1)
+            for i in range(len(upd_tiles)):
+                calculatedPosition = upd_tiles[i].metadata[model.MD_POS]
+                self.assertAlmostEqual(calculatedPosition[0], pos[i][0], places=1)
+                self.assertAlmostEqual(calculatedPosition[1], pos[i][1], places=1)
 
     # @unittest.skip("skip")
     def test_dep_tiles(self):
@@ -77,82 +86,86 @@ class TestRegister(unittest.TestCase):
         Test register wrapper function, when dependent tiles are present
         """
         # Test on 3 layers of the same image create by decompose_image
-        num = 3
-        o = 0.3
-        a = "horizontalZigzag"
-        [tiles, pos] = decompose_image(img, o, num, a)
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            data = conv.read_data(img)[0]
+            img = ensure2DImage(data)
+            num = 3
+            o = 0.3
+            a = "horizontalZigzag"
+            [tiles, pos] = decompose_image(img, o, num, a)
 
-        all_tiles = []
-        for i in range(len(pos)):
-            all_tiles.append((tiles[i], tiles[i], tiles[i]))
-        all_tiles_new = register(all_tiles)
+            all_tiles = []
+            for i in range(len(pos)):
+                all_tiles.append((tiles[i], tiles[i], tiles[i]))
+            all_tiles_new = register(all_tiles)
 
-        for i in range(len(pos)):
-            tile_pos = all_tiles_new[i][0].metadata[model.MD_POS]
-            dep_pos = (all_tiles_new[i][1].metadata[model.MD_POS],
-                       all_tiles_new[i][2].metadata[model.MD_POS])
+            for i in range(len(pos)):
+                tile_pos = all_tiles_new[i][0].metadata[model.MD_POS]
+                dep_pos = (all_tiles_new[i][1].metadata[model.MD_POS],
+                           all_tiles_new[i][2].metadata[model.MD_POS])
 
-            diff1 = abs(tile_pos[0] - pos[i][0])
-            diff2 = abs(tile_pos[1] - pos[i][1])
-            # allow difference of 1% of tile
-            px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
-            margin = 0.01 * tiles[i].shape[0] * px_size[0]
-            self.assertLessEqual(diff1, margin,
-                                 "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                 " %f != %f" % (tile_pos[0], pos[i][0]))
-            self.assertLessEqual(diff2, margin,
-                                 "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                 " %f != %f" % (tile_pos[1], pos[i][1]))
-
-            for j in range(2):
-                diff1 = abs(dep_pos[j][0] - pos[i][0])
+                diff1 = abs(tile_pos[0] - pos[i][0])
+                diff2 = abs(tile_pos[1] - pos[i][1])
+                # allow difference of 1% of tile
+                px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
+                margin = 0.01 * tiles[i].shape[0] * px_size[0]
                 self.assertLessEqual(diff1, margin,
                                      "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                     " %f != %f" % (dep_pos[j][0], pos[i][0]))
-
-                diff2 = abs(dep_pos[j][1] - pos[i][1])
+                                     " %f != %f" % (tile_pos[0], pos[i][0]))
                 self.assertLessEqual(diff2, margin,
                                      "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                     " %f != %f" % (dep_pos[j][1], pos[i][1]))
+                                     " %f != %f" % (tile_pos[1], pos[i][1]))
 
-        # Test with shifted dependent tiles
-        [tiles, pos] = decompose_image(img, o, num, a)
+                for j in range(2):
+                    diff1 = abs(dep_pos[j][0] - pos[i][0])
+                    self.assertLessEqual(diff1, margin,
+                                         "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
+                                         " %f != %f" % (dep_pos[j][0], pos[i][0]))
 
-        # Add shift
-        dep_tiles = copy.deepcopy(tiles)
-        rnd1 = [random.randrange(-1000, 1000) for _ in range(len(pos))]
-        rnd2 = [random.randrange(-1000, 1000) for _ in range(len(pos))]
-        for i in range(len(dep_tiles)):
-            p = (dep_tiles[i].metadata[model.MD_POS][0] + rnd1[i] * px_size[0],
-                 dep_tiles[i].metadata[model.MD_POS][1] + rnd2[i] * px_size[1])
-            dep_tiles[i].metadata[model.MD_POS] = p
+                    diff2 = abs(dep_pos[j][1] - pos[i][1])
+                    self.assertLessEqual(diff2, margin,
+                                         "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
+                                         " %f != %f" % (dep_pos[j][1], pos[i][1]))
 
-        all_tiles = []
-        for i in range(len(pos)):
-            all_tiles.append((tiles[i], dep_tiles[i], dep_tiles[i]))
-        all_tiles_new = register(all_tiles)
+            # Test with shifted dependent tiles
+            [tiles, pos] = decompose_image(img, o, num, a)
 
-        for i in range(len(pos)):
-            tile_pos = all_tiles_new[i][0].metadata[model.MD_POS]
-            dep_pos = (all_tiles_new[i][1].metadata[model.MD_POS],
-                       all_tiles_new[i][2].metadata[model.MD_POS])
+            # Add shift
+            dep_tiles = copy.deepcopy(tiles)
+            rnd1 = [random.randrange(-1000, 1000) for _ in range(len(pos))]
+            rnd2 = [random.randrange(-1000, 1000) for _ in range(len(pos))]
+            for i in range(len(dep_tiles)):
+                p = (dep_tiles[i].metadata[model.MD_POS][0] + rnd1[i] * px_size[0],
+                     dep_tiles[i].metadata[model.MD_POS][1] + rnd2[i] * px_size[1])
+                dep_tiles[i].metadata[model.MD_POS] = p
 
-            diff1 = abs(tile_pos[0] - pos[i][0])
-            diff2 = abs(tile_pos[1] - pos[i][1])
-            # allow difference of 1% of tile
-            px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
-            margin1 = 0.01 * tiles[i].shape[0] * px_size[0]
-            margin2 = 0.01 * tiles[i].shape[1] * px_size[1]
-            self.assertLessEqual(diff1, margin1,
-                                 "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                 " %f != %f" % (tile_pos[0], pos[i][0]))
-            self.assertLessEqual(diff2, margin2,
-                                 "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
-                                 " %f != %f" % (tile_pos[1], pos[i][1]))
+            all_tiles = []
+            for i in range(len(pos)):
+                all_tiles.append((tiles[i], dep_tiles[i], dep_tiles[i]))
+            all_tiles_new = register(all_tiles)
 
-            for j in range(2):
-                self.assertAlmostEqual(dep_pos[j][0], tile_pos[0] + rnd1[i] * px_size[0])
-                self.assertAlmostEqual(dep_pos[j][1], tile_pos[1] + rnd2[i] * px_size[1])
+            for i in range(len(pos)):
+                tile_pos = all_tiles_new[i][0].metadata[model.MD_POS]
+                dep_pos = (all_tiles_new[i][1].metadata[model.MD_POS],
+                           all_tiles_new[i][2].metadata[model.MD_POS])
+
+                diff1 = abs(tile_pos[0] - pos[i][0])
+                diff2 = abs(tile_pos[1] - pos[i][1])
+                # allow difference of 1% of tile
+                px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
+                margin1 = 0.01 * tiles[i].shape[0] * px_size[0]
+                margin2 = 0.01 * tiles[i].shape[1] * px_size[1]
+                self.assertLessEqual(diff1, margin1,
+                                     "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
+                                     " %f != %f" % (tile_pos[0], pos[i][0]))
+                self.assertLessEqual(diff2, margin2,
+                                     "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
+                                     " %f != %f" % (tile_pos[1], pos[i][1]))
+
+                for j in range(2):
+                    self.assertAlmostEqual(dep_pos[j][0], tile_pos[0] + rnd1[i] * px_size[0])
+                    self.assertAlmostEqual(dep_pos[j][1], tile_pos[1] + rnd2[i] * px_size[1])
 
 class TestWeave(unittest.TestCase):
 
@@ -201,17 +214,21 @@ class TestWeave(unittest.TestCase):
         Test on decomposed image
         """
 
-        numTiles = [2, 3, 4]
-        overlap = [0.4]
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            data = conv.read_data(img)[0]
+            img = ensure2DImage(data)
+            numTiles = [2, 3, 4]
+            overlap = [0.2, 0.3, 0.4]
 
-        for n in numTiles:
-            for o in overlap:
-                [tiles, _] = decompose_image(
-                    img, o, n, "horizontalZigzag", False)
+            for n in numTiles:
+                for o in overlap:
+                    [tiles, _] = decompose_image(
+                        img, o, n, "horizontalZigzag", False)
 
-                w = weave(tiles, WEAVER_MEAN)
-                sz = len(w)
-                numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
+                    w = weave(tiles, WEAVER_MEAN)
+                    sz = len(w)
+                    numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
 
 
 def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shift=True):
