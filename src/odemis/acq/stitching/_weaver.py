@@ -92,8 +92,8 @@ class CollageWeaver(object):
         # that's the origin (Y is max as Y is inverted)
         glt = gbbx_phy[0], gbbx_phy[3]
         for bp, t in zip(tbbx_phy, tiles):
-            lt = (int((bp[0] - glt[0]) / pxs[0]),
-                  int(-(bp[3] - glt[1]) / pxs[1]))
+            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
+                  int(round(-(bp[3] - glt[1]) / pxs[1])))
             w = t.shape[-1], t.shape[-2]
             bbx = (lt[0], lt[1],
                    lt[0] + w[0], lt[1] + w[1])
@@ -178,8 +178,8 @@ class MeanWeaver(object):
         # that's the origin (Y is max as Y is inverted)
         glt = gbbx_phy[0], gbbx_phy[3]
         for bp, t in zip(tbbx_phy, tiles):
-            lt = (int((bp[0] - glt[0]) / pxs[0]),
-                  int(-(bp[3] - glt[1]) / pxs[1]))
+            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
+                  int(round(-(bp[3] - glt[1]) / pxs[1])))
             w = t.shape[-1], t.shape[-2]
             bbx = (lt[0], lt[1],
                    lt[0] + w[0], lt[1] + w[1])
