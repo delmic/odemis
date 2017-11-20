@@ -31,13 +31,14 @@
 from __future__ import division
 
 import logging
-import wx
-import wx.lib.buttons as wxbuttons
 import math
-
+import numpy
 from odemis.gui import FG_COLOUR_HIGHLIGHT
-from odemis.gui.util.img import wxImageScaleKeepRatio
 from odemis.gui import img
+from odemis.gui.util.img import wxImageScaleKeepRatio
+import wx
+
+import wx.lib.buttons as wxbuttons
 
 
 def resize_bmp(btn_size, bmp):
@@ -68,20 +69,16 @@ def darken_image(image, mltp=0.5):
 
     """
 
+    # We need to store the alpha channel, because setting new data automatically
+    # deletes the current alpha data.
     if image.HasAlpha():
         alpha = image.GetAlphaData()
     else:
         alpha = None
 
-    data = [ord(d) for d in list(image.GetData())]
-
-    for i in range(0, len(data), 3):
-        pixel = (data[i], data[i + 1], data[i + 2])
-        pixel = tuple([int(p * mltp) for p in pixel])
-        for x in range(3):
-            data[i + x] = pixel[x]
-
-    image.SetData(''.join([chr(d) for d in data]))
+    data = numpy.frombuffer(image.GetDataBuffer(), dtype='uint8')
+    numpy.multiply(data, mltp, out=data, casting="unsafe")
+    image.SetData(data.tostring())
 
     if alpha:
         image.SetAlphaData(alpha)
