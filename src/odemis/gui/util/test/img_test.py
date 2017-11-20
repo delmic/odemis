@@ -32,7 +32,7 @@ import wx
 from odemis import model, dataio
 from odemis.acq import stream
 from odemis.gui.util import img
-from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray
+from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile_to_image, merge_screen
 from odemis.dataio import tiff
 
 
@@ -600,6 +600,91 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
         self.assertEqual(exp_data_rgb[0].shape[:2], exp_data_gray[0].shape)  # all exported images must have the same shape
 
+
+class TestOverviewFunctions(unittest.TestCase):
+    """ Tests the util functions used in building up the overview image """
+
+    def test_image_on_ovv(self):
+        """ Tests insert_tile_to_image function """
+
+        # Insert tile into image
+        ovv_im = model.DataArray(numpy.zeros((11, 11, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        tile = model.DataArray(255 * numpy.ones((3, 3, 3), dtype=numpy.uint8))
+        tile.metadata[model.MD_POS] = (-3, 3)
+        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        ovv_im_new = insert_tile_to_image(tile, ovv_im)
+        # rectangle with edges (-4,4), (-2,4), (-4,2), (-4,2) should be white now
+        # (6,6) is the center, so this corresponds to a rectangle with top left at (2,2) (=(1,1) when counting from 0)
+        numpy.testing.assert_array_equal(ovv_im_new[1:4, 1:4, :], tile)
+        numpy.testing.assert_array_equal(ovv_im_new[5:, 5:, :], numpy.zeros((6, 6, 3)))
+
+        # Test tile that goes beyond the borders of the image top left
+        ovv_im = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        tile = model.DataArray(255 * numpy.ones((2, 2, 3), dtype=numpy.uint8))
+        tile.metadata[model.MD_POS] = (-3, 3)  # top-left corner, one pixel diagonal to start of ovv
+        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        ovv_im_new = insert_tile_to_image(tile, ovv_im)
+        self.assertEqual(ovv_im_new[0][0][0], 255)  # first pixel white (all three dims), rest black
+        numpy.testing.assert_array_equal(ovv_im.flatten()[3:],
+                                         numpy.zeros(len(ovv_im.flatten()[3:])))
+
+        # Test tile that goes beyond the borders of the image bottom right
+        ovv_im = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        tile = model.DataArray(255 * numpy.ones((2, 2, 3), dtype=numpy.uint8))
+        tile.metadata[model.MD_POS] = (3, -3)  # bottom-right corner, one pixel diagonal to end of ovv
+        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        ovv_im_new = insert_tile_to_image(tile, ovv_im)
+        self.assertEqual(ovv_im_new[4][4][0], 255)
+        numpy.testing.assert_array_equal(ovv_im.flatten()[:-3],
+                                         numpy.zeros(len(ovv_im.flatten()[3:])))
+
+        # Test tile that lies completely outside the overview image
+        ovv_im = model.DataArray(numpy.zeros((5, 5, 3), dtype=numpy.uint8))
+        ovv_im.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        tile = model.DataArray(255 * numpy.ones((2, 2, 3), dtype=numpy.uint8))
+        tile.metadata[model.MD_POS] = (10, -10)
+        tile.metadata[model.MD_PIXEL_SIZE] = (1, 1)
+        ovv_im_new = insert_tile_to_image(tile, ovv_im)
+        numpy.testing.assert_array_equal(ovv_im_new, numpy.zeros((5, 5, 3)))
+
+    def test_merge(self):
+        """ Tests merge_screen function """
+        # Test if overview image changes after inserted optical and sem image
+        md = {
+            model.MD_DESCRIPTION: "green dye",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+            model.MD_POS: (13.7e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1,  # s
+            model.MD_IN_WL: (600e-9, 620e-9),  # m
+            model.MD_OUT_WL: (620e-9, 650e-9),  # m
+            model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
+            model.MD_ROTATION: 0.1,  # rad
+            model.MD_SHEAR: 0,
+            model.MD_DIMS: "YXC"
+        }
+
+        opt = model.DataArray(200 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
+        sem = model.DataArray(10 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
+        merged = merge_screen(opt, sem)
+        # Test if at least one element of ovv image is different from original images
+        # self.assertEqual(merged.shape, (10, 10, 3))
+        self.assertTrue(numpy.all(merged >= opt))
+        self.assertTrue(numpy.any(merged != opt))
+        self.assertTrue(numpy.all(merged >= sem))
+        self.assertTrue(numpy.any(merged != sem))
+
+        # Two very bright images should give a complete white
+        opt = model.DataArray(250 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
+        sem = model.DataArray(250 * numpy.ones((10, 10, 3), dtype=numpy.uint8), md)
+        merged = merge_screen(opt, sem)
+        # Test if at least one element of ovv image is different from original images
+        # self.assertEqual(merged.shape, (10, 10, 3))
+        self.assertTrue(numpy.all(merged == 255))
 
 if __name__ == "__main__":
     unittest.main()

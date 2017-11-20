@@ -3023,5 +3023,47 @@ class StaticStreamsTestCase(unittest.TestCase):
         # get the old function back to the class
         tiff.DataArrayShadowPyramidalTIFF.getTile = tiff.DataArrayShadowPyramidalTIFF._getTileOldSZ
 
+    def test_rgb_updatable_stream(self):
+        """Test RGBUpdatableStream """
+
+        # Test update function
+        md = {
+            model.MD_DESCRIPTION: "green dye",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+            model.MD_POS: (13.7e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1,  # s
+            model.MD_IN_WL: (600e-9, 620e-9),  # m
+            model.MD_OUT_WL: (620e-9, 650e-9),  # m
+            model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
+            model.MD_ROTATION: 0.1,  # rad
+            model.MD_SHEAR: 0,
+            model.MD_DIMS: "YXC"
+        }
+
+        # Initial raw data
+        da = model.DataArray(numpy.zeros((512, 1024, 3), dtype=numpy.uint8), md)
+        strUpd = stream.RGBUpdatableStream("Test stream", da)
+        numpy.testing.assert_array_equal(da, strUpd.raw[0])
+
+        # Update with RGB
+        new_da = model.DataArray(numpy.ones((512, 1024, 3), dtype=numpy.uint8), md)
+        strUpd.update(new_da)
+        numpy.testing.assert_array_equal(new_da, strUpd.raw[0])
+
+        # Update with RGBA
+        new_da = model.DataArray(numpy.ones((512, 1024, 4), dtype=numpy.uint8), md)
+        strUpd.update(new_da)
+        numpy.testing.assert_array_equal(new_da, strUpd.raw[0])
+
+        # Pass wrong data shape and check if ValueError is raised
+        new_da = model.DataArray(numpy.ones((512, 1024, 2), dtype=numpy.uint8), md)
+        self.assertRaises(ValueError, strUpd.update, new_da)
+
+        md[model.MD_DIMS] = "YXCT"
+        new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
+        self.assertRaises(ValueError, strUpd.update, new_da)
+
 if __name__ == "__main__":
     unittest.main()
