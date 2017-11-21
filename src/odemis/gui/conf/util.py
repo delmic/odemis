@@ -859,7 +859,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         accuracy = conf.get('accuracy', 3)
 
         # TODO: Might need size=(100, 16)!!
-        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
+        cbconf = {}
+        if hasattr(va, "choices") and isinstance(va.choices, collections.Iterable):
+            # Enumerated VA => don't allow entering other values
+            cbconf["style"] = wx.CB_READONLY
+        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf=cbconf)
 
         # Set choices
         if choices_si_prefix:
@@ -885,7 +889,19 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 logging.debug("No existing label found for value %s in combobox ctrl %d",
                               value, id(ctrl))
                 # entering value as free text
-                txt = readable_str(value, u, sig=acc)
+                try:
+                    if (isinstance(value, numbers.Real) or
+                        (isinstance(value, collections.Sequence) and
+                         len(value) > 0 and
+                         isinstance(value[0], numbers.Real))
+                       ):
+                        txt = readable_str(value, u, sig=acc)
+                    else:
+                        txt = "%s" % value
+                except (TypeError, ValueError):
+                    logging.warning("Failed to convert VA to string", exc_info=True)
+                    txt = "%r" % value
+
                 ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
@@ -998,8 +1014,9 @@ def create_axis_entry(container, name, comp, conf=None):
                                       events=wx.EVT_COMMAND_ENTER)
 
     elif control_type == odemis.gui.CONTROL_COMBO:
-        # FIXME: should be readonly, but it fails with GetInsertionPoint (wx.CB_READONLY)
-        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
+        # TODO: make it read-only _only_ if the axes have a .choices (but for now
+        # that's always the case for combo-boxes anyway)
+        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf={"style": wx.CB_READONLY})
 
         choices_fmt = format_axis_choices(name, ad)
 

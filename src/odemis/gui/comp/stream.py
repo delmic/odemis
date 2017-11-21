@@ -910,12 +910,20 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_combobox_control(self, label_text, value=None, conf=None):
-        """ Add a combobox control to manipulate a hardware setting """
+        """ Add a combo box to the hardware settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display *NOT USED ATM*
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
-
+        cbstyle = wx.NO_BORDER | wx.TE_PROCESS_ENTER | conf.pop("style", 0)
         value_ctrl = ComboBox(self._panel, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
-                              style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf if conf else {})
+                              style=cbstyle, **conf)
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
