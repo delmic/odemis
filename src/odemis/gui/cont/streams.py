@@ -36,7 +36,7 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
-from odemis.gui.conf.data import get_hw_settings_config, get_local_vas
+from odemis.gui.conf.data import get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
@@ -76,8 +76,6 @@ class StreamController(object):
 
         self.stream = stream
         self.stream_bar = stream_bar
-
-        self.hw_settings_config = get_hw_settings_config(tab_data_model.main.role)
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
@@ -191,13 +189,14 @@ class StreamController(object):
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
         # Get the emitter and detector configurations if they exist
+        hw_settings = self.tab_data_model.main.hw_settings_config
         if self.stream.emitter:
-            emitter_conf = self.hw_settings_config.get(self.stream.emitter.role, {})
+            emitter_conf = hw_settings.get(self.stream.emitter.role, {})
         else:
             emitter_conf = {}
 
         if self.stream.detector:
-            detector_conf = self.hw_settings_config.get(self.stream.detector.role, {})
+            detector_conf = hw_settings.get(self.stream.detector.role, {})
         else:
             detector_conf = {}
 
@@ -896,8 +895,8 @@ class StreamBarController(object):
 
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
-
         self._stream_bar = stream_bar
+
         self.stream_controllers = []
 
         # This attribute indicates whether live data is processed by the streams
@@ -1128,7 +1127,7 @@ class StreamBarController(object):
             self._main_data_model.light_filter,
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
-            hwdetvas=get_local_vas(detector),
+            hwdetvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
             emtvas={"power"}  # TODO: more VAs? Eg: frequency
         )
         self._ensure_power_non_null(s)
@@ -1895,7 +1894,7 @@ class SparcStreamsController(StreamBarController):
     def _add_sem_stream(self, name, detector, **kwargs):
 
         # Only put some local VAs, the rest should be global on the SE stream
-        emtvas = get_local_vas(self._main_data_model.ebeam)
+        emtvas = get_local_vas(self._main_data_model.ebeam, self._main_data_model.hw_settings_config)
         emtvas &= {"resolution", "dwellTime", "scale"}
 
         s = acqstream.SEMStream(
@@ -1905,7 +1904,7 @@ class SparcStreamsController(StreamBarController):
             self._main_data_model.ebeam,
             focuser=self._main_data_model.ebeam_focus,
             emtvas=emtvas,
-            detvas=get_local_vas(detector),
+            detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
         )
 
         # If the detector already handles brightness and contrast, don't do it by default
@@ -1993,7 +1992,7 @@ class SparcStreamsController(StreamBarController):
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             # TODO: add a focuser for the SPARCv2?
-            detvas=get_local_vas(main_data.ccd),
+            detvas=get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config),
         )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if model.hasVA(ar_stream, "detBinning"):
@@ -2025,7 +2024,7 @@ class SparcStreamsController(StreamBarController):
             focuser=self._main_data_model.ebeam_focus,
             opm=self._main_data_model.opm,
             emtvas={"dwellTime"},
-            detvas=get_local_vas(main_data.cld),
+            detvas=get_local_vas(main_data.cld, self._main_data_model.hw_settings_config),
         )
 
         # Special "safety" feature to avoid having a too high gain at start
@@ -2081,8 +2080,8 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
-            # emtvas=get_local_vas(main_data.ebeam), # no need
-            detvas=get_local_vas(detector),
+            # emtvas=get_local_vas(main_data.ebeam, self._main_data_model.hw_settings_config), # no need
+            detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
         )
 
         # Create the equivalent MDStream
@@ -2123,7 +2122,7 @@ class SparcStreamsController(StreamBarController):
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             emtvas={"dwellTime"},
-            detvas=get_local_vas(main_data.monochromator),
+            detvas=get_local_vas(main_data.monochromator, self._main_data_model.hw_settings_config),
         )
 
         # Create the equivalent MDStream
