@@ -330,8 +330,8 @@ class OverviewController(object):
             max_x = ax_x.range[1] - ax_x.range[0]
             max_y = ax_y.range[1] - ax_y.range[0]
             if max_x < 0.05 and max_y < 0.05:
-                ovv_shape = (2 * int(max_y / self.m_view.mpp.value),
-                             2 * int(max_x / self.m_view.mpp.value), 3)
+                ovv_shape = (int(max_y / self.m_view.mpp.value),
+                             int(max_x / self.m_view.mpp.value), 3)
             else:
                 ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
                              int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
