@@ -39,7 +39,7 @@ from odemis.model import NotApplicableError
 from odemis.util import fluo
 from odemis.util.conversion import reproduce_typed_value
 from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
-    si_scale_val, readable_time
+    si_scale_val, readable_time, value_to_str
 import re
 import wx
 from wx.lib.pubsub import pub
@@ -553,7 +553,7 @@ def format_axis_choices(name, axis_def):
         except Exception:
             logging.exception("Formatting error for %s", choices)
         if choices_formatted is None:
-            choices_formatted = [(c, utun.readable_str(c, unit=unit, sig=3)) for c in choices]
+            choices_formatted = [(c, readable_str(c, unit=unit, sig=3)) for c in choices]
     else:
         choices_formatted = [(c, u"%s %s" % (choice_to_str(c), unit)) for c in choices]
 
@@ -562,35 +562,6 @@ def format_axis_choices(name, axis_def):
         choices_formatted = sorted(choices_formatted)
 
     return choices_formatted
-
-
-def create_formatted_setter(value_ctrl, val, unit, sig=3, pretty_time=False):
-    """ Create a setting function for the given value control that also formats its value
-
-    Args:
-        value_ctrl (wx.Window): A text control
-        val: The current value of the value control
-        unit: The unit of the value
-        sig: The number of significant digits
-        pretty_time (bool): allow to make a full time display (as in "day, hour, min...")
-    return (callable): a function taking a value, and updating the control with it
-    """
-
-    value_formatter = None
-
-    if pretty_time and isinstance(val, (int, long, float)) and unit == "s":
-        def value_formatter(value):
-            value_ctrl.SetValue(readable_time(value, full=False))
-    elif (isinstance(val, (int, long, float)) or
-          (isinstance(val, collections.Iterable) and
-           len(val) > 0 and
-           isinstance(val[0], (int, long, float))
-          )
-         ):
-        def value_formatter(value, unit=unit):
-            value_ctrl.SetValue(readable_str(value, unit, sig=sig))
-
-    return value_formatter
 
 
 def choice_to_str(choice):
@@ -633,6 +604,7 @@ def str_to_value(text, va):
 
     return new_val
 
+
 def create_setting_entry(container, name, va, hw_comp, conf=None, change_callback=None):
     """ Determine what type on control to use for a setting and have the container create it
 
@@ -674,23 +646,29 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     logging.debug("Adding VA %s", label_text)
     # Create the needed wxPython controls
     if control_type == odemis.gui.CONTROL_READONLY:
-        val = va.value  # only format if it's a number
+        val = va.value
         accuracy = conf.get('accuracy', 3)
-        val_str = readable_str(val, unit, sig=accuracy)
+        val_str = value_to_str(val, unit, accuracy, pretty_time=True)
         lbl_ctrl, value_ctrl = container.add_readonly_field(label_text, val_str)
-        value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy, pretty_time=True)
+
+        def set_ctrl(value, ctrl=value_ctrl, u=unit, acc=accuracy):
+            ctrl.SetValue(value_to_str(value, u, acc, pretty_time=True))
+
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                     va_2_ctrl=value_formatter)
+                                     va_2_ctrl=set_ctrl)
 
     elif control_type == odemis.gui.CONTROL_TEXT:
-        val = va.value  # only format if it's a number
+        val = va.value
         accuracy = conf.get('accuracy', 3)
-        val_str = readable_str(val, unit, sig=accuracy)
+        val_str = value_to_str(val, unit, accuracy)  # No pretty_time, as we don't support reading it back
         lbl_ctrl, value_ctrl = container.add_text_field(label_text, val_str)
-        value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
 
-        # function to retrieve the actual value
+        # To set the value on the control (when the VA is updated)
+        def set_ctrl(value, ctrl=value_ctrl, u=unit, acc=accuracy):
+            ctrl.SetValue(value_to_str(value, u, acc))
+
+        # To retrieve the actual value, which may contain prefix and unit
         def text_get(ctrl=value_ctrl, va=va):
             ctrl_value = ctrl.GetValue()
             va_val = va.value
@@ -703,12 +681,12 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             # if it ends up being the same value as before the VA will
             # not update, so force reformatting it
             if va_val == new_val:
-                value_formatter(va_val)
+                set_ctrl(va_val)
             return new_val
 
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                     va_2_ctrl=value_formatter, ctrl_2_va=text_get,
+                                     va_2_ctrl=set_ctrl, ctrl_2_va=text_get,
                                      events=wx.EVT_TEXT_ENTER)
 
     elif control_type in (odemis.gui.CONTROL_SAVE_FILE, odemis.gui.CONTROL_OPEN_FILE):
@@ -889,19 +867,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 logging.debug("No existing label found for value %s in combobox ctrl %d",
                               value, id(ctrl))
                 # entering value as free text
-                try:
-                    if (isinstance(value, numbers.Real) or
-                        (isinstance(value, collections.Sequence) and
-                         len(value) > 0 and
-                         isinstance(value[0], numbers.Real))
-                       ):
-                        txt = readable_str(value, u, sig=acc)
-                    else:
-                        txt = "%s" % value
-                except (TypeError, ValueError):
-                    logging.warning("Failed to convert VA to string", exc_info=True)
-                    txt = "%r" % value
-
+                txt = value_to_str(value, u, acc)
                 ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
@@ -1038,7 +1004,7 @@ def create_axis_entry(container, name, comp, conf=None):
             else:
                 logging.warning("No existing label found for value %s", value)
                 # entering value as free text
-                txt = readable_str(value, unit)
+                txt = value_to_str(value, unit)
                 ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
