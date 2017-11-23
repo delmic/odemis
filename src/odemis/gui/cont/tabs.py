@@ -698,7 +698,7 @@ class SparcAcquisitionTab(Tab):
         # will be displayed correctly (and not reset the values on next play).
         emtvas = set()
         hwemtvas = set()
-        for vaname in get_local_vas(main_data.ebeam):
+        for vaname in get_local_vas(main_data.ebeam, main_data.hw_settings_config):
             if vaname in ("resolution", "dwellTime", "scale"):
                 emtvas.add(vaname)
             else:
@@ -714,7 +714,7 @@ class SparcAcquisitionTab(Tab):
             hwemtvas=hwemtvas,
             hwdetvas=None,
             emtvas=emtvas,
-            detvas=get_local_vas(main_data.sed),
+            detvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
         )
 
         tab_data.acquisitionStreams.add(sem_stream)  # it should also be saved
@@ -1100,7 +1100,7 @@ class ChamberTab(Tab):
                                                       main_data.ccd, main_data.ccd.data,
                                                       emitter=None,
                                                       focuser=ccd_focuser,
-                                                      detvas=get_local_vas(main_data.ccd))
+                                                      detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config))
             # Make sure image has square pixels and full FoV
             if hasattr(self._ccd_stream, "detBinning"):
                 self._ccd_stream.detBinning.value = (1, 1)
@@ -1969,7 +1969,7 @@ class SecomAlignTab(Tab):
                                                 emitter=None,
                                                 focuser=main_data.focus,
                                                 hwdetvas=hwdetvas,
-                                                detvas=get_local_vas(main_data.ccd),
+                                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                                 forcemd={model.MD_ROTATION: 0,
                                                          model.MD_SHEAR: 0}
                                                 )
@@ -1996,7 +1996,7 @@ class SecomAlignTab(Tab):
                                              main_data.laser_mirror,
                                              focuser=main_data.focus,
                                              hwdetvas=get_local_vas(photod),
-                                             emtvas=get_local_vas(main_data.laser_mirror),
+                                             emtvas=get_local_vas(main_data.laser_mirror, main_data.hw_settings_config),
                                              forcemd={model.MD_ROTATION: 0,
                                                       model.MD_SHEAR: 0}
                                              )
@@ -2029,8 +2029,8 @@ class SecomAlignTab(Tab):
         sem_stream = acqstream.SEMStream("SEM", main_data.sed,
                                          main_data.sed.data,
                                          main_data.ebeam,
-                                         hwdetvas=get_local_vas(main_data.sed),
-                                         hwemtvas=get_local_vas(main_data.ebeam),
+                                         hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
+                                         hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
                                          )
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
@@ -2832,7 +2832,7 @@ class Sparc2AlignTab(Tab):
                                 emitter=None,
                                 # focuser=ccd_focuser, # no focus on right drag, would be too easy to change mistakenly
                                 hwdetvas=hwdetvas,
-                                detvas=get_local_vas(main_data.ccd),
+                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                          model.MD_ROTATION: 0}  # Force the CCD as-is
                                 )
@@ -2870,7 +2870,7 @@ class Sparc2AlignTab(Tab):
                                 main_data.ccd.data,
                                 main_data.brightlight,
                                 focuser=ccd_focuser,
-                                detvas=get_local_vas(main_data.ccd),
+                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),
                                          model.MD_ROTATION: 0}
                                 )
@@ -2936,7 +2936,7 @@ class Sparc2AlignTab(Tab):
                                 main_data.ccd.data,
                                 emitter=None,
                                 hwdetvas=hwdetvas,
-                                detvas=get_local_vas(main_data.ccd),
+                                detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                          model.MD_ROTATION: 0}  # Force the CCD as-is
                                 )
@@ -3011,7 +3011,7 @@ class Sparc2AlignTab(Tab):
                                        fbdet,
                                        fbdet.data,
                                        emitter=None,
-                                       detvas=get_local_vas(fbdet),
+                                       detvas=get_local_vas(fbdet, main_data.hw_settings_config),
                                        )
                 speccnt_spe = self._stream_controller.addStream(speccnts,
                                     add_to_view=self.panel.vp_align_fiber.microscope_view)

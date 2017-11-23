@@ -32,6 +32,7 @@ from odemis.acq import path
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
+from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
 from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
@@ -274,6 +275,8 @@ class MainGUIData(object):
         chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
                           CHAMBER_VACUUM, CHAMBER_VENTING}
         self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
+
+        self.hw_settings_config = get_hw_settings_config(self.role)
 
         # Set to True to request debug info to be displayed
         self.debug = model.BooleanVA(False)

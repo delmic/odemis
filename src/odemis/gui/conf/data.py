@@ -726,26 +726,22 @@ def get_stream_settings_config():
     return STREAM_SETTINGS_CONFIG
 
 
-def get_local_vas(hw_comp, hidden=None):
+def get_local_vas(hw_comp, hw_settings):
     """
     Find all the VAs of a component which are worthy to become local VAs.
 
-    :param hw_comp: (HwComponent)
-    :param hidden: (set) Name of VAs to ignore
+    hw_comp (HwComponent): The component to look at
+    hw_settings (dict): the hardware settings, as received from get_hw_settings_config()
 
     return (set of str): all the names for the given comp
     """
-
-    config = get_hw_settings_config()
-    hidden_vas = HIDDEN_VAS | (hidden or set())
-
     comp_vas = getVAs(hw_comp)
-    config_vas = config.get(hw_comp.role, {}) # OrderedDict or dict
+    config_vas = hw_settings.get(hw_comp.role, {})  # OrderedDict or dict
 
     settings = set()
     for name, va in comp_vas.items():
         # Take all VAs that  would be displayed on the stream panel
-        if name in hidden_vas or va.readonly:
+        if name in HIDDEN_VAS or va.readonly:
             continue
         try:
             ctyp = config_vas[name]["control_type"]
