@@ -315,8 +315,9 @@ class SettingsPanel(wx.Panel):
             conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
+        cbstyle = wx.NO_BORDER | wx.TE_PROCESS_ENTER | conf.pop("style", 0)
         value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
-                              style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf)
+                              style=cbstyle, **conf)
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)

@@ -23,9 +23,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+
 import collections
 import logging
 import math
+import numbers
 import re
 
 
@@ -359,3 +361,33 @@ def readable_time(seconds, full=True):
         ret = u"minus " + ret
 
     return ret
+
+
+def value_to_str(value, unit=None, accuracy=None, pretty_time=False):
+    """
+    Attempt to convert any type of value to the most user-friendly string.
+    value (value)
+    unit (str or None): if value is a number or a sequence of numbers, it will be
+      shown after the value
+    accuracy (0<=int or None): The number of significant figures, if the value
+      is a number of a sequence of numbers.
+    pretty_time (bool): If True, values associated with the "s" unit will be
+      converted to a full time display (as in "day, hour, min...")
+    return (unicode string): user friendly string of the value
+    """
+
+    try:
+        if pretty_time and unit == "s" and isinstance(value, numbers.Real):
+            return readable_time(value, full=False)
+        elif (isinstance(value, numbers.Real) or
+              (isinstance(value, collections.Sequence) and
+               len(value) > 0 and
+               isinstance(value[0], numbers.Real))
+             ):
+            return readable_str(value, unit, sig=accuracy)
+        else:
+            return u"%s" % value
+    except Exception:
+        logging.warning("Failed to convert value to string", exc_info=True)
+        return u"%s" % value
+
