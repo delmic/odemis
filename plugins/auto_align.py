@@ -25,20 +25,22 @@ see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from collections import OrderedDict
+import cv2
 import logging
 import numpy
-from odemis import dataio, model
+from odemis import dataio, model, gui
 from odemis.acq import stream
 from odemis.acq.align import keypoint
+from odemis.acq.stream import OpticalStream, EMStream, CLStream
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main
 from odemis.util import img, limit_invocation
 from odemis.util.conversion import get_img_transformation_md
 import os
+import weakref
 import wx
 
-import cv2
 from odemis.acq.align.keypoint import preprocess
 import odemis.gui.util as guiutil
 import odemis.util.dataio as udataio
@@ -101,6 +103,7 @@ class AlignmentProjection(stream.RGBSpatialProjection):
     def _updateImage(self):
         raw = self.stream.raw[0]
         metadata = self.stream._find_metadata(raw.metadata)
+        raw = img.ensure2DImage(raw)  # Remove extra dimensions (of length 1)
         grayscale_im = preprocess(raw, self._invert, self._flip, self._crop,
                                   self._gaussian_sigma, self._eqhis)
         rgb_im = img.DataArray2RGB(grayscale_im)
@@ -123,6 +126,15 @@ class AutomaticOverlayPlugin(Plugin):
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
+        ("im_ref", {
+            "label": "Reference image",
+            "tooltip": "Change the reference image (left)",
+            # Normally it's automatically a combo-box, but if there is only one
+            # it'll become a read-only text. However the read-only text is not
+            # able to properly show the stream name (for now), so we force it to
+            # always be a combo-box.
+            "control_type": gui.CONTROL_COMBO,
+        }),
         ("blur_ref", {
             "label": "Blur reference",
             "tooltip": "Blur window size for the reference SEM image (left)",
@@ -161,6 +173,8 @@ class AutomaticOverlayPlugin(Plugin):
         super(AutomaticOverlayPlugin, self).__init__(microscope, main_app)
         self.addMenu("Overlay/Add && Align EM...", self.start)
 
+        self._dlg = None
+
         # Projections of the reference and new data
         self._rem_proj = None
         self._nem_proj = None
@@ -171,6 +185,8 @@ class AutomaticOverlayPlugin(Plugin):
         self._rem_kp = None
         self._rem_mkp = None
 
+        # im_ref.choices contains the streams and their name
+        self.im_ref = model.VAEnumerated(None, choices={None: ""})
         self.blur_ref = model.IntContinuous(2, range=(0, 20), unit="px")
         self.blur = model.IntContinuous(5, range=(0, 20), unit="px")
         self.crop_top = model.IntContinuous(0, range=(0, 200), unit="px")
@@ -210,11 +226,13 @@ class AutomaticOverlayPlugin(Plugin):
 #         self.patchSize.subscribe(self._on_new_stream)
 
     def start(self):
-        sem_stream = self._get_sem_stream()
-        if not sem_stream:
+        self.im_ref.unsubscribe(self._on_im_ref)
+        try:
+            self._update_im_ref()
+        except ValueError:
             box = wx.MessageDialog(self.main_app.main_frame,
-                                   "No EM stream found to use as reference.",
-                                   "Failed to find EM stream", wx.OK | wx.ICON_STOP)
+                                   "No spatial stream found to use as reference.",
+                                   "Failed to find spatial stream", wx.OK | wx.ICON_STOP)
             box.ShowModal()
             box.Destroy()
             return
@@ -226,6 +244,7 @@ class AutomaticOverlayPlugin(Plugin):
         dlg = AlignmentAcquisitionDialog(self, "Automatic image alignment",
                                          text="Adjust the parameters so that the two images looks similar\n"
                                               "and the key-points are detected at similar areas.")
+        self._dlg = dlg
 
         # removing the play overlay from the viewports
         dlg.viewport_l.canvas.remove_view_overlay(dlg.viewport_l.canvas.play_overlay)
@@ -233,7 +252,7 @@ class AutomaticOverlayPlugin(Plugin):
         dlg.viewport_r.canvas.remove_view_overlay(dlg.viewport_r.canvas.play_overlay)
         dlg.viewport_r.canvas.fit_view_to_next_image = True
 
-        rem_projection = AlignmentProjection(sem_stream)
+        rem_projection = AlignmentProjection(self.im_ref.value())
         self._rem_proj = rem_projection
 
         nem_projection = AlignmentProjection(tem_stream)
@@ -243,34 +262,64 @@ class AutomaticOverlayPlugin(Plugin):
         self._on_new_stream()
         dlg.addSettings(self, self.vaconf)
 
+        # Note: normally we are supposed to give stream (and the view will
+        # automatically create a projection), not directly a projection. However
+        # we want a special projection, and it works (excepted for a warning).
         dlg.addStream(rem_projection, 0)
         dlg.addStream(nem_projection, 1)
+
+        self.im_ref.subscribe(self._on_im_ref)
 
         dlg.addButton("Align", self.align, face_colour='blue')
         dlg.addButton("Cancel", None)
         dlg.pnl_gauge.Hide()
         dlg.ShowModal()
 
-    def _get_sem_stream(self):
+    def _update_im_ref(self):
         """
-        Finds the SEM stream in the acquisition tab
-        return (SEMStream or None): None if not found
+        Find all the compatible streams, fill-up the choices in im_ref, and
+        update the value, while trying to keep the same as before if possible.
+        raise ValueError: if they are no compatible streams.
         """
         tab = self.main_app.main_data.getTabByName("analysis")
         tab_data = tab.tab_data_model
-        fview = tab_data.focussedView.value
 
-        # Try first on the view (in case there are more than one SEM stream)
-        for s in fview.stream_tree.get_streams_by_type(stream.EMStream):
-            return s
+        # Any greyscale spatial stream should be compatible. For now we consider
+        # that it is either EM, Optical or CLi (which is an approximation).
+        s_compatible = [s for s in tab_data.streams.value if isinstance(s, (OpticalStream, EMStream, CLStream))]
+        # Put the EMStreams first, as it'd typically be the preferred stream to use
+        s_compatible.sort(key=lambda s: isinstance(s, EMStream), reverse=True)
 
-        # If no SEM stream there, fallback to all the streams
-        for s in tab_data.streams.value:
-            if isinstance(s, stream.EMStream):
-                return s
+        if not s_compatible:
+            raise ValueError("No spatial stream found")
 
-        logging.warning("No SEM stream found")
-        return None
+        # The names of the steams should be a set, but to force the order of
+        # display, we need to pass an OrderedDict.
+        s_names = OrderedDict((weakref.ref(s), s.name.value) for s in s_compatible)
+
+        prev_stream_ref = self.im_ref.value
+        self.im_ref._choices = s_names  # To avoid checking against the current value
+        # Leave the previous value if still available
+        if prev_stream_ref not in s_names:
+            self.im_ref.value = next(iter(s_names))
+
+    @call_in_wx_main
+    def _on_im_ref(self, s_ref):
+        """
+        Called when a new stream is selected for the reference image
+        """
+        # remove "all" streams from the left view (actually there is only one)
+        for s in self._dlg.microscope_view.getStreams():
+            logging.info("removing stream %s", s)
+            self._dlg.microscope_view.removeStream(s)
+
+        # Create a new projection and put it in the canvas
+        self._dlg.viewport_l.canvas.fit_view_to_next_image = True
+        rem_projection = AlignmentProjection(s_ref())
+        self._rem_proj = rem_projection
+
+        self._on_ref_stream()
+        self._dlg.addStream(rem_projection, 0)
 
     def _ensureGrayscale(self, data):
         ''' Ensures that the image is grayscale. If the image is an grayscale RGB,
@@ -352,20 +401,21 @@ class AutomaticOverlayPlugin(Plugin):
         flip = (self.flip_x.value, self.flip_y.value)
         tem_img = preprocess(self._nem_proj.raw[0], self.invert.value, flip, crop,
                              self.blur.value, True)
-        sem_img = preprocess(self._rem_proj.raw[0], False, (False, False), (0, 0, 0, 0),
+        sem_raw = img.ensure2DImage(self._rem_proj.raw[0])
+        sem_img = preprocess(sem_raw, False, (False, False), (0, 0, 0, 0),
                              self.blur_ref.value, True)
         try:
             tmat, _, _, _, _ = keypoint.FindTransform(tem_img, sem_img)
+
+            # get the metadata corresponding to the transformation
+            transf_md = get_img_transformation_md(tmat, tem_img, sem_img)
+            logging.debug("Computed transformation metadata: %s", transf_md)
         except ValueError as ex:
             box = wx.MessageDialog(dlg, str(ex), "Failed to align images",
                                    wx.OK | wx.ICON_STOP)
             box.ShowModal()
             box.Destroy()
             return
-
-        # get the metadata corresponding to the transformation
-        transf_md = get_img_transformation_md(tmat, tem_img, sem_img)
-        logging.debug("Computed transformation metadata: %s", transf_md)
 
         # Shear is really big => something is gone wrong
         if abs(transf_md[model.MD_SHEAR]) > 1:
@@ -379,7 +429,10 @@ class AutomaticOverlayPlugin(Plugin):
             logging.warning("Pixel size is %s, which means the alignment is probably wrong",
                             pxs)
             transf_md[model.MD_PIXEL_SIZE] = (pxs[0], pxs[0])
-        raw = preprocess(self._nem_proj.stream.raw[0], False, flip, crop, 0, False)
+
+        # The actual image inserted is not inverted and not blurred, but we still
+        # want it flipped and cropped.
+        raw = preprocess(self._nem_proj.raw[0], False, flip, crop, 0, False)
         raw.metadata.update(transf_md)
 
         # Add a new stream panel (removable)
@@ -409,7 +462,8 @@ class AutomaticOverlayPlugin(Plugin):
             flip = (self.flip_x.value, self.flip_y.value)
             tem_img = preprocess(self._nem_proj.raw[0], self.invert.value, flip, crop,
                                  self.blur.value, True)
-            sem_img = preprocess(self._rem_proj.raw[0], False, (False, False), (0, 0, 0, 0),
+            sem_raw = img.ensure2DImage(self._rem_proj.raw[0])
+            sem_img = preprocess(sem_raw, False, (False, False), (0, 0, 0, 0),
                                  self.blur_ref.value, True)
             try:
                 tmat, self._nem_kp, self._rem_kp, self._nem_mkp, self._rem_mkp = \
