@@ -27,7 +27,7 @@ import itertools
 import logging
 import math
 import numpy
-from odemis import dataio, model, util
+from odemis import dataio, model, util, gui
 import odemis
 from odemis.acq import stream
 from odemis.gui.conf import get_acqui_conf
@@ -498,6 +498,7 @@ class CLAcqPlugin(Plugin):
             "scale": "log",
         }),
         ("binning", {
+            "control_type": gui.CONTROL_RADIO,
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
@@ -517,6 +518,9 @@ class CLAcqPlugin(Plugin):
 
         self.exposureTime = main_data.ccd.exposureTime
         self.binning = main_data.ccd.binning
+        # Trick to pass the component (ccd to binning_1d_from_2d())
+        self.vaconf["binning"]["choices"] = (lambda cp, va, cf:
+                       gui.conf.util.binning_1d_from_2d(main_data.ccd, va, cf))
         self.xres = model.IntContinuous(10, (1, 1000), unit="px")
         self.yres = model.IntContinuous(10, (1, 1000), unit="px")
         self.stepsize = model.FloatVA(1e-6, unit="m")  # Just to show
