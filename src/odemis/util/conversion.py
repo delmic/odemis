@@ -370,12 +370,24 @@ def get_img_transformation_md(mat, timage, src_img):
     """
     Computes the metadata of the transformations from the transformation matrix
     It is an approximation, as a 3 x 3 matrix cannot be fully represented only
-    with translation, scale, rotation and shear.
-    mat (ndarray of shape 3,3): transformation matrix
+    with translation, scale, rotation and shear (eg, no "keystone" shape possible).
+    mat (ndarray of shape 3,3): transformation matrix (the OpenCV format).
     timage (numpy.array): Transformed image
     src_image (numpy.array): Source image. It should at least contain MD_PIXEL_SIZE
     return (dict str value): metadata with MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_SHEAR.
+    raise ValueError: If the transformation matrix is incorrect
     """
+    # Check the scale is not null (mathematically, it's allowed, meaning that the
+    # other image is just a single point, but it's very unlikely what the user
+    # would want to do, and the rest of the code doesn't deal with this corner
+    # case for now).
+    if mat[0, 0] * mat[1, 1] * mat[2, 2] == 0:
+        raise ValueError("Transformation matrix has null scale")
+
+    # TODO: for now we use rather convoluted (and reliable) way to convert from
+    # the transformation matrix to the values, passing by OpenCV. There should
+    # be a more straightforward mathematical path to achieve the same.
+
     half_size = ((timage.shape[1] / 2, timage.shape[0] / 2))
     img_src_center = ((src_img.shape[1] / 2, src_img.shape[0] / 2))
 
@@ -385,7 +397,6 @@ def get_img_transformation_md(mat, timage, src_img):
         [0.0, 0.0],
         [timage.shape[1], 0.0],
         [0.0, timage.shape[0]],
-        [timage.shape[1], timage.shape[0]]
     ]
     converted_points = cv2.perspectiveTransform(numpy.array([points]), mat)[0]
 

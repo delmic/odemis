@@ -22,16 +22,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import math
+import numpy
 from odemis import model
 from odemis.util import conversion
 from odemis.util.conversion import \
     convert_to_object, \
     reproduce_typed_value, \
-    get_img_transformation_matrix,\
-    get_tile_md_pos
+    get_img_transformation_matrix, \
+    get_tile_md_pos, get_img_transformation_md
 import unittest
-import math
-import numpy
 
 
 class TestConversion(unittest.TestCase):
@@ -200,6 +200,29 @@ class TestConversion(unittest.TestCase):
         with self.assertRaises(ValueError): # MD_PIXEL_SIZE must be present
             mat = get_img_transformation_matrix(md)
 
+    def test_get_img_transformation_md(self):
+        simg = numpy.zeros((512, 512), dtype=numpy.uint8)
+        smd = {
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            model.MD_POS: (-123, 23e-6),
+            model.MD_ROTATION: 0.05,
+            # model.MD_SHEAR : not defined
+        }
+        simg = model.DataArray(simg, smd)
+
+        timg = numpy.zeros((512, 512), dtype=numpy.uint8)
+        timg = model.DataArray(timg)
+
+        # simplest matrix (unity) => same metadata as input
+        mat = numpy.array([[1, 0, 0],
+                           [0, 1, 0],
+                           [0, 0, 1]])
+        omd = get_img_transformation_md(mat, timg, simg)
+        self.assertEqual(omd[model.MD_PIXEL_SIZE], smd[model.MD_PIXEL_SIZE])
+        self.assertEqual(omd[model.MD_POS], smd[model.MD_POS])
+        self.assertAlmostEqual(omd[model.MD_ROTATION], smd[model.MD_ROTATION])
+        self.assertAlmostEqual(omd[model.MD_SHEAR], 0)
+
     def test_get_tile_md_pos(self):
         TILE_SIZE = 256
         BASE_MD_POS = (10e-6, 50e-6)
@@ -275,6 +298,7 @@ class TestConversion(unittest.TestCase):
         numpy.testing.assert_almost_equal(tile_md_pos, [-0.00041236630212, -0.000413347328499])
         tile_md_pos = get_tile_md_pos((1, 1), (TILE_SIZE, TILE_SIZE), tile, origda)
         numpy.testing.assert_almost_equal(tile_md_pos, [0.00065225309200, -0.00051098638647])
+
 
 if __name__ == "__main__":
     unittest.main()
