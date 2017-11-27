@@ -546,6 +546,15 @@ class AndorCam2(model.DigitalCamera):
                                                            setter=self._setTargetTemperature)
             self._setTargetTemperature(ranges[0], force=True)
 
+            try:
+                # Stop cooling on shutdown. That's especially important for
+                # water-cooled cameras in case the user also stops the water-
+                # cooling after stopping Odemis. In such case, cooling down the
+                # sensor could result in over-heating of the camera.
+                self.atcore.SetCoolerMode(0)
+            except AndorV2Error:
+                logging.info("Couldn't change the cooler mode for shutdown", exc_info=True)
+
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # fan speed = ratio to max speed, with max speed by default
             self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
@@ -2272,14 +2281,12 @@ class AndorCam2(model.DigitalCamera):
         if self.handle is not None:
             # TODO for some hardware we need to wait the temperature is above -20°C
             try:
-                # FIXME: not sure if it does anything (with Clara)
-                self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
                 # iXon Ultra: as we force it open, we need to force it close now
                 ct = self.GetCapabilities().CameraType
                 if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
                     self.SetShutter(1, 2, 0, 0)  # mode 2 = close
             except Exception:
-                pass
+                logging.info("Failed to close the shutter", exc_info=True)
 
             logging.debug("Shutting down the camera")
             try:
