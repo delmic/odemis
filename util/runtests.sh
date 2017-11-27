@@ -21,7 +21,7 @@ find "$ODEMIS_SRC" -name "*.py" -a -not -name "*_test.py" -print0 | wc -l --file
 # Not related to tests, but to QA in general: Exceptions usually take only 1 argument
 # So a comma is probably a sign of syntax error and should be replace by a %
 echo "These files might have syntax error when raising an exception:"
-grep -IrE --colour 'raise.*",' --include=*.py "$ODEMIS_SRC"
+grep -IrE --colour 'raise .+".*%.*",' --include=*.py "$ODEMIS_SRC" "$ODEMIS_SRC"/../scripts/ "$ODEMIS_SRC"/../plugins/
 echo "---"
 
 echo "These files are not using division from the future:"
