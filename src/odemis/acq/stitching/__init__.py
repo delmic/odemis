@@ -75,7 +75,7 @@ def register(tiles, method=REGISTER_SHIFT):
             for j, dt in enumerate(dep_tiles):
                 md = copy.deepcopy(dt.metadata)
                 md[model.MD_POS] = registrar.getPositions()[1][i][j]
-                tilesNew.append(model.DataArray(ts, md))
+                tilesNew.append(model.DataArray(dt, md))
             tileUpd = tuple(tilesNew)
 
         else:
