@@ -696,6 +696,7 @@ def draw_image(ctx, im_data, p_im_center, buffer_center, buffer_scale,
 def calculate_raw_ar(data, bg_data):
     """
     Project the AR data to equirectangular
+    return (DataArray of shape phi/theta): phi/theta -> intensity
     """
     # FIXME: This code is a duplicate of part of _project2Polar
     if numpy.prod(data.shape) > (800 * 800):
@@ -735,7 +736,10 @@ def ar_to_export_data(streams, raw=False):
     client_size (wx._core.Size)
     raw (boolean): if True returns raw representation
 
-    returns (model.DataArray)
+    returns (model.DataArray): if raw, returns a 2D array with axes phi/theta ->
+       intensity (equirectangular projection). Otherwise, returns a 3D DataArray
+       corresponding to a greyscale RGBA view of the polar projection, with the
+       axes drawn over it.
     """
     # we expect just one stream
     if len(streams) == 0:
@@ -765,7 +769,7 @@ def ar_to_export_data(streams, raw=False):
             raise LookupError("Stream %s has no data selected" % (s.name.value,))
         wim = format_rgba_darray(sim)
         # image is always centered, fitting the whole canvas, with scale 1
-        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value, None, None)])
+        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value, None, None, {})])
         ar_margin = int(0.2 * sim.shape[0])
         ar_size = sim.shape[0] + ar_margin, sim.shape[1] + ar_margin
 
