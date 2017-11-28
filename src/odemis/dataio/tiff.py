@@ -1896,18 +1896,22 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
         """
-        if isinstance(tiff_info, list):
-            tiff_handle = tiff_info[0]['handle']
-        else:
-            tiff_handle = tiff_info['handle']
         self.tiff_info = tiff_info
+        if isinstance(tiff_info, list):
+            tiff_info0 = tiff_info[0]
+        else:
+            tiff_info0 = tiff_info
+        tiff_file = tiff_info0['handle']
 
-        num_tcols = tiff_handle.GetField(T.TIFFTAG_TILEWIDTH)
-        num_trows = tiff_handle.GetField(T.TIFFTAG_TILELENGTH)
+        num_tcols = tiff_file.GetField(T.TIFFTAG_TILEWIDTH)
+        num_trows = tiff_file.GetField(T.TIFFTAG_TILELENGTH)
         if num_tcols is None or num_trows is None:
             raise ValueError("The image is not tiled")
 
-        sub_ifds = tiff_handle.GetField(T.TIFFTAG_SUBIFD)
+        with tiff_info0['lock']:
+            tiff_file.SetDirectory(tiff_info0['dir_index'])
+            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+
         # add the number of subdirectories, and the main image
         if sub_ifds:
             maxzoom = len(sub_ifds)
