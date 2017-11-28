@@ -992,6 +992,8 @@ def _findImageGroups(das):
     returns (dict int -> list of DataArrays):
         IFD (index) of the first DataArray of a group -> "group" of DataArrays
     """
+    # FIXME: never do it for pyramidal images for now, as we don't support reading
+    # them back?
     # We consider images to be part of the same group if they have:
     # * signs to be an optical image
     # * same shape
@@ -1787,6 +1789,7 @@ def open_data(filename):
     filename = _ensure_fs_encoding(filename)
     return AcquisitionDataTIFF(filename)
 
+
 class DataArrayShadowTIFF(DataArrayShadow):
     """
     This class implements the read of a TIFF file
@@ -1824,10 +1827,6 @@ class DataArrayShadowTIFF(DataArrayShadow):
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
         """
-        if isinstance(tiff_info, list):
-            tiff_handle = tiff_info[0]['handle']
-        else:
-            tiff_handle = tiff_info['handle']
         self.tiff_info = tiff_info
 
         DataArrayShadow.__init__(self, shape, dtype, metadata)
@@ -1839,7 +1838,7 @@ class DataArrayShadowTIFF(DataArrayShadow):
         """
         # if tiff_info is a list, it means that self.content[n]
         # is a DataArrayShadow with multiple images
-        if type(self.tiff_info) is list:
+        if isinstance(self.tiff_info, list):
             return self._readAndMergeImages()
         else:
             image = self._readImage(self.tiff_info)
@@ -1873,7 +1872,7 @@ class DataArrayShadowTIFF(DataArrayShadow):
             imset[tiff_info_item['hdim_index']] = image
 
         return model.DataArray(imset, metadata=self.metadata)
-    
+
 
 class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
     """
@@ -1897,18 +1896,22 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
         dtype (numpy.dtype): The data type
         metadata (dict str->val): The metadata
         """
-        if isinstance(tiff_info, list):
-            tiff_handle = tiff_info[0]['handle']
-        else:
-            tiff_handle = tiff_info['handle']
         self.tiff_info = tiff_info
+        if isinstance(tiff_info, list):
+            tiff_info0 = tiff_info[0]
+        else:
+            tiff_info0 = tiff_info
+        tiff_file = tiff_info0['handle']
 
-        num_tcols = tiff_handle.GetField(T.TIFFTAG_TILEWIDTH)
-        num_trows = tiff_handle.GetField(T.TIFFTAG_TILELENGTH)
+        num_tcols = tiff_file.GetField(T.TIFFTAG_TILEWIDTH)
+        num_trows = tiff_file.GetField(T.TIFFTAG_TILELENGTH)
         if num_tcols is None or num_trows is None:
-            raise RuntimeError("The image is not tiled")
+            raise ValueError("The image is not tiled")
 
-        sub_ifds = tiff_handle.GetField(T.TIFFTAG_SUBIFD)
+        with tiff_info0['lock']:
+            tiff_file.SetDirectory(tiff_info0['dir_index'])
+            sub_ifds = tiff_file.GetField(T.TIFFTAG_SUBIFD)
+
         # add the number of subdirectories, and the main image
         if sub_ifds:
             maxzoom = len(sub_ifds)
@@ -1918,7 +1921,7 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
         tile_shape = (num_tcols, num_trows)
 
         DataArrayShadow.__init__(self, shape, dtype, metadata, maxzoom, tile_shape)
-    
+
     def getTile(self, x, y, zoom):
         '''
         Fetches one tile
@@ -1930,10 +1933,10 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
         '''
         # get information about how to retrieve the actual pixels from the TIFF file
         tiff_info = self.tiff_info
-        # TODO Implement the reading of the subdata when tiff_info is a list.
-        # It is the case when the DataArray has multiple pixelData (eg, when data has more than 2D).
-        if type(tiff_info) is list:
-            raise NotImplemented("Not implemented when DataArray has multiple pixelData")
+        if isinstance(tiff_info, list):
+            # TODO Implement the reading of the subdata when tiff_info is a list.
+            # It is the case when the DataArray has multiple pixelData (eg, when data has more than 2D).
+            raise NotImplementedError("DataArray has multiple pixelData")
 
         with tiff_info['lock']:
             tiff_file = tiff_info['handle']
@@ -1950,9 +1953,6 @@ class DataArrayShadowPyramidalTIFF(DataArrayShadowTIFF):
 
                 # set the offset of the subimage. Z=0 is the main image
                 tiff_file.SetSubDirectory(sub_ifds[zoom - 1])
-
-            if not hasattr(self, 'tile_shape'):
-                raise RuntimeError("the image is not tiled")
 
             orig_pixel_size = self.metadata.get(model.MD_PIXEL_SIZE, (1, 1))
 
@@ -2245,10 +2245,18 @@ class AcquisitionDataTIFF(AcquisitionData):
         # DataArrayShadow instance
         tiff_info_list = []
         for hi, i in numpy.ndenumerate(hdim_index):
-            local_tiff_info = das[i].tiff_info
             # add the index of the DataArrayShadow in the merged DataArrayShadow
-            local_tiff_info['hdim_index'] = hi
-            tiff_info_list.append(local_tiff_info)
+            das[i].tiff_info['hdim_index'] = hi
+            tiff_info_list.append(das[i].tiff_info)
+
+        if len(tiff_info_list) == 1:
+            # Optimisation: if there is actually only one (because it's split
+            # over C), make it a simple DAS.
+            # That's especially useful for now, as Pyramidal DAS don't support
+            # high dimensions yet.
+            tiff_info_list = tiff_info_list[0]
+            del tiff_info_list['hdim_index']
+            tshape = fim.shape
 
         # add the information about each of the merged DataArrayShadows
         mergedDataArrayShadow = DataArrayShadowTIFF(tiff_info_list, tshape, fim.dtype, fim.metadata)
