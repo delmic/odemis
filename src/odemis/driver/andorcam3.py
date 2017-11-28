@@ -1846,6 +1846,15 @@ class AndorCam3(model.DigitalCamera):
             logging.exception("Failed to stop the active acquisition")
 
         if self.handle is not None:
+            try:
+                # Stop cooling on shutdown. That's especially important for
+                # water-cooled cameras in case the user also stops the water-
+                # cooling after stopping Odemis. In such case, cooling down the
+                # sensor could result in over-heating of the camera.
+                self.SetBool(u"SensorCooling", False)
+            except ATError:
+                logging.info("Failed to disable the cooling", exc_info=True)
+
             self.Close()
             self.handle = None
 
