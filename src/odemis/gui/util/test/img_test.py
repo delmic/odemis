@@ -109,6 +109,20 @@ class TestRGBA(unittest.TestCase):
 
 
 class TestARExport(unittest.TestCase):
+    FILENAME_RAW = "test-ar.csv"
+    FILENAME_PR = "test-ar.png"
+
+    def tearDown(self):
+        # clean up
+        try:
+            os.remove(self.FILENAME_RAW)
+        except Exception:
+            pass
+
+        try:
+            os.remove(self.FILENAME_PR)
+        except Exception:
+            pass
 
     def test_ar_frame(self):
         ar_margin = 100
@@ -140,8 +154,6 @@ class TestARExport(unittest.TestCase):
 
     def test_ar_export(self):
 
-        filename = "test-ar.csv"
-
         # Create AR data
         md = {
             model.MD_SW_VERSION: "1.0-test",
@@ -170,6 +182,30 @@ class TestARExport(unittest.TestCase):
         ars = stream.StaticARStream("test", [data0, data1])
         ars.point.value = md1[model.MD_POS]
 
+        # Wait for the projection to be computed
+        tend = time.time() + 30
+        while ars.image.value is None:
+            self.assertLess(time.time(), tend, "Timeout during AR computation")
+            time.sleep(0.1)
+
+        # Convert to exportable RGB image
+        exdata = img.ar_to_export_data([ars], raw=False)
+        # shape = RGBA
+        self.assertGreater(exdata.shape[0], 200)
+        self.assertGreater(exdata.shape[1], 200)
+        self.assertEqual(exdata.shape[2], 4)
+
+        # The top-left corner should be white
+        numpy.testing.assert_equal(exdata[0, 0], [255, 255, 255, 255])
+        # There should be some non-white data
+        self.assertTrue(numpy.any(exdata != 255))
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("PNG")
+        exporter.export(self.FILENAME_PR, exdata)
+        st = os.stat(self.FILENAME_PR)  # this test also that the file is created
+        self.assertGreater(st.st_size, 1000)
+
         # Convert to exportable RGB image
         exdata = img.ar_to_export_data([ars], raw=True)
         # shape = raw data + theta/phi axes values
@@ -178,21 +214,13 @@ class TestARExport(unittest.TestCase):
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
-        exporter.export(filename, exdata)
-        st = os.stat(filename)  # this test also that the file is created
+        exporter.export(self.FILENAME_RAW, exdata)
+        st = os.stat(self.FILENAME_RAW)  # this test also that the file is created
         self.assertGreater(st.st_size, 100)
-
-        # clean up
-        try:
-            os.remove(filename)
-        except Exception:
-            pass
 
     # TODO: check that exporting large AR image doesn't get crazy memory usage
 
     def test_big_ar_export(self):
-
-        filename = "test-ar.csv"
 
         # Create AR data
         md = {
@@ -218,7 +246,31 @@ class TestARExport(unittest.TestCase):
         ars = stream.StaticARStream("test", [data0])
         ars.point.value = md0[model.MD_POS]
 
+        # Wait for the projection to be computed
+        tend = time.time() + 90
+        while ars.image.value is None:
+            self.assertLess(time.time(), tend, "Timeout during AR computation")
+            time.sleep(0.1)
+
         # Convert to exportable RGB image
+        exdata = img.ar_to_export_data([ars], raw=False)
+        # shape = RGBA
+        self.assertGreater(exdata.shape[0], 200)
+        self.assertGreater(exdata.shape[1], 200)
+        self.assertEqual(exdata.shape[2], 4)
+
+        # The top-left corner should be white
+        numpy.testing.assert_equal(exdata[0, 0], [255, 255, 255, 255])
+        # There should be some non-white data
+        self.assertTrue(numpy.any(exdata != 255))
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("PNG")
+        exporter.export(self.FILENAME_PR, exdata)
+        st = os.stat(self.FILENAME_PR)  # this test also that the file is created
+        self.assertGreater(st.st_size, 1000)
+
+        # Convert to equirectangular (RAW) image
         exdata = img.ar_to_export_data([ars], raw=True)
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
@@ -226,15 +278,9 @@ class TestARExport(unittest.TestCase):
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
-        exporter.export(filename, exdata)
-        st = os.stat(filename)  # this test also that the file is created
+        exporter.export(self.FILENAME_RAW, exdata)
+        st = os.stat(self.FILENAME_RAW)  # this test also that the file is created
         self.assertGreater(st.st_size, 100)
-
-        # clean up
-        try:
-            os.remove(filename)
-        except Exception:
-            pass
 
 
 class TestSpectrumExport(unittest.TestCase):
