@@ -33,7 +33,8 @@ Depends: python (>= 2.7.1),
          python-numpy,
          python-concurrent.futures,
          python-scipy,
-         python-libtiff,
+# pylibtiff 0.4.1 is recommended
+         python-libtiff (>= 0.4.0),
          python-h5py (>= 2.1),
          python-xdg,
 # suds is only needed for phenom driver
