@@ -242,7 +242,7 @@ class MeanWeaver(object):
             else:
                 y = numpy.arange(-hh, hh + 1, 1)
 
-            xx, yy = numpy.meshgrid(x ** 3 / hh ** 3, y ** 3 / hw ** 3)
+            xx, yy = numpy.meshgrid((x / hw) ** 3, (y / hh) ** 3)
             w = numpy.hypot(xx, yy)  # function determined experimentally: sqrt(abs(x)^5)
 
             # Use weights to create gradient in overlapping region
