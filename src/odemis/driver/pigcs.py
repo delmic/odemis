@@ -988,7 +988,7 @@ class Controller(object):
         assert(axis in self._channels)
         if steps == 0:
             return
-        self._sendOrderCommand("OSM %d %.5g\n" % (axis, steps))
+        self._sendOrderCommand("OSM %d %.5f\n" % (axis, steps))
 
     def SetStepAmplitude(self, axis, amplitude):
         """
@@ -1001,7 +1001,7 @@ class Controller(object):
         # SSA (Set Step Amplitude) : for nanostepping
         assert(axis in self._channels)
         assert((0 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("SSA %d %.5g\n" % (axis, amplitude))
+        self._sendOrderCommand("SSA %d %.5f\n" % (axis, amplitude))
 
     def GetStepAmplitude(self, axis):
         """
@@ -1027,7 +1027,7 @@ class Controller(object):
         # OAD (Open-Loop Analog Driving): move using analog
         assert(axis in self._channels)
         assert((-55 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("OAD %d %.5g\n" % (axis, amplitude))
+        self._sendOrderCommand("OAD %d %.5f\n" % (axis, amplitude))
 
     def GetOLVelocity(self, axis):
         """
@@ -1047,7 +1047,7 @@ class Controller(object):
         # OVL (Set Open-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("OVL %d %.5g\n" % (axis, velocity))
+        self._sendOrderCommand("OVL %d %.5f\n" % (axis, velocity))
 
     def GetOLAcceleration(self, axis):
         """
@@ -1067,7 +1067,7 @@ class Controller(object):
         # OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("OAC %d %.5g\n" % (axis, value))
+        self._sendOrderCommand("OAC %d %.5f\n" % (axis, value))
 
     def SetOLDeceleration(self, axis, value):
         """
@@ -1078,7 +1078,7 @@ class Controller(object):
         # ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("ODC %d %.5g\n" % (axis, value))
+        self._sendOrderCommand("ODC %d %.5f\n" % (axis, value))
 
     # Methods for closed-loop functionality. For all of them, servo must be on
     def MoveAbs(self, axis, pos):
@@ -1090,7 +1090,7 @@ class Controller(object):
         """
         # MOV (Set Target Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MOV %d %.5g\n" % (axis, pos))
+        self._sendOrderCommand("MOV %d %.5f\n" % (axis, pos))
 
     def MoveRel(self, axis, shift):
         """
@@ -1103,7 +1103,7 @@ class Controller(object):
         """
         # MVR (Set Target Relative To Current Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MVR %d %.5g\n" % (axis, shift))
+        self._sendOrderCommand("MVR %d %.5f\n" % (axis, shift))
 
     def ReferenceToLimit(self, axis, lim=1):
         """
@@ -1191,7 +1191,7 @@ class Controller(object):
         pos (float): pos can be negative
         """
         # POS (SetRealPosition)
-        return self._sendOrderCommand("POS %d %.5g\n" % (axis, pos))
+        return self._sendOrderCommand("POS %d %.5f\n" % (axis, pos))
 
     def GetMinPosition(self, axis):
         """
@@ -1214,7 +1214,7 @@ class Controller(object):
 
     def GetCLVelocity(self, axis):
         """
-        Get velocity for closed-loop montion.
+        Get velocity for closed-loop motion.
         axis (1<int<16): axis number
         """
         # VEL (Get Closed-Loop Velocity)
@@ -1223,18 +1223,18 @@ class Controller(object):
 
     def SetCLVelocity(self, axis, velocity):
         """
-        Set velocity for closed-loop montion.
+        Set velocity for closed-loop motion.
         axis (1<int<16): axis number
         velocity (0<float): velocity in units/s
         """
         # VEL (Set Closed-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("VEL %d %.5g\n" % (axis, velocity))
+        self._sendOrderCommand("VEL %d %.5f\n" % (axis, velocity))
 
     def GetCLAcceleration(self, axis):
         """
-        Get acceleration for closed-loop montion.
+        Get acceleration for closed-loop motion.
         axis (1<int<16): axis number
         """
         # VEL (Get Closed-Loop Acceleration)
@@ -1250,7 +1250,7 @@ class Controller(object):
         # ACC (Set Closed-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("ACC %d %.5g\n" % (axis, value))
+        self._sendOrderCommand("ACC %d %.5f\n" % (axis, value))
 
     def SetCLDeceleration(self, axis, value):
         """
@@ -1261,7 +1261,7 @@ class Controller(object):
         # DEC (Set Closed-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("DEC %d %.5g\n" % (axis, value))
+        self._sendOrderCommand("DEC %d %.5f\n" % (axis, value))
 
     def SetRecordRate(self, value):
         """
@@ -1365,7 +1365,7 @@ class Controller(object):
         shift (float): relative distance in user unit
         """
         assert(axis in self._channels)
-        self._sendOrderCommand("STE %d %.5g\n" % (axis, shift))
+        self._sendOrderCommand("STE %d %.5f\n" % (axis, shift))
 
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
