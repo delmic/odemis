@@ -26,7 +26,7 @@ Spectra: {
 
 "SEM ExtXY": {
     class: simsem.SimSEM,
-    role: none,
+    role: null,
     init: {
            image: "songbird-sim-sem.h5", # any large 16 bit image is fine
 #           drift_period: 5, # s, comment out to disable drift
@@ -45,7 +45,7 @@ Spectra: {
         dwellTime: 10.e-6, # s
         horizontalFoV: 1.e-6, # m, used to test the properties setting
     },
-    affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", "Clara"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
@@ -127,7 +127,7 @@ Clara: {
 
 PIGCS: {
     class: pigcs.FakeBus,
-    role: none,
+    role: null,
     init: {
         port: "/dev/ttyPIE",
         axes: {"l": [1, 1, False], "r": [2, 1, False], "z": [3, 1, False]} # axis -> controller, channel, closed-loop?

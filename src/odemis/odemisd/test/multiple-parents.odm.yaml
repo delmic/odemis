@@ -60,7 +60,7 @@ Spectra: {
 
 "Second Axis": {
     class: simulated.Stage,
-    role: none,
+    role: null,
     init: {axes: ["y"]},
 }
 

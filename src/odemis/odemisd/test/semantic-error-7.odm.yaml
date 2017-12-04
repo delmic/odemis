@@ -1,0 +1,28 @@
+# Test without parent and without class
+
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    children: [Light, "Andor SimCam", "Stage"],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor SimCam"]
+}
+
+"Andor SimCam": {
+    role: ccd,
+    init: {device: 1}
+}
+
+"Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {'x':1, 'y':1} #m/s
+    }
+}

@@ -1,0 +1,35 @@
+# Test multiple components with same role
+
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    children: [Light, "Calibration Light", "Andor SimCam", "Stage"],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor SimCam"]
+}
+
+"Calibration Light": {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor SimCam"]
+}
+
+"Andor SimCam": {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {device: 1}
+}
+
+"Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {'x':1, 'y':1} #m/s
+    }
+}

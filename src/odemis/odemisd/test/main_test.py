@@ -69,10 +69,14 @@ class TestCommandLine(unittest.TestCase):
                          # "semantic-error-3.odm.yaml",
                          # TODO: handle cyclic creation error
                          # "semantic-error-4.odm.yaml",
-                         # Skipped: for now, wrong affects are only a warning
-                         # "semantic-error-5.odm.yaml",
-                         # Skipped: for now, unused components are only a warning
-                         # "semantic-error-6.odm.yaml",
+                         # wrong affects
+                         "semantic-error-5.odm.yaml",
+                         # unused components
+                         "semantic-error-6.odm.yaml",
+                         # test creating a component without parent and without class
+                         "semantic-error-7.odm.yaml",
+                         # test with multiple role
+                         "semantic-error-8.odm.yaml",
                          "semantic-error-md.odm.yaml",
                         ]
 

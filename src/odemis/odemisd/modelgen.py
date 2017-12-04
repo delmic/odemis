@@ -148,7 +148,9 @@ class Instantiator(object):
         create_sub_containers (bool): whether the leave components (components which
            have no children created separately) are running in isolated containers
         dry_run (bool): if True, it will check the semantic and try to instantiate the
-          model without actually any driver contacting the hardware.
+          model without actually any driver contacting the hardware. It will also
+          be stricter, and some issues which are normally just warnings will be
+          considered errors.
         """
         self.ast = self._parse_instantiation_model(inst_file) # AST of the model to instantiate
         self.root_container = container # the container for non-leaf components
@@ -168,8 +170,9 @@ class Instantiator(object):
         self._fill_creator()
 
         # Sanity checks
-        self._check_lone_component()
-        self._check_affects()
+        self._check_lone_component(strict=dry_run)
+        self._check_affects(strict=dry_run)
+        self._check_duplicate_roles()
 
         # TODO: if the microscope has a known role, check it has the minimum
         # required sub-components (with the right roles) and otherwise raise
@@ -210,9 +213,9 @@ class Instantiator(object):
 
         for a in ("actuators", "detectors", "emitters"):
             if a in microscope:
-                logging.info("Microscope component contains field '%s', which is "
-                             "deprecated and can be merged in field 'children'.",
-                             a)
+                logging.warning("Microscope component contains field '%s', which is "
+                                "deprecated and can be merged in field 'children'.",
+                                a)
                 for i, name in enumerate(microscope[a]):
                     role = "%s%d" % (a[:-1], i)
                     microscope["children"][role] = name
@@ -256,8 +259,7 @@ class Instantiator(object):
             else:
                 # If one parent is Microscope, it's dropped for the "creator"
                 # guess because Microscope is known to create no component.
-                if len(parents) > 1:
-                    parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
+                parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
 
                 if len(parents) == 0:
                     raise SemanticError("Error in microscope file: component %s "
@@ -284,13 +286,15 @@ class Instantiator(object):
                                 "to cyclic dependency: %s" %
                                 (", ".join(left)))
 
-    def _check_lone_component(self):
+    def _check_lone_component(self, strict=False):
         """
         Check that every component is instantiate for eventually being a part
         of the microscope.
         Every component should be either:
          * A child of the microscope
          * Creator of a child of the microscope
+        strict (bool): if strict, will raise an error, instead of just printing
+          warnings
         """
         # All the components used for the microscope
         comps_used = {self._microscope_name}
@@ -312,31 +316,56 @@ class Instantiator(object):
                     # Note: some old microscope files had 'none' instead of 'null'
                     # which was turning into the string 'none' instead of None.
                     # TODO: don't warn if the role == 'none' or 'None'?
-                    logging.warning("Component '%s' is not directly required by the microscope but has non-null role '%s'",
-                                    cname, role)
+                    if strict:
+                        raise SemanticError("Component '%s' has role %s but it is not marked as child of the microscope" % (cname, role))
+                    else:
+                        logging.warning("Component '%s' has role %s but it is not used by the microscope",
+                                        cname, role)
 
                 creations = self.get_delegated_children(cname)
                 if not creations & comps_used:
                     if len(creations) > 1:
-                        logging.info("Component '%s' would create non-used components %s", cname, creations)
-                    # TODO: Convert to a SemanticError (in 2017 or later), once
-                    # all the currently broken microscope files have been fixed
-                    logging.warning("Component '%s' is defined but not required by the microscope", cname)
-                    # raise SemanticError("Component '%s' is defined but not required by the microscope" % (cname,))
+                        logging.info("Component '%s' will create non-used components %s", cname, creations)
+                    if strict:
+                        raise SemanticError("Component '%s' is defined but not required by the microscope" % (cname,))
+                    else:
+                        logging.warning("Component '%s' is defined but not required by the microscope", cname)
 
-    def _check_affects(self):
+    def _check_affects(self, strict=False):
         """
         Check that the affects of the components are correct.
         In particular, it checks that all affects points to existing components
+        strict (bool): if strict, will raise an error, instead of just printing
+          warnings
         """
         for cname, attrs in self.ast.items():
             affects = attrs.get("affects", [])
             for affcname in affects:
                 if affcname not in self.ast:
-                    # TODO: Convert to a SemanticError (in 2017 or later), once
-                    # all the currently broken microscope files are fixed
-                    logging.warning("Component '%s' affects non-existing component '%s'.", cname, affcname)
-                    # raise SemanticError("Component '%s' affects non-existing component '%s'." % (cname, affcname))
+                    if strict:
+                        raise SemanticError("Component '%s' affects non-existing component '%s'." % (cname, affcname))
+                    else:
+                        logging.warning("Component '%s' affects non-existing component '%s'.", cname, affcname)
+
+    def _check_duplicate_roles(self):
+        """
+        Check that any component with a role is unique
+        In particular, it checks that all affects points to existing components
+        """
+        roles = {}  # Dict role -> comp name
+        for cname, attrs in self.ast.items():
+            role = attrs.get("role")
+            if role is not None:
+                if role == "None" or role == "none":
+                    logging.warning("Component '%s' has role '%s', which mostly likely should be set to 'null'",
+                                    cname, role)
+                    continue
+                if role in roles:
+                    ocname = roles[role]
+                    raise SemanticError("Components '%s' and '%s' both have role '%s', but roles should be unique." %
+                                        (ocname, cname, role))
+                else:
+                    roles[role] = cname
 
     def _parse_instantiation_model(self, inst_file):
         """
