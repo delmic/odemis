@@ -63,7 +63,7 @@ SPARC2: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SEM Detector", "Spectrometer", "Spectral Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Spectrometer Vis-NIR", "Spectrometer IR", "Spectral Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 "SEM Detector": { # aka ETD
@@ -197,7 +197,7 @@ affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position

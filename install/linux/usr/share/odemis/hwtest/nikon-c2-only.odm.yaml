@@ -139,6 +139,6 @@ Light: {
 
 "Optical Stage": {
     class: simulated.Stage,
-    role: align,
+    role: null,
     init: {axes: ["x", "y", "z"]},
 }

@@ -112,7 +112,7 @@ Light: {
     class: static.LightFilter,
     role: filter,
     init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
-    affects: ["PMT1", "PMT2", "PMT3"]
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"]
 }
 
 "Sample Stage": {

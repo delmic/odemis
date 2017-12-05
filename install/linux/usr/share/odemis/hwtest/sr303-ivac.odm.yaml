@@ -88,7 +88,7 @@ SPARC-Spec: {
 "Mirror Actuators": {
     class: simulated.Stage,
     role: mirror,
-    affects: [SpecSimCam],
+    affects: ["Spectral Camera"],
     init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
     properties: {
         speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s

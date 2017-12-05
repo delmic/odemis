@@ -78,7 +78,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Spectrometer", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -232,7 +232,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectrometer"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -247,7 +247,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectrometer"],
+    affects: ["Camera", "Spectrometer", "CL Detector"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)

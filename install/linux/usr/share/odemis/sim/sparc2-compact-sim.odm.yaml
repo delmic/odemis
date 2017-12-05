@@ -15,7 +15,7 @@ SPARC2: {
     class: light.Light,
     role: brightlight,
     power_supplier: "Power Control Unit",
-    affects: ["Spectral Camera", "Spectrometer", "Calibration Camera"],
+    affects: ["CL Detector", "Calibration Camera"],
 }
 
 "Power Control Unit": {
@@ -221,7 +221,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Lens2 Switch", "CL Detector", "Calibration Camera"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position
