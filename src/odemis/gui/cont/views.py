@@ -321,6 +321,20 @@ class OverviewController(object):
                                                               main_data.overview_ccd.data, None)
             self.m_view.addStream(overview_stream)
             # TODO: add it to self.tab_data_model.streams?
+        else:
+            # black image to display history overlay separately from built-up ovv image
+            # controlled by merge slider
+            ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
+                         int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
+            
+            md = {
+                MD_DIMS: "YXC",
+                MD_PIXEL_SIZE : (self.m_view.mpp.value, self.m_view.mpp.value),
+                MD_POS: self.m_view.view_pos.value
+            }
+            da = DataArray(numpy.zeros(ovv_shape, dtype=numpy.uint8), md)
+            history_stream = acqstream.Static2DStream("History Stream", da)
+            m_view.addStream(history_stream)
 
         # Built-up overview image
         # Initialize the size of the ovv image with the stage size if the stage is small (< 5cm),
