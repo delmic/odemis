@@ -303,6 +303,7 @@ class OverviewController(object):
 
         self.curr_s = None
 
+        m_view.merge_ratio.subscribe(self._on_merge_ratio_change)
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
             tab_data.main.chamberState.subscribe(self._on_chamber_state)
@@ -351,6 +352,10 @@ class OverviewController(object):
         # Add stream to view
         self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im)
         self.m_view.addStream(self.upd_stream)
+
+    def _on_merge_ratio_change(self, _):
+        self.canvas.history_overlay.set_merge_ratio(self.m_view.merge_ratio.value)
+        wx.CallAfter(self.canvas.history_overlay.cnvs.request_drawing_update)
 
     def on_stage_pos_change(self, p_pos):
         """ Store the new position in the overview history when the stage moves,
