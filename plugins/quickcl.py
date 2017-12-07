@@ -26,8 +26,10 @@ from collections import OrderedDict
 from concurrent.futures._base import CancelledError
 import logging
 import math
-from odemis import dataio, model, gui, acq
+import numpy
+from odemis import dataio, model, gui, acq, util
 from odemis.acq import stream
+from odemis.acq.stream import CLStream, SEMStream
 from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas
@@ -42,6 +44,9 @@ import os
 import string
 import time
 import wx
+
+# Set to "True" to show a "Save" button
+ALLOW_SAVE = False
 
 
 class ContentAcquisitionDialog(AcquisitionDialog):
@@ -92,9 +97,57 @@ class ContentAcquisitionDialog(AcquisitionDialog):
         self.Fit()
 
 
+class LiveCLStream(SEMStream):
+    """
+    Same as the SEMStream, but different class to convince the GUI it's a CLStream
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        super(LiveCLStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        self.logScale = model.BooleanVA(False)
+        self.logScale.subscribe(self._on_log_scale)
+
+    def _on_log_scale(self, uselog):
+        # Force recomputing the intensity range
+        self._drange = None
+        self._shouldUpdateImage()
+
+    def _projectXY2RGB(self, data, tint=(255, 255, 255)):
+        """
+        Project a 2D spatial DataArray into a RGB representation
+        data (DataArray): 2D DataArray
+        tint ((int, int, int)): colouration of the image, in RGB.
+        return (DataArray): 3D DataArray
+        """
+        if not self.logScale.value:
+            return super(LiveCLStream, self)._projectXY2RGB(data, tint)
+
+        # Log scale:
+        # Map irange to 1 -> e^N
+        # Compute the log (= data goes from 0->N)
+        # Map to RGB 0->255
+
+        LOG_MAX = 8  # Map between 0 -> LOG_MAX
+        irange = self._getDisplayIRange()
+        data = numpy.clip(data, irange[0], irange[1])
+        # Actually map data to 0-> e-1, and compute log (x+1)
+        data -= irange[0]
+        data = data * ((math.exp(LOG_MAX) - 1) / (float(irange[1]) - float(irange[0])))
+        data = numpy.log1p(data)
+
+        rgbim = util.img.DataArray2RGB(data, (0, LOG_MAX), tint)
+        rgbim.flags.writeable = False
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC"  # RGB format
+        return model.DataArray(rgbim, md)
+
+
+CLStream.register(LiveCLStream)
+
+
 class QuickCLPlugin(Plugin):
     name = "Quick CL"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
@@ -107,6 +160,9 @@ class QuickCLPlugin(Plugin):
         }),
         ("hasDatabar", {
             "label": "Include data-bar",
+        }),
+        ("logScale", {
+            "label": "Logarithmic scale",
         }),
         ("expectedDuration", {
         }),
@@ -159,7 +215,7 @@ class QuickCLPlugin(Plugin):
         # We use a SEMStream to just have a basic live feed
         # TODO: one problem with using the SEMStream is that they get the same
         # icon, and might end-up switch in the view after hiding/showing.
-        self._cl_stream = stream.SEMStream(
+        self._cl_stream = LiveCLStream(
             "CL intensity",
             main_data.cld,
             main_data.cld.data,
@@ -171,6 +227,7 @@ class QuickCLPlugin(Plugin):
         )
         # TODO: allow to type in the resolution of the CL?
         # TODO: add the cl-filter axis (or reset it to pass-through?)
+        self.logScale = self._cl_stream.logScale
 
         if hasattr(self._cl_stream, "detGain"):
             self._cl_stream.detGain.subscribe(self._on_cl_gain)
@@ -218,7 +275,7 @@ class QuickCLPlugin(Plugin):
 
     def _on_filename(self, fn):
         bn, ext = os.path.splitext(fn)
-        if not ext.endswith(".png"):
+        if not ext.endswith(".png") and not ALLOW_SAVE:
             logging.warning("Only PNG format is recommended to use")
 
         # Store the directory so that next filename is in the same place
@@ -351,6 +408,8 @@ class QuickCLPlugin(Plugin):
         dlg.addStream(self._sem_stream)
         dlg.addStream(self._cl_stream)
         dlg.addSettings(self, self.vaconf)
+        if ALLOW_SAVE:
+            dlg.addButton("Save", self.save, face_colour='blue')
         dlg.addButton("Export", self.export, face_colour='blue')
 
         dlg.Maximize()
@@ -365,12 +424,7 @@ class QuickCLPlugin(Plugin):
     def _acq_canceller(self, future):
         return future._cur_f.cancel()
 
-    def export(self, dlg):
-        """
-        Stores the current CL data into a PNG file
-        """
-        # Note: the user never needs to store the raw data or the SEM data
-
+    def _acquire(self, dlg, future):
         # Stop the streams
         dlg.streambar_controller.pauseStreams()
 
@@ -378,28 +432,39 @@ class QuickCLPlugin(Plugin):
         ss = [self._cl_stream]
         dur = acq.estimateTime(ss)
         startt = time.time()
-        f = model.ProgressiveFuture(end=startt + dur)
-        f._cur_f = InstantaneousFuture()
-        f.task_canceller = self._acq_canceller
-        f.set_running_or_notify_cancel()  # Indicate the work is starting now
-        dlg.showProgress(f)
+        future._cur_f = InstantaneousFuture()
+        future.task_canceller = self._acq_canceller
+        future.set_running_or_notify_cancel()  # Indicate the work is starting now
+        future.set_progress(end=startt + dur)
+        dlg.showProgress(future)
+
+        future._cur_f = acq.acquire(ss)
+        das, e = future._cur_f.result()
+        if future.cancelled():
+            raise CancelledError()
+
+        if e:
+            raise e
+
+        return das
+
+    def export(self, dlg):
+        """
+        Stores the current CL data into a PNG file
+        """
+        f = model.ProgressiveFuture()
+        ss = [self._cl_stream]
 
         try:
-            f._cur_f = acq.acquire(ss)
-            das, e = f._cur_f.result()
-            if f.cancelled():
-                return
+            das = self._acquire(dlg, f)
         except CancelledError:
             logging.debug("Stopping acquisition + export, as it was cancelled")
             return
-        except Exception:
-            logging.exception("Failed to acquire CL data")
+        except Exception as e:
+            logging.exception("Failed to acquire CL data: %s", e)
             return
 
-        if e:
-            logging.error("Failed to acquire CL data: %s", e)
-            return
-
+        # Note: the user never needs to store the raw data or the SEM data
         fn = self.filename.value
         exporter = dataio.find_fittest_converter(fn, allowlossy=True)
 
@@ -420,6 +485,36 @@ class QuickCLPlugin(Plugin):
             else:
                 exdata = rgbi
             exporter.export(fn, exdata)
+        except Exception:
+            logging.exception("Failed to store data in %s", fn)
+
+        f.set_result(None)  # Indicate it's over
+        self._bump_filename_number()
+
+    def save(self, dlg):
+        """
+        Stores the current CL data into a TIFF/HDF5 file
+        """
+        f = model.ProgressiveFuture()
+
+        try:
+            das = self._acquire(dlg, f)
+        except CancelledError:
+            logging.debug("Stopping acquisition + export, as it was cancelled")
+            return
+        except Exception as e:
+            logging.exception("Failed to acquire CL data: %s", e)
+            return
+
+        fn = self.filename.value
+        bn, ext = os.path.splitext(fn)
+        if ext == ".png":
+            logging.debug("Using HDF5 instead of PNG")
+            fn = bn + ".h5"
+        exporter = dataio.find_fittest_converter(fn)
+
+        try:
+            exporter.export(fn, das)
         except Exception:
             logging.exception("Failed to store data in %s", fn)
 
