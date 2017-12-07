@@ -416,7 +416,7 @@ def man_calib(logpath):
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                 ar.focusByArrow(rollback_pos)
                 detector.data.unsubscribe(_discard_data)
-                print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
+                print "\033[1;30mTwin stage calibration starting, please wait...\033[1;m"
                 try:
                     # TODO: the first point (at 0,0) isn't different from the next 4 points,
                     # excepted it might be a little harder to focus.
