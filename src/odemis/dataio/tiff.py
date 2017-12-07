@@ -1690,7 +1690,7 @@ def write_image(f, arr, compression=None, write_rgb=False, pyramid=False):
     if len(resized_shapes) > 0:
         # LibTIFF will automatically write the next N directories as subdirectories
         # when this tag is present.
-        f.SetField(T.TIFFTAG_SUBIFD, [0] * len(resized_shapes), count=len(resized_shapes))
+        f.SetField(T.TIFFTAG_SUBIFD, [0] * len(resized_shapes))
 
     # write the original image
     f.write_tiles(arr, TILE_SIZE, TILE_SIZE, compression, write_rgb)

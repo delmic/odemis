@@ -165,7 +165,7 @@ class TimelapsePlugin(Plugin):
         """
         Return all the live streams present in the given tab
         """
-        ss = tab_data.streams.value
+        ss = list(tab_data.streams.value)
 
         # On the SPARC, there is a Spot stream, which we don't need for live
         if hasattr(tab_data, "spotStream"):
