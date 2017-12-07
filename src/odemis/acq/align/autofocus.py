@@ -109,6 +109,34 @@ def MeasureOpticalFocus(image):
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
+def getNextImage(det, timeout=None):
+    """
+    Acquire one image from the given detector
+    det (model.Detector): detector from which to acquire an image
+    timeout (None or 0<float): maximum time to wait
+    returns (model.DataArray):
+        Image (with subtracted background if requested)
+    raise:
+        IOError: if it timed out
+    """
+    # Code based on Dataflow.get(), to support timeout
+    min_time = time.time()  # asap=False
+    is_received = threading.Event()
+    data_shared = [None]  # in python2 we need to create a new container object
+
+    def receive_one_image(df, data):
+        if data.metadata.get(model.MD_ACQ_DATE, float("inf")) >= min_time:
+            df.unsubscribe(receive_one_image)
+            data_shared[0] = data
+            is_received.set()
+
+    det.data.subscribe(receive_one_image)
+    if not is_received.wait(timeout):
+        det.data.unsubscribe(receive_one_image)
+        raise IOError("No data received after %g s" % (timeout,))
+    return data_shared[0]
+
+
 def AcquireNoBackground(det, dfbkg=None, timeout=None):
     """
     Performs optical acquisition with background subtraction if possible.
@@ -124,40 +152,20 @@ def AcquireNoBackground(det, dfbkg=None, timeout=None):
     raise:
         IOError: if it timed out
     """
-    # Code based on Dataflow.get(), to support timeout
-    min_time = time.time()  # asap=False
-    is_received = threading.Event()
-    data_shared = [None] # in python2 we need to create a new container object
-
-    def receive_one_image(df, data):
-        if data.metadata.get(model.MD_ACQ_DATE, float("inf")) >= min_time:
-            df.unsubscribe(receive_one_image)
-            data_shared[0] = data
-            is_received.set()
-
     if dfbkg is not None:
         # acquire background
-        det.data.subscribe(receive_one_image)
-        if not is_received.wait(timeout):
-            det.data.unsubscribe(receive_one_image)
-            raise IOError("No (background) data received after %g s" % (timeout,))
-        bg_image = data_shared[0]
+        bg_image = getNextImage(det, timeout)
 
         # acquire with signal
         dfbkg.subscribe(_discard_data)
-        det.data.subscribe(receive_one_image)
-        if not is_received.wait(timeout):
-            det.data.unsubscribe(receive_one_image)
-            raise IOError("No data received after %g s" % (timeout,))
+        try:
+            data = getNextImage(det, timeout)
+        finally:
+            dfbkg.unsubscribe(_discard_data)
 
-        dfbkg.unsubscribe(_discard_data)
-        return Subtract(data_shared[0], bg_image)
+        return Subtract(data, bg_image)
     else:
-        det.data.subscribe(receive_one_image)
-        if not is_received.wait(timeout):
-            det.data.unsubscribe(receive_one_image)
-            raise IOError("No data received after %g s" % (timeout,))
-        return data_shared[0]
+        return getNextImage(det, timeout)
 
 
 def _discard_data(df, data):
