@@ -1695,7 +1695,7 @@ class SEMComedi(model.HwComponent):
                             return
                         else:
                             logging.exception("Acquisition failed, will retry")
-                            time.sleep(1)
+                            time.sleep(0.5)
                             self._reset_device()
                             continue
 
@@ -2085,6 +2085,8 @@ class Reader(Accesser):
             self.count = count
             self.duration = duration
             self.cancelled = False
+            # TODO: don't create a new thread for every read => just create at
+            # init, and use Queue/Event to synchronise
             if self.thread and self.thread.isAlive():
                 logging.warning("Preparing a new acquisition while previous one is not over")
             self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
@@ -2119,8 +2121,15 @@ class Reader(Accesser):
         timeout = timeout or self.duration
 
         # Note: join is pretty costly when timeout is not None, because it'll
-        # do long sleeps between each checks.
-        self.thread.join(timeout)
+        # do long sleeps between each checks. So we keep giving small sleeps
+        # which avoids waiting too long.
+        endt = time.time() + timeout
+        sleep = self.duration
+        while time.time() < endt:
+            self.thread.join(sleep)
+            if not self.thread.isAlive():
+                break
+            sleep = 1e-3
         logging.debug("Waited for the read thread for actually %g s", time.time() - self._begin)
         if self.cancelled:
             if self.thread.isAlive():
