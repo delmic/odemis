@@ -84,6 +84,7 @@ MD_AT_AR = "Angle-resolved"
 MD_AT_EM = "Electron microscope"
 MD_AT_FLUO = "Fluorescence"
 MD_AT_ANCHOR = "Anchor region"
+MD_AT_CL = "Cathodoluminescence"
 MD_AT_OVERVIEW = "Overview"
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR

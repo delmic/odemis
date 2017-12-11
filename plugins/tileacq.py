@@ -520,7 +520,7 @@ class TileAcqPlugin(Plugin):
                             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_FLUO
                         elif isinstance(s, acq.stream.MultipleDetectorStream):
                            if model.MD_OUT_WL in da.metadata:
-                               da.metadata[model.MD_ACQ_TYPE] = "Cathodoluminescence"
+                               da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_CL
                            else:
                                da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
                         else:
