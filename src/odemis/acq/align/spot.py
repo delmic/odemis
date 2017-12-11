@@ -82,7 +82,7 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=N
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateAlignmentTime(ccd.exposureTime.value))
-    f._spot_alignment_state = RUNNING
+    f._task_state = RUNNING
 
     # Task to run
     f.task_canceller = _CancelAlignSpot
@@ -133,7 +133,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
 
     logging.debug("Starting Spot alignment...")
     try:
-        if future._spot_alignment_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Configure CCD and set ebeam to spot mode
@@ -144,7 +144,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
 
-        if future._spot_alignment_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
         logging.debug("Adjust exposure time...")
         if dfbkg is None:
@@ -167,17 +167,16 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
             hqet *= 4  # To compensate for smaller binning
 
         # Try to find spot
-        if future._spot_alignment_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
-        # image = AcquireNoBackground(ccd, dfbkg)
         logging.debug("Trying to find spot...")
         future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
         dist, vector = future._centerspotf.result()
 
         # If spot not found, autofocus and then retry
         if dist is None:
-            if future._spot_alignment_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             logging.debug("Spot not found, try to autofocus...")
             try:
@@ -189,9 +188,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
                 # Update progress of the future
                 future.set_progress(end=time.time() +
                                     estimateAlignmentTime(hqet, dist, 1))
-            except IOError:
+            except IOError as ex:
+                logging.error("Autofocus on spot image failed: %s", ex)
                 raise IOError('Spot alignment failure. AutoFocus failed.')
-            if future._spot_alignment_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
             logging.debug("Trying again to find spot...")
             future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
@@ -208,11 +208,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         logging.debug("After rough alignment, spot center is at %s m", vector)
 
         # Limit FoV to save time
-        logging.debug("Crop FoV...")
+        logging.debug("Cropping FoV...")
         CropFoV(ccd, dfbkg)
-        image = AcquireNoBackground(ccd, dfbkg)
-        # Autofocus
-        if future._spot_alignment_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
 
         # Update progress of the future
@@ -220,7 +218,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
                             estimateAlignmentTime(hqet, dist, 0))
 
         # Center spot
-        if future._spot_alignment_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError()
         logging.debug("Aligning spot...")
         future._centerspotf = CenterSpot(ccd, stage, escan, FINE_MOVE, type, dfbkg)
@@ -237,9 +235,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         escan.resolution.value = init_eres
         with future._alignment_lock:
             future._done.set()
-            if future._spot_alignment_state == CANCELLED:
+            if future._task_state == CANCELLED:
                 raise CancelledError()
-            future._spot_alignment_state = FINISHED
+            future._task_state = FINISHED
 
 
 def _CancelAlignSpot(future):
@@ -249,9 +247,9 @@ def _CancelAlignSpot(future):
     logging.debug("Cancelling spot alignment...")
 
     with future._alignment_lock:
-        if future._spot_alignment_state == FINISHED:
+        if future._task_state == FINISHED:
             return False
-        future._spot_alignment_state = CANCELLED
+        future._task_state = CANCELLED
         future._autofocusf.cancel()
         future._centerspotf.cancel()
         logging.debug("Spot alignment cancelled.")
@@ -293,6 +291,8 @@ def FindSpot(image, sensitivity_limit=100):
 
     # Too many spots detected
     if len(optical_coordinates) > 10:
+        logging.info("Found %d potential spots on image with data %s -> %s",
+                     len(optical_coordinates), image.min(), image.max())
         raise LookupError("Too many spots detected")
 
     # Pick the brightest one
@@ -316,7 +316,14 @@ def CropFoV(ccd, dfbkg=None):
     center_pxs = ((image.shape[1] / 2),
                   (image.shape[0] / 2))
 
-    spot_pxs = FindSpot(image)
+    try:
+        spot_pxs = FindSpot(image)
+    except LookupError:
+        logging.warning("Couldn't locate spot when cropping CCD image, will use whole FoV")
+        ccd.binning.value = (1, 1)
+        ccd.resolution.value = ccd.resolution.range[1]
+        return
+
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
     max_dim = int(max(abs(tab_pxs[0]), abs(tab_pxs[1])))
     range_x = (ccd.resolution.range[0][0], ccd.resolution.range[1][0])
@@ -335,7 +342,7 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None):
     mx_steps (int): Maximum number of steps to reach the center
     type (*_MOVE or BEAM_SHIFT): Type of move in order to align
     dfbkg (model.DataFlow or None): If provided, will be used to start/stop
-     the e-beam emmision (it must be the dataflow of se- or bs-detector) in
+     the e-beam emission (it must be the dataflow of se- or bs-detector) in
      order to do background subtraction. If None, no background subtraction is
      performed.
     returns (model.ProgressiveFuture):    Progress of _DoCenterSpot,

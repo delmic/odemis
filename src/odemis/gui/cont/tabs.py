@@ -1995,7 +1995,7 @@ class SecomAlignTab(Tab):
                                              photod.data,
                                              main_data.laser_mirror,
                                              focuser=main_data.focus,
-                                             hwdetvas=get_local_vas(photod),
+                                             hwdetvas=get_local_vas(photod, main_data.hw_settings_config),
                                              emtvas=get_local_vas(main_data.laser_mirror, main_data.hw_settings_config),
                                              forcemd={model.MD_ROTATION: 0,
                                                       model.MD_SHEAR: 0}

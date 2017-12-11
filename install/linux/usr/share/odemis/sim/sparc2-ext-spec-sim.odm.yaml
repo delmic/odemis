@@ -77,7 +77,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Dedicated Spectrometer", "Angular Camera", "Integrated Spectrometer"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Dedicated Spectrometer", "Camera", "Integrated Spectrometer"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND

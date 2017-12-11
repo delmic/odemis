@@ -270,7 +270,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"]
+    affects: ["Camera","Spectrometer Vis-NIR"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -303,7 +303,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -318,7 +318,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Camera","Spectrometer Vis-NIR"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)

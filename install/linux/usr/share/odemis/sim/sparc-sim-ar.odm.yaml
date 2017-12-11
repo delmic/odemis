@@ -39,7 +39,7 @@ SimSPARCAR: {
         dwellTime: 10.e-6, # s
         magnification: 1000, # (ratio)
     },
-    affects: ["SED ExtXY", SpecSimCam, ARCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", ARCam] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 5/AI GND

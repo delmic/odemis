@@ -45,7 +45,7 @@ Spectra: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", "SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD

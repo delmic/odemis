@@ -901,7 +901,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             for step in range(MAX_STEPS):
                 try:
                     vector = find_spot(pos_ind)
-                except ValueError:
+                except LookupError:
                     # If failed to find spot, try first to focus
                     ccd.binning.value = ccd.binning.clip((8, 8))
                     future._autofocus_f = autofocus.AutoFocus(ccd, None, focus, dfbkg=det_dataflow,
@@ -911,7 +911,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                         raise CancelledError()
                     try:
                         vector = find_spot(pos_ind)
-                    except ValueError:
+                    except LookupError:
                         raise IOError("CL spot not found.")
                 dist = math.hypot(*vector)
                 # Move to spot until you are close enough

@@ -104,17 +104,19 @@ Type the following commands::
 
     sudo add-apt-repository ppa:webupd8team/java
     sudo apt-get update
-    sudo apt-get install oracle-java7-installer
-    sudo easy_install --upgrade pylint
+    sudo apt-get install oracle-java8-installer
     cd ~
     mkdir usr
     cd usr
-    wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/neon/R/eclipse-java-neon-R-linux-gtk-x86_64.tar.gz&mirror_id=1099
-    tar xf eclipse-java-neon-R-linux-gtk-x86_64.tar.gz
+    wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/oxygen/1a/eclipse-java-oxygen-1a-linux-gtk-x86_64.tar.gz&mirror_id=17
+    tar xf eclipse-java-oxygen-1a-linux-gtk-x86_64.tar.gz
     ~/usr/eclipse/eclipse
 
-Go to *Help/Marketplace...*. Search for PyDev, and install it.
-Optionally, you can also install *Eclipse Color Theme*, *hunspell4eclipse*, and *ReST Editor*.
+(The last lines are to install Eclipse. Alternatively, you can go to the
+`Eclipse website <https://www.eclipse.org/downloads/>`_, download the installer, uncompress it and run it.)
+
+Go to *Help/Marketplace...*. Search for *PyDev*, and install it.
+Optionally, you can also install *Eclipse Color Theme*, and *ReST Editor*.
 
 In the Eclipse preference window, go to *PyDev/PyLint* and as location of the 
 pylint executable, indicate your lint.py, which is approximately at this place:
@@ -183,6 +185,9 @@ required packages into it.
 Note: Pip cannot always be used, because some packages need to compile (parts
 of) themselves. In this case we need to download the relevant Windows installer
 and use `easy_install` (which is part of `setuptools`) to install the package.
+Also, the versions indicated below are mostly the latest one at the time of this
+writing. In most cases, newer versions can be used. That is with the exception
+of wxPython, which must be 3.x, and OpenCV, which must be 2.4.
 
 #.  Git clone https://github.com/delmic/odemis.git into the project directory of
     the Odemis virtualenv.

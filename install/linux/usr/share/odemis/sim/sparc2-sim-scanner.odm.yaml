@@ -445,7 +445,7 @@ SPARC2: {
 "Scan Stage": {
     class: simulated.Stage,
     role: scan-stage,
-    affects: ["Camera", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
+    affects: ["Camera", "IR Camera", "Spectrometer Vis-NIR", "Spectrometer IR", "CL Detector", "SEM E-beam full"],
     init: {
         axes: [x, y],
         ranges: {
@@ -469,5 +469,5 @@ SPARC2: {
             "y": [-10.e-3, 10.e-3],
         },
     },
-    affects: ["Camera", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
+    affects: ["Camera", "IR Camera", "Spectrometer Vis-NIR", "Spectrometer IR", "CL Detector", "SEM E-beam full"],
 }

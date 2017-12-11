@@ -16,7 +16,7 @@ SPARC2: {
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera"],
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"],
 }
 
 "Power Control Unit": {
@@ -79,7 +79,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Dedicated Spectrometer", "Angular Camera", "Integrated Spectrometer"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Dedicated Spectrometer", "Camera", "Integrated Spectrometer"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -259,7 +259,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera", "Dedicated Spectrometer"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position

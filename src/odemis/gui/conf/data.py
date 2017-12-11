@@ -146,7 +146,9 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Accelerating voltage",
                 "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
-            ("probeCurrent", {}),
+            ("probeCurrent", {
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
+            }),
             ("spotSize", {
                 "tooltip": "Electron-beam Spot size",
             }),

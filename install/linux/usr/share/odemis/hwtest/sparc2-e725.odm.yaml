@@ -124,7 +124,7 @@ SPARC2: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SEM Detector", "Angular Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Not used
@@ -246,7 +246,7 @@ SPARC2: {
         },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR"],
 }
 
 "Spectrograph focus": {
@@ -256,7 +256,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR"],
 }
 
 
@@ -289,7 +289,7 @@ SPARC2: {
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR"],
 }
 
 "Optical Path Properties": {
@@ -307,7 +307,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"]
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -340,7 +340,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -355,7 +355,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR", "CL Detector"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -370,7 +370,7 @@ SPARC2: {
             -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -385,7 +385,7 @@ SPARC2: {
             0.01: ["Spec CCD Flipper"]
         },
     },
-    affects: ["Camera", "IR Camera", "Spectrometer IR", "CL Detector"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer IR", "CL Detector"],
 }
 
 "CL Filter Wheel": {
@@ -445,7 +445,6 @@ SPARC2: {
 "Scan Stage": {
     class: pigcs.Bus,
     role: scan-stage,
-    affects: ["Camera", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam"],
     init: {
         port: "autoip", # put "autoip" or the IP address (if fixed)
         # axis -> controller, channel, closed-loop?
@@ -453,6 +452,7 @@ SPARC2: {
         # TODO: check on the actual hardware -> needs to be the same directions as SEM
         inverted: ["x"],
     },
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam"],
 }
 
 "Sample Stage": {
@@ -465,5 +465,5 @@ SPARC2: {
             "y": [-10.e-3, 10.e-3],
         },
     },
-    affects: ["Camera", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
 }

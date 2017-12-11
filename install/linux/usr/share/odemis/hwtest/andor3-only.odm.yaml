@@ -83,6 +83,6 @@ Cam: {
 
 FakePIGCS: {
     class: simulated.Stage,
-    role: align,
+    role: null,
     init: {axes: ["a", "b", "z"]},
 }
