@@ -291,6 +291,8 @@ class ViewPortController(object):
         logging.debug("Failed to find any view compatible with stream %s", stream.name.value)
 
 OVV_DIMENSION = (0.02, 0.02)  # m
+OVV_SHAPE = (1200, 1200, 3)
+
 
 class OverviewController(object):
     """ Class to connect stage history and overview canvas together and to control the overview image  """
@@ -324,15 +326,12 @@ class OverviewController(object):
         else:
             # black image to display history overlay separately from built-up ovv image
             # controlled by merge slider
-            ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
-                         int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
-            
             md = {
                 MD_DIMS: "YXC",
-                MD_PIXEL_SIZE : (self.m_view.mpp.value, self.m_view.mpp.value),
+                MD_PIXEL_SIZE : (0.05 / 1200, 0.05 / 1200),
                 MD_POS: self.m_view.view_pos.value
             }
-            da = DataArray(numpy.zeros(ovv_shape, dtype=numpy.uint8), md)
+            da = DataArray(numpy.zeros(OVV_SHAPE, dtype=numpy.uint8), md)
             history_stream = acqstream.Static2DStream("History Stream", da)
             m_view.addStream(history_stream)
 
@@ -341,20 +340,15 @@ class OverviewController(object):
         # otherwise fall back to OVV_DIMENSION
         ax_x = self.main_data.stage.axes["x"]
         ax_y = self.main_data.stage.axes["y"]
+
+        self.m_view.mpp.value = 0.05 / 1200
         if (hasattr(ax_x, "range") and hasattr(ax_y, "range")):
             max_x = ax_x.range[1] - ax_x.range[0]
             max_y = ax_y.range[1] - ax_y.range[0]
             if max_x < 0.05 and max_y < 0.05:
-                ovv_shape = (int(max_y / self.m_view.mpp.value),
-                             int(max_x / self.m_view.mpp.value), 3)
-            else:
-                ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
-                             int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
-        else:
-            ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
-                         int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
+                self.m_view.mpp.value = min(max_x / 1200, max_y / 1200)
 
-        self.ovv_im = DataArray(numpy.zeros(ovv_shape, dtype=numpy.uint8))
+        self.ovv_im = DataArray(numpy.zeros(OVV_SHAPE, dtype=numpy.uint8))
         self.ovv_im.metadata[MD_DIMS] = "YXC"
         self.ovv_im.metadata[MD_PIXEL_SIZE] = (self.m_view.mpp.value, self.m_view.mpp.value)
         self.ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
