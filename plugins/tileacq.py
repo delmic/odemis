@@ -29,7 +29,8 @@ from collections import OrderedDict
 import logging
 import math
 from odemis import model, acq, dataio, util
-from odemis.acq.stream import Stream, SEMStream, CameraStream
+from odemis.acq import stream
+from odemis import acq
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -37,8 +38,15 @@ from odemis.util import dataio as udataio
 from odemis.util import img, TimeoutError
 import os
 import time
+import wx
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
+import threading
 
 from odemis.acq import stitching
+from odemis.acq.stream import Stream, SEMStream, CameraStream, SpotSEMStream, LiveStream, \
+    RepetitionStream, SEMMDStream, StaticSEMStream, StaticStream, UNDEFINED_ROI
+import numpy
 
 
 class TileAcqPlugin(Plugin):
@@ -95,7 +103,6 @@ class TileAcqPlugin(Plugin):
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
-
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
         # of the ROI and linearly interpolate)
         # TODO: on SECOM allow to do fine alignment for each tile
@@ -126,20 +133,24 @@ class TileAcqPlugin(Plugin):
             u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
         )
 
+    def _on_streams_change(self, _=None):
+        tab = self.main_app.main_data.tab.value
+        ss = self._get_live_streams(tab.tab_data_model)
+
+        # Subscribe to all relevant setting changes
+        for s in ss:
+            for va in self._get_settings_vas(s):
+                va.subscribe(self._update_exp_dur)
+
     def _update_exp_dur(self, _=None):
         """
         Called when VA that affects the expected duration is changed
         """
-        at = acq.estimateTime(self._get_streams())
+        tat = self.estimate_time()
 
-        # 0.5 s for move between tile
-        tat = (at + 0.5) * (self.nx.value * self.ny.value)
-
-        # TODO: if Delphi +5s per tile for SEM alignment
-
-        # 1s per tile for large-scale image (very roughly!)
-        if self.stitch.value:
-            tat = 1 * (self.nx.value * self.ny.value)
+        # Typically there are a few more pixels inserted at the beginning of
+        # each line for the settle time of the beam. We don't take this into
+        # account and so tend to slightly under-estimate.
 
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(tat), force_write=True)
@@ -165,13 +176,45 @@ class TileAcqPlugin(Plugin):
         # Use _set_value as it's read only
         self.totalArea._set_value(ta, force_write=True)
 
+    def _check_range(self, _=None):
+        """
+        Check that stage limit is not exceeded during acquisition of nx * ny tiles. Set
+        self.nx and self.ny to its maximum values if input exceeds possible number of tiles. 
+        """
+        stage = self.main_app.main_data.stage
+        orig_pos = stage.position.value
+        tile_size = self._guess_smallest_fov()
+        overlap = 1 - self.overlap.value / 100
+        tile_pos = (orig_pos["x"] + self.nx.value * tile_size[0] * overlap,
+            orig_pos["y"] - self.ny.value * tile_size[1] * overlap)
+
+        # The acquisition region only extends to the right and to the bottom, never
+        # to the left of the top of the current position, so it is not required to
+        # check the distance to the top and left edges of the stage.
+        if hasattr(stage.axes["x"], "range"):
+            max_x = stage.axes["x"].range[1]
+            if tile_pos[0] > max_x:
+                self.nx.value = int((max_x - orig_pos["x"]) / (overlap * tile_size[0]))
+                logging.info("Restricting number of tiles in x direction to %i due to stage limit."
+                              % self.nx.value)
+        if hasattr(stage.axes["y"], "range"):
+            min_y = stage.axes["y"].range[0]
+            if tile_pos[1] < min_y:
+                self.ny.value = int(-(min_y - orig_pos["y"]) / (overlap * tile_size[1]))
+                logging.info("Restricting number of tiles in y direction to %i due to stage limit."
+                              % self.ny.value)
+
     def _guess_smallest_fov(self):
         """
         Return (float, float): smallest width and smallest height of all the FoV
           Note: they are not necessarily from the same FoV.
         raise ValueError: If no stream selected
         """
-        fovs = [self._get_fov(s) for s in self._get_streams()]
+        ss = self._get_live_streams(self.main_app.main_data.tab.value.tab_data_model)
+        for s in ss:
+            if isinstance(s, StaticStream):
+                ss.remove(s)
+        fovs = [self._get_fov(s) for s in ss]
         if not fovs:
             raise ValueError("No stream so no FoV, so no minimum one")
 
@@ -179,19 +222,39 @@ class TileAcqPlugin(Plugin):
                 min(f[1] for f in fovs))
 
     def show_dlg(self):
-        # TODO: only accept to run if in "secom_live" or "sparc_acqui" tab
-        # (iow, has a streambar_controller)
-        # TODO: support SPARC by using "sparc_acqui"
         # TODO: if there is a chamber, only allow if there is vacuum
 
-        tab = self.main_app.main_data.getTabByName("secom_live")
-        ss = tab.tab_data_model.streams.value
+        # Fail if the live tab is not selected
+        tab = self.main_app.main_data.tab.value
+        if tab.name not in ("secom_live", "sparc_acqui"):
+            box = wx.MessageDialog(self.main_app.main_frame,
+                       "Tiled acquisition must be done from the acquisition stream.",
+                       "Tiled acquisition not possible", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
 
+        tab = self.main_app.main_data.tab.value
+
+        # If no roi is selected, select entire area
+        try:
+            if tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
+                tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
+        except AttributeError:
+            pass  # Not a SPARC
+
+        # Disable drift correction
+        if hasattr(tab.tab_data_model, "semStream"):
+            # SPARC
+            tab.tab_data_model.semStream.dcRegion.value = UNDEFINED_ROI
+
+        ss = self._get_live_streams(tab.tab_data_model)
         self.filename.value = self._get_new_filename()
 
         dlg = AcquisitionDialog(self, "Tiled acquisition",
                                 "Acquire a large area by acquiring the streams multiple "
                                 "times over a grid.")
+
         self._dlg = dlg
         dlg.addSettings(self, self.vaconf)
         for s in ss:
@@ -199,16 +262,21 @@ class TileAcqPlugin(Plugin):
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
-        # Update acq time and area when streams are added/removed
+        # Update acq time and area when streams are added/removed. Add stream settings
+        # to subscribed vas.
         dlg.microscope_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         dlg.microscope_view.stream_tree.flat.subscribe(self._update_total_area, init=True)
-        # TODO: also update when settings change
+        dlg.microscope_view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
+
+        self.nx.subscribe(self._check_range, init=True)
+        self.ny.subscribe(self._check_range, init=True)
 
         # TODO: disable "acquire" button if no stream selected.
 
         ans = dlg.ShowModal()
-        if ans == 0:
+        if ans == 0 or ans == wx.ID_CANCEL:
             logging.info("Tiled acquisition cancelled")
+            self.ft.cancel()
         elif ans == 1:
             logging.info("Tiled acquisition completed")
         else:
@@ -216,6 +284,71 @@ class TileAcqPlugin(Plugin):
 
         # Don't hold references
         self._dlg = None
+
+    # black list of VAs name which are known to not affect the acquisition time
+    VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
+                                "is_active", "should_update", "status", "name", "tint")
+
+    def _get_settings_vas(self, stream):
+        """
+        Find all the VAs of a stream which can potentially affect the acquisition time
+        return (set of VAs)
+        """
+        tab = self.main_app.main_data.tab.value
+        ss = self._get_live_streams(tab.tab_data_model)
+
+        nvas = model.getVAs(stream)  # name -> va
+        vas = set()
+        # remove some VAs known to not affect the acquisition time
+        for n, va in nvas.items():
+            if n not in self.VAS_NO_ACQUSITION_EFFECT:
+                vas.add(va)
+        return vas
+
+    def _get_live_streams(self, tab_data):
+        """
+        Return all the live streams for tiled acquisition present in the given tab
+        """
+        ss = list(tab_data.streams.value)
+
+        # On the SPARC, there is a Spot stream, which we don't need for live
+        if hasattr(tab_data, "spotStream"):
+            try:
+                ss.remove(tab_data.spotStream)
+            except ValueError:
+                pass  # spotStream was not there anyway
+
+        for s in ss:
+            if isinstance(s, StaticStream):
+                ss.remove(s)
+        return ss
+
+    def _get_acq_streams(self):
+        """
+        Return the streams that should be used for acquisition
+        """
+        # On the SPARC, the acquisition streams are not the same as the live
+        # streams. On the SECOM/DELPHI, they are the same (for now)
+        live_st = self._get_streams()
+        tab_data = self.main_app.main_data.tab.value.tab_data_model
+        if hasattr(tab_data, "acquisitionStreams"):  # Odemis v2.7+
+            acq_st = tab_data.acquisitionStreams
+        elif hasattr(tab_data, "acquisitionView"):  # Odemis v2.6 and earlier
+            acq_st = tab_data.acquisitionView.getStreams()
+        else:
+            # No special acquisition streams
+            return live_st
+
+        # Discard the acquisition streams which are not visible
+        ss = []
+        for acs in acq_st:
+            if isinstance(acs, stream.MultipleDetectorStream):
+                if any(subs in live_st for subs in acs.streams):
+                    ss.append(acs)
+                    break
+            elif acs in live_st:
+                ss.append(acs)
+        return ss
 
     def _generate_scanning_indices(self, rep):
         """
@@ -235,7 +368,7 @@ class TileAcqPlugin(Plugin):
 
             dir *= -1
 
-    def _move_to_tile(self, idx, orig_pos, tile_size):
+    def _move_to_tile(self, idx, orig_pos, tile_size, prev_idx):
         # Go left/down, with every second line backward:
         # similar to writing/scanning convention, but move of just one unit
         # every time.
@@ -245,16 +378,26 @@ class TileAcqPlugin(Plugin):
         # |
         # --->-->-->--Z
         overlap = 1 - self.overlap.value / 100
-        tile_pos = (orig_pos["x"] + idx[0] * tile_size[0] * overlap,
-                    orig_pos["y"] - idx[1] * tile_size[1] * overlap)
+        # don't move on the axis that is not supposed to have changed
+        main_data = self.main_app.main_data
+        prev_pos = main_data.stage.position.value
+        m = {}
+        idx_change = numpy.subtract(idx, prev_idx)
+        if idx_change[0]:
+            m["x"] = orig_pos["x"] + idx[0] * tile_size[0] * overlap
+        if idx_change[1]:
+            m["y"] = orig_pos["y"] - idx[1] * tile_size[1] * overlap
 
-        logging.debug("Moving to tile %s at %s m", idx, tile_pos)
-        f = self.main_app.main_data.stage.moveAbs({"x": tile_pos[0], "y": tile_pos[1]})
+        logging.debug("Moving to tile %s at %s m", idx, m)
+        f = self.main_app.main_data.stage.moveAbs(m)
         try:
-            f.result(10)
+            speed = 10e-6  # m/s. Assume very low speed for timeout.
+            t = math.hypot(tile_size[0] * overlap, tile_size[1] * overlap) / speed + 1
+            # add 1 to make sure it doesn't time out in case of a very small move
+            f.result(t)
         except TimeoutError:
             logging.warning("Failed to move to tile %s", idx)
-            f.cancel()
+            future.running_subf.cancel()
             # Continue acquiring anyway... maybe it has moved somewhere near
 
     def _get_fov(self, sd):
@@ -285,12 +428,143 @@ class TileAcqPlugin(Plugin):
                 # compensate for binning
                 binning = ccd.binning.value
                 pxs = [p / b for p, b in zip(pxs, binning)]
-
                 return (shape[0] * pxs[0], shape[1] * pxs[1])
+
+            elif isinstance(sd, RepetitionStream):
+                # CL, Spectrum, AR
+                ebeam = sd.emitter
+                global_fov = (ebeam.shape[0] * ebeam.pixelSize.value[0],
+                              ebeam.shape[1] * ebeam.pixelSize.value[1])
+                l, t, r, b = sd.roi.value
+                fov = abs(r - l) * global_fov[0], abs(b - t) * global_fov[1]
+                return fov
             else:
-                raise TypeError("Unsupported Stream")
+                raise TypeError("Unsupported Stream %s" % (sd,))
         else:
             raise TypeError("Unsupported object")
+
+    def _cancel_acquisition(self, future):
+        """
+        Canceler of acquisition task.
+        """
+        logging.debug("Canceling acquisition...")
+
+        with future._task_lock:
+            if future._task_state == FINISHED:
+                return False
+            future._task_state = CANCELLED
+            future.running_subf.cancel()
+            logging.debug("Acquisition cancelled.")
+
+        return True
+
+    STITCH_SPEED = 1e-8  # s/px
+    MOVE_SPEED = 1e3  # s/m
+
+    def estimate_time(self, remaining=None):
+        """
+        Estimates duration for acquisition and stitching.
+        """
+        ss = self._get_acq_streams()
+
+        if remaining is None:
+            remaining = self.nx.value * self.ny.value
+        acqt = acq.estimateTime(ss)
+
+        if self.stitch.value:
+            # Estimate stitching time based on number of pixels in the overlapping part
+            max_pxs = 0
+            for s in ss:
+                for sda in s.raw:
+                    pxs = sda.shape[0] * sda.shape[1]
+                    if pxs > max_pxs:
+                        max_pxs = pxs
+
+            stitcht = self.nx.value * self.ny.value * max_pxs * self.overlap.value * self.STITCH_SPEED
+        else:
+            stitcht = 0
+
+        try:
+            movet = max(self._guess_smallest_fov()) * self.MOVE_SPEED * (remaining - 1)
+            # current tile is part of remaining, so no need to move there
+        except ValueError:  # no current streams
+            movet = 0.5
+
+        return acqt * remaining + movet + stitcht
+
+    def sort_das(self, das, ss):
+        """
+        Sorts das based on priority for stitching, i.e. largest SEM da first, then
+        other SEM das, and finally das from other streams.
+        das: list of DataArrays
+        ss: streams from which the das were extracted
+        
+        returns: list of DataArrays, reordered input
+        """
+        # Add the ACQ_TYPE metadata (in case it's not there)
+        # In practice, we check the stream the DA came from, and based on the stream
+        # type, fill the metadata
+        for da in das:
+            if model.MD_ACQ_TYPE in da.metadata:
+                continue
+            for s in ss:
+                for sda in s.raw:
+                    if da is sda:  # Found it!
+                        if isinstance(s, acq.stream.EMStream):
+                            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
+                        elif isinstance(s, acq.stream.ARStream):
+                            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
+                        elif isinstance(s, acq.stream.SpectrumStream):
+                            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+                        elif isinstance(s, acq.stream.FluoStream):
+                            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_FLUO
+                        elif isinstance(s, acq.stream.MultipleDetectorStream):
+                           if model.MD_OUT_WL in da.metadata:
+                               da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_CL
+                           else:
+                               da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
+                        else:
+                            logging.warning("Unknown acq stream type for %s", s)
+                        break
+
+            if not da.metadata[model.MD_ACQ_TYPE]:
+                da.metadata[model.MD_ACQ_TYPE] = "Unknown"
+                logging.warning("Couldn't find the stream for DA of shape %s", da.shape)
+
+        # save tiles for stitching
+        if self.stitch.value:
+            # Remove the DAs we don't want to (cannot) stitch
+            das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] not in (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
+
+            def leader_quality(da):
+                """
+                return int: The bigger the more leadership
+                """
+                # For now, we prefer a lot the EM images, because they are usually the
+                # one with the smallest FoV and the most contrast
+                if da.metadata[model.MD_ACQ_TYPE] == model.MD_AT_EM:
+                    return numpy.prod(da.shape)  # More pixel to find the overlap
+                elif da.metadata[model.MD_ACQ_TYPE]:
+                    # A lot less likely
+                    return numpy.prod(da.shape) / 100
+
+            das.sort(key=leader_quality, reverse=True)
+            das = tuple(das)
+        return das
+
+    def _check_fov(self, das, sfov):
+        """
+        Checks the fov based on the data arrays.
+        das: list of DataArryas
+        sfov: previous estimate for the fov
+        """
+        afovs = [self._get_fov(d) for d in das]
+        asfov = (min(f[1] for f in afovs),
+                 min(f[0] for f in afovs))
+        if not all(util.almost_equal(e, a) for e, a in zip(sfov, asfov)):
+            logging.warning("Unexpected min FoV = %s, instead of %s", asfov, sfov)
+            sfov = asfov
+        return sfov
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
@@ -309,41 +583,37 @@ class TileAcqPlugin(Plugin):
 
         exporter = dataio.find_fittest_converter(fn_tile_pat)
 
-        ss = self._get_streams()
-        acqt = acq.estimateTime(ss)
-        if self.stitch.value:
-            stitcht = nb * 1
-        else:
-            stitcht = 0
-        end = time.time() + (acqt + 0.5) * nb + stitcht  # same formula as in _update_exp_dur()
+        ss = self._get_acq_streams()
+        end = self.estimate_time() + time.time()
 
         ft = model.ProgressiveFuture(end=end)
-        ft.task_canceller = lambda l: True  # To allow cancelling while it's running
+        self.ft = ft  # allows future to be canceled in show_dlg after closing window
+        ft.running_subf = model.InstantaneousFuture()
+        ft._task_state = RUNNING
+        ft._task_lock = threading.Lock()
+        ft.task_canceller = self._cancel_acquisition  # To allow cancelling while it's running
         ft.set_running_or_notify_cancel()  # Indicate the work is starting now
         dlg.showProgress(ft)
 
         # For stitching only
-        da_streams = []  # for each stream, a list of DataArrays
-
+        da_list = []  # for each position, a list of DataArrays
         i = 0
+        prev_idx = [0, 0]
         try:
             for ix, iy in self._generate_scanning_indices(trep):
+                logging.debug("Acquiring tile %dx%d", ix, iy)
+                self._move_to_tile((ix, iy), orig_pos, sfov, prev_idx)
+                prev_idx = ix, iy
                 # Update the progress bar
-                left = nb - i
-                dur = (acqt + 0.5) * left + stitcht
-                ft.set_progress(end=time.time() + dur)
+                ft.set_progress(end=self.estimate_time(nb - i) + time.time())
 
-                self._move_to_tile((ix, iy), orig_pos, sfov)
-
-                dur -= 0.5
-                ft.set_progress(end=time.time() + dur)
-                fa = acq.acquire(ss)
-                das, e = fa.result()  # blocks until all the acquisitions are finished
+                ft.running_subf = acq.acquire(ss)
+                das, e = ft.running_subf.result()  # blocks until all the acquisitions are finished
                 if e:
                     logging.warning("Acquisition for tile %dx%d partially failed: %s",
                                     ix, iy, e)
 
-                if ft.cancelled():
+                if ft._task_state == CANCELLED:
                     logging.debug("Acquisition cancelled")
                     return
 
@@ -352,49 +622,44 @@ class TileAcqPlugin(Plugin):
                 logging.debug("Will save data of tile %dx%d to %s", ix, iy, fn_tile)
                 exporter.export(fn_tile, das)
 
-                if ft.cancelled():
+                if ft._task_state == CANCELLED:
                     logging.debug("Acquisition cancelled")
                     return
 
-                if self.stitch.value:
-                    # We need to keep the data of each stream together
-                    # TODO use more clever way (ie, either based on which stream
-                    # correspond to which DA, or by using MD similarity)
-                    das = sorted(das, key=lambda d: d.metadata.get(model.MD_ACQ_DATE, 0))
-
-                    if not da_streams:
-                        da_streams = [[da] for da in das]
-                    else:
-                        for da, stream in zip(das, da_streams):
-                            stream.append(da)
+                # Sort tiles (largest sem on first position)
+                da_list.append(self.sort_das(das, ss))
 
                 # Check the FoV is correct using the data, and if not update
                 if i == 0:
-                    afovs = [self._get_fov(d) for d in das]
-                    asfov = (min(f[0] for f in afovs),
-                             min(f[1] for f in afovs))
-                    if not all(util.almost_equal(e, a) for e, a in zip(sfov, asfov)):
-                        logging.warning("Unexpected min FoV = %s, instead of %s", asfov, sfov)
-                        sfov = asfov
-
+                    sfov = self._check_fov(das, sfov)
                 i += 1
 
-            if ft.cancelled():
-                logging.debug("Acquisition cancelled")
-                return
+            # Move stage to original position
+            main_data.stage.moveAbs(orig_pos)
 
+            # Stitch SEM and CL streams
+            st_data = []
             if self.stitch.value:
                 logging.info("Acquisition completed, now stitching...")
-                ft.set_progress(end=time.time() + stitcht)
+                ft.set_progress(end=self.estimate_time(0) + time.time())
 
-                st_data = []
-                for da_in in da_streams:
-                    logging.info("Computing big image out of %d images", len(da_in))
-                    
-                    da_registered = stitching.register(da_in)
-                    da = stitching.weave(da_registered)
+                logging.info("Computing big image out of %d images", len(da_list))
+                das_registered = stitching.register(da_list)
+
+                # Weave every stream
+                if isinstance(das_registered[0], tuple):
+                    for s in range(len(das_registered[0])):
+                        streams = []
+                        for da in das_registered:
+                            streams.append(da[s])
+                        da = stitching.weave(streams)
+                        da.metadata[model.MD_DIMS] = "YX"
+                        st_data.append(da)
+                else:
+                    da = stitching.weave(das_registered)
                     st_data.append(da)
 
+                # Save
                 exporter = dataio.find_fittest_converter(fn)
                 if exporter.CAN_SAVE_PYRAMID:
                     exporter.export(fn, st_data, pyramid=True)
@@ -405,11 +670,22 @@ class TileAcqPlugin(Plugin):
             ft.set_result(None)  # Indicate it's over
 
             # End of the (completed) acquisition
-            if not ft.cancelled():
+            if not ft._task_state == CANCELLED:
                 dlg.Destroy()
+
+            # Open analysis tab
+            tab = main_data.getTabByName('analysis')
+            main_data.tab.value = tab
+            tab.load_data(fn)
 
             # TODO: also export a full image (based on reported position, or based
             # on alignment detection)
+        except CancelledError:
+            logging.debug("Acquisition cancelled")
+        except Exception, e:
+            logging.info("An error occurred. Acquisition unsuccessful.")
+            ft.running_subf.cancel()
+            raise
         finally:
             logging.info("Tiled acquisition ended")
             main_data.stage.moveAbs(orig_pos)
