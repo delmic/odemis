@@ -362,7 +362,7 @@ class OverviewController(object):
         self.m_view.addStream(self.upd_stream)
 
     def _on_merge_ratio_change(self, _):
-        self.canvas.history_overlay.merge_ratio = self.m_view.merge_ratio.value
+        self.canvas.history_overlay.set_merge_ratio(self.m_view.merge_ratio.value)
         wx.CallAfter(self.canvas.history_overlay.cnvs.request_drawing_update)
 
     def on_stage_pos_change(self, p_pos):
