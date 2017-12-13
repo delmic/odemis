@@ -32,8 +32,6 @@ import threading
 import time
 
 
-logging.getLogger().setLevel(logging.INFO)
-
 LIVE_UPDATE_PERIOD = 10  # s, time between two images in the GUI (during acquisition)
 
 class SRAcqPlugin(Plugin):
