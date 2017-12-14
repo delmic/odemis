@@ -2745,8 +2745,8 @@ class Sparc2AlignTab(Tab):
             else:
                 self._moveLensToActive()
 
-        # Documentation text on the right panel for mirror alignement
-        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_alignment.html")
+        # Documentation text on the right panel for mirror alignment
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_header.html")
         panel.html_moi_doc.SetBorders(0)
         panel.html_moi_doc.LoadPage(doc_path)
 
@@ -2805,11 +2805,6 @@ class Sparc2AlignTab(Tab):
         #   supposed to make things easier (and almost automatic) but it doesn't
         #   work in all cases/samples. So we use now just rely on the direct CCD
         #   view.
-
-        if "lens-align" not in tab_data.align_mode.choices:
-            self.panel.pnl_lens_mover.Show(False)
-            # In such case, there is no focus affecting the ccd, so the
-            # pnl_focus will also be hidden later on, by the ccd_focuser code
 
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
@@ -2906,6 +2901,9 @@ class Sparc2AlignTab(Tab):
             # Bind autofocus (the complex part is to get the menu entry working too)
             self.panel.btn_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
             tab_data.autofocus_active.subscribe(self._onAutofocus)
+
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_autofocus.html")
+            panel.html_moi_doc.AppendToPage(doc_cnt)
         else:
             self.panel.pnl_focus.Show(False)
 
@@ -2954,8 +2952,19 @@ class Sparc2AlignTab(Tab):
 
             # To activate the SEM spot when the CCD plays
             mois.should_update.subscribe(self._on_ccd_stream_play)
+
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_mirror.html")
+            panel.html_moi_doc.AppendToPage(doc_cnt)
         else:
             self.panel.btn_bkg_acquire.Show(False)
+
+        if "lens-align" not in tab_data.align_mode.choices:
+            self.panel.pnl_lens_mover.Show(False)
+            # In such case, there is no focus affecting the ccd, so the
+            # pnl_focus will also be hidden later on, by the ccd_focuser code
+        else:
+            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens.html")
+            panel.html_moi_doc.AppendToPage(doc_cnt)
 
         if "center-align" in tab_data.align_mode.choices:
             # The center align view share the same CCD stream (and settings)
