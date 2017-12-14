@@ -298,6 +298,8 @@ class MetadataUpdater(model.Component):
         self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
 
     def terminate(self):
+        self._mic.alive.unsubscribe(self._onAlive)
+
         # call all the unsubscribes
         for fun, args in self._onTerminate:
             try:

@@ -243,7 +243,7 @@ class BackendContainer(model.Container):
         """
         Stops all the components that are currently alive (excepted the
           microscope)
-        It terminate them parents first as the instantiated children should
+        It terminate the parents (aka "users") first as the instantiated children should
          never need their parent but the parent might rely on the children.
          Delegated children should be directly terminated by their creator, so
          by the time we terminate them, it's a no-op.
@@ -256,8 +256,8 @@ class BackendContainer(model.Container):
         parents = {c: set() for c in alive}  # comp -> set of comps (all its parents)
         for comp in alive:
             # TODO: if a component was created by delegation, use its creator
-            # instead of itself of the other components, to ensure they might
-            # not be terminated too early.
+            # instead of itself as "used" by the other components, to ensure
+            # they might not be terminated too early.
             try:
                 for child in comp.children.value:
                     # TODO: do not add the creator

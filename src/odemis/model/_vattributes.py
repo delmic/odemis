@@ -71,7 +71,7 @@ class VigilantAttributeBase(object):
                                                         val,
                                                         len(self._listeners))
 
-    def subscribe(self, listener, init=False, **kwargs):
+    def subscribe(self, listener, init=False):
         """
         Register a callback function to be called when the VigilantAttributeBase
         is changed
@@ -79,18 +79,12 @@ class VigilantAttributeBase(object):
         listener (function): callback function which takes as argument val the
             new value
         init (boolean): if True calls the listener directly, to initialise it
-
-        Additional keyword arguments can be provided. They will be passed to
-        listener *ONLY ONCE* and only if `init` is True!
-
-        One of the reasons for this, is that we cannot easily store the `kwargs`
-        into the `_listeners` set, because `dicts` are not hashable.
         """
         assert callable(listener)
         self._listeners.add(WeakMethod(listener))
 
         if init:
-            listener(self.value, **kwargs)
+            listener(self.value)
 
     def unsubscribe(self, listener):
         self._listeners.discard(WeakMethod(listener))
@@ -288,7 +282,7 @@ class VigilantAttribute(VigilantAttributeBase):
             pass  # we've done our best
 
     @oneway
-    def subscribe(self, listener, init=False, **kwargs):
+    def subscribe(self, listener, init=False):
         """
         listener (string) => uri of listener of zmq
         listener (callable) => method to call (locally)
@@ -299,7 +293,7 @@ class VigilantAttribute(VigilantAttributeBase):
             if init:
                 self.pipe.send_pyobj(self.value)
         else:
-            VigilantAttributeBase.subscribe(self, listener, init, **kwargs)
+            VigilantAttributeBase.subscribe(self, listener, init)
 
     @oneway
     def unsubscribe(self, listener):
@@ -413,11 +407,11 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self._ctx)
         self._thread.start()
 
-    def subscribe(self, listener, init=False, **kwargs):
+    def subscribe(self, listener, init=False):
         count_before = len(self._listeners)
 
         # TODO: when init=True, if already listening, reuse last received value
-        VigilantAttributeBase.subscribe(self, listener, init, **kwargs)
+        VigilantAttributeBase.subscribe(self, listener, init)
 
         if count_before == 0:
             self._start_listening()
