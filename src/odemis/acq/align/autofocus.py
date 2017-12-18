@@ -66,11 +66,13 @@ def AssessFocus(levels):
     levels (list of floats): List of focus levels
     returns (boolean): True if there is significant deviation
     """
-    max_l = max(levels)
-    levels.remove(max_l)
     std_l = numpy.std(levels)
-    avg_l = numpy.mean(levels)
     logging.debug("Current standard deviation in focus levels: %f", std_l)
+
+    levels_nomax = list(levels)
+    max_l = max(levels)
+    levels_nomax.remove(max_l)
+    avg_l = numpy.mean(levels_nomax)
     l_diff = max_l - avg_l
     logging.debug("Difference between maximum and average focus level %f", l_diff)
     if (l_diff >= 15 * std_l):
