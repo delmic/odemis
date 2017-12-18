@@ -741,7 +741,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
         # the stage
         opt_pos = opt_stage.position.value
         if (opt_pos["x"], opt_pos["y"]) != (0, 0):
-            logger.warning("Optical stage not at it's origin as expected, will compensate offset")
+            logger.warning("Optical stage not at its origin as expected, will compensate offset")
             offset = (offset[0] - opt_pos["x"], offset[1] - opt_pos["y"])
 
         return offset
