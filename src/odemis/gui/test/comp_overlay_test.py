@@ -45,7 +45,6 @@ import odemis.model as omodel
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
-# test.set_sleep_time(1000)
 
 
 class OverlayTestCase(test.GuiTestCase):
@@ -342,9 +341,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.AngularResolvedCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        test.gui_loop()
-
-        test.sleep(10)
+        test.gui_loop(0.1)
 
         cnvs.polar_overlay.phi_deg = 60
         cnvs.polar_overlay.theta_deg = 60
@@ -682,11 +679,11 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
         cnvs.update_drawing()
-        test.sleep(500)
+        test.gui_loop(0.5)
 
         point.value = (50 / 1.0e5, 50 / 1.0e5)
 
-        test.sleep(500)
+        test.gui_loop(0.5)
 
         # point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
         # pol.set_point(point)

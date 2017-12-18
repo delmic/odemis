@@ -41,7 +41,6 @@ def run_test():
 
             module.INSPECT = False
             module.MANUAL = False
-            module.SLEEP_TIME = 10
 
             alltests.addTest(unittest.findTestCases(module))
 
@@ -49,7 +48,6 @@ def run_test():
 
     test.INSPECT = False
     test.MANUAL = False
-    test.SLEEP_TIME = 10
 
     print "\n** Running..."
     alltests.run(result)

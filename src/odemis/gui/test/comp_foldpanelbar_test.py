@@ -65,7 +65,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_structure(self):
         """ Test whether the FoldPanelBar consists of the right components in the right place """
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         self.assertIsInstance(self.app.test_frame.scrwin, wx.ScrolledWindow)
         self.assertEqual(len(self.app.test_frame.scrwin.GetChildren()), 1)
@@ -89,7 +89,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         appfpb = self.app.test_frame.fpb
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Put back into more or less original state
         self.app.test_frame.panel_1.expand()
@@ -123,7 +123,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), True)
         self.assertEqual(appfpb.has_horz_scrollbar(), False)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Collapse the 2nd panel
         wx.PostEvent(self.app.test_frame.panel_2, event)
@@ -135,7 +135,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_scrollbar_on_resize(self):
         """ Test the scroll bar """
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Put back into more or less original state
         self.app.test_frame.panel_1.expand()
@@ -158,8 +158,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.app.test_frame.SetSize((100, 400))
         test.gui_loop(0.1)
 
-        wx.MilliSleep(test.SLEEP_TIME)
-
         # No scroll bars should appear
         self.assertEqual(appfpb.has_vert_scrollbar(), False, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
@@ -172,7 +170,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), True, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Reset Size
         self.app.test_frame.SetSize((400, 400))
@@ -181,7 +179,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_caption_position(self):
         """ Test if the caption positions don't when expanding and collapsing"""
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         ini_positions = [i.GetPosition() for i in self.foldpanelitems]
 
@@ -196,7 +194,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertGreater(ini_positions[1][1], new_positions[1][1])
         self.assertGreater(ini_positions[2][1], new_positions[2][1])
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Panel 1 EXPAND
         wx.PostEvent(self.app.test_frame.panel_1, event)
@@ -206,7 +204,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertEqual(new_positions, ini_positions)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Panel 2 EXPAND
         event = self.build_caption_event(self.app.test_frame.panel_2)
@@ -219,7 +217,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(new_positions[1][1], ini_positions[1][1])
         self.assertGreater(new_positions[2][1], ini_positions[2][1])
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         # Panel 2 COLLAPSE
         wx.PostEvent(self.app.test_frame.panel_2, event)
@@ -229,7 +227,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertEqual(new_positions, ini_positions)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
     def test_icon_position(self):
         """ Test the position of the fold/collapse icon """
@@ -237,7 +235,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_foldpanel_manipulation(self):
 
-        test.set_sleep_time(100)
         appfpb = self.app.test_frame.fpb
         fpb_height = appfpb.BestSize.GetHeight()
 
@@ -282,7 +279,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # 4 fold panels total in the bar
         self.assertEqual(len(appfpb.GetChildren()), 4)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         appfpb.remove_item(new_panel)
         test.gui_loop(0.1)
@@ -290,6 +287,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # New panel removed, back to 3
         self.assertEqual(len(appfpb.GetChildren()), 3)
 
+        # TODO: sometimes the window is bigger, and the scrollbar doesn't appear
+        # even if we've added 7 children
         false_pos_warn = ("This might be a false positive. "
                           "Run test module stand-alone to verify")
 
@@ -297,25 +296,27 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), False, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(0.1)
 
         top_panel = self.app.test_frame.panel_1
 
         new_labels = []
 
-        for dummy in range(4):
+        # Normally, 5 children
+        for dummy in range(5):
             item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
             top_panel.add_item(item)
             new_labels.append(item)
 
         test.gui_loop(0.1)
 
-        # No Scroll bars yet
+        # No scrollbar yet, but almost full (normally)
         self.assertEqual(appfpb.has_vert_scrollbar(), False, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
         test.gui_loop(0.1)
 
+        # One last "drop" to make the scrollbar appear
         item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
         top_panel.add_item(item)
         new_labels.append(item)
@@ -326,8 +327,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), True, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        # Count children of the top fold panel: 2 labels and 4 added labels: 6 total
-        self.assertEqual(len(top_panel._container.GetChildren()), 7)
+        # Count children of the top fold panel: 2 labels and 5 added labels: 7 total
+        self.assertEqual(len(top_panel._container.GetChildren()), 8)
 
         new_labels.reverse()
         for label in new_labels:
