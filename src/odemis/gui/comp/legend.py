@@ -63,9 +63,12 @@ class InfoLegend(wx.Panel):
             (stream.CLStream, img.getBitmap("icon/ico_blending_opt.png")),  # same as optical
             (stream.EMStream, img.getBitmap("icon/ico_blending_sem.png")),
             (stream.RGBStream, img.getBitmap("icon/ico_blending_goal.png")),
-            (stream.RGBUpdatableStream, img.getBitmap("icon/ico_map.png")),
-            (stream.RGBCameraStream, img.getBitmap("icon/ico_cam_white.png")),
-            (stream.BrightfieldStream, img.getBitmap("icon/ico_cam_white.png")),
+            (stream.RGBUpdatableStream, img.getBitmap("icon/ico_blending_map.png")),
+            (stream.RGBCameraStream, img.getBitmap("icon/ico_blending_navcam.png")),
+            (stream.BrightfieldStream, img.getBitmap("icon/ico_blending_navcam.png")),
+            (stream.Static2DStream, img.getBitmap("icon/ico_blending_history.png")),
+            (stream.OpticalStream, img.getBitmap("icon/ico_blending_opt.png")),  # Optical
+            # streams that are not RGBCameraStream
         )
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
