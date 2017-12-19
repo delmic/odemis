@@ -414,7 +414,7 @@ class OverviewController(object):
             if isinstance(s, acqstream.OpticalStream):
                 self.im_opt = insert_tile_to_image(img, self.im_opt)
             elif isinstance(s, acqstream.EMStream):
-                self.im_sem = insert_tile_to_image(img, self.im_opt)
+                self.im_sem = insert_tile_to_image(img, self.im_sem)
             else:
                 logging.info("%s not added to overview image as it's not optical nor EM", s)
 
