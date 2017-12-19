@@ -31,7 +31,6 @@ import unittest
 import wx
 
 import odemis.gui.comp.canvas as canvas
-import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.viewport as viewport
 import odemis.gui.test as test
 
@@ -134,8 +133,6 @@ class ViewportTestCase(test.GuiTestCase):
 #     @unittest.skip("simple")
     def test_plot_viewport(self):
 
-        test.set_sleep_time(100)
-
 #         vwp = viewport.PlotViewport(self.panel)
         vwp = viewport.PointSpectrumViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
@@ -161,7 +158,7 @@ class ViewportTestCase(test.GuiTestCase):
                 with self.assertRaises(ValueError):
                     vwp.canvas.set_1d_data(plot[0], plot[1])
                     vwp.canvas.draw()
-                    test.gui_loop()
+                    test.gui_loop(0.1)
 
             vwp.Refresh()
 
@@ -169,7 +166,7 @@ class ViewportTestCase(test.GuiTestCase):
                 vwp.canvas.set_1d_data(plot[0], plot[1])
                 vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
                 vwp.left_legend.range = (min(plot[1]), max(plot[1]))
-                test.gui_loop()
+                test.gui_loop(0.1)
 
             vwp.Refresh()
 
@@ -177,7 +174,7 @@ class ViewportTestCase(test.GuiTestCase):
                 vwp.canvas.set_1d_data(plot[0], plot[1])
                 vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
                 vwp.left_legend.range = (min(plot[1]), max(plot[1]))
-                test.gui_loop()
+                test.gui_loop(0.1)
 
             vwp.Refresh()
 
@@ -188,7 +185,7 @@ class ViewportTestCase(test.GuiTestCase):
                                        range_y=plot[1])
                 vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
                 vwp.left_legend.range = (min(plot[1]), max(plot[1]))
-                test.gui_loop()
+                test.gui_loop(0.1)
 
             vwp.Refresh()
 

@@ -187,7 +187,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # BufferedCanvas is abstract and shoul not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_threaded_plot(self):
         test.goto_manual()
 
@@ -208,7 +208,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
             scale = 1.001
 
-            timeout = time.time() + 600
+            timeout = time.time() + 6
 
             while True:
                 cnvs.set_1d_data(xs, ys, unit_x='m', unit_y='g')
@@ -218,7 +218,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
                 if time.time() > timeout:
                     break
 
-                # threading._sleep(0.0005)
             print "No error..."
             self.frame.Destroy()
 
@@ -227,7 +226,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         t.setDaemon(True)
         t.start()
 
-        test.gui_loop()
+        test.gui_loop(10)
 
     # @unittest.skip("simple")
     def test_bitmap_canvas(self):
@@ -242,8 +241,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.set_images([img, None])
         cnvs.update_drawing()
 
-        test.gui_loop()
-        test.sleep(500)
+        test.gui_loop(0.5)
 
         # self.remove_all()
         #
@@ -254,19 +252,17 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # cnvs.update_drawing()
         #
         # # cnvs.fit_view_to_content()
-        # test.gui_loop()
-        # test.sleep(5)
+        # test.gui_loop(0.05)
 
         # for i in range(500):
         #     cnvs.bg_offset = (i % 40, i % 40)
         #     cnvs.update_drawing()
 
-        #     test.gui_loop()
-        #     test.sleep(10)
+        #     test.gui_loop(0.1)
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_plot_viewport(self):
-        vwp = viewport.PlotViewport(self.panel)
+        vwp = viewport.PointSpectrumViewport(self.panel)
         self.add_control(vwp, wx.EXPAND, proportion=1)
 
         for horz, vert in PLOTS:
@@ -340,8 +336,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.set_2d_data(im_data)
         cnvs.update_drawing()
 
-        test.gui_loop()
-        test.sleep(200)
+        test.gui_loop(0.2)
 
     # @unittest.skip("simple")
     def test_buffer_to_world(self):
@@ -351,8 +346,8 @@ class PlotCanvasTestCase(test.GuiTestCase):
             for bp in BUFF_COORDS:
                 for s in SCALES:
                     for c in BUFFER_CENTER:
-                        wp = canvas.BufferedCanvas.buffer_to_world_pos(bp, c, s, offset)
-                        nbp = canvas.BufferedCanvas.world_to_buffer_pos(wp, c, s, offset)
+                        wp = canvas.BufferedCanvas.buffer_to_phys_pos(bp, c, s, offset)
+                        nbp = canvas.BufferedCanvas.phys_to_buffer_pos(wp, c, s, offset)
 
                         err = ("{} -> {} -> {} "
                                "scale: {}, center: {}, offset: {}")
@@ -363,10 +358,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
 
 if __name__ == "__main__":
-    # unittest.main()
+    unittest.main()
 
-    suit = unittest.TestSuite()
-    # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
-    suit.addTest(PlotCanvasTestCase("test_plot_viewport"))
-    runner = unittest.TextTestRunner()
-    runner.run(suit)
+#     suit = unittest.TestSuite()
+#     # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
+#     suit.addTest(PlotCanvasTestCase("test_plot_viewport"))
+#     runner = unittest.TextTestRunner()
+#     runner.run(suit)

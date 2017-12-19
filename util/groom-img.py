@@ -11,9 +11,6 @@ import subprocess
 import sys
 from wx.tools.img2py import img2py
 
-# Directories that contain images to embed into data.py
-img_dirs = (".", "button", "icon", "menu")
-
 
 def cmd_exists(cmd):
     return subprocess.call("type " + cmd,
@@ -33,40 +30,43 @@ base_dir = os.path.join(os.path.dirname(__file__), "../src/")
 
 #if args.optimize:
 if not cmd_exists('pngcrush'):
-    print "Pngcrush not found, can't optimize!"
+    print("Pngcrush not found, can't optimize!")
 else:
     for dirpath, dirnames, filenames in os.walk(base_dir):
-        print "** Optimizing", dirpath
+        print("** Optimizing", dirpath)
 
         for f in [fn for fn in filenames if fn[-4:] == '.png']:
             ff = os.path.join(dirpath, f)
             fs = os.path.getsize(ff)
 
             if not args.skiplarge or fs < 10240:
-                print ' - ', ff
+                print(' - ', ff)
                 subprocess.call(['pngcrush', '-brute', '-rem', 'alla', ff, '%s.opt' % ff],
                                 stdout=subprocess.PIPE)
                 if os.path.exists('%s.opt' % ff):
                     os.rename('%s.opt' % ff, ff)
                 else:
-                    print "    %s.opt not found!!" % ff
+                    print("    %s.opt not found!" % ff)
             else:
-                print ' - SKIPPING ', ff
+                print(' - SKIPPING ', ff)
+
+# Directories that contain images to embed into data.py
+# img_dirs = (".", "button", "icon", "menu")
 
 # Image embedding
 #first = True
 #fakeoutput = StringIO.StringIO()  # for img2py
 
 #if not cmd_exists('img2py'):
-#    print "Img2py not found, can't generate python file!"
+#    print("Img2py not found, can't generate python file!")
 #else:
 #    outpy = os.path.join(base_dir, 'data.py')
 #    for idir in img_dirs:
 #        dirpath = os.path.join(base_dir, idir)
-#        print "** Packaging", dirpath
+#        print("** Packaging", dirpath)
 
 #        for f in glob.glob(os.path.join(dirpath, "*.png")):
-#            print ' - ', f
+#            print(' - ', f)
 
 #            sys.stdout = fakeoutput  # because img2py prints useless info uncontrollably
 #            img2py(f, outpy, append=(not first), catalog=True, functionCompatible=True)

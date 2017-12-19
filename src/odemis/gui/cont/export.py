@@ -219,7 +219,6 @@ class ExportController(object):
         elif export_type == 'spectrum-line':
             exported_data = line_to_export_data(vp.stream, raw)
         else:
-            export_type = 'spatial'
             view_px = tuple(vp.canvas.ClientSize)
             view_mpp = fview.mpp.value
             view_hfw = (view_mpp * view_px[0], view_mpp * view_px[1])
