@@ -5,7 +5,7 @@ Created on 5 Jan 2015
 
 @author: Kimon Tsitsikas
 
-Copyright © 2014-2015 Kimon Tsitsikas, Delmic
+Copyright © 2014-2017 Kimon Tsitsikas, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -112,16 +112,23 @@ class ArrowFocus(object):
                 f = self.opt_focus.moveRel({'z': mov})
                 f.result()
 
-    def focusByArrow(self, rollback_position=None):
+    def focusByArrow(self, rollback_pos=None):
+        """
+        rollback_pos (float, float): absolute sem_stage position
+        """
         self._focus_thread = threading.Thread(target=self._move_focus,
                                               name="Arrow focus thread")
         self._focus_thread.start()
+        init_pos = self.sem_stage.position.value
         try:
             while True:
                 c = getch()
-                if c in ('R', 'r') and rollback_position is not None:
-                    f = self.sem_stage.moveAbs({'x': rollback_position[0],
-                                                'y': rollback_position[1]})
+                if c in ('R', 'r') and rollback_pos:
+                    f = self.sem_stage.moveAbs({'x': rollback_pos[0],
+                                                'y': rollback_pos[1]})
+                    f.result()
+                elif c in ('I', 'i'):
+                    f = self.sem_stage.moveAbs(init_pos)
                     f.result()
                 elif c == '\x1b[A':
                     self._moves_opt.append(self.opt_stepsize)
@@ -265,6 +272,12 @@ def man_calib(logpath):
         # Set basic e-beam settings
         escan.spotSize.value = 2.7
         escan.accelVoltage.value = 5300  # V
+        # Without automatic blanker, the background subtraction doesn't work
+        if (model.hasVA(escan, "blanker") and  # For simulator
+            None in escan.blanker.choices and
+            escan.blanker.value is not None):
+            logging.warning("Blanker set back to automatic")
+            escan.blanker.value = None
 
         # Detect the holes/markers of the sample holder
         while True:
@@ -395,7 +408,7 @@ def man_calib(logpath):
                 ans = raw_input(msg)
             if ans in YES_CHARS:
                 # Configure CCD and e-beam to write CL spots
-                ccd.binning.value = (1, 1)
+                ccd.binning.value = ccd.binning.clip((4, 4))
                 ccd.resolution.value = ccd.resolution.range[1]
                 ccd.exposureTime.value = 900e-03
                 escan.scale.value = (1, 1)
@@ -409,11 +422,12 @@ def man_calib(logpath):
                 print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                 if not force_calib:
-                    print "\033[1;33mIf you cannot see the whole source background (bright circle) you may try to move to the already known offset position. \nTo do this press the R key at any moment.\033[1;m"
+                    print("\033[1;33mIf you cannot see the whole source background (bright circle) you may try to move to the already known offset position. \n"
+                          "To do this press the R key at any moment and use I to go back to the initial position.\033[1;m")
                     rollback_pos = (offset[0] * scaling[0], offset[1] * scaling[1])
                 else:
                     rollback_pos = None
-                ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, 10e-6)
                 ar.focusByArrow(rollback_pos)
                 detector.data.unsubscribe(_discard_data)
                 print "\033[1;30mTwin stage calibration starting, please wait...\033[1;m"
@@ -510,7 +524,7 @@ def man_calib(logpath):
                 detector.data.subscribe(_discard_data)
                 print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
-                ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, 10e-6)
                 ar.focusByArrow()
                 detector.data.unsubscribe(_discard_data)
 

@@ -166,38 +166,44 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
         if ccd.binning.value == (2, 2):
             hqet *= 4  # To compensate for smaller binning
 
-        # Try to find spot
-        if future._task_state == CANCELLED:
-            raise CancelledError()
-
         logging.debug("Trying to find spot...")
-        future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
-        dist, vector = future._centerspotf.result()
+        for i in range(3):
+            if future._task_state == CANCELLED:
+                raise CancelledError()
 
-        # If spot not found, autofocus and then retry
-        if dist is None:
-            if future._task_state == CANCELLED:
-                raise CancelledError()
-            logging.debug("Spot not found, try to autofocus...")
-            try:
-                # When Autofocus set binning 8 if possible, and use exhaustive
-                # method to be sure not to miss the spot.
-                ccd.binning.value = ccd.binning.clip((8, 8))
-                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=MTD_EXHAUSTIVE)
-                lens_pos, fm_level = future._autofocusf.result()
-                # Update progress of the future
-                future.set_progress(end=time.time() +
-                                    estimateAlignmentTime(hqet, dist, 1))
-            except IOError as ex:
-                logging.error("Autofocus on spot image failed: %s", ex)
-                raise IOError('Spot alignment failure. AutoFocus failed.')
-            if future._task_state == CANCELLED:
-                raise CancelledError()
-            logging.debug("Trying again to find spot...")
-            future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
-            dist, vector = future._centerspotf.result()
-            if dist is None:
-                raise IOError('Spot alignment failure. Spot not found')
+            if i == 0:
+                future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
+                dist, vector = future._centerspotf.result()
+            elif i == 1:
+                logging.debug("Spot not found, auto-focusing...")
+                try:
+                    # When Autofocus set binning 8 if possible, and use exhaustive
+                    # method to be sure not to miss the spot.
+                    ccd.binning.value = ccd.binning.clip((8, 8))
+                    future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=MTD_EXHAUSTIVE)
+                    lens_pos, fm_level = future._autofocusf.result()
+                    # Update progress of the future
+                    future.set_progress(end=time.time() +
+                                        estimateAlignmentTime(hqet, dist, 1))
+                except IOError as ex:
+                    logging.error("Autofocus on spot image failed: %s", ex)
+                    raise IOError('Spot alignment failure. AutoFocus failed.')
+                logging.debug("Trying again to find spot...")
+                future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
+                dist, vector = future._centerspotf.result()
+            elif i == 2:
+                if dfbkg is not None:
+                    # In some case background subtraction goes wrong, and makes
+                    # things worse, so try without.
+                    logging.debug("Trying again to find spot, without background subtraction...")
+                    dfbkg = None
+                    future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, dfbkg)
+                    dist, vector = future._centerspotf.result()
+
+            if dist is not None:
+                break
+        else:
+            raise IOError('Spot alignment failure. Spot not found')
 
         ccd.binning.value = (1, 1)
         ccd.exposureTime.value = ccd.exposureTime.clip(hqet)
