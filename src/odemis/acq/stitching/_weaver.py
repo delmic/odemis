@@ -200,9 +200,13 @@ class MeanWeaver(object):
         # empty (False). For the overlapping parts, the tile is multiplied with weights corresponding
         # to a gradient that has its maximum at the center of the tile and
         # smoothly decreases toward the edges. The function for creating the weights is
-        # a distance measure resembling the l5-norm, i.e. a rectangle with smooth edges.
+        # a distance measure resembling the maximum-norm, i.e. equidistant points lie
+        # on a rectangle (instead of a circle like for the euclidean norm). Additionally,
+        # the x and y values generating this norm are raised to the power of 6 to
+        # create a steeper gradient. The value 6 is quite arbitrary and was found to give
+        # good results during experimentation.
         # The part of the overview image that overlaps with the new tile is multiplied with the
-        # reverse of the weights (1 -  weights) and the weighted overlapping parts of the new tile and
+        # complementary weights (1 -  weights) and the weighted overlapping parts of the new tile and
         # the ovv image are added, so the resulting image contains a gradient in the overlapping regions
         # between all the tiles that have been inserted before and the newly inserted tile.
 
@@ -242,8 +246,16 @@ class MeanWeaver(object):
             else:
                 y = numpy.arange(-hh, hh + 1, 1)
 
-            xx, yy = numpy.meshgrid((x / hw) ** 3, (y / hh) ** 3)
-            w = numpy.hypot(xx, yy)  # function determined experimentally: sqrt(abs(x)^5)
+            xx, yy = numpy.meshgrid((x / hw) ** 6, (y / hh) ** 6)
+            w = numpy.maximum(xx, yy)
+            # Hardcoding a weight function is quite arbitrary and might result in
+            # suboptimal solutions in some cases.
+            # Alternatively, different weights might be used. One option would be to select
+            # a fixed region on the sides of the image, e.g. 20% (expected overlap), and
+            # only apply a (linear) gradient to these parts, while keeping the new tile for the
+            # rest of the region. However, this approach does not solve the hardcoding problem
+            # since the overlap region is still arbitrary. Future solutions might adaptively
+            # select the this region.
 
             # Use weights to create gradient in overlapping region
             roi[moi] = (t * (1 - w))[moi] + (roi * w)[moi]
