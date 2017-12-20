@@ -42,6 +42,8 @@ import time
 AXIS_PARAMS = {
     4: "Maximum positioning speed",
     5: "Maximum acceleration",
+    # Note: some versions of the documentation state params 6 & 7 cannot be
+    # stored in EEPROM, but that is an error, they are stored fine.
     6: "Absolute max current",
     7: "Standby current",
     12: "Right limit switch disable",
@@ -63,6 +65,10 @@ AXIS_PARAMS = {
     173: "StallGuard2 filter",
     174: "StallGuard2 threshold",
     181: "Stop on stall",
+
+    # These ones are not saved in EEPROM
+    # 201: "Encoder prescaler",
+    # 212: "Maximum encoder deviation",
 }
 
 # List of useful Global parameters: (bank, address) -> comment
@@ -73,6 +79,7 @@ GLOBAL_PARAMS = {
     (0, 77): "Autostart mode (on main power supply)",
     (0, 79): "End switch polarity",
     (0, 84): "Coordinate storage",
+    (0, 90): "Reverse shaft",
 }
 
 OUT_CONFIG = {  # Saved in user config

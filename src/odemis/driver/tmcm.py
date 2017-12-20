@@ -239,13 +239,7 @@ class TMCLController(model.Actuator):
             if not n:
                 continue
             sz = ustepsize[i]
-            if modl == 3110:
-                # Mov abs supports ±2³¹ but the actual position is only within ±2²³
-                # TODO: hardware seems to actually allow further
-                phy_rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
-            else:
-                phy_rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
-
+            phy_rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
             sw_rng = rng[i]
             if sw_rng is not None:
                 if not sw_rng[0] <= 0 <= sw_rng[1]:
