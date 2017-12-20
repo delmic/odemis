@@ -114,6 +114,8 @@ class TileAcqPlugin(Plugin):
         self.ny.subscribe(self._update_total_area)
         self.overlap.subscribe(self._update_total_area)
 
+        self.ft = model.InstantaneousFuture()  # acquisition future
+
         self._dlg = None
 
     def _get_streams(self):
@@ -242,6 +244,8 @@ class TileAcqPlugin(Plugin):
                 tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
         except AttributeError:
             pass  # Not a SPARC
+
+        tab.streambar_controller.pauseStreams()
 
         # Disable drift correction
         if hasattr(tab.tab_data_model, "semStream"):
