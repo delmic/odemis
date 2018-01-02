@@ -43,25 +43,27 @@ class StaticStream(Stream):
     Stream containing one static image.
     For testing and static images.
     """
-    def __init__(self, name, raw):
+
+    def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
-        super(StaticStream, self).__init__(name, None, None, None, raw=raw)
+        super(StaticStream, self).__init__(name, None, None, None, raw=raw, *args, **kwargs)
 
 
 class RGBStream(StaticStream):
     """
     A static stream which gets as input the actual RGB image
     """
-    def __init__(self, name, raw):
+
+    def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
         raw = self._clean_raw(raw)
-        super(RGBStream, self).__init__(name, raw)
+        super(RGBStream, self).__init__(name, raw, *args, **kwargs)
 
     def _init_projection_vas(self):
         ''' On RGBStream, the projection is done on RGBSpatialProjection
@@ -98,7 +100,8 @@ class Static2DStream(StaticStream):
     Stream containing one static image.
     For testing and static images.
     """
-    def __init__(self, name, raw):
+
+    def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
         raw (DataArray or DataArrayShadow): The data to display.
@@ -108,7 +111,7 @@ class Static2DStream(StaticStream):
             raw = [raw.getData()]
         else:
             raw = [raw]
-        super(Static2DStream, self).__init__(name, raw)
+        super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
 
     def _init_projection_vas(self):
         ''' On Static2DStream, the projection is done on RGBSpatialProjection
@@ -126,14 +129,19 @@ class StaticSEMStream(Static2DStream):
     """
     Same as a StaticStream, but considered a SEM stream
     """
-    pass
+
+    def __init__(self, name, raw, *args, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EM
+        Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
 
 class StaticCLStream(Static2DStream):
     """
     Same as a StaticStream, but has a emission wavelength
     """
-    def __init__(self, name, raw):
+
+    def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
         raw (DataArray of shape (111)YX): raw data. The metadata should
@@ -153,7 +161,9 @@ class StaticCLStream(Static2DStream):
             logging.warning("No emission wavelength for CL stream")
 
         # Do it at the end, as it forces it the update of the image
-        Static2DStream.__init__(self, name, raw)
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_CL
+        Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
 
 class StaticBrightfieldStream(Static2DStream):
@@ -170,15 +180,20 @@ class StaticFluoStream(Static2DStream):
     and how to taint the image.
     """
 
-    def __init__(self, name, raw):
+    def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
         raw (DataArray of shape (111)YX): raw data. The metadata should
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_IN_WL and MD_OUT_WL.
         """
+
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FLUO
         # Note: it will update the image, and changing the tint will do it again
-        super(StaticFluoStream, self).__init__(name, raw)
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FLUO
+        super(StaticFluoStream, self).__init__(name, raw, *args, **kwargs)
 
         # Wavelengths
         try:
@@ -222,7 +237,8 @@ class StaticARStream(StaticStream):
        pole (MD_AR_POLE, in px), and acquisition time (MD_ACQ_DATE)
      * multiple CCD images are grouped together in a list
     """
-    def __init__(self, name, data):
+
+    def __init__(self, name, data, *args, **kwargs):
         """
         name (string)
         data (model.DataArray(Shadow) of shape (YX) or list of such DataArray(Shadow)).
@@ -276,7 +292,9 @@ class StaticARStream(StaticStream):
         # no need for init=True, as Stream.__init__ will update the image
         self.point.subscribe(self._onPoint)
 
-        super(StaticARStream, self).__init__(name, list(self._sempos.values()))
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_AR
+        super(StaticARStream, self).__init__(name, list(self._sempos.values()), *args, **kwargs)
 
     def _project2Polar(self, pos):
         """
@@ -428,7 +446,8 @@ class StaticSpectrumStream(StaticStream):
     The histogram corresponds to the data after calibration, and selected via
     the spectrumBandwidth VA.
     """
-    def __init__(self, name, image):
+
+    def __init__(self, name, image, *args, **kwargs):
         """
         name (string)
         image (model.DataArray(Shadow) of shape (CYX) or (C11YX)). The metadata
@@ -519,7 +538,10 @@ class StaticSpectrumStream(StaticStream):
         self.selectionWidth.subscribe(self._onSelectionWidth)
 
         self._calibrated = image  # the raw data after calibration
-        super(StaticSpectrumStream, self).__init__(name, [image])
+
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_SPECTRUM
+        super(StaticSpectrumStream, self).__init__(name, [image], *args, **kwargs)
 
         # Automatically select point/line if data is small (can only be done
         # after .raw is set)
@@ -954,9 +976,9 @@ class RGBUpdatableStream(StaticStream):
     raw data.
     """
 
-    def __init__(self, name, raw):
+    def __init__(self, name, raw, *args, **kwargs):
         raw = self._clean_raw(raw)
-        super(RGBUpdatableStream, self).__init__(name, raw)
+        super(RGBUpdatableStream, self).__init__(name, raw, *args, **kwargs)
 
     def _clean_raw(self, raw):
         '''

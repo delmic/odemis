@@ -397,6 +397,8 @@ class SpectrumSettingsStream(CCDSettingsStream):
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_SPECTRUM
         super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
@@ -571,6 +573,8 @@ class ARSettingsStream(CCDSettingsStream):
     See StaticARStream for displaying a stream with polar projection.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_AR
         super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
@@ -597,6 +601,8 @@ class CLSettingsStream(PMTSettingsStream):
         """
         emtvas: don't put resolution or scale
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_CL
         super(CLSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 

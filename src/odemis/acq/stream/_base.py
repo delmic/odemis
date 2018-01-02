@@ -57,7 +57,8 @@ class Stream(object):
     SETUP_OVERHEAD = 0.1
 
     def __init__(self, name, detector, dataflow, emitter, focuser=None, opm=None,
-                 hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, raw=None):
+                 hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, raw=None,
+                 acq_type=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -77,8 +78,11 @@ class Stream(object):
         raw (None or list of DataArrays or DataArrayShadow): raw data to be used
           at initialisation. By default, it will contain no data. If it's a
           DataArrayShadow, it will provide a 2D tuple as .raw.
+        acq_type (MD_AT_*): acquisition type associated with this stream (as in model._metadata)
         """
         self.name = model.StringVA(name)
+        self.acquisitionType = model.VigilantAttribute(acq_type)  # MD_ACQ_TYPE or None
+        # for identification of the acquisition type associated with the stream
 
         # Hardware Components
         self._detector = detector
