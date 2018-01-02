@@ -715,6 +715,7 @@ class SparcAcquisitionTab(Tab):
             hwdetvas=None,
             emtvas=emtvas,
             detvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
+            acq_type=model.MD_AT_EM
         )
 
         tab_data.acquisitionStreams.add(sem_stream)  # it should also be saved
@@ -725,7 +726,8 @@ class SparcAcquisitionTab(Tab):
         # The stream controller takes care of turning on/off the stream when
         # another stream needs it, or the tool mode selects it.
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
+                                              main_data.sed.data, main_data.ebeam,
+                                              acq_type=model.MD_AT_EM)
         tab_data.spotStream = spot_stream
         # TODO: add to tab_data.streams and move the handling to the stream controller?
         tab_data.spotPosition.subscribe(self._onSpotPosition)
@@ -741,8 +743,8 @@ class SparcAcquisitionTab(Tab):
             "Secondary electrons concurrent",  # name matters, used to find the stream for the ROI
             main_data.sed,
             main_data.sed.data,
-            main_data.ebeam
-            # No local VAs,
+            main_data.ebeam,
+            acq_type=model.MD_AT_EM
         )
         tab_data.semStream = semcl_stream
 
@@ -1998,7 +2000,8 @@ class SecomAlignTab(Tab):
                                              hwdetvas=get_local_vas(photod, main_data.hw_settings_config),
                                              emtvas=get_local_vas(main_data.laser_mirror, main_data.hw_settings_config),
                                              forcemd={model.MD_ROTATION: 0,
-                                                      model.MD_SHEAR: 0}
+                                                      model.MD_SHEAR: 0},
+                                             acq_type=model.MD_AT_CL
                                              )
             opt_stream.emtScale.value = opt_stream.emtScale.clip((8, 8))
             opt_stream.emtDwellTime.value = opt_stream.emtDwellTime.range[0]
@@ -2031,6 +2034,7 @@ class SecomAlignTab(Tab):
                                          main_data.ebeam,
                                          hwdetvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
                                          hwemtvas=get_local_vas(main_data.ebeam, main_data.hw_settings_config),
+                                         acq_type=model.MD_AT_EM
                                          )
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
@@ -2042,7 +2046,8 @@ class SecomAlignTab(Tab):
         sem_spe.stream_panel.flatten()  # removes the expander header
 
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
+                                              main_data.sed.data, main_data.ebeam,
+                                              acq_type=model.MD_AT_EM)
         self.tab_data_model.streams.value.append(spot_stream)
         self._spot_stream = spot_stream
 
@@ -2505,7 +2510,8 @@ class SparcAlignTab(Tab):
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
         spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
+                                              main_data.sed.data, main_data.ebeam,
+                                              acq_type=model.MD_AT_EM)
         self._spot_stream = spot_stream
 
         # Switch between alignment modes
@@ -2811,7 +2817,8 @@ class Sparc2AlignTab(Tab):
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
         spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
+                                              main_data.sed.data, main_data.ebeam,
+                                              acq_type=model.MD_AT_EM)
         spot_stream.should_update.value = True
         self._spot_stream = spot_stream
 
@@ -2929,7 +2936,7 @@ class Sparc2AlignTab(Tab):
             # at the bottom of the stream panel showing the moment of inertia
             # and spot intensity.
             mois = acqstream.CameraStream(
-                                "Alignement CCD for mirror",
+                                "Alignment CCD for mirror",
                                 main_data.ccd,
                                 main_data.ccd.data,
                                 emitter=None,

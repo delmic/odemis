@@ -34,7 +34,8 @@ from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
 from odemis.util import limit_invocation
-from odemis.model import MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS
+from odemis.model import MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS, \
+                         MD_AT_OVV_FULL, MD_AT_OVV_TILES, MD_AT_HISTORY
 from odemis.gui.util.img import insert_tile_to_image, merge_screen
 import odemis.acq.stream as acqstream
 
@@ -318,17 +319,19 @@ class OverviewController(object):
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
                 overview_stream = acqstream.RGBCameraStream("Overview", main_data.overview_ccd,
-                                                            main_data.overview_ccd.data, None)
+                                                            main_data.overview_ccd.data, None,
+                                                            acq_type=MD_AT_OVV_FULL)
             else:
                 overview_stream = acqstream.BrightfieldStream("Overview", main_data.overview_ccd,
-                                                              main_data.overview_ccd.data, None)
+                                                              main_data.overview_ccd.data, None,
+                                                              acq_type=MD_AT_OVV_FULL)
             self.m_view.addStream(overview_stream)
             # TODO: add it to self.tab_data_model.streams?
         else:
             # black image to display history overlay separately from built-up ovv image
             # controlled by merge slider
             da, _ = self._initialize_ovv_im(OVV_SHAPE)
-            history_stream = acqstream.Static2DStream("History Stream", da)
+            history_stream = acqstream.Static2DStream("History Stream", da, acq_type=MD_AT_HISTORY)
             self.m_view.addStream(history_stream)
 
         # Built-up overview image
@@ -339,7 +342,8 @@ class OverviewController(object):
         self.im_sem = copy.deepcopy(self.ovv_im)
 
         # Add stream to view
-        self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im)
+        self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im,
+                                                       acq_type=MD_AT_OVV_TILES)
         self.m_view.addStream(self.upd_stream)
 
     def _initialize_ovv_im(self, shape):

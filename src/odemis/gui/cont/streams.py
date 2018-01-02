@@ -50,7 +50,7 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
-
+from odemis.model._metadata import MD_AT_FLUO
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -1059,7 +1059,8 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             detvas={"exposureTime"},
-            emtvas={"power"}
+            emtvas={"power"},
+            acq_type=model.MD_AT_FLUO
         )
         self._ensure_power_non_null(s)
 
@@ -1171,7 +1172,8 @@ class StreamBarController(object):
                 self._main_data_model.focus,
                 focuser=self._main_data_model.ebeam_focus,
                 opm=self._main_data_model.opm,
-                shiftebeam=acqstream.MTD_EBEAM_SHIFT
+                shiftebeam=acqstream.MTD_EBEAM_SHIFT,
+                acq_type=model.MD_AT_EM
             )
         else:
             s = acqstream.SEMStream(
@@ -1180,7 +1182,8 @@ class StreamBarController(object):
                 detector.data,
                 self._main_data_model.ebeam,
                 focuser=self._main_data_model.ebeam_focus,
-                opm=self._main_data_model.opm
+                opm=self._main_data_model.opm,
+                acq_type=model.MD_AT_CL
             )
 
         # If the detector already handles brightness and contrast, don't do it by default
@@ -1905,6 +1908,7 @@ class SparcStreamsController(StreamBarController):
             focuser=self._main_data_model.ebeam_focus,
             emtvas=emtvas,
             detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
+            acq_type=model.MD_AT_EM,
         )
 
         # If the detector already handles brightness and contrast, don't do it by default
@@ -1993,6 +1997,7 @@ class SparcStreamsController(StreamBarController):
             opm=self._main_data_model.opm,
             # TODO: add a focuser for the SPARCv2?
             detvas=get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config),
+            acq_type=model.MD_AT_AR,
         )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if model.hasVA(ar_stream, "detBinning"):
@@ -2025,6 +2030,7 @@ class SparcStreamsController(StreamBarController):
             opm=self._main_data_model.opm,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.cld, self._main_data_model.hw_settings_config),
+            acq_type=model.MD_AT_CL,
         )
 
         # Special "safety" feature to avoid having a too high gain at start
@@ -2034,7 +2040,8 @@ class SparcStreamsController(StreamBarController):
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi",
-                                               sem_stream, cli_stream)
+                                               sem_stream, cli_stream
+                                               )
 
         # Need to pick the right filter wheel (if there is one)
         axes = {}
@@ -2082,6 +2089,7 @@ class SparcStreamsController(StreamBarController):
             opm=self._main_data_model.opm,
             # emtvas=get_local_vas(main_data.ebeam, self._main_data_model.hw_settings_config), # no need
             detvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
+            acq_type=model.MD_AT_SPECTRUM,
         )
 
         # Create the equivalent MDStream

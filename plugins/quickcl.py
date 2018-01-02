@@ -209,6 +209,7 @@ class QuickCLPlugin(Plugin):
             hwdetvas=None,
             emtvas=emtvas,
             detvas=get_local_vas(main_data.sed, main_data.hw_settings_config),
+            acq_type=model.MD_AT_EM,
         )
 
         # This stream is used both for rendering and acquisition.
@@ -224,6 +225,7 @@ class QuickCLPlugin(Plugin):
             emtvas=emtvas,
             detvas=get_local_vas(main_data.cld, main_data.hw_settings_config),
             opm=main_data.opm,
+            acq_type=model.MD_AT_CL
         )
         # TODO: allow to type in the resolution of the CL?
         # TODO: add the cl-filter axis (or reset it to pass-through?)
