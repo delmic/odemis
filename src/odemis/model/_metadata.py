@@ -85,7 +85,9 @@ MD_AT_EM = "Electron microscope"
 MD_AT_FLUO = "Fluorescence"
 MD_AT_ANCHOR = "Anchor region"
 MD_AT_CL = "Cathodoluminescence"
-MD_AT_OVERVIEW = "Overview"
+MD_AT_OVV_FULL = "Full overview"
+MD_AT_OVV_TILES = "Built-up overview"
+MD_AT_HISTORY = "History"
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
