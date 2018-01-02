@@ -832,6 +832,8 @@ class FluoStream(CameraStream):
           filtering. If None, it will assume it's fixed and indicated on the
           MD_OUT_WL of the detector.
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FLUO
         super(FluoStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._em_filter = em_filter
 
@@ -973,6 +975,8 @@ class ScannedFluoStream(FluoStream):
           filtering. If None, it will assume it's fixed and indicated on the
           MD_OUT_WL of the detector.
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FLUO
         # TODO: for now it's not possible to have local VAs for the scanner.
         super(ScannedFluoStream, self).__init__(name, detector, dataflow, emitter,
                                                 em_filter, **kwargs)
