@@ -1403,4 +1403,4 @@ class OverviewView(StreamView):
         self.interpolate_content.value = False
 
         self.mpp.value = 10e-6
-        self.mpp.range = (10e-6, 1e-3)
+        self.mpp.range = (1e-10, 1e10)  # (10e-6, 1e-3)

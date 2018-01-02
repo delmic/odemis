@@ -1343,6 +1343,8 @@ class HistoryOverlay(base.ViewOverlay):
         self.history = history_list_va  # ListVA  of (center, size) tuples
         self.history.subscribe(self._on_history_update)
 
+        self._merge_ratio = None
+
     def __str__(self):
         return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history.value[-5:]])
 
@@ -1377,6 +1379,8 @@ class HistoryOverlay(base.ViewOverlay):
 
         for i, (p_center, p_size) in enumerate(self.history.value):
             alpha = (i + 1) * (0.8 / len(self.history.value)) + 0.2 if self.fade else 1.0
+            if self._merge_ratio is not None:
+                alpha *= (1 - self._merge_ratio)
             v_center = self.cnvs.phys_to_view(p_center, offset)
 
             if scale:
@@ -1416,6 +1420,13 @@ class HistoryOverlay(base.ViewOverlay):
         # Render rectangles of 3 pixels wide
         ctx.rectangle(x, y, v_size[0], v_size[1])
         ctx.stroke()
+
+    def set_merge_ratio(self, merge_ratio):
+        """
+        Modifies the internal attribute _merge_ratio that controls the transparency 
+        of the history overlay.
+        """
+        self._merge_ratio = merge_ratio
 
 
 class SpotModeOverlay(base.ViewOverlay, base.DragMixin, base.SpotModeBase):
