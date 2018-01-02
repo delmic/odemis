@@ -29,7 +29,8 @@ from abc import abstractmethod, ABCMeta
 from concurrent.futures._base import CancelledError
 import logging
 from odemis import gui, model, util
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, StaticStream, DataProjection
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream, \
+                              StaticStream, DataProjection
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -407,6 +408,12 @@ class MicroscopeViewport(ViewPort):
                 ):
                     self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_EM)
                     self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_SPECTRUM)
+                elif (
+                        any(isinstance(s, EMStream) for s in streams)
+                        and any(isinstance(s, ARStream) for s in streams)
+                ):
+                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_AR)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_EM)
                 else:
                     self.bottom_legend.set_stream_type(wx.LEFT, streams[0].acquisitionType.value)
                     self.bottom_legend.set_stream_type(wx.RIGHT, streams[1].acquisitionType.value)
