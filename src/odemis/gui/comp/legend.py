@@ -38,6 +38,11 @@ import wx
 from odemis.gui import img
 import odemis.util.units as units
 
+from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute, \
+                         MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
+                         MD_AT_CL, MD_AT_OVV_FULL, MD_AT_OVV_TILES, \
+                         MD_AT_EM, MD_AT_HISTORY
+
 
 class InfoLegend(wx.Panel):
     """ This class describes a legend containing the default controls that
@@ -55,18 +60,15 @@ class InfoLegend(wx.Panel):
 
         # Cannot be a constant because loading bitmaps only works after wx.App
         # has been created.
-        self._stream_to_icon = (
-            (stream.ARStream, img.getBitmap("icon/ico_blending_ang.png")),
-            (stream.SpectrumStream, img.getBitmap("icon/ico_blending_spec.png")),
-            (stream.CLStream, img.getBitmap("icon/ico_blending_opt.png")),  # same as optical
-            (stream.EMStream, img.getBitmap("icon/ico_blending_sem.png")),
-            (stream.RGBStream, img.getBitmap("icon/ico_blending_goal.png")),
-            (stream.RGBUpdatableStream, img.getBitmap("icon/ico_blending_map.png")),
-            (stream.RGBCameraStream, img.getBitmap("icon/ico_blending_navcam.png")),
-            (stream.BrightfieldStream, img.getBitmap("icon/ico_blending_navcam.png")),
-            (stream.Static2DStream, img.getBitmap("icon/ico_blending_history.png")),
-            (stream.OpticalStream, img.getBitmap("icon/ico_blending_opt.png")),  # Optical
-            # streams that are not RGBCameraStream
+        self._type_to_icon = (
+            (MD_AT_AR, img.getBitmap("icon/ico_blending_ang.png")),
+            (MD_AT_SPECTRUM, img.getBitmap("icon/ico_blending_spec.png")),
+            (MD_AT_EM, img.getBitmap("icon/ico_blending_sem.png")),
+            (MD_AT_OVV_TILES, img.getBitmap("icon/ico_blending_map.png")),
+            (MD_AT_OVV_FULL, img.getBitmap("icon/ico_blending_navcam.png")),
+            (MD_AT_HISTORY, img.getBitmap("icon/ico_blending_history.png")),
+            (MD_AT_CL, img.getBitmap("icon/ico_blending_opt.png")),
+            (MD_AT_FLUO, img.getBitmap("icon/ico_blending_opt.png")),
         )
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
@@ -202,25 +204,25 @@ class InfoLegend(wx.Panel):
         self.magnification_text.SetValue(label)
         self.Layout()
 
-    def set_stream_type(self, side, stream_class):
+    def set_stream_type(self, side, acq_type):
         """
         Set the stream type, to put the right icon on the merge slider
 
         :param side: (wx.LEFT or wx.RIGHT): whether this set the left or right
             stream
-        :param stream_class: (Stream (sub)class): the class of the stream
+        :param acq_type: (String): acquisition type associated with stream
         """
 
-        for group_of_classes, class_icon in self._stream_to_icon:
-            if issubclass(stream_class, group_of_classes):
-                icon = class_icon
+        for t, type_icon in self._type_to_icon:
+            if acq_type == t:
+                icon = type_icon
                 break
         else:
             # Don't fail too bad
             icon = img.getBitmap("icon/ico_blending_opt.png")
             if self.merge_slider.IsShown():
-                logging.warning("Failed to find icon for stream of class %s",
-                                stream_class)
+                logging.warning("Failed to find icon for stream of type %s",
+                                acq_type)
         if side == wx.LEFT:
             self.bmp_slider_left.SetBitmap(icon)
         else:

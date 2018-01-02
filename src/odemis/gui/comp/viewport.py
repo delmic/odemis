@@ -398,17 +398,18 @@ class MicroscopeViewport(ViewPort):
                         any(isinstance(s, EMStream) for s in streams)
                         and any(isinstance(s, OpticalStream) for s in streams)
                 ):
-                    self.bottom_legend.set_stream_type(wx.LEFT, OpticalStream)
-                    self.bottom_legend.set_stream_type(wx.RIGHT, EMStream)
+                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_CL)  # CL and Fluo
+                    # types correspond to same icon
+                    self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_EM)
                 elif (
                         any(isinstance(s, EMStream) for s in streams)
                         and any(isinstance(s, SpectrumStream) for s in streams)
                 ):
-                    self.bottom_legend.set_stream_type(wx.LEFT, EMStream)
-                    self.bottom_legend.set_stream_type(wx.RIGHT, SpectrumStream)
+                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_EM)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_SPECTRUM)
                 else:
-                    self.bottom_legend.set_stream_type(wx.LEFT, streams[0].__class__)
-                    self.bottom_legend.set_stream_type(wx.RIGHT, streams[1].__class__)
+                    self.bottom_legend.set_stream_type(wx.LEFT, streams[0].acquisitionType.value)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, streams[1].acquisitionType.value)
 
                 self.ShowMergeSlider(True)
         else:
