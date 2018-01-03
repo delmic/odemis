@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 import codecs
@@ -106,7 +106,7 @@ def scan(cls=None):
                     if not devices:
                         logging.info("No device found")
                     for name, args in devices:
-                        print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
+                        print("%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args)))
 
     if cls and not cls_found:
         raise ValueError("Failed to find class %s" % cls)
@@ -131,8 +131,8 @@ def print_component(comp, pretty=True, level=0):
         if level == 0:
             indent = u""
         else:
-            indent = u"  "*level + u"↳ "
-        print u"%s%s\trole:%s" % (indent, comp.name, comp.role)
+            indent = u"  " * level + u"↳ "
+        print(u"%s%s\trole:%s" % (indent, comp.name, comp.role))
     else:
         pstr = u""
         try:
@@ -141,7 +141,7 @@ def print_component(comp, pretty=True, level=0):
                 pstr = u"\tparent:" + pname
         except AttributeError:
             pass
-        print u"%s\trole:%s%s" % (comp.name, comp.role, pstr)
+        print(u"%s\trole:%s%s" % (comp.name, comp.role, pstr))
     # TODO would be nice to display which class is the component
     # TODO:
     # * if emitter, display .shape
@@ -180,20 +180,20 @@ def list_components(pretty=True):
 
 def print_axes(name, value, pretty):
     if pretty:
-        print u"\t%s (RO Attribute)" % (name,)
+        print(u"\t%s (RO Attribute)" % (name,))
         for an, ad in value.items():
-            print u"\t\t%s:\t%s" % (an, ad)
+            print(u"\t\t%s:\t%s" % (an, ad))
     else:
-        print u"%s\ttype:roattr\tvalue:%s" % (name,
-                                             u", ".join(k for k in value.keys()))
+        print(u"%s\ttype:roattr\tvalue:%s" % (name,
+                                             u", ".join(k for k in value.keys())))
 def print_roattribute(name, value, pretty):
     if name == "axes":
         return print_axes(name, value, pretty)
 
     if pretty:
-        print u"\t%s (RO Attribute)\tvalue: %s" % (name, value)
+        print(u"\t%s (RO Attribute)\tvalue: %s" % (name, value))
     else:
-        print u"%s\ttype:roattr\tvalue:%s" % (name, value)
+        print(u"%s\ttype:roattr\tvalue:%s" % (name, value))
 
 non_roattributes_names = ("name", "role", "parent", "affects")
 def print_roattributes(component, pretty):
@@ -205,7 +205,7 @@ def print_roattributes(component, pretty):
 
 def print_data_flow(name, df, pretty):
     if pretty:
-        print u"\t" + name + u" (Data-flow)"
+        print(u"\t" + name + u" (Data-flow)")
     else:
         print(u"%s\ttype:data-flow" % (name,))
 
@@ -216,7 +216,7 @@ def print_data_flows(component, pretty):
 
 def print_event(name, evt, pretty):
     if pretty:
-        print u"\t" + name + u" (Event)"
+        print(u"\t" + name + u" (Event)")
     else:
         print(u"%s\ttype:event" % (name,))
 
@@ -297,13 +297,13 @@ def print_metadata(component, pretty):
 
 def print_attributes(component, pretty):
     if pretty:
-        print u"Component '%s':" % component.name
-        print u"\trole: %s" % component.role
-        print u"\taffects: " + ", ".join([u"'%s'" % n for n in component.affects.value])
+        print(u"Component '%s':" % component.name)
+        print(u"\trole: %s" % component.role)
+        print(u"\taffects: " + ", ".join(u"'%s'" % n for n in component.affects.value))
     else:
-        print u"name\tvalue:%s" % component.name
-        print u"role\tvalue:%s" % component.role
-        print u"affects\tvalue:" + u"\t".join(component.affects.value)
+        print(u"name\tvalue:%s" % component.name)
+        print(u"role\tvalue:%s" % component.role)
+        print(u"affects\tvalue:" + u"\t".join(component.affects.value))
     print_roattributes(component, pretty)
     print_vattributes(component, pretty)
     print_data_flows(component, pretty)
@@ -715,7 +715,7 @@ def live_display(comp_name, df_name):
     if not isinstance(df, model.DataFlowBase):
         raise ValueError("%s.%s is not a data-flow" % (comp_name, df_name))
 
-    print "Press 'Q' to quit"
+    print("Press 'Q' to quit")
     # try to guess the size of the first image that will come
     try:
         size = component.resolution.value
@@ -836,9 +836,9 @@ def main(args):
 
     # Cannot use the internal feature, because it doesn't support multiline
     if options.version:
-        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
-               odemis.__copyright__ + "\n" +
-               "Licensed under the " + odemis.__license__)
+        print(odemis.__fullname__ + " " + odemis.__version__ + "\n" +
+              odemis.__copyright__ + "\n" +
+              "Licensed under the " + odemis.__license__)
         return 0
 
     # Set up logging before everything else
