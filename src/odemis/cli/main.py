@@ -106,7 +106,7 @@ def scan(cls=None):
                     if not devices:
                         logging.info("No device found")
                     for name, args in devices:
-                        print("%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args)))
+                        print("%s.%s: '%s' init=%r" % (module_name, cls_name, name, str(args)))
 
     if cls and not cls_found:
         raise ValueError("Failed to find class %s" % cls)
@@ -181,11 +181,13 @@ def list_components(pretty=True):
 def print_axes(name, value, pretty):
     if pretty:
         print(u"\t%s (RO Attribute)" % (name,))
-        for an, ad in value.items():
-            print(u"\t\t%s:\t%s" % (an, ad))
+        # show in alphabetical order
+        for an in sorted(value.keys()):
+            print(u"\t\t%s:\t%s" % (an, value[an]))
     else:
-        print(u"%s\ttype:roattr\tvalue:%s" % (name,
-                                             u", ".join(k for k in value.keys())))
+        print(u"%s\ttype:roattr\tvalue:%s" %
+              (name, u", ".join(k for k in value.keys())))
+
 def print_roattribute(name, value, pretty):
     if name == "axes":
         return print_axes(name, value, pretty)
@@ -256,8 +258,8 @@ def print_vattribute(name, va, pretty):
         vachoices = va.choices # set or dict
         if pretty:
             if isinstance(va.choices, dict):
-                str_choices = u" (choices: %s)" % ", ".join(
-                                [u"%s: '%s'" % i for i in vachoices.items()])
+                str_choices = u" (choices: %s)" % u", ".join(
+                                u"%s: '%s'" % i for i in vachoices.items())
             else:
                 str_choices = u" (choices: %s)" % u", ".join([str(c) for c in vachoices])
         else:
@@ -266,8 +268,17 @@ def print_vattribute(name, va, pretty):
         str_choices = ""
 
     if pretty:
+        val = va.value
+        # Display set/dict sorted, so that they always look the same.
+        # Especially handy for VAs such as .position, which show axis names.
+        if isinstance(val, dict):
+            sval = u"{%s}" % (u", ".join(u"%r: %r" % (k, val[k]) for k in sorted(val.keys())),)
+        elif isinstance(val, set):
+            sval = u"{%s}" % (u", ".join(u"%r" % v for v in sorted(val)),)
+        else:
+            sval = str(val)
         print(u"\t" + name + u" (%sVigilant Attribute)\t value: %s%s%s%s" %
-            (readonly, str(va.value), unit, str_range, str_choices))
+              (readonly, sval, unit, str_range, str_choices))
     else:
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
@@ -299,7 +310,7 @@ def print_attributes(component, pretty):
     if pretty:
         print(u"Component '%s':" % component.name)
         print(u"\trole: %s" % component.role)
-        print(u"\taffects: " + ", ".join(u"'%s'" % n for n in component.affects.value))
+        print(u"\taffects: " + ", ".join(u"'%s'" % n for n in sorted(component.affects.value)))
     else:
         print(u"name\tvalue:%s" % component.name)
         print(u"role\tvalue:%s" % component.role)
