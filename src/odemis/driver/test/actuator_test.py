@@ -27,7 +27,8 @@ import math
 from odemis import model
 import odemis
 from odemis.driver import simulated, tmcm
-from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator
+from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
+    CombinedSensorActuator
 from odemis.util import test
 import os
 import time
@@ -662,6 +663,51 @@ class TestAntiBacklashActuator(unittest.TestCase):
     def _on_position(self, pos):
         self.assertIsInstance(pos, dict)
         self.called += 1
+
+
+class TestCombinedSensorActuator(unittest.TestCase):
+
+    def setUp(self):
+        self.cact = simulated.Stage("sstage1", "test", {"a"})
+        self.csensor = simulated.Stage("sstage2", "test", {"b"})
+        self.csensor.moveAbs({"b":-1e-3}).result()  # simulate
+        self.dev = CombinedSensorActuator("stage", "stage",
+                                          children={"actuator": self.cact,
+                                                    "sensor": self.csensor},
+                                          axis_actuator="a",
+                                          axis_sensor="b",
+                                          positions={0: "pos0", 0.01: "pos1"},
+                                          to_sensor={0:-1e-3, 0.01: 1e-3},
+                                          )
+
+    def test_moveAbs(self):
+        move = {"a": 0.01}
+        f = self.dev.moveAbs(move)
+        self.csensor.moveAbs({"b": 1e-3}).result()  # simulate successful move
+        f.result()  # wait
+        self.assertDictEqual(move, self.dev.position.value,
+                             "Actuator didn't move to the requested position")
+
+        # Null move
+        f = self.dev.moveAbs(move)
+        f.result()  # wait
+        self.assertDictEqual(move, self.dev.position.value,
+                             "Actuator didn't move to the requested position")
+
+    def test_fail_sensor(self):
+        # Move to a known position
+        move = {"a": 0.00}
+        f = self.dev.moveAbs(move)
+        self.csensor.moveAbs({"b":-1e-3}).result()  # simulate successful move
+        f.result()  # wait
+        self.assertDictEqual(move, self.dev.position.value,
+                             "Actuator didn't move to the requested position")
+
+        # Pretend the sensor didn't update
+        move = {"a": 0.01}
+        f = self.dev.moveAbs(move)
+        with self.assertRaises(IOError):
+            f.result()  # should raise an error
 
 
 if __name__ == "__main__":
