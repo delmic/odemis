@@ -509,6 +509,7 @@ class MultipleDetectorStream(Stream):
         # concatenate data into one big array of (number of pixels,1)
         flat_list = [ar.flatten() for ar in data_list]
         main_data = numpy.concatenate(flat_list)
+        logging.debug("Assembling %s points into %s shape", main_data.shape, rep)
         # reshape to (Y, X)
         main_data.shape = rep[::-1]
         main_data = model.DataArray(main_data, metadata=md)
