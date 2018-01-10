@@ -103,6 +103,8 @@ def weave(tiles, method=WEAVER_MEAN):
         weaver = MeanWeaver()
     elif method == WEAVER_COLLAGE:
         weaver = CollageWeaver()
+    else:
+        raise ValueError("Invalid weaver %s" % (method,))
 
     for t in tiles:
         weaver.addTile(t)
