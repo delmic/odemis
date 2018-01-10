@@ -28,12 +28,16 @@ from gettext import ngettext
 import logging
 import numpy
 from odemis import dataio, model
+from odemis.acq.stream import StaticSEMStream, StaticCLStream, StaticSpectrumStream, \
+                              StaticARStream
 import odemis
 from odemis.acq import stitching
 from odemis.util import spectrum
+from odemis.util import dataio as io
 import os
 import sys
 
+from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
@@ -177,32 +181,86 @@ def minus(data_a, data_b):
     return ret
 
 
-def weave(infns):
+def add_acq_type_md(das):
+    """
+    Add acquisition type to das.
+    returns: das with updated metadata
+    """
+    streams = io.data_to_static_streams(das)
+    for da, stream in zip(das, streams):
+        if isinstance(stream, StaticSEMStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
+        elif isinstance(stream, StaticCLStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_CL
+        elif isinstance(stream, StaticARStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
+        elif isinstance(stream, StaticSpectrumStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        else:
+            da.metadata[model.MD_ACQ_TYPE] = "Unknown"
+            logging.warning("Unexpected stream of shape %s in input data." % da.shape)
 
-    # Connect similar streams of each file together
-    # TODO: use open_data/DataArrayShadow when converter support it
+    # If AR Stream is present, multiple data arrays are created. The data_to_static_streams
+    # function returns a single ARStream, so in this case many data arrays will not be assigned a
+    # stream and therefore also don't have an acquisition type.
+    for da in das:
+        if model.MD_ACQ_TYPE not in da.metadata:
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
+    return das
+
+
+def stitch(infns, method):
+    """
+    Stitches a set of tiles.
+    infns: file names of tiles
+    method: weaving method (WEAVER_MEAN or WEAVER_COLLAGE)
+    returns list of data arrays containing the stitched images for every stream
+    """
+
+    def leader_quality(da):
+        """
+        Function for sorting different streams. Use largest EM stream first, then other EM streams,
+        then other types of streams sorted by their size.
+        return int: The bigger the more leadership
+        """
+        # For now, we prefer a lot the EM images, because they are usually the
+        # one with the smallest FoV and the most contrast
+        if da.metadata[model.MD_ACQ_TYPE] == model.MD_AT_EM:  # SEM stream
+            return numpy.prod(da.shape)  # More pixel to find the overlap
+        else:
+            # A lot less likely
+            return numpy.prod(da.shape) / 100
+
     da_streams = []  # for each stream, a list of DataArrays
     for fn in infns:
+        # Read data
         converter = dataio.find_fittest_converter(fn)
+        # TODO: use open_data/DataArrayShadow when converter support it
         das = converter.read_data(fn)
         logging.debug("Got %d streams from file %s", len(das), fn)
 
-        # TODO use more clever way (aka MD_DESCRIPTION, MD_OUT_WL, MD_IN_WL...) to detect similar streams
-        das = sorted(das, key=lambda d: d.metadata.get(model.MD_ACQ_DATE, 0))
-        if not da_streams:
-            da_streams = [[da] for da in das]
-        else:
-            for da, stream in zip(das, da_streams):
-                stream.append(da)
+        # Remove the DAs we don't want to (cannot) stitch
+        das = add_acq_type_md(das)
+        das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] not in \
+               (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
 
-    big_das = []
-    for da_in in da_streams:
-        logging.info("Computing big image out of %d images", len(da_in))
-        da_registered = stitching.register(da_in)
-        da = stitching.weave(da_registered)
-        big_das.append(da)
+        # Add sorted DAs to list
+        das = sorted(das, key=leader_quality, reverse=True)
+        da_streams.append(tuple(das))
 
-    return big_das
+    das_registered = stitching.register(da_streams)
+
+    # Weave every stream
+    st_data = []
+    for s in range(len(das_registered[0])):
+        streams = []
+        for da in das_registered:
+            streams.append(da[s])
+        da = stitching.weave(streams, method)
+        da.metadata[model.MD_DIMS] = "YX"
+        st_data.append(da)
+
+    return st_data
 
 
 def main(args):
@@ -234,6 +292,11 @@ def main(args):
                         "Currently, only the TIFF format supports this option.")
     parser.add_argument("--minus", "-m", dest="minus", action='append',
             help="name of an acquisition file whose data is subtracted from the input file.")
+    parser.add_argument("--weaver", "-w", dest="weaver",
+            help="name of weaver to be used during stitching. Options: 'mean': MeanWeaver " 
+            "(blend overlapping regions of adjacent tiles), 'collage': CollageWeaver "
+            "(paste tiles as-is at calculated position)", choices=("mean", "collage"),
+            default='mean')
 
     # TODO: --export (spatial) image that defaults to a HFW corresponding to the
     # smallest image, and can be overridden by --hfw xxx (in µm).
@@ -266,7 +329,8 @@ def main(args):
                      len(data), ngettext("image", "images", len(data)),
                      len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
     elif tifns:
-        data = weave(tifns)
+        method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN}[options.weaver]
+        data = stitch(tifns, method)
         thumbs = []
         logging.info("File contains %d %s",
                      len(data), ngettext("stream", "streams", len(data)))
