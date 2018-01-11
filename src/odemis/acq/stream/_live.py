@@ -219,6 +219,9 @@ class SEMStream(LiveStream):
         """
         emitter (Emitter): this is the scanner, with a .resolution and a .dwellTime
         """
+
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EM
         super(SEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
         # To restart directly acquisition if settings change
@@ -409,6 +412,8 @@ class AlignedSEMStream(SEMStream):
         focus (actuator): the _optical_ focuser, just to know when re-alignment is needed
         focuser (actuator): the _e-beam_ focuser, to allow focusing the image
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EM
         super(AlignedSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
         self._stage = stage
@@ -543,6 +548,8 @@ class SpotSEMStream(LiveStream):
         """
         detector: must be one of the SEM detector, to force beam unblanking
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EM
         super(SpotSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
         # TODO: forbid emt VAs resolution, translation and dwelltime
@@ -832,6 +839,8 @@ class FluoStream(CameraStream):
           filtering. If None, it will assume it's fixed and indicated on the
           MD_OUT_WL of the detector.
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FLUO
         super(FluoStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._em_filter = em_filter
 
@@ -973,6 +982,8 @@ class ScannedFluoStream(FluoStream):
           filtering. If None, it will assume it's fixed and indicated on the
           MD_OUT_WL of the detector.
         """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FLUO
         # TODO: for now it's not possible to have local VAs for the scanner.
         super(ScannedFluoStream, self).__init__(name, detector, dataflow, emitter,
                                                 em_filter, **kwargs)

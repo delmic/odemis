@@ -51,7 +51,6 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 
-
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
 # * StreamBar controller: links .streams VA <-> stream bar (cont/stream/StreamBar)

@@ -34,7 +34,8 @@ from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
 from odemis.util import limit_invocation
-from odemis.model import MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS
+from odemis.model import MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS, \
+                         MD_AT_OVV_FULL, MD_AT_OVV_TILES, MD_AT_HISTORY
 from odemis.gui.util.img import insert_tile_to_image, merge_screen
 import odemis.acq.stream as acqstream
 
@@ -290,7 +291,10 @@ class ViewPortController(object):
 
         logging.debug("Failed to find any view compatible with stream %s", stream.name.value)
 
-OVV_DIMENSION = (0.02, 0.02)  # m
+
+OVV_SHAPE = (1200, 1200, 3)  # px
+MAX_OVV_SIZE = 0.05  # m
+
 
 class OverviewController(object):
     """ Class to connect stage history and overview canvas together and to control the overview image  """
@@ -303,6 +307,7 @@ class OverviewController(object):
 
         self.curr_s = None
 
+        m_view.merge_ratio.subscribe(self._on_merge_ratio_change)
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
             tab_data.main.chamberState.subscribe(self._on_chamber_state)
@@ -314,43 +319,60 @@ class OverviewController(object):
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
                 overview_stream = acqstream.RGBCameraStream("Overview", main_data.overview_ccd,
-                                                            main_data.overview_ccd.data, None)
+                                                            main_data.overview_ccd.data, None,
+                                                            acq_type=MD_AT_OVV_FULL)
             else:
                 overview_stream = acqstream.BrightfieldStream("Overview", main_data.overview_ccd,
-                                                              main_data.overview_ccd.data, None)
+                                                              main_data.overview_ccd.data, None,
+                                                              acq_type=MD_AT_OVV_FULL)
             self.m_view.addStream(overview_stream)
             # TODO: add it to self.tab_data_model.streams?
+        else:
+            # black image to display history overlay separately from built-up ovv image
+            # controlled by merge slider
+            da, _ = self._initialize_ovv_im(OVV_SHAPE)
+            history_stream = acqstream.RGBStream("History Stream", da, acq_type=MD_AT_HISTORY)
+            self.m_view.addStream(history_stream)
 
         # Built-up overview image
-        # Initialize the size of the ovv image with the stage size if the stage is small (< 5cm),
-        # otherwise fall back to OVV_DIMENSION
-        ax_x = self.main_data.stage.axes["x"]
-        ax_y = self.main_data.stage.axes["y"]
-        if (hasattr(ax_x, "range") and hasattr(ax_y, "range")):
-            max_x = ax_x.range[1] - ax_x.range[0]
-            max_y = ax_y.range[1] - ax_y.range[0]
-            if max_x < 0.05 and max_y < 0.05:
-                ovv_shape = (2 * int(max_y / self.m_view.mpp.value),
-                             2 * int(max_x / self.m_view.mpp.value), 3)
-            else:
-                ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
-                             int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
-        else:
-            ovv_shape = (int(OVV_DIMENSION[1] / self.m_view.mpp.value),
-                         int(OVV_DIMENSION[0] / self.m_view.mpp.value), 3)
-
-        self.ovv_im = DataArray(numpy.zeros(ovv_shape, dtype=numpy.uint8))
-        self.ovv_im.metadata[MD_DIMS] = "YXC"
-        self.ovv_im.metadata[MD_PIXEL_SIZE] = (self.m_view.mpp.value, self.m_view.mpp.value)
-        self.ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
+        self.ovv_im, self.m_view.mpp.value = self._initialize_ovv_im(OVV_SHAPE)
 
         # Initialize individual ovv images for optical and sem stream
         self.im_opt = copy.deepcopy(self.ovv_im)
         self.im_sem = copy.deepcopy(self.ovv_im)
 
         # Add stream to view
-        self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im)
+        self.upd_stream = acqstream.RGBUpdatableStream("Overview Stream", self.ovv_im,
+                                                       acq_type=MD_AT_OVV_TILES)
         self.m_view.addStream(self.upd_stream)
+
+    def _initialize_ovv_im(self, shape):
+        """
+        Initialize an overview image, i.e. a black DataArray with corresponding
+        metadata. 
+        shape: XYC tuple 
+        returns: DataArray of shape XYC, mpp value 
+        """
+        # Initialize the size of the ovv image with the stage size if the stage is small (< 5cm),
+        # otherwise fall back to OVV_SHAPE
+        ax_x = self.main_data.stage.axes["x"]
+        ax_y = self.main_data.stage.axes["y"]
+        mpp = max(MAX_OVV_SIZE / shape[0], MAX_OVV_SIZE / shape[1])
+        if (hasattr(ax_x, "range") and hasattr(ax_y, "range")):
+            max_x = ax_x.range[1] - ax_x.range[0]
+            max_y = ax_y.range[1] - ax_y.range[0]
+            if max_x < MAX_OVV_SIZE and max_y < MAX_OVV_SIZE:
+                mpp = max(max_x / shape[0], max_y / shape[1])
+
+        ovv_im = DataArray(numpy.zeros(shape, dtype=numpy.uint8))
+        ovv_im.metadata[MD_DIMS] = "YXC"
+        ovv_im.metadata[MD_PIXEL_SIZE] = (mpp, mpp)
+        ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
+        return ovv_im, mpp
+
+    def _on_merge_ratio_change(self, _):
+        self.canvas.history_overlay.set_merge_ratio(self.m_view.merge_ratio.value)
+        wx.CallAfter(self.canvas.history_overlay.cnvs.request_drawing_update)
 
     def on_stage_pos_change(self, p_pos):
         """ Store the new position in the overview history when the stage moves,
