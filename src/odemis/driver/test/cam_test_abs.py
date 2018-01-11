@@ -157,8 +157,8 @@ class VirtualTestCam(object):
 #    @unittest.skip("simple")
     def test_acquire(self):
         self.assertEqual(len(self.camera.shape), 3)
-        exposure = 0.1
-        self.camera.exposureTime.value = exposure
+        self.camera.exposureTime.value = self.camera.exposureTime.clip(0.1)
+        exposure = self.camera.exposureTime.value
 
         start = time.time()
         im = self.camera.data.get()
@@ -508,6 +508,8 @@ class VirtualTestSynchronized(object):
     def setUp(self):
         self.got_image = threading.Event()
         self.end_time = 0
+        self.sem_size = (10, 10)
+        self.ccd_size = self.ccd.resolution.value
 
     def tearDown(self):
         # just in case it failed
@@ -552,8 +554,6 @@ class VirtualTestSynchronized(object):
 
         exp = 50e-3  # s
         # in practice, it takes up to 500ms to take an image of 50 ms exposure
-        self.sem_size = (10, 10)
-        self.ccd_size = self.ccd.resolution.value
         numbert = numpy.prod(self.sem_size)
 
         self.ccd.exposureTime.value = exp
