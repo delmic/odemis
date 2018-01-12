@@ -29,8 +29,8 @@ from abc import abstractmethod, ABCMeta
 from concurrent.futures._base import CancelledError
 import logging
 from odemis import gui, model, util
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream, \
-                              StaticStream, DataProjection
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, \
+                              StaticStream, DataProjection, CLStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -378,8 +378,8 @@ class MicroscopeViewport(ViewPort):
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
         if (
-                "merge" in self._microscope_view.stream_tree.kwargs
-                and len(self._microscope_view.stream_tree) >= 2
+                "merge" in self._microscope_view.stream_tree.kwargs and
+                len(self._microscope_view.stream_tree) >= 2
         ):
             streams = self._microscope_view.getStreams()
             all_opt = all(isinstance(s, OpticalStream) for s in streams)
@@ -393,27 +393,30 @@ class MicroscopeViewport(ViewPort):
                 # => it should be done in the MicroscopeView when adding a stream
                 # For now, special hack for the MicroscopeCanvas which always sets
                 # the EM image as "right" (ie, it's drawn last).
-                # If there is SEM and Spectrum, the spectrum image is always
+                # If there is EM and Spectrum or CL, the spectrum/CL image is always
                 # set as "right" (ie, it's drawn last).
+                # Note: in practice, there is no AR spatial stream, so it's
+                # never mixed with any other stream.
                 if (
-                        any(isinstance(s, EMStream) for s in streams)
-                        and any(isinstance(s, OpticalStream) for s in streams)
+                        any(isinstance(s, EMStream) for s in streams) and
+                        any(isinstance(s, OpticalStream) for s in streams)
                 ):
-                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_CL)  # CL and Fluo
-                    # types correspond to same icon
+                    # TODO: don't hard-code MD_AT_FLUO and MD_AT_EM but use the
+                    # acquisitionType of the corresponding streams.
+                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_FLUO)
                     self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_EM)
                 elif (
-                        any(isinstance(s, EMStream) for s in streams)
-                        and any(isinstance(s, SpectrumStream) for s in streams)
+                        any(isinstance(s, EMStream) for s in streams) and
+                        any(isinstance(s, SpectrumStream) for s in streams)
                 ):
                     self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_EM)
                     self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_SPECTRUM)
                 elif (
-                        any(isinstance(s, EMStream) for s in streams)
-                        and any(isinstance(s, ARStream) for s in streams)
+                        any(isinstance(s, EMStream) for s in streams) and
+                        any(isinstance(s, CLStream) for s in streams)
                 ):
-                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_AR)
-                    self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_EM)
+                    self.bottom_legend.set_stream_type(wx.LEFT, model.MD_AT_EM)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, model.MD_AT_CL)
                 else:
                     self.bottom_legend.set_stream_type(wx.LEFT, streams[0].acquisitionType.value)
                     self.bottom_legend.set_stream_type(wx.RIGHT, streams[1].acquisitionType.value)
