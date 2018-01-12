@@ -359,7 +359,7 @@ class MicroscopeViewport(ViewPort):
         buf_fov = self.get_buffer_fov_from_mpp()
         if buf_fov:
             self.microscope_view.fov_buffer.value = buf_fov
-        self.microscope_view.mpp.value = mpp
+
         if self.bottom_legend:
             self.bottom_legend.scale_win.SetMPP(mpp)
             self.UpdateHFWLabel()
