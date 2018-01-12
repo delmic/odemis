@@ -331,7 +331,7 @@ class OverviewController(object):
             # black image to display history overlay separately from built-up ovv image
             # controlled by merge slider
             da, _ = self._initialize_ovv_im(OVV_SHAPE)
-            history_stream = acqstream.RGBStream("History Stream", da, acq_type=MD_AT_HISTORY)
+            history_stream = acqstream.RGBUpdatableStream("History Stream", da, acq_type=MD_AT_HISTORY)
             self.m_view.addStream(history_stream)
 
         # Built-up overview image
