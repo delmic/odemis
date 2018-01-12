@@ -971,7 +971,7 @@ class StaticSpectrumStream(StaticStream):
 # we could simplify/merge the two stream classes.
 
 class RGBUpdatableStream(StaticStream):
-    """ 
+    """
     Similar to RGBStream, but contains an update function that allows to modify the
     raw data.
     """

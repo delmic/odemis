@@ -216,7 +216,7 @@ class MeanWeaver(object):
         im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
         # Use minimum of the values in the tiles for background
         im[:] = numpy.amin(tiles)
-        
+
         # The mask is multiplied with the tile, thereby creating a tile with a gradient
         mask = numpy.zeros((gbbx_px[-1], gbbx_px[-2]), dtype=numpy.bool)
 
