@@ -67,6 +67,9 @@ if sys.platform.startswith('linux'):
                   ('share/odemis/sim', glob.glob('install/linux/usr/share/odemis/sim/*.odm.yaml')),
                   ('share/odemis/examples', glob.glob('install/linux/usr/share/odemis/examples/*.odm.yaml')),
                   ('share/odemis/hwtest', glob.glob('install/linux/usr/share/odemis/hwtest/*.odm.yaml')),
+                  # /usr/lib/odemis/plugins/ contains the plugins to be _loaded_,
+                  # in /usr/share/, which put all the plugins which are available.
+                  ('share/odemis/plugins/', glob.glob('plugins/*.py')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
                   ('share/applications/', glob.glob('install/linux/usr/share/applications/*.desktop')),
                   ('share/icons/hicolor/32x32/apps/', glob.glob('install/linux/usr/share/icons/hicolor/32x32/apps/odemis*.png')),
@@ -106,8 +109,8 @@ else:
 dist = setup(name='Odemis',
              version=VERSION,
              description='Open Delmic Microscope Software',
-             author='Éric Piel, Rinze de Laat, Kimon Tsitsikas',
-             author_email='piel@delmic.com, laat@delmic.com, tsitsikas@delmic.com',
+             author='Éric Piel, Rinze de Laat, Kimon Tsitsikas, Philip Winkler',
+             author_email='piel@delmic.com, laat@delmic.com, tsitsikas@delmic.com, winkler@delmic.com',
              url='https://github.com/delmic/odemis',
              classifiers=["License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
                           "Operating System :: POSIX :: Linux",
