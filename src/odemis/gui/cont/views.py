@@ -331,7 +331,7 @@ class OverviewController(object):
             # black image to display history overlay separately from built-up ovv image
             # controlled by merge slider
             da, _ = self._initialize_ovv_im(OVV_SHAPE)
-            history_stream = acqstream.RGBStream("History Stream", da, acq_type=MD_AT_HISTORY)
+            history_stream = acqstream.RGBUpdatableStream("History Stream", da, acq_type=MD_AT_HISTORY)
             self.m_view.addStream(history_stream)
 
         # Built-up overview image
@@ -370,9 +370,8 @@ class OverviewController(object):
         ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
         return ovv_im, mpp
 
-    def _on_merge_ratio_change(self, _):
-        self.canvas.history_overlay.set_merge_ratio(self.m_view.merge_ratio.value)
-        wx.CallAfter(self.canvas.history_overlay.cnvs.request_drawing_update)
+    def _on_merge_ratio_change(self, ratio):
+        self.canvas.history_overlay.set_merge_ratio(ratio)
 
     def on_stage_pos_change(self, p_pos):
         """ Store the new position in the overview history when the stage moves,

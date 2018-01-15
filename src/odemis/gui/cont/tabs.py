@@ -298,7 +298,6 @@ class SecomStreamsTab(Tab):
                                                                self.panel.vp_overview_sem.microscope_view,
                                                                )
 
-
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
             (

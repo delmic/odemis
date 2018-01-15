@@ -1427,7 +1427,7 @@ class HistoryOverlay(base.ViewOverlay):
         of the history overlay.
         """
         self._merge_ratio = merge_ratio
-        self.cnvs.request_drawing_update()
+        wx.CallAfter(self.cnvs.request_drawing_update)
 
 
 class SpotModeOverlay(base.ViewOverlay, base.DragMixin, base.SpotModeBase):
