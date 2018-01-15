@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -36,7 +36,7 @@ import time
 # Colour name (lower case) to source ID (as used in the device)
 COLOUR_TO_SOURCE = {"red": 0,
                     "green": 1, # cf yellow
-                    "cyan": 2, 
+                    "cyan": 2,
                     "uv": 3,
                     "yellow": 4, # actually filter selection for green/yellow
                     "blue": 5,
@@ -44,26 +44,27 @@ COLOUR_TO_SOURCE = {"red": 0,
                     }
 
 # map of source number to bit & address for source intensity setting
-SOURCE_TO_BIT_ADDR = { 0: (3, 0x18), # Red
-                       1: (2, 0x18), # Green
-                       2: (1, 0x18), # Cyan
-                       3: (0, 0x18), # UV
-                       4: (2, 0x18), # Yellow is the same source as Green
-                       5: (0, 0x1A), # Blue
-                       6: (1, 0x1A), # Teal
-                  }
+SOURCE_TO_BIT_ADDR = {0: (3, 0x18),  # Red
+                      1: (2, 0x18),  # Green
+                      2: (1, 0x18),  # Cyan
+                      3: (0, 0x18),  # UV
+                      4: (2, 0x18),  # Yellow is the same source as Green
+                      5: (0, 0x1A),  # Blue
+                      6: (1, 0x1A),  # Teal
+                     }
 
-# The default sources, as found in the documentation, and as the default 
+# The default sources, as found in the documentation, and as the default
 # Spectra LLE can be bought. Used only by scan().
 # source name -> 99% low, 25% low, centre, 25% high, 99% high in m
 DEFAULT_SOURCES = {"red": (615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9),
-                  "green": (525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9),
-                  "cyan": (455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9),
-                  "UV": (375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9),
-                  "yellow": (565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9),
-                  "blue": (420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9),
-                  "teal": (495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9),
-           }
+                   "green": (525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9),
+                   "cyan": (455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9),
+                   "UV": (375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9),
+                   "yellow": (565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9),
+                   "blue": (420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9),
+                   "teal": (495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9),
+                  }
+
 
 class LLE(model.Emitter):
     '''
@@ -72,11 +73,11 @@ class LLE(model.Emitter):
     Spectra, but might be compatible with other hardware with less channels.
     Documentation: Spectra TTL IF Doc.pdf. Micromanager's driver "LumencorSpectra"
     might also be a source of documentation (BSD license).
-    
+
     The API doesn't allow asynchronous actions. So the switch of source/intensities
-    is considered instantaneous by the software. It obviously is not, but the 
+    is considered instantaneous by the software. It obviously is not, but the
     documentation states about 200 μs. As it's smaller than most camera frame
-    rates, it shouldn't matter much. 
+    rates, it shouldn't matter much.
     '''
 
     def __init__(self, name, role, port, sources, _serial=None, **kwargs):
@@ -85,14 +86,14 @@ class LLE(model.Emitter):
          in which case, all the ports fitting the pattern will be tried, and the
          first one which looks like an LLE will be used.
         sources (dict string -> 5-tuple of float): the light sources (by colour).
-         The string is one of the seven names for the sources: "red", "cyan", 
-         "green", "UV", "yellow", "blue", "teal". They correspond to fix 
+         The string is one of the seven names for the sources: "red", "cyan",
+         "green", "UV", "yellow", "blue", "teal". They correspond to fix
          number in the LLE (cf documentation). The tuple contains the wavelength
          in m for the 99% low, 25% low, centre/max, 25% high, 99% high. They do
          no have to be extremely precise. The most important is the centre, and
-         that they are all increasing values. If the device doesn't have the 
+         that they are all increasing values. If the device doesn't have the
          source it can be skipped.
-        _serial (serial): for internal use only, directly use a opened serial 
+        _serial (serial): for internal use only, directly use a opened serial
          connection
         """
         # start with this opening the port: if it fails, we are done
@@ -104,21 +105,21 @@ class LLE(model.Emitter):
             self._serial, self._port = self._findDevice(port)
             logging.info("Found LLE device on port %s", self._port)
             self._try_recover = True
-        
+
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
-        
+
         # Init the LLE
         self._initDevice()
 
         if _serial is not None: # used for port testing => only simple init
             return
-        
+
         # parse source and do some sanity check
         if not sources or not isinstance(sources, dict):
             logging.error("sources argument must be a dict of source name -> wavelength 5 points")
             raise ValueError("Incorrect sources argument")
-        
+
         self._source_id = [] # source number for each spectra
         self._gy = [] # indexes of green and yellow source
         self._rcubt = [] # indexes of other sources
@@ -151,9 +152,9 @@ class LLE(model.Emitter):
 
         # emissions is list of 0 <= floats <= 1.
         self._intensities = [0.] * len(spectra) # start off
-        self.emissions = model.ListVA(list(self._intensities), unit="", 
+        self.emissions = model.ListVA(list(self._intensities), unit="",
                                       setter=self._setEmissions)
-        self.spectra = model.ListVA(spectra, unit="m", readonly=True) 
+        self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
         self._prev_intensities = [None] * len(spectra) # => will update for sure
         self._updateIntensities() # turn off every source
@@ -187,13 +188,12 @@ class LLE(model.Emitter):
                     self._tryRecover()
                 else:
                     raise
-        
-        
+
     def _readResponse(self, length):
         """
         receive a response from the engine
         length (0<int): length of the response to receive
-        return (bytearray of length == length): the response received (raw) 
+        return (bytearray of length == length): the response received (raw)
         raises:
             IOError in case of timeout
         """
@@ -208,10 +208,10 @@ class LLE(model.Emitter):
                 else:
                     raise IOError("Device timeout after receiving '%s'." % str(response).encode('hex_codec'))
             response.append(char)
-            
+
         logging.debug("Received: %s", str(response).encode('hex_codec'))
         return response
-        
+
     def _initDevice(self):
         """
         Initialise the device
@@ -224,7 +224,7 @@ class LLE(model.Emitter):
             garbage = self._serial.read(100)
             if len(garbage) == 100:
                 raise IOError("Device keeps sending unknown data")
-    
+
     def _setDeviceManual(self):
         """
         Reset the device to the manual mode
@@ -237,13 +237,13 @@ class LLE(model.Emitter):
     def _tryRecover(self):
         # no other access to the serial port should be done
         # so _ser_access should already be acquired
-        
+
         # Retry to open the serial port (in case it was unplugged)
         while True:
             try:
                 self._serial.close()
                 self._serial = None
-            except:
+            except Exception:
                 pass
             try:
                 logging.debug("retrying to open port %s", self._port)
@@ -256,13 +256,13 @@ class LLE(model.Emitter):
                 raise
             else:
                 break
-        
+
         # Now it managed to write, let's see if we manage to read
         while True:
             try:
                 logging.debug("retrying to communicate with device on port %s", self._port)
                 self._serial.write(b"\x57\x02\xff\x50") # init
-                self._serial.write(b"\x57\x03\xab\x50") 
+                self._serial.write(b"\x57\x03\xab\x50")
                 time.sleep(1)
                 self._serial.write(b"\x53\x91\x02\x50") # temp
                 resp = bytearray()
@@ -275,42 +275,40 @@ class LLE(model.Emitter):
                     break # it's look good
             except IOError:
                 time.sleep(2)
-        
+
         # it now should be accessible again
         self._prev_intensities = [None] * 7 # => will update for sure
         self._ser_access.release() # because it will try to write on the port
         self._updateIntensities() # reset the sources
         self._ser_access.acquire()
         logging.info("Recovered device on port %s", self._port)
-                
 
     # The source ID is more complicated than it looks like:
-    # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
+    # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects
     # whether yellow (activated) or green (deactivated) is used.
     def _enableSources(self, sources):
         """
         Select the light sources which must be enabled.
-        Note: If yellow/green (1/4) are activated, no other channel will work. 
+        Note: If yellow/green (1/4) are activated, no other channel will work.
         Yellow has precedence over green.
         sources (set of 0<= int <= 6): source to be activated, the rest will be turned off
         """
         com = bytearray(b"\x4F\x00\x50") # the second byte will contain the sources to activate
-        
+
         # Do we need to activate Green filter?
         if (1 in sources or 4 in sources) and len(sources) > 1:
             logging.warning("Asked to activate multiple conflicting sources %r", sources)
-            
+
         s_byte = 0x7f # reset a bit to 0 to activate
         for s in sources:
             assert(0 <= s and s <= 6)
             if s == 4: # for yellow, "green/yellow" (1) channel must be activated (=0)
                 s_byte &= ~ (1 << 1)
-            s_byte &= ~ (1 << s) 
-        
+            s_byte &= ~(1 << s)
+
         com[1] = s_byte
         with self._ser_access:
             self._sendCommand(com)
-    
 
     def _setSourceIntensity(self, source, intensity):
         """
@@ -320,24 +318,24 @@ class LLE(model.Emitter):
         """
         assert(0 <= source and source <= 6)
         bit, addr = SOURCE_TO_BIT_ADDR[source]
-        
+
         com = bytearray(b"\x53\x18\x03\x0F\xFF\xF0\x50")
         #                       ^^       ^   ^  ^ : modified bits
         #                    address    bit intensity
-        
+
         # address
         com[1] = addr
         # bit
         com[3] = 1 << bit
-        
+
         # intensity is inverted
         b_intensity = 0xfff0 & (((~intensity) << 4) | 0xf00f)
         com[4] = b_intensity >> 8
         com[5] = b_intensity & 0xff
-        
+
         with self._ser_access:
             self._sendCommand(com)
-    
+
     def GetTemperature(self):
         """
         returns (-300 < float < 300): temperature in degrees
@@ -350,13 +348,13 @@ class LLE(model.Emitter):
             resp = self._readResponse(2)
         val = 0.125 * ((((resp[0] << 8) | resp[1]) >> 5) & 0x7ff)
         return val
-    
+
     def _updateTemperature(self):
         temp = self.GetTemperature()
         self.temperature._value = temp
         self.temperature.notify(self.temperature.value)
         logging.debug("LLE temp is %g", temp)
-    
+
     def _getIntensityGY(self, intensities):
         """
         return the intensity of green and yellow (they share the same intensity)
@@ -365,12 +363,12 @@ class LLE(model.Emitter):
             yellow_i = self._source_id.index(4)
         except ValueError:
             yellow_i = None
-            
+
         try:
             green_i = self._source_id.index(1)
         except ValueError:
             green_i = None
-        
+
         # Yellow has precedence over green
         if yellow_i is not None and intensities[yellow_i] > 0:
             return intensities[yellow_i]
@@ -378,7 +376,7 @@ class LLE(model.Emitter):
             return intensities[green_i]
         else:
             return 0
-    
+
     def _updateIntensities(self):
         """
         Update the sources setting of the hardware, if necessary
@@ -387,46 +385,46 @@ class LLE(model.Emitter):
         for i, intens in enumerate(self._intensities):
             if self._prev_intensities[i] != intens:
                 need_update = True
-                # Green and Yellow share the same source => do it later    
+                # Green and Yellow share the same source => do it later
                 if i in self._gy:
                     continue
                 sid = self._source_id[i]
                 self._setSourceIntensity(sid, int(round(intens * 255 / self._max_power)))
-        
+
         # special for Green/Yellow: merge them
         prev_gy = self._getIntensityGY(self._prev_intensities)
         gy = self._getIntensityGY(self._intensities)
         if prev_gy != gy:
             self._setSourceIntensity(1, int(round(gy * 255 / self._max_power)))
-        
+
         if need_update:
             toTurnOn = set()
             for i, intens in enumerate(self._intensities):
                 if intens > self._max_power / 255:
                     toTurnOn.add(self._source_id[i])
             self._enableSources(toTurnOn)
-            
+
         self._prev_intensities = list(self._intensities)
-        
+
     def _updatePower(self, value):
         # set the actual values
         for i, intensity in enumerate(self.emissions.value):
             self._intensities[i] = intensity * value
         self._updateIntensities()
-        
+
     def _setEmissions(self, intensities):
         """
         intensities (list of N floats [0..1]): intensity of each source
-        """ 
+        """
         if len(intensities) != len(self._intensities):
             raise TypeError("Emission must be an array of %d floats." % len(self._intensities))
-    
+
         # TODO need to do better for selection
         # Green (1) and Yellow (4) can only be activated independently
         # If only one of them selected: easy
         # If only other selected: easy
         # If only green and yellow: pick the strongest
-        # If mix: if the max of GY > max other => pick G or Y, other pick others 
+        # If mix: if the max of GY > max other => pick G or Y, other pick others
         intensities = list(intensities) # duplicate
         max_gy = max([intensities[i] for i in self._gy] + [0]) # + [0] to always have a non-empty list
         max_others = max([intensities[i] for i in self._rcubt] + [0])
@@ -444,7 +442,7 @@ class LLE(model.Emitter):
                     intensities[self._gy[1]] = 0
                 else: # second is the strongest
                     intensities[self._gy[0]] = 0
-        
+
         # set the actual values
         for i, intensity in enumerate(intensities):
             # clip + indicate minimum step
@@ -463,12 +461,12 @@ class LLE(model.Emitter):
         if hasattr(self, "_temp_timer") and self._temp_timer:
             self._temp_timer.cancel()
             self._temp_timer = None
-        
+
         if self._serial:
             self._setDeviceManual()
             self._serial.close()
             self._serial = None
-        
+
     def selfTest(self):
         """
         check as much as possible that it works without actually moving the motor
@@ -482,9 +480,9 @@ class LLE(model.Emitter):
                 logging.warning("device reports suspicious temperature of exactly 0°C.")
             if 0 < temp and temp < 250:
                 return True
-        except:
+        except Exception:
             logging.exception("Selftest failed")
-        
+
         return False
 
     @classmethod
@@ -545,7 +543,7 @@ class LLE(model.Emitter):
                 ports = ["COM" + str(n) for n in range (0,8)]
             else:
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
-        
+
         logging.info("Serial ports scanning for Lumencor light engines in progress...")
         found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
@@ -558,7 +556,7 @@ class LLE(model.Emitter):
                 found.append(("LLE", {"port": p, "sources": DEFAULT_SOURCES}))
 
         return found
-    
+
     @staticmethod
     def openSerialPort(port):
         """
@@ -567,15 +565,16 @@ class LLE(model.Emitter):
         return (serial): the opened serial port
         """
         ser = serial.Serial(
-            port = port,
-            baudrate = 9600,
-            bytesize = serial.EIGHTBITS,
-            parity = serial.PARITY_NONE,
-            stopbits = serial.STOPBITS_ONE,
-            timeout = 1 #s
+            port=port,
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1  # s
         )
-        
+
         return ser
+
 
 class FakeLLE(LLE):
     """
@@ -585,7 +584,7 @@ class FakeLLE(LLE):
     def __init__(self, name, role, port, *args, **kwargs):
         # force a port pattern with just one existing file
         LLE.__init__(self, name, role, port="/dev/null", *args, **kwargs)
-    
+
     @staticmethod
     def openSerialPort(port):
         """
@@ -597,10 +596,11 @@ class FakeLLE(LLE):
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=1 #s
+            timeout=1  # s
         )
 
         return ser
+
 
 class LLESimulator(object):
     """
@@ -620,7 +620,7 @@ class LLESimulator(object):
     def read(self, size=1):
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
-        
+
         if len(ret) < size:
             # simulate timeout
             time.sleep(self.timeout)

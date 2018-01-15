@@ -44,8 +44,8 @@ class IdentityRegistrar(object):
         self.dep_tiles_pos = []
 
     def addTile(self, tile, dependent_tiles=None):
-        """ 
-        Extends grid by one tile. 
+        """
+        Extends grid by one tile.
         tile (DataArray of shape YX): each image must have at least MD_POS and MD_PIXEL_SIZE metadata. 
         They should all have the same dtype.
         dependent_tiles (list of DataArray or None): each of the dependent tile, where their position 
@@ -58,7 +58,7 @@ class IdentityRegistrar(object):
             self.dep_tiles_pos.append(pos)
 
     def getPositions(self):
-        """ 
+        """
         returns:
         tile_positions (list of N tuples of 2 floats)): the adjusted position in X/Y for each tile, in the order they were added
         dep_tile_positions (list of N tuples of tuples of 2 floats): the adjusted position for each dependent tile 
@@ -68,11 +68,11 @@ class IdentityRegistrar(object):
 
 
 class ShiftRegistrar(object):
-    """ 
+    """
     Locates the position of the image relative to the previous top tiles (horizontally and vertically) 
     by using cross-correlation. The cross-correlation is done using just the part of the images which are 
     supposed to be overlapping. In case the cross-correlation doesn't work (based on a couple of simple tests), 
-    fallback to the average shift on the same axis. 
+    fallback to the average shift on the same axis.
     """
 
     def __init__(self):
@@ -111,8 +111,8 @@ class ShiftRegistrar(object):
         self.tsize = None  # int. Expected shift in pixels, distance between the centers of two tiles
 
     def addTile(self, tile, dependent_tiles=None):
-        """ 
-        Extends grid by one tile. 
+        """
+        Extends grid by one tile.
         tile (DataArray of shape YX): each image must have at least MD_POS and MD_PIXEL_SIZE metadata. 
         They should all have the same dtype.
         dependent_tiles (list of K DataArray or None): each of the dependent tile, where their position 
@@ -192,7 +192,6 @@ class ShiftRegistrar(object):
                     self.ovrlp  # overlap size in pixels
                 self.tsize = int(self.size[1] - self.osize)
 
-
         for dt in dependent_tiles:
             sdt = numpy.subtract(dt.metadata[model.MD_POS], tile.metadata[model.MD_POS])
             self.shift_tile_dep_tiles[-1].append(sdt)
@@ -200,7 +199,7 @@ class ShiftRegistrar(object):
         self._compute_registration(tile, self.posY, self.posX)
 
     def getPositions(self):
-        """ 
+        """
         returns:
         tile_positions (list of N tuples): the adjusted position in X/Y for each tile, in the order they were added
         dep_tile_positions (list of N tuples of K tuples of 2 floats): for each tile, it returns 
@@ -213,8 +212,8 @@ class ShiftRegistrar(object):
 
         for ti in self.acqOrder:
             shift = self.shifts[ti[0]][ti[1]]
-            tile_positions.append(((shift[0] + firstPosition[0]) * self.px_size[0], 
-                 (firstPosition[1] - shift[1]) * self.px_size[1]))
+            tile_positions.append(((shift[0] + firstPosition[0]) * self.px_size[0],
+                                   (firstPosition[1] - shift[1]) * self.px_size[1]))
 
         # Return positions for dependent tiles
         for t, sdts in zip(tile_positions, self.shift_tile_dep_tiles):
@@ -235,15 +234,13 @@ class ShiftRegistrar(object):
             for j in range(len(self.tiles[0])):
                 if self.tiles[i][j] is not None:
                     md_pos_ij = self.tiles[i][j].metadata[model.MD_POS]
-                    dist = numpy.sqrt(
-                        (pos[0] - md_pos_ij[0]) ** 2 + (pos[1] - md_pos_ij[1]) ** 2)
+                    dist = math.hypot(pos[0] - md_pos_ij[0], pos[1] - md_pos_ij[1])
                     if dist < minDist:
                         minDist = dist
                         pos_prev = (i, j)
                         md_pos_prev = self.tiles[i][j].metadata[model.MD_POS]
         return pos_prev, md_pos_prev
-        
-        
+
     def _updateGrid(self, direction):
         """ extends grid by one row (direction = "y") or one column (direction = "x") """
         if direction == "x":
@@ -347,7 +344,6 @@ class ShiftRegistrar(object):
         mean_x = int(sum(v[0] for v in val) / len(val))
         mean_y = int(sum(v[1] for v in val) / len(val))
         return mean_x, mean_y
-
 
     def _pos_to_left_right(self, row, col, xdir):
         """
