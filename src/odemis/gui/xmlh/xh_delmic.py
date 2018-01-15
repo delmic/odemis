@@ -204,12 +204,10 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, 'StreamBar')
 
-
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
         if self.GetClass() == 'StreamBar':
-            #print "Creating FoldpanelItem"
             parent = self.GetParentAsWindow()
             w = strm.StreamBar(parent,
                                  self.GetID(),
@@ -283,7 +281,7 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
                     height=height
                 )
         except ValueError:
-            print self.GetName()
+            print("Failed to create ImageButton %s" % (self.GetName(),))
             raise
 
         self.SetupWindow(w)
@@ -758,7 +756,6 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
-        print self.GetParamValue('content')
 
         # Now create the object
         new_ctrl = wx.combo.OwnerDrawnComboBox(self.GetParentAsWindow(),

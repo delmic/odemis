@@ -135,8 +135,12 @@ def load_plugin(filename, microscope, main_app):
         # if inspect.isabstract(pc):
         #     continue
 
-        logging.debug("Trying to instantiate %s (%s) of '%s' with microscope %s",
-                      pc.name, n, filename, microscope)
+        if microscope:
+            logging.debug("Trying to instantiate %s (%s) of '%s' with microscope %s",
+                      pc.name, n, filename, microscope.name)
+        else:
+            logging.debug("Trying to instantiate %s (%s) of '%s' without microscope",
+                          pc.name, n, filename)
         found_plugin = True
         try:
             ip = pc(microscope, main_app)

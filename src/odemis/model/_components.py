@@ -142,6 +142,12 @@ class Component(ComponentBase):
                 _vattributes.dump_vigilant_attributes(self),
                 _dataflow.dump_events(self))
 
+    def __str__(self):
+        try:
+            return "%s '%s'" % (self.__class__.__name__, self.name)
+        except AttributeError:
+            return super(Component, self).__str__()
+
     # .parent is a weakref so that there is no cycle.
     # Too complicated to be a roattribute
     @property
@@ -231,6 +237,12 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         _dataflow.load_dataflows(self, dataflows)
         _vattributes.load_vigilant_attributes(self, vas)
         _dataflow.load_events(self, events)
+
+    def __str__(self):
+        try:
+            return "Proxy of Component '%s'" % (self.name)
+        except AttributeError:
+            return super(ComponentProxy, self).__str__()
 
 # Note: this could be directly __reduce__ of Component, but is a separate function
 # to look more like the normal Proxy of Pyro
