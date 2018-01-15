@@ -50,12 +50,25 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               # refswitch={"x": 0},
               # minpower=1.3,  # For working without external power supply
               inverted=["x"])
+
+# For testing encoder
+KWARGS_ENC = dict(name="test", role="selector", port=PORT,
+              axes=["x"],
+              ustepsize=[122e-9],  # rad/µstep
+              unit=["rad"],
+              abs_encoder=[True],
+              )
+
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "Standard"
 KWARGS_SIM["port"] = "/dev/fake6"
+KWARGS_ENC_SIM = dict(KWARGS_ENC)
+KWARGS_ENC_SIM["port"] = "/dev/fake1"
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
+    KWARGS_ENC = KWARGS_ENC_SIM
+
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
@@ -81,6 +94,19 @@ class TestStatic(unittest.TestCase):
         Just makes sure we don't (completely) break the simulator after an update
         """
         dev = CLASS(**KWARGS_SIM)
+
+        self.assertGreater(len(dev.axes), 0)
+        for axis in dev.axes:
+            dev.moveAbs({axis:-1e-3})
+
+        self.assertTrue(dev.selfTest(), "self test failed.")
+        dev.terminate()
+
+    def test_fake_enc(self):
+        """
+        Just makes sure we don't (completely) break the simulator after an update
+        """
+        dev = CLASS(**KWARGS_ENC_SIM)
 
         self.assertGreater(len(dev.axes), 0)
         for axis in dev.axes:
@@ -174,13 +200,18 @@ class TestActuator(unittest.TestCase):
     def test_stop(self):
         self.dev.stop()
 
-        move = {'y':100e-6}
+        if "y" in self.dev.axes:
+            a = "y"
+        else:
+            a = next(iter(self.dev.axes.keys()))
+
+        move = {a:100e-6}
         f = self.dev.moveRel(move)
         self.assertTrue(f.cancel())
         self.assertTrue(f.cancelled())
 
         # Try similar but with stop (should cancel every futures)
-        move = {'y':-100e-6}
+        move = {a:-100e-6}
         f = self.dev.moveRel(move)
         self.dev.stop()
         self.assertTrue(f.cancelled())
@@ -386,9 +417,37 @@ class TestActuator(unittest.TestCase):
         self.assertFalse(all(self.dev.referenced.value.values()))
 
 
+class TestActuatorEnc(TestActuator):
+
+    def setUp(self):
+        self.dev = CLASS(**KWARGS_ENC)
+        self.orig_pos = dict(self.dev.position.value)
+
+    def test_move_circle(self):
+        # Only one axis => skip
+        pass
+
+    def test_ref_cancel(self):
+        # It's always referenced, so cannot cancel it.
+        pass
+
+    def test_reference(self):
+        """
+        Try referencing each axis
+        """
+        # Much "simpler" than the standard version as it doesn't actually run
+        # any referencing.
+        axes = set(self.dev.axes.keys())
+
+        for a in axes:
+            f = self.dev.reference({a})
+            f.result()
+            self.assertTrue(self.dev.referenced.value[a])
+            # position is not 0, as it's not really referenced!
+
+
 if __name__ == "__main__":
     unittest.main()
-
 
 # from odemis.driver import tmcm
 # import logging

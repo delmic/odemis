@@ -48,6 +48,7 @@ import serial
 import struct
 import threading
 import time
+from types import NoneType
 
 
 class TMCLError(Exception):
@@ -80,7 +81,7 @@ REFPROC_STD = "Standard"  # Use the standard reference search built in the contr
 REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't support referencing
 
 # Model number (int) of devices tested
-KNOWN_MODELS = {3110, 6110}
+KNOWN_MODELS = {1140, 3110, 6110}
 
 # Info for storing config data that is not directly recordable in EEPROM
 UC_FORMAT = 1  # Version number
@@ -115,7 +116,9 @@ class TMCLController(model.Actuator):
     Represents one Trinamic TMCL-compatible controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, axes, ustepsize, rng=None, address=None,
+
+    def __init__(self, name, role, port, axes, ustepsize, address=None,
+                 rng=None, unit=None, abs_encoder=None,
                  refproc=None, refswitch=None, temp=False,
                  minpower=10.8, **kwargs):
         """
@@ -132,6 +135,15 @@ class TMCLController(model.Actuator):
           each axis. 0 must be part of the range.
           Note: if the axis is not referenced, the range is doubled. If the axis
           is inverted, the values provided will be inverted too.
+        abs_encoder (None or list of True/False/None): Indicates for each axis
+          whether the axis position can be read as an absolute position from the
+          encoder (=True), a relative position of the encoder (=False
+          but NOT IMPLEMENTED YET), or no encoder is present (=None).
+          With a "relative" encoder, a referencing is needed before the reported
+          position corresponds to a known point on the physical axis, while
+          absolute encoders are always referenced.
+        unit (None or list of str): The unit of each axis. When it's None, it
+          defaults to "m" for all the axes.
         refswitch (dict str -> int): if an axis needs to have its reference
           switch turn on during referencing, the digital output port is
           indicated by the number.
@@ -158,8 +170,18 @@ class TMCLController(model.Actuator):
 
         self._name_to_axis = {}  # str -> int: name -> axis number
         if rng is None:
-            rng = []
+            rng = [None] * len(axes)
         rng += [None] * (len(axes) - len(rng)) # ensure it's long enough
+
+        if abs_encoder is None:
+            abs_encoder = [None] * len(axes)
+        elif len(abs_encoder) != len(axes):
+            raise ValueError("abs_encoder argument must be the same length as axes")
+
+        if unit is None:
+            unit = ["m"] * len(axes)
+        elif len(unit) != len(axes):
+            raise ValueError("unit argument must be the same length as axes")
 
         for i, n in enumerate(axes):
             if not n:  # skip this non-connected axis
@@ -167,7 +189,7 @@ class TMCLController(model.Actuator):
             # sz is typically ~1µm, so > 1 cm is very fishy
             sz = ustepsize[i]
             if not (0 < sz <= 10e-3):
-                raise ValueError("ustepsize should be above 0 and < 10 mm, but got %g m" % (sz,))
+                raise ValueError("ustepsize should be between 0 and 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
 
         self._refswitch = {} # int -> None or int: axis number -> out port to turn on the ref switch
@@ -234,25 +256,29 @@ class TMCLController(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = ParallelThreadPoolExecutor()  # one task at a time
 
+        self._abs_encoder = {}  # str -> bool: axis name -> use encoder position
         axes_def = {}
         for n, i in self._name_to_axis.items():
             if not n:
                 continue
-            sz = ustepsize[i]
-            if modl == 3110:
-                # Mov abs supports ±2³¹ but the actual position is only within ±2²³
-                # TODO: hardware seems to actually allow further
-                phy_rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
-            else:
-                phy_rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
 
+            self._abs_encoder[n] = abs_encoder[i]
+            if abs_encoder[i] is False:
+                raise NotImplementedError("abs_encoder = False is not yet supported, as set for axis %s" % (n,))
+            elif not isinstance(abs_encoder[i], (bool, NoneType)):
+                raise ValueError("abs_encoder argument must only contain True, False, or None")
+
+            sz = ustepsize[i]
+            phy_rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
             sw_rng = rng[i]
             if sw_rng is not None:
                 if not sw_rng[0] <= 0 <= sw_rng[1]:
                     raise ValueError("Range of axis %d doesn't include 0: %s" % (i, sw_rng))
                 phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
 
-            axes_def[n] = model.Axis(range=phy_rng, unit="m")
+            if not isinstance(unit[i], basestring):
+                raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
+            axes_def[n] = model.Axis(range=phy_rng, unit=unit[i])
             self._init_axis(i)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -263,6 +289,8 @@ class TMCLController(model.Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
+        # TODO: for axes with encoders, refresh position regularly
+
         # TODO: add support for changing speed. cf p.68: axis param 4 + p.81 + TMC 429 p.6
         self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
@@ -271,10 +299,15 @@ class TMCLController(model.Actuator):
         for n, i in self._name_to_axis.items():
             self._accel[n] = self._readAccel(i)
 
-        if refproc is not None:
+        if refproc is None:
+            # Only the axes which are "absolute"
+            axes_ref = {a: True for a in self.axes.keys() if self._abs_encoder[a]}
+        else:
             # str -> boolean. Indicates whether an axis has already been referenced
-            axes_ref = {a: False for a in axes}
-            self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+            # (considered already referenced if absolute)
+            axes_ref = {a: (self._abs_encoder[a] is True) for a in self.axes.keys()}
+
+        self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
         try:
             axis_params, io_config = self.extract_config()
@@ -1197,8 +1230,15 @@ class TMCLController(model.Actuator):
 
         for n, i in self._name_to_axis.items():
             if axes is None or n in axes:
-                # param 1 = current position
-                pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
+                if self._abs_encoder[n]:
+                    # param 209 = encoder position
+                    # Note: it's almost like param 215 * 512 / param 210, but
+                    # as long as the controller is turned on, it will remember
+                    # multiple rotations.
+                    pos[n] = self.GetAxisParam(i, 209) * self._ustepsize[i]
+                else:
+                    # param 1 = current position
+                    pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
 
         pos = self._applyInversion(pos)
 
@@ -1315,8 +1355,7 @@ class TMCLController(model.Actuator):
         self._checkMoveAbs(pos)
 
         for a, p in pos.items():
-            if (hasattr(self, "referenced") and
-                not self.referenced.value[a] and p != self.position.value[a]):
+            if not self.referenced.value.get(a, False) and p != self.position.value[a]:
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
         pos = self._applyInversion(pos)
@@ -1341,17 +1380,26 @@ class TMCLController(model.Actuator):
 
     @isasync
     def reference(self, axes):
-        if not axes:
-            return model.InstantaneousFuture()
         self._checkReference(axes)
+
+        refaxes = set(axes)
+        for an in axes:
+            if self._abs_encoder[an]:
+                # Absolute axes never need to be referenced
+                logging.debug("Attempted to reference absolute axis %s", an)
+                refaxes.remove(an)
+
+        if not refaxes:
+            return model.InstantaneousFuture()
+
         if self._refproc == REFPROC_2XFF:
             # Can only run one referencing at a time => block all the other axes too
             dependences = set(self.axes.keys())
         else:
-            dependences = set(axes)
+            dependences = set(refaxes)
 
         f = self._createRefFuture()
-        self._executor.submitf(dependences, f, self._doReference, f, axes)
+        self._executor.submitf(dependences, f, self._doReference, f, refaxes)
         return f
     reference.__doc__ = model.Actuator.reference.__doc__
 
@@ -1465,7 +1513,17 @@ class TMCLController(model.Actuator):
                 aid = self._name_to_axis[an]
                 moving_axes.add(aid)
                 usteps = int(round(v / self._ustepsize[aid]))
-                self.MoveAbsPos(aid, usteps)
+                if self._abs_encoder[an]:
+                    # Originally the encoder and current position are identical
+                    # but they get de-synchronise when the motor misses steps or
+                    # if the scaler is not perfect. As the user-visible position
+                    # is the one reported by encoder we need to convert from
+                    # this encoder position to internal one. The simplest is to
+                    # use a relative move.
+                    epos = self.GetAxisParam(aid, 209)
+                    self.MoveRelPos(aid, usteps - epos)
+                else:
+                    self.MoveAbsPos(aid, usteps)
                 # compute expected end
                 d = abs(v - old_pos[an])
                 dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
@@ -1677,6 +1735,8 @@ class TMCLController(model.Actuator):
         # For debugging purpose
         if port == "/dev/fake" or port == "/dev/fake3":
             return TMCMSimulator(timeout=0.1, naxes=3)
+        elif port == "/dev/fake1":
+            return TMCMSimulator(timeout=0.1, naxes=1)
         elif port == "/dev/fake6":
             return TMCMSimulator(timeout=0.1, naxes=6)
 
@@ -1723,8 +1783,8 @@ class TMCLController(model.Actuator):
                 dev = cls(None, None, p, address=None, axes=["x"], ustepsize=[10e-9])
                 modl, vmaj, vmin = dev.GetVersion()
                 address = dev._target
-                # TODO: based on the model name (ie, the first number) deduce
-                # the number of axes
+                # Guess the number of axes based on the model name (ie, the first number)
+                naxes = int(str(modl)[0])
             except IOError:
                 # not possible to use this port? next one!
                 continue
@@ -1735,8 +1795,8 @@ class TMCLController(model.Actuator):
             found.append(("TMCM-%s" % modl,
                           {"port": p,
                            "address": address,
-                           "axes": ["x", "y", "z"],
-                           "ustepsize": [10e-9, 10e-9, 10e-9]})
+                           "axes": ["x", "y", "z"][:naxes],
+                           "ustepsize": [10e-9] * naxes})
                         )
 
         return found
@@ -1923,6 +1983,8 @@ class TMCMSimulator(object):
             # special code for special values
             if typ == 1: # actual position
                 rval = self._getCurrentPos(mot)
+            elif typ == 209:  # encoder position (simulated as actual position)
+                rval = self._getCurrentPos(mot)
             elif typ == 8: # target reached?
                 rval = 0 if self._axis_move[mot][1] > time.time() else 1
             elif typ in (10, 11):  # left/right switch
@@ -1940,7 +2002,7 @@ class TMCMSimulator(object):
             self._astates[mot][typ] = self._orig_axis_state.get(typ, 0)
             self._sendReply(inst, val=0)
         elif inst == 10:  # Get global param
-            if not 0 <= mot < self._naxes:
+            if not 0 <= mot < len(self._gstate):
                 self._sendReply(inst, status=4)  # invalid value
                 return
             if not 0 <= typ <= 255:
