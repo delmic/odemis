@@ -29,7 +29,7 @@ import logging
 import numpy
 from odemis import dataio, model
 from odemis.acq.stream import StaticSEMStream, StaticCLStream, StaticSpectrumStream, \
-                              StaticARStream
+                              StaticARStream, StaticFluoStream
 import odemis
 from odemis.acq import stitching
 from odemis.util import spectrum
@@ -196,6 +196,8 @@ def add_acq_type_md(das):
             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
         elif isinstance(stream, StaticSpectrumStream):
             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        elif isinstance(stream, StaticFluoStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_FLUO
         else:
             da.metadata[model.MD_ACQ_TYPE] = "Unknown"
             logging.warning("Unexpected stream of shape %s in input data." % da.shape)
