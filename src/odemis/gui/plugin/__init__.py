@@ -61,8 +61,8 @@ def find_plugins():
                  os.path.join(hf, u".config", u"odemis", u"plugins")
                  )
     else:  # hopefully this is Linux
-        paths = (u"/usr/share/odemis/plugins",
-                 u"/usr/share/local/odemis/plugins",
+        paths = (u"/usr/lib/odemis/plugins",
+                 u"/usr/local/lib/odemis/plugins",
                  os.path.join(hf, u".local/share/odemis/plugins"),
                  )
 

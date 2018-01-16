@@ -1,3 +1,4 @@
 etc/sudoers.d
 etc/logrotate.d
 etc/bash_completion.d
+usr/lib/odemis/plugins
