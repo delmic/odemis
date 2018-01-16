@@ -30,7 +30,7 @@ BEST_MATCH = 0.9  # minimum match value indicating optimal shift value
 GOOD_MATCH = 0.2  # minimum match value indicating shift value can be used in the average position calculation
 # minimum ratio of overlap size indicating an extreme shift value that
 # should be aborted
-EXTREME_SHIFT = 0.4
+EXTREME_SHIFT = 0.6
 
 LEFT = 1  # direction in pos_to_left_right function
 RIGHT = -1
@@ -291,7 +291,9 @@ class ShiftRegistrar(object):
         """
         # If case the shift is extreme, force the match to 0, to indicate
         # something is wrong
-        if math.hypot(*shift) >= self.tsize + self.osize * EXTREME_SHIFT:
+        min_shift = math.sqrt(2) * (self.tsize - self.osize) - self.osize * EXTREME_SHIFT
+        max_shift = math.sqrt(2) * (self.tsize - self.osize) + self.osize * EXTREME_SHIFT
+        if not min_shift <= math.hypot(*shift) <= max_shift:
             return 0
 
         (l1, t1, r1, b1), (l2, t2, r2, b2) = self._estimateROI(shift)
@@ -328,7 +330,9 @@ class ShiftRegistrar(object):
 
         a = prev_tile[t1:b1, l1:r1]
         b = tile[t2:b2, l2:r2]
-
+        # TODO: Check if shift is calculated properly. It might be the case that
+        # very small overlap areas that result in a good match are favoured over the correct
+        # bigger overlap area.
         [x, y] = MeasureShift(b, a)
         return x, y
 
@@ -506,6 +510,8 @@ class ShiftRegistrar(object):
 
         pos = None
         pos2 = None
+        match = 0
+        match2 = 0
 
         if self.pos_prev_x <= col:
             if col != 0 and self.tiles[row][col - 1] is not None:
@@ -536,6 +542,9 @@ class ShiftRegistrar(object):
         elif match2 > match:
             # otherwise just keep the best one
             pos = pos2
+        elif match2 == 0 and match == 0:
+            # no good value, fall back to given position
+            pos = (ox, oy)
 
         # store the position of the tile
         self.shifts[row][col] = pos

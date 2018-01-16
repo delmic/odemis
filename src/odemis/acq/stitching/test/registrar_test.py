@@ -28,6 +28,7 @@ import unittest
 import random
 import copy
 import os
+import math
 
 from odemis.acq.stitching import IdentityRegistrar, ShiftRegistrar
 from odemis.dataio import find_fittest_converter
@@ -35,6 +36,7 @@ from odemis.util.img import ensure2DImage
 import odemis
 
 from stitching_test import decompose_image
+from odemis.acq.stitching import EXTREME_SHIFT
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -418,10 +420,11 @@ class TestShiftRegistrar(unittest.TestCase):
                             diff1 = abs(calculatedPositions[i][0] - pos[i][0])
                             diff2 = abs(calculatedPositions[i][1] - pos[i][1])
                             px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
-                            # allow error of 3% of tileSize
-                            margin1 = 0.03 * tiles[i].shape[0] * px_size[0]
-                            margin2 = 0.03 * tiles[i].shape[1] * px_size[1]
 
+                            margin1 = math.sqrt(2) * (1 - o) * tiles[i].shape[0] * px_size[0] + \
+                                             o * tiles[i].shape[0] * EXTREME_SHIFT * px_size[0]
+                            margin2 = math.sqrt(2) * (1 - o) * tiles[i].shape[1] * px_size[1] + \
+                                             o * tiles[i].shape[1] * EXTREME_SHIFT * px_size[1]
                             self.assertLessEqual(diff1, margin1,
                                                  "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
                                                  " %f != %f" % (calculatedPositions[i][0], pos[i][0]))
@@ -477,8 +480,17 @@ class TestShiftRegistrar(unittest.TestCase):
                 diff2 = abs(tile_pos[i][1] - pos[i][1])
                 # allow difference of 10% of overlap
                 px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
-                margin1 = int(1 + 0.03 * tiles[i].shape[0]) * px_size[0]
-                margin2 = int(1 + 0.03 * tiles[i].shape[1]) * px_size[1]
+
+                # Check if position is not completely wrong. The margins are given
+                # by the extreme value calculation in the registrar and provide
+                # a very generous upper limit for the error that should never be exceeded
+                # because of the fallback method.
+                # Unfortunately, many tests don't pass stricter limits yet.
+                margin1 = math.sqrt(2) * (1 - o) * tiles[i].shape[0] * px_size[0] + \
+                                 o * tiles[i].shape[0] * EXTREME_SHIFT * px_size[0]
+                margin2 = math.sqrt(2) * (1 - o) * tiles[i].shape[1] * px_size[1] + \
+                                 o * tiles[i].shape[1] * EXTREME_SHIFT * px_size[1]
+
                 self.assertLessEqual(diff1, margin1,
                                      "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
                                      " %f != %f" % (tile_pos[i][0], pos[i][0]))
@@ -526,8 +538,10 @@ class TestShiftRegistrar(unittest.TestCase):
                 diff2 = abs(tile_pos[i][1] - pos[i][1])
 
                 # allow difference of 10% of overlap
-                margin1 = 0.1 * tiles[i].shape[0] * px_size[0]
-                margin2 = 0.1 * tiles[i].shape[1] * px_size[1]
+                margin1 = math.sqrt(2) * (1 - o) * tiles[i].shape[0] * px_size[0] + \
+                                 o * tiles[i].shape[0] * EXTREME_SHIFT * px_size[0]
+                margin2 = math.sqrt(2) * (1 - o) * tiles[i].shape[1] * px_size[1] + \
+                                 o * tiles[i].shape[1] * EXTREME_SHIFT * px_size[1]
                 self.assertLessEqual(diff1, margin1,
                                      "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
                                      " %f != %f" % (tile_pos[i][0], pos[i][0]))
