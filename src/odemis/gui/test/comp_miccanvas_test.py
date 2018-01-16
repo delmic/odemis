@@ -204,6 +204,8 @@ class PlotCanvasTestCase(test.GuiTestCase):
         xs = range(data_size)
         ys = self._generate_sine_list(data_size)
 
+        is_done = threading.Event()
+
         def rotate(q):
 
             scale = 1.001
@@ -214,19 +216,25 @@ class PlotCanvasTestCase(test.GuiTestCase):
                 cnvs.set_1d_data(xs, ys, unit_x='m', unit_y='g')
                 q[-1] *= scale
                 q.rotate(1)
+                time.sleep(0.01)
 
                 if time.time() > timeout:
                     break
 
-            print "No error..."
-            self.frame.Destroy()
+            print("No error detected in threaded plotting")
+            is_done.set()
 
         t = threading.Thread(target=rotate, args=(ys, ))
         # Setting Daemon to True, will cause the thread to exit when the parent does
         t.setDaemon(True)
         t.start()
 
-        test.gui_loop(10)
+        for i in range(10):  # Fail after 10s not yet finished
+            test.gui_loop(1)
+            if is_done.is_set():
+                return
+
+        self.assertTrue(is_done.is_set())
 
     # @unittest.skip("simple")
     def test_bitmap_canvas(self):

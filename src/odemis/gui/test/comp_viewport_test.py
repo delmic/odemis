@@ -104,6 +104,8 @@ class ViewportTestCase(test.GuiTestCase):
         xs = range(data_size)
         ys = self._generate_sine_list(data_size)
 
+        is_done = threading.Event()
+
         def rotate(q, v):
             # v.bottom_legend.unit = 'm'
             scale = 1.001
@@ -120,15 +122,21 @@ class ViewportTestCase(test.GuiTestCase):
                 v.left_legend.range = (min(ys), max(ys))
                 v.left_legend.SetToolTipString(u"Count per second")
 
-                time.sleep(0.0001)
-            self.frame.Destroy()
+                time.sleep(0.01)
+
+            is_done.set()
 
         t = threading.Thread(target=rotate, args=(ys, vwp))
         # Setting Daemon to True, will cause the thread to exit when the parent does
         t.setDaemon(True)
         t.start()
 
-        test.gui_loop(10)
+        for i in range(10):  # Fail after 10s not yet finished
+            test.gui_loop(1)
+            if is_done.is_set():
+                return
+
+        self.assertTrue(is_done.is_set())
 
 #     @unittest.skip("simple")
     def test_plot_viewport(self):
