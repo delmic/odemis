@@ -1586,7 +1586,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         escan.shift.value = (0, 0)
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
-        et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
+        et = escan.dwellTime.clip(7.5e-07) * numpy.prod(escan.resolution.range[1])
 
         # Start with largest resolution
         max_resolution = escan.resolution.range[1][0]  # pixels
