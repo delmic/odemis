@@ -30,7 +30,6 @@ import logging
 import math
 from odemis import model, acq, dataio, util
 from odemis.acq import stream
-from odemis import acq
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -44,9 +43,11 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import threading
 
 from odemis.acq import stitching
-from odemis.acq.stream import Stream, SEMStream, CameraStream, SpotSEMStream, LiveStream, \
-    RepetitionStream, SEMMDStream, StaticSEMStream, StaticStream, UNDEFINED_ROI
+from odemis.acq.stream import Stream, SEMStream, CameraStream, \
+    RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, \
+    ARStream, SpectrumStream, FluoStream, MultipleDetectorStream
 import numpy
+from ipykernel.pickleutil import istype
 
 
 class TileAcqPlugin(Plugin):
@@ -262,7 +263,11 @@ class TileAcqPlugin(Plugin):
         self._dlg = dlg
         dlg.addSettings(self, self.vaconf)
         for s in ss:
-            dlg.addStream(s)
+            if isinstance(s, ARStream):
+                dlg.addStream(s, index=1)  # add ARStream in different view
+            else:
+                dlg.addStream(s, index=0)
+            # TODO: handle Spectrum stream
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
@@ -298,8 +303,6 @@ class TileAcqPlugin(Plugin):
         Find all the VAs of a stream which can potentially affect the acquisition time
         return (set of VAs)
         """
-        tab = self.main_app.main_data.tab.value
-        ss = self._get_live_streams(tab.tab_data_model)
 
         nvas = model.getVAs(stream)  # name -> va
         vas = set()
@@ -383,8 +386,6 @@ class TileAcqPlugin(Plugin):
         # --->-->-->--Z
         overlap = 1 - self.overlap.value / 100
         # don't move on the axis that is not supposed to have changed
-        main_data = self.main_app.main_data
-        prev_pos = main_data.stage.position.value
         m = {}
         idx_change = numpy.subtract(idx, prev_idx)
         if idx_change[0]:
@@ -401,7 +402,7 @@ class TileAcqPlugin(Plugin):
             f.result(t)
         except TimeoutError:
             logging.warning("Failed to move to tile %s", idx)
-            future.running_subf.cancel()
+            self.ft.running_subf.cancel()
             # Continue acquiring anyway... maybe it has moved somewhere near
 
     def _get_fov(self, sd):
@@ -514,19 +515,19 @@ class TileAcqPlugin(Plugin):
             for s in ss:
                 for sda in s.raw:
                     if da is sda:  # Found it!
-                        if isinstance(s, acq.stream.EMStream):
+                        if isinstance(s, EMStream):
                             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
-                        elif isinstance(s, acq.stream.ARStream):
+                        elif isinstance(s, ARStream):
                             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
-                        elif isinstance(s, acq.stream.SpectrumStream):
+                        elif isinstance(s, SpectrumStream):
                             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
-                        elif isinstance(s, acq.stream.FluoStream):
+                        elif isinstance(s, FluoStream):
                             da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_FLUO
-                        elif isinstance(s, acq.stream.MultipleDetectorStream):
-                           if model.MD_OUT_WL in da.metadata:
-                               da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_CL
-                           else:
-                               da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
+                        elif isinstance(s, MultipleDetectorStream):
+                            if model.MD_OUT_WL in da.metadata:
+                                da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_CL
+                            else:
+                                da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
                         else:
                             logging.warning("Unknown acq stream type for %s", s)
                         break
