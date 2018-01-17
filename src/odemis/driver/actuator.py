@@ -933,7 +933,8 @@ class FixedPositionsActuator(model.Actuator):
     actuator moves a filter wheel.
     """
 
-    def __init__(self, name, role, children, axis_name, positions, cycle=None, **kwargs):
+    def __init__(self, name, role, children, axis_name, positions, cycle=None,
+                 inverted=None, **kwargs):
         """
         name (string)
         role (string)
@@ -942,7 +943,9 @@ class FixedPositionsActuator(model.Actuator):
         positions (set or dict value -> str): positions where the actuator is allowed to move
         cycle (float): if not None, it means the actuator does a cyclic move and this value represents a full cycle
         """
-        # TODO: forbid inverted
+        if inverted:
+            raise ValueError("Axes shouldn't be inverted")
+
         if len(children) != 1:
             raise ValueError("FixedPositionsActuator needs precisely one child")
 
@@ -1131,3 +1134,235 @@ class FixedPositionsActuator(model.Actuator):
             self._executor = None
 
         self._child.position.unsubscribe(self._update_child_position)
+        if hasattr(self, "referenced"):
+            self._child.referenced.subscribe(self._update_child_ref)
+
+
+class CombinedSensorActuator(model.Actuator):
+    """
+    An actuator component which allows moving to fixed positions which can
+    be detected by a separate component.
+    """
+
+    def __init__(self, name, role, children, axis_actuator, axis_sensor,
+                 positions, to_sensor, inverted=None, **kwargs):
+        """
+        name (string)
+        role (string)
+        children (dict str -> actuator): role (in this actuator) -> actuator
+           "actuator": child used to move the axis
+           "sensor: child used to read the position (via the .position)
+        axis_actuator (str): axis name in the child actuator
+        axis_sensor (str): axis name in the child sensor
+        positions (set or dict value -> (str or [str])): positions where the actuator is allowed to move
+        to_sensor (dict value -> value): position of the actuator to position reported by the sensor
+        """
+        if inverted:
+            raise ValueError("Axes shouldn't be inverted")
+        if len(children) != 2:
+            raise ValueError("CombinedSensorActuator needs precisely two children")
+
+        try:
+            child = children["actuator"]
+        except KeyError:
+            raise ValueError("No 'actuator' child provided")
+        if not isinstance(child, model.ComponentBase):
+            raise ValueError("Child %s is not a component." % (child.name,))
+        if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+            raise ValueError("Child %s is not an actuator." % child.name)
+        try:
+            sensor = children["sensor"]
+        except KeyError:
+            raise ValueError("No 'sensor' child provided")
+        if not isinstance(sensor, model.ComponentBase):
+            raise ValueError("Child %s is not a component." % (sensor.name,))
+        if not model.hasVA(sensor, "position"):  # or not c in sensor.position.value:
+            raise ValueError("Child %s has no position VA." % sensor.name)
+
+        self._child = child
+        self._sensor = sensor
+
+        self._axis = axis_actuator
+        self._axis_sensor = axis_sensor
+        ac = child.axes[axis_actuator]
+        axes = {self._axis: model.Axis(choices=positions, unit=ac.unit)}
+
+        self._positions = positions
+        self._to_sensor = to_sensor
+        # Check that each actuator position in to_sensor is valid
+        if set(to_sensor.keys()) != set(positions):
+            raise ValueError("to_sensor doesn't contain the same values as 'positions'.")
+
+        # Check that each sensor position in to_sensor is valid
+        as_def = sensor.axes[self._axis_sensor]
+        if hasattr(as_def, "choices"):
+            if not set(to_sensor.values()) <= set(as_def.choices):
+                raise ValueError("to_sensor doesn't contain the same values as available in the sensor (%s)." %
+                                 (as_def.choices,))
+        elif hasattr(as_def, "range"):
+            if not all(as_def.range[0] <= p <= as_def.range[1] for p in to_sensor.values()):
+                raise ValueError("to_sensor contains out-of-range values for the sensor (range is %s)." %
+                                 (as_def.range,))
+
+        # This is the compensation needed for the actuator to move to the expected
+        # position. Will be updated after a move, if extra shift is needed.
+        # TODO: also update during referencing
+        self._pos_shift = 0  # in child actuator axis unit
+
+        # Executor used to reference and move to nearest position
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
+
+        self.position = model.VigilantAttribute({}, readonly=True)
+        logging.debug("Subscribing to position of children %s and %s", child.name, sensor.name)
+        child.position.subscribe(self._update_child_position)
+        sensor.position.subscribe(self._updatePosition, init=True)
+
+        # TODO: provide our own reference?
+        if model.hasVA(child, "referenced") and axis_actuator in child.referenced.value:
+            self._referenced = {self._axis: child.referenced.value[axis_actuator]}
+            self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
+            child.referenced.subscribe(self._update_child_ref)
+
+    def _update_child_position(self, value):
+        # Force reading the sensor position
+        self._updatePosition()
+
+    def _update_child_ref(self, value):
+        self._referenced[self._axis] = value[self._axis]
+        self._updateReferenced()
+
+    def _updatePosition(self, spos=None):
+        """
+        update the position VA
+        spos: position from the sensor
+        """
+        if spos is None:
+            spos = self._sensor.position.value
+
+        spos_axis = spos[self._axis_sensor]
+
+        # Convert from sensor to "actuator" position
+        for ap, sp in self._to_sensor.items():
+            if sp == spos_axis:
+                pos = {self._axis: ap}
+                break
+        else:
+            logging.error("No equivalent position known for sensor position %s", spos_axis)
+            # TODO: look for the closest one?
+            return
+
+        logging.debug("Reporting position %s", pos)
+        self.position._set_value(pos, force_write=True)
+
+    def _updateReferenced(self):
+        """
+        update the referenced VA
+        """
+        # .referenced is copied to detect changes to it on next update
+        self.referenced._set_value(self._referenced.copy(), force_write=True)
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        raise NotImplementedError("Relative move on fixed positions axis not supported")
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the actuator to the defined position in m for each axis given.
+        pos dict(string-> float): name of the axis and position in m
+        """
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
+        f = self._executor.submit(self._doMoveAbs, pos)
+
+        return f
+
+    def _doMoveAbs(self, pos):
+        p = pos[self._axis]
+        p_cor = p + self._pos_shift
+        prev_pos = self._child.position.value[self._axis]
+        logging.debug("Moving axis %s to %g (corrected %g)", self._axis, p, p_cor)
+
+        self._child.moveAbs(pos).result()
+
+        # Check that it worked
+        exp_spos = self._to_sensor[p]  # already checked that distance is there
+        spos = self._sensor.position.value[self._axis_sensor]
+
+        # If it didn't work, try 10x to move by an extra 10%
+        retry = 0
+        tot_shift = 0
+        while spos != exp_spos:
+            retry += 1
+            if retry == 10:
+                logging.warning("Failed to reach position %s (=%s) even after extra %s, still at %s",
+                                p_cor, exp_spos, tot_shift, spos)
+                raise IOError("Failed to reach position %s, sensor reports %s" % (p, spos))
+
+            # Find 10% move
+            if p_cor == prev_pos:
+                # It was already at the "right" position => give up
+                logging.warning("Actuator supposedly at position %s, but sensor reports %s",
+                                exp_spos, spos)
+                return
+            shift = (p_cor - prev_pos) * 0.1
+
+            logging.debug("Attempting to reach position %s (=%s) by moving an extra %s",
+                          p_cor, exp_spos, shift)
+            try:
+                self._child.moveRel({self._axis: shift}).result()
+            except Exception as ex:
+                logging.warning("Failed to move further (%s)", ex)
+                raise IOError("Failed to reach position %s, sensor reports %s" % (p, spos))
+
+            tot_shift += shift
+            spos = self._sensor.position.value[self._axis_sensor]
+
+        # It worked, so save the shift
+        self._pos_shift += tot_shift
+
+    def _doReference(self, axes):
+        # TODO:
+        # 1. If the child is not referenced yet, reference it
+        # 2. move to first position
+        # 3. keep moving +10% until the sensor indicates a change
+        # 4. do the same with every position
+        # 5. store the updated position for each position.
+
+        logging.debug("Referencing axis %s", self._axis)
+        f = self._child.reference({self._axis})
+        f.result()
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+
+        f = self._executor.submit(self._doReference, axes)
+        return f
+
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def stop(self, axes=None):
+        """
+        stops the motion
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
+        """
+        self._child.stop(axes=axes)
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+        self._child.position.unsubscribe(self._update_child_position)
+        self._sensor.position.unsubscribe(self._updatePosition)
