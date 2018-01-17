@@ -474,16 +474,21 @@ class Controller(object):
                     raise
 
                 success = self.recoverTimeout()
+                if isinstance(com, basestring):
+                    full_com = com
+                else:
+                    full_com = "".join(com)
+
                 if success:
                     logging.warning("Controller %s timeout after '%s', but recovered.",
-                                    self.address, com.encode('string_escape'))
+                                    self.address, full_com.encode('string_escape'))
                     # try one more time (and it has to work this time)
                     lines = self.busacc.sendQueryCommand(self.address, com)
                 else:
                     logging.error("Controller %s timeout after '%s', not recovered.",
-                                  self.address, com.encode('string_escape'))
+                                  self.address, full_com.encode('string_escape'))
                     raise IOError("Controller %s timeout after '%s', not recovered." %
-                                  (self.address, com.encode('string_escape')))
+                                  (self.address, full_com.encode('string_escape')))
 
         return lines
 

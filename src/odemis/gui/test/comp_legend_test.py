@@ -84,7 +84,6 @@ class LegendTestCase(test.GuiTestCase):
                 leg.range = (start, end)
                 time.sleep(0.0005)
 
-            self.frame.Destroy()
             is_done.set()
 
         test.gui_loop(0.5)

@@ -407,12 +407,12 @@ class TestActuator(unittest.TestCase):
             self.assertFalse(f.cancelled())
 
         # try all axes simultaneously, and cancel during ref
-        mv = {a: 1e-3 for a in axes}
-        self.dev.moveRel(mv)
+        # (for now all the axes are referenced)
         f = self.dev.reference(axes)
-        time.sleep(5e-3)
+        time.sleep(0.1)
         self.assertTrue(f.cancel())
         self.assertTrue(f.cancelled())
+        print(self.dev.referenced.value)
         # Some axes might have had time to be referenced, but not all
         self.assertFalse(all(self.dev.referenced.value.values()))
 

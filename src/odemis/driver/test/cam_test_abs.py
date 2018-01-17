@@ -548,14 +548,15 @@ class VirtualTestSynchronized(object):
         The SEM scans a region and for each point, the CCD acquires one image.
         """
         start = time.time()
-        # use large binning, to reduce the resolution
-        if model.hasVA(self.ccd, "binning") and not self.ccd.binning.readonly:
-            self.ccd.binning.value = self.ccd.binning.clip((4, 4))
-
         exp = 50e-3  # s
         # in practice, it takes up to 500ms to take an image of 50 ms exposure
         numbert = numpy.prod(self.sem_size)
 
+        # use large binning, to reduce the resolution
+        if model.hasVA(self.ccd, "binning") and not self.ccd.binning.readonly:
+            self.ccd.binning.value = self.ccd.binning.clip((4, 4))
+
+        self.ccd_size = self.ccd.resolution.value
         self.ccd.exposureTime.value = exp
         # magical formula to get a long enough dwell time.
         # works with PVCam and Andorcam, but is probably different with other drivers :-(

@@ -74,6 +74,7 @@ class MultiplexOneTest(unittest.TestCase, simulated_test.ActuatorTest):
                                          port="/dev/fake3",
                                          axes=["a", "b"],
                                          ustepsize=[5.9e-9, 5.8e-9],
+                                         rng=[[-1e-3, 1e-3], [0, 1e-3]],
                                          refproc="Standard")
         self.dev = self.actuator_type("stage", "stage",
                                       children={"x": self.child, "y": self.child},

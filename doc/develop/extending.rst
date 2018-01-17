@@ -205,7 +205,7 @@ of wxPython, which must be 3.x, and OpenCV, which must be 2.4.
     ``pip install wxPython_common-3.0.2.0-py2-none-any.whl`` followed by
     ``pip install wxPython-3.0.2.0-cp27-none-win32.whl``, downloaded from
     http://www.lfd.uci.edu/~gohlke/pythonlibs/#wxpython
-#.  Install using ``pip install libtiff-0.4.0-cp27-none-win32.whl``, downloaded
+#.  Install using ``pip install libtiff-0.4.2-cp27-cp27m-win32.whl``, downloaded
     from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 #.  ``pip install scipy-0.15.1-cp27-none-win32.whl``, downloaded from
     http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy
@@ -295,25 +295,26 @@ Installing Python environment
 This allows you to manipulate the data in Python, either by writing Python
 scripts, or via a command-line interface.
 
-#. Install Anaconda from https://www.continuum.io/downloads. Pick the Python 2.7
+#. Install Anaconda from https://www.anaconda.com/download . Pick the Python 2.7
    version, with the right architecture for your computer (most likely 64-bit).
 
-#. Install Delmic's special version of Pyro4:
-   `pip install https://github.com/delmic/Pyro4/archive/master.zip`
+#. Install Delmic's special version of Pyro4, by typing in the Anaconda command
+   prompt the following command:
+   ``pip install https://github.com/delmic/Pyro4/archive/master.zip``
 
-#. Install using `pip install libtiff-0.4.0-cp27-none-win64.whl` (or `-win32`),
+#. Install using ``pip install libtiff-0.4.2-cp27-cp27m-win_amd64.whl`` (or ``-win32``),
    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 
 #. Download the ZIP file of the latest release of Odemis from:
    https://github.com/delmic/odemis/releases
 
-#. Extract the Odemis release into `C:\\Program Files\\Odemis` (or any folder of
+#. Extract the Odemis release into ``C:\Program Files\Odemis`` (or any folder of
    your preference).
 
 #. Create an empty text file `odemis.pth` in the Anaconda Python installation folder:
-   `C:\\Users\\YOURUSERNAME\\Anaconda2\\Lib\\site-packages`. Make sure the file does
+   ``C:\Users\YOURUSERNAME\Anaconda2\Lib\site-packages``. Make sure the file does
    *not* have a `.txt` extension. Edit that file and enter the full path to the
-   Odemis source code, such as: `C:\\Program Files\\Odemis\\src\\`.
+   Odemis source code, such as: ``C:\Program Files\Odemis\src\``.
 
 You can now use Python via the "Spyder" interface. To read an acquisition file
 you can use code such as:
