@@ -164,7 +164,7 @@ class Stage(model.Actuator):
 
     def stop(self, axes=None):
         self._executor.cancel()
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
 
 PRESSURE_VENTED = 100e3 # Pa

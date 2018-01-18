@@ -1158,7 +1158,7 @@ class EbeamFocus(model.Actuator):
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        logging.info("Cancelled moved on all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
         if self._executor:
