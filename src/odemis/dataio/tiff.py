@@ -704,7 +704,13 @@ def _updateMDFromOME(root, das, basename):
             for ifd in hd_2_ifd[chans].flat:
                 if ifd == -1:
                     continue # no IFD known, it's alright, might be just 3D array
-                da = das[ifd]
+                try:
+                    da = das[ifd]
+                except IndexError:
+                    # That typically happens if not all the series of a
+                    # serialized TIFF could be opened.
+                    logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                    continue
                 if da is None:
                     continue # might be a thumbnail, it's alright
                 # First apply the global MD, then per-channel
@@ -720,7 +726,11 @@ def _updateMDFromOME(root, das, basename):
             for ifd in hd_2_ifd.flat:
                 if ifd == -1:
                     continue
-                da = das[ifd]
+                try:
+                    da = das[ifd]
+                except IndexError:
+                    logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                    continue
                 if da is None:
                     continue
                 da.metadata.update({model.MD_WL_LIST: wl_list})
@@ -761,7 +771,11 @@ def _updateMDFromOME(root, das, basename):
             ifd = hd_2_ifd[tuple(pos)]
             if ifd == -1:
                 continue # no IFD known, it's alright, might be just 3D array
-            da = das[ifd]
+            try:
+                da = das[ifd]
+            except IndexError:
+                logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                continue
             if da is None:
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
@@ -782,7 +796,11 @@ def _updateMDFromOME(root, das, basename):
             for ifd in hd_2_ifd.flat:
                 if ifd == -1:
                     continue
-                da = das[ifd]
+                try:
+                    da = das[ifd]
+                except IndexError:
+                    logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                    continue
                 if da is None:
                     continue
                 da.metadata.update({model.MD_TIME_OFFSET: tof,
@@ -836,7 +854,11 @@ def _updateMDFromOME(root, das, basename):
                 for ifd in hd_2_ifd[chans].flat:
                     if ifd == -1:
                         continue
-                    da = das[ifd]
+                    try:
+                        da = das[ifd]
+                    except IndexError:
+                        logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                        continue
                     if da is None:
                         continue
                     # First apply the global MD, then per-channel
@@ -2012,23 +2034,30 @@ class AcquisitionDataTIFF(AcquisitionData):
                 root = ET.fromstring(desc)
 
                 # Keep track of the files that were already opened
+                # TODO: in file_read, instead of using the filename, use the UUID
                 file_read = set()
                 for tiff_data in root.findall("Image/Pixels/TiffData"):
-
-                    uuid = tiff_data.find("UUID")
-                    if uuid is None:
+                    uuide = tiff_data.find("UUID")
+                    if uuide is None:
                         # uuid attribute is only part of multiple files distribution
                         continue
                     else:
-                        uuid_data = uuid.get("FileName")
+                        uuid_data = uuide.get("FileName")
+                    if uuid_data in file_read:
+                        continue  # Already done
                     # attach to the right path
                     uuid_path = os.path.join(path, uuid_data)
-                    if uuid_data in file_read:
-                        continue
                     # try to find and open the enlisted file
                     try:
                         f_link = TIFF.open(uuid_path, mode='r')
                     except TypeError:
+                        # TODO: one reason the file cannot be found is that it's
+                        # been renamed. Instead of failing, we could check whether
+                        # the base file has been renamed, based on its UUID,
+                        # and if so, try with the same change to look for that file.
+
+                        # TODO: if it's really missing, we should still put a
+                        # None filler in data, so that the IFDs match.
                         logging.warning("File '%s' enlisted in the OME-XML header is missing.", uuid_path)
                         continue
 
@@ -2054,6 +2083,8 @@ class AcquisitionDataTIFF(AcquisitionData):
         AcquisitionData.__init__(self, tuple(content), tuple(thumbnails))
 
     @staticmethod
+    # TODO: make it more Pythonic by just returning a list of new DAS and thumbnails,
+    # instead of extending it
     def _createDataArrayShadows(tfile, dir_index, lock, data_array_shadows, thumbnails):
         """
         Create the DataArrayShadows from the TIFF metadata for the current directory,
@@ -2163,7 +2194,11 @@ class AcquisitionDataTIFF(AcquisitionData):
                 continue
 
             # Check if the IFDs are 2D or 3D, based on the first one
-            fim = das[fifd]
+            try:
+                fim = das[fifd]
+            except IndexError:
+                logging.warning("IFD %d not present, cannot update its metadata", fifd)
+                continue
             if fim is None:
                 continue # thumbnail
 
