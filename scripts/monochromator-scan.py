@@ -249,7 +249,10 @@ def acquire_spec(wls, wle, res, dt, filename):
     ebeam = model.getComponent(role="e-beam")
     sed = model.getComponent(role="se-detector")
     mchr = model.getComponent(role="monochromator")
-    sgrh = model.getComponent(role="spectrograph")
+    try:
+        sgrh = model.getComponent(role="spectrograph")
+    except LookupError:
+        sgrh = model.getComponent(role="spectrograph-dedicated")
     opm = acq.path.OpticalPathManager(model.getMicroscope())
 
     prev_dt = ebeam.dwellTime.value
@@ -398,10 +401,17 @@ class MonoScanPlugin(Plugin):
         try:
             self.ebeam = model.getComponent(role="e-beam")
             self.mchr = model.getComponent(role="monochromator")
+        except LookupError:
+            logging.info("No monochromator, cannot use the plugin")
+            return
+        try:
             self.sgrh = model.getComponent(role="spectrograph")
         except LookupError:
-            logging.debug("No mochromator and spectrograph found, cannot use the plugin")
-            return
+            try:
+                self.sgrh = model.getComponent(role="spectrograph-dedicated")
+            except LookupError:
+                logging.info("No spectrograph found, cannot use the plugin")
+                return
 
         self.addMenu("Acquisition/Monochromator scan...", self.start)
 
