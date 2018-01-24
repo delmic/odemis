@@ -914,7 +914,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         self.ccd.binning.value = (4, 4) # hopefully always supported
@@ -968,7 +968,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         self.ccd.binning.value = (4, 4) # hopefully always supported
@@ -1023,7 +1023,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         self.ccd.binning.value = (4, 4) # hopefully always supported
@@ -1052,10 +1052,11 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sas.raw))
-        self.assertEqual(len(sas._main_raw), 1)
-        self.assertEqual(sas._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sas._rep_raw), num_ar)
-        for d in sas._rep_raw:
+        sem_da = sas.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        ar_das = sas.raw[1:]
+        self.assertEqual(len(ar_das), num_ar)
+        for d in ar_das:
             md = d.metadata
             self.assertIn(model.MD_POS, md)
             self.assertIn(model.MD_AR_POLE, md)
@@ -1086,10 +1087,11 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sas.raw))
-        self.assertEqual(len(sas._main_raw), 1)
-        self.assertEqual(sas._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sas._rep_raw), num_ar)
-        for d in sas._rep_raw:
+        sem_da = sas.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        ar_das = sas.raw[1:]
+        self.assertEqual(len(ar_das), num_ar)
+        for d in ar_das:
             md = d.metadata
             self.assertIn(model.MD_POS, md)
             self.assertIn(model.MD_AR_POLE, md)
@@ -1105,7 +1107,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
 
@@ -1125,14 +1127,14 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -1144,7 +1146,7 @@ class SPARCTestCase(unittest.TestCase):
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        timeout = 1 + 2.5 * sps.estimateAcquisitionTime()
         start = time.time()
         f = sps.acquire()
 
@@ -1154,14 +1156,14 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -1176,7 +1178,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
         specs.fuzzing.value = True
 
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
@@ -1188,6 +1190,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Start acquisition
         timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        logging.debug("Will wait up to %g s", timeout)
         start = time.time()
         f = sps.acquire()
 
@@ -1197,19 +1200,22 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        sem_res = sps._main_raw[0].shape
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        # The SEM res should have at least 2x2 sub-pixels per pixel
+        self.assertGreaterEqual(sem_da.shape[1], exp_res[0] * 2)
+        self.assertGreaterEqual(sem_da.shape[0], exp_res[1] * 2)
+        sp_da = sps.raw[1]
+        sem_res = sem_da.shape
+        sshape = sp_da.shape
         spec_res = sshape[-2:]
         res_upscale = (sem_res[0] / spec_res[0], sem_res[1] / spec_res[1])
         self.assertGreaterEqual(res_upscale[0], 2)
         self.assertGreaterEqual(res_upscale[1], 2)
-        self.assertEqual(len(sps._rep_raw), 1)
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         self.assertEqual(sshape[-1:-3:-1], exp_res)
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE],
                                       (spec_md[model.MD_PIXEL_SIZE][0] / res_upscale[0],
@@ -1222,8 +1228,10 @@ class SPARCTestCase(unittest.TestCase):
         specs.repetition.value = (25, 60)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
-        # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        # Start acquisition (needs large timeout because currently the e-beam
+        # scan tends to have a large overhead.
+        timeout = 1 + 2.5 * sps.estimateAcquisitionTime()
+        logging.debug("Will wait up to %g s", timeout)
         start = time.time()
         f = sps.acquire()
 
@@ -1233,19 +1241,22 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        sem_res = sps._main_raw[0].shape
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        # The SEM res should have at least 2x2 sub-pixels per pixel
+        self.assertGreaterEqual(sem_da.shape[1], exp_res[0] * 2)
+        self.assertGreaterEqual(sem_da.shape[0], exp_res[1] * 2)
+        sp_da = sps.raw[1]
+        sem_res = sem_da.shape
+        sshape = sp_da.shape
         spec_res = sshape[-2:]
         res_upscale = (sem_res[0] / spec_res[0], sem_res[1] / spec_res[1])
         self.assertGreaterEqual(res_upscale[0], 2)
         self.assertGreaterEqual(res_upscale[1], 2)
-        self.assertEqual(len(sps._rep_raw), 1)
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         self.assertEqual(sshape[-1:-3:-1], exp_res)
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE],
                                       (spec_md[model.MD_PIXEL_SIZE][0] / res_upscale[0],
@@ -1264,7 +1275,7 @@ class SPARCTestCase(unittest.TestCase):
         mcs = stream.MonochromatorSettingsStream("test",
                       self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
                       emtvas={"dwellTime", })
-        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+        sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
         sems.dcPeriod.value = 5
@@ -1403,6 +1414,7 @@ class SPARCTestCase(unittest.TestCase):
         res = self.ccd.resolution.value
         rot = numpy.prod(res) / self.ccd.readoutRate.value
         dur = num_ar * (exp + rot)
+        logging.debug("Expecting a new MoI frame every %g s", dur)
 
         # acquire for a few seconds
         mas.should_update.value = True
@@ -1544,7 +1556,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs = stream.CLSettingsStream("test",
                       self.cl, self.cl.data, self.ebeam,
                       emtvas={"dwellTime", })
-        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+        sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
         sems.dcPeriod.value = 100
@@ -1569,13 +1581,12 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sms.raw))
 
-        # Both SEM and CL should have the same shape
-        self.assertEqual(len(sms._main_raw), 1)
-        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sms._rep_raw), 1)
-        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
-        sem_md = sms._main_raw[0].metadata
-        cl_md = sms._rep_raw[0].metadata
+        # Both SEM and CL should have the same shape (and last one is anchor region)
+        self.assertEqual(len(sms.raw), 3)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        sem_md = sms.raw[0].metadata
+        cl_md = sms.raw[1].metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
@@ -1601,15 +1612,107 @@ class SPARC2TestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sms.raw))
-        # Both SEM and CL should have the same shape
-        self.assertEqual(len(sms._main_raw), 1)
-        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sms._rep_raw), 1)
-        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
-        sem_md = sms._main_raw[0].metadata
-        cl_md = sms._rep_raw[0].metadata
+        # Both SEM and CL should have the same shape (and last one is anchor region)
+        self.assertEqual(len(sms.raw), 3)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        sem_md = sms.raw[0].metadata
+        cl_md = sms.raw[1].metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acq_cl_cancel(self):
+        """
+        Test cancelling acquisition for SEM MD CL intensity
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        mcs = stream.CLSettingsStream("test",
+                      self.cl, self.cl.data, self.ebeam,
+                      emtvas={"dwellTime", })
+        sms = stream.SEMMDStream("test sem-md", [sems, mcs])
+
+        mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        sems.dcPeriod.value = 100
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-6  # s
+
+        mcs.repetition.value = (500, 700)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+        start = time.time()
+        f = sms.acquire()
+
+        # Let it run for a short while and stop
+        for i in range(4):
+            time.sleep(2)
+            f.cancel()
+            time.sleep(0.1)
+            f = sms.acquire()
+
+        # Finally acquire something really, and check it worked
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+
+        # Both SEM and CL should have the same shape (and last one is anchor region)
+        self.assertEqual(len(sms.raw), 3)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        sem_md = sms.raw[0].metadata
+        cl_md = sms.raw[1].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acq_cl_only(self):
+        """
+        Test short & long acquisition for SEM MD CL intensity, without SE stream
+        """
+        # Create the stream
+        mcs = stream.CLSettingsStream("test",
+                      self.cl, self.cl.data, self.ebeam,
+                      emtvas={"dwellTime", })
+        sms = stream.SEMMDStream("test sem-md", [mcs])
+
+        mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        mcs.dcPeriod.value = 100
+        mcs.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        mcs.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-6  # s
+
+        mcs.repetition.value = (500, 700)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+
+        # Both SEM and CL should have the same shape (and last one is anchor region)
+        self.assertEqual(len(sms.raw), 2)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        cl_md = sms.raw[0].metadata
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
 
@@ -1633,7 +1736,7 @@ class SPARC2TestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
                                               self.ebeam, sstage=self.sstage)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
 
@@ -1658,14 +1761,14 @@ class SPARC2TestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -1694,14 +1797,14 @@ class SPARC2TestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -1724,7 +1827,7 @@ class SPARC2TestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
                                               self.ebeam, sstage=self.sstage)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
 
@@ -1765,14 +1868,14 @@ class SPARC2TestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -1795,7 +1898,7 @@ class SPARC2TestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
                                               self.ebeam, sstage=self.sstage)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         specs.useScanStage.value = True
         specs.fuzzing.value = True
@@ -1825,18 +1928,23 @@ class SPARC2TestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        sem_res = sps._main_raw[0].shape
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        # The SEM res should have at least 2x2 sub-pixels per pixel
+        self.assertGreaterEqual(sem_da.shape[1], exp_res[0] * 2)
+        self.assertGreaterEqual(sem_da.shape[0], exp_res[1] * 2)
+        sp_da = sps.raw[1]
+        sem_res = sem_da.shape
+        sshape = sp_da.shape
         spec_res = sshape[-2:]
         res_upscale = (sem_res[0] / spec_res[0], sem_res[1] / spec_res[1])
         self.assertGreaterEqual(res_upscale[0], 2)
         self.assertGreaterEqual(res_upscale[1], 2)
-        self.assertEqual(len(sps._rep_raw), 1)
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        self.assertEqual(sshape[-1:-3:-1], exp_res)
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
+
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE],
                                       (spec_md[model.MD_PIXEL_SIZE][0] / res_upscale[0],
@@ -1866,19 +1974,23 @@ class SPARC2TestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        sem_res = sps._main_raw[0].shape
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        # The SEM res should have at least 2x2 sub-pixels per pixel
+        self.assertGreaterEqual(sem_da.shape[1], exp_res[0] * 2)
+        self.assertGreaterEqual(sem_da.shape[0], exp_res[1] * 2)
+        sp_da = sps.raw[1]
+        sem_res = sem_da.shape
+        sshape = sp_da.shape
         spec_res = sshape[-2:]
         res_upscale = (sem_res[0] / spec_res[0], sem_res[1] / spec_res[1])
         self.assertGreaterEqual(res_upscale[0], 2)
         self.assertGreaterEqual(res_upscale[1], 2)
-        self.assertEqual(len(sps._rep_raw), 1)
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        self.assertEqual(sshape[-1:-3:-1], exp_res)
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
+
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE],
                                       (spec_md[model.MD_PIXEL_SIZE][0] / res_upscale[0],
@@ -1893,7 +2005,7 @@ class SPARC2TestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         pcd = Fake0DDetector("test")
         pca = ProbeCurrentAcquirer(pcd)
@@ -1918,14 +2030,14 @@ class SPARC2TestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
-        self.assertEqual(len(sps._main_raw), 1)
-        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sps._rep_raw), 1)
-        sshape = sps._rep_raw[0].shape
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
-        sem_md = sps._main_raw[0].metadata
-        spec_md = sps._rep_raw[0].metadata
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -1944,7 +2056,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs = stream.CLSettingsStream("test",
                       self.cl, self.cl.data, self.ebeam,
                       emtvas={"dwellTime", })
-        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+        sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         pcd = Fake0DDetector("test")
         pca = ProbeCurrentAcquirer(pcd)
@@ -1974,13 +2086,12 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sms.raw))
 
-        # Both SEM and CL should have the same shape
-        self.assertEqual(len(sms._main_raw), 1)
-        self.assertEqual(sms._main_raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(sms._rep_raw), 1)
-        self.assertEqual(sms._rep_raw[0].shape, exp_res[::-1])
-        sem_md = sms._main_raw[0].metadata
-        cl_md = sms._rep_raw[0].metadata
+        # Both SEM and CL should have the same shape (and last one is anchor region)
+        self.assertEqual(len(sms.raw), 3)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        sem_md = sms.raw[0].metadata
+        cl_md = sms.raw[1].metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], cl_md[model.MD_POS])
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], cl_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)

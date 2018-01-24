@@ -58,6 +58,29 @@ class LiveStream(Stream):
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
+        # FIXME: move to a Leech
+
+        # drift correction VAs:
+        # Not currently supported by this standard stream, but some synchronised
+        #   streams do.
+        # dcRegion defines the anchor region, drift correction will be disabled
+        #   if it is set to UNDEFINED_ROI
+        # dcDwellTime: dwell time used when acquiring anchor region
+        # dcPeriod is the (approximate) time between two acquisition of the
+        #  anchor (and drift compensation). The exact period is determined so
+        #  that it fits with the region of acquisition.
+        # Note: the scale used for the acquisition of the anchor region is the
+        #  same as the scale of the SEM. We could add a dcScale if it's needed.
+        if emitter and model.hasVA(emitter, "dwellTime"):
+            self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
+                                                  range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                                  cls=(int, long, float),
+                                                  setter=self._setDCRegion)
+            self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
+                                                     range=emitter.dwellTime.range, unit="s")
+            # in seconds, default to "fairly frequent" to work hopefully in most cases
+            self.dcPeriod = model.FloatContinuous(10, range=(0.1, 1e6), unit="s")
+
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
                                          args=(weakref.ref(self),),
@@ -76,6 +99,50 @@ class LiveStream(Stream):
             img.mergeMetadata(simpl_md)
 
         return simpl_md
+
+    def _setDCRegion(self, roi):
+        """
+        Called when the dcRegion is set
+        """
+        logging.debug("dcRegion set to %s", roi)
+        if roi == UNDEFINED_ROI:
+            return roi  # No need to discuss it
+
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        # Ensure the ROI is at least as big as the MIN_RESOLUTION
+        # (knowing it always uses scale = 1)
+        shape = self._emitter.shape
+        min_width = [r / s for r, s in zip(drift.MIN_RESOLUTION, shape)]
+        width = [max(a, b) for a, b in zip(width, min_width)]
+
+        # Recompute the ROI so that it fits
+        roi = [center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2]
+
+        # Ensure it's not too big
+        if roi[2] - roi[0] > 1:
+            roi[2] = roi[0] + 1
+        if roi[3] - roi[1] > 1:
+            roi[3] = roi[1] + 1
+
+        # shift the ROI if it's now slightly outside the possible area
+        if roi[0] < 0:
+            roi[2] = min(1, roi[2] - roi[0])
+            roi[0] = 0
+        elif roi[2] > 1:
+            roi[0] = max(0, roi[0] - (roi[2] - 1))
+            roi[2] = 1
+
+        if roi[1] < 0:
+            roi[3] = min(1, roi[3] - roi[1])
+            roi[1] = 0
+        elif roi[3] > 1:
+            roi[1] = max(0, roi[1] - (roi[3] - 1))
+            roi[3] = 1
+
+        return tuple(roi)
 
     def _onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the
@@ -239,26 +306,6 @@ class SEMStream(LiveStream):
         # Actually use the ROI
         self.roi.subscribe(self._onROI)
 
-        # drift correction VAs:
-        # Not currently supported by this standard stream, but some synchronised
-        #   streams do.
-        # dcRegion defines the anchor region, drift correction will be disabled
-        #   if it is set to UNDEFINED_ROI
-        # dcDwellTime: dwell time used when acquiring anchor region
-        # dcPeriod is the (approximate) time between two acquisition of the
-        #  anchor (and drift compensation). The exact period is determined so
-        #  that it fits with the region of acquisition.
-        # Note: the scale used for the acquisition of the anchor region is the
-        #  same as the scale of the SEM. We could add a dcScale if it's needed.
-        self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
-                                              range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                              cls=(int, long, float),
-                                              setter=self._setDCRegion)
-        self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
-                                                 range=emitter.dwellTime.range, unit="s")
-        # in seconds, default to "fairly frequent" to work hopefully in most cases
-        self.dcPeriod = model.FloatContinuous(10, range=(0.1, 1e6), unit="s")
-
     def _computeROISettings(self, roi):
         """
         roi (4 0<=floats<=1)
@@ -302,50 +349,6 @@ class SEMStream(LiveStream):
         if self.is_active.value:
             self._applyROI()
             self._updateAcquisitionTime()
-
-    def _setDCRegion(self, roi):
-        """
-        Called when the dcRegion is set
-        """
-        logging.debug("dcRegion set to %s", roi)
-        if roi == UNDEFINED_ROI:
-            return roi  # No need to discuss it
-
-        width = (roi[2] - roi[0], roi[3] - roi[1])
-        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
-
-        # Ensure the ROI is at least as big as the MIN_RESOLUTION
-        # (knowing it always uses scale = 1)
-        shape = self._emitter.shape
-        min_width = [r / s for r, s in zip(drift.MIN_RESOLUTION, shape)]
-        width = [max(a, b) for a, b in zip(width, min_width)]
-
-        # Recompute the ROI so that it fits
-        roi = [center[0] - width[0] / 2, center[1] - width[1] / 2,
-               center[0] + width[0] / 2, center[1] + width[1] / 2]
-
-        # Ensure it's not too big
-        if roi[2] - roi[0] > 1:
-            roi[2] = roi[0] + 1
-        if roi[3] - roi[1] > 1:
-            roi[3] = roi[1] + 1
-
-        # shift the ROI if it's now slightly outside the possible area
-        if roi[0] < 0:
-            roi[2] = min(1, roi[2] - roi[0])
-            roi[0] = 0
-        elif roi[2] > 1:
-            roi[0] = max(0, roi[0] - (roi[2] - 1))
-            roi[2] = 1
-
-        if roi[1] < 0:
-            roi[3] = min(1, roi[3] - roi[1])
-            roi[1] = 0
-        elif roi[3] > 1:
-            roi[1] = max(0, roi[1] - (roi[3] - 1))
-            roi[3] = 1
-
-        return tuple(roi)
 
     def estimateAcquisitionTime(self):
 

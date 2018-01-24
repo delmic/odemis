@@ -145,7 +145,7 @@ class SimPathTestCase(unittest.TestCase):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         guess = self.optmngr.guessMode(ars)
         self.assertEqual(guess, "ar")
@@ -156,7 +156,7 @@ class SimPathTestCase(unittest.TestCase):
         # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
         self.assertEqual(guess, "spectral")
@@ -263,7 +263,7 @@ class MonashPathTestCase(unittest.TestCase):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         guess = self.optmngr.guessMode(ars)
         self.assertEqual(guess, "ar")
@@ -274,7 +274,7 @@ class MonashPathTestCase(unittest.TestCase):
         # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
         self.assertEqual(guess, "spectral")
@@ -284,8 +284,8 @@ class MonashPathTestCase(unittest.TestCase):
 
         # test guess mode for cli
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        cls = stream.SpectrumSettingsStream("test cl", self.cld, self.cld.data, self.ebeam)
-        sls = stream.SEMSpectrumMDStream("test sem-cl", sems, cls)
+        cls = stream.CLSettingsStream("test cl", self.cld, self.cld.data, self.ebeam)
+        sls = stream.SEMMDStream("test sem-cl", [sems, cls])
 
         guess = self.optmngr.guessMode(cls)
         self.assertEqual(guess, "cli")
@@ -370,7 +370,7 @@ class SpecPathTestCase(unittest.TestCase):
         # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
         self.assertEqual(guess, "spectral")
@@ -570,7 +570,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         guess = self.optmngr.guessMode(ars)
         self.assertEqual(guess, "ar")
@@ -581,7 +581,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         # test guess mode for spectral-dedicated
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
         self.assertIn(guess, ("spectral", "spectral-dedicated"))
@@ -593,7 +593,7 @@ class Sparc2PathTestCase(unittest.TestCase):
     def test_set_path_stream(self):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
@@ -614,7 +614,7 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
@@ -634,7 +634,7 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec_integrated, self.spec_integrated.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         # Change positions back
         self.optmngr.setPath("chamber-view").result()
@@ -831,7 +831,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         guess = self.optmngr.guessMode(ars)
         self.assertEqual(guess, "ar")
@@ -842,7 +842,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # test guess mode for spectral-dedicated
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
         self.assertIn(guess, ("spectral", "spectral-dedicated"))
@@ -855,7 +855,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
@@ -879,7 +879,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # test guess mode for spectral-dedicated
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
