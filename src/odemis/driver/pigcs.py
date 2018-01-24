@@ -940,6 +940,21 @@ class Controller(object):
             if error != 10:  # PI_CNTR_STOP
                 logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
 
+    def GetServo(self, axis):
+        """
+        Return whether the servo is active or not
+        axis (1<int<16): axis number
+        return (bool): True if the servo is active (closed-loop)
+        """
+        # SVO? (Get Servo State)
+        assert(axis in self._channels)
+
+        ans = self._sendQueryCommand("SVO? %d\n" % (axis,))
+        ss = ans.split("=")
+        if len(ss) != 2:
+            raise IOError("Failed to parse answer from SVO?: '%s'" % (ans,))
+        return ss[1] == "1"
+
     def SetServo(self, axis, activated):
         """
         Activate or de-activate the servo.
@@ -956,7 +971,7 @@ class Controller(object):
         else:
             state = 0
         # FIXME: on E861 it seems recommended to first relax piezo.
-        # On C867, it's RNP doesn't exists
+        # On C867, RNP doesn't even exists
         self._sendOrderCommand("SVO %d %d\n" % (axis, state))
 
     def SetReferenceMode(self, axis, absolute):
@@ -993,7 +1008,7 @@ class Controller(object):
         assert(axis in self._channels)
         if steps == 0:
             return
-        self._sendOrderCommand("OSM %d %.5f\n" % (axis, steps))
+        self._sendOrderCommand("OSM %d %.6f\n" % (axis, steps))
 
     def SetStepAmplitude(self, axis, amplitude):
         """
@@ -1006,7 +1021,7 @@ class Controller(object):
         # SSA (Set Step Amplitude) : for nanostepping
         assert(axis in self._channels)
         assert((0 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("SSA %d %.5f\n" % (axis, amplitude))
+        self._sendOrderCommand("SSA %d %.6f\n" % (axis, amplitude))
 
     def GetStepAmplitude(self, axis):
         """
@@ -1032,7 +1047,7 @@ class Controller(object):
         # OAD (Open-Loop Analog Driving): move using analog
         assert(axis in self._channels)
         assert((-55 <= amplitude) and (amplitude <= 55))
-        self._sendOrderCommand("OAD %d %.5f\n" % (axis, amplitude))
+        self._sendOrderCommand("OAD %d %.6f\n" % (axis, amplitude))
 
     def GetOLVelocity(self, axis):
         """
@@ -1052,7 +1067,7 @@ class Controller(object):
         # OVL (Set Open-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("OVL %d %.5f\n" % (axis, velocity))
+        self._sendOrderCommand("OVL %d %.6f\n" % (axis, velocity))
 
     def GetOLAcceleration(self, axis):
         """
@@ -1072,7 +1087,7 @@ class Controller(object):
         # OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("OAC %d %.5f\n" % (axis, value))
+        self._sendOrderCommand("OAC %d %.6f\n" % (axis, value))
 
     def SetOLDeceleration(self, axis, value):
         """
@@ -1083,7 +1098,7 @@ class Controller(object):
         # ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("ODC %d %.5f\n" % (axis, value))
+        self._sendOrderCommand("ODC %d %.6f\n" % (axis, value))
 
     # Methods for closed-loop functionality. For all of them, servo must be on
     def MoveAbs(self, axis, pos):
@@ -1095,7 +1110,7 @@ class Controller(object):
         """
         # MOV (Set Target Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MOV %d %.5f\n" % (axis, pos))
+        self._sendOrderCommand("MOV %d %.6f\n" % (axis, pos))
 
     def MoveRel(self, axis, shift):
         """
@@ -1108,7 +1123,7 @@ class Controller(object):
         """
         # MVR (Set Target Relative To Current Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MVR %d %.5f\n" % (axis, shift))
+        self._sendOrderCommand("MVR %d %.6f\n" % (axis, shift))
 
     def ReferenceToLimit(self, axis, lim=1):
         """
@@ -1196,7 +1211,7 @@ class Controller(object):
         pos (float): pos can be negative
         """
         # POS (SetRealPosition)
-        return self._sendOrderCommand("POS %d %.5f\n" % (axis, pos))
+        return self._sendOrderCommand("POS %d %.6f\n" % (axis, pos))
 
     def GetMinPosition(self, axis):
         """
@@ -1235,7 +1250,7 @@ class Controller(object):
         # VEL (Set Closed-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
-        self._sendOrderCommand("VEL %d %.5f\n" % (axis, velocity))
+        self._sendOrderCommand("VEL %d %.6f\n" % (axis, velocity))
 
     def GetCLAcceleration(self, axis):
         """
@@ -1255,7 +1270,7 @@ class Controller(object):
         # ACC (Set Closed-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("ACC %d %.5f\n" % (axis, value))
+        self._sendOrderCommand("ACC %d %.6f\n" % (axis, value))
 
     def SetCLDeceleration(self, axis, value):
         """
@@ -1266,7 +1281,7 @@ class Controller(object):
         # DEC (Set Closed-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
-        self._sendOrderCommand("DEC %d %.5f\n" % (axis, value))
+        self._sendOrderCommand("DEC %d %.6f\n" % (axis, value))
 
     def SetRecordRate(self, value):
         """
@@ -1370,7 +1385,7 @@ class Controller(object):
         shift (float): relative distance in user unit
         """
         assert(axis in self._channels)
-        self._sendOrderCommand("STE %d %.5f\n" % (axis, shift))
+        self._sendOrderCommand("STE %d %.6f\n" % (axis, shift))
 
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
@@ -1865,11 +1880,9 @@ class CLRelController(Controller):
             #    due to encoder using infra-red light (and ensures the motor
             #    doesn't move.
             #  * PID values set to 0,0,0: used when encoders cannot be turned off.
-            #    That typically happens with the E-861. It allows to still
-            #    follow slowly (~10 nm/s) the encoder position, to compensate
-            #    for drift. It also avoids going through the piezo "relax"
-            #    procedure that takes time (4 x slew rate) and causes up to
-            #    100 nm move.
+            #    That typically happens with the E-861. It avoids going through
+            #    the piezo "relax" procedure that takes time (4 x slew rate) and
+            #    causes up to 100 nm move.
             if 0x56 in self._avail_params:  # Parameter to control encoder power
                 self._servo_suspend = True
                 if self._auto_suspend:
@@ -1978,7 +1991,7 @@ class CLRelController(Controller):
             if 0x56 in self._avail_params:
                 # Store the position before turning off the encoder because while
                 # turning off the encoder, some signal will be received which will
-                # make the controller beleive it has moved.
+                # make the controller believe it has moved.
                 pos = self.GetPosition(axis)
                 self.SetParameter(axis, 0x56, 0)  # 0 = off
                 # SetParameter checks the error num, which gives a bit of time to
@@ -2032,16 +2045,44 @@ class CLRelController(Controller):
         if self._servo_suspend:
             self._stopServo(axis)
         else:
-            # TODO: also start servo if it's off? Or not a big deal here?
-            # Force PID to 0, 0, 0
             with self.busacc.ser_access:  # To avoid garbage when using IP com
-                self.SetParameter(axis, 1, 0, check=False)  # P
-                self.SetParameter(axis, 2, 0, check=False)  # I
-                self.SetParameter(axis, 3, 0, check=False)  # D
-                try:
-                    self.checkError()
-                except PIGCSError as ex:
-                    logging.error("Changing PID seems to have failed: %s", ex)
+                if self.IsOnTarget(axis, check=False):
+                    # Force PID to 0, 0, 0
+                    # Normally the servo should be on, but in case of error,
+                    # it might have been automatically stopped.
+                    logging.debug("Suspending servo of axis %s/%s", self.address, axis)
+                    if not self.GetServo(axis):
+                        logging.info("Servo of axis %s/%s was off, need to restart it",
+                                     self.address, axis)
+                        self._startServo(axis)
+                    self.SetParameter(axis, 1, 0, check=False)  # P
+                    self.SetParameter(axis, 2, 0, check=False)  # I
+                    self.SetParameter(axis, 3, 0, check=False)  # D
+                    try:
+                        self.checkError()
+                    except PIGCSError as ex:
+                        logging.error("Changing PID seems to have failed: %s", ex)
+                else:
+                    # The axis is not on target. IOW, current position != target
+                    # position. The main reason for this to happen is that the
+                    # axis limit was reached. If we do nothing, the controller
+                    # keeps the target position, and when doing another move,
+                    # it might still be out of the range, so for the user
+                    # the axis will look "stuck". => The target position should
+                    # be synchronised with the current position, so that the next
+                    # move starts from where the axis is. We could try to set
+                    # the target position to the current position, but there is
+                    # no explicit command to do so (MoveAbs/MoveRel will do that,
+                    # but after following a motion profile, which can be long).
+                    # The simplest and also safest is to just stop the servo. On
+                    # start it will set target position as the current position.
+                    logging.warning("Turing off servo of axis %s/%s, as it is off-target",
+                                    self.address, axis)
+                    self.SetServo(axis, False)
+                    try:
+                        self.checkError()
+                    except PIGCSError as ex:
+                        logging.error("Stopping servo seems to have failed: %s", ex)
 
     def _resumeAxis(self, axis):
         if self._servo_suspend:
@@ -2050,16 +2091,13 @@ class CLRelController(Controller):
             # The servo should be on all the time, but if for some reason there
             # was an error, the servo might have been disabled => need to put
             # it back on now.
-            # Note: We use status as it's a bit faster, but it's not sure
-            # whether all controller will report servo the same way
-            # TODO: use GetServo(axis) if controller is unsupported
-            status = self.GetStatus()
-            if not (status & (1 << 12)):  # For E861 and C867, bit 12 = servo on
-                logging.info("Servo of controller %s was off, need to restart it", self.address)
-                self._startServo(axis)
-
-            # Put back PID values
             with self.busacc.ser_access:  # To avoid garbage when using IP com
+                if not self.GetServo(axis):
+                    logging.info("Servo of axis %s/%s was off, need to restart it",
+                                 self.address, axis)
+                    self._startServo(axis)
+
+                # Put back PID values
                 P, I, D = self._pid
                 self.SetParameter(axis, 1, P, check=False)  # P
                 self.SetParameter(axis, 2, I, check=False)  # I
