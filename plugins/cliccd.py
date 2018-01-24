@@ -118,7 +118,7 @@ class CLiCCDPlugin(Plugin):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             opm=main_data.opm,
-            detvas=get_local_vas(main_data.ccd),
+            detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
         )
         # TODO: Allow very large binning on the CCD
 
