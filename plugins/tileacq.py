@@ -47,7 +47,6 @@ from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, \
     ARStream, SpectrumStream, FluoStream, MultipleDetectorStream
 import numpy
-from ipykernel.pickleutil import istype
 
 
 class TileAcqPlugin(Plugin):
