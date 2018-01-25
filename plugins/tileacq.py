@@ -51,8 +51,8 @@ import numpy
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.0"
-    __author__ = u"Éric Piel"
+    __version__ = "1.1"
+    __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
     # Describe how the values should be displayed
@@ -188,7 +188,7 @@ class TileAcqPlugin(Plugin):
         tile_size = self._guess_smallest_fov()
         overlap = 1 - self.overlap.value / 100
         tile_pos = (orig_pos["x"] + self.nx.value * tile_size[0] * overlap,
-            orig_pos["y"] - self.ny.value * tile_size[1] * overlap)
+                    orig_pos["y"] - self.ny.value * tile_size[1] * overlap)
 
         # The acquisition region only extends to the right and to the bottom, never
         # to the left of the top of the current position, so it is not required to
@@ -362,7 +362,7 @@ class TileAcqPlugin(Plugin):
         rep (int, int): X, Y number of tiles
         return (generator of tuple(int, int)): x/y positions, starting from 0,0
         """
-        # For now we do forward/backward on X, and Y slowly
+        # For now we do forward/backward on X (fast), and Y (slowly)
         dir = 1
         for iy in range(rep[1]):
             if dir == 1:
@@ -502,7 +502,7 @@ class TileAcqPlugin(Plugin):
         other SEM das, and finally das from other streams.
         das: list of DataArrays
         ss: streams from which the das were extracted
-        
+
         returns: list of DataArrays, reordered input
         """
         # Add the ACQ_TYPE metadata (in case it's not there)
