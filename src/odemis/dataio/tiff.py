@@ -219,7 +219,7 @@ def _readTiffTag(tfile):
 
 def _isThumbnail(tfile):
     """
-    Detects whether the current image if a file is a thumbnail or not
+    Detects whether the current image of a file is a thumbnail or not
     returns (boolean): True if the image is a thumbnail, False otherwise
     """
     # Best method is to check for the official TIFF flag
@@ -454,6 +454,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
               ET.tostring(root, encoding="utf-8"))
     return ometxt
 
+
 def _findElementByID(root, eid, tag=None):
     """
     Find the element with the given ID.
@@ -471,7 +472,8 @@ def _findElementByID(root, eid, tag=None):
 
     return None
 
-def _updateMDFromOME(root, das, basename):
+
+def _updateMDFromOME(root, das):
     """
     Updates the metadata of DAs according to OME XML
     root (ET.Element): the root (i.e., OME) element of the XML description
@@ -1636,30 +1638,6 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
             write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
 
 
-def _thumbsFromTIFF(filename):
-    """
-    Read thumbnails from an TIFF file.
-    return (list of model.DataArray)
-    """
-    f = TIFF.open(filename, mode='r')
-    # open each image/page as a separate data
-    data = []
-    f.SetDirectory(0)
-    while True:
-        if _isThumbnail(f):
-            md = _readTiffTag(f) # reads tag of the current image
-            image = f.read_image()
-            da = model.DataArray(image, metadata=md)
-            data.append(da)
-
-        # TODO: also check SubIFD for sub directories that might contain
-        # thumbnails
-        if f.ReadDirectory() == 0: # reads _next_ directory
-            break
-
-    return data
-
-
 def _genResizedShapes(data):
     """
     Generates a list of tuples with the size of the resized images
@@ -2001,101 +1979,218 @@ class AcquisitionDataTIFF(AcquisitionData):
         Constructor
         filename (string): The name of the TIFF file
         """
+        # lock to avoid race conditions when accessing the TIFF file (as libtiff
+        # uses multiple calls to access a specific IFD/tile + tag.
+        self._lock = threading.Lock()
         tiff_file = TIFF.open(filename, mode='r')
+        try:
+            data, thumbnails = self._getAllOMEDataArrayShadows(filename, tiff_file)
+        except ValueError as ex:
+            logging.info("Failed to use the OME data (%s), will use standard TIFF",
+                         ex)
+            data, thumbnails = self._getAllDataArrayShadows(tiff_file, self._lock)
 
+        AcquisitionData.__init__(self, tuple(data), tuple(thumbnails))
+
+    def _getAllDataArrayShadows(self, tfile, lock):
+        """
+        Create the all DataArrayShadows for the given TIFF file
+        tfile (tiff handle): Handle for the TIFF file
+        lock (threading.Lock): The lock that controls the access to the TIFF file
+        return:
+            data (list of DataArrayShadows or None): DataArrayShadows
+               for each IFD representing a proper image. None are inserted for
+               IFDs which don't correspond to data (ie, it's a thumbnail)
+            thumbnails (list of DataArrayShadows): DataArrayShadows for all the
+               thumbnails images found in the file
+        """
         data = []
         thumbnails = []
-
-        # creates a lock to avoid race conditions when acessing the TIFF file
-        self._lock = threading.Lock()
-
         # iterates all the directories of the TIFF file
-        for dir_index in AcquisitionDataTIFF._iterDirectories(tiff_file):
-            AcquisitionDataTIFF._createDataArrayShadows(tiff_file, dir_index,
-                                                        self._lock, data, thumbnails)
+        for dir_index in self._iterDirectories(tfile):
+            das, is_thumb = self._createDataArrayShadows(tfile, dir_index, lock)
+            if is_thumb:
+                data.append(None)
+                thumbnails.append(das)
+            else:
+                data.append(das)
 
+        return data, thumbnails
+
+    def _getAllOMEDataArrayShadows(self, filename, tfile):
+        """
+        Create the all DataArrayShadows for the given TIFF file and use the OME
+          information to find data from other files and to fill the metadata.
+        filename (str): the name of the TIFF file
+        tfile (tiff handle): Handle for the TIFF file
+        return:
+            data (list of DataArrayShadows or None): DataArrayShadows
+               for each IFD representing a proper image. None are inserted for
+               IFDs which don't correspond to data (ie, it's a thumbnail)
+            thumbnails (list of DataArrayShadows): DataArrayShadows for all the
+               thumbnails images found in the file
+        raise ValueError:
+            If the OME metadata is not present
+        """
         # If looks like OME TIFF, reconstruct >2D data and add metadata
-        # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
         # Warning: we support what we write, not the whole OME-TIFF specification.
-        tiff_file.SetDirectory(0)
-        desc = tiff_file.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
+        try:
+            omeroot = self._getOMEXML(tfile)
+        except LookupError as ex:
+            raise ValueError("%s" % (ex,))
 
-        if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
-                      or desc[:4].lower() == '<ome')):
+        # TODO: flip the whole procedure on its head: based on the OME metadata,
+        # load the right metadata. If that doesn't go fine, just fallback to
+        # reading the data from the TIFF.
+        data, thumbnails = [], []
+        try:
+            # take care of multiple file distribution
+            # Keep track of the UUID/files that were already opened
+            uuids_read = {}  # str -> str: UUID -> file path
+            for tiff_data in omeroot.findall("Image/Pixels/TiffData"):
+                uuide = tiff_data.find("UUID")
+                if uuide is None:
+                    # uuid attribute is only part of multiple files distribution
+                    continue
+
+                try:
+                    u = uuid.UUID(uuide.text)
+                    ofn = uuide.get("FileName")
+                except (ValueError, KeyError) as ex:
+                    logging.warning("Failed to decode UUID %s: %s", uuide.text, ex)
+                    continue
+
+                if u in uuids_read:
+                    continue  # Already done
+
+                try:
+                    sfn, stfile = self._findFileByUUID(u, ofn, filename)
+                except LookupError:
+                    logging.warning("File '%s' enlisted in the OME-XML header is missing.", u)
+                    # To keep the metadata update synchronised, we need to
+                    # put a place-holder.
+                    # TODO: instead of guessing the "IFD" based on the order
+                    # in the Pixels, we should use the IFD + UUID of each
+                    # TiffData and map it to the file/IFD.
+                    data.append(None)
+                    continue
+
+                # TODO: we could have a separate lock per file?
+                d, t = self._getAllDataArrayShadows(stfile, self._lock)
+                data.extend(d)
+                thumbnails.extend(t)
+                uuids_read[u] = sfn
+
+            if not data:
+                # Nothing loading (not even the current file) => load this file
+                data, thumbnails = self._getAllDataArrayShadows(tfile, self._lock)
+
+            _updateMDFromOME(omeroot, data)
+            data = AcquisitionDataTIFF._foldArrayShadowsFromOME(omeroot, data)
+        except Exception:
+            logging.exception("Failed to decode OME XML")
+            raise ValueError("Failure during OME XML decoding")
+
+        # Remove all the None (=thumbnails) from the list
+        data = [i for i in data if i is not None]
+        return data, thumbnails
+
+    def _findFileByUUID(self, suuid, orig_fn, root_fn):
+        """
+        Find the file with the given UUID. In addition to immediately
+        looking for the orig_fn, it _may_ look at other files which could
+        have the UUID.
+        suuid (str): UUID of the file searched for
+        orig_fn (str): most probable name of the file (just the basename
+          is fine)
+        root_fn (str): path to the file where UUID reference was found,
+            should contain the whole path
+        return filename (str): the whole path of the file found
+               tfile (tiff_file): opened file
+        raise LookupError:
+            if no file could be found
+        """
+        path, root_bn = os.path.split(root_fn)
+        _, orig_bn = os.path.split(orig_fn)
+
+        def try_filename(fn):
+            # try to find and open the enlisted file
             try:
-                # take care of multiple file distribution
+                tfile = TIFF.open(fn, mode='r')
+            except TypeError:
+                # No file found
+                raise LookupError("File not found")
 
-                file_data, data = data, [] # keep the original data in case it doesn't go smoothly
-                path, basename = os.path.split(filename)
+            try:
+                omeroot = self._getOMEXML(tfile)
+                fuuid = uuid.UUID(omeroot.attrib["UUID"])
+            except (LookupError, KeyError, ValueError):
+                logging.info("Found file %s, but couldn't read UUID", fn)
+                raise LookupError("File has not UUID")
+
+            if fuuid != suuid:
+                logging.warning("Found file %s, but UUID is %s instead of %s",
+                                fn, fuuid, suuid)
+            return full_fn, tfile
+
+        # Look in the same directory as the root file
+        full_fn = os.path.join(path, orig_bn)
+        try:
+            return try_filename(full_fn)
+        except LookupError:
+            pass
+
+        # In case the root file has been renamed, let's try to rename the
+        # file we are looking for in the same way.
+        # IOW, get the XXXXX.n.ome.tiff from root and use the n from orig.
+        m_root = re.search(r"(?P<b>.*)(?P<n>\.\d+)(?P<ext>(\.ome)?(\.\w+)?)$", root_bn)
+        m_orig = re.search(r"(?P<b>.*)(?P<n>\.\d+)(?P<ext>(\.ome)?(\.\w+)?)$", orig_bn)
+        if m_root and m_orig:
+            try_bn = m_root.groupdict()["b"] + m_orig.groupdict()["n"] + m_root.groupdict()["ext"]
+            if try_bn != orig_bn:
+                full_fn = os.path.join(path, try_bn)
+                try:
+                    return try_filename(full_fn)
+                except LookupError:
+                    pass
+
+        raise LookupError("Failed to find file with UUID %s" % (suuid,))
+
+    def _getOMEXML(self, tfile):
+        """
+        return (xml.Element): the OME XML root in the given file
+        raise LookupError: if no OME XML text found
+        """
+        # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
+        tfile.SetDirectory(0)
+        desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
+
+        if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower()) or
+                      desc[:4].lower() == '<ome')):
+            try:
                 desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                               "", desc, count=1)
                 desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
                               "", desc)
                 root = ET.fromstring(desc)
+                if root.tag.lower() == "ome":
+                    return root
+                raise LookupError("XML data is not OME: %s" % (desc,))
+            except ET.ParseError as ex:
+                raise LookupError("OME XML couldn't be parsed: %s" % (ex,))
 
-                # Keep track of the files that were already opened
-                # TODO: in file_read, instead of using the filename, use the UUID
-                file_read = set()
-                for tiff_data in root.findall("Image/Pixels/TiffData"):
-                    uuide = tiff_data.find("UUID")
-                    if uuide is None:
-                        # uuid attribute is only part of multiple files distribution
-                        continue
-                    else:
-                        uuid_data = uuide.get("FileName")
-                    if uuid_data in file_read:
-                        continue  # Already done
-                    # attach to the right path
-                    uuid_path = os.path.join(path, uuid_data)
-                    # try to find and open the enlisted file
-                    try:
-                        f_link = TIFF.open(uuid_path, mode='r')
-                    except TypeError:
-                        # TODO: one reason the file cannot be found is that it's
-                        # been renamed. Instead of failing, we could check whether
-                        # the base file has been renamed, based on its UUID,
-                        # and if so, try with the same change to look for that file.
-
-                        # TODO: if it's really missing, we should still put a
-                        # None filler in data, so that the IFDs match.
-                        logging.warning("File '%s' enlisted in the OME-XML header is missing.", uuid_path)
-                        continue
-
-                    for dir_index in AcquisitionDataTIFF._iterDirectories(f_link):
-                        AcquisitionDataTIFF._createDataArrayShadows(f_link, dir_index,
-                                self._lock, data, thumbnails)
-
-                    file_read.add(uuid_data)
-
-                # If this file was not enlisted in the xml data we assume it has
-                # been renamed. In this case we also include its data.
-                if basename not in file_read:
-                    data.extend(file_data)
-
-                data = AcquisitionDataTIFF._reconstructFromOMETIFF(desc, data, os.path.basename(filename))
-            except Exception:
-                # fallback to pretend there was no OME XML
-                logging.exception("Failed to decode OME XML string: '%s'", desc)
-
-        # Remove all the None (=thumbnails) from the list
-        content = [i for i in data if i is not None]
-
-        AcquisitionData.__init__(self, tuple(content), tuple(thumbnails))
+        raise LookupError("No OME XML data found")
 
     @staticmethod
-    # TODO: make it more Pythonic by just returning a list of new DAS and thumbnails,
-    # instead of extending it
-    def _createDataArrayShadows(tfile, dir_index, lock, data_array_shadows, thumbnails):
+    def _createDataArrayShadows(tfile, dir_index, lock):
         """
-        Create the DataArrayShadows from the TIFF metadata for the current directory,
-        and add them to the data_array_shadows and thumbnails lists
+        Create the DataArrayShadow from the TIFF metadata for the current directory
         tfile (tiff handle): Handle for the TIFF file
         dir_index (int): Index of the directory in the TIFF file
         lock (threading.Lock): The lock that controls the access to the TIFF file
-        data_array_shadows: (list of DataArrayShadows): List of DataArrayShadows representing
-            the images of the current TIFF file that are not thumbnails
-        thumbnails: (list of DataArrayShadows): List of DataArrayShadows of the current TIFF file
-            that are thumbnails
+        return:
+            das (DataArrayShadows): DataArrayShadows representing the image
+            is_thumbnail (bool): True if the image is a thumbnail
         """
         bits = tfile.GetField(T.TIFFTAG_BITSPERSAMPLE)
         sample_format = tfile.GetField(T.TIFFTAG_SAMPLEFORMAT)
@@ -2123,36 +2218,10 @@ class AcquisitionDataTIFF(AcquisitionData):
         tiff_info = {'handle': tfile, 'dir_index': dir_index, 'lock': lock}
         das = DataArrayShadowTIFF(tiff_info, shape, typ, md)
 
-        if _isThumbnail(tfile):
-            data_array_shadows.append(None)
-            thumbnails.append(das)
-        else:
-            data_array_shadows.append(das)
+        return das, _isThumbnail(tfile)
 
     @staticmethod
-    def _reconstructFromOMETIFF(xml, data_array_shadows, basename):
-        """
-        Update DataArrayShadows to reflect shape and metadata contained in OME XML
-        xml (string): String containing the OME XML declaration
-        data_array_shadows (list of DataArrayShadows): each
-        basename (string): File name of the TIFF file
-        return (list of model.DataArray): new list with the DAs following the OME
-            XML description. Note that DASs are either updated or completely recreated.
-        """
-        # Remove "xmlns" which is the default namespace and is appended everywhere
-        # It's not beautiful, but the simplest with ET to handle expected namespaces.
-        xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                     "", xml, count=1)
-        # Remove ROI namespace too
-        xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."', "", xml)
-        root = ET.fromstring(xml)
-        _updateMDFromOME(root, data_array_shadows, basename)
-        omedata = AcquisitionDataTIFF._foldArrayShadowsFromOME(root, data_array_shadows, basename)
-
-        return omedata
-
-    @staticmethod
-    def _foldArrayShadowsFromOME(root, das, basename):
+    def _foldArrayShadowsFromOME(root, das):
         """
         Reorganize DataArrayShadows with more than 2 dimensions according to OME XML
         Note: it expects _updateMDFromOME has been run before and so each array
@@ -2161,7 +2230,6 @@ class AcquisitionDataTIFF(AcquisitionData):
         base arrays of 3D if the data is RGB (3rd dimension has length 3).
         root (ET.Element): the root (i.e., OME) element of the XML description
         das (list of DataArrayShadows): DataArrayShadows at the same place as the TIFF IFDs
-        basename (string): File name of the TIFF file
         return (list of DataArrayShadows): new shorter list of DASs positions
         """
         omedas = []
@@ -2311,4 +2379,3 @@ class AcquisitionDataTIFF(AcquisitionData):
             tiff_file.ReadDirectory()
             dir_index += 1
             yield dir_index
-        tiff_file.SetDirectory(0)
