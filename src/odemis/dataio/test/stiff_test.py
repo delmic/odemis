@@ -162,7 +162,7 @@ class TestTiffIO(unittest.TestCase):
             ldata.append(a)
 
         # export
-        orig_name = "boo" + FILENAME
+        orig_name = "boo.0.tiff"
         stiff.export(orig_name, ldata)
 
         tokens = orig_name.split(".0.", 1)
@@ -186,8 +186,9 @@ class TestTiffIO(unittest.TestCase):
             self.assertGreaterEqual(len(rdata), 1)
 
             # Check the correct metadata is present
-            self.assertAlmostEqual(rdata[0].metadata[model.MD_EXP_TIME],
-                                   ldata[i].metadata[model.MD_EXP_TIME])
+            for j in range(self.no_of_images):
+                self.assertAlmostEqual(rdata[j].metadata[model.MD_EXP_TIME],
+                                       ldata[j].metadata[model.MD_EXP_TIME])
 
             rthumbnail = fmt_mng.read_thumbnail(fname)
             # No thumbnail handling for now, so assert that is empty
