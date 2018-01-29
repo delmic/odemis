@@ -2003,7 +2003,7 @@ class SparcStreamsController(StreamBarController):
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
-                                                sem_stream, ar_stream)
+                                                [sem_stream, ar_stream])
 
         return self._addRepStream(ar_stream, sem_ar_stream,
                                   vas=("repetition", "pixelSize", "fuzzing"),
@@ -2033,7 +2033,7 @@ class SparcStreamsController(StreamBarController):
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi",
-                                               sem_stream, cli_stream)
+                                               [sem_stream, cli_stream])
 
         # Need to pick the right filter wheel (if there is one)
         axes = {}
@@ -2086,7 +2086,7 @@ class SparcStreamsController(StreamBarController):
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM " + name,
-                                                        sem_stream, spec_stream)
+                                                        [sem_stream, spec_stream])
 
         # TODO: all the axes, including the filter band should be local. The
         # band should be set to the pass-through by default
@@ -2127,7 +2127,7 @@ class SparcStreamsController(StreamBarController):
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator",
-                                                  sem_stream, monoch_stream)
+                                                  [sem_stream, monoch_stream])
 
         # TODO: all the axes, including the filter band should be local. The
         # band should be set to the pass-through by default

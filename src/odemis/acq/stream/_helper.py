@@ -729,7 +729,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         self.background = model.VigilantAttribute(None, setter=self._setBackground)
 
         # Future of the acquisition
-        self._acq_stream = MomentOfInertiaMDStream("MoI acq", sem_stream, self)
+        self._acq_stream = MomentOfInertiaMDStream("MoI acq", [sem_stream, self])
         self._acquire_f = None
 
     def _setDetROI(self, roi):

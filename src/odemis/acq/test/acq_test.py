@@ -238,7 +238,7 @@ class SPARCTestCase(unittest.TestCase):
         semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
+        semars = stream.SEMARMDStream("test SEM/AR", [sems, ars])
         st = stream.StreamTree(streams=[semsur, semars])
 
         # SEM survey settings are via the current hardware settings
@@ -291,9 +291,9 @@ class SPARCTestCase(unittest.TestCase):
         semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, opm=opmngr)
-        semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
+        semars = stream.SEMARMDStream("test SEM/AR", [sems, ars])
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam, opm=opmngr)
-        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
         st = stream.StreamTree(streams=[semsur, semars, sps])
 
         # SEM survey settings are via the current hardware settings
@@ -353,7 +353,7 @@ class SPARCTestCase(unittest.TestCase):
         semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
+        semars = stream.SEMARMDStream("test SEM/AR", [sems, ars])
         st = stream.StreamTree(streams=[semsur, semars])
 
         pcd = Fake0DDetector("test")

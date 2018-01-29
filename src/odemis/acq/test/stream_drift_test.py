@@ -77,11 +77,11 @@ class TestDriftStream(unittest.TestCase):
         escan = self.ebeam
         detector = self.sed
         ccd = self.ccd
-        
+
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
         ars = stream.ARSettingsStream("test ar", ccd, ccd.data, escan)
-        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         # Long acquisition
         ccd.exposureTime.value = 1e-02  # s

@@ -38,31 +38,38 @@ class SEMCLCCDStream(SEMCCDMDStream):
     image).
     """
     def _runAcquisition(self, future):
-        self._rep_md = None
+        self._ccd_md = None
         return super(SEMCLCCDStream, self)._runAcquisition(future)
 
-    def _preprocessRepData(self, data, i):
+    def _preprocessData(self, n, data, i):
         """
         return (int): mean of the data
         """
-        if not self._rep_md:
-            self._rep_md = data.metadata
+        # We only care about the CCD data
+        if n < len(self.streams) - 1:
+            return super(SEMCLCCDStream, self)._preprocessData(n, data, i)
+
+        if not self._ccd_md:
+            self._ccd_md = data.metadata
 
         # We could return the sum, but it's probably overkill as the original
         # data type contains probably enough precision, and would need special
         # handling of very large data type.
         return data.mean().astype(data.dtype)
 
-    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
-        """
-        cf SEMCCDMDStream._onMultipleDetectorData()
-        """
-        # Same as main data, but without computing the data position from the
+    def _onCompletedData(self, n, raw_das):
+        # Only override for the CCD data
+        if n < len(self._streams) - 1:
+            r = super(SEMCLCCDStream, self)._onCompletedData(n, raw_das)
+            return r
+
+        # Same as sem data, but without computing the data position from the
         # CCD metadata
-        md = self._rep_md.copy()
-        md[model.MD_DESCRIPTION] = self._rep_stream.name.value
-        md[model.MD_POS] = main_data.metadata[model.MD_POS]
-        # Make sure it doesn't contian metadata related to AR
+        md = self._ccd_md.copy()
+        sem_data = self._raw[0]  # _onCompletedData() should be called in order
+        md[model.MD_POS] = sem_data.metadata[model.MD_POS]
+        md[model.MD_DESCRIPTION] = self._streams[n].name.value
+        # Make sure it doesn't contain metadata related to AR
         for k in (model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE,
                   model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
                   model.MD_AR_XMAX, model.MD_ROTATION):
@@ -70,23 +77,23 @@ class SEMCLCCDStream(SEMCCDMDStream):
 
         try:
             # handle sub-pixels (aka fuzzing)
-            shape_main = main_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
-            tile_shape = (shape_main[0] / repetition[0], shape_main[1] / repetition[1])
-            pxs = (main_data.metadata[model.MD_PIXEL_SIZE][0] * tile_shape[0],
-                   main_data.metadata[model.MD_PIXEL_SIZE][1] * tile_shape[1])
+            sem_shape = sem_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
+            rep = self.repetition.value
+            tile_shape = (sem_shape[0] / rep[0], sem_shape[1] / rep[1])
+            pxs = (sem_data.metadata[model.MD_PIXEL_SIZE][0] * tile_shape[0],
+                   sem_data.metadata[model.MD_PIXEL_SIZE][1] * tile_shape[1])
             md[model.MD_PIXEL_SIZE] = pxs
         except KeyError:
             logging.warning("Metadata missing from the SEM data")
 
         # concatenate data into one big array of (number of pixels,1)
-        flat_list = [ar.flatten() for ar in rep_data]
+        flat_list = [ar.flatten() for ar in raw_das]
         rep_one = numpy.concatenate(flat_list)
         # reshape to (Y, X)
-        rep_one.shape = repetition[::-1]
+        rep_one.shape = rep[::-1]
         rep_one = model.DataArray(rep_one, metadata=md)
 
-        self._rep_raw = [rep_one]
-        self._main_raw = [main_data]
+        self._raw.append(rep_one)
 
 
 class CLiCCDPlugin(Plugin):
@@ -106,6 +113,7 @@ class CLiCCDPlugin(Plugin):
         else:
             logging.info("%s plugin cannot load as the microscope is not a SPARC with AR",
                          self.name)
+        # TODO: also support same functionality with sp-ccd
 
     def addst(self):
         main_data = self.main_app.main_data
@@ -131,7 +139,7 @@ class CLiCCDPlugin(Plugin):
 
         # Create the equivalent MDStream
         sem_stream = self._tab.tab_data_model.semStream
-        sem_cl_stream = SEMCLCCDStream("SEM CLi CCD", sem_stream, ar_stream)
+        sem_cl_stream = SEMCLCCDStream("SEM CLi CCD", [sem_stream, ar_stream])
 
         stctrl = self._tab.streambar_controller
         return stctrl._addRepStream(ar_stream, sem_cl_stream,
