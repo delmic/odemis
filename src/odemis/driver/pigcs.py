@@ -4126,6 +4126,11 @@ class E861Simulator(object):
                 if axis != 1:
                     raise SimulatedError(15)
                 out = "%s=%s" % (args[1], self._target)
+            elif args[0] == "SVO?" and len(args) == 2:  # Servo on?
+                axis = int(args[1])
+                if axis != 1:
+                    raise SimulatedError(15)
+                out = "%s=%s" % (args[1], "1" if self._servo else "0")
             elif args[0] == "ONT?" and len(args) == 2: # on target
                 axis = int(args[1])
                 if axis != 1:
