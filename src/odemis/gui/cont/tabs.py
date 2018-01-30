@@ -917,6 +917,10 @@ class SparcAcquisitionTab(Tab):
     def streambar_controller(self):
         return self._stream_controller
 
+    @property
+    def acquisition_controller(self):
+        return self._acquisition_controller
+
     def on_tool_change(self, tool):
         """ Ensure spot position is always defined when using the spot """
         if tool == guimod.TOOL_SPOT:

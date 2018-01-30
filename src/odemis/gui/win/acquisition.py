@@ -38,6 +38,7 @@ from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
@@ -64,7 +65,8 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: record and reuse the preset used?
         self.cmb_presets.Select(0)
 
-        self.filename = model.StringVA(self._get_default_filename())
+        self.filename = model.StringVA(create_filename(self.conf.last_path, self.conf.fn_ptn,
+                                                       self.conf.last_extension, self.conf.fn_count))
         self.filename.subscribe(self._onFilename, init=True)
 
         # The name of the last file that got written to disk (used for auto viewing on close)
@@ -325,17 +327,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.lbl_acqestimate.SetLabel(txt)
 
-    def _get_default_filename(self):
-        """
-        Return a good default filename
-        """
-        # TODO: check the file doesn't yet exist (if the computer clock is
-        # correct it's unlikely)
-        return os.path.join(
-            self.conf.last_path,
-            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), self.conf.last_extension)
-        )
-
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
         # decompose into path/file
@@ -390,6 +381,10 @@ class AcquisitionDialog(xrcfr_acq):
             # It means the user wants to do a new acquisition
             self.btn_secom_acquire.SetLabel("START")
             self.last_saved_file = None
+
+        self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
+        logging.debug('Generated filename pattern %s' % self.conf.fn_ptn)
+
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
@@ -502,6 +497,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         try:
             data, exp = future.result(1) # timeout is just for safety
+            self.conf.fn_count = update_counter(self.conf.fn_count)
         except CancelledError:
             # put back to original state:
             # re-enable the acquire button
