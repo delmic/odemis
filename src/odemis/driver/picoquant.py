@@ -229,9 +229,6 @@ class PH300(model.Detector):
 
         self.Calibrate()
 
-        # Do basic set-up for things that should never be needed to change
-        self.SetSyncDiv(1)  # 1 = no divider TODO: needs to be a VA?
-
         # TODO: needs to be changeable?
         self.SetOffset(0)
 
@@ -270,6 +267,10 @@ class PH300(model.Detector):
 
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
+
+        self.syncDiv = model.IntEnumerated(1, choices={1, 2, 4, 8},
+                                           unit="s", setter=self._setSyncDiv)
+        self._setSyncDiv(self.syncDiv.value)
 
         self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-12, SYNCOFFSMAX * 1e-12),
                                                 unit="s", setter=self._setSyncOffset)
@@ -399,8 +400,10 @@ class PH300(model.Detector):
     def SetSyncDiv(self, div):
         """
         Changes the divider of the sync input (channel 0). This allows to reduce
-        the sync input rate so that the period is at least as long as the dead time.
-        Note: the count rate will need 100 ms to be valid again
+          the sync input rate so that the period is at least as long as the dead
+          time. In practice, on the PicoHarp300, this should be used whenever
+          the sync rate frequency is higher than 10MHz.
+          Note: the count rate will need 100 ms to be valid again.
         div (1, 2, 4, or 8): input rate divider applied at channel 0
         """
         assert(SYNCDIVMIN <= div <= SYNCDIVMAX)
@@ -574,6 +577,10 @@ class PH300(model.Detector):
         self._metadata[model.MD_PIXEL_DUR] = pxd
 
         return pxd
+
+    def _setSyncDiv(self, div):
+        self.SetSyncDiv(div)
+        return div
 
     def _setSyncOffset(self, offset):
         offset_ps = int(offset * 1e12)
