@@ -48,10 +48,13 @@ class SEMCLCCDStream(SEMCCDMDStream):
         if not self._rep_md:
             self._rep_md = data.metadata
 
-        # We could return the sum, but it's probably overkill as the original
-        # data type contains probably enough precision, and would need special
-        # handling of very large data type.
-        return data.mean().astype(data.dtype)
+        # Computing the sum or the mean is theoretically equivalent, but the sum
+        # provides gigantic values while the mean gives values in the same order
+        # as in the original data. Note that we cannot use the original dtype
+        # because if it's an integer it will likely cause quantisation (as a
+        # large part of the image received is identical for all the e-beam
+        # positions scanned).
+        return data.mean()
 
     def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
@@ -91,7 +94,7 @@ class SEMCLCCDStream(SEMCCDMDStream):
 
 class CLiCCDPlugin(Plugin):
     name = "CL intensity CCD"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
