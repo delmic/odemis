@@ -157,7 +157,9 @@ class SEM(model.HwComponent):
                 # not possible to use this port? next one!
                 continue
         else:
-            raise HwError("Check that Remcon32 is running, and check the connection to the SEM PC. No Zeiss SEM found on ports %s" % (ports,))
+            raise HwError("Check that Remcon32 is running, and check the connection "
+                          "to the SEM PC. No Zeiss SEM found on ports %s" %
+                          (ports,))
 
     def _SendCmd(self, cmd):
         """
@@ -207,7 +209,6 @@ class SEM(model.HwComponent):
             else:
                 raise IOError("Status sign is expected, received '%s' instead." % stat)
 
-
     # Define 1 function per SEM command
     def NullCommand(self):
         """
@@ -242,7 +243,7 @@ class SEM(model.HwComponent):
 
     def GetExternal(self):
         """
-        returns (bool): True (on), False (off) 
+        returns (bool): True (on), False (off)
         """
         ans = self._SendCmd('EXS?')
         return int(ans) != 0
@@ -349,7 +350,7 @@ class SEM(model.HwComponent):
 class Stage(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
-    moving the Zeiss stage and updating the position. 
+    moving the Zeiss stage and updating the position.
     """
 
     def __init__(self, name, role, parent, rng=None, **kwargs):
@@ -357,23 +358,21 @@ class Stage(model.Actuator):
         axes (set of string): names of the axes
         """
 
-        if rng == None:
-            self.rng = {}
-        else:
-            self.rng = rng
+        if rng is None:
+            rng = {}
 
-        if "x" not in self.rng:
-            self.rng["x"] = (5e-3, 152e-3)
-        if "y" not in self.rng:
-            self.rng["y"] = (5e-3, 152e-3)
-        if "z" not in self.rng:
-            self.rng["z"] = (5e-3, 40e-3)
+        if "x" not in rng:
+            rng["x"] = (5e-3, 152e-3)
+        if "y" not in rng:
+            rng["y"] = (5e-3, 152e-3)
+        if "z" not in rng:
+            rng["z"] = (5e-3, 40e-3)
 
         axes_def = {
             # Ranges are from the documentation
-            "x": model.Axis(unit="m", range=(self.rng["x"][0], self.rng["x"][1])),
-            "y": model.Axis(unit="m", range=(self.rng["y"][0], self.rng["y"][1])),
-            "z": model.Axis(unit="m", range=(self.rng["z"][0], self.rng["z"][1])),
+            "x": model.Axis(unit="m", range=(rng["x"][0], rng["x"][1])),
+            "y": model.Axis(unit="m", range=(rng["y"][0], rng["y"][1])),
+            "z": model.Axis(unit="m", range=(rng["z"][0], rng["z"][1])),
         }
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
@@ -389,11 +388,16 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
         self._pos_poll.start()
 
-    def _updatePosition(self):
+    def _updatePosition(self, raw_pos=None):
         """
         update the position VA
+        raw_pos (dict str -> float): the position in mm (as received from the SEM)
         """
-        x, y, z, _ = self.parent.GetStagePosition()
+        if raw_pos is None:
+            x, y, z, _ = self.parent.GetStagePosition()
+        else:
+            x, y, z = raw_pos["x"], raw_pos["y"], raw_pos["z"]
+
         pos = {"x": x * 1e-3,
                "y": y * 1e-3,
                "z": z * 1e-3,
@@ -427,9 +431,10 @@ class Stage(model.Actuator):
             z += shift["z"] * 1e3
 
         # Check range
-        assert self.rng["x"][0] * 1e3 <= x <= self.rng["x"][1] * 1e3
-        assert self.rng["y"][0] * 1e3 <= y <= self.rng["y"][1] * 1e3
-        assert self.rng["z"][0] * 1e3 <= z <= self.rng["z"][1] * 1e3
+        for v, an in zip((x, y, z), ("x", "y", "z")):
+            rng = self.axes[an].range
+            if not rng[0] * 1e3 <= v <= rng[1] * 1e3:
+                raise ValueError("Relative move would cause axis %s out of bound (%f mm)", an, v)
 
         self._moveTo(future, x, y, z)
 
@@ -452,41 +457,34 @@ class Stage(model.Actuator):
         self._moveTo(future, x, y, z)
 
     def _moveTo(self, future, x, y, z, timeout=60):
-
         with future._moving_lock:
             try:
                 if future._must_stop.is_set():
-                    future._was_stopped = True
                     raise CancelledError()
-                else:
-                    logging.debug("Moving to position (%s, %s, %s)" % (x, y, z))
-                    self.parent.MoveStage(x, y, z)
-                    # documentation suggests to wait 1s before calling
-                    # GetStagePosition() after MoveStage()
-                    time.sleep(1)
-                    
-                    # Wait until the move is over
+                logging.debug("Moving to position (%s, %s, %s)", x, y, z)
+                self.parent.MoveStage(x, y, z)
+                # documentation suggests to wait 1s before calling
+                # GetStagePosition() after MoveStage()
+                time.sleep(1)
+
+                # Wait until the move is over
+                # Don't check for future._must_stop because anyway the stage will
+                # stop moving, and so it's nice to wait until we know the stage is
+                # not moving.
+                moving = True
+                tstart = time.time()
+                while moving:
                     x, y, z, moving = self.parent.GetStagePosition()
-                    tstart = time.time()
+                    # Take the opportunity to update .position
+                    self._updatePosition({"x": x, "y": y, "z": z})
 
-                    # Don't check for future._must_stop because anyway the stage will
-                    # stop moving, and so it's nice to wait until we know the stage is
-                    # not moving.
-                    while moving:
-                        # 50 ms is about the time it takes to read the stage status
-                        time.sleep(50e-3)
-                        x, y, z, moving = self.parent.GetStagePosition()
+                    if time.time() > tstart + timeout:
+                        self.parent.Abort()
+                        logging.error("Timeout after submitting stage move. Aborting move.")
+                        break
 
-                        # Take the opportunity to update .position
-                        pos = {"x": x * 1e-3,
-                               "y": y * 1e-3,
-                               "z": z * 1e-3,
-                               }
-                        self.position._set_value(pos, force_write=True)
-                        if time.time() > tstart + timeout:
-                            self.parent.Abort()
-                            logging.error("Timeout after submitting stage move. Aborting move.")
-                            break
+                    # 50 ms is about the time it takes to read the stage status
+                    time.sleep(50e-3)
 
                 # If it was cancelled, Abort() has stopped the stage before, and
                 # we still have waited until the stage stopped moving. Now let
@@ -585,8 +583,8 @@ class Scanner(model.Emitter):
         self._hfw_nomag = hfw_nomag  # m
 
         self.magnification = model.FloatContinuous(self.parent.GetMagnification(),
-                                                     unit="", readonly=True,
-                                                     range=MAGNIFICATION_RANGE)  # RO
+                                                   unit="", readonly=True,
+                                                   range=MAGNIFICATION_RANGE)
         fov_range = (self._hfw_nomag / MAGNIFICATION_RANGE[1],
                      self._hfw_nomag / MAGNIFICATION_RANGE[0])
         self.horizontalFoV = model.FloatContinuous(self._hfw_nomag / self.magnification.value,
@@ -603,7 +601,7 @@ class Scanner(model.Emitter):
         #self.probeCurrent = model.FloatContinuous(1e-6, range=PC_RANGE, unit="A",
         #                                          setter=self._setProbeCurrent)
 
-        self.accelVoltage = model.FloatContinuous(0, 
+        self.accelVoltage = model.FloatContinuous(0,
                                 range=(VOLTAGE_RANGE[0] * 1e3,VOLTAGE_RANGE[1] * 1e3),
                                 unit="V",
                                 setter=self._setVoltage)
@@ -749,7 +747,7 @@ class Focus(model.Actuator):
         foc (float): relative change in mm
         """
         try:
-            foc += self.parent.GetFocus()  #  mm
+            foc += self.parent.GetFocus()  # mm
             self.parent.SetFocus(foc)
         finally:
             # Update the position, even if the move didn't entirely succeed
@@ -834,10 +832,11 @@ class RemconSimulator(object):
         self.dur = 0
         # Prepare moving thread
         self.target_pos = numpy.zeros(3)
+        self._start_move = 0
         self._end_move = 0
         self._stage_stop = threading.Event()
         self._is_moving = False
-        
+
     def _run_move(self):
         try:
             orig_pos = self.pos
@@ -976,5 +975,3 @@ class RemconSimulator(object):
             self._sendAck(RS_SUCCESS)
         else:
             self._sendAck(RS_INVALID)
-
-
