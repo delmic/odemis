@@ -4,7 +4,7 @@ Created on 28 Sep 2017
 
 @author: Éric Piel
 
-Copyright © 2017 Éric Piel, Delmic
+Copyright © 2017-2018 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -26,6 +26,8 @@ import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq import drift
+from odemis.acq.stream import UNDEFINED_ROI
 import time
 
 
@@ -60,7 +62,7 @@ def get_next_rectangle(shape, current, n):
     else:
         nx = shape[1]
         ny = min(n // shape[1], shape[0] - cy)
-        logging.debug("Returning a %d lines, as %d pixels requested", ny, n)
+        logging.debug("Returning %d lines, as %d pixels requested", ny, n)
         return ny, nx
 
 
@@ -124,12 +126,214 @@ class LeechAcquirer(object):
         """
         pass
 
-    def series_completed(self, das):
+    def series_complete(self, das):
         """
         Called after the last acquisition
         das (list of DataArrays): the data which has just been acquired. It
           might be modified by this function.
         """
+        return None
+
+
+class AnchorDriftCorrector(LeechAcquirer):
+    """
+    Acquires regularly a Region-Of-Interest, and detects the position change to
+    estimate current drift.
+    """
+
+    def __init__(self, scanner, detector):
+        """
+        scanner (Emitter): a component with a .dwellTime, .translation, .scale
+        detector (Detector): to acquire the signal
+        """
+        super(AnchorDriftCorrector, self).__init__()
+        self._scanner = scanner
+        self._detector = detector
+        self._dc_estimator = None
+        self._next_px = None
+
+        # roi: the anchor region, it must be set to something different from
+        #  UNDEFINED_ROI to run.
+        # dwellTime: dwell time used when acquiring anchor region
+        # period is the (approximate) time between two acquisition of the
+        #  anchor (and drift compensation). The exact period is determined so
+        #  that it fits with the region of acquisition.
+        # Note: the scale used for the acquisition of the anchor region is
+        #  selected by the AnchoredEstimator, to be as small as possible while
+        #  still not scanning too many pixels.
+        self.roi = model.TupleContinuous(UNDEFINED_ROI,
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float),
+                                         setter=self._setROI)
+        self.dwellTime = model.FloatContinuous(scanner.dwellTime.range[0],
+                                               range=scanner.dwellTime.range, unit="s")
+        # in seconds, default to "fairly frequent" to work hopefully in most cases
+        self.period = model.FloatContinuous(10, range=(0.1, 1e6), unit="s")
+
+    @property
+    def drift(self):
+        """
+        Latest drift vector from the previous acquisition, in sem px
+        """
+        return self._dc_estimator.drift
+
+    @property
+    def tot_drift(self):
+        """
+        Total drift vector from the first acquisition, in sem px
+        """
+        return self._dc_estimator.tot_drift
+
+    @property
+    def max_drift(self):
+        """
+        Maximum distance drifted from the first acquisition, in sem px
+        """
+        return self._dc_estimator.max_drift
+
+    @property
+    def raw(self):
+        """
+        first 2 and last 2 anchor areas acquired (in order)
+        """
+        return self._dc_estimator.raw
+
+    def _setROI(self, roi):
+        """
+        Called when the .roi is set
+        """
+        logging.debug("drift corrector ROI set to %s", roi)
+        if roi == UNDEFINED_ROI:
+            return roi  # No need to discuss it
+
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        # Ensure the ROI is at least as big as the MIN_RESOLUTION
+        # (knowing it always uses scale = 1)
+        shape = self._scanner.shape
+        min_width = [r / s for r, s in zip(drift.MIN_RESOLUTION, shape)]
+        width = [max(a, b) for a, b in zip(width, min_width)]
+
+        # Recompute the ROI so that it fits
+        roi = [center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2]
+
+        # Ensure it's not too big
+        if roi[2] - roi[0] > 1:
+            roi[2] = roi[0] + 1
+        if roi[3] - roi[1] > 1:
+            roi[3] = roi[1] + 1
+
+        # shift the ROI if it's now slightly outside the possible area
+        if roi[0] < 0:
+            roi[2] = min(1, roi[2] - roi[0])
+            roi[0] = 0
+        elif roi[2] > 1:
+            roi[0] = max(0, roi[0] - (roi[2] - 1))
+            roi[2] = 1
+
+        if roi[1] < 0:
+            roi[3] = min(1, roi[3] - roi[1])
+            roi[1] = 0
+        elif roi[3] > 1:
+            roi[1] = max(0, roi[1] - (roi[3] - 1))
+            roi[3] = 1
+
+        return tuple(roi)
+
+    def estimateAcquisitionTime(self, dt, shape):
+        """
+        Compute an approximation of how long the leech will increase the
+        time of an acquisition.
+        return (0<float): time in s added to the whole acquisition
+        """
+        if self.roi.value == UNDEFINED_ROI:
+            return 0
+
+        # number of times the anchor will be acquired * anchor acquisition time
+        dce = drift.AnchoredEstimator(self._scanner, self._detector,
+                                      self.roi.value, self.dwellTime.value)
+        period = dce.estimateCorrectionPeriod(self.period.value, dt, shape)
+        npixels = numpy.prod(shape)
+        n_anchor = 1 + npixels // period.next()
+        return n_anchor * dce.estimateAcquisitionTime()
+
+    def series_start(self):
+        if self.roi.value == UNDEFINED_ROI:
+            raise ValueError("AnchorDriftCorrector.roi is not defined")
+
+        self._dc_estimator = drift.AnchoredEstimator(self._scanner,
+                                                     self._detector,
+                                                     self.roi.value,
+                                                     self.dwellTime.value)
+
+        # First acquisition of anchor area
+        self._dc_estimator.acquire()
+
+    def series_complete(self, das):
+        self._dc_estimator = None
+
+    def start(self, dt, shape):
+        """
+        Called before an acquisition starts.
+        Note: it can access the hardware, but if it modifies the settings of the
+          hardware, it should put them back afterwards so that the main
+          acquisition runs as expected.
+        dt (0 < float): The expected duration between two pixels (assuming there
+           is no "leech"). IOW, the integration time.
+        shape (tuple of 0<int): The number of pixels to acquire. When there are
+          several dimensions, the last ones are scanned fastest.
+        return (1<=int or None): how many pixels before .next() should be called
+        """
+        assert self._dc_estimator is not None
+        # TODO: automatically call series_start if it hasn't been called?
+        # That would be handy for basic acquisition?
+#         if not self._dc_estimator:
+#             logging.warning("start() called before series_start(), will call it now")
+#             self.series_start()
+
+        super(AnchorDriftCorrector, self).start(dt, shape)
+        self._next_px = self._dc_estimator.estimateCorrectionPeriod(self.period.value, dt, shape)
+
+        # Skip if the last acquisition is very recent (compared to the period)
+        try:
+            last_acq_date = self._dc_estimator.raw[-1].metadata[model.MD_ACQ_DATE]
+            if last_acq_date > time.time() - self.period.value:
+                logging.debug("Skipping DC estimation at acquisition start, as latest anchor is still fresh")
+                return self._next_px.next()
+        except KeyError:  # No MD_ACQ_DATE => no short-cut
+            pass
+
+        # Same as a standard acquisition == acquire + estimate
+        return self.next([])
+
+    def next(self, das):
+        """
+        Called after the Nth pixel has been acquired.
+        das (list of DataArrays): the data which has just been acquired. It
+          might be modified by this function.
+        return (1<=int or None): how many pixels before .next() should be called
+         Note: it may return more pixels than what still needs to be acquired.
+        """
+        assert self._next_px is not None
+
+        # Acquisition of anchor area & estimate drift
+        # Cannot cancel during this time, but hopefully it's short
+        self._dc_estimator.acquire()
+        self._dc_estimator.estimate()
+
+        # TODO: if next() would mean all the pixels, skip the last call by returning None
+        return self._next_px.next()
+
+    def complete(self, das):
+        """
+        Called after the last pixel has been acquired, and the data processed
+        das (list of DataArrays): the data which has just been acquired. It
+          might be modified by this function.
+        """
+        self._next_px = None
+        # TODO: add (a copy of) self.raw to the das? Or in series_complete()
         return None
 
 

@@ -28,7 +28,8 @@ import math
 import numpy
 from odemis import model
 import odemis
-from odemis.acq import stream, calibration, path
+from odemis.acq import stream, calibration, path, leech
+from odemis.acq.leech import ProbeCurrentAcquirer
 from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.util import test, conversion, img
@@ -38,8 +39,6 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-
-from odemis.acq.leech import ProbeCurrentAcquirer
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -1278,9 +1277,11 @@ class SPARCTestCase(unittest.TestCase):
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
-        sems.dcPeriod.value = 5
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 5
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
 
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-3  # s
@@ -1290,10 +1291,14 @@ class SPARCTestCase(unittest.TestCase):
 
         # Start acquisition
         start = time.time()
+        for l in sms.leeches:
+            l.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result()
+        for l in sms.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
@@ -1317,19 +1322,23 @@ class SPARCTestCase(unittest.TestCase):
 
         # Now same thing but with more pixels
         mcs.roi.value = (0.1, 0.1, 0.8, 0.8)
-        sems.dcPeriod.value = 1
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc.period.value = 1
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
 
         mcs.repetition.value = (30, 40)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
 
         # Start acquisition
         start = time.time()
+        for l in sms.leeches:
+            l.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result()
+        for l in sms.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
@@ -1558,10 +1567,37 @@ class SPARC2TestCase(unittest.TestCase):
                       emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
+#         # Test acquisition with leech failure => it should just go on as if the
+#         # leech had not been used.
+#         mcs.roi.value = (0, 0.2, 0.3, 0.6)
+#         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+#         dc.period.value = 5
+#         dc.roi.value = stream.UNDEFINED_ROI
+#         dc.dwellTime.value = 1e-06
+#         sems.leeches.append(dc)
+#
+#         # dwell time of sems shouldn't matter
+#         mcs.emtDwellTime.value = 1e-6  # s
+#
+#         # Start acquisition
+#         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+#         start = time.time()
+#         f = sms.acquire()
+#
+#         # wait until it's over
+#         data = f.result(timeout)
+#         dur = time.time() - start
+#         logging.debug("Acquisition took %g s", dur)
+#         self.assertTrue(f.done())
+#         self.assertEqual(len(data), len(sms.raw))
+
+        # Now, proper acquisition
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
-        sems.dcPeriod.value = 100
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 5
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
 
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-6  # s
@@ -1572,10 +1608,12 @@ class SPARC2TestCase(unittest.TestCase):
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
         start = time.time()
+        dc.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result(timeout)
+        dc.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
@@ -1594,9 +1632,9 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Now same thing but with more pixels
         mcs.roi.value = (0.3, 0.1, 1.0, 0.8)
-        sems.dcPeriod.value = 1
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc.period.value = 1
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
 
         mcs.repetition.value = (3000, 4000)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
@@ -1604,10 +1642,12 @@ class SPARC2TestCase(unittest.TestCase):
         # Start acquisition
         timeout = 1 + 2.5 * sms.estimateAcquisitionTime()
         start = time.time()
+        dc.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result(timeout)
+        dc.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
@@ -1636,9 +1676,11 @@ class SPARC2TestCase(unittest.TestCase):
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
-        sems.dcPeriod.value = 100
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 100
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
 
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-6  # s
@@ -1649,6 +1691,8 @@ class SPARC2TestCase(unittest.TestCase):
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
         start = time.time()
+        for l in sms.leeches:
+            l.series_start()
         f = sms.acquire()
 
         # Let it run for a short while and stop
@@ -1656,10 +1700,14 @@ class SPARC2TestCase(unittest.TestCase):
             time.sleep(2)
             f.cancel()
             time.sleep(0.1)
+            for l in sms.leeches:
+                l.series_start()
             f = sms.acquire()
 
         # Finally acquire something really, and check it worked
         data = f.result(timeout)
+        for l in sms.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
@@ -1687,9 +1735,11 @@ class SPARC2TestCase(unittest.TestCase):
         sms = stream.SEMMDStream("test sem-md", [mcs])
 
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
-        mcs.dcPeriod.value = 100
-        mcs.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        mcs.dcDwellTime.value = 1e-06
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 100
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        mcs.leeches.append(dc)
 
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-6  # s
@@ -1700,10 +1750,14 @@ class SPARC2TestCase(unittest.TestCase):
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
         start = time.time()
+        for l in sms.leeches:
+            l.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result(timeout)
+        for l in sms.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
@@ -1903,9 +1957,11 @@ class SPARC2TestCase(unittest.TestCase):
         specs.useScanStage.value = True
         specs.fuzzing.value = True
 
-        sems.dcPeriod.value = 1
-        sems.dcRegion.value = (0.8, 0.5, 0.9, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 1
+        dc.roi.value = (0.8, 0.5, 0.9, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
         specs.pixelSize.value = 1e-6
@@ -1920,10 +1976,14 @@ class SPARC2TestCase(unittest.TestCase):
         estt = sps.estimateAcquisitionTime()
         timeout = 5 + 3 * estt
         start = time.time()
+        for l in sps.leeches:
+            l.series_start()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
+        for l in sps.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
@@ -1967,10 +2027,14 @@ class SPARC2TestCase(unittest.TestCase):
         estt = sps.estimateAcquisitionTime()
         timeout = 5 + 3 * estt
         start = time.time()
+        for l in sps.leeches:
+            l.series_start()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
+        for l in sps.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
@@ -2048,7 +2112,7 @@ class SPARC2TestCase(unittest.TestCase):
 
     def test_acq_cl_leech(self):
         """
-        Test acquisition for SEM MD CL intensity + leech
+        Test acquisition for SEM MD CL intensity + 2 leeches
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
@@ -2063,9 +2127,11 @@ class SPARC2TestCase(unittest.TestCase):
         sems.leeches.append(pca)
 
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
-        sems.dcPeriod.value = 100
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 100
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
 
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-6  # s
@@ -2077,10 +2143,14 @@ class SPARC2TestCase(unittest.TestCase):
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime() + (0.3 * 700 / 10)
         logging.debug("Expecting acquisition of %g s", timeout)
         start = time.time()
+        for l in sms.leeches:
+            l.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result(timeout)
+        for l in sms.leeches:
+            l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())

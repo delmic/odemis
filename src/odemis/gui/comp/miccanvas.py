@@ -1101,7 +1101,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
         self.roa_overlay = None
 
-        self._dc_region = None  # The dcRegion VA of the SEM concurrent
+        self._dc_region = None  # The ROI VA of the drift correction
         self.driftcor_overlay = None
 
     def _set_tool_mode(self, tool_mode):
@@ -1150,7 +1150,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         # Link drift correction region
 
-        self._dc_region = sem_stream.dcRegion
+        self._dc_region = tab_data.driftCorrector.roi
         self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
             self, self._dc_region, colour=gui.SELECTION_COLOUR_2ND)
         self.add_world_overlay(self.driftcor_overlay)

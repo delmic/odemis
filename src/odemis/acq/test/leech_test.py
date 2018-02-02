@@ -19,10 +19,11 @@ from __future__ import division
 import logging
 import numpy
 from odemis import model
+from odemis.acq import stream
+from odemis.acq.leech import ProbeCurrentAcquirer, AnchorDriftCorrector
+from odemis.driver import simsem
 import time
 import unittest
-
-from odemis.acq.leech import ProbeCurrentAcquirer
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -45,6 +46,85 @@ class Fake0DDataFlow(model.DataFlow):
     def get(self):
         da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
         return da
+
+
+CONFIG_SED = {"name": "sed", "role": "sed"}
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
+CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
+              "drift_period": 0.1,
+              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
+              }
+
+
+class ADCTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sem = simsem.SimSEM(**CONFIG_SEM)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    def test_set_roi(self):
+        dc = AnchorDriftCorrector(self.scanner, self.sed)
+
+        # Too small => should grow a little
+        dc.roi.value = (0.1, 0.1, 0.1, 0.1)
+        roi = tuple(dc.roi.value)
+        self.assertGreater(roi[2] - roi[0], 0)
+        self.assertGreater(roi[3] - roi[1], 0)
+
+        # Set the same small value => no change
+        dc.roi.value = tuple(roi)
+        self.assertEqual(roi, dc.roi.value)
+
+        # Full FoV => allowed
+        dc.roi.value = (0, 0, 1, 1)
+        self.assertEqual(dc.roi.value, (0, 0, 1, 1))
+
+        # UNDEFINED_ROI doesn't allow to start
+        dc.roi.value = stream.UNDEFINED_ROI
+        self.assertEqual(dc.estimateAcquisitionTime(0.1, (4, 3)), 0)
+        with self.assertRaises(ValueError):
+            dc.series_start()
+            np = dc.start(0.1, (5, 5))
+
+    def test_get_next_pixels(self):
+        dc = AnchorDriftCorrector(self.scanner, self.sed)
+
+        # Period = dt => every pixel
+        dc.roi.value = (0, 0, 0.1, 0.1)
+        dc.dwellTime.value = dc.dwellTime.range[0]
+        dc.period.value = 0.1
+        dc.series_start()
+        np = dc.start(0.1, (5, 5))
+        scan_px = np
+        while scan_px < 5 * 5:
+            self.assertEqual(np, 1)  # don't check the last call
+            np = dc.next([None])
+            scan_px += np
+        dc.next([None])  # one last time
+
+        dc.complete([None])
+        dc.series_complete([None])
+
+        # Period = 2.5 * dt  => alternatively every 2 and 3 pixels
+        dc.period.value = 0.1 * 2.5
+        dc.series_start()
+        np = dc.start(0.1, (5, 5))
+        scan_px = np
+        while scan_px < 5 * 5:
+            self.assertIn(np, (2, 3))  # don't check the last call
+            da = model.DataArray([0] * np, {model.MD_ACQ_DATE: time.time()})
+            np = dc.next([None])
+            scan_px += np
+        dc.next([None])  # one last time
+
+        dc.complete([None])
+        dc.series_complete([None])
 
 
 # @skip("simple")
@@ -212,6 +292,7 @@ class PCAcquirerTestCase(unittest.TestCase):
         assert cot[0][0] < cot[1][0]
         # Data should be small
         assert 0 < cot[0][1] < 1e-3
+
 
 if __name__ == "__main__":
     unittest.main()

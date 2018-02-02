@@ -46,7 +46,7 @@ from odemis.gui.plugin import Plugin, AcquisitionDialog
 
 class RGBCLIntensity(Plugin):
     name = "RGB CL-intensity"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
@@ -139,11 +139,9 @@ class RGBCLIntensity(Plugin):
         if self._cl_int_s:
             dt_cl = self._cl_int_s.estimateAcquisitionTime()
 
-        # For RGB acquisition, the spatial drift correction will run 3 times
-        dcRegion = self._acqui_tab.semStream.dcRegion.value
-        dcDwellTime = self._acqui_tab.semStream.dcDwellTime.value
-        if dcRegion != UNDEFINED_ROI:
-            dc = drift.AnchoredEstimator(self.ebeam, self.sed, dcRegion, dcDwellTime)
+        # For each CL filter acquisition, the drift correction will run once
+        dc = self._acqui_tab.driftCorrector
+        if dc.roi.value != UNDEFINED_ROI:
             dt_drift = dc.estimateAcquisitionTime() + 0.1
 
         return dt_survey, dt_cl, dt_drift
@@ -280,12 +278,6 @@ class RGBCLIntensity(Plugin):
         # doubles the dwell time).
         dt_survey, dt_clint, dt_drift = self._calc_acq_times()
 
-        # For drift correction specify region and DwellTime:
-        dcRegion = self._acqui_tab.semStream.dcRegion.value
-        dcDwellTime = self._acqui_tab.semStream.dcDwellTime.value
-
-        # drift correction vector
-        tot_dc_vect = (0, 0)
 
         das = []
         fn = self.filename.value
@@ -310,9 +302,15 @@ class RGBCLIntensity(Plugin):
             dur -= dt_survey
             ft.set_progress(end=time.time() + dur)
 
-            if dcRegion != UNDEFINED_ROI:
+            # Extra drift correction between each filter
+            dc_roi = self._acqui_tab.driftCorrector.roi.value
+            dc_dt = self._acqui_tab.driftCorrector.dwellTime.value
+
+            # drift correction vector
+            tot_dc_vect = (0, 0)
+            if dc_roi != UNDEFINED_ROI:
                 drift_est = drift.AnchoredEstimator(self.ebeam, self.sed,
-                                                    dcRegion, dcDwellTime)
+                                                    dc_roi, dc_dt)
                 drift_est.acquire()
                 dur -= dt_drift
                 ft.set_progress(end=time.time() + dur)

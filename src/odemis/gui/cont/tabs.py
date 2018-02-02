@@ -737,15 +737,18 @@ class SparcAcquisitionTab(Tab):
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
-            "Secondary electrons concurrent",  # name matters, used to find the stream for the ROI
+            "Secondary electrons concurrent",
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam
         )
         tab_data.semStream = semcl_stream
 
-        # drift correction is disabled until a roi is selected
-        semcl_stream.dcRegion.value = acqstream.UNDEFINED_ROI
+        tab_data.driftCorrector = leech.AnchorDriftCorrector(semcl_stream.emitter,
+                                                             semcl_stream.detector)
+
+        # drift correction is disabled until a ROI is selected
+        tab_data.driftCorrector.roi.value = acqstream.UNDEFINED_ROI
         # Set anchor region dwell time to the same value as the SEM survey
         sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
@@ -834,17 +837,18 @@ class SparcAcquisitionTab(Tab):
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
+        # FIXME
         # Display on the SEM live stream panel, the extra settings of the SEM concurrent stream
         # * Drift correction period
         # * Probe current activation & period (if supported)
         # * Scan stage (if supported)
-        self.sem_dcperiod_ent = sem_stream_cont.add_setting_entry(
+        self.dc_period_ent = sem_stream_cont.add_setting_entry(
             "dcPeriod",
-            semcl_stream.dcPeriod,
+            tab_data.driftCorrector.period,
             None,  # component
             get_stream_settings_config()[acqstream.SEMStream]["dcPeriod"]
         )
-        semcl_stream.dcRegion.subscribe(self._onDCRegion, init=True)
+        tab_data.driftCorrector.roi.subscribe(self._on_dc_roi, init=True)
 
         if main_data.pcd:
             # Create a "leech" that we can add/remove to the SEM stream
@@ -969,7 +973,7 @@ class SparcAcquisitionTab(Tab):
         """
         Use the sem stream dwell time as the anchor dwell time
         """
-        self.tab_data_model.semStream.dcDwellTime.value = dt
+        self.tab_data_model.driftCorrector.dwellTime.value = dt
 
     @call_in_wx_main
     def _on_pcd_active(self, active):
@@ -995,14 +999,26 @@ class SparcAcquisitionTab(Tab):
             self.panel.vp_sparc_tl.hide_stage_limit_overlay()
 
     @call_in_wx_main
-    def _onDCRegion(self, roi):
+    def _on_dc_roi(self, roi):
         """
         Called when the Anchor region changes.
         Used to enable/disable the drift correction period control
         """
         enabled = (roi != acqstream.UNDEFINED_ROI)
-        self.sem_dcperiod_ent.lbl_ctrl.Enable(enabled)
-        self.sem_dcperiod_ent.value_ctrl.Enable(enabled)
+        self.dc_period_ent.lbl_ctrl.Enable(enabled)
+        self.dc_period_ent.value_ctrl.Enable(enabled)
+
+        # The driftCorrector should be a leech iif drift correction is enabled
+        dc = self.tab_data_model.driftCorrector
+        sems = self.tab_data_model.semStream
+        if enabled:
+            if dc not in sems.leeches:
+                self.tab_data_model.semStream.leeches.append(dc)
+        else:
+            try:
+                sems.leeches.remove(dc)
+            except ValueError:
+                pass  # It was already not there
 
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed

@@ -24,7 +24,7 @@ This file is part of Odemis.
 import logging
 from odemis import model
 import odemis
-from odemis.acq import stream
+from odemis.acq import stream, leech
 from odemis.util import test
 import os
 import time
@@ -86,17 +86,24 @@ class TestDriftStream(unittest.TestCase):
         # Long acquisition
         ccd.exposureTime.value = 1e-02  # s
 
-        sems.dcPeriod.value = 5
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-04
+        dc = leech.AnchorDriftCorrector(escan, detector)
+        dc.period.value = 5
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-04
+        sems.leeches.append(dc)
+
         escan.dwellTime.value = 1e-02
 
         ars.roi.value = (0.4, 0.4, 0.6, 0.6)
         ars.repetition.value = (5, 5)
 
         start = time.time()
+        for l in sas.leeches:
+            l.series_start()
         f = sas.acquire()
         x = f.result()
+        for l in sas.leeches:
+            l.series_complete(x)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
