@@ -141,6 +141,10 @@ class TestPH300(unittest.TestCase):
             self.assertEqual(data.metadata[model.MD_DWELL_TIME], dt)
             self.assertEqual(data.metadata[model.MD_PIXEL_DUR], pxd)
 
+        for i in self.dev.syncDiv.choices:
+            self.dev.syncDiv.value = i
+            self.assertEqual(self.dev.syncDiv.value, i)
+
     def test_acquire_rawdet(self):
         for i in range(3):
             data = self.det0.data.get()
@@ -159,6 +163,7 @@ class TestPH300(unittest.TestCase):
     def _on_rawdet(self, df, data):
         self._cnt += 1
         self._lastdata = data
+
 
 if __name__ == "__main__":
     unittest.main()
