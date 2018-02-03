@@ -30,13 +30,7 @@ class DataArrayShadow(object):
     This class contains information about a DataArray.
     It has all the useful attributes of a DataArray, but not the actual data.
     If the image represented by an instance of this class is tiled, it should have a
-    method called 'getTile', that fetches one tile from the image. 
-    It should have the following parameters, and return:
-        x (0<=int): X index of the tile.
-        y (0<=int): Y index of the tile
-        zoom (0<=int): zoom level to use. The total shape of the image is shape / 2**zoom.
-            The number of tiles available in an image is ceil((shape//zoom)/tile_shape)
-        return (DataArray): the shape of the DataArray is typically of shape
+    method called 'getTile()', that fetches one tile from the image.
     """
     __metaclass__ = ABCMeta
 
@@ -63,14 +57,23 @@ class DataArrayShadow(object):
             self.tile_shape = tile_shape
 
     @abstractmethod
-    def getData(self, n):
+    def getData(self):
         """
-        Fetches the whole data (at full resolution) of image at index n.
-        n (0<=int): index of the image
+        Fetches the whole data (at full resolution) of the DataArray.
         return DataArray: the data, with its metadata (ie, identical to .content[n] but
             with the actual data)
         """
         pass
+
+    # Defined if the object supports per tile access.
+#     def getTile(self, x, y, zoom):
+#         """
+#         x (0<=int): X index of the tile.
+#         y (0<=int): Y index of the tile
+#         zoom (0<=int): zoom level to use. The total shape of the image is shape / 2**zoom.
+#             The number of tiles available in an image is ceil((shape//zoom)/tile_shape)
+#         return (DataArray): the shape of the DataArray is typically of shape
+#         """
 
 
 class AcquisitionData(object):

@@ -54,63 +54,61 @@ class TestTiffIO(unittest.TestCase):
         except Exception:
             pass
 
-    # @skip("simple")
     def testExportMultiPage(self):
         # create a simple greyscale image
         size = (512, 256)
         white = (12, 52) # non symmetric position
         dtype = numpy.uint16
         ldata = []
-        num = 2
-        metadata = {
-                    model.MD_IN_WL: (500e-9, 520e-9),  # m
-                    }
+        self.no_of_images = 2
+        metadata = [{
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    },
+                    {
+                     model.MD_EXP_TIME: 1.2,  # s
+                    },
+                   ]
 
         # Add wavelength metadata just to group them
-        for i in range(num):
-            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata)
-            a[white[::-1]] = 124
+        for i in range(self.no_of_images):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata[i])
+            a[white[::-1]] = 124 + i
             ldata.append(a)
 
         # export
         stiff.export(FILENAME, ldata)
 
         tokens = FILENAME.split(".0.", 1)
-        self.no_of_images = 1
         # Iterate through the files generated
-        for file_index in range(self.no_of_images):
-            fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
+        for i in range(self.no_of_images):
+            fname = tokens[0] + "." + str(i) + "." + tokens[1]
             # check it's here
             st = os.stat(fname)  # this test also that the file is created
             self.assertGreater(st.st_size, 0)
             im = Image.open(fname)
             self.assertEqual(im.format, "TIFF")
-
-            # check the number of pages
-            for i in range(num):
-                im.seek(i)
-                self.assertEqual(im.size, size)
-                self.assertEqual(im.getpixel(white), 124)
-
+            self.assertEqual(im.size, size)
+            self.assertEqual(im.getpixel(white), 124 + i)
             del im
 
-        for file_index in range(self.no_of_images):
-            fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
-            os.remove(fname)
-
-    # @skip("simple")
     def testExportOpener(self):
         # create a simple greyscale image
         size = (512, 256)
         white = (12, 52)  # non symmetric position
         dtype = numpy.uint16
         ldata = []
-        num = 2
-        metadata = {
-                    model.MD_IN_WL: (500e-9, 520e-9),  # m
-                    }
-        for i in range(num):
-            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata)
+        self.no_of_images = 2
+        metadata = [{
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    },
+                    {
+                     model.MD_EXP_TIME: 1.2,  # s
+                    },
+                   ]
+
+        # Add wavelength metadata just to group them
+        for i in range(self.no_of_images):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata[i])
             a[white[::-1]] = 124
             ldata.append(a)
 
@@ -118,8 +116,9 @@ class TestTiffIO(unittest.TestCase):
         stiff.export(FILENAME, ldata)
 
         tokens = FILENAME.split(".0.", 1)
-        self.no_of_images = 1
-        # Iterate through the files generated
+
+        # Iterate through the files generated. Opening any of them should be
+        # returning _all_ the DAs
         for file_index in range(self.no_of_images):
             fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
 
@@ -128,19 +127,125 @@ class TestTiffIO(unittest.TestCase):
                    "For '%s', expected format TIFF but got %s" % (fname, fmt_mng.FORMAT))
             rdata = fmt_mng.read_data(fname)
             # Assert all the DAs are there
-            self.assertEqual(len(rdata[file_index]), len(ldata))
+            self.assertEqual(len(rdata), len(ldata))
+            for da in rdata:
+                self.assertEqual(da[white[::-1]], 124)
 
             rthumbnail = fmt_mng.read_thumbnail(fname)
             # No thumbnail handling for now, so assert that is empty
             self.assertEqual(rthumbnail, [])
 
-        self.no_of_images = 1
-        # Iterate through the files generated
-        for file_index in range(self.no_of_images):
-            fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
-            os.remove(fname)
+    def testRename(self):
+        """
+        Check it's at least possible to open one DataArray, when the files are
+        renamed
+        """
+        # create a simple greyscale image
+        size = (512, 256)
+        white = (12, 52)  # non symmetric position
+        dtype = numpy.uint16
+        ldata = []
+        self.no_of_images = 2
+        metadata = [{
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
+                     model.MD_EXP_TIME: 0.2, # s
+                    },
+                    {
+                     model.MD_EXP_TIME: 1.2, # s
+                    },
+                   ]
 
-    # @skip("simple")
+        # Add metadata
+        for i in range(self.no_of_images):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata[i])
+            a[white[::-1]] = 124 + i
+            ldata.append(a)
+
+        # export
+        orig_name = "boo.0.tiff"
+        stiff.export(orig_name, ldata)
+
+        tokens = orig_name.split(".0.", 1)
+        ntokens = FILENAME.split(".0.", 1)
+        # Renaming the file
+        for i in range(self.no_of_images):
+            fname = tokens[0] + "." + str(i) + "." + tokens[1]
+            new_fname = ntokens[0] + "." + str(i) + "." + ntokens[1]
+            os.rename(fname, new_fname)
+
+        # Iterate through the new files
+        for i in range(self.no_of_images):
+            fname = ntokens[0] + "." + str(i) + "." + ntokens[1]
+
+            fmt_mng = dataio.find_fittest_converter(fname, mode=os.O_RDONLY)
+            self.assertEqual(fmt_mng.FORMAT, "TIFF",
+                   "For '%s', expected format TIFF but got %s" % (fname, fmt_mng.FORMAT))
+            rdata = fmt_mng.read_data(fname)
+            # Assert that at least one DA is there
+            # In practice, currently, we expected precisely 1
+            self.assertGreaterEqual(len(rdata), 1)
+
+            # Check the correct metadata is present
+            for j in range(self.no_of_images):
+                self.assertAlmostEqual(rdata[j].metadata[model.MD_EXP_TIME],
+                                       ldata[j].metadata[model.MD_EXP_TIME])
+
+            rthumbnail = fmt_mng.read_thumbnail(fname)
+            # No thumbnail handling for now, so assert that is empty
+            self.assertEqual(rthumbnail, [])
+
+    def testMissing(self):
+        """
+        Check it's at least possible to open one DataArray, when the other parts
+        are missing.
+        """
+        # create a simple greyscale image
+        size = (512, 256)
+        white = (12, 52)  # non symmetric position
+        dtype = numpy.uint16
+        ldata = []
+        self.no_of_images = 2
+        metadata = [{
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
+                     model.MD_EXP_TIME: 0.2,  # s
+                    },
+                    {
+                     model.MD_EXP_TIME: 1.2,  # s
+                    },
+                   ]
+
+        # Add metadata
+        for i in range(self.no_of_images):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata[i])
+            a[white[::-1]] = 124 + i
+            ldata.append(a)
+
+        # export
+        stiff.export(FILENAME, ldata)
+
+        # Ooops, the first file is gone => it should still be possible to open
+        # the other files
+        os.remove(FILENAME)
+        tokens = FILENAME.split(".0.", 1)
+        for i in range(1, self.no_of_images):
+            fname = tokens[0] + "." + str(i) + "." + tokens[1]
+
+            fmt_mng = dataio.find_fittest_converter(fname, mode=os.O_RDONLY)
+            self.assertEqual(fmt_mng.FORMAT, "TIFF",
+                   "For '%s', expected format TIFF but got %s" % (fname, fmt_mng.FORMAT))
+            rdata = fmt_mng.read_data(fname)
+            # Assert that at least one DA is there
+            # In practice, currently, we expected precisely 1
+            self.assertGreaterEqual(len(rdata), 1)
+
+            # Check the correct metadata is present
+            self.assertAlmostEqual(rdata[0].metadata[model.MD_EXP_TIME],
+                                   ldata[i].metadata[model.MD_EXP_TIME])
+
+            rthumbnail = fmt_mng.read_thumbnail(fname)
+            # No thumbnail handling for now, so assert that is empty
+            self.assertEqual(rthumbnail, [])
+
     def testExportCube(self):
         """
         Check it's possible to export a 3D data (typically: 2D area with full
