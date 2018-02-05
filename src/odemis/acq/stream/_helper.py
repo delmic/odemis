@@ -417,16 +417,30 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
     def _updateImage(self):
         # Just copy the raw data into the image, removing useless second dimension
-        data = self.raw[0]
-        if data.shape[0] != 1:
-            logging.warning("Got a spectrum with multiple lines (shape = %s)", data.shape)
-
-        self.image.value = self.raw[0][0]
+        self.image.value = self.raw[0][:, 0, 0, 0, 0]
 
     # No histogram => no need to do anything to update it
     @staticmethod
     def _histogram_thread(wstream):
         pass
+
+    def _onNewData(self, dataflow, data):
+        # Convert data to be spectrum-like. It's not needed for the projection,
+        # but useful when storing the raw data (eg, with in a snapshot in the GUI)
+        # (We expect the original shape is (1, X).
+        if data.shape[0] != 1:
+            logging.warning("Got a spectrum with multiple lines (shape = %s)", data.shape)
+        specdata = data.reshape((data.shape[-1], 1, 1, 1, 1))
+
+        # Set POS and PIXEL_SIZE from the e-beam (which is in spot mode)
+        epxs = self.emitter.pixelSize.value
+        specdata.metadata[model.MD_PIXEL_SIZE] = epxs
+        emd = self.emitter.getMetadata()
+        pos = emd.get(model.MD_POS, (0, 0))
+        trans = self.emitter.translation.value
+        specdata.metadata[model.MD_POS] = (pos[0] + trans[0] * epxs[0],
+                                           pos[1] - trans[1] * epxs[1])  # Y is inverted
+        super(SpectrumSettingsStream, self)._onNewData(dataflow, specdata)
 
 
 class MonochromatorSettingsStream(PMTSettingsStream):
