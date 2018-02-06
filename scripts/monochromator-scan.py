@@ -67,7 +67,7 @@ class MonochromatorScanStream(stream.Stream):
         wlr = spectrograph.axes["wavelength"].range
         self.startWavelength = model.FloatContinuous(400e-9, wlr, unit="m")
         self.endWavelength = model.FloatContinuous(500e-9, wlr, unit="m")
-        self.numberOfPixels = model.IntContinuous(51, (2, 1000), unit="px")
+        self.numberOfPixels = model.IntContinuous(51, (2, 10001), unit="px")
         # TODO: could be a local attribute?
         self.dwellTime = model.FloatContinuous(1e-3, range=self._emitter.dwellTime.range,
                                                unit="s")
