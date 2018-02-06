@@ -312,6 +312,7 @@ class OverviewController(object):
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
             tab_data.main.chamberState.subscribe(self._on_chamber_state)
             tab_data.streams.subscribe(self._on_current_stream)
+            self.m_view.stage_is_moving.subscribe(self._on_moving_state_change)
 
         # Global overview image (Delphi)
         overview_stream = None
@@ -373,11 +374,18 @@ class OverviewController(object):
     def _on_merge_ratio_change(self, ratio):
         self.canvas.history_overlay.set_merge_ratio(ratio)
 
-    def on_stage_pos_change(self, p_pos):
-        """ Store the new position in the overview history when the stage moves,
-        update the overview image """
+    def _on_moving_state_change(self, moving):
+        """ Add new position to history when stage move is completed. """
+        if not moving:
+            p_pos = self._data_model.main.stage.position.value
+            self.add_pos_to_history(p_pos)
 
-        # History
+    def on_stage_pos_change(self, p_pos):
+        """ Update the overview image whenever the stage position changes. """
+        self._update_ovv()
+
+    def add_pos_to_history(self, p_pos):
+        """ Add position to history and draw corresponding rectangle. """
         p_size = self.calc_stream_size()
         p_center = (p_pos['x'], p_pos['y'])
         stage_history = self._data_model.stage_history.value
@@ -393,9 +401,6 @@ class OverviewController(object):
 
         stage_history.append((p_center, p_size))
         self._data_model.stage_history.value = stage_history
-
-        # Update overview image
-        self._update_ovv()
 
     def _on_current_stream(self, streams):
         """
