@@ -111,6 +111,7 @@ class MainGUIData(object):
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
         "spectrometer": "spectrometer",
+        "sp-ccd": "sp_ccd",
         "spectrometer-integrated": "spectrometer_int",
         "spectrograph": "spectrograph",
         "spectrograph-dedicated": "spectrograph_ded",
@@ -179,6 +180,7 @@ class MainGUIData(object):
         self.cld = None  # cathodoluminescnence detector (aka PMT)
         self.pcd = None  # Probe current detector (to measure actual e-beam current)
         self.spectrometer = None  # 1D detector that returns a spectrum
+        self.sp_ccd = None  # raw access to the spectrometer
         self.spectrometer_int = None  # second spectrometer, which has its detector also usable for AR (SPARCv2)
         self.spectrograph = None  # actuator to change the wavelength/grating (on SPARCv2, it's directly on the optical path)
         self.spectrograph_ded = None  # spectrograph connected via an optical fiber (SPARCv2)
