@@ -537,7 +537,7 @@ class CoupledStage(model.Actuator):
         self._executor.cancel()
         self._master.stop(axes)
         self._stage_conv.stop(axes)
-        logging.warning("Stopping all axes: %s", ", ".join(axes or self.axes))
+        logging.info("Stopping all axes: %s", ", ".join(axes or self.axes))
 
     def _doReference(self, axes):
         fs = []
