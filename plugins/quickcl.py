@@ -39,11 +39,14 @@ from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import img
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 from odemis.model import InstantaneousFuture
 import os
 import string
 import time
 import wx
+import re
+from odemis.util.dataio import splitext
 
 # Set to "True" to show a "Save" button
 ALLOW_SAVE = False
@@ -179,7 +182,8 @@ class QuickCLPlugin(Plugin):
         self.light = main_data.light
         self.ccd = main_data.ccd
 
-        self.filename = model.StringVA("", setter=self._set_filename)
+        self.conf = get_acqui_conf()
+        self.filename = model.StringVA("")
         self.filename.subscribe(self._on_filename)
 
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
@@ -241,67 +245,38 @@ class QuickCLPlugin(Plugin):
 
         self.addMenu("Acquisition/Quick CL...\tF2", self.start)
 
+
     def _get_new_filename(self):
-        conf = get_acqui_conf()
-        return os.path.join(
-            conf.last_path,
-            u"cl-%s-0000.png" % (time.strftime("%Y%m%d-%H%M%S"),)
-        )
-
-    def _get_filename_count(self, fn):
         """
-        Find a number pattern at the end of the filename (non including the extension)
-
-        return (str): the pattern
+        Get filename from pattern in conf file
         """
-        bn, ext = os.path.splitext(fn)
-        bn_ncnt = bn.rstrip(string.digits)
-        logging.debug("bn = %s, ncnt = %s", bn, bn_ncnt)
-        return bn[len(bn_ncnt):]
 
-    def _set_filename(self, fn):
-        """
-        Setter, which ensures there is always a -0000 pattern at the end of the filename
-        """
-        # Find a pattern, or add one if none present
-        cnt = self._get_filename_count(fn)
-        logging.debug("cnt = %s", cnt)
-        if not cnt:
-            bn, ext = os.path.splitext(fn)
-            fn = bn + "-0000" + ext
-            logging.debug("Updating filename to %s", fn)
-
+        fn = create_filename(self.conf.last_path, self.conf.fn_ptn, '.png', self.conf.fn_count)
+        self.conf.fn_count = update_counter(self.conf.fn_count)
         return fn
 
     def _on_filename(self, fn):
+        """
+        Warn if extension not .png, store path and pattern in conf file
+        """
         bn, ext = os.path.splitext(fn)
         if not ext.endswith(".png") and not ALLOW_SAVE:
             logging.warning("Only PNG format is recommended to use")
 
         # Store the directory so that next filename is in the same place
-        conf = get_acqui_conf()
         p, bn = os.path.split(fn)
         if p:
-            conf.last_path = p
+            self.conf.last_path = p
 
+        # Save pattern
+        self.conf.fn_ptn, self.conf.fn_count = guess_pattern(fn)
         logging.debug("Filename is now %s", self.filename.value)
 
-    def _bump_filename_number(self):
-        """
-        Find the digit pattern in the filename and replace by +1
-        """
-        fn = self.filename.value
-        bn, ext = os.path.splitext(fn)
-        num_str = self._get_filename_count(fn)
-        assert num_str, "No number in the filename"
-        n = int(num_str) + 1
-        fmt_str = ("%%0%dd" % len(num_str))
-        num_str = fmt_str % n
-        fn = bn[:-len(num_str)] + num_str + ext
-
-        logging.debug("Bumped filename to %s", num_str)
-
-        self.filename.value = fn
+        # Update filename in main window
+        main_data = self.main_app.main_data
+        tab_data = main_data.tab.value
+        bn, ext = splitext(fn)
+        tab_data.acquisition_controller.filename.value = bn + self.conf.last_extension
 
     def _update_exp_dur(self, _=None):
         """
@@ -489,7 +464,11 @@ class QuickCLPlugin(Plugin):
             logging.exception("Failed to store data in %s", fn)
 
         f.set_result(None)  # Indicate it's over
-        self._bump_filename_number()
+
+        # Don't unsubscribe from on_new_filename. The filename pattern is updated
+        # which is unnecessary, but not harmful. The function is also responsible for
+        # updating the filename in the main window, so it has to be called.
+        self.filename.value = self._get_new_filename()
 
     def save(self, dlg):
         """
@@ -519,4 +498,5 @@ class QuickCLPlugin(Plugin):
             logging.exception("Failed to store data in %s", fn)
 
         f.set_result(None)  # Indicate it's over
-        self._bump_filename_number()
+
+        self.filename.value = self._get_new_filename()
