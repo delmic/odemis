@@ -1095,10 +1095,13 @@ class ChamberTab(Tab):
             else:
                 ccd_focuser = None
             self._ccd_stream = acqstream.CameraStream("Chamber view",
-                                                      main_data.ccd, main_data.ccd.data,
-                                                      emitter=None,
-                                                      focuser=ccd_focuser,
-                                                      detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config))
+                                      main_data.ccd, main_data.ccd.data,
+                                      emitter=None,
+                                      focuser=ccd_focuser,
+                                      detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
+                                      forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                               model.MD_ROTATION: 0}  # Force the CCD as-is
+                                      )
             # Make sure image has square pixels and full FoV
             if hasattr(self._ccd_stream, "detBinning"):
                 self._ccd_stream.detBinning.value = (1, 1)
