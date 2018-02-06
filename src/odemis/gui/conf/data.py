@@ -254,6 +254,71 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "sp-ccd":
+        OrderedDict((
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (0.001, 60.0),  # Good for fluorescence microscopy
+                "type": "float",
+                "accuracy": 2,
+            }),
+            ("binning", {
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Number of pixels combined",
+                "choices": util.binning_1d_from_2d,
+            }),
+            ("resolution", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": util.resolution_from_range,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            # just here to enforce the order
+            ("gain", {}),
+            ("readoutRate", {}),
+            ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
+                "control_type": odemis.gui.CONTROL_NONE,
+                "scale": "cubic",
+                "range": (0, 500.0),
+                "accuracy": 2,
+                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
+                            u"Lower exposure times will force the shutter to stay open."),
+            }),
+            ("temperature", {}),
+            # what we don't want to display:
+            ("translation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("targetTemperature", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("fanSpeed", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # Advanced settings for andorcam2
+            ("verticalReadoutRate", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("verticalClockVoltage", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("emGain", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvert", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("countConvertWavelength", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
     "spectrometer":
         OrderedDict((
             ("exposureTime", {
