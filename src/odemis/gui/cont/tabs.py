@@ -2819,6 +2819,7 @@ class Sparc2AlignTab(Tab):
         spot_stream.should_update.value = True
         self._spot_stream = spot_stream
 
+        self._ccd_stream = None
         if main_data.ccd:
             # Force the "temperature" VA to be displayed by making it a hw VA
             hwdetvas = set()
@@ -2959,6 +2960,33 @@ class Sparc2AlignTab(Tab):
 
             doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_mirror.html")
             panel.html_moi_doc.AppendToPage(doc_cnt)
+        elif main_data.sp_ccd:
+            # Hack: if there is no CCD, let's display at least the sp-ccd.
+            # It might or not be useful. At least we can show the temperature.
+            hwdetvas = set()
+            if model.hasVA(main_data.sp_ccd, "temperature"):
+                hwdetvas.add("temperature")
+            mois = acqstream.CameraStream(
+                                "Alignment CCD for mirror",
+                                main_data.sp_ccd,
+                                main_data.sp_ccd.data,
+                                emitter=None,
+                                hwdetvas=hwdetvas,
+                                detvas=get_local_vas(main_data.sp_ccd, main_data.hw_settings_config),
+                                forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
+                                         model.MD_ROTATION: 0}  # Force the CCD as-is
+                                )
+            # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
+            if hasattr(mois, "detBinning"):
+                mois.detBinning.value = mois.detBinning.clip((2, 2))
+            self._moi_stream = mois
+
+            mois_spe = self._stream_controller.addStream(mois,
+                                add_to_view=self.panel.vp_moi.microscope_view)
+            mois_spe.stream_panel.flatten()
+
+            # To activate the SEM spot when the CCD plays
+            mois.should_update.subscribe(self._on_ccd_stream_play)
         else:
             self.panel.btn_bkg_acquire.Show(False)
 
@@ -3302,7 +3330,7 @@ class Sparc2AlignTab(Tab):
         # when the SEM stream is playing. Because that allows the user to see
         # the SEM image in the original SEM software (by pausing the stream),
         # while still being able to move the mirror.
-        ccdupdate = self._ccd_stream.should_update.value
+        ccdupdate = self._ccd_stream and self._ccd_stream.should_update.value
         spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
         moiupdate = self._moi_stream and self._moi_stream.should_update.value
         self._spot_stream.is_active.value = any((ccdupdate, spcupdate, moiupdate))
