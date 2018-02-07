@@ -1,3 +1,20 @@
+odemis (2.7.1-1) precise; urgency=medium
+
+  * New version: 2.7.1
+  * Main new features:
+    - Support for Zeiss SEM contron via the Remcon interface
+    - Add SyncDivider control to the picoquant driver
+    - Display spectrometer camera in SPARC alignment if no calibration camera
+  * Main bugs fixed:
+    - Avoid closed-loop axes staying locked on the physical limits (SECOM)
+    - Fix loading tileacq plugin
+    - Handle renamed Serialized TIFF with multiple streams
+    - Don't move the chamber view based on the stage position (SPARC)
+    - Store snapshot of spectrum with correct metadata (SPARC)
+    - Store the output of cliccd as a float, to avoid quantisation (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 07 Feb 2018 16:14:16 +0100
+
 odemis (2.7.0-1) precise; urgency=medium
 
   * New version: 2.7
