@@ -25,6 +25,7 @@ import ConfigParser
 import logging
 import math
 import os.path
+import time
 
 from odemis.dataio import tiff
 from odemis.acq.align import delphi
@@ -206,6 +207,19 @@ class AcquisitionConfig(Config):
         self.default.set("acquisition", "last_format", tiff.FORMAT)
         self.default.set("acquisition", "last_extension", tiff.EXTENSIONS[0])
 
+        # fn_ptn is a string representing a filename pattern. It may contain placeholders
+        # surrounded by curly braces such as {datelng}, {daterev}, {count}, ...
+        # These placeholders are replaced by the actual date/time/count when a filename is
+        # generated. The placeholder options and the related code can be found in
+        # odemis.util.filename. fn_count saves the latest count corresponding to a
+        # filename pattern as a string (possibly with leading zeros).
+        # Example: If the user saves the name 'test-20180101-05', the pattern
+        # 'test-{datelng}-{cnt}' will be generated and fn_count will be set to '05'. This
+        # pattern is used to suggest a new filename after the acquisition
+        # is completed.
+        self.default.set("acquisition", "fn_ptn", "{datelng}-{timelng}")
+        self.default.set("acquisition", "fn_count", "0")
+
         self.default.add_section("export")
         self.default.set("export", "last_path", ACQUI_PATH)
         # Cannot save the format, as it depends on the type, but at least remember
@@ -260,6 +274,23 @@ class AcquisitionConfig(Config):
     def export_raw(self, value):
         strval = "True" if value else "False"
         self.set("export", "raw", strval)
+
+    @property
+    def fn_ptn(self):
+        return self.get("acquisition", "fn_ptn")
+
+    @fn_ptn.setter
+    def fn_ptn(self, ptn):
+        self.set("acquisition", "fn_ptn", ptn)
+
+    @property
+    def fn_count(self):
+        return self.get("acquisition", "fn_count")
+
+    @fn_count.setter
+    def fn_count(self, cnt):
+        self.set("acquisition", "fn_count", cnt)
+
 
 
 class CalibrationConfig(Config):

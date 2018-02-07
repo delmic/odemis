@@ -49,6 +49,7 @@ from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.util import units
 from odemis.util.img import mergeTiles
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import re
 import subprocess
@@ -445,7 +446,8 @@ class SparcAcquiController(object):
         # At least, we must ensure it's a new date after the acquisition
         # is done.
         # Filename to save the acquisition
-        self.filename = model.StringVA(self._get_default_filename())
+        self.filename = model.StringVA(create_filename(self.conf.last_path, self.conf.fn_ptn,
+                                                       self.conf.last_extension, self.conf.fn_count))
         self.filename.subscribe(self._onFilename, init=True)
 
         # For acquisition
@@ -513,15 +515,6 @@ class SparcAcquiController(object):
                 vas.add(va)
         return vas
 
-    def _get_default_filename(self):
-        """
-        Return a good default filename
-        """
-        return os.path.join(self.conf.last_path,
-                            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
-                                             self.conf.last_extension)
-                            )
-
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
         # decompose into path/file
@@ -569,15 +562,29 @@ class SparcAcquiController(object):
         """
         self.update_acquisition_time() # to update the message
 
+    def update_fn_suggestion(self):
+        """
+        When the filename counter is updated in a plugin, the suggested name for
+        the main acquisition needs to be updated
+        """
+        self.filename.value = create_filename(self.conf.last_path, self.conf.fn_ptn,
+                                              self.conf.last_extension, self.conf.fn_count)
+
     def on_change_file(self, evt):
         """
         Shows a dialog to change the path, name, and format of the acquisition
         file.
         returns nothing, but updates .filename and .conf
         """
-        new_name = ShowAcquisitionFileDialog(self._tab_panel, self.filename.value)
+        # Update .filename with new filename instead of input name so the right
+        # time is used
+        fn = create_filename(self.conf.last_path, self.conf.fn_ptn,
+                             self.conf.last_extension, self.conf.fn_count)
+        new_name = ShowAcquisitionFileDialog(self._tab_panel, fn)
         if new_name is not None:
-            self.filename.value = new_name
+            self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
+            logging.debug('Generated filename pattern %s' % self.conf.fn_ptn)
+
 
     @wxlimit_invocation(1) # max 1/s
     def update_acquisition_time(self):
@@ -648,8 +655,12 @@ class SparcAcquiController(object):
         self._resume_streams()
 
         if not keep_filename:
-            # change filename, to ensure not overwriting anything
-            self.filename.value = self._get_default_filename()
+            self.conf.fn_count = update_counter(self.conf.fn_count)
+
+        # Update filename even if keep_filename is True (but don't update counter). This
+        # ensures that the time is always up to date.
+        self.filename.value = create_filename(self.conf.last_path, self.conf.fn_ptn,
+                                              self.conf.last_extension, self.conf.fn_count)
 
         if text is not None:
             self.lbl_acqestimate.SetLabel(text)

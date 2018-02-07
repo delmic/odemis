@@ -1,0 +1,134 @@
+# -*- coding: utf-8 -*-
+"""
+Created on 29 Jan 2018
+
+@author: Philip Winkler
+
+Copyright © 2018 Philip Winkler, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
+
+from __future__ import division
+import time
+import os
+import unittest
+from odemis.gui.util import get_home_folder
+from odemis.util.filename import create_filename, guess_pattern, update_counter
+
+date = time.strftime("%Y%m%d")
+daterev = time.strftime("%d%m%Y")
+timeshrt = time.strftime("%H%M")
+timeshrt_colon = time.strftime("%H:%M")
+timelng = time.strftime("%H%M%S")
+date_sl = time.strftime("%Y/%m/%d")
+timelng_sl = time.strftime("%H/%M/%S")
+
+EXTS = ('.tiff', '.ome.tiff', '.0.ome.tiff', '.h5', '.hdf5')
+PATH = get_home_folder()
+
+
+class TestFilenameSuggestions(unittest.TestCase):
+    """
+    Tests the util-acquisition functions for filename suggestions. 
+    """
+
+    def test_guess_pattern(self):
+        fn_ptns = {
+                   'test-123': ('test-{cnt}', '123'),
+                   '%stest-123' % date: ('{datelng}test-{cnt}', '123'),
+                   '123-test-%s' % date: ('{cnt}-test-{datelng}', '123'),
+                   'test-123-%s' % timeshrt: ('test-{cnt}-{timeshrt}', '123'),
+                   'test-123-%s' % timeshrt_colon: ('test-{cnt}-{timeshrt_colon}', '123'),
+                   '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
+                   'test-0000': ('test-{cnt}', '0000'),
+                   '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
+                   'test2-45': ('test2-{cnt}', '45'),
+                   'test': ('test-{cnt}', '001'),
+                   'test%s' % timeshrt: ('test{timelng}', '001'),
+                   '2018-cell5': ('{year}-cell{cnt}', '5'),
+                   '2018-{cell}{cnt}': ('{year}-{{cell}}{{cnt}}', '001')
+                    }
+
+        for fn, ptn in fn_ptns.items():
+            for ext in EXTS:
+                self.assertEqual(guess_pattern(fn), ptn)
+                fullfn = os.path.join(PATH, fn) + ext
+                self.assertEqual(guess_pattern(fullfn), ptn)
+
+    def test_create_filename(self):
+        # Test some time related patterns later, so that the right time is used
+        fn_ptns = {
+                   'test-123': ('test-{cnt}', '123'),
+                   '%stest-123' % date: ('{datelng}test-{cnt}', '123'),
+                   '123-test-%s' % date: ('{cnt}-test-{datelng}', '123'),
+                   'test-0000': ('test-{cnt}', '0000'),
+                   'test2-45': ('test2-{cnt}', '45')
+                    }
+
+        for fn, ptn in fn_ptns.items():
+            for ext in EXTS:
+                fullfn = os.path.join(PATH, fn) + ext
+                self.assertEqual(create_filename(PATH, ptn[0], ext, ptn[1]), fullfn)
+
+        # Assertion takes ~ 1e-4 seconds, so it's safe to assume that the time hasn't changed
+        self.assertEqual(create_filename(PATH, 'test-{cnt}-{timeshrt}', '.0.ome.tiff', '123'),
+                         os.path.join(PATH, 'test-123-%s.0.ome.tiff' % time.strftime('%H%M')))
+        self.assertEqual(create_filename(PATH, 'test-{cnt}-{timeshrt_colon}', '.0.ome.tiff', '123'),
+                         os.path.join(PATH, 'test-123-%s.0.ome.tiff' % time.strftime('%H:%M')))
+        self.assertEqual(create_filename(PATH, '{datelng}{timelng}-acquisition', '.tiff', '001'),
+                         os.path.join(PATH, '%s-acquisition.tiff' % time.strftime('%Y%m%d%H%M%S')))
+        self.assertEqual(create_filename(PATH, '{daterev}{timelng}', '.tiff', '001'),
+                         os.path.join(PATH, '%s.tiff' % time.strftime('%d%m%Y%H%M%S')))
+
+    def test_filename_is_unique(self):
+
+        fns = {
+            'test-123': 'test-124',
+            'test-0800': 'test-0800-1',  # 4-digit 0800 assumed to be time
+            'test-%s-1' % time.strftime('%Y%m%d'): 'test-%s-2' % time.strftime('%Y%m%d')
+            }
+        
+        for fn, new_fn in fns.items():
+            ext = '.0.ome.tiff'
+            # Create file
+            open('./%s%s' % (fn, ext), "w+").close()
+            ptn, cnt = guess_pattern(fn)
+            new_fullfn = os.path.join('.', new_fn) + ext
+            self.assertEqual(create_filename('.', ptn, ext, cnt), new_fullfn)
+            os.remove('./%s%s' % (fn, ext))
+            
+        # Check what happens is next proposed file is also already in directory
+        open('./test-123.tiff', "w+").close()
+        open('./test-124.tiff', "w+").close()
+
+        ptn, cnt = guess_pattern('./test-123')
+        new_fullfn = os.path.join('.', 'test-125.tiff')
+        self.assertEqual(create_filename('.', ptn, '.tiff', cnt), new_fullfn)
+
+        os.remove('./test-123.tiff')
+        os.remove('./test-124.tiff')
+
+    def test_update_counter(self):
+        self.assertEqual(update_counter('0'), '1')
+        self.assertEqual(update_counter('0005'), '0006')
+        self.assertEqual(update_counter('9'), '10')
+        self.assertEqual(update_counter('000'), '001')
+        self.assertRaises(AssertionError, update_counter, '-5')
+
+
+if __name__ == "__main__":
+    unittest.main()
+
