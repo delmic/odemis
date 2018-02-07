@@ -721,7 +721,7 @@ class SpectralARScanStream(stream.Stream):
 
 class ARspectral(Plugin):
     name = "AR/Spectral"
-    __version__ = "2.1"
+    __version__ = "2.2"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
@@ -932,8 +932,8 @@ class ARspectral(Plugin):
 
     def start(self):
         # get region and dwelltime for drift correction
-        self._ARspectral_s.dcRegion.value = self._acqui_tab.semStream.dcRegion.value
-        self._ARspectral_s.dcDwellTime.value = self._acqui_tab.semStream.dcDwellTime.value
+        self._ARspectral_s.dcRegion.value = self._acqui_tab.driftCorrector.roi.value
+        self._ARspectral_s.dcDwellTime.value = self._acqui_tab.driftCorrector.dwellTime.value
 
         # Update the grating position to its current position
         self.grating.value = self.sgrh.position.value["grating"]
@@ -981,10 +981,6 @@ class ARspectral(Plugin):
         except AttributeError: # Odemis v2.6 and earlier versions
             str_ctrl = self.main_app.main_data.tab.value.stream_controller
         stream_paused = str_ctrl.pauseStreams()
-
-        # For drift correction specify region and DwellTime:
-        self._ARspectral_s.dcRegion.value = self._acqui_tab.semStream.dcRegion.value
-        self._ARspectral_s.dcDwellTime.value = self._acqui_tab.semStream.dcDwellTime.value
 
         strs = []
         if self._survey_s:

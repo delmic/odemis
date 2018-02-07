@@ -32,6 +32,7 @@ import threading
 import time
 import weakref
 
+# TODO: move to odemis.acq (once it doesn't depend on odemis.acq.stream)
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)

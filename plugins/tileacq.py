@@ -51,7 +51,7 @@ import numpy
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
@@ -237,20 +237,18 @@ class TileAcqPlugin(Plugin):
             return
 
         tab = self.main_app.main_data.tab.value
+        tab.streambar_controller.pauseStreams()
 
-        # If no roi is selected, select entire area
+        # If no ROI is selected, select entire area
         try:
             if tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
                 tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
         except AttributeError:
             pass  # Not a SPARC
 
-        tab.streambar_controller.pauseStreams()
-
-        # Disable drift correction
-        if hasattr(tab.tab_data_model, "semStream"):
-            # SPARC
-            tab.tab_data_model.semStream.dcRegion.value = UNDEFINED_ROI
+        # Disable drift correction (on SPARC)
+        if hasattr(tab.tab_data_model, "driftCorrector"):
+            tab.tab_data_model.driftCorrector.roi.value = UNDEFINED_ROI
 
         ss = self._get_live_streams(tab.tab_data_model)
         self.filename.value = self._get_new_filename()

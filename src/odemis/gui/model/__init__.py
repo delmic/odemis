@@ -28,7 +28,7 @@ import collections
 import logging
 import math
 from odemis import model
-from odemis.acq import path
+from odemis.acq import path, leech
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
@@ -487,8 +487,8 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         self.acquisitionStreams = set()
 
         # The SEM concurrent stream that is used to select the acquisition settings
-        # eg, ROI (aka ROA), dcPeriod, dcRegion. It also gets Leeches to run during
-        # the entire series of acquisition.
+        # eg, ROI (aka ROA). It also gets Leeches to run during the entire
+        # series of acquisition (ie, the drift corrector and/or PCD acquirer).
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
@@ -498,6 +498,10 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         # The position of the spot. Two floats 0->1. (None, None) if undefined.
         self.spotPosition = model.TupleVA((None, None))
+
+        # The leech to be used for drift correction (AnchorDriftCorrector)
+        # It is set at start-up by the tab controller.
+        self.driftCorrector = None
 
         # Whether to use a scan stage (if there is one)
         self.useScanStage = model.BooleanVA(False, readonly=(main.scan_stage is None))

@@ -271,8 +271,20 @@ class AcquisitionTask(object):
         # acquired. Not absolutely needed, but nice for the user in some cases.
         raw_images = OrderedDict()  # stream -> list of raw images
         try:
+            # Tell the leeches that the acquisition is starting
             for s in self._streams:
+                try:
+                    for l in s.leeches:
+                        try:
+                            l.series_start()
+                        except Exception:
+                            logging.exception("Leech %s failed to start the series, "
+                                              "will pretend nothing happened", l)
+                except AttributeError:
+                    # No leeches
+                    pass
 
+            for s in self._streams:
                 # Get the future of the acquisition, depending on the Stream type
                 if hasattr(s, "acquire"):
                     f = s.acquire()
@@ -300,16 +312,31 @@ class AcquisitionTask(object):
                 # update the time left
                 expected_time -= self._streamTimes[s]
                 self._future.set_progress(end=time.time() + expected_time)
+
+            # Tell the leeches it's over. Note: we don't do it in case of
+            # (partial) error.
+            for s in self._streams:
+                try:
+                    for l in s.leeches:
+                        try:
+                            l.series_complete(s.raw)
+                        except Exception:
+                            logging.warning("Leech %s failed to complete the series",
+                                            l, exc_info=True)
+                except AttributeError:
+                    # No leeches
+                    pass
+
         except CancelledError:
             raise
-        except Exception as e:
+        except Exception as ex:
             # If no acquisition yet => just raise the exception,
             # otherwise, the results we got might already be useful
             if not raw_images:
                 raise
             logging.warning("Exception during acquisition (after some data already acquired)",
                             exc_info=True)
-            exp = e
+            exp = ex
         finally:
             # Don't hold references to the streams once it's over
             self._streams = []
