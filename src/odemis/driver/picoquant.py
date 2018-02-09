@@ -260,16 +260,16 @@ class PH300(model.Detector):
 
         tresbase, bs = self.GetBaseResolution()
         tres = self.GetResolution()
-        pxd_rng = (tresbase * 1e-12, 2 ** (BINSTEPSMAX - 1) * tresbase * 1e-12)
-        self.pixelDuration = model.FloatContinuous(tres, pxd_rng, unit="s",
+        pxd_ch = {2 ** i * tresbase * 1e-12 for i in range(BINSTEPSMAX)}
+        self.pixelDuration = model.FloatEnumerated(tres, pxd_ch, unit="s",
                                                    setter=self._setPixelDuration)
         self._metadata[model.MD_PIXEL_DUR] = tres
 
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
-        self.syncDiv = model.IntEnumerated(1, choices={1, 2, 4, 8},
-                                           unit="s", setter=self._setSyncDiv)
+        self.syncDiv = model.IntEnumerated(1, choices={1, 2, 4, 8}, unit="",
+                                           setter=self._setSyncDiv)
         self._setSyncDiv(self.syncDiv.value)
 
         self.syncOffset = model.FloatContinuous(0, (SYNCOFFSMIN * 1e-12, SYNCOFFSMAX * 1e-12),
