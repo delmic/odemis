@@ -72,14 +72,16 @@ class CorrelatorScanStream(stream.Stream):
         #dwell time and exposure time are the same thing in this case
         self.dwellTime = model.FloatContinuous(1, range=self._emitter.dwellTime.range,
                                                unit="s")
-        # pixelDuration of correlator (hard-coded for the PH300)
+        # pixelDuration of correlator, this can be shortened once implemented as choices.
         self.pixelDuration = model.FloatEnumerated(512e-12,
                                 choices={4e-12, 8e-12, 16e-12, 32e-12, 64e-12, 128e-12, 256e-12, 512e-12},
                                 unit="s",
                                 )
-        self.syncOffset = model.FloatContinuous(0, range=self._detector.syncOffset.range,
-                                                unit="s")
-
+        #Sync Offset time correlator
+        self.syncOffset = self._detector.syncOffset
+        #Sync Divider time correlator
+        self.syncDiv = self._detector.syncDiv 
+        
         # Distance between the center of each pixel
         self.stepsize = model.FloatContinuous(1e-6, (1e-9, 1e-4), unit="m")
 
@@ -97,6 +99,7 @@ class CorrelatorScanStream(stream.Stream):
                                               cls=(int, long, float))
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                                  range=emitter.dwellTime.range, unit="s")
+        #number of drift corrections per scanning pixel
         self.nDC = model.IntContinuous(1, (1, 20))
 
         # For acquisition
@@ -193,8 +196,8 @@ class CorrelatorScanStream(stream.Stream):
     def _runAcquisition(self, future):
 
         self._detector.pixelDuration.value = self.pixelDuration.value
-        self._detector.syncOffset.value = self.syncOffset.value
         logging.debug("Syncoffset used %s", self.syncOffset.value)
+        logging.debug("SyncDiv used %s", self.syncDiv.value)
 
         # number of drift corrections per pixel
         nDC = self.nDC.value
@@ -710,6 +713,9 @@ class Correlator2D(Plugin):
         }),
         ("syncOffset", {
         }),
+        ("syncDiv", {
+            "label": "Sync divider",
+        }),
         ("cropvalue", {
             "accuracy": None,  # Don't round value in plugin UI
         }),
@@ -734,8 +740,6 @@ class Correlator2D(Plugin):
             logging.debug("Hardware not found, cannot use the plugin")
             return
 
-        self.addMenu("Acquisition/CL time correlator scan...", self.start)
-
         # the SEM survey stream (will be updated when showing the window)
         self._survey_s = None
 
@@ -749,6 +753,7 @@ class Correlator2D(Plugin):
         self.dwellTime = self._correlator_s.dwellTime
         self.pixelDuration = self._correlator_s.pixelDuration
         self.syncOffset = self._correlator_s.syncOffset
+        self.syncDiv = self._correlator_s.syncDiv
 
         # The scanning positions are defined by ROI (as selected in the acquisition tab) + stepsize
         # Based on these values, the scanning resolution is computed
@@ -771,6 +776,8 @@ class Correlator2D(Plugin):
         # subscribe to update X/Y res
         self.stepsize.subscribe(self._update_res)
         self.roi.subscribe(self._update_res)
+
+        self.addMenu("Acquisition/CL time correlator scan...", self.start)
 
     def _update_exp_dur(self, _=None):
         """
@@ -832,8 +839,8 @@ class Correlator2D(Plugin):
 
     def start(self):
         # get region and dwelltime for drift correction
-        self._correlator_s.dcRegion.value = self._acqui_tab.semStream.dcRegion.value
-        self._correlator_s.dcDwellTime.value = self._acqui_tab.semStream.dcDwellTime.value
+        self._correlator_s.dcRegion.value = self._acqui_tab.driftCorrector.roi.value
+        self._correlator_s.dcDwellTime.value = self._acqui_tab.driftCorrector.dwellTime.value
 
         # get survey
         self._survey_s = self._get_sem_survey()
@@ -893,10 +900,6 @@ class Correlator2D(Plugin):
         except AttributeError:  # Odemis v2.6 and earlier
             str_ctrl = self.main_app.main_data.tab.value.stream_controller
         stream_paused = str_ctrl.pauseStreams()
-
-        # For drift correction specify region and DwellTime:
-        self._correlator_s.dcRegion.value = self._acqui_tab.semStream.dcRegion.value
-        self._correlator_s.dcDwellTime.value = self._acqui_tab.semStream.dcDwellTime.value
 
         strs = []
         if self._survey_s:
