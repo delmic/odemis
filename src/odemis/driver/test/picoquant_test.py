@@ -126,12 +126,11 @@ class TestPH300(unittest.TestCase):
         self.dev.dwellTime.value = dt
         df = self.dev.data
 
-        tres_rng = self.dev.pixelDuration.range
-
-        for i in range(1, 5):
-            self.dev.pixelDuration.value = tres_rng[0] * i
+        print self.dev.pixelDuration.choices
+        for i, pxdr in zip(range(1, 5), self.dev.pixelDuration.choices):
+            self.dev.pixelDuration.value = pxdr
             pxd = self.dev.pixelDuration.value
-            self.assertGreaterEqual(pxd, tres_rng[0])
+            self.assertGreaterEqual(pxd, pxdr)
 
             so = -10e-9 * i
             self.dev.syncOffset.value = so
