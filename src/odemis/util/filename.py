@@ -96,7 +96,7 @@ def guess_pattern(fn):
             fn_ptn = re.sub(time_ptn, "{timeshrt}", fn_ptn)
 
     # Detect count
-    cnt_ptn = '\d{1,5}'
+    cnt_ptn = r'\d{1,5}'
     cnt_m = None
     for m in re.finditer(cnt_ptn, fn_ptn):
         cnt_m = m
@@ -113,7 +113,11 @@ def guess_pattern(fn):
     if '{cnt}' not in fn_ptn:
         if '{timeshrt}' in fn_ptn:
             fn_ptn = re.sub('{timeshrt}', '{timelng}', fn_ptn)
-        elif '{timelng}' in fn_ptn:
+        if '{timeshrt_colon}' in fn_ptn:
+            fn_ptn = re.sub('{timeshrt_colon}', '{timelng_colon}', fn_ptn)
+        elif ("{timelng}" in fn_ptn or
+              "{timelng_colon}" in fn_ptn or
+              "{timelng_hyphen}" in fn_ptn):
             pass
         else:
             fn_ptn = fn_ptn + '-{cnt}'

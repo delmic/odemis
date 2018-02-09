@@ -375,16 +375,16 @@ class AcquisitionDialog(xrcfr_acq):
         file.
         returns nothing, but updates .filename and .conf
         """
-        new_name = ShowAcquisitionFileDialog(self, self.filename.value)
+        fn = create_filename(self.conf.last_path, self.conf.fn_ptn,
+                             self.conf.last_extension, self.conf.fn_count)
+        new_name = ShowAcquisitionFileDialog(self, fn)
         if new_name is not None:
             self.filename.value = new_name
+            self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
+            logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
             # It means the user wants to do a new acquisition
             self.btn_secom_acquire.SetLabel("START")
             self.last_saved_file = None
-
-        self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
-        logging.debug('Generated filename pattern %s' % self.conf.fn_ptn)
-
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
