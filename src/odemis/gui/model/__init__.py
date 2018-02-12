@@ -942,6 +942,7 @@ class StreamView(View):
             # the stage
             pos = self.stage_pos.value
             view_pos_init = (pos["x"], pos["y"])
+            self.stage_is_moving = BooleanVA(False)
         else:
             view_pos_init = (0, 0)
 
@@ -1179,6 +1180,7 @@ class StreamView(View):
             kwargs["update"] = True
 
         f = self._stage.moveRel(move, **kwargs)
+        self.stage_is_moving.value = True
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
         return f
@@ -1222,6 +1224,7 @@ class StreamView(View):
                              ax, p * 1e3)
 
         f = self._stage.moveAbs(move)
+        self.stage_is_moving.value = True
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
         return f
@@ -1233,6 +1236,8 @@ class StreamView(View):
         ex = f.exception()
         if ex:
             logging.warning("Stage move failed: %s", ex)
+
+        self.stage_is_moving.value = False
 
     def getStreams(self):
         """
