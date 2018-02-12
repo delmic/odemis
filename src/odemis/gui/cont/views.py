@@ -307,6 +307,9 @@ class OverviewController(object):
 
         self.curr_s = None
 
+        # Timer to detect when the stage ends moving
+        self._timer_pos = wx.PyTimer(self.add_pos_to_history)
+
         m_view.merge_ratio.subscribe(self._on_merge_ratio_change)
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
@@ -373,11 +376,23 @@ class OverviewController(object):
     def _on_merge_ratio_change(self, ratio):
         self.canvas.history_overlay.set_merge_ratio(ratio)
 
-    def on_stage_pos_change(self, p_pos):
+    def on_stage_pos_change(self, pos):
         """ Store the new position in the overview history when the stage moves,
         update the overview image """
 
-        # History
+        # If the stage hasn't moved within the next 0.5 s, we will considered it's
+        # stopped, and so will update the position. Without doing so, every stage position
+        # would be drawn, resulting in a very cluttered view.
+        # wx.CallLater can only be used from main thread, therefore we need CallAfter
+        # to get the same functionality. The timer is reset every time the function is
+        # called (_timer_pos.Stop), so that we always wait for the correct number
+        # of milliseconds.
+        wx.CallAfter(self._timer_pos.Stop)
+        wx.CallAfter(self._timer_pos.Start, milliseconds=500, oneShot=True)
+
+    def add_pos_to_history(self):
+        """ Add position to history and draw corresponding rectangle. """
+        p_pos = self.main_data.stage.position.value
         p_size = self.calc_stream_size()
         p_center = (p_pos['x'], p_pos['y'])
         stage_history = self._data_model.stage_history.value
@@ -393,9 +408,6 @@ class OverviewController(object):
 
         stage_history.append((p_center, p_size))
         self._data_model.stage_history.value = stage_history
-
-        # Update overview image
-        self._update_ovv()
 
     def _on_current_stream(self, streams):
         """
