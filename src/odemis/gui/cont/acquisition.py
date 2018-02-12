@@ -582,9 +582,9 @@ class SparcAcquiController(object):
                              self.conf.last_extension, self.conf.fn_count)
         new_name = ShowAcquisitionFileDialog(self._tab_panel, fn)
         if new_name is not None:
+            self.filename.value = new_name
             self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
-            logging.debug('Generated filename pattern %s' % self.conf.fn_ptn)
-
+            logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
 
     @wxlimit_invocation(1) # max 1/s
     def update_acquisition_time(self):
