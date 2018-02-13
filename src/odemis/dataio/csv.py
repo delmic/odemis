@@ -29,6 +29,7 @@ FORMAT = "CSV"
 EXTENSIONS = [u".csv"]
 
 LOSSY = True  # because it only supports AR in phi/theta and spectrum in wavelength/intensity format export
+CAN_SAVE_PYRAMID = False
 
 
 def export(filename, data):

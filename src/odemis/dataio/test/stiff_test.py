@@ -33,7 +33,8 @@ import os
 import time
 import unittest
 from unittest.case import skip
-
+import libtiff
+import libtiff.libtiff_ctypes as T  # for the constant names
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -783,7 +784,7 @@ class TestTiffIO(unittest.TestCase):
         thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
 
         # export
-        tiff.export(FILENAME, ldata, thumbnail, multiple_files=True, pyramid=True)
+        stiff.export(FILENAME, ldata, thumbnail, pyramid=True)
 
         tokens = FILENAME.split(".0.", 1)
         # Iterate through the files generated
@@ -804,6 +805,119 @@ class TestTiffIO(unittest.TestCase):
                     subim = im  # TODO: should it always be 5 dim?
                 self.assertEqual(subim.shape, sizes[i][-1::-1])
                 self.assertEqual(subim[white[-1:-3:-1]], ldata[i][white[-1:-3:-1]])
+
+    def testExportMultiArrayPyramid(self):
+        """
+        Checks that we can export and read back the metadata and data of 1 SEM image,
+        2 optical images, 1 RGB imagem and a RGB thumnail
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "brightfield",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "blue dye",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_BPP: 12,
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                     model.MD_DIMS: "YXC",
+                     # In order to test shear is applied even without rotation
+                     # provided. And also check that *_COR is merged into its
+                     # normal metadata brother.
+                     # model.MD_SHEAR: 0.03,
+                     model.MD_SHEAR_COR: 0.003,
+                    },
+                    ]
+        # create 3 greyscale images of same size
+        size = (5120, 7680)
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        # iterate on the first 3 metadata items
+        for i, md in enumerate(metadata[:-1]):
+            nparray = numpy.zeros(size[::-1], dtype)
+            a = model.DataArray(nparray, md.copy())
+            a[i, i + 10] = i  # "watermark" it
+            ldata.append(a)
+
+        # write a RGB image
+        a = model.DataArray(numpy.zeros((514, 516, 3), dtype), metadata[3].copy())
+        a[8:24, 24:40] = [5, 8, 13]  # "watermark" a square
+        ldata.append(a)
+
+        # thumbnail : small RGB completely green
+        tshape = (size[1] // 8, size[0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail.metadata[model.MD_DIMS] = "YXC"
+        thumbnail.metadata[model.MD_POS] = (13.7e-3, -30e-3)
+        thumbnail[:, :, 1] += 255  # green
+
+        # export
+        stiff.export(FILENAME, ldata, thumbnail, pyramid=True)
+
+        tokens = FILENAME.split(".0.", 1)
+        self.no_of_images = 4
+        # Iterate through the files generated
+        for file_index in range(self.no_of_images):
+            fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
+            # check it's here
+            st = os.stat(fname)  # this test also that the file is created
+
+            self.assertGreater(st.st_size, 0)
+            f = libtiff.TIFF.open(FILENAME)
+
+            # read all images and subimages and store in main_images
+            main_images = []
+            count = 0
+            for im in f.iter_images():
+                zoom_level_images = []
+                zoom_level_images.append(im)
+                # get an array of offsets, one for each subimage
+                sub_ifds = f.GetField(T.TIFFTAG_SUBIFD)
+                if not sub_ifds:
+                    main_images.append(zoom_level_images)
+                    f.SetDirectory(count)
+                    count += 1
+                    continue
+
+                for n in xrange(len(sub_ifds)):
+                    # set the offset of the current subimage
+                    f.SetSubDirectory(sub_ifds[n])
+                    # read the subimage
+                    subim = f.read_image()
+                    zoom_level_images.append(subim)
+
+                f.SetDirectory(count)
+                count += 1
+
+                main_images.append(zoom_level_images)
+
+            # check the total number of main images
+            self.assertEqual(len(main_images), 1)
+
+            # check the sizes of each grayscale pyramidal image
+            for main_image in main_images:
+                self.assertEqual(len(main_image), 6)
+                self.assertEqual(main_image[0].shape, (7680, 5120))
+                self.assertEqual(main_image[1].shape, (3840, 2560))
+                self.assertEqual(main_image[2].shape, (1920, 1280))
+                self.assertEqual(main_image[3].shape, (960, 640))
+                self.assertEqual(main_image[4].shape, (480, 320))
+                self.assertEqual(main_image[5].shape, (240, 160))
 
 
 if __name__ == "__main__":
