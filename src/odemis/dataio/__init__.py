@@ -60,7 +60,7 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
         except Exception:
             logging.info("Skipping exporter %s, which failed to load", module_name)
             continue # module cannot be loaded
-        if not allowlossy and hasattr(exporter, "LOSSY") and exporter.LOSSY:
+        if not allowlossy and exporter.LOSSY:
             logging.debug("Skipping exporter %s as it is lossy", module_name)
             continue
         if ((mode == os.O_RDONLY and not hasattr(exporter, "read_data")) or

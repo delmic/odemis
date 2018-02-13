@@ -66,6 +66,7 @@ STIFF_SPLIT = ".0."  # pattern to replace with the "stiff" multiple file
 
 CAN_SAVE_PYRAMID = True # indicates the support for pyramidal export
 TILE_SIZE = 256 # Tile size of pyramidal images
+LOSSY = False
 
 # We try to make it as much as possible looking like a normal (multi-page) TIFF,
 # with as much metadata as possible saved in the known TIFF tags. In addition,

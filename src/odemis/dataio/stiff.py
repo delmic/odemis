@@ -27,6 +27,8 @@ from odemis.dataio import tiff
 FORMAT = "Serialized TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [u".0.ome.tiff"]
+CAN_SAVE_PYRAMID = True
+LOSSY = False
 
 # An almost identical OME-XML metadata block is inserted into the first IFD of
 # each constituent OME-TIFF file. This is for redundancy purposes: if only a
@@ -34,7 +36,8 @@ EXTENSIONS = [u".0.ome.tiff"]
 # the files in the set has identical metadata apart from the UUID, the unique
 # identifier of a file.
 
-def export(filename, data, thumbnail=None, compressed=True):
+
+def export(filename, data, thumbnail=None, compressed=True, pyramid=False):
     '''
     Write a collection of multiple OME-TIFF files with the given images and 
     metadata
@@ -48,4 +51,4 @@ def export(filename, data, thumbnail=None, compressed=True):
       it will be dropped silently.
     compressed (boolean): whether the file is compressed or not.
     '''
-    tiff.export(filename, data, thumbnail, compressed, multiple_files=True)
+    tiff.export(filename, data, thumbnail, compressed, multiple_files=True, pyramid=pyramid)

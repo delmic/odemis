@@ -35,6 +35,8 @@ import time
 FORMAT = "HDF5"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [u".h5", u".hdf5"]
+LOSSY = False
+CAN_SAVE_PYRAMID = False
 
 # We are trying to follow the same format as SVI, as defined here:
 # http://www.svi.nl/HDF5
