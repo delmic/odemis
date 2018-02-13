@@ -73,6 +73,15 @@ class MenuController(object):
                         main_frame.menu_item_reset_finealign.GetId(),
                         self._on_reset_align)
 
+        # Assign 'Reset overview' functionality (if the tab exists)
+        if main_data.role == "secom":
+            wx.EVT_MENU(main_frame,
+                        main_frame.menu_item_reset_overview.GetId(),
+                        self._on_reset_overview)
+            self._main_frame.menu_item_reset_overview.Enable(True)
+        else:
+            menu_file.RemoveItem(main_frame.menu_item_reset_overview)
+
         if main_data.microscope:
             wx.EVT_MENU(main_frame,
                         main_frame.menu_item_halt.GetId(),
@@ -209,6 +218,9 @@ class MenuController(object):
 
         # Will be enabled next time fine alignment is set
         self._main_frame.menu_item_reset_finealign.Enable(False)
+
+    def _on_reset_overview(self, _):
+        self._main_data.tab.value.overview_controller.reset_ovv()
 
     def _get_current_stream(self):
         """
