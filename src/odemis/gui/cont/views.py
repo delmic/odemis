@@ -373,6 +373,21 @@ class OverviewController(object):
         ovv_im.metadata[MD_POS] = self.m_view.view_pos.value
         return ovv_im, mpp
 
+    def reset_ovv(self):
+        """
+        Reset the overview image and history after a new sample has been loaded
+        """
+        self.ovv_im[:] = 0
+        self.im_opt[:] = 0
+        self.im_sem[:] = 0
+
+        # Empty the stage history, as the interesting locations on the previous
+        # sample have probably nothing in common with this new sample
+        self._data_model.stage_history.value = self._data_model.stage_history.value[-1:]
+
+        self.upd_stream.update(self.ovv_im)
+        self.canvas.fit_view_to_content()
+
     def _on_merge_ratio_change(self, ratio):
         self.canvas.history_overlay.set_merge_ratio(ratio)
 
@@ -435,9 +450,8 @@ class OverviewController(object):
         # We don't wait for CHAMBER_VACUUM, as the optical stream can already
         # be used as soon as the sample is inserted
         if state == CHAMBER_PUMPING:
-            # Empty the stage history, as the interesting locations on the previous
-            # sample have probably nothing in common with this new sample
-            self._data_model.stage_history.value = self._data_model.stage_history.value[-1:]
+            # Reset the built-up overview image and history overlay after loading a new sample.
+            self.reset_ovv()
 
     def _update_ovv(self):
         """ Update the overview image with the currently active stream. """
