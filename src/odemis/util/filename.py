@@ -22,10 +22,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
+import logging
+from odemis.util.dataio import splitext
+import os
 import re
 import time
-import os
-from odemis.util.dataio import splitext
 
 
 def guess_pattern(fn):
@@ -136,28 +138,36 @@ def create_filename(path, ptn, ext, count="001"):
         fn (String): unique filename (including path and extension)
     """
 
-    fn = ptn.format(datelng=time.strftime("%Y%m%d"),
-                       daterev=time.strftime("%d%m%Y"),
-                       datelng_hyphen=time.strftime("%Y-%m-%d"),
-                       daterev_hyphen=time.strftime("%d-%m-%Y"),
-                       year=("%Y"),
-                       timelng=time.strftime("%H%M%S"),
-                       timelng_colon=time.strftime("%H:%M:%S"),
-                       timelng_hyphen=time.strftime("%H-%M-%S"),
-                       timeshrt=time.strftime("%H%M"),
-                       timeshrt_colon=time.strftime("%H:%M"),
-                       timeshrt_hyphen=time.strftime("%H-%M"),
-                       cnt='%s' % count)
+    def generate_fn(ptn, count):
+        return ptn.format(datelng=time.strftime("%Y%m%d"),
+                          daterev=time.strftime("%d%m%Y"),
+                          datelng_hyphen=time.strftime("%Y-%m-%d"),
+                          daterev_hyphen=time.strftime("%d-%m-%Y"),
+                          year=("%Y"),
+                          timelng=time.strftime("%H%M%S"),
+                          timelng_colon=time.strftime("%H:%M:%S"),
+                          timelng_hyphen=time.strftime("%H-%M-%S"),
+                          timeshrt=time.strftime("%H%M"),
+                          timeshrt_colon=time.strftime("%H:%M"),
+                          timeshrt_hyphen=time.strftime("%H-%M"),
+                          cnt='%s' % count)
+
+    fn = generate_fn(ptn, count)
 
     # Ensure filename is unique
-    while fn + ext in os.listdir(path):
-        m = re.search('[^0-9](\d{1,3}|\d{5})$', fn)  # assume 4-digit numbers are time, don't increase
-        if m:
-            cnt = m.group(0)[1:]
-            fn = fn[:-len(cnt)] + update_counter(cnt)
-        else:
-            fn = re.sub('$', '-1', fn)
-            # will be checked again and updated in the if-part until the name is unique
+    try:
+        while fn + ext in os.listdir(path):
+            count = update_counter(count)
+            new_fn = generate_fn(ptn, count)
+            if new_fn == fn:
+                # No counter in the pattern => add one
+                ptn += "-{cnt}"
+                count = "001"
+            else:
+                fn = new_fn
+    except OSError as ex:
+        # Mostly in case "path" doesn't exists
+        logging.warning("%s, will not check filename is unique", ex)
 
     return os.path.join(path, fn + ext)
 

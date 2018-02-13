@@ -97,19 +97,21 @@ class TestFilenameSuggestions(unittest.TestCase):
 
         fns = {
             'test-123': 'test-124',
-            'test-0800': 'test-0800-1',  # 4-digit 0800 assumed to be time
-            'test-%s-1' % time.strftime('%Y%m%d'): 'test-%s-2' % time.strftime('%Y%m%d')
+            'test 0800 great': 'test 0801 great',
+            'test-%s-1' % time.strftime('%Y%m%d'): 'test-%s-2' % time.strftime('%Y%m%d'),
+            'booo': 'booo-001',
             }
-        
+
         for fn, new_fn in fns.items():
             ext = '.0.ome.tiff'
             # Create file
             open('./%s%s' % (fn, ext), "w+").close()
             ptn, cnt = guess_pattern(fn)
             new_fullfn = os.path.join('.', new_fn) + ext
-            self.assertEqual(create_filename('.', ptn, ext, cnt), new_fullfn)
+            next_fullfn = create_filename('.', ptn, ext, cnt)
+            self.assertEqual(next_fullfn, new_fullfn)
             os.remove('./%s%s' % (fn, ext))
-            
+
         # Check what happens is next proposed file is also already in directory
         open('./test-123.tiff', "w+").close()
         open('./test-124.tiff', "w+").close()
