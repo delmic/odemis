@@ -42,10 +42,8 @@ from odemis.gui.util import img
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 from odemis.model import InstantaneousFuture
 import os
-import string
 import time
 import wx
-import re
 from odemis.util.dataio import splitext
 
 # Set to "True" to show a "Save" button
@@ -245,21 +243,23 @@ class QuickCLPlugin(Plugin):
 
         self.addMenu("Acquisition/Quick CL...\tF2", self.start)
 
-
-    def _get_new_filename(self):
+    def _update_filename(self):
         """
-        Get filename from pattern in conf file
+        Set filename from pattern in conf file
         """
-
         fn = create_filename(self.conf.last_path, self.conf.fn_ptn, '.png', self.conf.fn_count)
         self.conf.fn_count = update_counter(self.conf.fn_count)
-        return fn
+
+        # Update the widget, without updating the pattern and counter again
+        self.filename.unsubscribe(self._on_filename)
+        self.filename.value = fn
+        self.filename.subscribe(self._on_filename)
 
     def _on_filename(self, fn):
         """
         Warn if extension not .png, store path and pattern in conf file
         """
-        bn, ext = os.path.splitext(fn)
+        bn, ext = splitext(fn)
         if not ext.endswith(".png") and not ALLOW_SAVE:
             logging.warning("Only PNG format is recommended to use")
 
@@ -270,13 +270,6 @@ class QuickCLPlugin(Plugin):
 
         # Save pattern
         self.conf.fn_ptn, self.conf.fn_count = guess_pattern(fn)
-        logging.debug("Filename is now %s", self.filename.value)
-
-        # Update filename in main window
-        main_data = self.main_app.main_data
-        tab_data = main_data.tab.value
-        bn, ext = splitext(fn)
-        tab_data.acquisition_controller.filename.value = bn + self.conf.last_extension
 
     def _update_exp_dur(self, _=None):
         """
@@ -339,9 +332,9 @@ class QuickCLPlugin(Plugin):
         for s in tab_data.streams.value:
             s.should_update.value = False
 
-        # First time, use the date
+        # First time, create a proper filename
         if not self.filename.value:
-            self.filename.value = self._get_new_filename()
+            self._update_filename()
         self._update_exp_dur()
 
         # immediately switch optical path, to save time
@@ -395,6 +388,10 @@ class QuickCLPlugin(Plugin):
         # Make sure the streams are not playing anymore
         dlg.streambar_controller.pauseStreams()
         self._dlg = None
+
+        # Update filename in main window
+        tab_acqui = main_data.getTabByName("sparc_acqui")
+        tab_acqui.acquisition_controller.update_fn_suggestion()
 
     def _acq_canceller(self, future):
         return future._cur_f.cancel()
@@ -464,11 +461,7 @@ class QuickCLPlugin(Plugin):
             logging.exception("Failed to store data in %s", fn)
 
         f.set_result(None)  # Indicate it's over
-
-        # Don't unsubscribe from on_new_filename. The filename pattern is updated
-        # which is unnecessary, but not harmful. The function is also responsible for
-        # updating the filename in the main window, so it has to be called.
-        self.filename.value = self._get_new_filename()
+        self._update_filename()
 
     def save(self, dlg):
         """
@@ -498,5 +491,4 @@ class QuickCLPlugin(Plugin):
             logging.exception("Failed to store data in %s", fn)
 
         f.set_result(None)  # Indicate it's over
-
-        self.filename.value = self._get_new_filename()
+        self._update_filename()
