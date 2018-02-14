@@ -1593,11 +1593,6 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Now, proper acquisition
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
-        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
-        dc.period.value = 5
-        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
-        dc.dwellTime.value = 1e-06
-        sems.leeches.append(dc)
 
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-6  # s
@@ -1608,19 +1603,17 @@ class SPARC2TestCase(unittest.TestCase):
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
         start = time.time()
-        dc.series_start()
         f = sms.acquire()
 
         # wait until it's over
         data = f.result(timeout)
-        dc.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sms.raw))
 
-        # Both SEM and CL should have the same shape (and last one is anchor region)
-        self.assertEqual(len(sms.raw), 3)
+        # Both SEM and CL should have the same shape
+        self.assertEqual(len(sms.raw), 2)
         self.assertEqual(sms.raw[0].shape, exp_res[::-1])
         self.assertEqual(sms.raw[1].shape, exp_res[::-1])
         sem_md = sms.raw[0].metadata
@@ -1630,11 +1623,13 @@ class SPARC2TestCase(unittest.TestCase):
         numpy.testing.assert_allclose(cl_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(cl_md[model.MD_PIXEL_SIZE], exp_pxs)
 
-        # Now same thing but with more pixels
+        # Now same thing but with more pixels and drift correction
         mcs.roi.value = (0.3, 0.1, 1.0, 0.8)
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
         dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
 
         mcs.repetition.value = (3000, 4000)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
