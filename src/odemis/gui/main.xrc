@@ -38,6 +38,13 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_reset_overview">
+          <label>Reset Overview Image</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_halt">
           <label>Stop all Axes</label>
           <accel>Pause</accel>

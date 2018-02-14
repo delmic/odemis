@@ -41,6 +41,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
         self.menu_item_export_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_export_as"))
         self.menu_item_reset_finealign = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_finealign"))
+        self.menu_item_reset_overview = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_overview"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_recalibrate = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_recalibrate"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
@@ -554,6 +555,13 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_reset_finealign">
           <label>Reset Fine Alignment</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_reset_overview">
+          <label>Reset Overview Image</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
@@ -6371,23 +6379,11 @@ X\xabe\x88v\xae1\xb2\xe8P+\x82kXP0R\xda\xd4e\x9d\xea\x91\x9axy\x09\xa7\x02\
 \x89PNG\x0d
 \x1a
 \x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00 \x08\x06\x00\x00\x00\xe3\
-i\x03;\x00\x00\x00\x19tEXtSoftware\x00Adobe ImageReadyq\xc9e<\x00\x00\x03\
-&iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\xbf\
-" id="W5M0MpCehiHzreSzNTczkc9d"?> <x:xmpmeta xmlns:x="adobe:ns:meta/" x\
-:xmptk="Adobe XMP Core 5.6-c067 79.157747, 2015/03/30-23:40:42        "\
-> <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"> <rd\
-f:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xml\
-ns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:stRef="http://ns.adobe\
-.com/xap/1.0/sType/ResourceRef#" xmp:CreatorTool="Adobe Photoshop CC 20\
-15 (Windows)" xmpMM:InstanceID="xmp.iid:9578D5C1FC5311E58120D4CED8063C3\
-8" xmpMM:DocumentID="xmp.did:9578D5C2FC5311E58120D4CED8063C38"> <xmpMM:\
-DerivedFrom stRef:instanceID="xmp.iid:9578D5BFFC5311E58120D4CED8063C38"\
- stRef:documentID="xmp.did:9578D5C0FC5311E58120D4CED8063C38"/> </rdf:De\
-scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>4\x05\xe6w\x00\x00\
-\x03eIDATx\xda\x94W\xcbJ\\A\x10\xad~\x8c\x8e#\x88\xe0B\xf0\xb1P\xb7\xc9\
-"\xab\xe0F\x17.\x0c\x09\x88\xe0\x0f\xf8\x0b~@\xc0$\x10\xb2\xc8\x9f$!\x04\
-\x92\xa5\xf8\xc0\xcd\x90mV\x83\xb3\x18\x84\xe0\xca\x95\xa23\xce\xedNu\xdb\
-=\xa9[\xa9{5\x0d5\xdd\xd3s\xfb\x9e\xae\xaaS\x8fQ\xde{\x03\x00\x1aE\xa5\x99
+i\x03;\x00\x00\x03bIDATH\xc7\x95W\xcbJ\\A\x10\xad~\x8c\x8e#\x88\xe0B\xf0\
+\xb1P\xb7\xc9"\xab\xe0F\x17.\x0c\x09\x88\xe0\x0f\xf8\x0b~@\xc0$\x10\xb2\
+\xc8\x9f$!\x04\x92\xa5\xf8\xc0\xcd\x90mV\x83\xb3\x18\x84\xe0\xca\x95\xa2\
+3\xce\xedNu\xdb=\xa9[\xa9{5\x0d5\xdd\xd3s\xfb\x9e\xae\xaaS\x8fQ\xde{\x03\
+\x00\x1aE\xa5\x99
 \xa4}\x05\xe5\xe1\x898&^\x908,\x012I4\x99\x15\x13\x10^T\x10\xa0"I\xbe\x04\
 \xbd\\\x04\xa3@&\xed\x19\xa2\x9d\x04\x06\x0c,K~\xbeH\xcf\x94\x00-\xd1$H\
 #I\xfe\xae\x88y\x15\xbf)\xd1`HD\x93u\x09\xd0\x12\x0d\xc2\xba\xb1\xb7\xb7\
@@ -6418,8 +6414,8 @@ scription> </rdf:RDF> </x:xmpmeta> <?xpacket end="r"?>4\x05\xe6w\x00\x00\
 \xb3\xd9\xe4\xc9\xdcY\x12\x90\x9a4\x97\x10z\x8f\x95\x95\x95P\xee\x81Q\xb9\
 v\xa0\xa6\x11(\xb5\x82\xb4\x81u\x819M\xe2\xe8\xaa&U\xf2A\xddo<Y\xc7\xd4\
 F5\xa3\x07\x8c\x90!\xa4\xe4\xaa**\x83#\xb9s\xa4\x99%7\xe1\x07\xaa:\xaf*\
-0/\xd4\xbf\xd2\x9f\x0dK^\x9c{\x0dM\xf6\xa0\x86\xd2P\x13S\xd2\xdf(\xf7G\x80\
-\x01\x00\xb4}\xc6\xca\x1ay\xca1\x00\x00\x00\x00IEND\xaeB`\x82'''
+0/\xd4\xbf\xd2\x9f\x0dK^\x9c{\x0dM\xf6\xa0\x86\xd2P\x13S\xd2\xdf(\xf7\x07\
+\xb4}\xc6\xcaf\xffA\xa0\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     img_icon_ico_press_png = '''\
 \x89PNG\x0d
