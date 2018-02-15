@@ -548,7 +548,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._arfile_ctrl = self._pnl_arfile.add_file_btn(
             "AR background",
             tooltip="Angle-resolved background acquisition file",
-            clear= "None").value_ctrl
+            clear="None").value_ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(odemis.dataio.get_available_formats(),
                                                             include_all=True)
         self._arfile_ctrl.SetWildcard(wildcards)
