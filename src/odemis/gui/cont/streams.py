@@ -909,8 +909,7 @@ class StreamBarController(object):
         self._scheduler_subscriptions = {}  # stream -> callable
         self._sched_policy = SCHED_LAST_ONE  # works well in most cases
 
-        if stream_bar.btn_add_stream:
-            self._createAddStreamActions()
+        self._createAddStreamActions()
 
         # Don't hide or show stream panel when the focused view changes
         self.ignore_view = ignore_view
@@ -945,8 +944,7 @@ class StreamBarController(object):
         for stream_controller in self.stream_controllers:
             stream_controller.enable(enabled)
 
-        if self._stream_bar.btn_add_stream:
-            self._stream_bar.btn_add_stream.Enable(enabled)
+        self._stream_bar.btn_add_stream.Enable(enabled)
 
     # unused (but in test case)
     def get_actions(self):

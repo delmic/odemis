@@ -1281,19 +1281,14 @@ class StreamBar(wx.Panel):
         self.txt_no_stream = wx.StaticText(self, -1, msg)
         self._sz.Add(self.txt_no_stream, 0, wx.ALL | wx.ALIGN_CENTER, 10)
 
-        self.btn_add_stream = None
-
-        if add_btn:
-            self.btn_add_stream = buttons.PopupImageButton(
-                self, -1,
-                label="ADD STREAM",
-                style=wx.ALIGN_CENTER
-            )
-
-            self.btn_add_stream.SetForegroundColour("#999999")
-            self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
-
-            # self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
+        self.btn_add_stream = buttons.PopupImageButton(
+            self, -1,
+            label="ADD STREAM",
+            style=wx.ALIGN_CENTER
+        )
+        self.btn_add_stream.SetForegroundColour("#999999")
+        self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
+        self.btn_add_stream.Show(add_btn)
 
         self.fit_streams()
 
@@ -1345,9 +1340,6 @@ class StreamBar(wx.Panel):
 
     # === Event Handlers
 
-    # def on_add_stream(self, evt):
-    #     evt.Skip()
-
     def on_stream_remove(self, evt):
         """
         Called when user request to remove a stream via the stream panel
@@ -1368,14 +1360,12 @@ class StreamBar(wx.Panel):
 
     # === API of the stream panel
     def show_add_button(self):
-        if self.btn_add_stream:
-            self.btn_add_stream.Show()
-            self.fit_streams()
+        self.btn_add_stream.Show()
+        self.fit_streams()
 
     def hide_add_button(self):
-        if self.btn_add_stream:
-            self.btn_add_stream.Hide()
-            self.fit_streams()
+        self.btn_add_stream.Hide()
+        self.fit_streams()
 
     def is_empty(self):
         return len(self.stream_panels) == 0
