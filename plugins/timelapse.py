@@ -41,39 +41,15 @@ from odemis.acq.stream._base import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.util.dataio import splitext
 import os
 import time
 import wx
 
-try:
-    from odemis.util.dataio import splitext
-except ImportError:
-    # This is a fallback for Odemis 2.6, which doesn't have this function
-    # When Odemis v2.7 is released, this can go away
-    def splitext(path):
-        """
-        Split a pathname into basename + ext (.XXX).
-        Does pretty much the same as os.path.splitext, but handles "double" extensions
-        like ".ome.tiff".
-        """
-        root, ext = os.path.splitext(path)
-
-        # See if there is a longer extension in the known formats
-        fmts = dataio.get_available_formats(mode=os.O_RDWR, allowlossy=True)
-        # Note, this one-liner also works, but brain-teasers are not good code:
-        # max((fe for fes in fmts.values() for fe in fes if path.endswith(fe)), key=len)
-        for fmtexts in fmts.values():
-            for fmtext in fmtexts:
-                if path.endswith(fmtext) and len(fmtext) > len(ext):
-                    ext = fmtext
-
-        root = path[:len(path) - len(ext)]
-        return root, ext
-
 
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -86,6 +62,11 @@ class TimelapsePlugin(Plugin):
         }),
         ("numberOfAcquisitions", {
             "control_type": odemis.gui.CONTROL_INT,  # no slider
+        }),
+        ("semOnlyOnLast", {
+            "label": "SEM only on the last",
+            "tooltip": "Acquire SEM images only once, after the timelapse",
+            "control_type": odemis.gui.CONTROL_NONE,  # hidden by default
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
@@ -104,11 +85,16 @@ class TimelapsePlugin(Plugin):
                                             setter=self._setPeriod)
         # TODO: prevent period < acquisition time of all streams
         self.numberOfAcquisitions = model.IntContinuous(100, (2, 1000))
+        self.semOnlyOnLast = model.BooleanVA(False)
         self.filename = model.StringVA("a.h5")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
         self.period.subscribe(self._update_exp_dur)
         self.numberOfAcquisitions.subscribe(self._update_exp_dur)
+
+        # On SECOM/DELPHI, propose to only acquire the SEM at the end
+        if microscope.role in ("secom", "delphi"):
+            self.vaconf["semOnlyOnLast"]["control_type"] = odemis.gui.CONTROL_CHECK
 
         self._dlg = None
         self.addMenu("Acquisition/Timelapse...\tCtrl+T", self.start)
@@ -126,13 +112,15 @@ class TimelapsePlugin(Plugin):
         """
         nb = self.numberOfAcquisitions.value
         p = self.period.value
-        ss = self._get_acq_streams()
+        ss, last_ss = self._get_acq_streams()
 
         sacqt = acq.estimateTime(ss)
         logging.debug("Estimating %g s acquisition for %d streams", sacqt, len(ss))
         intp = max(0, p - sacqt)
 
         dur = sacqt * nb + intp * (nb - 1)
+        if last_ss:
+            dur += acq.estimateTime(ss + last_ss) - sacqt
 
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(dur), force_write=True)
@@ -140,7 +128,7 @@ class TimelapsePlugin(Plugin):
     def _setPeriod(self, period):
         # It should be at least as long as the acquisition time of all the streams
         tot_time = 0
-        for s in self._get_acq_streams():
+        for s in self._get_acq_streams()[0]:
             acqt = s.estimateAcquisitionTime()
             # Normally we round-up in order to be pessimistic on the duration,
             # but here it's better to be a little optimistic and allow the user
@@ -150,16 +138,6 @@ class TimelapsePlugin(Plugin):
             tot_time += acqt
 
         return min(max(tot_time, period), self.period.range[1])
-
-    def _get_streams(self):
-        """
-        Returns the streams set as visible in the acquisition dialog
-        """
-        if not self._dlg:
-            return []
-        ss = self._dlg.microscope_view.getStreams()
-        logging.debug("View has %d streams", len(ss))
-        return ss
 
     def _get_live_streams(self, tab_data):
         """
@@ -179,30 +157,40 @@ class TimelapsePlugin(Plugin):
     def _get_acq_streams(self):
         """
         Return the streams that should be used for acquisition
+        return:
+           acq_st (list of streams): the streams to be acquired at every repetition
+           last_st (list of streams): streams to be acquired at the end
         """
+        if not self._dlg:
+            return []
+
+        live_st = self._dlg.microscope_view.getStreams()
+        logging.debug("View has %d streams", len(live_st))
+
         # On the SPARC, the acquisition streams are not the same as the live
         # streams. On the SECOM/DELPHI, they are the same (for now)
-        live_st = self._get_streams()
         tab_data = self.main_app.main_data.tab.value.tab_data_model
-        if hasattr(tab_data, "acquisitionStreams"): # Odemis v2.7+
+        if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
-        elif hasattr(tab_data, "acquisitionView"):  # Odemis v2.6 and earlier
-            acq_st = tab_data.acquisitionView.getStreams()
+            # Discard the acquisition streams which are not visible
+            ss = []
+            for acs in acq_st:
+                if isinstance(acs, stream.MultipleDetectorStream):
+                    if any(subs in live_st for subs in acs.streams):
+                        ss.append(acs)
+                        break
+                elif acs in live_st:
+                    ss.append(acs)
         else:
             # No special acquisition streams
-            return live_st
+            ss = live_st
 
-        # Discard the acquisition streams which are not visible
-        ss = []
-        for acs in acq_st:
-            if isinstance(acs, stream.MultipleDetectorStream):
-                if any(subs in live_st for subs in acs.streams):
-                    ss.append(acs)
-                    break
-            elif acs in live_st:
-                ss.append(acs)
+        last_ss = []
+        if self.semOnlyOnLast.value:
+            last_ss = [s for s in ss if isinstance(s, stream.EMStream)]
+            ss = [s for s in ss if not isinstance(s, stream.EMStream)]
 
-        return ss
+        return ss, last_ss
 
     def start(self):
         # Fail if the live tab is not selected
@@ -248,7 +236,7 @@ class TimelapsePlugin(Plugin):
 
         # TODO: disable "acquire" button if no stream selected
 
-        # TODO: don't even try to display streams which have no spactial projection
+        # TODO: don't even try to display streams which have no spatial projection
 
         # TODO: also display the repetition and axis settings for the SPARC streams.
 
@@ -264,7 +252,7 @@ class TimelapsePlugin(Plugin):
     def acquire(self, dlg):
         nb = self.numberOfAcquisitions.value
         p = self.period.value
-        ss = self._get_acq_streams()
+        ss, last_ss = self._get_acq_streams()
 
         fn = self.filename.value
         exporter = dataio.find_fittest_converter(fn)
@@ -289,6 +277,10 @@ class TimelapsePlugin(Plugin):
         for i in range(nb):
             left = nb - i
             dur = sacqt * left + intp * (left - 1)
+            if left == 1 and last_ss:
+                ss += last_ss
+                dur += acq.estimateTime(ss) - sacqt
+
             startt = time.time()
             f.set_progress(end=startt + dur)
             das, e = acq.acquire(ss).result()
