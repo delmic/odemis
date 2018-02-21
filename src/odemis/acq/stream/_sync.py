@@ -1441,7 +1441,8 @@ class SEMMDStream(MultipleDetectorStream):
             spots_sum = 0
             while spots_sum < tot_num:
                 # Acquire the maximum amount of pixels until next leech
-                npixels = min(np if np is not None else (tot_num - spots_sum) for np in leech_np)
+                npixels = min([np for np in leech_np if np is not None] +
+                              [tot_num - spots_sum])  # max, in case of no leech
                 n_y, n_x = leech.get_next_rectangle((rep[1], rep[0]), spots_sum, npixels)
                 npixels = n_x * n_y
                 # get_next_rectangle() takes care of always fitting in the
