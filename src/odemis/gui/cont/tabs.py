@@ -1406,36 +1406,31 @@ class ChamberTab(Tab):
 
 class AnalysisTab(Tab):
     """ Handle the loading and displaying of acquisition files
-
-    Creation
-    ~~~~~~~~
-
-    During creation, the following controllers are created:
-
-    ViewPortController
-      Processes the given viewports by creating views for them, determining which stream classes
-      those views can handle and finally assigning them to their viewport.
-
-    StreamController
-      Keeps track of the available streams, which are all static
-
-    ViewButtonController
-        blah blah
-
-    Loading Data
-    ~~~~~~~~~~~~
-
-    In the `load_data` method the file data is loaded using the appropriate converter. It's then
-    passed on to the `display_new_data` method, which analyzes which static streams need to be
-    created. The StreamController is then asked to create the actual stream object and it also adds
-    them to every view which supports that (sub)type of stream.
-
     """
-
     def __init__(self, name, button, panel, main_frame, main_data):
         """
         microscope will be used only to select the type of views
         """
+        # During creation, the following controllers are created:
+        #
+        # ViewPortController
+        #   Processes the given viewports by creating views for them, and
+        #   assigning them to their viewport.
+        #
+        # StreamBarController
+        #   Keeps track of the available streams, which are all static
+        #
+        # ViewButtonController
+        #   Connects the views to their thumbnails and show the right one(s)
+        #   based on the model.
+        #
+        # In the `load_data` method the file data is loaded using the
+        # appropriate converter. It's then passed on to the `display_new_data`
+        # method, which analyzes which static streams need to be created. The
+        # StreamController is then asked to create the actual stream object and
+        # it also adds them to every view which supports that (sub)type of
+        # stream.
+
         # TODO: automatically change the display type based on the acquisition
         # displayed
         tab_data = guimod.AnalysisGUIData(main_data)

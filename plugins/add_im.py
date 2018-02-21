@@ -42,7 +42,11 @@ class ImageAdderPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(ImageAdderPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Overlay/Add image...", self.pick_image)
+
+        # Add a menu entry in the "Add Stream" button under the streams
+        tab = self.main_app.main_data.getTabByName("analysis")
+        tab.stream_bar_controller._stream_bar.show_add_button()
+        tab.stream_bar_controller.add_action("From file...", self.pick_image)
 
     def pick_image(self):
         # Use a good default folder to start with
