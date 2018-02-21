@@ -4,7 +4,7 @@
 
 @author: Rinze de Laat
 
-Copyright © 2014Rinze de Laat, Delmic
+Copyright © 2014, 2018 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -48,7 +48,6 @@ class FileBrowser(wx.Panel):
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=0,
                  dialog_style=wx.FD_OPEN,
-                 tool_tip=None,
                  clear_btn=False,
                  clear_label="",
                  dialog_title="Browse for file",
@@ -56,7 +55,6 @@ class FileBrowser(wx.Panel):
                  name='fileBrowser',
                  file_path=None,
                  default_dir=None,
-
         ):
 
         style |= wx.TAB_TRAVERSAL
@@ -189,22 +187,24 @@ class FileBrowser(wx.Panel):
 
     def _on_browse(self, evt):
         current = self.GetValue() or ""
-        directory = os.path.split(current)
-
-        if os.path.isdir(current):
-            directory = current
-            current = ""
-        elif directory and os.path.isdir(directory[0]):
-            current = directory[1]
-            directory = directory[0]
+        if current and os.path.isdir(current):
+            path = current
+            bn = ""
         else:
-            directory = self.default_dir
-            current = ""
+            path, bn = os.path.split(current)
+            if not (path and os.path.isdir(path)):
+                path = self.default_dir
+                bn = ""
 
-        dlg = wx.FileDialog(self, self.dialog_title, directory, current,
+        dlg = wx.FileDialog(self, self.dialog_title, path, bn,
                             wildcard=self.wildcard,
                             style=self.dialog_style)
 
         if dlg.ShowModal() == wx.ID_OK:
-            self._SetValue(dlg.GetPath(), raise_event=True)
+            fullpath = dlg.GetPath()
+            self._SetValue(fullpath, raise_event=True)
+            # Update default_dir so that if the value is cleared, we start from
+            # this directory
+            self.default_dir = os.path.dirname(fullpath)
+
         dlg.Destroy()
