@@ -7,7 +7,9 @@ SetCompressorDictSize 64
 !include MultiUser.nsh
 
 ; HM NIS Edit Wizard helper defines
+; These ones are defined via the command line (to select Delphi/Odemis Viewer)
 ;!define PRODUCT_NAME "OdemisViewer"
+;!define PRODUCT_HNAME "Odemis Viewer"
 ; Product version is defined through the command line!
 !define PRODUCT_PUBLISHER "Delmic"
 !define PRODUCT_WEB_SITE "${WEBSITE}"
@@ -45,9 +47,12 @@ SetCompressorDictSize 64
 
 ; File association. For information see
 ; http://nsis.sourceforge.net/File_Association
+; http://nsis.sourceforge.net/FileAssoc
 ; https://msdn.microsoft.com/en-us/library/cc144175(VS.85).aspx
 ; https://msdn.microsoft.com/en-us/library/windows/desktop/hh127445(v=vs.85).aspx
 !include "FileAssociation.nsh"
+; FIXME: only include/use this one
+!include "FileAssoc.nsh"
 
 ; MUI end ------
 
@@ -66,10 +71,12 @@ Section "MainSection" SEC01
   CreateShortCut "$SMPROGRAMS\${PRODUCT_HNAME}\${PRODUCT_HNAME}.lnk" "$INSTDIR\${PRODUCT_NAME}.exe"
   CreateShortCut "$DESKTOP\${PRODUCT_HNAME}.lnk" "$INSTDIR\${PRODUCT_NAME}.exe"
 
-  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".tiff" "TIFF"
-  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".tif" "TIFF"
-  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".h5" "HDF5"
-  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".hdf5" "HDF5"
+  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".tiff" "Odemis.TIFF"
+  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".tif" "Odemis.TIFF"
+  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".h5" "Odemis.HDF5"
+  ${registerExtension} "$INSTDIR\${PRODUCT_NAME}.exe" ".hdf5" "Odemis.HDF5"
+  ; Tell the Windows shell to recheck the registry.
+  !insertmacro UPDATEFILEASSOC
 SectionEnd
 
 Section -AdditionalIcons
@@ -83,7 +90,7 @@ Section -Post
   WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\${PRODUCT_NAME}.exe"
 
   ; User friendly app name (without .exe)
-  WriteRegStr HKCR "Applications\${PRODUCT_NAME}.exe" "" "${PRODUCT_HNAME}"
+  ;WriteRegStr HKCR "Applications\${PRODUCT_NAME}.exe" "" "${PRODUCT_HNAME}"
   WriteRegStr HKCR "Applications\${PRODUCT_NAME}.exe" "DefaultIcon" "$INSTDIR\${PRODUCT_NAME}.exe"
   WriteRegStr HKCR "Applications\${PRODUCT_NAME}.exe" "FriendlyAppName" "${PRODUCT_HNAME}"
 
@@ -145,8 +152,9 @@ Section Uninstall
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
   SetAutoClose true
 
-  ${unregisterExtension} ".tiff" "TIFF"
-  ${unregisterExtension} ".tif" "TIFF"
-  ${unregisterExtension} ".h5" "HDF5"
-  ${unregisterExtension} ".hdf5" "HDF5"
+  ${unregisterExtension} ".tiff" "Odemis.TIFF"
+  ${unregisterExtension} ".tif" "Odemis.TIFF"
+  ${unregisterExtension} ".h5" "Odemis.HDF5"
+  ${unregisterExtension} ".hdf5" "Odemis.HDF5"
+  !insertmacro UPDATEFILEASSOC
 SectionEnd
