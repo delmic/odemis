@@ -28,9 +28,9 @@ import logging
 import math
 import numpy
 from odemis import model
-from odemis.acq._futures import executeTask
 from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
+from odemis.util import executeAsyncTask
 from odemis.util.spot import FindCenterCoordinates
 import threading
 import time
@@ -94,11 +94,8 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, dfbkg=None, rng_f=N
     f._centerspotf = model.InstantaneousFuture()
 
     # Run in separate thread
-    alignment_thread = threading.Thread(target=executeTask,
-                  name="Spot alignment",
-                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type, dfbkg, rng_f))
-
-    alignment_thread.start()
+    executeAsyncTask(f, _DoAlignSpot,
+                     args=(f, ccd, stage, escan, focus, type, dfbkg, rng_f))
     return f
 
 def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f):
@@ -365,11 +362,8 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, dfbkg=None):
     f._center_lock = threading.Lock()
 
     # Run in separate thread
-    center_thread = threading.Thread(target=executeTask,
-                  name="Spot center",
-                  args=(f, _DoCenterSpot, f, ccd, stage, escan, mx_steps, type, dfbkg))
-
-    center_thread.start()
+    executeAsyncTask(f, _DoCenterSpot,
+                     args=(f, ccd, stage, escan, mx_steps, type, dfbkg))
     return f
 
 

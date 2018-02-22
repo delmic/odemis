@@ -172,34 +172,6 @@ def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
     return maxtab, mintab
 
 
-# def Fit(spectrum, wavelength, type='gaussian'):
-#     """
-#     Wrapper for _DoFit. It provides the ability to check the progress of fitting
-#     procedure or even cancel it.
-#     spectrum (1d array of floats): The data representing the spectrum.
-#     wavelength (1d array of floats): The wavelength values corresponding to the
-#     spectrum given.
-#     type (str): Type of fitting to be applied (for now only ‘gaussian’ and
-#     ‘lorentzian’ are available).
-#     returns (model.ProgressiveFuture):  Progress of DoFit
-#     """
-#     # Create ProgressiveFuture and update its state to RUNNING
-#     est_start = time.time() + 0.1
-#     f = model.ProgressiveFuture(start=est_start,
-#                                 end=est_start + estimateFitTime())
-#     f._fit_state = RUNNING
-#     f._fit_lock = threading.Lock()
-#     f.task_canceller = _CancelFit
-#
-#     # Run in separate thread
-#     fit_thread = threading.Thread(target=executeTask,
-#                                         name="Fitting",
-#                                         args=(f, _DoFit, f, spectrum, wavelength, type))
-#
-#     fit_thread.start()
-#     return f
-
-
 class PeakFitter(object):
     def __init__(self):
         # will take care of executing peak fitting asynchronously

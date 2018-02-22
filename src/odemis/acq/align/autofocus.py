@@ -25,17 +25,17 @@ from __future__ import division
 import collections
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import cv2
 import logging
 import numpy
 from odemis import model
-from odemis.acq._futures import executeTask
 from odemis.model import InstantaneousFuture
+from odemis.util import executeAsyncTask
 from odemis.util.img import Subtract
 from scipy import ndimage
 import threading
 import time
 
-import cv2
 
 MTD_BINARY = 0
 MTD_EXHAUSTIVE = 1
@@ -613,12 +613,8 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
     else:
         raise ValueError("Unknown autofocus method")
 
-    autofocus_thread = threading.Thread(target=executeTask,
-                                        name="Autofocus",
-                                        args=(f, autofocus_fn, f, detector, emt,
-                                              focus, dfbkg, good_focus, rng_focus))
-
-    autofocus_thread.start()
+    executeAsyncTask(f, autofocus_fn,
+                     args=(f, detector, emt, focus, dfbkg, good_focus, rng_focus))
     return f
 
 
@@ -662,12 +658,8 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
     f._subfuture = InstantaneousFuture()
 
     # Run in separate thread
-    autofocus_thread = threading.Thread(target=executeTask,
-                                        name="Spectrometer Autofocus",
-                                        args=(f, _DoAutoFocusSpectrometer, f,
-                                              spectrograph, focuser, detectors, selector))
-
-    autofocus_thread.start()
+    executeAsyncTask(f, _DoAutoFocusSpectrometer,
+                     args=(f, spectrograph, focuser, detectors, selector))
     return f
 
 
