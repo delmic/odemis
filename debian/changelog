@@ -1,3 +1,15 @@
+odemis (2.7.2-1) precise; urgency=medium
+
+  * New version: 2.7.2
+  * Main bugs fixed:
+    - Associate Odemis Viewer to TIFF and HDF5 files in Windows too
+    - Don't keep the old overview image when inserting a new sample (DELPHI)
+    - Show PicoHarp SyncDivider option in the time-correlator plugin
+    - Support saving pyramidal image in Serialized TIFF too
+    - When doing large moves, don't show every intermediary position in the overview image (SECOM/DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 23 Feb 2018 09:09:34 +0100
+
 odemis (2.7.1-1) precise; urgency=medium
 
   * New version: 2.7.1
