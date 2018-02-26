@@ -30,12 +30,11 @@ import math
 from numpy import array, linalg
 import numpy
 from odemis import model
-from odemis.acq._futures import executeTask
 from odemis.acq.align import transform, spot, autofocus, FindOverlay
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.acq.drift import MeasureShift
 from odemis.dataio import tiff
-from odemis.util import img
+from odemis.util import img, executeAsyncTask
 import os
 from scipy.ndimage import zoom
 import threading
@@ -153,11 +152,7 @@ def DelphiCalibration(main_data):
     f.running_subf = model.InstantaneousFuture()
 
     # Run in separate thread
-    delphi_calib_thread = threading.Thread(target=executeTask,
-                                           name="Delphi Calibration",
-                                           args=(f, _DoDelphiCalibration, f, main_data))
-
-    delphi_calib_thread.start()
+    executeAsyncTask(f, _DoDelphiCalibration, args=(f, main_data))
     return f
 
 
@@ -635,12 +630,9 @@ def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus, logpath=No
     f.running_subf = model.InstantaneousFuture()
 
     # Run in separate thread
-    offset_thread = threading.Thread(target=executeTask,
-                                     name="Align and offset",
-                                     args=(f, _DoAlignAndOffset, f, ccd, detector, escan, sem_stage, opt_stage,
-                                           focus, logpath))
-
-    offset_thread.start()
+    executeAsyncTask(f, _DoAlignAndOffset,
+                     args=(f, ccd, detector, escan, sem_stage, opt_stage,
+                           focus, logpath))
     return f
 
 
@@ -810,12 +802,9 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
 
     f._autofocus_f = model.InstantaneousFuture()
     # Run in separate thread
-    rotation_thread = threading.Thread(target=executeTask,
-                                       name="Rotation and scaling",
-                                       args=(f, _DoRotationAndScaling, f, ccd, detector, escan, sem_stage, opt_stage,
-                                             focus, offset, manual, logpath))
-
-    rotation_thread.start()
+    executeAsyncTask(f, _DoRotationAndScaling,
+                     args=(f, ccd, detector, escan, sem_stage, opt_stage,
+                           focus, offset, manual, logpath))
     return f
 
 
@@ -1015,10 +1004,9 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, manual=False,
     f._autofocus_f = model.InstantaneousFuture()
 
     # Run in separate thread
-    t = threading.Thread(target=executeTask, name="Hole detection",
-                         args=(f, _DoHoleDetection, f, detector, escan,
-                               sem_stage, ebeam_focus, manual, logpath))
-    t.start()
+    executeAsyncTask(f, _DoHoleDetection,
+                     args=(f, detector, escan, sem_stage, ebeam_focus,
+                           manual, logpath))
     return f
 
 
@@ -1320,11 +1308,8 @@ def LensAlignment(navcam, sem_stage, logpath=None):
     f._task_lock = threading.Lock()
 
     # Run in separate thread
-    lens_thread = threading.Thread(target=executeTask,
-                                   name="Lens alignment",
-                                   args=(f, _DoLensAlignment, f, navcam, sem_stage, logpath))
-
-    lens_thread.start()
+    executeAsyncTask(f, _DoLensAlignment,
+                     args=(f, navcam, sem_stage, logpath))
     return f
 
 
@@ -1391,9 +1376,7 @@ def HFWShiftFactor(detector, escan, logpath=None):
     f._task_lock = threading.Lock()
 
     # Run in separate thread
-    t = threading.Thread(target=executeTask, name="HFW Shift Factor",
-                         args=(f, _DoHFWShiftFactor, f, detector, escan, logpath))
-    t.start()
+    executeAsyncTask(f, _DoHFWShiftFactor, args=(f, detector, escan, logpath))
     return f
 
 
@@ -1552,9 +1535,8 @@ def ResolutionShiftFactor(detector, escan, logpath=None):
     f._task_lock = threading.Lock()
 
     # Run in separate thread
-    t = threading.Thread(target=executeTask, name="Resolution Shift Factor",
-                         args=(f, _DoResolutionShiftFactor, f, detector, escan, logpath))
-    t.start()
+    executeAsyncTask(f, _DoResolutionShiftFactor,
+                     args=(f, detector, escan, logpath))
     return f
 
 
@@ -1722,9 +1704,8 @@ def ScaleShiftFactor(detector, escan, logpath=None):
     f._task_lock = threading.Lock()
 
     # Run in separate thread
-    t = threading.Thread(target=executeTask, name="Scale Shift Factor",
-                         args=(f, _DoScaleShiftFactor, f, detector, escan, logpath))
-    t.start()
+    executeAsyncTask(f, _DoScaleShiftFactor,
+                     args=(f, detector, escan, logpath))
     return f
 
 

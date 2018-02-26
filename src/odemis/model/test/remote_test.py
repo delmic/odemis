@@ -31,7 +31,7 @@ from multiprocessing.process import Process
 import numpy
 from odemis import model
 from odemis.model import roattribute, oneway, isasync, VigilantAttributeBase
-from odemis.util import mock, timeout
+from odemis.util import mock, timeout, executeAsyncTask
 import os
 import pickle
 import sys
@@ -894,10 +894,8 @@ class MyComponent(model.Component):
         end = start + 10
         f = model.ProgressiveFuture(start, end)
 
-        # run executeTask in a thread
-        thread = threading.Thread(target=executeTask, name="Long task",
-                            args=(f, self._long_pessimistic_task, f, duration))
-        thread.start()
+        # run in a separate thread
+        executeAsyncTask(f, self._long_pessimistic_task, args=(f, duration))
         return f
 
     def _long_pessimistic_task(self, future, duration):
@@ -938,31 +936,6 @@ class MyComponent(model.Component):
     @oneway
     def stopServer(self):
         self._pyroDaemon.shutdown()
-
-
-def executeTask(future, fn, *args, **kwargs):
-    """
-    Executes a task represented by a future.
-    Usually, called as main task of a (separate thread).
-    Based on the standard futures code _WorkItem.run()
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    *args, **kwargs: passed to the fn
-    returns None: when the task is over (or cancelled)
-    """
-    if not future.set_running_or_notify_cancel():
-        return
-
-    try:
-        result = fn(*args, **kwargs)
-    except CancelledError:
-        # cancelled via the future (while running) => it's all already handled
-        pass
-    except BaseException:
-        e = sys.exc_info()[1]
-        future.set_exception(e)
-    else:
-        future.set_result(result)
 
 
 class FamilyValueComponent(model.Component):

@@ -36,7 +36,7 @@ from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, \
     OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream
-from odemis.util import img, fluo
+from odemis.util import img, fluo, executeAsyncTask
 import sys
 import threading
 import time
@@ -44,7 +44,6 @@ import time
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
 # because it's a bit strange dependency. => just move to a acq.manager module?
-
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
 # background. You are in charge of ensuring that no other acquisition is
@@ -54,7 +53,6 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-
 def acquire(streams):
     """ Start an acquisition task for the given streams.
 
@@ -78,10 +76,8 @@ def acquire(streams):
     task = AcquisitionTask(streams, future)
     future.task_canceller = task.cancel # let the future cancel the task
 
-    # run executeTask in a thread
-    thread = threading.Thread(target=_futures.executeTask, name="Acquisition task",
-                              args=(future, task.run))
-    thread.start()
+    # connect the future to the task and run in a thread
+    executeAsyncTask(future, task.run)
 
     # return the interface to manipulate the task
     return future

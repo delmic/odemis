@@ -25,12 +25,12 @@ from functools import partial
 import gc
 import logging
 from odemis import util
-from odemis.util import limit_invocation, TimeoutError
+from odemis.model import CancellableFuture
+from odemis.util import limit_invocation, TimeoutError, executeAsyncTask
 from odemis.util import timeout
 import time
 import unittest
 import weakref
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -94,6 +94,26 @@ class TestTimeout(unittest.TestCase):
     def toolong(self):
         # will always timeout
         time.sleep(1)
+
+
+class TestExectuteTask(unittest.TestCase):
+
+    def test_execute(self):
+        f = CancellableFuture()
+        t = executeAsyncTask(f, self.long_task, args=(42,), kwargs={"d": 3})
+        self.assertFalse(f.done())
+        time.sleep(0.1)
+        self.assertTrue(f.running())
+        r = f.result()
+        self.assertEqual(r, -1)
+        self.assertEqual(self._v, 42)
+        self.assertEqual(self._d, 3)
+
+    def long_task(self, v, d=1):
+        self._v = v
+        self._d = d
+        time.sleep(1)
+        return -1
 
 
 class SortedAccordingTestCase(unittest.TestCase):

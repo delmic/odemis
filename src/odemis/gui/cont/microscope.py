@@ -27,7 +27,6 @@ import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq import align, stream
-from odemis.acq._futures import executeTask
 from odemis.acq.align import delphi
 from odemis.gui import img
 from odemis.gui.conf import get_calib_conf
@@ -37,6 +36,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
     EllipsisAnimator
 from odemis.model import VigilantAttributeBase, InstantaneousFuture
+from odemis.util import executeAsyncTask
 import threading
 import time
 import wx
@@ -1258,11 +1258,7 @@ class DelphiStateController(SecomStateController):
         f._delphi_load_lock = threading.Lock()
 
         # Run in separate thread
-        delphi_load_thread = threading.Thread(target=executeTask,
-                      name="Delphi Loading",
-                      args=(f, self._DoDelphiLoading, f))
-
-        delphi_load_thread.start()
+        executeAsyncTask(f, self._DoDelphiLoading, args=(f,))
         return f
 
     def _DoDelphiLoading(self, future):

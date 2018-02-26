@@ -22,52 +22,22 @@ from concurrent.futures._base import CancelledError, FINISHED, CANCELLED, \
     CANCELLED_AND_NOTIFIED, RUNNING
 import logging
 from odemis import model
+from odemis.util import executeAsyncTask
 import sys
 import threading
 import time
-
-
-def executeTask(future, fn, *args, **kwargs):
-    """
-    Executes a task represented by a future.
-    Usually, called as main task of a (separate thread).
-    Based on the standard futures code _WorkItem.run()
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    *args, **kwargs: passed to the fn
-    returns None: when the task is over (or cancelled)
-    """
-    if not future.set_running_or_notify_cancel():
-        return
-
-    try:
-        result = fn(*args, **kwargs)
-    except CancelledError:
-        # cancelled via the future (while running) => it's all already handled
-        pass
-    except BaseException:
-        e, tb = sys.exc_info()[1:]
-        try:
-            future.set_exception_info(e, tb)
-        except AttributeError:  # Old futures (<v3) only had the non-traceback version
-            future.set_exception(e)
-    else:
-        future.set_result(result)
 
 
 def wrapSimpleStreamIntoFuture(stream):
     """
     Starts one stream acquisition and return a Future
     Works with streams having only .is_active and .image .
-    returns (Future that returns list of DataArray): the acquisition task 
+    returns (Future that returns list of DataArray): the acquisition task
     """
     # Create a Future, not started yet
     future = SimpleStreamFuture(stream)
-    # run executeTask in a thread that will actually run/wait the acquisition
-    thread = threading.Thread(target=executeTask,
-                              name="Simple stream Future runner",
-                              args=(future, future._run))
-    thread.start()
+    # run in a separate thread
+    executeAsyncTask(future, future._run)
     return future
 
 

@@ -35,10 +35,10 @@ import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.acq import _futures, leech
+from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
-from odemis.util import img, units, spot
+from odemis.util import img, units, spot, executeAsyncTask
 import random
 import threading
 import time
@@ -296,10 +296,7 @@ class MultipleDetectorStream(Stream):
         f.task_canceller = self._cancelAcquisition
 
         # run task in separate thread
-        self._acq_thread = threading.Thread(target=_futures.executeTask,
-                              name="Multiple detector acquisition",
-                              args=(f, self._runAcquisition, f))
-        self._acq_thread.start()
+        executeAsyncTask(f, self._runAcquisition, args=(f,))
         return f
 
     def _updateProgress(self, future, dur, current, tot, bonus=0):

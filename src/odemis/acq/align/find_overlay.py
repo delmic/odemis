@@ -32,9 +32,8 @@ import math
 import numpy
 from odemis import model
 from odemis import util
-from odemis.acq._futures import executeTask
 from odemis.dataio import tiff
-from odemis.util import TimeoutError, img, spot
+from odemis.util import TimeoutError, img, spot, executeAsyncTask
 from odemis.util.img import Subtract
 import os
 import threading
@@ -85,13 +84,9 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
     f._gscanner = GridScanner(repetitions, dwell_time, escan, ccd, detector, bgsub)
 
     # Run in separate thread
-    overlay_thread = threading.Thread(target=executeTask,
-                                      name="SEM/CCD overlay",
-                                      args=(f, _DoFindOverlay, f, repetitions,
-                                            dwell_time, max_allowed_diff, escan,
-                                            ccd, detector, skew))
-
-    overlay_thread.start()
+    executeAsyncTask(f, _DoFindOverlay,
+                     args=(f, repetitions, dwell_time, max_allowed_diff, escan,
+                           ccd, detector, skew))
     return f
 
 class OverlayError(LookupError):
