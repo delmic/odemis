@@ -1694,8 +1694,15 @@ def convert_streams_to_images(streams, raw=False):
         rgba_im = format_rgba_darray(rgbim)
         keepalpha = False
         date = rgbim.metadata.get(model.MD_ACQ_DATE, None)
-        scale = rgbim.metadata[model.MD_PIXEL_SIZE]
-        pos = rgbim.metadata[model.MD_POS]
+        if 'dc_scale' in rgbim.metadata.keys():
+            # in case of pyramidal image
+            scale = rgbim.metadata['dc_scale']
+        else:
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
+        if 'dc_center' in rgbim.metadata.keys():
+            pos = rgbim.metadata['dc_center']
+        else:
+            pos = rgbim.metadata[model.MD_POS]
         rot = rgbim.metadata.get(model.MD_ROTATION, 0)
         shear = rgbim.metadata.get(model.MD_SHEAR, 0)
         flip = rgbim.metadata.get(model.MD_FLIP, 0)
