@@ -2,6 +2,8 @@
 
 import os
 
+from PyInstaller.utils.hooks import collect_submodules
+
 
 def get_lib_tiff():
     """ Help PyInstaller find all the lib-tiff files it needs """
@@ -58,6 +60,14 @@ def get_dataio_imports():
     return imports
 
 
+def get_wx_imports():
+    # Special hooks-wx-lib.pubsub doesn't work properly if these modules are not 
+    # collected explicitly
+    return collect_submodules('wx.lib.pubsub.core.kwargs') + \
+    	   collect_submodules('wx.lib.pubsub.core.arg1') + \
+    	   ["wx.lib.pubsub.core.publisherbase", "wx.lib.pubsub.core.listenerbase"]
+
+
 def get_version():
     """ Write the current version of Odemis to a txt file and tell PyInstaller where to find it """
     import odemis
@@ -99,7 +109,6 @@ else:
     name = "OdemisViewer"
     script = "odemis_viewer.py"
 
-
 # The statements in a spec file create instances of four classes, Analysis, PYZ, EXE and COLLECT.
 #
 # * A new instance of class Analysis takes a list of script names as input. It analyzes all
@@ -126,8 +135,8 @@ a = Analysis(
     datas=None,
     hiddenimports=[
         'cairo',
-        'odemis.acq.align.keypoint', # Not used in standard, but could be used by plugins
-    ] + get_dataio_imports(),
+        'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
+    ] + get_dataio_imports() + get_wx_imports(),
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
