@@ -24,17 +24,18 @@ from odemis.driver import pmtctrl
 from odemis.driver import semcomedi
 import os
 import threading
+import time
 import unittest
 from unittest.case import skip
 
 
 logger = logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-CLASS = pmtctrl.PMTControl
 if TEST_NOHW:
     # Test using the simulator
     KWARGS = dict(name="test", role="pmt_control", port="/dev/fake")
@@ -43,8 +44,10 @@ else:
     KWARGS = dict(name="test", role="pmt_control", port="/dev/ttyPMT*")
 
 # Control unit used for PMT testing
-CLASS_CTRL = CLASS
+CLASS_CTRL = pmtctrl.PMTControl
 KWARGS_CTRL = KWARGS
+
+CLASS_PMT = pmtctrl.PMT
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
@@ -56,7 +59,6 @@ CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
               }
 
-CLASS_PMT = pmtctrl.PMT
 
 class TestStatic(unittest.TestCase):
     """
@@ -175,8 +177,8 @@ class TestPMT(unittest.TestCase):
     def setUp(self):
         # We will need to catch some log messages
         self.handler = h = TestHandler(Matcher())
-        self.logger = l = logging.getLogger()
-        l.addHandler(h)
+        self.logger = logging.getLogger()
+        self.logger.addHandler(h)
         # reset resolution and dwellTime
         self.scanner.resolution.value = (256, 200)
         self.size = self.scanner.resolution.value
@@ -308,6 +310,7 @@ class Matcher(object):
         else:
             result = dv.find(v) >= 0
         return result
+
 
 if __name__ == "__main__":
     unittest.main()

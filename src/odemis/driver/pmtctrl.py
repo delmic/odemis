@@ -110,11 +110,11 @@ class PMT(model.Detector):
         try:
             if (hasattr(ctrl, "gain")
                 and isinstance(ctrl.gain, model.VigilantAttributeBase)):
-                self._gain = ctrl.gain.range[0]
-                self.gain = model.FloatContinuous(self._gain, ctrl.gain.range, unit="V",
+                gain = ctrl.gain.range[0]
+                self.gain = model.FloatContinuous(gain, ctrl.gain.range, unit="V",
                                                   setter=self._setGain)
-                self._last_gain = self._gain
-                self._setGain(self._gain)  # Just start with no gain
+                self._last_gain = gain
+                self._setGain(gain)  # Just start with no gain
             if (hasattr(ctrl, "powerSupply")
                 and isinstance(ctrl.powerSupply, model.VigilantAttributeBase)):
                 self.powerSupply = ctrl.powerSupply
@@ -222,6 +222,7 @@ class PMTControl(model.PowerSupplier):
         prot_curr (float): protection current threshold (in Amperes)
         relay_cycle (None or 0<float): if not None, will power cycle the relay
           with the given delay (in s)
+        powered (list of str or None): set of the HwComponents controlled by the relay
         Raise an exception if the device cannot be opened
         '''
         if powered is None:
