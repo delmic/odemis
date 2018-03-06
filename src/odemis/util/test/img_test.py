@@ -876,7 +876,50 @@ class TestMergeTiles(unittest.TestCase):
         del rdata
 
         os.remove(FILENAME)
+        
+    def test_rgb_tiles(self):
 
+        def getSubData(dast, zoom, rect):
+            x1, y1, x2, y2 = rect
+            tiles = []
+            for x in range(x1, x2 + 1):
+                tiles_column = []
+                for y in range(y1, y2 + 1):
+                    tiles_column.append(dast.getTile(x, y, zoom))
+                tiles.append(tiles_column)
+            return tiles
+        
+        FILENAME = u"test" + tiff.EXTENSIONS[0]
+        POS = (5.0, 7.0)
+        size = (3, 2000, 1000)
+        dtype = numpy.uint8
+        md = {
+        model.MD_DIMS: 'YXC',
+        model.MD_POS: POS,
+        model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+        }
+        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(size[::-1]).astype(dtype)
+        print(arr.shape)
+        data = model.DataArray(arr, metadata=md)
+        
+        # export
+        tiff.export(FILENAME, data, pyramid=True)
+        
+        rdata = tiff.open_data(FILENAME)
+        
+        tiles = getSubData(rdata.content[0], 0, (0, 0, 7, 3))
+        merged_img = img.mergeTiles(tiles)
+        self.assertEqual(merged_img.shape, (1000, 2000, 3))
+        self.assertEqual(merged_img.metadata[model.MD_POS], POS)
+        
+        tiles = getSubData(rdata.content[0], 0, (0, 0, 3, 1))
+        merged_img = img.mergeTiles(tiles)
+        self.assertEqual(merged_img.shape, (512, 1024, 3))
+        numpy.testing.assert_almost_equal(merged_img.metadata[model.MD_POS], (4.999512, 7.000244))
+        
+        del rdata
+        
+        os.remove(FILENAME)
 
 # TODO: test guessDRange()
 

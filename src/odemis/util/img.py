@@ -703,7 +703,7 @@ def mergeTiles(tiles):
 
         width_sum += tile_width
 
-    result.metadata[model.MD_POS] = getCenterOfTiles(tiles, result_shape)
+    result.metadata[model.MD_POS] = getCenterOfTiles(tiles, result_shape[:2])
 
     return result
 
