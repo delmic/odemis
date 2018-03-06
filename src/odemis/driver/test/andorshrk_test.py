@@ -20,12 +20,11 @@ from __future__ import division
 from concurrent import futures
 import logging
 from odemis import model
-from odemis.driver import andorshrk, andorcam2
+from odemis.driver import andorshrk, andorcam2, pmtctrl
 import os
 import time
 import unittest
 from unittest.case import skip
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -51,7 +50,12 @@ KWARGS_SHRK = dict(name="sr193", role="spectrograph", device=0)
 KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: "slit-in", 3: "slit-monochromator"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"},
-                       drives_shutter=[1.57])
+                       drives_shutter=[1.57],
+                       accessory="slitleds")
+
+# Control unit used for PMT testing
+KWARGS_PMT = dict(name="test", role="pmt", port="/dev/fake")
+CLASS_PMT = pmtctrl.PMTControl
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
@@ -64,8 +68,7 @@ class TestShamrockStatic(unittest.TestCase):
         """
         Just makes sure we don't (completely) break Shamrock after an update
         """
-        ccd = CLASS_CAM(**KWARGS_CAM_SIM)
-        sp = CLASS_SHRK(children={"ccd": ccd}, **KWARGS_SHRK_SIM)
+        sp = CLASS_SHRK(**KWARGS_SHRK_SIM)
 
         self.assertGreater(len(sp.axes["grating"].choices), 0)
         sp.moveAbs({"wavelength": 300e-9})
@@ -385,8 +388,7 @@ class TestShamrock(TestSpectrograph, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.ccd = CLASS_CAM(**KWARGS_CAM)
-        cls.spectrograph = CLASS_SHRK(children={"ccd": cls.ccd}, **KWARGS_SHRK)
+        cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK)
 
         # save position
         cls._orig_pos = cls.spectrograph.position.value
@@ -502,6 +504,111 @@ class TestShamrockAndCCD(TestSpectrograph, unittest.TestCase):
 
     def count_data(self, df, data):
         self.count += 1
+
+
+class TestShamrockSlit(unittest.TestCase):
+    """
+    Tests for the spectrograph with slit let
+    Subclass needs to inherit from unittest.TestCase too
+      and to provide .spectrograph and .ccd.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pmt = CLASS_PMT(**KWARGS_PMT)
+        cls.spectrograph = CLASS_SHRK(children={"led_prot0": cls.pmt},
+                                      slitleds_settle_time=1,
+                                      **KWARGS_SHRK_SIM)
+
+    def test_simple(self):
+        """
+        No move, protection should just follow what is requested
+        """
+        # The protection should be on when starting
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+        # simulate turning it on
+        self.pmt.protection.value = False
+        self.spectrograph.protection.value = False
+
+        self.assertFalse(self.pmt.protection.value)
+        self.assertFalse(self.spectrograph.protection.value)
+
+        # simulate turning it off
+        self.pmt.protection.value = True
+        self.spectrograph.protection.value = True
+
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+    def test_move_no_acq(self):
+        """
+        Simulate moving the slit while no acquisition (so protection stays always on)
+        """
+        slit_rng = self.spectrograph.axes["slit-monochromator"].range
+
+        f = self.spectrograph.moveAbs({"slit-monochromator": slit_rng[1]})
+
+        time.sleep(0.01)
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+        # Still on
+        f.result()
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+        f = self.spectrograph.moveAbs({"slit-monochromator": slit_rng[0]})
+
+        time.sleep(0.01)
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+        # Still on
+        f.result()
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+    def test_move_acq(self):
+        """
+        Simulate moving the slit while acquisition (so protection on when moving)
+        """
+        slit_rng = self.spectrograph.axes["slit-monochromator"].range
+
+        # simulate turning it on
+        self.pmt.protection.value = False
+        self.spectrograph.protection.value = False
+
+        f = self.spectrograph.moveAbs({"slit-monochromator": slit_rng[1]})
+
+        time.sleep(0.01)
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+        # Still on
+        f.result()
+        self.assertFalse(self.pmt.protection.value)
+        self.assertFalse(self.spectrograph.protection.value)
+
+        f = self.spectrograph.moveAbs({"slit-monochromator": slit_rng[0]})
+
+        time.sleep(0.01)
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
+        # Still on
+        f.result()
+        self.assertFalse(self.pmt.protection.value)
+        self.assertFalse(self.spectrograph.protection.value)
+
+        # simulate turning it off
+        self.pmt.protection.value = True
+        self.spectrograph.protection.value = True
+
+        self.assertTrue(self.pmt.protection.value)
+        self.assertTrue(self.spectrograph.protection.value)
+
 
 if __name__ == '__main__':
     unittest.main()
