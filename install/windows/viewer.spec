@@ -67,6 +67,11 @@ def get_wx_imports():
     	   collect_submodules('wx.lib.pubsub.core.arg1') + \
     	   ["wx.lib.pubsub.core.publisherbase", "wx.lib.pubsub.core.listenerbase"]
 
+def get_libtiff_imports():
+    # tiff_h_x_y_z needs administrator rights to be generated, so import it here
+    import libtiff
+    h_file = libtiff.libtiff_ctypes.tiff_h_name
+    return ["libtiff.%s" % (h_file,)]
 
 def get_version():
     """ Write the current version of Odemis to a txt file and tell PyInstaller where to find it """
@@ -136,7 +141,7 @@ a = Analysis(
     hiddenimports=[
         'cairo',
         'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
-    ] + get_dataio_imports() + get_wx_imports(),
+    ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports(),
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
