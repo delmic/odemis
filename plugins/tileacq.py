@@ -678,9 +678,10 @@ class TileAcqPlugin(Plugin):
                 dlg.Destroy()
 
             # Open analysis tab
-            tab = main_data.getTabByName('analysis')
-            main_data.tab.value = tab
-            tab.load_data(fn)
+            if self.stitch.value:
+                tab = main_data.getTabByName('analysis')
+                main_data.tab.value = tab
+                tab.load_data(fn)
 
             # TODO: also export a full image (based on reported position, or based
             # on alignment detection)
