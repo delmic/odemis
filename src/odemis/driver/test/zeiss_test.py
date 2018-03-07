@@ -37,8 +37,10 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 # arguments used for the creation of basic components
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1}
-CONFIG_STAGE = {"name": "stage", "role": "stage", "rng": {"x": (5.e-3, 152.e-3),
-                "y": (5.e-3, 152.e-3)}}  # skip one axis to see if default works
+CONFIG_STAGE = {"name": "stage", "role": "stage",
+                "rng": {"x": (5.e-3, 152.e-3), "y": (5.e-3, 152.e-3)},  # skip one axis to see if default works
+                "inverted": ["x"],
+               }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "port": "/dev/ttyUSB*",  # "/dev/fake*"
               "children": {"scanner": CONFIG_SCANNER,
@@ -141,11 +143,34 @@ class TestSEM(unittest.TestCase):
         Check it's possible to move the stage
         """
         pos = self.stage.position.value.copy()
-        self.stage.moveRel({"x":2e-6, "y":3e-6})
+        f = self.stage.moveRel({"x":2e-6, "y":3e-6})
+        f.result()
+        self.assertNotEqual(self.stage.position.value, pos)
         time.sleep(6)  # wait until .position is updated
         self.assertNotEqual(self.stage.position.value, pos)
 
-        self.stage.moveRel({"x":-2e-6, "y":-3e-6})
+        f = self.stage.moveRel({"x":-2e-6, "y":-3e-6})
+        f.result()
+        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        time.sleep(6)
+        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Try a relative move outside of the range (less than min)
+        axes = self.stage.axes
+        toofar = {"x": axes["x"].range[0] - pos["x"] - 10e-6}
+        f = self.stage.moveRel(toofar)
+        with self.assertRaises(ValueError):
+            f.result()
+        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        time.sleep(6)
+        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Try a relative move outside of the range (more than max)
+        toofar = {"y": axes["y"].range[1] - pos["y"] + 10e-6}
+        f = self.stage.moveRel(toofar)
+        with self.assertRaises(ValueError):
+            f.result()
+        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
         time.sleep(6)
         test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
@@ -159,19 +184,23 @@ class TestSEM(unittest.TestCase):
 #         f.result()
 #         test.assert_pos_almost_equal(self.stage.position.value, pos, atol=10e-6)
 
-        self.assertRaises(ValueError, self.stage.moveRel, {"x":-200e-3})
+        with self.assertRaises(ValueError):
+            f = self.stage.moveRel({"x":-200e-3})
 
         p = self.stage.position.value.copy()
         subpos = self.stage.position.value.copy()
         subpos["x"] += 50e-6
-        self.stage.moveAbs(subpos)
+        f = self.stage.moveAbs(subpos)
+        f.result()
+        test.assert_pos_almost_equal(self.stage.position.value, subpos)
         time.sleep(6)
         test.assert_pos_almost_equal(self.stage.position.value, subpos)
 
         subpos = self.stage.position.value.copy()
         subpos.pop("y")
         subpos["x"] -= 50e-6
-        self.stage.moveAbs(subpos)
+        self.stage.moveAbsSync(subpos)
+        test.assert_pos_almost_equal(self.stage.position.value, p)
         time.sleep(6)
         test.assert_pos_almost_equal(self.stage.position.value, p)
 
@@ -180,20 +209,21 @@ class TestSEM(unittest.TestCase):
         Check it's possible to move the stage
         """
         pos = self.stage.position.value.copy()
+        logging.info("Initial pos = %s", pos)
         f = self.stage.moveRel({"y": 50e-3})
+        exppos = pos.copy()
+        exppos["y"] += 50e-3
 
         time.sleep(0.5)  # abort after 0.5 s
         f.cancel()
 
-        time.sleep(5)  # wait for position to update
-        exppos = pos.copy()
-        exppos["y"] += 50e-3
-
+        time.sleep(6)  # wait for position to update
         self.assertNotEqual(self.stage.position.value, pos)
         self.assertNotEqual(self.stage.position.value, exppos)
 
         f = self.stage.moveAbs(pos)  # Back to orig pos
-        time.sleep(10)  # wait for position to update
+        f.result()
+        time.sleep(6)  # wait for position to update
         test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
         # Same thing, but using stop() method
@@ -211,7 +241,8 @@ class TestSEM(unittest.TestCase):
         self.assertNotEqual(self.stage.position.value, exppos)
 
         f = self.stage.moveAbs(pos)  # Back to orig pos
-        time.sleep(10)
+        f.result()
+        time.sleep(6)
         test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
     def test_focus(self):
@@ -255,7 +286,7 @@ class TestSEM(unittest.TestCase):
         ebeam.blanker.value = orig_blanked
         time.sleep(6)  # Wait for value refresh
         self.assertEqual(orig_blanked, ebeam.blanker.value)
-        
+
     def test_external(self):
         """
         Test if it's possible to change external
@@ -272,7 +303,7 @@ class TestSEM(unittest.TestCase):
         # Reset
         ebeam.external.value = orig_ext
         time.sleep(6)  # Wait for value refresh
-        self.assertEqual(orig_ext, ebeam.external.value)    
+        self.assertEqual(orig_ext, ebeam.external.value)
 
 
 if __name__ == "__main__":
