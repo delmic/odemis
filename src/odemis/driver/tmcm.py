@@ -133,8 +133,7 @@ class TMCLController(model.Actuator):
           bigger will be a move for a given distance in m)
         rng (list of tuples of 2 floats or None): min/max position allowed for
           each axis. 0 must be part of the range.
-          Note: if the axis is not referenced, the range is doubled. If the axis
-          is inverted, the values provided will be inverted too.
+          Note: If the axis is inverted, the values provided will be inverted too.
         abs_encoder (None or list of True/False/None): Indicates for each axis
           whether the axis position can be read as an absolute position from the
           encoder (=True), a relative position of the encoder (=False
