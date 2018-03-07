@@ -944,6 +944,12 @@ class Shamrock(model.Actuator):
         assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         width_um = c_float(width * 1e6)
 
+        # TODO: on the SR-193 (and maybe other spectrographs), the led actually
+        # is only turned on when going to the minimum position (probably because
+        # it's used as a referencing move). If it's a long move, the led will
+        # stay turned on for a long time. So, to avoid keeping the led on for
+        # too long, we could first do a (long) move up to near the minimum, and
+        # then a (short) move to the minimum.
         with self._hw_access:
             with self._led_access:
                 self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
