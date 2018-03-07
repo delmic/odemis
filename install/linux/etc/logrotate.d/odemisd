@@ -1,7 +1,7 @@
 /var/log/odemis.log
 {
 	rotate 6
-	size 100M
+	maxsize 100M
 	monthly
 	missingok
 	notifempty
