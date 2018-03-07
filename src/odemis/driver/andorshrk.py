@@ -160,7 +160,7 @@ class HwAccessMgr(object):
 
     def __enter__(self):
         if self._ccd is None:
-            logging.debug("Taking spectrograph lock")
+            # logging.debug("Taking spectrograph lock")
             self.hw_lock.acquire()
         else:
             self._ccd.request_hw.append(None)  # let the acquisition thread know it should release the lock
@@ -172,7 +172,7 @@ class HwAccessMgr(object):
         returns True if the exception is to be suppressed (never)
         """
         if self._ccd is None:
-            logging.debug("Released spectrograph lock")
+            # logging.debug("Released spectrograph lock")
             self.hw_lock.release()
         else:
             self._ccd.request_hw.pop()  # hw no more needed
@@ -188,34 +188,43 @@ class LedActiveMgr(object):
     This typically happens when the slits move, and can cause damage to some
     detectors.
     """
-    def __init__(self, spec, line):
+
+    def __init__(self, comps, settle_time):
         """
-        spec (Shamrock): spectrograph component
-        line (1<=int<=2 or None): Accessory line number or None if nothing
-         needs to be done.
+        comps (list of Components): the components to control, with .protection
+        settle_time (0<=float): duration to wait when entering
         """
-        self._spec = spec
-        self._line = line
-        self.__exit__(None, None, None)  # start by indicating the leds are off
+        self._comps = comps
+        self._settle_time = settle_time
+        self._prev_prot = [c.protection.value for c in comps]
 
     def __enter__(self):
-        if self._line is None:
+        if not self._comps:
             return
+
         logging.debug("Indicating leds are on")
-        # Force the protection independently of the protection VA state
-        self._spec.SetAccessory(self._line, False)
-        time.sleep(1e-3)  # wait 1 ms to make sure all the detectors are stopped
+
+        for i, c in enumerate(self._comps):
+            self._prev_prot[i] = c.protection.value
+            if not self._prev_prot[i]:
+                c.protection.value = True
+
+        # wait a little to make sure the detectors are really off
+        time.sleep(self._settle_time)
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
         returns True if the exception is to be suppressed (never)
         """
-        if self._line is None:
+        if not self._comps:
             return
+
         logging.debug("Indicating leds are off")
-        # Unprotect iff the protection VA also allows it
-        if not self._spec.protection.value:
-            self._spec.SetAccessory(self._line, True)
+
+        # Unprotect iff previously the protection was off
+        for c, pp in zip(self._comps, self._prev_prot):
+            if not pp:
+                c.protection.value = pp
 
 
 # default names for the slits
@@ -244,18 +253,21 @@ class Shamrock(model.Actuator):
     Note: we don't handle changing turret (live).
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
-                 slits=None, bands=None, fstepsize=1e-6, drives_shutter=None,
-                 **kwargs):
+                 slitleds_settle_time=1e-3, slits=None, bands=None,
+                 fstepsize=1e-6, drives_shutter=None, children=None, **kwargs):
         """
         device (0<=int or str): if int, device number, if str serial number or
           "fake" to use the simulator
         camera (None or AndorCam2): Needed if the connection is done via the
           I²C connector of the camera.
         inverted (None): it is not allowed to invert the axes
-        accessory (str or None): if "slitleds", then a TTL signal will be set to
-          high on line 1 whenever one of the slit leds might be turned on.
         slits (None or dict int -> str): names of each slit,
           for 1 to 4: in-side, in-direct, out-side, out-direct
+        accessory (str or None): if "slitleds", then a TTL signal will be set to
+          high on line 1 whenever one of the slit leds might be turned on.
+        slitleds_settle_time (0 <= float): duration wait before (potentially)
+          turning on the slit leds. Useful to delay the move after the slitleds
+          interlock is set.
         bands (None or dict 1<=int<=6 -> 2-tuple of floats > 0 or str):
           wavelength range or name of each filter for the filter wheel from 1->6.
           Positions without filters do not need to be defined.
@@ -265,6 +277,9 @@ class Shamrock(model.Actuator):
         drives_shutter (list of float): flip-out angles for which the shutter
           should be set to BNC (external) mode. Otherwise, the shutter is left
           opened.
+        children (None or dict str -> HwComponent): if the key starts with
+          "led_prot", it will set the .protection to True any time that the
+          slit leds could be turned on.
         """
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
@@ -285,6 +300,8 @@ class Shamrock(model.Actuator):
         self._camera = camera
         self._hw_access = HwAccessMgr(camera)
         self._is_via_camera = (camera is not None)
+
+        children = children or {}
 
         slits = slits or {}
         for i in slits:
@@ -314,6 +331,7 @@ class Shamrock(model.Actuator):
                 self._model = None
                 logging.warning("Untested spectrograph with focus length %d mm", fl * 1000)
 
+            led_comps = [] # list of tuples (Light, float) or (Shamrock, int, float)
             if accessory is not None and not self.AccessoryIsPresent():
                 raise ValueError("Accessory set to '%s', but no accessory connected"
                                  % (accessory,))
@@ -321,9 +339,13 @@ class Shamrock(model.Actuator):
                 # To control the ttl signal from outside the component
                 self.protection = model.BooleanVA(True, setter=self._setProtection)
                 self._setProtection(True)
-                self._led_access = LedActiveMgr(self, 0)
-            else:
-                self._led_access = LedActiveMgr(None, None)
+                led_comps.append(self)
+
+            for cr, child in children.items():
+                if cr.startswith("led_prot"):
+                    led_comps.append(child)
+
+            self._led_access = LedActiveMgr(led_comps, slitleds_settle_time)
 
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
             max_speed = 1000e-9 / 5 # about 1000 nm takes 5s => max speed in m/s
@@ -922,6 +944,12 @@ class Shamrock(model.Actuator):
         assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         width_um = c_float(width * 1e6)
 
+        # TODO: on the SR-193 (and maybe other spectrographs), the led actually
+        # is only turned on when going to the minimum position (probably because
+        # it's used as a referencing move). If it's a long move, the led will
+        # stay turned on for a long time. So, to avoid keeping the led on for
+        # too long, we could first do a (long) move up to near the minimum, and
+        # then a (short) move to the minimum.
         with self._hw_access:
             with self._led_access:
                 self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
@@ -1282,12 +1310,12 @@ class Shamrock(model.Actuator):
         actions = []
         for axis, s in shift.items():  # order doesn't matter
             if axis == "wavelength":
-                actions.append((self._doSetWavelengthRel, s))
+                actions.append((axis, self._doSetWavelengthRel, s))
             elif axis == "focus":
-                actions.append((self._doSetFocusRel, s))
+                actions.append((axis, self._doSetFocusRel, s))
             elif axis == self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
-                actions.append((self._doSetSlitRel, sid, s))
+                actions.append((axis, self._doSetSlitRel, sid, s))
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
@@ -1312,31 +1340,36 @@ class Shamrock(model.Actuator):
             except KeyError:
                 continue
             if axis == "grating":
-                actions.append((self._doSetGrating, p))
+                actions.append((axis, self._doSetGrating, p))
             elif axis == "wavelength":
-                actions.append((self._doSetWavelengthAbs, p))
+                actions.append((axis, self._doSetWavelengthAbs, p))
             elif axis == "band":
-                actions.append((self._doSetFilter, p))
+                actions.append((axis, self._doSetFilter, p))
             elif axis == "focus":
-                actions.append((self._doSetFocusAbs, p))
+                actions.append((axis, self._doSetFocusAbs, p))
             elif axis == "flip-out":
-                actions.append((self._doSetFlipper, OUTPUT_FLIPPER, p))
+                actions.append((axis, self._doSetFlipper, OUTPUT_FLIPPER, p))
             elif axis in self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
-                actions.append((self._doSetSlitAbs, sid, p))
+                actions.append((axis, self._doSetSlitAbs, sid, p))
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
 
     def _doMultipleActions(self, actions):
         """
-        Run multiple actions sequentially (as long as they don't raise exceptions
-        actions (tuple of tuple(callable, *args)): ordered actions defined by the
-          callable and the arguments
+        Run multiple actions sequentially (as long as they don't raise exceptions)
+        actions (tuple of tuple(str, callable, *args)): ordered actions defined
+          by the axis name, callable, and the arguments
         """
         for a in actions:
-            func, args = a[0], a[1:]
-            func(*args)
+            an, func, args = a[0], a[1], a[2:]
+            logging.debug("Moving axis %s", an)
+            try:
+                func(*args)
+            except Exception:
+                logging.exception("Failure during move of axis %s", an)
+                raise
 
     def _doSetWavelengthRel(self, shift):
         """
