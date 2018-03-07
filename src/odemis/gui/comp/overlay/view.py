@@ -450,8 +450,10 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 val = self.cnvs.val_x_to_val(val[0])
             v_pos = self.cnvs.val_to_pos(val)
 
-            self.x_label = units.readable_str(val[0], self.cnvs.unit_x, 3)
-            self.y_label = units.readable_str(val[1], self.cnvs.unit_y, 3)
+            # No rounding as the user might want to know as precisely as possible
+            # the actual value.
+            self.x_label = units.readable_str(val[0], self.cnvs.unit_x, None)
+            self.y_label = units.readable_str(val[1], self.cnvs.unit_y, None)
 
             # v_posx, v_posy = self.v_pos.value
             if self.orientation & self.VERTICAL:

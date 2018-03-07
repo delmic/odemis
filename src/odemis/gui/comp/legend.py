@@ -26,22 +26,22 @@ from __future__ import division
 
 import cairo
 import logging
+import math
 from odemis.acq import stream
 from odemis.gui import FG_COLOUR_DIS
+from odemis.gui import img
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.util import wxlimit_invocation
-from odemis.gui.util.img import calculate_ticks
 from odemis.gui.util.conversion import wxcol_to_frgb
-import wx
-
-from odemis.gui import img
-import odemis.util.units as units
-
+from odemis.gui.util.img import calculate_ticks
 from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute, \
                          MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
                          MD_AT_CL, MD_AT_OVV_FULL, MD_AT_OVV_TILES, \
                          MD_AT_EM, MD_AT_HISTORY
+import wx
+
+import odemis.util.units as units
 
 
 class InfoLegend(wx.Panel):
@@ -313,6 +313,15 @@ class AxisLegend(wx.Panel):
         self._tick_list, self._vtp_ratio = calculate_ticks(self._value_range, self.ClientSize, self._orientation, self._tick_spacing)
         csize = self.ClientSize
 
+        # If min and max are very close, we need more significant numbers to
+        # ensure the values displayed are different (ex 17999 -> 18003)
+        rng = self._value_range
+        if rng[0] == rng[1]:
+            sig = None
+        else:
+            ratio_rng = max(abs(v) for v in rng) / (rng[1] - rng[0])
+            sig = max(3, 1 + math.ceil(math.log10(ratio_rng * len(self._tick_list))))
+
         # Set Font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
@@ -327,7 +336,7 @@ class AxisLegend(wx.Panel):
         prev_lpos = 0 if self._orientation == wx.HORIZONTAL else csize.y
 
         for i, (pos, val) in enumerate(self._tick_list):
-            label = units.readable_str(val, self.unit, 3)
+            label = units.readable_str(val, self.unit, sig)
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
             if self._orientation == wx.HORIZONTAL:
@@ -358,30 +367,3 @@ class AxisLegend(wx.Panel):
             self._max_tick_width = max_width
             self.SetMinSize((self._max_tick_width + 14, -1))
             self.Parent.GetSizer().Layout()
-
-    def value_to_pixel(self, value):
-        """ Map range value to legend pixel position """
-        if self._pixel_space is None:
-            return None
-        elif None not in (self._vtp_ratio, self._value_range):
-            pixel = (value - self._value_range[0]) * self._vtp_ratio
-            pixel = int(round(pixel))
-        else:
-            pixel = 0
-        return pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
-
-    def pixel_to_value(self, pixel):
-        """ Map pixel value to range value """
-        if not self._vtp_ratio:  # None or 0
-            return self._value_range[0]
-        pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
-        return (pixel / self._vtp_ratio) + self._value_range[0]
-
-    def pixel_to_ratio(self, pixel):
-        """ Map the given pixel value to the ratio of the pixel space
-
-        :return: (float) [0..1]
-        """
-
-        pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
-        return pixel / self._pixel_space
