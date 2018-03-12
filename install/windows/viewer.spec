@@ -153,15 +153,18 @@ pyz = PYZ(
     cipher=block_cipher
 )
 
+# For debug version change debug and console values to True. This will result in more
+# verbose error messages.
+
 exe = EXE(
     pyz,
     a.scripts,
     exclude_binaries=True,
     name='%s.exe' % name,
-    debug=False,
+    debug=False,  # True
     strip=False,
     upx=use_upx,
-    console=False,
+    console=False,  # True
     icon='odemis-viewer.ico'
 )
 
