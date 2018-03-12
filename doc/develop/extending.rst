@@ -199,7 +199,7 @@ of wxPython, which must be 3.x, and OpenCV, which must be 2.4.
 #.  Install the decorator module using ``pip install decorator``
 #.  Install Delmic's special version of Pyro4:
     ``pip install git+https://github.com/delmic/Pyro4.git``
-#.  Install Numpy using ``pip install "numpy-1.9.2+mkl-cp27-none-win32.whl"``,
+#.  Install Numpy using ``pip install numpy-1.9.2+mkl-cp27-none-win32.whl``,
     downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy
 #.  Install wxPython3.0 using
     ``pip install wxPython_common-3.0.2.0-py2-none-any.whl`` followed by
@@ -209,7 +209,7 @@ of wxPython, which must be 3.x, and OpenCV, which must be 2.4.
     from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 #.  ``pip install scipy-0.15.1-cp27-none-win32.whl``, downloaded from
     http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy
-#.  Install OpenCV using ``pip install opencv_python-2.4.11-cp27-none-win32.whl``,
+#.  Install OpenCV using ``pip install opencv_python-2.4.13.5-cp27-cp27m-win32.whl``,
     downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
 #.  Install H5py using ``pip install h5py-2.5.0-cp27-none-win32.whl``, downloaded
     from http://www.lfd.uci.edu/~gohlke/pythonlibs/#h5py
@@ -305,6 +305,9 @@ scripts, or via a command-line interface.
 #. Install using ``pip install libtiff-0.4.2-cp27-cp27m-win_amd64.whl`` (or ``-win32``),
    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#pylibtiff
 
+#.  Install OpenCV using ``pip install opencv_python-2.4.13.5-cp27-cp27m-win_amd64.whl`` (or ``-win32``),
+    downloaded from http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
+
 #. Download the ZIP file of the latest release of Odemis from:
    https://github.com/delmic/odemis/releases
 
@@ -316,13 +319,13 @@ scripts, or via a command-line interface.
    *not* have a `.txt` extension. Edit that file and enter the full path to the
    Odemis source code, such as: ``C:\Program Files\Odemis\src\``.
 
-You can now use Python via the "Spyder" interface. To read an acquisition file
-you can use code such as:
+You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
+To read an acquisition file you can use code such as:
 
 .. code-block:: python
 
     from odemis.dataio import hdf5
-    das = hdf5.read_data("C:\\Path\\to\\the\\acquistion.h5")
+    das = hdf5.read_data(u"C:\\Path\\to\\the\\acquistion.h5")
     print das
     print das[0].metadata
 
