@@ -136,7 +136,17 @@ def get_home_folder():
     """ Return the home directory of the user running the Odemis GUI
     """
     # fall-back to HOME
-    folder = os.path.expanduser(u"~")
+    if sys.platform.startswith('linux'):
+        folder = os.path.expanduser(u"~")
+    elif sys.platform.startswith('win32'):
+        # expanduser(u) fails with non-ASCII usernames in Python2,
+        # see https://bugs.python.org/issue13207
+        # Import functions here because wintypes in ctypes library cannot be opened in linux
+        from odemis.gui.util.winknownpaths import get_path, FOLDERID
+        folder = get_path(FOLDERID.Profile)
+    if os.path.isdir(folder):
+        return folder
+
     if os.path.isdir(folder):
         return folder
 
@@ -162,9 +172,14 @@ def get_picture_folder():
             return folder
         # drop to default
     elif sys.platform.startswith('win32'):
-        # TODO Windows code
-        pass
-        # drop to default
+        # expanduser(u) fails with non-ASCII usernames in Python2,
+        # see https://bugs.python.org/issue13207
+        # Import functions here because wintypes in ctypes library cannot be opened in linux
+        from odemis.gui.util.winknownpaths import get_path, FOLDERID
+        try:
+            folder = get_path(FOLDERID.Pictures)
+        except:
+            logging.warning("Cannot find picture folder")
     else:
         logging.warning("Platform not supported for picture folder")
 
