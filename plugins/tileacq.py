@@ -47,6 +47,7 @@ from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, \
     ARStream, SpectrumStream, FluoStream, MultipleDetectorStream
 import numpy
+import psutil
 
 
 class TileAcqPlugin(Plugin):
@@ -87,6 +88,10 @@ class TileAcqPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(TileAcqPlugin, self).__init__(microscope, main_app)
+
+        self._dlg = None
+        self.ft = model.InstantaneousFuture()  # acquisition future
+
         # Can only be used with a microscope
         if not microscope:
             return
@@ -107,16 +112,18 @@ class TileAcqPlugin(Plugin):
         # of the ROI and linearly interpolate)
         # TODO: on SECOM allow to do fine alignment for each tile
 
+        self.nx.subscribe(self._check_range)
+        self.ny.subscribe(self._check_range)
         self.nx.subscribe(self._update_exp_dur)
         self.ny.subscribe(self._update_exp_dur)
-
         self.nx.subscribe(self._update_total_area)
         self.ny.subscribe(self._update_total_area)
         self.overlap.subscribe(self._update_total_area)
 
-        self.ft = model.InstantaneousFuture()  # acquisition future
-
-        self._dlg = None
+        # Warn if memory will be exhausted
+        self.nx.subscribe(self._memory_check)
+        self.ny.subscribe(self._memory_check)
+        self.stitch.subscribe(self._memory_check)
 
     def _get_streams(self):
         """
@@ -143,6 +150,17 @@ class TileAcqPlugin(Plugin):
         for s in ss:
             for va in self._get_settings_vas(s):
                 va.subscribe(self._update_exp_dur)
+                va.subscribe(self._memory_check)
+
+    def _unsubscribe_vas(self):
+        tab = self.main_app.main_data.tab.value
+        ss = self._get_live_streams(tab.tab_data_model)
+
+        # Unsubscribe to all relevant setting changes
+        for s in ss:
+            for va in self._get_settings_vas(s):
+                va.unsubscribe(self._update_exp_dur)
+                va.unsubscribe(self._memory_check)
 
     def _update_exp_dur(self, _=None):
         """
@@ -265,6 +283,7 @@ class TileAcqPlugin(Plugin):
             else:
                 dlg.addStream(s, index=0)
             # TODO: handle Spectrum stream
+
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
@@ -274,8 +293,7 @@ class TileAcqPlugin(Plugin):
         dlg.microscope_view.stream_tree.flat.subscribe(self._update_total_area, init=True)
         dlg.microscope_view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
 
-        self.nx.subscribe(self._check_range, init=True)
-        self.ny.subscribe(self._check_range, init=True)
+        self._memory_check()
 
         # TODO: disable "acquire" button if no stream selected.
 
@@ -289,6 +307,7 @@ class TileAcqPlugin(Plugin):
             logging.warning("Got unknown return code %s", ans)
 
         # Don't hold references
+        self._unsubscribe_vas()
         self._dlg = None
 
     # black list of VAs name which are known to not affect the acquisition time
@@ -567,6 +586,49 @@ class TileAcqPlugin(Plugin):
             logging.warning("Unexpected min FoV = %s, instead of %s", asfov, sfov)
             sfov = asfov
         return sfov
+
+    MEMPP = 2e-8  # memory per pixel in GB, found empirically
+    def _memory_check(self, _=None):
+        """
+        Makes an estimate for the amount of memory that will be consumed during
+        stitching and compares it to the available memory on the computer.
+        Displays a warning if memory exceeds available memory.
+        returns (bool): True (memory is sufficient), False (memory will be exhausted)
+        """
+
+        if self.stitch.value:
+            # Number of pixels for acquisition
+            pxs = 0
+            for s in self._get_acq_streams():
+                if hasattr(s, 'emtResolution'):
+                    pxs += s.emtResolution.value[0] * s.emtResolution.value[1]
+                elif hasattr(s, 'repetition'):
+                    pxs += s.repetition.value[0] * s.repetition.value[1]
+                else:
+                    logging.warning("Resolution of stream %s cannot be determined." % s)
+            pxs = pxs * self.nx.value * self.ny.value
+
+            # Memory calculation
+            mem_est = pxs * self.MEMPP
+            mem_computer = psutil.virtual_memory().total / 1024 ** 3  # in GB
+            # Assume computer is using 2 GB RAM for odemis and other programs
+            mem_sufficient = mem_est < mem_computer - 2
+        else:
+            mem_sufficient = True
+
+        # Display warning
+        if mem_sufficient:
+            self._dlg.lbl_acquisition_info.SetLabel("")
+            self._dlg.Layout()
+        else:
+            txt = "Stitching this area requires %.1f GB of memory.\n" % (mem_est) + \
+                "Running the acquisition might cause your computer to crash."
+            self._dlg.lbl_acquisition_info.SetLabel(txt)
+            self._dlg.lbl_acquisition_info.SetFont(wx.Font(10, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+            self._dlg.lbl_acquisition_info.SetForegroundColour(odemis.gui.FG_COLOUR_ERROR)
+            self._dlg.Layout()
+
+        return mem_sufficient
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
