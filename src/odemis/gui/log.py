@@ -23,7 +23,7 @@ import collections
 import logging
 from logging.handlers import RotatingFileHandler
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, FG_COLOUR_MAIN
-from odemis.gui.util import wxlimit_invocation
+from odemis.gui.util import wxlimit_invocation, get_home_folder
 import os.path
 import sys
 import threading
@@ -68,7 +68,7 @@ def init_logger(level=logging.DEBUG, log_file=None):
 
     # Create file handler
     # Path to the log file
-    logfile_path = log_file or os.path.join(os.path.expanduser("~"), LOG_FILE)
+    logfile_path = log_file or os.path.join(get_home_folder(), LOG_FILE)
     # Formatting string for logging messages to file
     frm = "%(asctime)s %(levelname)-7s %(module)s:%(lineno)d: %(message)s"
     file_format = logging.Formatter(frm)
