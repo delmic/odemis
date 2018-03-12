@@ -402,8 +402,7 @@ class Stage(model.Actuator):
                "y": y * 1e-3,
                "z": z * 1e-3,
         }
-        self._applyInversion(pos)
-        self.position._set_value(pos, force_write=True)
+        self.position._set_value(self._applyInversion(pos), force_write=True)
 
     def _refreshPosition(self):
         """
@@ -430,11 +429,13 @@ class Stage(model.Actuator):
         if "z" in shift:
             z += shift["z"] * 1e3
 
-        # Check range
-        for v, an in zip((x, y, z), ("x", "y", "z")):
+        target_pos = self._applyInversion({"x": x * 1e-3, "y": y * 1e-3, "z": z * 1e-3})
+        # Check range (for the axes we are moving)
+        for an in shift.keys():
             rng = self.axes[an].range
-            if not rng[0] * 1e3 <= v <= rng[1] * 1e3:
-                raise ValueError("Relative move would cause axis %s out of bound (%f mm)", an, v)
+            p = target_pos[an]
+            if not rng[0] <= p <= rng[1]:
+                raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
 
         self._moveTo(future, x, y, z)
 
