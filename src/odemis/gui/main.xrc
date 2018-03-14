@@ -4909,6 +4909,16 @@
             <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
+            <object class="PointSpectrumViewport" name="viewport_spectrum">
+              <hidden>1</hidden>
+              <XRCED>
+                <assign_var>1</assign_var>
+              </XRCED>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
             <object class="wxBoxSizer">
               <object class="sizeritem">
                 <object class="wxPanel">

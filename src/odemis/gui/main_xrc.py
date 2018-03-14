@@ -498,6 +498,7 @@ class xrcfr_plugin(wx.Dialog):
         self.pnl_desc = xrc.XRCCTRL(self, "pnl_desc")
         self.viewport_l = xrc.XRCCTRL(self, "viewport_l")
         self.viewport_r = xrc.XRCCTRL(self, "viewport_r")
+        self.viewport_spectrum = xrc.XRCCTRL(self, "viewport_spectrum")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
         self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
@@ -5423,6 +5424,16 @@ def __init_resources():
           </object>
           <object class="sizeritem">
             <object class="LiveViewport" name="viewport_r">
+              <hidden>1</hidden>
+              <XRCED>
+                <assign_var>1</assign_var>
+              </XRCED>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="PointSpectrumViewport" name="viewport_spectrum">
               <hidden>1</hidden>
               <XRCED>
                 <assign_var>1</assign_var>
