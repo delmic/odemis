@@ -32,6 +32,7 @@ from wx.lib.agw.infobar import AutoWrapStaticText
 
 from odemis import util
 import odemis
+from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_MAIN
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.streams import StreamBarController
@@ -493,6 +494,29 @@ class AcquisitionDialog(xrcfr_plugin):
         # TODO: if the future is cancellable (ie, has task_canceller), allow to
         # press the "cancel" button, if such button exists, otherwise provide
         # such a button. That button will call cancel() on the future.
+
+    @call_in_wx_main
+    def set_acquisition_info(self, txt=None, lvl=logging.INFO):
+        """
+        Displays acquisition info above progress bar.
+        txt (str or None): text to be displayed. If None is passed, the acquisition
+        label will be hidden, so no empty space is displayed.
+        lvl (int, from logging.*): log level, which selects the display colour. 
+        Options: logging.INFO, logging.WARNING, logging.ERROR
+        """
+        if txt == None:
+            self.lbl_acquisition_info.Hide()
+        else:
+            self.lbl_acquisition_info.SetLabel(txt)
+            if lvl >= logging.ERROR:
+                self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_ERROR)
+            elif lvl >= logging.WARNING:
+                self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_WARNING)
+            else:
+                self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_MAIN)
+            self.lbl_acquisition_info.Show()
+
+        self.Layout()
 
     @call_in_wx_main
     def enable_buttons(self, enable):
