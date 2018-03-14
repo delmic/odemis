@@ -1,3 +1,19 @@
+odemis (2.7.3-1) precise; urgency=medium
+
+  * New version: 2.7.3
+  * Main improvement:
+    - Support for software interlock between andorshrk and external component
+    - Timelapse plugin has option to acquire the SEM image only once, at the end
+  * Main bugs fixed:
+    - Exporting pyramidal TIFF image didn't use the right field-of-view
+    - Windows version would try to write libtiff header file in directory without permissions
+    - Windows version would fail to start if username contained non-ascii characters
+    - Stage movement of Zeiss SEM always failing if axes are inverted
+    - Ensure the backend log file is rotated as soon as it's > 100Mb
+    - Tile plugin would try to open stiched file, even if no stitching was performed
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 14 Mar 2018 13:09:11 +0100
+
 odemis (2.7.2-1) precise; urgency=medium
 
   * New version: 2.7.2
