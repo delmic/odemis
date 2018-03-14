@@ -50,6 +50,9 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
+from odemis.acq.stream._static import StaticStream
+from odemis.acq.stream._helper import SpectrumSettingsStream
+from odemis.gui.comp.viewport import PointSpectrumViewport
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -71,10 +74,16 @@ PEAK_METHOD_TO_STATE = {None: None, "gaussian": 0, "lorentzian": 1}
 class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None):
+        """
+        view (MicroscopeView or None): Link stream to a view. If view is None, the stream
+        will be linked to the focused view. Passing a view to the controller ensures 
+        that the visibility button functions correctly when multiple views are present.
+        """
 
         self.stream = stream
         self.stream_bar = stream_bar
+        self.view = view
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
@@ -143,7 +152,10 @@ class StreamController(object):
                 self._add_selwidth_ctrl()
 
         # Set the visibility button on the stream panel
-        vis = stream in tab_data_model.focussedView.value.stream_tree
+        if view:
+            vis = stream in view.stream_tree
+        else:
+            vis = stream in tab_data_model.focussedView.value.stream_tree
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
@@ -297,7 +309,10 @@ class StreamController(object):
 
     def _on_stream_visible(self, evt):
         """ Show or hide a stream in the focussed view if the visibility button is clicked """
-        view = self.tab_data_model.focussedView.value
+        if self.view:
+            view = self.view
+        else:
+            view = self.tab_data_model.focussedView.value
 
         if not view:
             return
@@ -1264,8 +1279,11 @@ class StreamBarController(object):
         stream.should_update.value = play
 
         if visible:
+            linked_view = None
             if self.ignore_view:  # Always show the stream panel
                 show_panel = True
+                if not isinstance(add_to_view, bool):
+                    linked_view = v
             elif self.locked_mode:  # (and don't ignore_view)
                 # Show the stream panel iif the view is showing the stream
                 show_panel = stream in fview.getStreams()
@@ -1276,8 +1294,8 @@ class StreamBarController(object):
             stream_cont = self._add_stream_cont(stream,
                                                 show_panel,
                                                 locked=self.locked_mode,
-                                                static=self.static_mode)
-
+                                                static=self.static_mode,
+                                                view=linked_view)
             return stream_cont
         else:
             return stream
@@ -1291,14 +1309,16 @@ class StreamBarController(object):
 
         return self._add_stream_cont(stream, show_panel=True, static=True)
 
-    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False,
+                         view=None):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
 
         """
 
-        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show_panel)
+        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
+                                       show_panel, view)
 
         if locked:
             stream_cont.to_locked_mode()
