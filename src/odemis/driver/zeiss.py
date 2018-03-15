@@ -1,18 +1,39 @@
-from odemis import model
-import logging
+# -*- coding: utf-8 -*-
+'''
+Created on 13 Dec 2017
 
-import serial
-import glob
-import os
+Copyright © 2017-2018 Philip Winkler, Éric Piel, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+'''
+
+from __future__ import division
+
+from concurrent.futures import CancelledError
 import fcntl
+import glob
+import logging
+import numpy
+from odemis import model
+from odemis import util
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, CancellableFuture
+import os
 import re
+import serial
 import threading
 import time
-import numpy
 
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, CancellableFuture
-from concurrent.futures import CancelledError
-from odemis import util
 
 MAGNIFICATION_RANGE = (5., 500.e3)
 FOCUS_RANGE = (0., 121.)  # mm

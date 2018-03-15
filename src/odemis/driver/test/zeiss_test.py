@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
-Created on 13 Nov 2015
+Created on 13 Dec 2017
 
-Copyright © 2015 Éric Piel, Delmic
+Copyright © 2017-2018 Philip Winkler, Éric Piel, Delmic
 
-This file is part of Odemis-hitachi.
+This file is part of Odemis.
 
-Odemis-hitachi is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis-hitachi is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
-Odemis-hitachi. If not, see http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
