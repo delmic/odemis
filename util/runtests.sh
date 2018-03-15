@@ -21,7 +21,7 @@ find "$ODEMIS_SRC" -name "*.py" -a -not -name "*_test.py" -print0 | wc -l --file
 # Not related to tests, but to QA in general: Exceptions usually take only 1 argument
 # So a comma is probably a sign of syntax error and should be replace by a %
 echo "These files might have syntax error when raising an exception:"
-grep -IrE --colour 'raise .+".*%.*",' --include=*.py "$ODEMIS_SRC" "$ODEMIS_SRC"/../scripts/ "$ODEMIS_SRC"/../plugins/
+grep -IrE --colour 'raise .+".*%.*",' --include=*.py "$ODEMIS_SRC" "$ODEMIS_DIR"/scripts/ "$ODEMIS_DIR"/plugins/
 echo "---"
 
 echo "These files are not using division from the future:"
@@ -114,11 +114,15 @@ fi
 # try to clean up a bit
 sudo odemis-stop
 
-
 # Run the integration tests
-ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/"
 INTEGLOGDIR="./integtest-$DATE/"
 mkdir -p "$INTEGLOGDIR"
 
 echo "Running integration tests"
-"$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/
+SIMPATH="$ODEMIS_DIR/install/linux/usr/share/odemis/sim/"
+"$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$SIMPATH"/
+
+ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/" # extra microscope files
+if [ -d "$ODMPATH" ]; then
+    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/
+fi
