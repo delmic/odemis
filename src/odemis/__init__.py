@@ -4,7 +4,7 @@ Created on 26 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2013 Éric Piel, Delmic
+Copyright © 2012-2018 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -85,8 +85,9 @@ def get_major_version():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = u"Copyright © 2012-2017 Delmic"
-__authors__ = [u"Éric Piel", "Rinze de Laat", "Kimon Tsitsikas"]
+__copyright__ = u"Copyright © 2012-2018 Delmic"
+__authors__ = [u"Éric Piel", u"Rinze de Laat", u"Kimon Tsitsikas",
+               u"Philip Winkler", u"Anders Muskens"]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
 """Odemis is free software: you can redistribute it and/or modify it under the terms
