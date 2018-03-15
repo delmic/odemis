@@ -27,9 +27,12 @@ https://gist.github.com/mkropat/7550097
 Importing this module from a platform other than Windows will fail.
 """
 
-import ctypes, sys
+from __future__ import division
+
+import ctypes
 from ctypes import windll, wintypes
 from uuid import UUID
+
 
 class GUID(ctypes.Structure):   # [1]
     _fields_ = [
@@ -37,15 +40,16 @@ class GUID(ctypes.Structure):   # [1]
         ("Data2", wintypes.WORD),
         ("Data3", wintypes.WORD),
         ("Data4", wintypes.BYTE * 8)
-    ] 
+    ]
 
     def __init__(self, uuid_):
         ctypes.Structure.__init__(self)
         self.Data1, self.Data2, self.Data3, self.Data4[0], self.Data4[1], rest = uuid_.fields
         for i in range(2, 8):
-            self.Data4[i] = rest>>(8 - i - 1)*8 & 0xff
+            self.Data4[i] = rest >> (8 - i - 1) * 8 & 0xff
 
-class FOLDERID:     # [2]
+
+class FOLDERID(object):  # [2]
     Pictures = UUID('{33E28130-4E1E-4676-835A-98395C3BC3BB}')
     Profile = UUID('{5E6C858F-0E22-4760-9AFE-EA3317B67173}')
     Desktop = UUID('{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}')
@@ -56,23 +60,27 @@ class FOLDERID:     # [2]
     # The complete list is much longer, see https://gist.github.com/mkropat/7550097
 
 
-class UserHandle:   # [3]
+class UserHandle(object):  # [3]
     current = wintypes.HANDLE(0)
-    common  = wintypes.HANDLE(-1)
+    common = wintypes.HANDLE(-1)
+
 
 _CoTaskMemFree = windll.ole32.CoTaskMemFree     # [4]
-_CoTaskMemFree.restype= None
+_CoTaskMemFree.restype = None
 _CoTaskMemFree.argtypes = [ctypes.c_void_p]
 
 _SHGetKnownFolderPath = windll.shell32.SHGetKnownFolderPath     # [5] [3]
 _SHGetKnownFolderPath.argtypes = [
     ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)
-] 
+]
 
-class PathNotFoundException(Exception): pass
+
+class PathNotFoundException(Exception):
+    pass
+
 
 def get_path(folderid, user_handle=UserHandle.common):
-    fid = GUID(folderid) 
+    fid = GUID(folderid)
     pPath = ctypes.c_wchar_p()
     S_OK = 0
     if _SHGetKnownFolderPath(ctypes.byref(fid), 0, user_handle, ctypes.byref(pPath)) != S_OK:
