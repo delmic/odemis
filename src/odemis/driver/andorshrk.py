@@ -205,9 +205,12 @@ class LedActiveMgr(object):
         logging.debug("Indicating leds are on")
 
         for i, c in enumerate(self._comps):
-            self._prev_prot[i] = c.protection.value
-            if not self._prev_prot[i]:
-                c.protection.value = True
+            try:
+                self._prev_prot[i] = c.protection.value
+                if not self._prev_prot[i]:
+                    c.protection.value = True
+            except Exception:
+                logging.exception("Failed to activate protection for %s", c.name)
 
         # wait a little to make sure the detectors are really off
         time.sleep(self._settle_time)
@@ -224,7 +227,10 @@ class LedActiveMgr(object):
         # Unprotect iff previously the protection was off
         for c, pp in zip(self._comps, self._prev_prot):
             if not pp:
-                c.protection.value = pp
+                try:
+                    c.protection.value = pp
+                except Exception:
+                    logging.exception("Failed to disable protection for %s", c.name)
 
 
 # default names for the slits
