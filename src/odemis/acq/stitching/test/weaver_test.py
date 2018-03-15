@@ -19,20 +19,22 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+
+from __future__ import division
+
 import logging
 import numpy
 from odemis import model
-import time
-import unittest
-import os
-import random
-
+import odemis
 from odemis.acq.stitching import CollageWeaver, MeanWeaver
 from odemis.dataio import find_fittest_converter
 from odemis.util.img import ensure2DImage
+import os
+import random
+import time
+import unittest
 
 from stitching_test import decompose_image
-import odemis
 
 logging.getLogger().setLevel(logging.DEBUG)
 
