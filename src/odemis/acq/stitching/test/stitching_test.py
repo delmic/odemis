@@ -20,16 +20,18 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-import unittest
-from odemis.acq.stitching import register, weave, REGISTER_IDENTITY, REGISTER_SHIFT, WEAVER_COLLAGE, WEAVER_MEAN
+from __future__ import division
+
+import copy
+import numpy
 from odemis import model
+import odemis
+from odemis.acq.stitching import register, weave, REGISTER_IDENTITY, REGISTER_SHIFT, WEAVER_COLLAGE, WEAVER_MEAN
 from odemis.dataio import find_fittest_converter
 from odemis.util.img import ensure2DImage
 import os
 import random
-import copy
-import numpy
-import odemis
+import unittest
 
 # Find path for test images
 IMG_PATH = os.path.dirname(odemis.__file__)
