@@ -79,7 +79,7 @@ class PathNotFoundException(Exception):
     pass
 
 
-def get_path(folderid, user_handle=UserHandle.common):
+def get_path(folderid, user_handle=UserHandle.current):
     fid = GUID(folderid)
     pPath = ctypes.c_wchar_p()
     S_OK = 0
