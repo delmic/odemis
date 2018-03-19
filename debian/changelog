@@ -1,3 +1,12 @@
+odemis (2.7.4-1) precise; urgency=medium
+
+  * New version: 2.7.4
+  * Main bugs fixed:
+   - Windows version would fail to start if not running with admin rights
+   - Andorshrk should not fail slit moving if protected components are not responding
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 19 Mar 2018 13:29:40 +0100
+
 odemis (2.7.3-1) precise; urgency=medium
 
   * New version: 2.7.3
