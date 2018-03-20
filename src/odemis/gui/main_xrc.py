@@ -5521,6 +5521,7 @@ def __init_resources():
                           <face>Ubuntu</face>
                           <encoding>UTF-8</encoding>
                         </font>
+                        <hidden>1</hidden>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
