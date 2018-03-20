@@ -43,6 +43,9 @@ from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
+from odemis.acq.stream import SpectrumStream
+from odemis.acq.stream._static import StaticSpectrumStream
+from odemis.acq.stream._helper import SpectrumSettingsStream
 
 
 def find_plugins():
@@ -342,8 +345,11 @@ class AcquisitionDialog(xrcfr_plugin):
         self.viewport_l.setView(self.microscope_view, data_model)
         self.microscope_view_r = MicroscopeView("Plugin View right")
         self.viewport_r.setView(self.microscope_view_r, data_model)
+        self.microscope_view_spectrum = MicroscopeView("Plugin View spectrum")
+        self.viewport_spectrum.setView(self.microscope_view_spectrum, data_model)
         data_model.focussedView.value = self.microscope_view
-        data_model.views.value = [self.microscope_view, self.microscope_view_r]
+        data_model.views.value = [self.microscope_view, self.microscope_view_spectrum,
+                                  self.microscope_view_r]
 
         self.streambar_controller = StreamBarController(
             data_model,
@@ -432,15 +438,19 @@ class AcquisitionDialog(xrcfr_plugin):
         Note: If this method is not called, the stream panel and canvas are hidden.
 
         stream(Stream or None): Stream to be added
-        index(0 or 1): Index of the viewport to add the stream. 0 = left, 1 = right
+        index(0, 1, or 2): Index of the viewport to add the stream. 0 = left, 
+        1 = right, 2 = spectrum viewport
 
         """
-        if index == 0:
-            viewport = self.viewport_l
-            v = self.microscope_view
-        else:
+        if index == 1:
             viewport = self.viewport_r
             v = self.microscope_view_r
+        elif index == 2:
+            viewport = self.viewport_spectrum
+            v = self.microscope_view_spectrum
+        else:
+            viewport = self.viewport_l
+            v = self.microscope_view
 
         if not self.fp_streams.IsShown() or not viewport.IsShown():
             self.fp_streams.Show()

@@ -44,10 +44,11 @@ import threading
 
 from odemis.acq import stitching
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
-    RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, \
-    ARStream, SpectrumStream, FluoStream, MultipleDetectorStream
+    RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
+    FluoStream, MultipleDetectorStream
 import numpy
 import psutil
+from odemis.gui.util import call_in_wx_main
 
 
 class TileAcqPlugin(Plugin):
@@ -131,7 +132,8 @@ class TileAcqPlugin(Plugin):
         """
         if not self._dlg:
             return []
-        ss = self._dlg.microscope_view.getStreams()
+        ss = self._dlg.microscope_view.getStreams() + self._dlg.microscope_view_r.getStreams() + \
+            self._dlg.microscope_view_spectrum.getStreams()
         logging.debug("View has %d streams", len(ss))
         return ss
 
@@ -278,11 +280,13 @@ class TileAcqPlugin(Plugin):
         self._dlg = dlg
         dlg.addSettings(self, self.vaconf)
         for s in ss:
+            # add ARStream and Spectrum stream in different view
             if isinstance(s, ARStream):
-                dlg.addStream(s, index=1)  # add ARStream in different view
+                dlg.addStream(s, index=1)
+            elif isinstance(s, SpectrumStream):
+                dlg.addStream(s, index=2)
             else:
                 dlg.addStream(s, index=0)
-            # TODO: handle Spectrum stream
 
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
@@ -525,6 +529,8 @@ class TileAcqPlugin(Plugin):
         # Add the ACQ_TYPE metadata (in case it's not there)
         # In practice, we check the stream the DA came from, and based on the stream
         # type, fill the metadata
+        # TODO: make sure acquisition type is added to data arrays before, so this
+        # code can be deleted
         for da in das:
             if model.MD_ACQ_TYPE in da.metadata:
                 continue
@@ -549,13 +555,13 @@ class TileAcqPlugin(Plugin):
                         break
 
             if not da.metadata[model.MD_ACQ_TYPE]:
-                da.metadata[model.MD_ACQ_TYPE] = "Unknown"
                 logging.warning("Couldn't find the stream for DA of shape %s", da.shape)
 
         # save tiles for stitching
         if self.stitch.value:
             # Remove the DAs we don't want to (cannot) stitch
-            das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] not in (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
+            das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] \
+                   not in (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
 
             def leader_quality(da):
                 """
@@ -588,14 +594,13 @@ class TileAcqPlugin(Plugin):
         return sfov
 
     MEMPP = 2e-8  # memory per pixel in GB, found empirically
+    @call_in_wx_main
     def _memory_check(self, _=None):
         """
         Makes an estimate for the amount of memory that will be consumed during
         stitching and compares it to the available memory on the computer.
         Displays a warning if memory exceeds available memory.
-        returns (bool): True (memory is sufficient), False (memory will be exhausted)
         """
-
         if self.stitch.value:
             # Number of pixels for acquisition
             pxs = 0
@@ -627,8 +632,6 @@ class TileAcqPlugin(Plugin):
             self._dlg.lbl_acquisition_info.SetFont(wx.Font(10, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
             self._dlg.lbl_acquisition_info.SetForegroundColour(odemis.gui.FG_COLOUR_ERROR)
             self._dlg.Layout()
-
-        return mem_sufficient
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
