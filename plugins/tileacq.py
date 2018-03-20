@@ -623,11 +623,11 @@ class TileAcqPlugin(Plugin):
 
         # Display warning
         if mem_sufficient:
-            self._dlg.set_acquisition_info(None)
+            self._dlg.setAcquisitionInfo(None)
         else:
             txt = "Stitching this area requires %.1f GB of memory.\n" % (mem_est) + \
                 "Running the acquisition might cause your computer to crash."
-            self._dlg.set_acquisition_info(txt, lvl=logging.ERROR)
+            self._dlg.setAcquisitionInfo(txt, lvl=logging.ERROR)
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data

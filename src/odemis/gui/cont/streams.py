@@ -50,9 +50,6 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
-from odemis.acq.stream._static import StaticStream
-from odemis.acq.stream._helper import SpectrumSettingsStream
-from odemis.gui.comp.viewport import PointSpectrumViewport
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)

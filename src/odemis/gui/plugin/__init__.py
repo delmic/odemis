@@ -44,9 +44,6 @@ from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
-from odemis.acq.stream import SpectrumStream
-from odemis.acq.stream._static import StaticSpectrumStream
-from odemis.acq.stream._helper import SpectrumSettingsStream
 
 
 def find_plugins():
@@ -506,18 +503,18 @@ class AcquisitionDialog(xrcfr_plugin):
         # such a button. That button will call cancel() on the future.
 
     @call_in_wx_main
-    def set_acquisition_info(self, txt=None, lvl=logging.INFO):
+    def setAcquisitionInfo(self, text=None, lvl=logging.INFO):
         """
         Displays acquisition info above progress bar.
-        txt (str or None): text to be displayed. If None is passed, the acquisition
+        text (str or None): text to be displayed. If None is passed, the acquisition
         label will be hidden, so no empty space is displayed.
-        lvl (int, from logging.*): log level, which selects the display colour. 
+        lvl (int, from logging.*): log level, which selects the display colour.
         Options: logging.INFO, logging.WARNING, logging.ERROR
         """
-        if txt == None:
+        if text is None:
             self.lbl_acquisition_info.Hide()
         else:
-            self.lbl_acquisition_info.SetLabel(txt)
+            self.lbl_acquisition_info.SetLabel(text)
             if lvl >= logging.ERROR:
                 self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_ERROR)
             elif lvl >= logging.WARNING:
