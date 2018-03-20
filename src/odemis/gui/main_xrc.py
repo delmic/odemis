@@ -504,10 +504,10 @@ class xrcfr_plugin(wx.Dialog):
         self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
         self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
+        self.lbl_acquisition_info = xrc.XRCCTRL(self, "lbl_acquisition_info")
         self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.lbl_acquisition_info = xrc.XRCCTRL(self, "lbl_acquisition_info")
         self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
 
 
@@ -5510,6 +5510,26 @@ def __init_resources():
                 <object class="wxPanel" name="pnl_gauge">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_acquisition_info">
+                        <fg>#DDDDDD</fg>
+                        <font>
+                          <size>10</size>
+                          <style>normal</style>
+                          <weight>normal</weight>
+                          <underlined>0</underlined>
+                          <family>default</family>
+                          <face>Ubuntu</face>
+                          <encoding>UTF-8</encoding>
+                        </font>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
+                      <border>10</border>
+                    </object>
+                    <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
                         <size>-1,8</size>
                         <range>100</range>
@@ -5563,24 +5583,6 @@ def __init_resources():
                       <border>5</border>
                     </object>
                     <orient>wxVERTICAL</orient>
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_acquisition_info">
-                        <fg>#DDDDDD</fg>
-                        <font>
-                          <size>14</size>
-                          <style>normal</style>
-                          <weight>normal</weight>
-                          <underlined>0</underlined>
-                          <face>Ubuntu</face>
-                        </font>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
-                      <border>10</border>
-                    </object>
                   </object>
                   <bg>#4D4D4D</bg>
                   <XRCED>

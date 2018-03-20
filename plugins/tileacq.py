@@ -158,7 +158,7 @@ class TileAcqPlugin(Plugin):
         tab = self.main_app.main_data.tab.value
         ss = self._get_live_streams(tab.tab_data_model)
 
-        # Unsubscribe to all relevant setting changes
+        # Unsubscribe from all relevant setting changes
         for s in ss:
             for va in self._get_settings_vas(s):
                 va.unsubscribe(self._update_exp_dur)
@@ -623,20 +623,17 @@ class TileAcqPlugin(Plugin):
 
         # Display warning
         if mem_sufficient:
-            self._dlg.lbl_acquisition_info.SetLabel("")
-            self._dlg.Layout()
+            self._dlg.set_acquisition_info(None)
         else:
             txt = "Stitching this area requires %.1f GB of memory.\n" % (mem_est) + \
                 "Running the acquisition might cause your computer to crash."
-            self._dlg.lbl_acquisition_info.SetLabel(txt)
-            self._dlg.lbl_acquisition_info.SetFont(wx.Font(10, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
-            self._dlg.lbl_acquisition_info.SetForegroundColour(odemis.gui.FG_COLOUR_ERROR)
-            self._dlg.Layout()
+            self._dlg.set_acquisition_info(txt, lvl=logging.ERROR)
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
         str_ctrl = main_data.tab.value.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
+        self._unsubscribe_vas()
 
         orig_pos = main_data.stage.position.value
         trep = (self.nx.value, self.ny.value)
