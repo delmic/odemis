@@ -25,10 +25,11 @@ from odemis.acq.drift import MeasureShift
 import numpy
 import math
 from odemis import model
+import logging
 
 BEST_MATCH = 0.9  # minimum match value indicating optimal shift value
 GOOD_MATCH = 0.2  # minimum match value indicating shift value can be used in the average position calculation
-# minimum ratio of overlap size indicating an extreme shift value that
+# maximum percentage of overlap size indicating an extreme shift value that
 # should be aborted
 EXTREME_SHIFT = 0.6
 
@@ -378,7 +379,6 @@ class ShiftRegistrar(object):
                 x, y = self._get_shift(tile, prev_tile, exp_shift)
                 y = -y
                 x = -x
-
             match = self._estimateMatch(
                 prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
 
@@ -417,9 +417,17 @@ class ShiftRegistrar(object):
                 self.coords_hor[row][col] = x, y
 
             # calculate the new position based on the shift with respect to the
-            # left neighbor position (prev_pos)
-            pos = (int(prev_pos[0] + (self.size[1] * (1 - self.ovrlp)) - x),
-                   int(prev_pos[1] - y))
+            # neighbour position (prev_pos)
+            if xdir == LEFT:
+                pos = (int(prev_pos[0] + (self.size[1] * (1 - self.ovrlp)) - x),
+                       int(prev_pos[1] - y))
+                if pos[0] < prev_pos[0]:
+                    logging.warning("Inserted tile to the wrong side (left instead of right)")
+            else:
+                pos = (int(prev_pos[0] - (self.size[1] * (1 - self.ovrlp)) - x),
+                       int(prev_pos[1] - y))
+                if pos[0] > prev_pos[0]:
+                    logging.warning("Inserted tile to the wrong side (right instead of left)")
 
         return pos, match
 
@@ -513,12 +521,12 @@ class ShiftRegistrar(object):
         match = 0
         match2 = 0
 
-        if self.pos_prev_x <= col:
+        if self.pos_prev_x < col:
             if col != 0 and self.tiles[row][col - 1] is not None:
                 # calculate the shift compared to the neighbor on the left if
                 # possible
                 pos, match = self._pos_to_left_right(row, col, LEFT)
-        else:
+        elif self.pos_prev_x > col:
             if col != self.nx and self.tiles[row][col + 1] is not None:
                 # calculate the shift compared to the neighbor on the right if
                 # possible
