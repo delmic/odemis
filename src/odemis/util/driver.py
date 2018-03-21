@@ -4,7 +4,7 @@ Created on 5 Mar 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2018 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -124,6 +124,9 @@ def estimateMoveDuration(distance, speed, accel):
     accel (0 < float): acceleration and deceleration (in m²/s)
     return (0 <= float): time in s
     """
+    if speed <= 0 or accel <= 0:
+        raise ValueError("Speed and accel must be > 0, but got %g and %g" % (speed, accel))
+
     # Given the distance to be traveled, determine whether we have a
     # triangular or a trapezoidal motion profile.
     A = (2 * accel) / (accel ** 2)
