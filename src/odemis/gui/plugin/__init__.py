@@ -44,9 +44,6 @@ from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
-from odemis.acq.stream import SpectrumStream
-from odemis.acq.stream._static import StaticSpectrumStream
-from odemis.acq.stream._helper import SpectrumSettingsStream
 
 
 def find_plugins():
@@ -341,19 +338,20 @@ class AcquisitionDialog(xrcfr_plugin):
 
         # Create a minimal model for use in the streambar controller
 
-        data_model = MicroscopyGUIData(plugin.main_app.main_data)
+        self._dmodel = MicroscopyGUIData(plugin.main_app.main_data)
         self.microscope_view = MicroscopeView("Plugin View left")
-        self.viewport_l.setView(self.microscope_view, data_model)
+        self.viewport_l.setView(self.microscope_view, self._dmodel)
         self.microscope_view_r = MicroscopeView("Plugin View right")
-        self.viewport_r.setView(self.microscope_view_r, data_model)
+        self.viewport_r.setView(self.microscope_view_r, self._dmodel)
         self.microscope_view_spectrum = MicroscopeView("Plugin View spectrum")
-        self.viewport_spectrum.setView(self.microscope_view_spectrum, data_model)
-        data_model.focussedView.value = self.microscope_view
-        data_model.views.value = [self.microscope_view, self.microscope_view_spectrum,
-                                  self.microscope_view_r]
+        self.viewport_spectrum.setView(self.microscope_view_spectrum, self._dmodel)
+        self._dmodel.focussedView.value = self.microscope_view
+        self._dmodel.views.value = [self.microscope_view, self.microscope_view_r,
+                                    self.microscope_view_spectrum]
+        self._viewports = (self.viewport_l, self.viewport_r, self.viewport_spectrum)
 
         self.streambar_controller = StreamBarController(
-            data_model,
+            self._dmodel,
             self.pnl_streams,
             ignore_view=True
         )
@@ -433,25 +431,19 @@ class AcquisitionDialog(xrcfr_plugin):
     @call_in_wx_main
     def addStream(self, stream, index=0):
         """
-        Adds a stream to the canvas, and a stream entry to the stream panel.
-        It also ensures the panel box and canvas are shown.
+        Adds a stream to the viewport, and a stream entry to the stream panel.
+        It also ensures the panel box and viewport are shown.
 
-        Note: If this method is not called, the stream panel and canvas are hidden.
+        Note: If this method is not called, the stream panel and viewports are hidden.
 
-        stream(Stream or None): Stream to be added
-        index(0, 1, or 2): Index of the viewport to add the stream. 0 = left, 
-        1 = right, 2 = spectrum viewport
-
+        stream (Stream or None): Stream to be added. Use None to force a viewport
+          to be seen without adding a stream.
+        index (0, 1, or 2): Index of the viewport to add the stream. 0 = left,
+          1 = right, 2 = spectrum viewport
         """
-        if index == 1:
-            viewport = self.viewport_r
-            v = self.microscope_view_r
-        elif index == 2:
-            viewport = self.viewport_spectrum
-            v = self.microscope_view_spectrum
-        else:
-            viewport = self.viewport_l
-            v = self.microscope_view
+        viewport = self._viewports[index]
+        v = self._dmodel.views.value[index]
+        assert viewport.microscope_view is v
 
         if not self.fp_streams.IsShown() or not viewport.IsShown():
             self.fp_streams.Show()
@@ -506,18 +498,18 @@ class AcquisitionDialog(xrcfr_plugin):
         # such a button. That button will call cancel() on the future.
 
     @call_in_wx_main
-    def set_acquisition_info(self, txt=None, lvl=logging.INFO):
+    def setAcquisitionInfo(self, text=None, lvl=logging.INFO):
         """
         Displays acquisition info above progress bar.
-        txt (str or None): text to be displayed. If None is passed, the acquisition
+        text (str or None): text to be displayed. If None is passed, the acquisition
         label will be hidden, so no empty space is displayed.
-        lvl (int, from logging.*): log level, which selects the display colour. 
+        lvl (int, from logging.*): log level, which selects the display colour.
         Options: logging.INFO, logging.WARNING, logging.ERROR
         """
-        if txt == None:
+        if text is None:
             self.lbl_acquisition_info.Hide()
         else:
-            self.lbl_acquisition_info.SetLabel(txt)
+            self.lbl_acquisition_info.SetLabel(text)
             if lvl >= logging.ERROR:
                 self.lbl_acquisition_info.SetForegroundColour(FG_COLOUR_ERROR)
             elif lvl >= logging.WARNING:
