@@ -27,6 +27,7 @@ import odemis
 from odemis.acq import path, stream
 from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
 from odemis.util import test
+from odemis.util.test import assert_pos_almost_equal
 import os
 import unittest
 from unittest.case import skip
@@ -479,6 +480,8 @@ class Sparc2PathTestCase(unittest.TestCase):
         Test setting modes that do exist. We expect all modes to be available
         """
         fbands = self.filter.axes["band"].choices
+        l1_pos_exp = self.lensmover.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        self.lensmover.reference({"x"}).result()  # reset pos
 
         # setting ar
         self.optmngr.setPath("ar").result()
@@ -488,6 +491,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
+        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # CL intensity mode
         self.optmngr.setPath("cli").result()
@@ -503,6 +507,8 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
+        self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
+        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
 #         self.optmngr.setPath("spectral-dedicated").result()
 #         # Assert that actuator was moved according to mode given
@@ -527,6 +533,8 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
 
+        self.lensmover.reference({"x"}).result()
+
         # Check the focus is remembered before going to chamber-view
         orig_focus = self.focus.position.value
         # Move to a different filter band
@@ -547,6 +555,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         self.focus.moveRel({"z": 1e-3}).result()
         chamber_focus = self.focus.position.value
+        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # Check the focus is back after changing to previous mode
         self.optmngr.setPath("mirror-align").result()
@@ -595,6 +604,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
+        l1_pos_exp = self.lensmover.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        self.lensmover.reference({"x"}).result()  # reset pos
+
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
         self.assert_pos_as_in_mode(self.lenswitch, "ar")
@@ -611,6 +623,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.slit, "ar")
         self.assert_pos_as_in_mode(self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
@@ -638,6 +651,7 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         # Change positions back
         self.optmngr.setPath("chamber-view").result()
+        self.lensmover.reference({"x"}).result()  # reset pos
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
@@ -646,6 +660,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.specgraph, "spectral-integrated")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
+        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # Check the focus is remembered before going to chamber-view
         orig_focus = self.focus.position.value

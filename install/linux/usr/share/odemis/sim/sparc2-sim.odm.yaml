@@ -294,7 +294,7 @@ SPARC2: {
     },
     metadata: {
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": -0.0045} # m
+        FAV_POS_ACTIVE: {"x": 0.0045} # m
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
@@ -307,8 +307,8 @@ SPARC2: {
     init: {
         axis_name: "l2",
         positions: {
-            -4.e-3: "on",
-            -0.02: "off", # completely out of the path
+            4.e-3: "on",
+            0.02: "off", # completely out of the path
         },
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],

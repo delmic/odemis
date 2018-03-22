@@ -90,6 +90,7 @@ SPARC_MODES = {'ar': ("ccd",
 SPARC2_MODES = {
             'ar': ("ccd",
                 {'lens-switch': {'x': 'on'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
                  # 'cl-det-selector': {'x': 'off'},
@@ -99,6 +100,7 @@ SPARC2_MODES = {
                 }),
             'cli': ("cl-detector",
                 {'lens-switch': {'x': 'on'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'on'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # there is also the cl-filter, but that's just up to the user
@@ -106,6 +108,7 @@ SPARC2_MODES = {
                 }),
             'spectral': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
                  # TODO: need to restore slit-in to the current position?
                  # 'cl-det-selector': {'x': 'off'},
@@ -118,6 +121,7 @@ SPARC2_MODES = {
                 }),
             'spectral-integrated': ("spectrometer-integrated",
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
                  # TODO: need to restore slit-in to the current position?
                  # 'cl-det-selector': {'x': 'off'},
@@ -128,6 +132,7 @@ SPARC2_MODES = {
                 }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
                  # 'cl-det-selector': {'x': 'off'},
                  # TODO
@@ -138,10 +143,12 @@ SPARC2_MODES = {
                 }),
             'time-correlator': ("time-correlator",
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
                 }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': 'pass-through'},
                  'spectrograph': {'grating': 'mirror'},
@@ -152,7 +159,7 @@ SPARC2_MODES = {
                 }),
             'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
-                 # 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': 'pass-through'},
                  'spectrograph': {'grating': 'mirror'},
@@ -164,6 +171,7 @@ SPARC2_MODES = {
                 }),
             'spec-focus': ("ccd",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},
                  'filter': {'band': 'pass-through'},
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
@@ -174,6 +182,7 @@ SPARC2_MODES = {
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': 'pass-through'},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
@@ -183,6 +192,7 @@ SPARC2_MODES = {
                 }),
             'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
                 {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': 'pass-through'},
                  # In the current convention, only the spectrograph-dedicated
                  # can be after the fiber, so no need to check for spectrograph
@@ -492,7 +502,6 @@ class OpticalPathManager(object):
                     continue
                 if not hasattr(comp, "axes") or not isinstance(comp.axes, dict):
                     continue
-                # Unused
                 if isinstance(pos, str) and pos.startswith("MD:"):
                     pos = self.mdToValue(comp, pos[3:])[axis]
                 if axis in comp.axes:
@@ -744,8 +753,7 @@ class OpticalPathManager(object):
         """
         md = comp.getMetadata()
         try:
-            value = md.get(md_name)
-            return value
+            return md[md_name]
         except KeyError:
             raise KeyError("Metadata %s does not exist in component %s" % (md_name, comp.name))
 
