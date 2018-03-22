@@ -642,10 +642,8 @@ class TileAcqPlugin(Plugin):
         # before the first move
         sfov = self._guess_smallest_fov()
         fn = self.filename.value
-        bs, ext = udataio.splitext(fn)
-        fn_tile_pat = bs + "-%.5dx%.5d" + ext
-
-        exporter = dataio.find_fittest_converter(fn_tile_pat)
+        exporter = dataio.find_fittest_converter(fn)
+        fn_bs, fn_ext = udataio.splitext(fn)
 
         ss = self._get_acq_streams()
         end = self.estimate_time() + time.time()
@@ -682,7 +680,7 @@ class TileAcqPlugin(Plugin):
                     return
 
                 # TODO: do in a separate thread
-                fn_tile = fn_tile_pat % (ix, iy)
+                fn_tile = "%s-%.5dx%.5d%s" % (fn_bs, ix, iy, fn_ext)
                 logging.debug("Will save data of tile %dx%d to %s", ix, iy, fn_tile)
                 exporter.export(fn_tile, das)
 
