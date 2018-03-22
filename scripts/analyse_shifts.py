@@ -22,20 +22,25 @@ import sys
 from odemis.acq.align.shift import MeasureShift
 
 
-def measure_shift(da, db):
+def measure_shift(da, db, use_md=True):
     """
+    use_md (bool): if False, will not use metadata and assume the 2 images are
+      of the same area
     return (float, float): shift of the second image compared to the first one,
      in pixels of the first image.
     """
     da_res = da.shape[1], da.shape[0] # X/Y are inverted
     db_res = db.shape[1], db.shape[0]
     if any(sa < sb for sa, sb in zip(da_res, db_res)):
-        logging.warning("Comparing a large image to a small image, you should do the opposite")
+        logging.warning("Comparing a large image %s to a small image %s, you should do the opposite", db_res, da_res)
 
     # if db FoV is smaller than da, crop da
-    dafov = [pxs * s for pxs, s in zip(da.metadata[model.MD_PIXEL_SIZE], da_res)]
-    dbfov = [pxs * s for pxs, s in zip(db.metadata[model.MD_PIXEL_SIZE], db_res)]
-    fov_ratio = [fa / fb for fa, fb in zip(dafov, dbfov)]
+    if use_md:
+        dafov = [pxs * s for pxs, s in zip(da.metadata[model.MD_PIXEL_SIZE], da_res)]
+        dbfov = [pxs * s for pxs, s in zip(db.metadata[model.MD_PIXEL_SIZE], db_res)]
+        fov_ratio = [fa / fb for fa, fb in zip(dafov, dbfov)]
+    else:
+        fov_ratio = (1, 1)
     if any(r < 1 for r in fov_ratio):
         logging.warning("Cannot compare an image with a large FoV %g to a small FoV %g",
                         dbfov, dafov)
@@ -80,10 +85,12 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(description="Automated focus procedure")
+    parser = argparse.ArgumentParser(description="Shift analysis between images of the same region")
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
+    parser.add_argument("--no-metadata", "-m", dest="nomd", action="store_true", default=False,
+                        help="Do not try to use the metadata (and assume all images are of the same region)")
     parser.add_argument(dest="base",
                         help="filename of the base image used to compare")
     parser.add_argument(dest="compared", nargs="+",
@@ -101,7 +108,8 @@ def main(args):
 
     try:
         da = get_data(options.base)
-        dafov = da.metadata[model.MD_PIXEL_SIZE][0] * da.shape[1]
+        if not options.nomd:
+            dafov = da.metadata[model.MD_PIXEL_SIZE][0] * da.shape[1]
         print("filename\tzoom\tdwell time\tres X\tres Y\tshift X\tshift Y")
         for fn in options.compared:
             logging.info("Comparing %s", fn)
@@ -109,11 +117,14 @@ def main(args):
                 db = get_data(fn)
             except LookupError:
                 continue
-            shift_px = measure_shift(da, db)
-            dbfov = db.metadata[model.MD_PIXEL_SIZE][0] * db.shape[1]
-            z = dafov / dbfov
+            shift_px = measure_shift(da, db, use_md=not options.nomd)
+            if not options.nomd:
+                dbfov = db.metadata[model.MD_PIXEL_SIZE][0] * db.shape[1]
+                z = dafov / dbfov
+            else:
+                z = 1
             print("%s\t%g\t%g\t%d\t%d\t%g\t%g" %
-                  (fn, z, db.metadata[model.MD_EXP_TIME], db.shape[1], db.shape[0], shift_px[0], shift_px[1]))
+                  (fn, z, db.metadata.get(model.MD_EXP_TIME, 0), db.shape[1], db.shape[0], shift_px[0], shift_px[1]))
 
     except KeyboardInterrupt:
         logging.info("Interrupted before the end of the execution")
