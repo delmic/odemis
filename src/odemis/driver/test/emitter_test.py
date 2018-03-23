@@ -23,11 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-from odemis.driver import pwrcomedi, omicronxx, emitter
-import os
+from odemis.driver import pwrcomedi, omicronxx, emitter, rigol, simulated
 import time
 import unittest
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -52,7 +50,11 @@ CHILD1_KWARGS = {"name": "test1", "role": None,
          }
 CHILD2_CLASS = omicronxx.HubxX
 CHILD2_KWARGS = {"name": "test2", "role": None, "port": "/dev/fakehub"}
-
+CONFIG_DG1000Z = {"name": "Rigol Wave Gen", "role": "pc-emitter",
+                "host": "fake",
+                "port": 5555, "channel": 1,
+                "limits": (-10.0, 10.0)
+}
 KWARGS = {"name": "test", "role": "light"}
 
 
@@ -127,6 +129,67 @@ class TestMultiplexLight(unittest.TestCase):
 #             em[i] = 0
 #             self.assertEqual(self.dev.emissions.value, em)
 
+
+class TestExtendedLight(unittest.TestCase):
+    """
+    Tests for extended light
+    """
+
+    def setUp(self):
+        self.wg = rigol.WaveGenerator(**CONFIG_DG1000Z)    # specify IP of actual device
+        self.light = simulated.Light("test", "light")
+        CONFIG_EX_LIGHT = {"name": "Test Extended Light", "role": None,
+                           "children": {"light": self.light, "clock": self.wg }
+                           }
+        self.ex_light = emitter.ExtendedLight(**CONFIG_EX_LIGHT)
+
+    def tearDown(self):
+        self.wg.terminate() # free up gsocket.
+        time.sleep(1.0) # give some time to make sure socket is released.
+
+    def test_power(self):
+        '''
+        Test 1: If there are emissions, and power > 0, the wave generator power
+        should be active (1) and the light power should be the same as ex_light power
+        '''
+        self.ex_light.power.value = 5
+        em = self.ex_light.emissions.value
+        em[0] = 0.5
+        self.ex_light.emissions.value = em
+        self.assertEqual(self.ex_light.power.value, 5)
+        self.assertEqual(self.wg.power.value, 1)
+        self.assertEqual(self.light.power.value, self.ex_light.power.value)
+        '''
+        Test 2: If there are no emissions, and power > 0, the wave generator power
+        should be off (0) and the light power should be the same as ex_light power
+        '''
+        self.ex_light.power.value = 5
+        em = [0] * len(self.ex_light.emissions.value)
+        self.ex_light.emissions.value = em
+        self.assertEqual(self.ex_light.power.value, 5)
+        self.assertEqual(self.wg.power.value, 0)
+        self.assertEqual(self.light.power.value, self.ex_light.power.value)
+        '''
+        Test 3: If there are emissions, but power = 0, the wave generator power
+        should be off (0) and the light power should be the same as ex_light power
+        '''
+        self.ex_light.power.value = 0
+        em = self.ex_light.emissions.value
+        em[0] = 0.5
+        self.ex_light.emissions.value = em
+        self.assertEqual(self.ex_light.power.value, 0)
+        self.assertEqual(self.wg.power.value, 0)
+        self.assertEqual(self.light.power.value, self.ex_light.power.value)
+
+    def test_period(self):
+        self.ex_light.power.value = 0
+        self.assertEqual(self.ex_light.power.value, 0)
+        for i in range(1000, 10000, 1000):    # specify range of frequencies to increment
+            self.ex_light.period.value = 1 / i
+            self.assertEqual(self.ex_light.period.value, 1 / i)
+            self.ex_light.power.value = 5
+            time.sleep(0.1)
+            self.ex_light.power.value = 0
 
 if __name__ == "__main__":
     unittest.main()
