@@ -132,3 +132,62 @@ class MultiplexLight(model.Emitter):
         pwr, em = self._readPwrEmissions()
         # TODO: what to do if power is different from the current value? That shouldn't happen, right?
         return em
+
+
+class ExtendedLight(model.Emitter):
+    """
+    Wrapper component to add to an Emitter, a .period VA coming from a clock generator
+    """
+    def __init__(self, name, role, children, **kwargs):
+        """
+        children (dict str->Component): the two components to wrap together.
+            The key must be "light" for the emitter component, and "clock" for the clock generator.
+        """
+        # This will create the .powerSupply VA
+        model.Emitter.__init__(self, name, role, children=children, **kwargs)
+        self._shape = ()
+
+        # Determine child objects. Light
+        try:
+            self._light = children["light"]
+        except KeyError:
+            raise ValueError("No 'light' child provided")
+        if not isinstance(self._light, model.ComponentBase):
+            raise ValueError("Child %s is not an emitter." % (self._light.name,))
+        if not model.hasVA(self._light, 'power'):
+            raise ValueError("Child %s has no power VA." % (self._light.name,))
+        if not model.hasVA(self._light, 'emissions'):
+            raise ValueError("Child %s has no emissions VA." % (self._light.name,))
+        # Clock generator
+        try:
+            self._clock = children["clock"]
+        except KeyError:
+            raise ValueError("No 'clock generator' child provided")
+        if not isinstance(self._clock,  model.ComponentBase):
+            raise ValueError("Child %s is not a Component." % (self._clock.name,))
+        if not model.hasVA(self._clock, "period"):
+            raise ValueError("Child %s has no period VA." % (self._clock.name,))
+
+        # Only one VA from the clock
+        self.period = self._clock.period
+
+        # All the other VAs are straight from the light
+        self.emissions = self._light.emissions
+        self.spectra = self._light.spectra
+        self.power = self._light.power
+
+        # Turn off/on the power of the clock based on the light power
+        self.emissions.subscribe(self._onEmissions)
+        self.power.subscribe(self._onPower)
+
+    def _updateClockPower(self, power, emissions):
+        if any((em * power) > 0 for em in emissions):
+            self._clock.power.value = 1
+        else:
+            self._clock.power.value = 0
+
+    def _onEmissions(self, em):
+        self._updateClockPower(self.power.value, em)
+
+    def _onPower(self, power):
+        self._updateClockPower(power, self.emissions.value)
