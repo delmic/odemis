@@ -242,8 +242,6 @@ class AxisLegend(wx.Panel):
 
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
-        self._locked = False
-
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
 
