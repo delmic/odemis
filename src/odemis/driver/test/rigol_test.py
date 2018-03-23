@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
-from odemis import model
 from odemis.driver import rigol
 import os
 import time
@@ -37,18 +36,20 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 # arguments used for the creation of basic components
 CONFIG_DG1000Z = {"name": "Rigol Wave Gen", "role": "pc-emitter",
-                "host": "192.168.1.191",
-                "port": 5555, "channel": 1,
-                "limits": [0, 5.0]
+                  "host": "192.168.1.191",
+                  "port": 5555,
+                  "channel": 1,
+                  "limits": [0, 5.0]
 }
 
 # arguments used for the creation of basic components
 if TEST_NOHW:
     CONFIG_DG1000Z["host"] = "fake"
 
+
 class TestWaveGenerator(unittest.TestCase):
     """
-    Tests 
+    Tests
     """
     @classmethod
     def setUpClass(cls):
@@ -56,7 +57,7 @@ class TestWaveGenerator(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.wg.terminate() # free up socket. 
+        cls.wg.terminate()  # free up socket.
 
     def test_power(self):
         self.wg.power.value = 1
@@ -75,18 +76,18 @@ class TestWaveGenerator(unittest.TestCase):
             self.wg.power.value = 1
             time.sleep(0.1)
             self.wg.power.value = 0
-            
+
     def test_period_range(self):
         # test limits of range
-        for i in [self.wg.period.range[0], self.wg.period.range[1]]:
-            self.wg.period.value = i
-            self.assertEqual(self.wg.period.value, i)
-            
+        for p in self.wg.period.range:
+            self.wg.period.value = p
+            self.assertEqual(self.wg.period.value, p)
+
         # test boundary cases
         with self.assertRaises(IndexError):
             self.wg.period.value = 0
 
+
 if __name__ == "__main__":
     unittest.main()
-
 
