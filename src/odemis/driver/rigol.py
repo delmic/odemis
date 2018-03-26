@@ -18,28 +18,26 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 import logging
 
-from odemis import model, util
-from odemis.model import HwError
-from odemis.util import driver
+from odemis import model
 
-import os
-import sys
 import time
 import re
 import threading
 import socket
 
 DEFAULT_PORT = 5555 # Default TCP/IP port for the device
+PERIOD_RNG = (4e-8, 10)  # s, = 25 MHz -> 0.1Hz
 
 
 class WaveGenerator(model.Emitter):
     '''
     Implements control of a Rigol DG1000z series Wave Generator connected over
-    TCP/IP using SCPI raw. Currently, square wave generation on Channels 1 and 2
-    is supported. Note: The Rigol DG1022Z used in testing had 5555 as the
-    default TCP/IP port
+    TCP/IP using SCPI raw. Currently, square wave generation on channels 1 and 2
+    is supported.
     '''
-    def __init__(self, name, role, host, port=DEFAULT_PORT, channel=1, limits=[0,10], **kwargs):
+
+    def __init__(self, name, role, host, port=DEFAULT_PORT, channel=1, limits=(0, 10),
+                 **kwargs):
         '''
         host (str): Host name or IP address of the device. Use "fake" for using
         a simulator.
@@ -72,14 +70,14 @@ class WaveGenerator(model.Emitter):
 
         # Read frequency from the device.
         frequency = self.GetFrequency()
-        self.period = model.FloatContinuous(1 / frequency, range=(4e-8, 10), 
-                                            unit="s", setter=self._setPeriod)   # Range - up to 25 MHz
+        self.period = model.FloatContinuous(1 / frequency, range=PERIOD_RNG,
+                                            unit="s", setter=self._setPeriod)
         self.power = model.IntEnumerated(0, {0, 1}, unit="", setter=self._setPower)
-        # make sure it is off. 
+        # make sure it is off.
         self._setPower(self.power.value)
 
     def terminate(self):
-        if self._accesser: 
+        if self._accesser:
             self.SetOutput(0)   # turn off
             self._accesser.terminate()
             self._accesser = None
@@ -89,9 +87,9 @@ class WaveGenerator(model.Emitter):
         Sends an order to the device.
         cmd (str): the command string. e.g.  ":SOUR1:APPL:SQU"
         val (str): the value of the command string. e.g. "1,2,3,4"
-        Returns true if successful. 
+        Returns true if successful.
         '''
-        logging.debug("Sending command %s %s", cmd.encode('string_escape'), 
+        logging.debug("Sending command %s %s", cmd.encode('string_escape'),
                       val.encode('string_escape'))
         ret = self._accesser.sendOrderCommand(cmd, val)
 
@@ -119,7 +117,7 @@ class WaveGenerator(model.Emitter):
                 # Reset helps, but it also reset the current position, which
                 # is not handy.
                 time.sleep(4.0)
-                
+
                 try:
                     self._accesser.terminate()
                     self._accesser = self._openConnection(self._host, self._port)
@@ -160,7 +158,7 @@ class WaveGenerator(model.Emitter):
     def QueryErrorState(self):
         '''
         Gets the error state from the device.  This is stored as an error number and error message.
-        Returns (int or None, str): error_code, error_message. 
+        Returns (int or None, str): error_code, error_message.
             If no error, error_code is None
         '''
         msg = self._sendQueryCommand(":SYST:ERR?")
@@ -172,29 +170,26 @@ class WaveGenerator(model.Emitter):
 
     def _setPower(self, value):
         '''
-        Power on or off the wave generator. 
-        state: 0 or false for off, 1 or true for on. 
-        channel (int, 1 or 2): the channel to output on. 
+        Power on or off the wave generator.
+        state: 0 or false for off, 1 or true for on.
+        channel (int, 1 or 2): the channel to output on.
         '''
         self.SetOutput(value)
         self._checkForError()
         return value
-    
+
     def _setPeriod(self, value):
         '''
         Set output period of wave generation for a specific channel
-        value (float): the new period in seconds
+        value (0 < float): the new period in seconds
         '''
-        if value == 0:
-            raise ValueError("Cnnnot have 0 as a period.")
-        
-        self.ApplySquareWave(1 / value, self._amplitude_pp, self._dc_bias, 
+        self.ApplySquareWave(1 / value, self._amplitude_pp, self._dc_bias,
                              self._phase_shift)
         self._checkForError()
         return value
 
     def _checkForError(self):
-        ''' 
+        '''
         Checks for an error. Raises an exception if an error occurred.
         Returns None
         raise:
@@ -205,7 +200,7 @@ class WaveGenerator(model.Emitter):
             err = "Error code %d from %s: %s" % (err_code, self.name, err_msg)
             logging.error(err)
             raise model.HwError(err)
-    
+
     @classmethod
     def _openConnection(cls, host, port):
         """
@@ -227,28 +222,28 @@ class IPAccesser(object):
         self._host = host
         self._port = port
         self._is_connected = False
-        
+
         if self._host == "fake":
             self.simulator = FakeDG1000Z()
             self._host = "localhost"
         else:
             self.simulator = None
-            
+
         try:
-            logging.debug("Connecting to %s:%d" % (self._host, self._port))
+            logging.debug("Connecting to %s:%d", self._host, self._port)
             self.socket = socket.create_connection((self._host, self._port), timeout=1)
             self._is_connected = True
         except socket.error:
             raise model.HwError("Failed to connect to '%s:%d', check that the Rigol "
-                                "Clock Generator is connected to the network, turned "
-                                        "on, and correctly configured." % (host, port))
+                                "Clock Generator is connected, turned on, "
+                                "and correctly configured." % (host, port))
 
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
-        
+
     def __del__(self):
         self.terminate()
-        
+
     def terminate(self):
         if self.simulator:
             self.simulator.terminate()
@@ -282,7 +277,7 @@ class IPAccesser(object):
         """
         if not self._is_connected:
             raise IOError("Device %s not connected." % (self._host))
-        
+
         msg = "%s\n" % cmd
 
         with self._net_access:
@@ -322,27 +317,27 @@ class IPAccesser(object):
 
 class FakeDG1000Z(object):
     '''
-    A simulated Rigol DG1000Z Clock Generator. 
-    Runs a listening thread that acts as a simulated device on localhost 
+    A simulated Rigol DG1000Z Clock Generator.
+    Runs a listening thread that acts as a simulated device on localhost
     '''
     def __init__(self):
-        
+
         # parameters
         self._error_state = False
         self._output_buffer = ''
         self.name = "SimWG"
-        logging.debug('%s: Starting simulated device' %  (self.name))
+        logging.debug('%s: Starting simulated device', self.name)
         self._frequency = 1000
-        
+
         # Set up listening socket
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.host = ('localhost', DEFAULT_PORT)
         self.socket.bind(self.host)
-        
+
         # Create a thread to listen for incoming commands
         self._shutdown_flag = threading.Event()
         self._listener_thread = threading.Thread(target=self._listen)
-        self._listener_thread.daemon = True 
+        self._listener_thread.daemon = True
         # or listener_thread.setDaemon(True) for old versions of python
         self._listener_thread.start()
 
@@ -353,19 +348,20 @@ class FakeDG1000Z(object):
         '''
         Called to teardown the listening thread and likewise the socket so it can be freed
         '''
-        logging.debug('%s: Terminating. Shutting down socket' %  (self.name,))
+        logging.debug('%s: Terminating. Shutting down socket', self.name)
         self._shutdown_flag.set()
-        self.socket.close        ()
+        self.socket.close()
 
-    def _sendBuffer(self,connection):
+    def _sendBuffer(self, connection):
         '''
         Transmit the contents of the output buffer over the connection
         connection: an active accepted socket connection
         '''
         if self._output_buffer: # check if there is data in the buffer
             connection.sendall(self._output_buffer)
-            logging.debug('%s: Sending transmission: %s' % (self.name,self._output_buffer.encode('string_escape')))
-            self._output_buffer = ''   #  clear the buffer
+            logging.debug('%s: Sending transmission: %s', self.name,
+                          self._output_buffer.encode('string_escape'))
+            self._output_buffer = ''  # clear the buffer
 
     def _listen(self):
         '''
@@ -373,14 +369,14 @@ class FakeDG1000Z(object):
         '''
         # Listen for incoming connections
         self.socket.listen(1)
-        
+
         while not self._shutdown_flag.is_set():
             # Wait for a connection
-            logging.debug('%s: Waiting for a connection' %  (self.name))
-            connection, client_address = self.socket.accept()   # this function blocks until a connection is received. 
+            logging.debug('%s: Waiting for a connection', self.name)
+            connection, client_address = self.socket.accept()  # this function blocks until a connection is received.
             try:
-                logging.debug('%s: Connection from : %s' %  (self.name, client_address))
-        
+                logging.debug('%s: Connection from : %s', self.name, client_address)
+
                 # Receive the data in small chunks and retransmit it
                 while True:
                     data = connection.recv(4096)    # read from the socket
@@ -400,35 +396,36 @@ class FakeDG1000Z(object):
                 # Clean up the connection
                 connection.close()
 
-    def _decodeMessage(self,msg):
+    def _decodeMessage(self, msg):
         '''
-        Decodes a message sent to the device and writes appropriate responses to the output buffer. 
+        Decodes a message sent to the device and writes appropriate responses to
+          the output buffer.
         msg: a string input message
         '''
-        msg = msg.strip()   # clean whtiespace from message
+        msg = msg.strip()  # clean whitespace from message
 
         if msg == '':   # Empty message
-            logging.warning('%s: Empty message received' %  self.name)
+            logging.warning('%s: Empty message received', self.name)
             return
 
-        if  msg == ":SYST:ERR?":    # Error query
-            logging.debug('%s: Error state requested: %d' %  (self.name, self._error_state))
+        if msg == ":SYST:ERR?":  # Error query
+            logging.debug('%s: Error state requested: %d', self.name, self._error_state)
             if self._error_state:
                 self._output_buffer += '113,"Invalid command"\n'
             else:
                 self._output_buffer += '0,"No error"\n'
         elif msg == "*IDN?":    # Request identifier command
             self._output_buffer += 'SimRigol\n'
-            logging.debug('%s: Return identifier' % self.name)
-        elif re.match("\:SOUR(1|2)\:FREQ?", msg):
+            logging.debug('%s: Return identifier', self.name)
+        elif re.match(":SOUR(1|2):FREQ?", msg):
             self._output_buffer += '%E\n' % (self._frequency,)
-        elif re.match("\:OUTP(1|2) ON", msg): # Channel 1 on command
+        elif re.match(":OUTP(1|2) ON", msg):  # Channel 1 on command
             self._error_state = False
-            logging.debug('%s: Set output on',  self.name)
-        elif re.match("\:OUTP(1|2) OFF", msg): # Channel 1 off command
+            logging.debug('%s: Set output on', self.name)
+        elif re.match(":OUTP(1|2) OFF", msg):  # Channel 1 off command
             self._error_state = False
-            logging.debug('%s: Set output off',  self.name)
-        elif re.match("\:SOUR(1|2)\:APPL\:SQU", msg):    # Apply square wave command
+            logging.debug('%s: Set output off', self.name)
+        elif re.match(":SOUR(1|2):APPL:SQU", msg):  # Apply square wave command
             # Try to unpack the command to see if the format is correct
             try:
                 cmd, para = msg.split(" ")
@@ -439,15 +436,16 @@ class FakeDG1000Z(object):
             except TypeError:   # could not unpack message
                 self._error_state = True
                 logging.exception('%s: Error Setting square wave %s', self.name, cmd.encode('string_escape'))
-        elif re.match("\:SOUR(1|2)\:FUNC\:SQU\:DCYC", msg):    # Duty cycle setting
+        elif re.match(":SOUR(1|2):FUNC:SQU:DCYC", msg):  # Duty cycle setting
             # Try to unpack the command to see if the format is correct
             try:
                 cmd, para = msg.split(" ")
-                logging.debug('%s: Setting duty cycle to %f %%' % (self.name, float(para)))
+                logging.debug('%s: Setting duty cycle to %f %%', self.name, float(para))
             except TypeError:   # could not unpack message
                 self._error_state = True
-                logging.exception('%s: Error Setting duty cycle %s' % (self.name, cmd.encode('string_escape')))
+                logging.exception('%s: Error Setting duty cycle %s', self.name,
+                                  cmd.encode('string_escape'))
         else:
             self._error_state = True
-            logging.exception('%s: Error state set for message: %s' % (self.name, msg.encode('string_escape')))
-    
+            logging.exception('%s: Error state set for message: %s', self.name,
+                              msg.encode('string_escape'))

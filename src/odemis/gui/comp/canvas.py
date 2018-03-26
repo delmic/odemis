@@ -1067,7 +1067,7 @@ class BitmapCanvas(BufferedCanvas):
         if interpolate_data:
             # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
             # Downscaling and upscaling < 2x is nice, but above that, it just
-            # makes the pixels big (and antialiased)    
+            # makes the pixels big (and antialiased)
             if total_scale_x > 2:
                 cairo_filter = cairo.FILTER_BILINEAR
             else:
@@ -1738,13 +1738,18 @@ class PlotCanvas(BufferedCanvas):
         # The data to be plotted: list of 2-tuples (x, y, for each point)
         self._data = None
 
+        # TODO: these range don't seem to be used (or passed by the callers).
+        # We should have .range_x as properties, which lazily computes them whenever
+        # needed (instead of storing them in data_prop). IOW ._range_x is None if
+        # not yet computed, in which case call _calc_data_characteristics(), and
+        # otherwise trust it. Main advantage: the overlay can use it, and no
+        # need to call _calc_data_characteristics() at every draw.
         # The range of the x and y data
         self.range_x = None
         self.range_y = None
 
         self.data_prop = None  # data_width, range_x, data_height, range_y
 
-        # TODO not used?
         self.unit_x = None
         self.unit_y = None
 
@@ -1978,23 +1983,19 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        if self.IsEnabled():
-            # if self._locked:
-            #     return
-            #
-            # self._locked = True
+        if not self.IsEnabled():
+            return
+
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
+        self._draw_background(ctx)
+
+        if self._data:
+            data = self._data
+            # TODO: reuse data_prop if the data has not changed
+            data_width, range_x, data_height, range_y = self._calc_data_characteristics(data)
+            self.data_prop = (data_width, range_x, data_height, range_y)
             ctx = wxcairo.ContextFromDC(self._dc_buffer)
-            self._draw_background(ctx)
-
-            if self._data:
-                data = self._data
-                # TODO: reuse data_prop if the data has not changed
-                data_width, range_x, data_height, range_y = self._calc_data_characteristics(data)
-                self.data_prop = (data_width, range_x, data_height, range_y)
-                ctx = wxcairo.ContextFromDC(self._dc_buffer)
-                self._plot_data(ctx, data, data_width, range_x, data_height, range_y)
-
-            # self._locked = False
+            self._plot_data(ctx, data, data_width, range_x, data_height, range_y)
 
     def _plot_data(self, ctx, data, data_width, range_x, data_height, range_y):
         """ Plot the current `_data` to the given context """
