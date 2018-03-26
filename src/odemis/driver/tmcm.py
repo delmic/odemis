@@ -4,7 +4,7 @@ Created on 20 May 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2018 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -297,6 +297,8 @@ class TMCLController(model.Actuator):
         self._accel = {}
         for n, i in self._name_to_axis.items():
             self._accel[n] = self._readAccel(i)
+            if self._accel[n] == 0:
+                logging.warning("Accelration of axis %s is null, most probably due to a bad hardware configuration", n)
 
         if refproc is None:
             # Only the axes which are "absolute"
@@ -1254,6 +1256,8 @@ class TMCLController(model.Actuator):
         speed = {}
         for n, i in self._name_to_axis.items():
             speed[n] = self._readSpeed(i)
+            if speed[n] == 0:
+                logging.warning("Speed of axis %s is null, most probably due to a bad hardware configuration", n)
 
         # it's read-only, so we change it via _value
         self.speed._value = speed
@@ -1488,8 +1492,12 @@ class TMCLController(model.Actuator):
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveRelPos(aid, usteps)
                 # compute expected end
-                d = abs(usteps) * self._ustepsize[aid]
-                dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                try:
+                    d = abs(usteps) * self._ustepsize[aid]
+                    dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                except Exception: # Can happen if config is wrong and report speed or accel == 0
+                    logging.exception("Failed to estimate move duration")
+                    dur = 60
                 end = max(time.time() + dur, end)
 
             self._waitEndMove(future, moving_axes, end)
@@ -1524,8 +1532,12 @@ class TMCLController(model.Actuator):
                 else:
                     self.MoveAbsPos(aid, usteps)
                 # compute expected end
-                d = abs(v - old_pos[an])
-                dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                try:
+                    d = abs(v - old_pos[an])
+                    dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                except Exception: # Can happen if config is wrong and report speed or accel == 0
+                    logging.exception("Failed to estimate move duration")
+                    dur = 60
                 end = max(time.time() + dur, end)
 
             self._waitEndMove(future, moving_axes, end)

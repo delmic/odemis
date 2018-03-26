@@ -27,15 +27,16 @@ import cairo
 import itertools
 import logging
 import math
+import numbers
 import numpy
 from odemis import util
 from odemis.gui.comp.overlay.base import Label
+from odemis.gui.util.conversion import change_brightness
 from odemis.util import peak
 import wx
 
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
-from odemis.gui.util.conversion import change_brightness
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.units as units
@@ -450,10 +451,24 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 val = self.cnvs.val_x_to_val(val[0])
             v_pos = self.cnvs.val_to_pos(val)
 
-            # No rounding as the user might want to know as precisely as possible
-            # the actual value.
-            self.x_label = units.readable_str(val[0], self.cnvs.unit_x, None)
-            self.y_label = units.readable_str(val[1], self.cnvs.unit_y, None)
+            # Adapt the significant numbers based on how different are all the
+            # values.
+            # TODO: once the range is always available, don't use the value type.
+            def guess_sig(v, rng):
+                if rng is None or rng[0] == rng[1]:
+                    # Can't use range => rely on the type
+                    # TODO: instead of not rounding for integers, readable_str
+                    # should have an option to use all the digits which are
+                    # written any way. Ex 163.54nm+sig=2 -> 163nm (instead of 160nm).
+                    return None if isinstance(v, numbers.Integral) else 3
+                else:
+                    ratio_rng = max(abs(r) for r in rng) / (rng[1] - rng[0])
+                    return 2 + math.ceil(math.log10(ratio_rng) + 0.5)
+
+            self.x_label = units.readable_str(val[0], self.cnvs.unit_x,
+                                              guess_sig(val[0], self.cnvs.range_x))
+            self.y_label = units.readable_str(val[1], self.cnvs.unit_y,
+                                              guess_sig(val[1], self.cnvs.range_x))
 
             # v_posx, v_posy = self.v_pos.value
             if self.orientation & self.VERTICAL:
