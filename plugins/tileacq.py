@@ -553,8 +553,10 @@ class TileAcqPlugin(Plugin):
                         else:
                             logging.warning("Unknown acq stream type for %s", s)
                         break
-
-            if not da.metadata[model.MD_ACQ_TYPE]:
+                if model.MD_ACQ_TYPE in da.metadata:
+                    # if da is found, no need to search other streams
+                    break
+            else:
                 logging.warning("Couldn't find the stream for DA of shape %s", da.shape)
 
         # save tiles for stitching
@@ -701,7 +703,10 @@ class TileAcqPlugin(Plugin):
 
             # Stitch SEM and CL streams
             st_data = []
-            if self.stitch.value:
+            if self.stitch.value and (not da_list or not da_list[0]):
+                # if only AR or Spectrum are acquired
+                logging.warning("No stream acquired that can be used for stitching.")
+            elif self.stitch.value:
                 logging.info("Acquisition completed, now stitching...")
                 ft.set_progress(end=self.estimate_time(0) + time.time())
 
@@ -715,7 +720,7 @@ class TileAcqPlugin(Plugin):
                         for da in das_registered:
                             streams.append(da[s])
                         da = stitching.weave(streams)
-                        da.metadata[model.MD_DIMS] = "YX"
+                        da.metadata[model.MD_DIMS] = "YX"  # TODO: do it in the weaver
                         st_data.append(da)
                 else:
                     da = stitching.weave(das_registered)
@@ -736,7 +741,7 @@ class TileAcqPlugin(Plugin):
                 dlg.Destroy()
 
             # Open analysis tab
-            if self.stitch.value:
+            if st_data:
                 tab = main_data.getTabByName('analysis')
                 main_data.tab.value = tab
                 tab.load_data(fn)
