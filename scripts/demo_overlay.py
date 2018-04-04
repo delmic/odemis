@@ -30,7 +30,7 @@ import math
 import numpy
 from odemis import model
 from odemis.acq.align import find_overlay
-from odemis.util import TimeoutError
+from odemis.util import TimeoutError, executeAsyncTask
 import sys
 import threading
 
@@ -122,11 +122,8 @@ def SEMCCDAcquisition(escan, ccd, detector, light):
     f.task_canceller = _CancelAcquisition
 
     # Run in separate thread
-    acq_thread = threading.Thread(target=_executeTask,
-                  name="SEMCCDAcquisition",
-                  args=(f, doAcquisition, f, escan, ccd, detector, light))
-
-    acq_thread.start()
+    executeAsyncTask(f, doAcquisition,
+                     args=(f, escan, ccd, detector, light))
     return f
 
 def _ssOnSEMImage(df, data):
