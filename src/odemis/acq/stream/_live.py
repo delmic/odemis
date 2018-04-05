@@ -199,6 +199,35 @@ class LiveStream(Stream):
         self._shouldUpdateHistogram()
         self._shouldUpdateImage()
 
+    def _onBackground(self, data):
+        """Called when the background is changed"""
+
+        if data is not None:
+            # Check the background data and all the raw data have the same resolution
+            # We don't check via a setter because anyway, the data might become
+            # incompatible later, and we won't be able to do anything with it.
+            for r in self.raw:
+                if data.shape != r.shape:
+                    raise ValueError("Incompatible resolution of background data "
+                                     "%s with the angular resolved resolution %s." %
+                                     (data.shape, r.shape))
+                if data.dtype != r.dtype:
+                    raise ValueError("Incompatible encoding of background data "
+                                     "%s with the angular resolved encoding %s." %
+                                     (data.dtype, r.dtype))
+                try:
+                    if data.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
+                        raise ValueError(
+                            "Incompatible format of background data "
+                            "(%d bits) with the angular resolved format "
+                            "(%d bits)." %
+                            (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
+                except KeyError:
+                    pass  # no metadata, let's hope it's the same BPP
+
+        self._shouldUpdateHistogram()
+        super(LiveStream, self)._onBackground(data)
+
 
 class SEMStream(LiveStream):
     """ Stream containing images obtained via Scanning electron microscope.

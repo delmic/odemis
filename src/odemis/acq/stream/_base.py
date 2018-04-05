@@ -197,6 +197,13 @@ class Stream(object):
         # Tuple of (int, str) or (None, None): loglevel and message
         self.status = model.VigilantAttribute((None, None), readonly=True)
 
+        # Background data, to be subtracted from the acquisition data before
+        # projection. It should be the same shape and dtype as the acquisition
+        # data, otherwise no subtraction will be performed. If None, nothing is
+        # subtracted is applied.
+        self.background = model.VigilantAttribute(None, setter=self._setBackground)
+        self.background.subscribe(self._onBackground)
+
         # if there is already some data, update image with it
         # TODO: have this done by the child class, if needed.
         if self.raw:
@@ -894,6 +901,13 @@ class Stream(object):
             # if .raw is a list of DataArray, .image is a complete image
             if isinstance(self.raw, list):
                 data = self.raw[0]
+                bkg = self.background.value
+                if bkg is not None:
+                    try:
+                        data = img.Subtract(data, bkg)
+                    except Exception as ex:
+                        logging.info("Failed to subtract background data: %s", ex)
+
                 dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
                 ci = dims.find("C")  # -1 if not found
                 # is RGB
@@ -908,15 +922,23 @@ class Stream(object):
                     except Exception:
                         logging.exception("Updating %s image", self.__class__.__name__)
                 else: # is grayscale
-                    raw = self.raw[0]
-                    if raw.ndim != 2:
-                        raw = img.ensure2DImage(raw)  # Remove extra dimensions (of length 1)
-                    self.image.value = self._projectXY2RGB(raw, self.tint.value)
+                    if data.ndim != 2:
+                        data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
+                    self.image.value = self._projectXY2RGB(data, self.tint.value)
             else:
                 raise AttributeError(".raw must be a list of DA/DAS")
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
+    # Setter and updater of background don't do much, but allow to be overridden
+    def _setBackground(self, data):
+        """Called when the background is about to be changed"""
+        return data
+
+    def _onBackground(self, data):
+        """Called after the background has changed"""
+        self._shouldUpdateImage()
 
     def _onAutoBC(self, enabled):
         # if changing to auto: B/C might be different from the manual values
@@ -958,6 +980,13 @@ class Stream(object):
                 return
 
         data = self.raw[0] if data is None else data
+
+        bkg = self.background.value
+        if bkg is not None:
+            try:
+                data = img.Subtract(data, bkg)
+            except Exception as ex:
+                logging.info("Failed to subtract background when computing histogram: %s", ex)
 
         # Depth can change at each image (depends on hardware settings)
         self._updateDRange(data)

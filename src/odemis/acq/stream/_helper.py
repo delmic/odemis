@@ -711,6 +711,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
     Also provides spot size information.
     Needs a SEMStream.
     Note: internally it uses MomentOfInertiaSyncStream to actually acquire data.
+    background VA will be subtracted from the raw data to compute the MoI
     """
 
     def __init__(self, name, detector, dataflow, emitter, sem_stream, **kwargs):
@@ -737,11 +738,6 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float), setter=self._setDetROI)
 
-        # The background data (typically, an acquisition without ebeam).
-        # It is subtracted from the acquisition data.
-        # If set to None, baseline is used
-        self.background = model.VigilantAttribute(None, setter=self._setBackground)
-
         # Future of the acquisition
         self._acq_stream = MomentOfInertiaMDStream("MoI acq", [sem_stream, self])
         self._acquire_f = None
@@ -759,6 +755,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         Setter for the .background VA
         Synchronises the background VA with the VA of the acquisition stream
         """
+        # If set to None, baseline is used
         self._acq_stream.background.value = data
         return data
 
@@ -820,7 +817,6 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
             if not self.should_update.value:
                 logging.warning("Trying to activate stream while it's not "
                                 "supposed to update")
-            self._bg_image = self.background.value
             # approx. the index of the center image
 
             self._acquire_f = self._acq_stream.acquire()
