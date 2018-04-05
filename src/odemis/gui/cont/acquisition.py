@@ -91,12 +91,18 @@ class SnapshotController(object):
             self._main_frame.menu_item_snapshot_as.GetId(),
             self.start_snapshot_as_viewport)
 
+        self._prev_streams = None # To unsubscribe afterwards
         self._main_data_model.tab.subscribe(self.on_tab_change, init=True)
 
     def on_tab_change(self, tab):
-        """ Subscribe to the foccusedView VA of the current tab """
+        """ Called when the current tab changes """
+        # Listen to .streams, to know whether the current tab has any stream
+        if self._prev_streams:
+            self._prev_streams.unsubscribe(self.on_streams_change)
         tab.tab_data_model.streams.subscribe(self.on_streams_change, init=True)
+        self._prev_streams = tab.tab_data_model.streams
 
+    @call_in_wx_main
     def on_streams_change(self, streams):
         """ Enable Snapshot menu items iff the tab has at least one stream """
 

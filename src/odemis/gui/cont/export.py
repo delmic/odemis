@@ -75,17 +75,24 @@ class ExportController(object):
         self._main_frame.menu_item_export_as.Enable(False)
 
         # subscribe to get notified about tab changes
+        self._prev_streams = None # To unsubscribe afterwards
         self._main_data_model.tab.subscribe(self.on_tab_change, init=True)
 
+    @call_in_wx_main
     def on_tab_change(self, tab):
         """ Subscribe to the the current tab """
+        if self._prev_streams:
+            self._prev_streams.unsubscribe(self.on_streams_change)
+            self._prev_streams = None
         if tab is not None and tab.name == 'analysis':
             # Only let export item to be enabled in AnalysisTab
             tab.tab_data_model.streams.subscribe(self.on_streams_change, init=True)
+            self._prev_streams = tab.tab_data_model.streams
         else:
             self._main_frame.menu_item_export_as.Enable(False)
             self._tab_panel.btn_secom_export.Enable(False)
 
+    @call_in_wx_main
     def on_streams_change(self, streams):
         """ Enable Export menu item iff the tab has at least one stream """
 
