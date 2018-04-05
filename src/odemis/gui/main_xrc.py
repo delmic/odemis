@@ -3441,7 +3441,7 @@ def __init_resources():
                           <object class="ImageTextButton" name="btn_bkg_acquire">
                             <height>24</height>
                             <face_colour>def</face_colour>
-                            <label>Acquire Background</label>
+                            <label>Acquire background</label>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>

@@ -54,6 +54,7 @@ from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 import os.path
 import pkg_resources
+import time
 import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -3120,8 +3121,13 @@ class Sparc2AlignTab(Tab):
         # TODO: warn user if the mirror stage is too far from the official engaged
         # position. => The S axis will fail!
 
-        # Bind MoI background acquisition
+        # Bind background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
+        self._min_bkg_date = None
+        self._bkg_im = None
+        # TODO: Have a warning text to indicate there is no background image?
+        # TODO: Auto remove the background when the image shape changes?
+        # TODO: Use a toggle button to show the background is in use or not?
 
         # Force MoI view fit to content when magnification is updated
         if not main_data.ebeamControlsMag:
@@ -3158,7 +3164,7 @@ class Sparc2AlignTab(Tab):
         """
         # the "MoI" value bellow the streams
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
-        tooltip_txt = "Moment of inertia at the center (smaller is better), and range"
+        tooltip_txt = "Moment of inertia at the center (smaller is better)"
         lbl_moi.SetToolTipString(tooltip_txt)
         txt_moi.SetToolTipString(tooltip_txt)
         # Change font size and colour
@@ -3517,31 +3523,47 @@ class Sparc2AlignTab(Tab):
 
     def _onBkgAcquire(self, evt):
         """
-        Called when the user presses the "Acquire background" button (for MoI stream)
+        Called when the user presses the "Acquire background" button
         """
-        # Stop e-beam, in case it's connected to a beam blanker
-        self._moi_stream.should_update.value = False
+        if self._bkg_im is None:
+            # Stop e-beam, in case it's connected to a beam blanker
+            self._moi_stream.should_update.value = False
 
-        # TODO: if there is no blanker available, put the spec-det-selector to
-        # the other port, so that the ccd get almost no signal
+            # TODO: if there is no blanker available, put the spec-det-selector to
+            # the other port, so that the ccd get almost no signal? Or it might be
+            # better to just rely on the user to blank from the SEM software?
 
-        # Disable button to give a feedback that acquisition is taking place
-        self.panel.btn_bkg_acquire.Disable()
+            # Disable button to give a feedback that acquisition is taking place
+            self.panel.btn_bkg_acquire.Disable()
 
-        # Acquire asynchronously
-        # TODO: make sure we don't get the latest CCD image that was being acquired
-        self.tab_data_model.main.ccd.data.subscribe(self._on_bkg_data)
+            # Acquire asynchronously
+            # We store the time to ensure we don't use the latest CCD image
+            self._min_bkg_date = time.time()
+            self.tab_data_model.main.ccd.data.subscribe(self._on_bkg_data)
+        else:
+            logging.info("Removing background data")
+            self._bkg_im = None
+            self._moi_stream.background.value = None
+            self.panel.btn_bkg_acquire.SetLabel("Acquire background")
 
     def _on_bkg_data(self, df, data):
         """
         Called with a raw CCD image corresponding to background acquisition.
         """
-        # Stop the acquisition, and pass that data to the MoI stream
+        try:
+            if data.metadata[model.MD_ACQ_DATE] < self._min_bkg_date:
+                logging.debug("Got too old image, probably not background yet")
+                return
+        except KeyError:
+            pass  # no date => assume it's new enough
+        # Stop the acquisition, and pass the data to the streams
         df.unsubscribe(self._on_bkg_data)
-        # self._moi_stream.background.value = data
-        # TODO: add support for background subtraction to the MoI CameraStream.
+        self._bkg_im = data
+        self._moi_stream.background.value = data
+        # TODO: subtract the background data from the lens stream too?
         self._moi_stream.should_update.value = True
 
+        wx.CallAfter(self.panel.btn_bkg_acquire.SetLabel, "Remove background")
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
 
     @limit_invocation(1)  # max 1 Hz
@@ -3557,10 +3579,16 @@ class Sparc2AlignTab(Tab):
         except IndexError:
             return  # No data => next time will be better
 
+        # TODO: Show a warning if the background image has different settings
+        # than the current CCD image
+        background = self._bkg_im
+        if background is not None and background.shape != data.shape:
+            logging.debug("Background has a different resolution, cannot be used")
+            background = None
+
         # Note: this can take a long time (on a large image), so we must not do
         # it in the main GUI thread. limit_invocation() ensures we are in a
         # separate thread, and that's why the GUI update is separated.
-        background = None
         moi = spot.MomentOfInertia(data, background)
         ss = spot.SpotIntensity(data, background)
         self._updateMoIValues(moi, ss)
