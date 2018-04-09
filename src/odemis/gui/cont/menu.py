@@ -234,14 +234,14 @@ class MenuController(object):
         except IndexError:
             raise LookupError("No stream")
 
+    @call_in_wx_main
     def _on_tab_change(self, tab):
         tab_data = tab.tab_data_model
         if self._prev_streams:
             self._prev_streams.unsubscribe(self._on_current_stream)
 
-        if hasattr(tab_data, "streams"):
-            self._prev_streams = tab_data.streams
-            tab_data.streams.subscribe(self._on_current_stream, init=True)
+        tab_data.streams.subscribe(self._on_current_stream, init=True)
+        self._prev_streams = tab_data.streams
 
         # Handle fit to content
         fit_enable = hasattr(tab, "view_controller") and tab.view_controller is not None
