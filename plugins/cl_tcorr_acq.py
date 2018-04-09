@@ -36,15 +36,15 @@ from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.util import executeAsyncTask
 import os.path
 import threading
 import time
+
 import odemis.util.driver as udriver
 
 
 # TODO: Include fuzzing
-
-
 # All the acquisition code is in this standard Stream interface, so that it can
 # be handled automatically by the Odemis acquisition manager.
 class CorrelatorScanStream(stream.Stream):
@@ -103,7 +103,6 @@ class CorrelatorScanStream(stream.Stream):
         self.nDC = model.IntContinuous(1, (1, 20))
 
         # For acquisition
-        self._acq_thread = None
         self.tc_data = None
         self.tc_data_received = threading.Event()
         self.sem_data = []
@@ -131,10 +130,7 @@ class CorrelatorScanStream(stream.Stream):
         f._acq_done = threading.Event()
 
         # run task in separate thread
-        self._acq_thread = threading.Thread(target=acq._futures.executeTask,
-                                            name="Time correlator acquisition",
-                                            args=(f, self._runAcquisition, f))
-        self._acq_thread.start()
+        executeAsyncTask(f, self._runAcquisition, args=(f,))
         return f
 
     def get_scan_res(self):

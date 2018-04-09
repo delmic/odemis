@@ -28,14 +28,13 @@ from odemis.acq import stream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.model import TOOL_SPOT
-from odemis.util import units
+from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.util import units, executeAsyncTask
 import os
 import sys
 import threading
 import time
 import wx
-
-from odemis.gui.plugin import Plugin, AcquisitionDialog
 
 
 logging.getLogger().setLevel(logging.INFO)  # put "DEBUG" level for more messages
@@ -78,7 +77,6 @@ class MonochromatorScanStream(stream.Stream):
 
         # For acquisition
         self._pt_acq = threading.Event()
-        self._acq_thread = None
         self._data = []
         self._md = {}
 
@@ -110,10 +108,7 @@ class MonochromatorScanStream(stream.Stream):
         f._acq_done = threading.Event()
 
         # run task in separate thread
-        self._acq_thread = threading.Thread(target=acq._futures.executeTask,
-                                            name="Monochromator scan acquisition",
-                                            args=(f, self._runAcquisition, f))
-        self._acq_thread.start()
+        executeAsyncTask(f, self._runAcquisition, args=(f,))
         return f
 
     def _on_mchr_data(self, df, data):
