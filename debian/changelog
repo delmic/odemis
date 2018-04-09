@@ -1,3 +1,14 @@
+odemis (2.7.5-1) precise; urgency=medium
+
+  * New version: 2.7.5
+  * Main bugs fixed:
+   - plugin tile-acq wouldn't accept to store filenames containing "%"
+   - stitching would too easily fail on the tiles on the back zigzag line
+   - ensure the lens1 is always in place for acquisition (SPARC)
+   - fix (rare) GUI crash when a plugin would display an acquisition in the analysis tab
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 09 Apr 2018 13:58:53 +0200
+
 odemis (2.7.4-1) precise; urgency=medium
 
   * New version: 2.7.4
