@@ -521,6 +521,16 @@ If you modify the application main icons in ``image/icon_gui*.png``, you need to
 
     ./util/generate_icons.sh
 
+To start the GUI directly as a python module, for example to run it in a debugger,
+you can run it this way::
+
+    python -m odemis.gui.main --log-level 2 --log-target $HOME/odemis-gui.log
+
+To start the GUI just in viewer mode::
+
+    python -m odemis.gui.main --standalone --log-level 2 --log-target $HOME/odemis-gui.log
+
+
 If you need to see more log messages of the GUI while it is running, it's possible
 to increase the log level. To do so, select Help/Development/Inspect GUI.
 In console panel (PyCrust) of the inspection window, type:
@@ -532,6 +542,17 @@ In console panel (PyCrust) of the inspection window, type:
     l.setLevel(logging.DEBUG)
 
 From now on, all log messages are displayed and recorded in the log file.
+
+
+An other important detail to take into account when modifying the GUI is that
+the wxPython framework has a limitation: any change to the GUI widgets must
+done from within the main thread. Not respecting this can result in some
+random crashes of the GUI without any backtrace. This can happen for instance
+in a callback for a VigilantAttribute or DataFlow. To avoid such issue, there
+are two simple ways. The simplest way is to decorate the function with the special
+``@call_in_wx_main`` decorator. This decorator ensures that the function is
+always run from within the main GUI thread. Another way is to call every GUI
+related function using the special ``wx.CallAfter()`` function.
 
 Speed optimization
 ==================
