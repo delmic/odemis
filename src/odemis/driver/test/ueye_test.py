@@ -26,6 +26,7 @@ from __future__ import division
 
 import logging
 from odemis.driver import ueye
+import os
 import unittest
 from unittest.case import skip
 
@@ -33,6 +34,9 @@ from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchr
 
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+# Export TEST_NOHW=1 to prevent using the real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 CLASS = ueye.Camera
 KWARGS = dict(name="camera", role="ccd", device=None, transp=[2, -1])
@@ -52,6 +56,22 @@ class TestUEye(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
 
+    @classmethod
+    def setUpClass(cls):
+        if not TEST_NOHW:
+            VirtualTestCam.setUpClass()
+
+    @classmethod
+    def tearDownClass(self):
+        if not TEST_NOHW:
+            VirtualTestCam.tearDown(self)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator available")
+        VirtualTestCam.setUp(self)
+
+
 # @skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
@@ -59,6 +79,22 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
+
+    @classmethod
+    def setUpClass(cls):
+        if not TEST_NOHW:
+            VirtualTestCam.setUpClass()
+
+    @classmethod
+    def tearDownClass(self):
+        if not TEST_NOHW:
+            VirtualTestCam.tearDown(self)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator available")
+        VirtualTestCam.setUp(self)
+
 
 if __name__ == '__main__':
     unittest.main()
