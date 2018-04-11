@@ -171,6 +171,7 @@ def get_picture_folder():
         if os.path.isdir(folder):
             return folder
         # drop to default
+
     elif sys.platform.startswith('win32'):
         # expanduser(u) fails with non-ASCII usernames in Python2,
         # see https://bugs.python.org/issue13207
@@ -182,11 +183,6 @@ def get_picture_folder():
             logging.warning("Cannot find picture folder")
     else:
         logging.warning("Platform not supported for picture folder")
-
-    # fall-back to HOME
-    folder = os.path.expanduser(u"~")
-    if os.path.isdir(folder):
-        return folder
 
     # last resort: current working directory should always be existing
     return os.getcwd()
