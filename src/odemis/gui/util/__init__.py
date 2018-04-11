@@ -147,9 +147,6 @@ def get_home_folder():
     if os.path.isdir(folder):
         return folder
 
-    if os.path.isdir(folder):
-        return folder
-
     # last resort: current working directory should always be existing
     return os.getcwd()
 
@@ -178,6 +175,7 @@ def get_picture_folder():
         from odemis.gui.util.winknownpaths import get_path, FOLDERID
         try:
             folder = get_path(FOLDERID.Pictures)
+            return folder
         except:
             logging.warning("Cannot find picture folder")
     else:
