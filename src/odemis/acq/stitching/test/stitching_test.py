@@ -109,9 +109,9 @@ class TestRegister(unittest.TestCase):
 
                 diff1 = abs(tile_pos[0] - pos[i][0])
                 diff2 = abs(tile_pos[1] - pos[i][1])
-                # allow difference of 1% of tile
+                # allow difference of 5% of tile
                 px_size = tiles[i].metadata[model.MD_PIXEL_SIZE]
-                margin = 0.01 * tiles[i].shape[0] * px_size[0]
+                margin = 0.05 * tiles[i].shape[0] * px_size[0]
                 self.assertLessEqual(diff1, margin,
                                      "Failed for %s tiles, %s overlap and %s method," % (num, o, a) +
                                      " %f != %f" % (tile_pos[0], pos[i][0]))
@@ -286,6 +286,7 @@ def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shif
                     # the registrar can deal with 5% shift of the tile size, but not with 10%. In this
                     # case an overlap of 0.2 is not sufficient and even for higher overlaps, the
                     # stitching isn't guaranteed to work properly.
+                    random.seed(1)
                     noise = [random.randrange(-maxNoise, maxNoise)
                              for _ in range(2)]
 
