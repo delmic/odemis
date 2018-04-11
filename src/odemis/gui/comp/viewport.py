@@ -1030,8 +1030,7 @@ class PointSpectrumViewport(PlotViewport):
             return
 
         data = self.stream.get_pixel_spectrum()
-        spectrum_range, _ = self.stream.get_spectrum_range()
-        unit_x = self.stream.spectrumBandwidth.unit
+        spectrum_range, unit_x = self.stream.get_spectrum_range()
 
         if self.stream.peak_method.value is not None:
             # cancel previous fitting if there is one in progress
