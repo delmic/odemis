@@ -339,7 +339,7 @@ class TestDataArray2RGB(unittest.TestCase):
         # first 8 bit => no change (and test the short-cut)
         size = (1024, 1024)
         depth = 256
-        grey_img = numpy.zeros(size, dtype="uint8") + depth // 2
+        grey_img = numpy.zeros(size, dtype="uint8") + depth // 2 # 128
         grey_img[0, 0] = 10
         grey_img[0, 1] = depth - 10
 
@@ -348,6 +348,8 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 3)
         pixel = out[2, 2]
+        numpy.testing.assert_equal(out[:, :, 0], out[:, :, 1])
+        numpy.testing.assert_equal(out[:, :, 0], out[:, :, 2])
         numpy.testing.assert_equal(pixel, [128, 128, 128])
 
         # 16 bits
@@ -355,13 +357,43 @@ class TestDataArray2RGB(unittest.TestCase):
         grey_img = numpy.zeros(size, dtype="uint16") + depth // 2
         grey_img[0, 0] = 100
         grey_img[0, 1] = depth - 100
+        grey_img[1, 0] = 0
+        grey_img[1, 1] = depth - 1
 
         # should keep the grey
         out = img.DataArray2RGB(grey_img, irange=(0, depth - 1))
         self.assertEqual(out.shape, size + (3,))
-        self.assertEqual(self.CountValues(out), 3)
+        self.assertEqual(self.CountValues(out), 5)
         pixel = out[2, 2]
-        numpy.testing.assert_equal(pixel, [127, 127, 127])
+        numpy.testing.assert_equal(out[:, :, 0], out[:, :, 1])
+        numpy.testing.assert_equal(out[:, :, 0], out[:, :, 2])
+        # In theory, depth//2 should be 128, but due to support for floats (ranges),
+        # the function cannot ensure this, so accept slightly less (127).
+        assert (numpy.array_equal(pixel, [127, 127, 127]) or
+                numpy.array_equal(pixel, [128, 128, 128]))
+        numpy.testing.assert_equal(out[1, 0], [0, 0, 0])
+        numpy.testing.assert_equal(out[1, 1], [255, 255, 255])
+
+        # 32 bits
+        depth = 2**32
+        grey_img = numpy.zeros(size, dtype="uint32") + depth // 2
+        grey_img[0, 0] = depth // 50
+        grey_img[0, 1] = depth - depth // 50
+        grey_img[1, 0] = 0
+        grey_img[1, 1] = depth - 1
+
+        # should keep the grey
+        out = img.DataArray2RGB(grey_img, irange=(0, depth - 1))
+        self.assertEqual(out.shape, size + (3,))
+        self.assertEqual(self.CountValues(out), 5)
+        pixel = out[2, 2]
+        numpy.testing.assert_equal(out[:, :, 0], out[:, :, 1])
+        numpy.testing.assert_equal(out[:, :, 0], out[:, :, 2])
+        assert (numpy.array_equal(pixel, [127, 127, 127]) or
+                numpy.array_equal(pixel, [128, 128, 128]))
+        numpy.testing.assert_equal(out[1, 0], [0, 0, 0])
+        numpy.testing.assert_equal(out[1, 1], [255, 255, 255])
+
 
     def test_irange(self):
         """test with specific corner values of irange"""
@@ -433,8 +465,8 @@ class TestDataArray2RGB(unittest.TestCase):
 
         print("Time fast conversion = %g s, standard = %g s" % (fast_dur, std_dur))
         self.assertLess(fast_dur, std_dur)
+        # ±1, to handle the value shifts by the standard converter to handle floats
         numpy.testing.assert_almost_equal(rgb, rgb_nc_back, decimal=0)
-        numpy.testing.assert_equal(rgb, rgb_nc_back)
 
     def test_tint(self):
         """test with tint (on the fast path)"""

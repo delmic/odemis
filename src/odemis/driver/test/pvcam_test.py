@@ -21,13 +21,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
-from odemis.driver import pvcam
-from unittest.case import skip
 import logging
+from odemis.driver import pvcam
+import os
 import unittest
+from unittest.case import skip
+
+from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
+
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+# Export TEST_NOHW=1 to prevent using the real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 CLASS = pvcam.PVCam
 # device can also be "rspiusb", but 0 is more generic
@@ -47,6 +53,22 @@ class TestPVCam(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = CONFIG_PVCAM
 
+    @classmethod
+    def setUpClass(cls):
+        if not TEST_NOHW:
+            VirtualTestCam.setUpClass()
+
+    @classmethod
+    def tearDownClass(self):
+        if not TEST_NOHW:
+            VirtualTestCam.tearDown(self)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator available")
+        VirtualTestCam.setUp(self)
+
+
 #@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
@@ -54,7 +76,23 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = CONFIG_PVCAM
-            
+
+    @classmethod
+    def setUpClass(cls):
+        if not TEST_NOHW:
+            VirtualTestCam.setUpClass()
+
+    @classmethod
+    def tearDownClass(self):
+        if not TEST_NOHW:
+            VirtualTestCam.tearDown(self)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator available")
+        VirtualTestCam.setUp(self)
+
+
 if __name__ == '__main__':
     unittest.main()
 

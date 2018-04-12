@@ -75,7 +75,6 @@ class TestShamrockStatic(unittest.TestCase):
 
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
-        ccd.terminate()
 
     def test_fake_with_ccd(self):
         """
@@ -359,10 +358,10 @@ class TestSpectrograph(object):
         # Most gratings (but mirrors) works well with 600 nm
         sp.moveAbs({"wavelength": 600e-9}).result()
         wl = sp.position.value['wavelength']
-        npixels = self.ccd.resolution.value[0]
-        pxs = self.ccd.pixelSize.value[0] * self.ccd.binning.value[0]
+        npixels = 1320
+        pxs = 6.5e-6 # m
         lt = sp.getPixelToWavelength(npixels, pxs)
-        self.assertEqual(len(lt), self.ccd.resolution.value[0])
+        self.assertEqual(len(lt), npixels)
         self.assertTrue(lt[0] < wl < lt[-1])
 
         rng = sp.getOpeningToWavelength(10e-6)

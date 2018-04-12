@@ -44,9 +44,9 @@ else:
 
 CONFIG_RS_SECOM_1 = {'x': (0, 0), 'y': (0, 1)}
 CONFIG_RS_SECOM_2 = {'x': (1, 0), 'y': (0, 0)}
-class TestPIRedStone(unittest.TestCase):
+class TestPIRedStoneStatic(unittest.TestCase):
     """
-    Test directly the PIRedStone class.
+    Test directly the PIRedStone class for scanning
     """
     config = CONFIG_RS_SECOM_1
 
@@ -77,6 +77,16 @@ class TestPIRedStone(unittest.TestCase):
             print "opening ", name
             stage = pi.StageRedStone(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
+
+class TestPIRedStone(unittest.TestCase):
+    """
+    Test directly the PIRedStone class.
+    """
+    config = CONFIG_RS_SECOM_1
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator available")
 
     def test_simple(self):
         stage = pi.StageRedStone("test", "stage", PORT, self.config)

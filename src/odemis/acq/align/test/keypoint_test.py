@@ -47,6 +47,8 @@ class TestKeypoint(unittest.TestCase):
     def test_image_pair(self):
         ''' Testing a pair of images
         '''
+        # WARNING: if opencv is not compiled with SIFT support (ie, only ORB
+        # available), then this test case will fail.
         # FIXME: these two images are very hard, and any tiny change in the
         # algorithm or settings can cause the alignment to fail => not a good
         # test case

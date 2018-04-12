@@ -351,8 +351,10 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         else:
             # TODO: could directly use one channel of the 'rgb' variable?
             drescaled = numpy.empty(data.shape, dtype=numpy.uint8)
-        # Note: just > 255 to compensate for floating-point errors (anything < 256 -> 255 anyway)
-        b = 255.01 / (irange[1] - irange[0])
+        # Ideally, it would be 255 / (irange[1] - irange[0]) + 0.5, but to avoid
+        # the addition, we can just use 255.99, and with the rounding down, it's
+        # very similar.
+        b = 255.99 / (irange[1] - irange[0])
         numpy.multiply(dshift, b, out=drescaled, casting="unsafe")
 
     # Now duplicate it 3 times to make it RGB (as a simple approximation of
