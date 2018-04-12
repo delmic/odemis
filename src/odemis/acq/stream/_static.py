@@ -236,6 +236,8 @@ class StaticARStream(StaticStream):
      * each CCD image contains metadata about the SEM position (MD_POS, in m)
        pole (MD_AR_POLE, in px), and acquisition time (MD_ACQ_DATE)
      * multiple CCD images are grouped together in a list
+    background VA is subtracted from the raw image when displayed, otherwise a
+      baseline value is used.
     """
 
     def __init__(self, name, data, *args, **kwargs):
@@ -269,13 +271,6 @@ class StaticARStream(StaticStream):
         # SEM position displayed, (None, None) == no point selected
         self.point = model.VAEnumerated((None, None),
                      choices=frozenset([(None, None)] + list(self._sempos.keys())))
-
-        # The background data (typically, an acquisition without ebeam).
-        # It is subtracted from the acquisition data.
-        # If set to None, a simple baseline background value is subtracted.
-        self.background = model.VigilantAttribute(None,
-                                                  setter=self._setBackground)
-        self.background.subscribe(self._onBackground)
 
         if self._sempos:
             # Pick one point, e.g., top-left
@@ -390,7 +385,8 @@ class StaticARStream(StaticStream):
     def _setBackground(self, data):
         """Called when the background is about to be changed"""
         if data is None:
-            return
+            # simple baseline background value will be subtracted
+            return data
 
         # check it's compatible with the data
         data = img.ensure2DImage(data)
@@ -429,10 +425,10 @@ class StaticARStream(StaticStream):
         return data
 
     def _onBackground(self, data):
-        """Called when the background is changed"""
+        """Called after the background has changed"""
         # uncache all the polar images, and update the current image
         self._polar = {}
-        self._shouldUpdateImage()
+        super(StaticARStream, self)._onBackground(data)
 
 
 class StaticSpectrumStream(StaticStream):
@@ -445,6 +441,8 @@ class StaticSpectrumStream(StaticStream):
 
     The histogram corresponds to the data after calibration, and selected via
     the spectrumBandwidth VA.
+
+    If background VA is set, it is subtracted from the raw data.
     """
 
     def __init__(self, name, image, *args, **kwargs):
@@ -497,11 +495,6 @@ class StaticSpectrumStream(StaticStream):
         # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
         self.efficiencyCompensation = model.VigilantAttribute(None, setter=self._setEffComp)
 
-        # The background data (typically, an acquisition without e-beam).
-        # It is subtracted from the acquisition data.
-        # If set to None, a simple baseline background value is subtracted.
-        self.background = model.VigilantAttribute(None, setter=self._setBackground)
-
         # low/high values of the spectrum displayed
         self.spectrumBandwidth = model.TupleContinuous(
                                     (cwl - width, cwl + width),
@@ -534,7 +527,6 @@ class StaticSpectrumStream(StaticStream):
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
         self.efficiencyCompensation.subscribe(self._onCalib)
-        self.background.subscribe(self._onCalib)
         self.selectionWidth.subscribe(self._onSelectionWidth)
 
         self._calibrated = image  # the raw data after calibration
@@ -916,6 +908,10 @@ class StaticSpectrumStream(StaticStream):
 
         if not (None, None) in self.selected_line.value:
             self.selected_line.notify(self.selected_line.value)
+
+    def _onBackground(self, data):
+        self._onCalib(data)
+        # Skip super call, as we are taking care of all
 
     def _onCalib(self, unused):
         """
