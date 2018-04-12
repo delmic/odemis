@@ -28,7 +28,7 @@ from odemis import model
 import odemis
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
-    CombinedSensorActuator
+    CombinedSensorActuator, RotationActuator
 from odemis.util import test
 import os
 import time
@@ -709,6 +709,92 @@ class TestCombinedSensorActuator(unittest.TestCase):
         f = self.dev.moveAbs(move)
         with self.assertRaises(IOError):
             f.result()  # should raise an error
+
+
+class RotationTest(unittest.TestCase):
+
+    def setUp(self):
+        # create 1 child
+        #self.child1 = simulated.Stage("sstage1", "test", {"rz"}, ranges={"rz": [-3.9269908, 3.9269908]})
+
+        # self.child1 = tmcm.TMCLController("sstage1", "test", port="/dev/fake6",
+        #                                   axes=["linear", "qwp"], ustepsize=[3.392e-5, 4e-5],
+        #                                   unit=["rad", "rad"],
+        #                                   refproc="Standard",
+        #                                   )
+        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+                                          axes=["linear"], ustepsize=[3.392e-5],
+                                          unit=["rad"],
+                                          refproc="Standard",
+                                          )
+
+        self.dev_cycle = RotationActuator("stage", "stage", {"rz": self.child1}, "linear",
+                                          cycle=6.283185, offset_mounting=0)
+
+    def test_unsupported_position(self):
+        # It's optional
+        if not hasattr(self.dev_cycle, "moveAbs"):
+            self.skipTest("Actuator doesn't support absolute move")
+
+        new_pos = 6.4
+        with self.assertRaises(ValueError):
+            f = self.dev_cycle.moveAbs({"rz": new_pos})  # move
+            f.result()  # wait
+
+    def test_cycle_moveAbs(self):
+        cur_pos = self.dev_cycle.position.value["rz"]
+
+        # don't change position
+        f = self.dev_cycle.moveAbs({"rz": cur_pos})
+        f.result()
+        print self.dev_cycle.position.value
+        self.assertEqual(self.dev_cycle.position.value["rz"], cur_pos)
+        #
+        # # find a different position
+        # new_pos = cur_pos
+        # position = self.dev_cycle.axes["x"]
+        #
+        # for p in position.choices:
+        #     if p != cur_pos:
+        #         new_pos = p
+        #         break
+        # else:
+        #     self.fail("Failed to find a position different from %d" % cur_pos)
+
+        # test new position
+        new_pos = 1.570796  # pi/2
+        f = self.dev_cycle.moveAbs({"rz": new_pos})
+        f.result()
+        self.assertEqual(self.dev_cycle.position.value["rz"], new_pos)
+
+        # test if offset is correctly recognized (accumulation of angles is overrunning 2pi)
+        new_pos = 1.570796  # pi/2
+        for i in range(1, 5):
+            print i, "i"
+            f = self.dev_cycle.moveAbs({"rz": new_pos*i})
+            f.result()
+            i += 1
+
+        f = self.dev_cycle.moveAbs({"rz": new_pos})
+        f.result()
+        self.assertEqual(self.dev_cycle.position.value["rz"], new_pos)
+
+    def test_cycle_offset_mounting(self):
+        # move to zero
+        #TODO Sabrina need to map offset somehow back so 0 is and accepted position or return pos
+        #TODO Sabrina: need maybe to map back after passed 2pi with offset
+        f = self.dev_cycle.moveAbs({"rz": 0})
+        f.result()
+        print self.dev_cycle.position.value
+        new_pos = 1.570796  # pi/2
+        f = self.dev_cycle.moveAbs({"rz": new_pos})
+        f.result()
+        print self.dev_cycle.position.value["rz"]
+        # self.assertEqual(self.dev_cycle.position.value["rz"], new_pos)
+
+    # force to not use the default method from TestCase
+    def tearDown(self):
+        super(RotationTest, self).tearDown()
 
 
 if __name__ == "__main__":

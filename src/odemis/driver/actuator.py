@@ -932,7 +932,6 @@ class FixedPositionsActuator(model.Actuator):
     one axis/actuator and it can also apply cyclic move e.g. in case the
     actuator moves a filter wheel.
     """
-
     def __init__(self, name, role, children, axis_name, positions, cycle=None,
                  inverted=None, **kwargs):
         """
@@ -977,6 +976,7 @@ class FixedPositionsActuator(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
 
+        #TODO Sabrina: warum hier nochmal defined?
         self._position = {}
         self.position = model.VigilantAttribute({}, readonly=True)
 
@@ -1366,3 +1366,346 @@ class CombinedSensorActuator(model.Actuator):
 
         self._child.position.unsubscribe(self._update_child_position)
         self._sensor.position.unsubscribe(self._updatePosition)
+
+
+# class PolarizationActuator(model.Actuator):
+#     """
+#     An actuator component which allows moving two actuators to fixed relative and absolute position.
+#     """
+#     # pass
+#     def __init__(self, name, role, children, axis_name,
+#                  positions, to_sensor, inverted=None, **kwargs):
+#         """
+#         name (string)
+#         role (string)
+#         children (dict str -> actuator): role (in this actuator) -> actuator
+#            "actuator1": child used to move the first axis
+#            "actuator2": child used to move the second axis
+#         axis_actuator1 (str): axis name in the child actuator1
+#         axis_actuator2 (str): axis name in the child actuator2
+#         positions (set or dict value -> (str or [str])): positions where the actuators are allowed to move
+#         """
+#         if inverted:
+#             raise ValueError("Axes shouldn't be inverted")
+#         if len(children) != 2:
+#             raise ValueError("CombinedSensorActuator needs precisely two children")
+#
+#         for key in children:
+#             try:
+#                 child = children[key]  # "actuator1"
+#                 print "---------------------------------------------------------------------------", child
+#             except KeyError:
+#                 raise ValueError("No 'actuator' child provided")
+#             if not isinstance(child, model.ComponentBase):
+#                 raise ValueError("Child %s is not a component." % (child.name,))
+#             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+#                 raise ValueError("Child %s is not an actuator." % child.name)
+#
+#
+#         self._child1 = child
+#         self._child2 = sensor
+#
+#         self._axis1 = axis_actuator1
+#         self._axis2 = axis_actuator1
+#         ac = child.axes[axis_actuator]
+#         axes = {self._axis: model.Axis(choices=positions, unit=ac.unit)}
+#
+#         self._positions = positions
+#         self._to_sensor = to_sensor
+
+
+
+    #
+    # """
+    # A generic actuator component which only allows moving to fixed positions
+    # defined by the user upon initialization. It is actually a wrapper to just
+    # one axis/actuator and it can also apply cyclic move e.g. in case the
+    # actuator moves a filter wheel.
+    # """
+    #
+    # def __init__(self, name, role, children, axis_name, cycle=None,
+    #              inverted=None, **kwargs):
+    #     """
+    #     name (string)
+    #     role (string)
+    #     children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
+    #     axis_name (str): axis name in the child actuator
+    #     positions (set or dict value -> str): positions where the actuator is allowed to move
+    #     cycle (float): if not None, it means the actuator does a cyclic move and this value represents a full cycle
+    #     """
+    #     # logging.debug("..........................................................................................................................................")
+    #     if inverted:
+    #         raise ValueError("Axes shouldn't be inverted")
+    #
+    #     if len(children) > 2:
+    #         raise ValueError("PolarizerActuator needs precisely two children")
+    #
+    #     self._cycle = cycle
+    #     self._move_sum = 0
+    #     self._position = {}
+    #     self._referenced = {}
+    #     axis_linear, child_linear = 'linear', children['linear']
+    #     axis_qwp, child_qwp = 'qwp', children['qwp']
+    #     self._axis_linear = axis_linear
+    #     self._axis_qwp = axis_qwp
+    #     self._child_linear = child_linear
+    #     self._child_qwp = child_qwp
+    #     self._caxis = axis_name
+    #     self._positions = positions
+    #     # Executor used to reference and move to nearest position
+    #     self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+    #
+    #     if not isinstance(child, model.ComponentBase):
+    #         raise ValueError("Child %s is not a component." % (child,))
+    #     if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+    #         raise ValueError("Child %s is not an actuator." % child.name)
+    #
+    #     if cycle is not None:
+    #         # just an offset to reference switch position
+    #         self._offset = self._cycle / len(self._positions)
+    #         if not all(0 <= p < cycle for p in positions.keys()):
+    #             raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
+    #
+
+
+class RotationActuator(model.Actuator):
+    """
+    A generic actuator component which only allows moving to fixed positions
+    defined by the user upon initialization. It is actually a wrapper to just
+    one axis/actuator and it can also apply cyclic move e.g. in case the
+    actuator moves a filter wheel.
+    """
+
+    def __init__(self, name, role, children, axis_name, cycle=None, offset_mounting=0,
+                 inverted=None, **kwargs):
+        """
+        name (string)
+        role (string)
+        children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
+        axis_name (str): axis name in the child actuator
+        #TODO Sabrina update
+        # positions (set or dict value -> str): positions where the actuator is allowed to move
+        cycle (float): if not None, it means the actuator does a cyclic move and this value represents a full cycle
+        """
+        if inverted:
+            raise ValueError("Axes shouldn't be inverted")
+
+        if len(children) != 1:
+            raise ValueError("RotationActuator needs precisely one child")
+
+        self.offset_mounting = offset_mounting
+        self._cycle = cycle
+        self._move_sum = 0
+        self._position = {}
+        self._referenced = {}
+        axis, child = children.items()[0]
+        self._axis = axis
+        self._child = child
+        self._caxis = axis_name
+        # positions = dict(enumerate(numpy.arange(0, 2*numpy.pi, stepsize).flatten(), 0))
+        # positions = {v: k for k, v in positions.items()}
+        # self._positions = positions
+        self._pos_rng = (0 + offset_mounting, cycle + offset_mounting)
+        print self._pos_rng
+        # Executor used to reference and move to nearest position
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        if not isinstance(child, model.ComponentBase):
+            raise ValueError("Child %s is not a component." % (child,))
+        if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+            raise ValueError("Child %s is not an actuator." % child.name)
+
+        if cycle is not None:
+            # just an offset to reference switch position
+            # 5% should be sufficient to take care of the accumulated rotation error
+            self._offset = self._cycle*0.05
+        # TODO Sabrina: don't need?
+        #     if not all(0 <= p < cycle for p in positions.keys()):
+        #         raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
+
+        ac = child.axes[axis_name]
+        axes = {axis: model.Axis(range=self._pos_rng, unit=ac.unit)}  # TODO: allow the user to override the unit?
+
+        model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
+
+        self._position = {}
+        self.position = model.VigilantAttribute({}, readonly=True)
+
+        logging.debug("Subscribing to position of child %s", child.name)
+        child.position.subscribe(self._update_child_position, init=True)
+
+        if model.hasVA(child, "referenced") and axis_name in child.referenced.value:
+            self._referenced[axis] = child.referenced.value[axis_name]
+            self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
+            child.referenced.subscribe(self._update_child_ref)
+
+        # If the axis can be referenced => do it now (and move to a known position)
+        # In case of cyclic move always reference
+        if not self._referenced.get(axis, True) or (self._cycle and axis in self._referenced):
+            # The initialisation will not fail if the referencing fails
+            f = self.reference({axis})
+            f.add_done_callback(self._on_referenced)
+        #TODO Sabrina:
+        # else:
+        #     # If not at a known position => move to the closest known position
+        #     nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
+        #     self.moveAbs({self._axis: nearest}).result()
+
+    def _on_referenced(self, future):
+        try:
+            future.result()
+        except Exception as e:
+            self._child.stop({self._caxis})  # prevent any move queued
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
+
+    def _update_child_position(self, value):
+        p = value[self._caxis] - self.offset_mounting
+        print p, value[self._caxis], "positioning for offset"
+        if self._cycle is not None:
+            p %= self._cycle
+        self._position[self._axis] = p
+        self._updatePosition()
+
+    def _update_child_ref(self, value):
+        self._referenced[self._axis] = value[self._caxis]
+        self._updateReferenced()
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # if it is an unsupported position report the nearest supported one
+        # position can be any in the specified range with the specified stepsize of the actuator
+        real_pos = self._position[self._axis]
+        # nearest = util.find_closest(real_pos, self._positions.keys())
+        # if not util.almost_equal(real_pos, nearest):
+        #     logging.warning("Reporting axis %s @ %s (known position), while physical axis %s @ %s",
+        #                     self._axis, nearest, self._caxis, real_pos)
+        # pos = {self._axis: nearest}
+        pos = {self._axis: real_pos}
+        logging.debug("reporting position %s", pos)
+        self.position._set_value(pos, force_write=True)
+
+    def _updateReferenced(self):
+        """
+        update the referenced VA
+        """
+        # .referenced is copied to detect changes to it on next update
+        self.referenced._set_value(self._referenced.copy(), force_write=True)
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        raise NotImplementedError("Relative move on fixed positions axis not supported")
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the actuator to the defined position in m for each axis given.
+        pos dict(string-> float): name of the axis and position in m
+        """
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
+        f = self._executor.submit(self._doMoveAbs, pos)
+
+        return f
+
+    def _doMoveAbs(self, pos):
+        axis, distance = pos.items()[0]
+        print "-------------------------------------------", axis, distance
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
+
+        #TODO Sabrina: need to reference after a certain number of rotoations. Error can also accumulate and \
+        # rotation never passes 0
+
+        # if self._cycle is None:
+        #     move = {self._caxis: distance}
+        #     self._child.moveAbs(move).result()
+        # else:
+        # Optimize by moving through the closest way
+        cur_pos = self._child.position.value[self._caxis]
+        # print self._child.position.value
+        vector1 = distance - cur_pos
+        mod1 = vector1 % self._cycle
+        vector2 = cur_pos - distance
+        mod2 = vector2 % self._cycle
+        print mod1, mod2
+        if abs(mod1) < abs(mod2):
+            self._move_sum += mod1
+            print self._move_sum
+            if self._move_sum >= self._cycle:
+                # print True, "1"
+                # Once we are about to complete a full cycle, reference again
+                # to get rid of accumulated error
+                self._move_sum = 0
+                # move to the reference switch
+                move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
+                # print True, "2"
+                self._child.moveRel({self._caxis: move_to_ref}).result()
+                # print True, "3"
+                self._child.reference({self._caxis}).result()
+                print True, "4"
+                move = {self._caxis: distance}
+                print self._child.position.value, "....................................set zero"
+                self.move_sum = self._move_sum
+            else:
+                move = {self._caxis: mod1}
+        else:
+            move = {self._caxis:-mod2} #TODO Sabrina ? Why no referencing for negative rotations?
+            self._move_sum -= mod2
+
+        self._child.moveRel(move).result()
+
+    def _doReference(self, axes):
+        logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
+        f = self._child.reference({self._caxis})
+        f.result()
+
+        # TODO Sabrina: no need here?
+        # If we just did homing and ended up to an unsupported position, move to
+        # the nearest supported position
+        # cp = self._child.position.value[self._caxis]
+        # if (cp not in self._positions):
+        #     nearest = util.find_closest(cp, self._positions.keys())
+        #     self._doMoveAbs({self._axis: nearest})
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+
+        f = self._executor.submit(self._doReference, axes)
+        return f
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def stop(self, axes=None):
+        """
+        stops the motion
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
+        """
+        if axes is not None:
+            axes = set()
+            if self._axis in axes:
+                axes.add(self._caxis)
+
+        self._child.stop(axes=axes)
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+        self._child.position.unsubscribe(self._update_child_position)
+        if hasattr(self, "referenced"):
+            self._child.referenced.subscribe(self._update_child_ref)
+
+
+# print "--------------------------------------------------------------------------------------"
+#     print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
