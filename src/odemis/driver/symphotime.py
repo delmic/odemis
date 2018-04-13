@@ -233,7 +233,7 @@ class OptionalDataRecord(object):
         elif self.typ == PQ_OPT_DATATYPE_FIXED_LENGTH_STRING:
             output_string += struct.pack('<BH', self.typ, len(self.data)) + self.data
         else:
-            raise ValueError('Invalid record type. ')
+            raise ValueError('Invalid record type.')
         
         return output_string
 
@@ -339,9 +339,9 @@ class Message(object):
 
         else:
             logging.error("Unknown message type 0x%x.", msg_type)
-            raise ValueError("Unknown message type 0x%x.", msg_type)
+            raise ValueError("Unknown message type 0x%x." % (msg_type,))
 
-    @abc.abstractmethod
+    @abstractmethod
     def _generateMessageData(self):
         '''
         Virtual function.
@@ -360,7 +360,7 @@ class Message(object):
         header = struct.pack('Hb', msg_len, self._bType) + MAGIC.encode('ascii')
         return header + msg
     
-    @abc.abstractmethod
+    @abstractmethod
     def __str__(self):
         raise RuntimeError('Abstract method called.')
 
