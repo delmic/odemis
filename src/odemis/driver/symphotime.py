@@ -574,7 +574,6 @@ class Controller(model.Detector):
                                 "Server is connected to the network, turned "
                                 "on, and correctly configured." % (host, port))
 
-
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
         
