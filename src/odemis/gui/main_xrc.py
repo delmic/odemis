@@ -4456,6 +4456,7 @@ def __init_resources():
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_inspection_streams">
                           <size>300,-1</size>
+                          <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
