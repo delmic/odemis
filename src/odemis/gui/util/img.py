@@ -35,7 +35,6 @@ from odemis.gui.comp.overlay.base import Label
 from odemis.util import intersect, fluo, conversion, polar, img, units
 import time
 import wx
-import copy
 
 import odemis.acq.stream as acqstream
 import odemis.gui.img as guiimg
@@ -1630,9 +1629,9 @@ def get_ordered_images(streams, raw=False):
             data = _pack_data_into_rgba(data_raw)
 
         if isinstance(s.raw, tuple):  # s.raw has tiles
-            md = s.raw[0][0].metadata
+            md = s.raw[0][0].metadata.copy()
         else:
-            md = s.raw[0].metadata
+            md = s.raw[0].metadata.copy()
 
         ostream = s.stream if isinstance(s, DataProjection) else s
 

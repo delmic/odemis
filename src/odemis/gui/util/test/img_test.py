@@ -492,16 +492,22 @@ class TestSpatialExport(unittest.TestCase):
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
         streams = [self.streams[1], self.spec_stream]
+        orig_md = [s.raw[0].metadata.copy() for s in streams]
         exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(exp_data[0].shape, (3379, 4199, 4))  # RGB
+        for s, md in zip(streams, orig_md):
+            self.assertEqual(md, s.raw[0].metadata)
 
     def test_spec_pp(self):
         view_hfw = (0.00025158414075691866, 0.00017445320835792754)
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
         streams = [self.streams[1], self.spec_stream]
+        orig_md = [s.raw[0].metadata.copy() for s in streams]
         exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, True)
         self.assertEqual(exp_data[0].shape, (3379, 4199))  # greyscale
+        for s, md in zip(streams, orig_md):
+            self.assertEqual(md, s.raw[0].metadata)
 
     def test_no_crop_need(self):
         """
@@ -514,7 +520,7 @@ class TestSpatialExport(unittest.TestCase):
         self.assertEqual(exp_data[0].shape, (1226, 1576, 4))  # RGB
         self.assertEqual(len(exp_data), 1)
 
-        # TODO: test also raw export
+        # test also raw export
         exp_data = img.images_to_export_data([self.streams[0]], view_hfw, view_pos, draw_merge_ratio, True)
         self.assertEqual(exp_data[0].shape, (1226, 1576))  # greyscale
 
@@ -542,6 +548,8 @@ class TestSpatialExport(unittest.TestCase):
         self.assertEqual(exp_data[0].shape, (182, 1673, 4))  # RGB
 
     def test_multiple_streams(self):
+        orig_md = [s.raw[0].metadata.copy() for s in self.streams]
+
         # Print ready format
         view_hfw = (8.191282393266523e-05, 6.205915392651362e-05)
         view_pos = [-0.001203511795256, -0.000295338300158]
@@ -556,6 +564,9 @@ class TestSpatialExport(unittest.TestCase):
         self.assertEqual(len(exp_data[0].shape), 2)  # grayscale
         self.assertEqual(len(exp_data[1].shape), 2)  # grayscale
         self.assertEqual(exp_data[0].shape, exp_data[1].shape)  # all exported images must have the same shape
+
+        for s, md in zip(self.streams, orig_md):
+            self.assertEqual(md, s.raw[0].metadata)
 
     def test_no_intersection(self):
         """
@@ -589,7 +600,7 @@ class TestSpatialExport(unittest.TestCase):
         self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
 
 
-class TestSpatialExportAcquisitionData(unittest.TestCase):
+class TestSpatialExportPyramidal(unittest.TestCase):
 
     def setUp(self):
         self.app = wx.App()
@@ -631,6 +642,8 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         time.sleep(0.5)
 
     def test_first(self):
+        orig_md = [s.raw[0][0].metadata.copy() for s in self.streams]
+
         # Print ready format
         view_hfw = (8.191282393266523e-05, 6.205915392651362e-05)
         view_pos = [-0.001203511795256, -0.000295338300158]
@@ -645,6 +658,9 @@ class TestSpatialExportAcquisitionData(unittest.TestCase):
         self.assertEqual(len(exp_data_gray), 2)
         self.assertEqual(len(exp_data_gray[0].shape), 2)  # grayscale
         self.assertEqual(exp_data_rgb[0].shape[:2], exp_data_gray[0].shape)  # all exported images must have the same shape
+
+        for s, md in zip(self.streams, orig_md):
+            self.assertEqual(md, s.raw[0][0].metadata)
 
 
 class TestOverviewFunctions(unittest.TestCase):
