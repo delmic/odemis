@@ -545,7 +545,7 @@ class Controller(model.Detector):
     Uses metadata: MD_PIXEL_SIZE, MD_DESCRIPTION, MD_LENS_NAME
     '''
 
-    def __init__(self, name, role, children, host, port=DEFAULT_PORT, **kwargs):
+    def __init__(self, name, role, host, children=None, port=DEFAULT_PORT, daemon=None, **kwargs):
         """
         children (dict str -> dict): internal role -> kwargs. The internal roles
           can be "scanner"
@@ -555,7 +555,7 @@ class Controller(model.Detector):
         Raises:
             ValueError if no scanner child is present
         """
-        super(Controller, self).__init__(name, role, **kwargs)
+        super(Controller, self).__init__(name, role, daemon=daemon, **kwargs)
         
         if not children:
             raise ValueError("Symphotime detector requires a scanner child. ")
@@ -580,14 +580,13 @@ class Controller(model.Detector):
         # try get parameters from metadata
         self._metadata[model.MD_PIXEL_SIZE] = (10e-6, 10e-6)
         
-        
         # Vigilant attributes
         try:
             ckwargs = children["scanner"]
         except KeyError:
             raise ValueError("No 'scanner' child configuration provided")
             
-        self.scanner = Scanner(parent=self, **ckwargs)
+        self.scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self.scanner)
 
         # Measurement parameters
