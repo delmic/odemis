@@ -207,12 +207,14 @@ received).
 
         Unregister a given callback. Can be called from the callback itself.
 
-    .. py:method:: get()
+    .. py:method:: get(asap=True)
 
         Acquire and returns one DataArray. It is equivalent to subscribing, and
         unsubscribing as soon as the first DataArray is received by the callback.
-        
-    .. TODO: maybe allow to .get several data in a row? Useful for example when doing spectrum acquisition.
+
+       :param bool asap: if True, returns the first image received, otherwise
+          ensures that the image has been acquired *after* the call to this function.
+          It only makes a difference if the DataFlow is already active.
 
     .. py:method:: synchronizedOn(Event or None)
 
