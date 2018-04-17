@@ -53,6 +53,7 @@ MONASH_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPEC_CONFIG = CONFIG_PATH + "sim/sparc-sim-spec.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
 SPARC2_EXT_SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-ext-spec-sim.odm.yaml"
+SECOM_FLIM_CONFIG = CONFIG_PATH + "sim/secom-flim-sim.odm.yaml"
 
 
 # @skip("faster")
@@ -161,7 +162,6 @@ class SimPathTestCase(unittest.TestCase):
 
         guess = self.optmngr.guessMode(specs)
         self.assertEqual(guess, "spectral")
-
         guess = self.optmngr.guessMode(sps)
         self.assertEqual(guess, "spectral")
 
@@ -598,7 +598,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         guess = self.optmngr.guessMode(sps)
         self.assertIn(guess, ("spectral", "spectral-dedicated"))
 
-    # @skip("simple")
+#   @skip("simple")
     def test_set_path_stream(self):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
@@ -679,7 +679,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.focus.position.value, orig_focus)
 
 
-# @skip("faster")
+#    @skip("faster")
 class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in EMPA)
@@ -1019,6 +1019,92 @@ class SecomPathTestCase(unittest.TestCase):
         self.assertEqual(self.ccd.fanSpeed.value, 0)
         ols.prepare().result()
         self.assertEqual(self.ccd.fanSpeed.value, 0)
+
+
+class SecomFlimPathTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SECOM setup for FLIM
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SECOM_FLIM_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Microscope component
+        cls.microscope = model.getComponent(role="secom")
+        # Find CCD & SEM components
+        cls.sft = model.getComponent(role="time-correlator")
+        cls.tc_scanner = model.getComponent(role="tc-scanner")
+        cls.ex_light = model.getComponent(role="light")
+        cls.lscanner = model.getComponent(role="laser-mirror")
+        cls.apd = model.getComponent(role="tc-detector")
+        cls.det0 = model.getComponent(role="photo-detector0")
+        cls.det1 = model.getComponent(role="photo-detector1")
+        cls.det2 = model.getComponent(role="photo-detector2")
+        cls.detsel = model.getComponent(role="det-selector")
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        del cls.optmngr  # To garbage collect it
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def test_set_path_stream(self):
+        self.optmngr.setPath("confocal").result()
+
+        self.optmngr.setPath("flim").result()
+        assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
+
+        self.optmngr.setPath("flim-setup").result()
+        assert_pos_almost_equal(self.detsel.position.value, {"rx": 0}, atol=1e-3)
+
+    def test_guess_mode(self):
+        # test guess mode for ar
+        helper = stream.ScannedTCSettingsStream('Stream', self.det0, self.ex_light, self.lscanner,
+                                                self.sft, self.apd, self.tc_scanner)
+
+        remote = stream.ScannedRemoteTCStream("remote", helper)
+
+        s1 = stream.ScannedFluoStream("s1", self.det0, self.det0.data, self.ex_light,
+                                      self.lscanner, None)
+
+        s2 = stream.ScannedFluoStream("s2", self.det1, self.det1.data, self.ex_light,
+                                      self.lscanner, None)
+
+        s3 = stream.ScannedFluoStream("s3", self.det2, self.det2.data, self.ex_light,
+                                      self.lscanner, None)
+
+        # Test regex comprehension
+        guess = self.optmngr.guessMode(s1)
+        self.assertEqual(guess, "confocal")
+
+        guess = self.optmngr.guessMode(s2)
+        self.assertEqual(guess, "confocal")
+
+        guess = self.optmngr.guessMode(s3)
+        self.assertEqual(guess, "confocal")
+
+        # Test if we get to the right stream
+        guess = self.optmngr.guessMode(remote)
+        self.assertEqual(guess, "flim")
+
+        guess = self.optmngr.guessMode(helper)
+        self.assertEqual(guess, "flim-setup")
 
 
 if __name__ == "__main__":

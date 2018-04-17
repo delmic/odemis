@@ -1015,3 +1015,134 @@ class OverlayStream(Stream):
             return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
 
         return result_as_da
+
+
+class ScannedTCSettingsStream(RepetitionStream):
+
+    def __init__(self, name, detector, emitter, scanner, time_correlator, detector_live, scanner_extra, **kwargs):
+        """
+        A helper stream used to define FLIM acquisition settings and run a live setting stream
+        that gets a time-series from an APD (tc_detector)
+
+        detector: (model.Detector) typically a photo-detector
+        emitter: (model.Light) Typically an extended light (pulsed laser)
+        scanner: (model.Emitter) typically laser-scanner
+        time_correlator: (model.Detector) typically Symphotime controller
+        detector_live: (model.Detector)Typically an APD
+        scanner_extra: (model.Emitter) The Symphotime scanner device wrapped by the Symphotime controller
+
+        Warning: do not use local .dwellTime, but use the one provided by the stream.
+        """
+        RepetitionStream.__init__(self, name, detector_live, detector_live.data, scanner, **kwargs)
+
+        # Fuzzing is not handled for FLIM streams (and doesn't make much
+        # sense as it's the same as software-binning
+        del self.fuzzing
+
+        # scan stage is not (yet?) handled for FLIM streams
+        del self.useScanStage
+
+        # B/C and histogram are meaningless on a chronogram
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
+        # Child devices
+        self.lemitter = emitter
+        self.tc_scanner = scanner_extra
+        self.tc_detector = detector_live
+        self.scanner = scanner
+        self.time_correlator = time_correlator
+        self.dataflow = detector_live.data
+        self.pdetector = detector
+
+        # VA's
+        self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
+        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
+        self.image.value = model.DataArray([])  # start with an empty array
+        # Time over which to accumulate the data. 0 indicates that only the last
+        # value should be included
+        self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
+
+    def estimateAcquisitionTime(self):
+        # 1 pixel => the dwell time (of the emitter)
+        duration = self.scanner.dwellTime.value
+        # Add the setup time
+        duration += self.SETUP_OVERHEAD
+
+        return duration
+
+    # Taken from MonochromatorSettingsStream
+    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+    # Note: we assume we are in spot mode, if not the dwell time will be messed up!
+    # TODO: if the dwell time is small (eg, < 0.1s), do multiple acquisitions
+    # at the same spot (how?)
+
+    def _setRepetition(self, repetition):
+        self.scanner.resolution.value = repetition
+        valid_rep = self.scanner.resolution.clip(repetition)
+        return RepetitionStream._setRepetition(self, valid_rep)
+
+    def _append(self, count, date):
+        """
+        Adds a new count and updates the window
+        """
+        # find first element still part of the window
+        oldest = date - self.windowPeriod.value
+        first = numpy.searchsorted(self.raw[:, 1], oldest)
+
+        # We must update .raw atomically as _updateImage() can run simultaneously
+        new = numpy.array([[count, date]], dtype=numpy.float64)
+        self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
+
+    def _updateImage(self):
+
+        # convert the list into a DataArray
+        raw = self.raw  # read in one shot
+        count, date = raw[:, 0], raw[:, 1]
+        im = model.DataArray(count)
+        # save the relative time of each point as ACQ_DATE, unorthodox but should not
+        # cause much problems as the data is so special anyway.
+        if len(date) > 0:
+            age = date - date[-1]
+        else:
+            age = date  # empty
+        im.metadata[model.MD_ACQ_DATE] = age
+        assert len(im) == len(date)
+        assert im.ndim == 1
+
+        self.image.value = im
+
+    def _onNewData(self, dataflow, data):
+        # we absolutely need the acquisition time
+        try:
+            date = data.metadata[model.MD_ACQ_DATE]
+        except KeyError:
+            date = time.time()
+
+        # Get one data value
+        if data.shape == (1, 1):  # obtained during spot mode?
+            d = data[0, 0]
+        else:  # obtained during a scan
+            logging.debug("ScannedTCSettingsStream got %s points instead of 1", data.shape)
+            d = data.view(numpy.ndarray).mean()
+
+        dtyp = data.metadata.get(model.MD_DET_TYPE, model.MD_DT_INTEGRATING)
+        if dtyp == model.MD_DT_INTEGRATING:
+            # Convert the data from counts to counts/s
+            try:
+                dt = data.metadata[model.MD_DWELL_TIME]
+            except KeyError:
+                dt = data.metadata.get(model.MD_EXP_TIME, self.lemitter.dwellTime.value)
+                logging.warning("No dwell time metadata found in the ScannedTCSettings data, "
+                                "will use %f s", dt)
+
+            d /= dt
+            assert isinstance(d, numbers.Real), "%s is not a number" % d
+
+        elif dtyp != model.MD_DT_NORMAL:
+            logging.warning("Unknown detector type %s", dtyp)
+
+        self._append(d, date)
+        self._shouldUpdateImage()
+
