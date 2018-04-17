@@ -1800,8 +1800,8 @@ class SparcStreamsController(StreamBarController):
         # Basically one action per type of stream
         if main_data.ebic:
             self.add_action("EBIC", self.addEBIC)
-        if main_data.cld:
-            self.add_action("CL intensity", self.addCLIntensity)
+        # if main_data.cld:
+        #     self.add_action("CL intensity", self.addCLIntensity)
         if main_data.ccd and main_data.lens and model.hasVA(main_data.lens, "polePosition"):
             # Some simple SPARC have a CCD which can only do rough chamber view,
             # but no actual AR acquisition. This is indicate by not having any
@@ -2025,50 +2025,50 @@ class SparcStreamsController(StreamBarController):
                                   axes={"band": main_data.light_filter}
                                   )
 
-    def addCLIntensity(self):
-        """ Create a CLi stream and add to to all compatible viewports """
-
-        main_data = self._main_data_model
-        cli_stream = acqstream.CLSettingsStream(
-            "CL intensity",
-            main_data.cld,
-            main_data.cld.data,
-            main_data.ebeam,
-            sstage=main_data.scan_stage,
-            focuser=self._main_data_model.ebeam_focus,
-            opm=self._main_data_model.opm,
-            emtvas={"dwellTime"},
-            detvas=get_local_vas(main_data.cld, self._main_data_model.hw_settings_config),
-        )
-
-        # Special "safety" feature to avoid having a too high gain at start
-        if hasattr(cli_stream, "detGain"):
-            cli_stream.detGain.value = cli_stream.detGain.range[0]
-
-        # Create the equivalent MDStream
-        sem_stream = self._tab_data_model.semStream
-        sem_cli_stream = acqstream.SEMMDStream("SEM CLi",
-                                               [sem_stream, cli_stream])
-
-        # Need to pick the right filter wheel (if there is one)
-        axes = {}
-        for fw in (main_data.cl_filter, main_data.light_filter):
-            if fw is None:
-                continue
-            if main_data.cld.name in fw.affects.value:
-                axes["band"] = fw
-
-        ret = self._addRepStream(cli_stream, sem_cli_stream,
-                                  vas=("repetition", "pixelSize"),
-                                  axes=axes,
-                                  play=False
-                                  )
-
-        # With CLi, often the user wants to get the whole area, same as the survey.
-        # But it's not very easy to select all of it, so do it automatically.
-        if sem_stream.roi.value == acqstream.UNDEFINED_ROI:
-            sem_stream.roi.value = (0, 0, 1, 1)
-        return ret
+    # def addCLIntensity(self):
+    #     """ Create a CLi stream and add to to all compatible viewports """
+    #
+    #     main_data = self._main_data_model
+    #     cli_stream = acqstream.CLSettingsStream(
+    #         "CL intensity",
+    #         main_data.cld,
+    #         main_data.cld.data,
+    #         main_data.ebeam,
+    #         sstage=main_data.scan_stage,
+    #         focuser=self._main_data_model.ebeam_focus,
+    #         opm=self._main_data_model.opm,
+    #         emtvas={"dwellTime"},
+    #         detvas=get_local_vas(main_data.cld, self._main_data_model.hw_settings_config),
+    #     )
+    #
+    #     # Special "safety" feature to avoid having a too high gain at start
+    #     if hasattr(cli_stream, "detGain"):
+    #         cli_stream.detGain.value = cli_stream.detGain.range[0]
+    #
+    #     # Create the equivalent MDStream
+    #     sem_stream = self._tab_data_model.semStream
+    #     sem_cli_stream = acqstream.SEMMDStream("SEM CLi",
+    #                                            [sem_stream, cli_stream])
+    #
+    #     # Need to pick the right filter wheel (if there is one)
+    #     axes = {}
+    #     for fw in (main_data.cl_filter, main_data.light_filter):
+    #         if fw is None:
+    #             continue
+    #         if main_data.cld.name in fw.affects.value:
+    #             axes["band"] = fw
+    #
+    #     ret = self._addRepStream(cli_stream, sem_cli_stream,
+    #                               vas=("repetition", "pixelSize"),
+    #                               axes=axes,
+    #                               play=False
+    #                               )
+    #
+    #     # With CLi, often the user wants to get the whole area, same as the survey.
+    #     # But it's not very easy to select all of it, so do it automatically.
+    #     if sem_stream.roi.value == acqstream.UNDEFINED_ROI:
+    #         sem_stream.roi.value = (0, 0, 1, 1)
+    #     return ret
 
     def addSpectrum(self, name=None, detector=None):
         """

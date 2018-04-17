@@ -399,60 +399,38 @@ SPARC2: {
 
 #TODO Sabrina
 "Polarization Analyzer": {
-    class: actuator.FixedPositionsActuator,
+    class: actuator.CombinedFixedPositionsActuator,
     role: "polarization-analyzer",
-    children: {"linear": "Optical Actuators"},# "qwp": "Optical Actuators"},
+    children: {"linear": "Linear Polarizer", "qwp": "Quarter Wave Plate"}, # alphabetically sorted
     init: {
-        axis_name: "rz",
+        axis_name: "pol",
+        axes_map: ["rz", "rz"],
+        atol: [3.392e-5, 3.392e-5], # rad (~the step size of the motor)
+        #axes_map: {"linear": ["rz", 3.392e-5],
+        #           "qwp": ["rz", 3.392e-5],
+        #}
         # It supports 7 positions
         positions: {
-            # pos (rad) -> m,m
-            0.0:      "0pirad",         # 1  (0.0, 0.0)
-            0.785398: "qpirad",         # 2  (0.785398, 0.785398)
-            1.570796: "hpirad",         # 3  (1.570796, 1.570796)
-            2.356194: "3qpirad",        # 4  (2.356194, 2.356194)
-            0.785398: "lcirc",          # 5  (0.785398, 1.570796)
-            2.356194: "rcirc",          # 6  (2.356194, 1.570796)
-            3.9269908: "pass-through",  # 7 (no polarization)
+            # pos -> pos (linear), pos (qwp)
+            "0pirad": [0.0, 0.0],
+            "qpirad": [0.785398, 0.785398],
+            "hpirad": [1.570796, 1.570796],
+            "3qpirad": [2.356194, 2.356194],
+            "lcirc": [0.785398, 1.570796],
+            "rcirc": [2.356194, 1.570796],
+            "pass-through": [0.0, 0.0],
         },
+        fallback: "pass-through",
     },
     affects: ["Lens1 Mover"],
 }
-
-
-
-#"Polarization Analyzer": {
-#    class: actuator.PolarizerActuator,
-#    role: "polarization-analyzer",
-#    children: {"linear": "Linear Polarizer", "qwp": "Quarter Wave Plate"},
-#    init: {
-#        axis_name: "rz",
-#        # It supports 7 positions
-#        positions: {
-#            # pos (rad) -> m,m
-#            "0pirad": [0.0, 0.0], # rad
-#            "0pirad": [0.0, 0.0],
-#            "qpirad": [0.785398, 0.785398],
-#            "hpirad": [1.570796, 1.570796],
-#            "3qpirad": [2.356194, 2.356194],
-#            "lcirc": [0.785398, 1.570796],
-#            "rcirc": [2.356194, 1.570796],
-#            "pass-through": [0.0, 0.0],
-#        },
-#    },
-#    affects: ["Lens1 Mover"],
-#}
 
 "Linear Polarizer": {
     class: actuator.RotationActuator,
     role: "linear-polarizer",
     children: {"linear": "Optical Actuators"},
     init: {
-        axis_name: "rz",
-#        pos_min: 0,
-#        pos_max: 6.283185,
-#        pos_rng: [0, 6.283185],
-        cycle: 6.283185, # position of ref switch (0) after a full turn
+        axis_name: "rz"
     },
     metadata: {
         POS_COR: 12.e-3,  # rad
@@ -469,7 +447,6 @@ SPARC2: {
 #        pos_min: 0,
 #        pos_max: 6.283185,
 #        pos_rng: [0, 6.283185],
-        cycle: 6.283185, # position of ref switch (0) after a full turn
     },
     metadata: {
         POS_COR: 6.e-3,  # rad

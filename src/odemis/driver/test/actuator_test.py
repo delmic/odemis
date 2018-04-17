@@ -28,7 +28,7 @@ from odemis import model
 import odemis
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
-    CombinedSensorActuator, RotationActuator
+    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator
 from odemis.util import test
 import os
 import time
@@ -710,26 +710,179 @@ class TestCombinedSensorActuator(unittest.TestCase):
         with self.assertRaises(IOError):
             f.result()  # should raise an error
 
+class TestCombinedFixedPostionActuator(unittest.TestCase):
 
-class RotationTest(unittest.TestCase):
+    #TODO Sabrina: generalize axes names "linear" and "qwp"
+    # TODO Sabrina: both children have axis pol
+    def setUp(self):
+        self.axis1 = "linear"
+        self.axis2 = "qwp"
+        self.axis_name = "pol"
+        self.fallback = "pass-through"
+        self.positions = {
+                         # pos -> pos (linear), pos (qwp)
+                         "0pirad": [0.0, 0.0],
+                         "qpirad": [0.785398, 0.785398],
+                         "hpirad": [1.570796, 1.570796],
+                         "3qpirad": [2.356194, 2.356194],
+                         "lcirc": [0.785398, 1.570796],
+                         "rcirc": [2.356194, 1.570796],
+                         "pass-through": [0.0, 0.0]
+                        }
+
+        # create one child
+        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+                                          axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
+                                          unit=["rad", "rad"],
+                                          refproc="Standard",
+                                          )
+
+        self.dev = CombinedFixedPositionActuator("stage", "stage", children={"rz1": self.child1, "rz2": self.child1},
+                                                 axis_name=self.axis_name,
+                                                 axes_map={"rz1": self.axis1, "rz2": self.axis2}, # [self.axis1, self.axis2]
+                                                 positions=self.positions, atol=[3.392e-5, 3.392e-5],
+                                                 fallback=self.fallback)
+
+        # self.dev = CombinedFixedPositionActuator("stage", "stage",
+        #                                          children={self.axis1: self.child1,  self.axis2: self.child1},
+        #                                          axis_name=self.axis_name,
+        #                                          axes_map={"rz": self.axis1, "rz": self.axis2}, # [self.axis1, self.axis2]
+        #                                          positions=self.positions, atol=[3.392e-5, 3.392e-5])
+
+    def test_moveAbs(self):
+        # test don't change position
+        # cur_pos = self.dev.position.value["rz"]
+        # f = self.dev_cycle.moveAbs({self.axis_name: cur_pos})
+        # f.result()
+        # self.assertEqual(self.dev_cycle.pol_position.value[self.axis_name], pol_pos)
+
+        # check all positions possible
+        # check children report expected positions (e.g. [0.0, 0.0]
+        # check combined actuator reports corresponding expected positions (e.g. "0pirad")
+        for pol_pos in self.positions.keys():
+            print "position to do", pol_pos, "**********************************************************************"
+            f = self.dev.moveAbs({self.axis_name: pol_pos})
+            f.result()
+            print "position done", pol_pos, "**********************************************************************"
+            # TODO Sabrina check output VA! should be pol positions and not single axis pos
+            print "combined pos reported by VA:", self.dev.pol_position.value
+            # print "pos reported by VA:", self.dev.pol_position.value[self.axis_name]
+            print "pos reported by axis 1:", self.child1.position.value[self.axis1]
+            print "pos reported by axis 2:", self.child1.position.value[self.axis2]
+            # self.assertEqual(self.dev.pol_position.value[self.axis_name], pol_pos)
+            self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pol_pos][0]),
+                            self.child1._ustepsize[0] / 2.)
+            self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pol_pos][1]),
+                            self.child1._ustepsize[0] / 2.)
+
+
+        # def test_cycle_moveAbs(self):
+        #     cur_pos = self.dev_cycle.position.value["rz"]
+        #     # # find a different position
+        #     # new_pos = cur_pos
+        #     # position = self.dev_cycle.axes["x"]
+        #     #
+        #     # for p in position.choices:
+        #     #     if p != cur_pos:
+        #     #         new_pos = p
+        #     #         break
+        #     # else:
+        #     #     self.fail("Failed to find a position different from %d" % cur_pos)
+        #
+        #     # test new position
+        #     new_pos = 1.570796  # pi/2
+        #     f = self.dev_cycle.moveAbs({"rz": new_pos})
+        #     f.result()
+        #     # check absolute difference is smaller half the ustepsize
+        #     # self.assertLess(abs(self.dev_cycle.position.value["rz"] - new_pos), self.child1._ustepsize[0]/2.)
+        # test don't change position
+        # first axis
+        # cur_pos = self.dev.position.value["a"] #self.axis_name]
+        # f = self.dev.moveAbs({"a": cur_pos}) #{self.axis_name: cur_pos}
+        # f.result()
+        # print "pos reported by VA:", self.dev.position.value["a"]
+        # self.assertEqual(self.dev.position.value["a"], cur_pos)
+        #
+        # # second axis
+        # cur_pos = self.dev.position.value["b"]
+        # f = self.dev.moveAbs({"b": cur_pos})
+        # f.result()
+        # print "pos reported by VA:", self.dev.position.value["b"]
+        # self.assertEqual(self.dev.position.value["b"], cur_pos)
+        #
+        # print " next test"
+        # # test new position
+        # # first axis
+        # new_pos = 1.570796  # pi/2
+        # f = self.dev.moveAbs({"a": new_pos})
+        # f.result()
+        # print "pos reported by VA:", self.dev.position.value["a"]
+        # # check absolute difference is smaller half the ustepsize
+        # self.assertLess(abs(self.dev.position.value["a"] - new_pos), self.child1._ustepsize[0]/2.)
+        #
+        # # second axis
+        # new_pos = 3.141593  # pi
+        # f = self.dev.moveAbs({"b": new_pos})
+        # f.result()
+        # print "pos reported by VA:", self.dev.position.value["b"]
+        # # check absolute difference is smaller half the ustepsize
+        # self.assertLess(abs(self.dev.position.value["b"] - new_pos), self.child1._ustepsize[0]/2.)
+
+
+    def test_unsupported_position(self):
+        # test fallback: if unsupported position is requested, move combined actuator to known position
+        pol_pos = [10.0, 20.0]
+        print pol_pos
+        #TODO: should report position not supported and move back to pass-through
+        # add_done_callback(fn) future
+        with self.assertRaises(ValueError):
+            f = self.dev_cycle.moveAbs({self.axis_name: pol_pos})  # move
+            f.result()  # wait
+
+    def test_cancel_move(self):
+        # request a position, wait and cancel movement
+        #TODO Sabrina: check position requested not reached (should be previous pos or fallback)
+        cur_pos = self.dev.position.value[self.axis_name]
+        # enough to check only one position different from current pos
+        i = 0
+        while i != 1:
+            for pol_pos in self.positions.keys():
+                if pol_pos != cur_pos:
+                    f = self.dev_cycle.moveAbs({self.axis_name: pol_pos})  # move
+                    # here cancel: how to call?
+                    # TODO cancel() future
+                    # TODO Sabrina something with future cancelled() check
+                    f.result()
+                    # check position is previous or fallback
+                    print self.dev.position.value[self.axis_name]
+                    i += 1
+
+    def test_referencing(self):
+        # check both children report their axis as referenced
+        # ref_on_init=None
+        # ref_on_init (None, list or dict (str -> float or None)): axes to be referenced during
+        #           initialization. If it's a dict, it will go the indicated position
+        #           after referencing, otherwise, it'll stay where it is.
+        pass
+
+
+class TestRotationActuator(unittest.TestCase):
 
     def setUp(self):
-        # create 1 child
-        #self.child1 = simulated.Stage("sstage1", "test", {"rz"}, ranges={"rz": [-3.9269908, 3.9269908]})
+        self.offset_mounting = 1.
+        self.axis = "linear"
+        self.axis_name = "rz"
 
-        # self.child1 = tmcm.TMCLController("sstage1", "test", port="/dev/fake6",
-        #                                   axes=["linear", "qwp"], ustepsize=[3.392e-5, 4e-5],
-        #                                   unit=["rad", "rad"],
-        #                                   refproc="Standard",
-        #                                   )
+        # create 1 child
         self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
-                                          axes=["linear"], ustepsize=[3.392e-5],
+                                          axes=[self.axis], ustepsize=[3.392e-5],
                                           unit=["rad"],
                                           refproc="Standard",
                                           )
 
-        self.dev_cycle = RotationActuator("stage", "stage", {"rz": self.child1}, "linear",
-                                          cycle=6.283185, offset_mounting=0)
+        # TODO Sabrina axis and axisname confusion: why "rz" as argument for children
+        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.child1}, self.axis,
+                                          offset_mounting=self.offset_mounting)
 
     def test_unsupported_position(self):
         # It's optional
@@ -738,63 +891,117 @@ class RotationTest(unittest.TestCase):
 
         new_pos = 6.4
         with self.assertRaises(ValueError):
-            f = self.dev_cycle.moveAbs({"rz": new_pos})  # move
+            f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
             f.result()  # wait
 
     def test_cycle_moveAbs(self):
-        cur_pos = self.dev_cycle.position.value["rz"]
-
-        # don't change position
-        f = self.dev_cycle.moveAbs({"rz": cur_pos})
+        # test don't change position
+        cur_pos = self.dev_cycle.position.value[self.axis_name]
+        f = self.dev_cycle.moveAbs({self.axis_name: cur_pos})
         f.result()
-        print self.dev_cycle.position.value
-        self.assertEqual(self.dev_cycle.position.value["rz"], cur_pos)
-        #
-        # # find a different position
-        # new_pos = cur_pos
-        # position = self.dev_cycle.axes["x"]
-        #
-        # for p in position.choices:
-        #     if p != cur_pos:
-        #         new_pos = p
-        #         break
-        # else:
-        #     self.fail("Failed to find a position different from %d" % cur_pos)
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+             self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
+        self.assertEqual(self.dev_cycle.position.value[self.axis_name], cur_pos)
 
+        print " next test"
         # test new position
         new_pos = 1.570796  # pi/2
-        f = self.dev_cycle.moveAbs({"rz": new_pos})
+        f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        self.assertEqual(self.dev_cycle.position.value["rz"], new_pos)
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+             self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
+        # check absolute difference is smaller half the ustepsize
+        self.assertLess(abs(self.dev_cycle.position.value[self.axis_name] - new_pos), self.child1._ustepsize[0]/2.)
 
-        # test if offset is correctly recognized (accumulation of angles is overrunning 2pi)
+    def test_offset_moveAbs(self):
+        # test if offset is correctly used (accumulation of angles is overrunning 2pi): reset of position zero
         new_pos = 1.570796  # pi/2
+        # move 4*pi/2
         for i in range(1, 5):
             print i, "i"
-            f = self.dev_cycle.moveAbs({"rz": new_pos*i})
+            f = self.dev_cycle.moveAbs({self.axis_name: new_pos*i})
             f.result()
             i += 1
-
-        f = self.dev_cycle.moveAbs({"rz": new_pos})
+        # move again by pi/2 --> overrun 2pi
+        f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        self.assertEqual(self.dev_cycle.position.value["rz"], new_pos)
+        self.assertLess(abs(self.dev_cycle.position.value[self.axis_name] - new_pos), self.child1._ustepsize[0] / 2.)
+
+        new_pos = 6.283185
+        # move 4*-pi/2
+        for i in range(1, 5):
+            print i, "i"
+            f = self.dev_cycle.moveAbs({self.axis_name: new_pos-1.570796*i})
+            f.result()
+            i += 1
+        # move again by -pi/2 --> overrun -2pi
+        new_pos = 4.712389
+        f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
+        f.result()
+        self.assertLess(abs(self.dev_cycle.position.value[self.axis_name] - new_pos), self.child1._ustepsize[0] / 2.)
 
     def test_cycle_offset_mounting(self):
-        # move to zero
-        #TODO Sabrina need to map offset somehow back so 0 is and accepted position or return pos
-        #TODO Sabrina: need maybe to map back after passed 2pi with offset
-        f = self.dev_cycle.moveAbs({"rz": 0})
+        print "offset mounting:", self.dev_cycle.offset_mounting, "position VA:", self.dev_cycle.position.value[self.axis_name]
+        # move to zero + offset: report back zero
+        f = self.dev_cycle.moveAbs({self.axis_name: 0})
         f.result()
-        print self.dev_cycle.position.value
+        # dev_cycle should have value 0 then child1 should have value 1 for offset 1
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
+        # print self.dev_cycle.position.value["rz"], self.dev_cycle.offset_mounting
+        self.assertAlmostEqual((self.dev_cycle.position.value[self.axis_name] + self.dev_cycle.offset_mounting)
+                               % self.dev_cycle._cycle, self.dev_cycle.offset_mounting % self.dev_cycle._cycle, 4)
+
+        # move to any position in range allowed + offset: report position without offset
         new_pos = 1.570796  # pi/2
-        f = self.dev_cycle.moveAbs({"rz": new_pos})
+        f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        print self.dev_cycle.position.value["rz"]
-        # self.assertEqual(self.dev_cycle.position.value["rz"], new_pos)
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
+        # check if position of actuator minus position requested is almost equal to mounting offset
+        # almost equal to correct for quantized stepsize
+        self.assertAlmostEqual((self.dev_cycle.position.value[self.axis_name] + self.dev_cycle.offset_mounting)
+                               % self.dev_cycle._cycle, self.child1.position.value[self.axis] % self.dev_cycle._cycle, 4)
+
+        # supported position + offset overrunning cycle: report position without offset
+        # check that position is mapped back correctly when cycle is overrun
+        new_pos = 6.283185  # 2pi
+        f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
+        f.result()
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
+        # check if position of actuator minus position requested is almost equal to mounting offset
+        # almost equal to correct for quantized stepsize
+        self.assertAlmostEqual((self.dev_cycle.position.value[self.axis_name] + self.dev_cycle.offset_mounting)
+                               % self.dev_cycle._cycle, self.child1.position.value[self.axis] % self.dev_cycle._cycle, 4)
+
+        # move to unsupported position: report position without offset
+        new_pos = 6.4
+        with self.assertRaises(ValueError):
+            f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
+            f.result()  # wait
+        print "position not supported"
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
+
+        new_pos = -0.5
+        with self.assertRaises(ValueError):
+            f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
+            f.result()  # wait
+        print "position not supported"
+        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
+            "should be different from tmcm pos: ", \
+            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
 
     # force to not use the default method from TestCase
     def tearDown(self):
-        super(RotationTest, self).tearDown()
+        super(TestRotationActuator, self).tearDown()
 
 
 if __name__ == "__main__":

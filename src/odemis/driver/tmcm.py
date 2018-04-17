@@ -1348,6 +1348,7 @@ class TMCLController(model.Actuator):
             return model.InstantaneousFuture()
 
         f = self._createMoveFuture()
+        # TODO Sabrina: typo in dependencies?!
         f = self._executor.submitf(dependences, f, self._doMoveRel, f, shift)
         return f
 
