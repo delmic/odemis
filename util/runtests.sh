@@ -8,7 +8,8 @@
 # The global result is saved in test-XXX.log
 # It will generate one file and one directory:
 #  * unittest-full-$DATE.log : results of unit tests
-#  * ./integtest-$DATE/ : results of integration testing (2 files per conf)
+#  * integtest-full-$DATE.log: results of the integration tests
+#  * ./integtest-$DATE/ :logs of integration testing (2 files per conf)
 
 # Root path of the repo
 ODEMIS_DIR="$(readlink -m $(dirname $0)/../)"
@@ -115,14 +116,23 @@ fi
 sudo odemis-stop
 
 # Run the integration tests
+TESTLOG=./integtest-full-$DATE.log
+# make sure it is full path
+TESTLOG="$(readlink -m "$TESTLOG")"
 INTEGLOGDIR="./integtest-$DATE/"
 mkdir -p "$INTEGLOGDIR"
 
+# only echo ERRORs in the output
+touch "$TESTLOG" # To make sure tail doesn't fail
+tail -f "$TESTLOG" | grep --line-buffered "ERROR:" &
+
 echo "Running integration tests"
 SIMPATH="$ODEMIS_DIR/install/linux/usr/share/odemis/sim/"
-"$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$SIMPATH"/
+"$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$SIMPATH"/ >> "$TESTLOG" 2>&1
 
 ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/" # extra microscope files
 if [ -d "$ODMPATH" ]; then
-    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/
+    "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/ >> "$TESTLOG" 2>&1
 fi
+
+kill %1 # Stops the "tail -f"

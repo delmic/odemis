@@ -53,10 +53,6 @@ CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
 CMD_START = ["%s/install/linux/usr/bin/odemis-start" % ODEMIS_PATH, "-n", "-l"]
 CMD_GUI = ["%s/install/linux/usr/bin/odemis-gui" % ODEMIS_PATH, "--log-level", "2", "--log-target"]
 
-# These string are searched for in the log files and if any are found, an error
-# is assumed to have occurred.
-ERROR_TRIGGER = ("EXCEPTION:", "ERROR:", "WARNING:")
-
 
 class OdemisThread(threading.Thread):
     """ Thread used to run Odemis commands """
@@ -106,7 +102,7 @@ def wait_backend_ready():
         microscope = model.getMicroscope()
         nghosts = len(microscope.ghosts.value) # Components still to start
     except Exception:
-        logging.error("Back-end unreachable")
+        logging.error("Back-end unreachable, probably failed to start")
         return False
 
     try:
@@ -157,13 +153,11 @@ def test_config(sim_conf, path_root, logpath):
 
     logging.info("Starting %s backend", sim_conf)
     cmd = CMD_START + [dlog_path, sim_conf]
-    start = OdemisThread("Backend %s" % sim_conf_fn, cmd)
-    start.start()
+    backend = OdemisThread("Backend %s" % sim_conf_fn, cmd)
+    backend.start()
 
     # Wait for the back end to load
-    if not wait_backend_ready():
-        gui = None
-    else:
+    if wait_backend_ready():
         logging.info("Starting %s GUI", sim_conf)
         cmd = CMD_GUI + [os.path.abspath(guilog_path)]
         gui = OdemisThread("GUI %s" % sim_conf_fn, cmd)
@@ -174,6 +168,30 @@ def test_config(sim_conf, path_root, logpath):
         time.sleep(10)
 
         # TODO: do typical "stuff" in the GUI (based on the microscope type)
+    else:
+        gui = None
+
+    # Trick: the backend tends to spill out some ERRORs at termination. They are
+    # not really important. So for now, we check the log just before termination,
+    # to only display the errors which are important.
+    passed = True
+    if backend.returncode != 0:  # 'ok' return code
+        logging.error("Back-end failed to start, with return code %d", backend.returncode)
+        return False
+    elif os.path.exists(dlog_path):
+        # TODO: make error/exception detection in log files more intelligent?
+        # TODO: backend always start with an "ERROR" from Pyro, trying to connect to existing backend
+        #  => drop to warning?
+        odemisd_log = open(dlog_path).read()
+        if "ERROR:" in odemisd_log:
+            logging.error("Found %d %s in back-end log of %s, see %s",
+                          odemisd_log.count("ERROR:"), "ERROR", sim_conf_fn, dlog_path)
+            passed = False
+        if "WARNING:" in odemisd_log:
+            logging.warning("Found %d %s in back-end log of %s, see %s",
+                          odemisd_log.count("WARNING:"), "WARNING", sim_conf_fn, dlog_path)
+    else:
+        logging.warning("Backend log file not found: %s", dlog_path)
 
     logging.info("Stopping %s", sim_conf)
     stop = OdemisThread("Stop %s" % sim_conf_fn, CMD_STOP)
@@ -182,25 +200,9 @@ def test_config(sim_conf, path_root, logpath):
 
     # If 'start' is still running, kill it forcibly (It might be stuck displaying the log
     # window)
-    if start.is_alive():
-        start.kill()
-
-    passed = True
-    if start.returncode != 0:  # 'ok' return code
-        logging.error("Backend failed to start, with return code %d", start.returncode)
-        return False
-    elif os.path.exists(dlog_path):
-        # TODO: make error/exception detection in log files more intelligent?
-        # TODO: backend always start with an "ERROR" from Pyro, trying to connect to existing backend
-        # TODO: differentiate errors happening after asking to stop the back-end
-        odemisd_log = open(dlog_path).read()
-        for lbl in ERROR_TRIGGER:
-            if lbl in odemisd_log:
-                logging.error("Found %d %s in back-end log of %s, see %s",
-                              odemisd_log.count(lbl), lbl, sim_conf_fn, dlog_path)
-                passed = False
-    else:
-        logging.warning("Backend log file not found: %s", dlog_path)
+    if backend.is_alive():
+        logging.error("Back-end still running after requesting to stop")
+        backend.kill()
 
     if gui and gui.returncode != 143:  # SIGTERM return code
         if gui.returncode == 255:
@@ -209,11 +211,13 @@ def test_config(sim_conf, path_root, logpath):
         return False
     elif os.path.exists(guilog_path):
         gui_log = open(guilog_path).read()
-        for lbl in ERROR_TRIGGER:
-            if lbl in gui_log:
-                logging.error("%s found in GUI log of %s, see %s", lbl, sim_conf_fn, guilog_path)
-                passed = False
-                break
+        if "ERROR:" in gui_log:
+            logging.error("Found %d %s in GUI log of %s, see %s",
+                          gui_log.count("ERROR:"), "ERROR", sim_conf_fn, guilog_path)
+            passed = False
+        if "WARNING:" in gui_log:
+            logging.warning("Found %d %s in GUI log of %s, see %s",
+                          gui_log.count("WARNING:"), "WARNING", sim_conf_fn, guilog_path)
     else:
         logging.warning("GUI log file not found: %s", guilog_path)
 
