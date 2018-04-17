@@ -105,7 +105,7 @@ class DataFlowBase(object):
     """
     def __init__(self):
         self._listeners = set()
-        self._lock = threading.Lock() # need to be acquired to modify the set
+        self._lock = threading.RLock()  # need to be acquired to modify the set
 
     # to be overridden
     # not defined at all so that the proxy version automatically does a remote call

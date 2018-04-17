@@ -505,13 +505,16 @@ class DataframeServerAckMessage(Message):
 
 class BasicDataFlow(model.DataFlow):
 
-    def __init__(self, start_func, stop_func):
+    def __init__(self, start_func, stop_func, check):
         """
         start_func: function to execute when start_generate is called
         stop_func: function to execute when stop_generate is called
+        check: A function that validates whether or not a subscriber should be added.
+            If check raises an exception, the subscriber will nto be added.
         """
         model.DataFlow.__init__(self)
         self._start = start_func
+        self._check = check
         self._stop = stop_func
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
@@ -520,6 +523,15 @@ class BasicDataFlow(model.DataFlow):
 
     def stop_generate(self):
         self._stop()
+        
+    def subscribe(self, listener):
+        # override subscribe. Only allow a subscriber to be added if no exception is raised on
+        # self._check()
+        with self._lock:
+            count_before = self._count_listeners()
+            if count_before == 0:
+                self._check()
+            super(BasicDataFlow, self).subscribe(listener)
 
 
 class SPTError(HwError):
@@ -545,7 +557,7 @@ class Controller(model.Detector):
     Uses metadata: MD_PIXEL_SIZE, MD_DESCRIPTION, MD_LENS_NAME
     '''
 
-    def __init__(self, name, role, children, host, port=DEFAULT_PORT, **kwargs):
+    def __init__(self, name, role, host, children=None, port=DEFAULT_PORT, daemon=None, **kwargs):
         """
         children (dict str -> dict): internal role -> kwargs. The internal roles
           can be "scanner"
@@ -555,7 +567,7 @@ class Controller(model.Detector):
         Raises:
             ValueError if no scanner child is present
         """
-        super(Controller, self).__init__(name, role, **kwargs)
+        super(Controller, self).__init__(name, role, daemon=daemon, **kwargs)
         
         if not children:
             raise ValueError("Symphotime detector requires a scanner child. ")
@@ -579,19 +591,28 @@ class Controller(model.Detector):
         
         # try get parameters from metadata
         self._metadata[model.MD_PIXEL_SIZE] = (10e-6, 10e-6)
+        self.measurement_type = PQ_MEASTYPE_IMAGESCAN
         
-        
-        # Vigilant attributes
+        # Children
         try:
             ckwargs = children["scanner"]
         except KeyError:
             raise ValueError("No 'scanner' child configuration provided")
             
-        self.scanner = Scanner(parent=self, **ckwargs)
+        self.scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self.scanner)
+        
+        # Check for an optional "detector-live" child
+        try:
+            ckwargs = children["detector-live"]
+            self.detector_live = DetectorLive(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(self.detector_live)
+        except KeyError:
+            logging.debug("No 'detector-live' child configuration provided")
+            self.detector_live = None
 
         # Measurement parameters
-        self.data = BasicDataFlow(self.StartMeasurement, self.StopMeasurement)
+        self.data = BasicDataFlow(self.StartMeasurement, self.StopMeasurement, self._checkImScan)
         self._tStart = None  # this will hold the epoch time a measurmenet starts
 
         # Create a thread to listen to messages from SymPhoTime
@@ -623,9 +644,13 @@ class Controller(model.Detector):
         return not(self._measurement_stopped.is_set())
 
     def waitTillMeasurementComplete(self):
-        logging.debug("Waiting for measurmenet to end...")
-        self._measurement_stopped.wait()
-        logging.debug("Measurement stopped. Done waiting. ")
+        logging.debug("Waiting for measurement to end...")
+        val = self._measurement_stopped.wait(30)
+        if val: 
+            logging.debug("Measurement stopped. Done waiting. ")
+        else:
+            logging.warning("Timed out waiting for measurement to stop.")
+        return val
 
     def _sendMessage(self, msg):
         '''
@@ -637,10 +662,13 @@ class Controller(model.Detector):
         with self._net_access:
             self._socket.sendall(msg.to_bytes())
 
-    def StartMeasurement(self):
+    def StartMeasurement(self, measurement_type=PQ_MEASTYPE_IMAGESCAN):
         '''
         Starts the measurement process with the values stored in the object config
         '''
+        if self.isMeasuring():
+            # already measuring. Don't start again.
+            return
 
         # determine measurement parameters
         pixel_size = self._metadata[model.MD_PIXEL_SIZE][0]
@@ -678,7 +706,9 @@ class Controller(model.Detector):
 
         logging.info("Requesting an acquisition. Pixel size: %f m, Resolution: %d x %d", pixel_size, iPixelNumber_X, iPixelNumber_Y)
 
-        msg = DataframeServerRequestMessage(T_REC_VERSION, PQ_MEASTYPE_IMAGESCAN,
+        self.measurement_type = measurement_type
+
+        msg = DataframeServerRequestMessage(T_REC_VERSION, self.measurement_type,
                                 iPixelNumber_X, iPixelNumber_Y, 
                                 iScanningPattern, pixel_size, 
                                 optional_data)
@@ -690,12 +720,33 @@ class Controller(model.Detector):
 
     def StopMeasurement(self):
         '''
-        Sends a user break to the server to stop the measurement. 
+        Sends a user break to the server to stop the measurement. Note that the measurement state will
+        not change until the server acknowledges.
         '''
         if self.isMeasuring():
             logging.info("Sending user break.")
             self._sendMessage(EncodedStatusMessage (PQ_STOPREASON_CODE_USER_BREAK))
             self._user_break = True
+            
+    def CheckMeasurement(self, meas_type):
+        '''
+        Check if a measurement of the same type to meas_type is running.
+        Used to validate subscriber functions.
+        meas_type: (int) a measurmenet type enum (e.g. PQ_MEASTYPE_IMAGESCAN)
+
+        returns:
+            True if we are measuring and the measurement type is the same as meas_type
+            True if we are not measuring at all
+            False if we are measuring and the measurement type is different from meas_type
+        '''
+        if self.isMeasuring():
+            return meas_type == self.measurement_type
+        else:
+            return True
+
+    def _checkImScan(self):
+        if not self.CheckMeasurement(PQ_MEASTYPE_IMAGESCAN):
+            raise RuntimeError("A measurement is already running!")
 
     def _listen(self):
         '''
@@ -777,22 +828,16 @@ class Controller(model.Detector):
                 # Sent and acknowledges the error state clearing.
                 # Change the state back to RUNNING
                 self.state._set_value(model.ST_RUNNING, force_write=True)
-                    
+
             elif err_status == PQ_ERRCODE_MEASUREMENT_READY:
                 # Measurement is complete
                 if not self._measurement_stopped.is_set():
                     logging.info("Acquisition completed successfully.")
                     self._measurement_stopped.set()
-                    # update metadata and send data array to subscribers
-                    md = self._metadata.copy()
-                    md[model.MD_DWELL_TIME] = self.scanner.dwellTime.value
-                    md[model.MD_ACQ_DATE] = self._tStart
-                    da = model.DataArray([[0]], md)
-                    self.data.notify(da)
-
+                    self._notifySubscribers(self.data, [[0]])
             else:
                 # All other status types denote errors. 
-                self._measurement_stopped.clear()
+                self._measurement_stopped.set()
                 raise SPTError(err_status)
 
         elif isinstance(decoded_msg, DataframeServerAckMessage):
@@ -814,6 +859,12 @@ class Controller(model.Detector):
                 self.scanner.filename.value = data['ResultingFilename']
             if "ResultingGroupname" in data:
                 self.scanner.directory.value = data['ResultingGroupname']
+                
+            # If we have a live detector ...
+            if self.detector_live:
+                apd_name = "det%d" % self.detector_live.channel # det1, for example
+                if apd_name  in data:
+                    self._notifySubscribers(self.detector_live.data, [[data[apd_name]]])
 
         elif isinstance(decoded_msg, EncodedStatusReplyMessage):
             # Do not answer these types of messages
@@ -821,7 +872,12 @@ class Controller(model.Detector):
             err_status = decoded_msg.ecStatus
             logging.debug("Status: 0x%x: %s", err_status, ERRCODE[err_status])
 
-            if err_status == PQ_STOPREASON_CODE_FINISHED_OK:
+            if err_status == PQ_STOPREASON_CODE_CONTINUE_OK:
+                if self.isMeasuring() and self._user_break:
+                    logging.info("Server acknowledged user break.")
+                    self._measurement_stopped.set()
+                    self._user_break = False
+            elif err_status == PQ_STOPREASON_CODE_FINISHED_OK:
                 if self.isMeasuring():
                     logging.info("Finished ok.")
                     self._measurement_stopped.set()
@@ -833,7 +889,7 @@ class Controller(model.Detector):
             # Do not answer these types of messages
             # Log the updated status from the server
             err_status = decoded_msg.ecStatus
-            logging.debug("Status Reply: 0x%x: %s", err_status, ERRCODE[err_status])
+            logging.debug("Dataframe Reply: 0x%x: %s", err_status, ERRCODE[err_status])
 
             if err_status == PQ_STOPREASON_CODE_CONTINUE_OK:
                 if self.isMeasuring() and self._user_break:
@@ -847,6 +903,15 @@ class Controller(model.Detector):
         else:
             logging.warning("Unknown message received. Msgtype %s", type(decoded_msg))
 
+    def _notifySubscribers(self, dataflow, data):
+        # update metadata and send data array to subscribers
+        # Will notify 'data' to 'dataflow'
+        md = self._metadata.copy()
+        md[model.MD_DWELL_TIME] = self.scanner.dwellTime.value
+        md[model.MD_ACQ_DATE] = self._tStart
+        da = model.DataArray(data, md)
+        dataflow.notify(da)
+
 
 class Scanner(model.Emitter):
     '''
@@ -858,6 +923,7 @@ class Scanner(model.Emitter):
         bidirectional (bool)
         dwellTime (float)
     '''
+
     def __init__(self, name, role, parent, **kwargs):
         '''
         parent (symphotime.Controller): a symphotime server parent object
@@ -887,3 +953,38 @@ class Scanner(model.Emitter):
             raise ValueError("Directory name too long. Cannot be longer than 63 characters")
         return value
 
+
+class DetectorLive(model.Detector):
+    '''
+    Detector that is a child of the Symphotime parent. Provides a stream of count values.
+
+    Parameters:
+
+        data: BasicDataFlow that can be subscibred to
+
+    '''
+
+    def __init__(self, name, role, parent, **kwargs):
+        '''
+        parent (symphotime.Controller): a symphotime server parent object
+        '''
+        super(DetectorLive, self).__init__(name, role, **kwargs)
+
+        self.parent = parent
+        self.channel = 1  # hard coded channel of the apd. Typically 1, 2, or 3
+        self.data = BasicDataFlow(self._start, self._stop, self._check)
+
+    def _start(self):
+        self.parent.StartMeasurement(measurement_type=PQ_MEASTYPE_TEST_POINTMEAS)
+    
+    def _stop(self):
+        self.parent.StopMeasurement()
+        
+    def _check(self):
+        '''
+        Passed to the BasicDataFlow as a check to ensure that a measurement of different type is not
+        already running.
+        '''
+        if not self.parent.CheckMeasurement(PQ_MEASTYPE_TEST_POINTMEAS):
+            raise RuntimeError("A measurement is already running!")
+    
