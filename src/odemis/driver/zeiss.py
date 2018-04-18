@@ -376,7 +376,11 @@ class Stage(model.Actuator):
 
     def __init__(self, name, role, parent, rng=None, **kwargs):
         """
-        axes (set of string): names of the axes
+        inverted (set of str): names of the axes which are inverted
+        rng (dict str -> (float,float)): axis name -> min/max of the position on
+          this axis. Note: if the axis is inverted, the range passed will be
+          inverted. Also, if the hardware reports position outside of the range,
+          move might fail, as it is considered outside of the range.
         """
 
         if rng is None:
