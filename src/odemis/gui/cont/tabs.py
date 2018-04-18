@@ -1530,6 +1530,7 @@ class AnalysisTab(Tab):
             panel.pnl_inspection_streams,
             static=True
         )
+        self._stream_bar_controller.add_action("From file...", self._on_add_file)
 
         # Show the file info and correction selection
         self._settings_controller = settings.AnalysisSettingsController(
@@ -1546,9 +1547,11 @@ class AnalysisTab(Tab):
     def stream_bar_controller(self):
         return self._stream_bar_controller
 
-    def select_acq_file(self):
+    def select_acq_file(self, extend=False):
         """ Open an image file using a file dialog box
 
+        extend (bool): if False, will ensure that the previous streams are closed.
+          If True, will add the new file to the current streams opened.
         return (boolean): True if the user did pick a file, False if it was
         cancelled.
         """
@@ -1577,23 +1580,35 @@ class AnalysisTab(Tab):
 
         # Detect the format to use
         filename = dialog.GetPath()
-        logging.debug("Current file set to %s", filename)
+        if extend:
+            logging.debug("Extending the streams with file %s", filename)
+        else:
+            logging.debug("Current file set to %s", filename)
 
         fmt = formats[dialog.GetFilterIndex()]
 
         # popup.show_message(self.main_frame, "Opening file")
-        self.load_data(filename, fmt)
+        self.load_data(filename, fmt, extend=extend)
         return True
 
     def on_file_open_button(self, _):
         self.select_acq_file()
 
-    def load_data(self, filename, fmt=None):
+    def _on_add_file(self):
+        """
+        Called when the user requests to extend the current acquisition with
+        an extra file.
+        """
+        # If no acquisition file, behave as just opening a file normally
+        extend = bool(self.tab_data_model.streams.value)
+        self.select_acq_file(extend)
+
+    def load_data(self, filename, fmt=None, extend=False):
         data = open_acquisition(filename, fmt)
-        self.display_new_data(filename, data)
+        self.display_new_data(filename, data, extend=extend)
 
     @call_in_wx_main
-    def display_new_data(self, filename, data):
+    def display_new_data(self, filename, data, extend=False):
         """
         Display a new data set (and removes all references to the current one)
 
@@ -1601,56 +1616,58 @@ class AnalysisTab(Tab):
           If None, just the current data will be closed.
         data (list of DataArray(Shadow)): List of data to display.
           Should contain at least one array
+        extend (bool): if False, will ensure that the previous streams are closed.
+          If True, will add the new file to the current streams opened.
         """
-        # Remove all the previous streams
-        self._stream_bar_controller.clear()
-        # Clear any old plots
-        self.panel.vp_inspection_plot.clear()
-        self.panel.vp_spatialspec.clear()
-        self.panel.vp_angular.clear()
+        if not extend:
+            # Remove all the previous streams
+            self._stream_bar_controller.clear()
+            # Clear any old plots
+            self.panel.vp_inspection_plot.clear()
+            self.panel.vp_spatialspec.clear()
+            self.panel.vp_angular.clear()
 
-        # Reset tool, layout and visible views
-        self.tab_data_model.tool.value = guimod.TOOL_NONE
-        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
-
+        gc.collect()
         if filename is None:
             return
 
-        # TODO: currently, when adding streams, they appear added before the old
-        # streams are removed. That seems to incur extra time => Make sure every
-        # stream entry is deleted fast.
+        if not extend:
+            # Reset tool, layout and visible views
+            self.tab_data_model.tool.value = guimod.TOOL_NONE
+            self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
-        new_visible_views = list(self._def_views)  # Use a copy
+            # Create a new file info model object
+            fi = guimod.FileInfo(filename)
 
-        # Create a new file info model object
-        fi = guimod.FileInfo(filename)
+            # Force the canvases to fit to the content
+            for vp in [self.panel.vp_inspection_tl,
+                       self.panel.vp_inspection_tr,
+                       self.panel.vp_inspection_bl,
+                       self.panel.vp_inspection_br]:
+                vp.canvas.fit_view_to_next_image = True
 
-        # Force the canvases to fit to the content
-        for vp in [self.panel.vp_inspection_tl,
-                   self.panel.vp_inspection_tr,
-                   self.panel.vp_inspection_bl,
-                   self.panel.vp_inspection_br]:
-            vp.canvas.fit_view_to_next_image = True
+            md_list = [d.metadata for d in data]
 
-        md_list = [d.metadata for d in data]
-
-        # Update the acquisition date to the newest image present (so that if
-        # several acquisitions share one old image, the date is still different)
-        acq_dates = [md[model.MD_ACQ_DATE] for md in md_list if model.MD_ACQ_DATE in md]
-        if acq_dates:
-            fi.metadata[model.MD_ACQ_DATE] = max(acq_dates)
-        self.tab_data_model.acq_fileinfo.value = fi
+            # Update the acquisition date to the newest image present (so that if
+            # several acquisitions share one old image, the date is still different)
+            acq_dates = [md[model.MD_ACQ_DATE] for md in md_list if model.MD_ACQ_DATE in md]
+            if acq_dates:
+                fi.metadata[model.MD_ACQ_DATE] = max(acq_dates)
+            self.tab_data_model.acq_fileinfo.value = fi
 
         # Create streams from data
         streams = data_to_static_streams(data)
+        all_streams = streams + self.tab_data_model.streams.value
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
-        spec_streams = [s for s in streams if isinstance(s, acqstream.SpectrumStream)]
-        ar_streams = [s for s in streams if isinstance(s, acqstream.ARStream)]
+        spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream)]
+        ar_streams = [s for s in all_streams if isinstance(s, acqstream.ARStream)]
+
+        new_visible_views = list(self._def_views)  # Use a copy
 
         # TODO: Move viewport related code to ViewPortController
         # TODO: to support multiple (types of) streams (eg, AR+Spec+Spec), do
-        # this every time the streams are hidden/displayed.
+        # this every time the streams are hidden/displayed/removed.
         if spec_streams:
             # ########### Track pixel and line selection
 
@@ -1736,7 +1753,9 @@ class AnalysisTab(Tab):
 
         # Load the Streams and their data into the model and views
         for s in streams:
-            self._stream_bar_controller.addStream(s, add_to_view=True)
+            scont = self._stream_bar_controller.addStream(s, add_to_view=True)
+            # when adding more streams, make it easy to remove them
+            scont.stream_panel.show_remove_btn(extend)
 
         # Reload current calibration on the new streams (must be done after .streams is set)
         if spec_streams:
