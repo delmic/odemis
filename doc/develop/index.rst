@@ -14,7 +14,7 @@ This document covers the main aspects of development with Odemis.
 
 .. toctree::
     :maxdepth: 2
-	
+
     sys-arch
     extending
     base-api
