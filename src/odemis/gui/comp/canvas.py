@@ -370,7 +370,9 @@ class BufferedCanvas(wx.Panel):
             mouse is captured.
 
         """
-
+        # Note: on Ubuntu (ie, with wxPython3/GTK2), it's actually not needed
+        # to capture the mouse. However, on Windows it's necessary to capture it
+        # in order to know its movement (and button up) outside of the widget. 
         if not self.HasCapture():
             self.CaptureMouse()
 
