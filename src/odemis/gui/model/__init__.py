@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012-2016 Éric Piel, Rinze de Laat, Delmic
+:copyright: © 2012-2018 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -58,9 +58,7 @@ VIEW_LAYOUT_ONE = 0  # one big view
 VIEW_LAYOUT_22 = 1  # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2  # Fullscreen view (not yet supported)
 
-# The different tools (selectable in the tool bar). Actually, only the ones which
-# have a mode, the ones which have a direct action don't need to be known
-# explicitly.
+# The different tools (selectable in the tool bar). First, the "mode" ones:
 TOOL_NONE = 0  # No tool (normal)
 TOOL_ZOOM = 1  # Select the region to zoom in
 TOOL_ROI = 2  # Select the region of interest (sub-area to be updated)
@@ -69,7 +67,13 @@ TOOL_POINT = 4  # Select a point (to acquire/display)
 TOOL_LINE = 5  # Select a line (to acquire/display)
 TOOL_DICHO = 6  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
 TOOL_SPOT = 7  # Activate spot mode on the SEM
-TOOL_RO_ANCHOR = 8
+TOOL_RO_ANCHOR = 8 # Select the region of the anchor region for drift correction
+# Auto-focus is handle by a separate VA, still needs an ID for the button
+TOOL_AUTO_FOCUS = 9 # Run auto focus procedure on the (active) stream
+
+# "Actions" are also buttons on the toolbar, but with immediate effect:
+TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
+
 # Autofocus state
 TOOL_AUTO_FOCUS_ON = True
 TOOL_AUTO_FOCUS_OFF = False
@@ -110,6 +114,8 @@ class MainGUIData(object):
         "pc-detector": "pcd",
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
+        "time-correlator": "time_correlator",
+        "tc-detector": "tcd",
         "spectrometer": "spectrometer",
         "sp-ccd": "sp_ccd",
         "spectrometer-integrated": "spectrometer_int",
@@ -163,6 +169,8 @@ class MainGUIData(object):
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.laser_mirror = None  # the scanner on confocal SECOM
         self.photo_ds = []  # List of all the photo detectors on confocal SECOM
+        self.time_correlator = None # life-time measurement on SECOM or SPARC
+        self.tcd = None # the raw detector of the time-correlator (for settings)
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
@@ -435,19 +443,28 @@ class LiveViewGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE, TOOL_ZOOM, TOOL_ROI}
+        tools = {TOOL_NONE,} # TOOL_ZOOM, TOOL_ROI}
+        if main.time_correlator: # FLIM
+            tools.add(TOOL_ROA)
+            if main.tcd: # Can even show live settings
+                tools.add(TOOL_SPOT)
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+        # The SpotConfocalstream, used to control spot mode.
+        # It is set at start-up by the tab controller.
+        self.spotStream = None
+
+        # The position of the spot. Two floats 0->1. (None, None) if undefined.
+        self.spotPosition = model.TupleVA((None, None))
 
         # Represent the global state of the microscopes. Mostly indicating
         # whether optical/sem streams are active.
         hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
 
-        if self.main.ccd:
-            self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        elif self.main.photo_ds:  # Confocal
+        if main.ccd or main.photo_ds:
             self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
-        if self.main.ebeam:
+        if main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
         # history list of visited stage positions, ordered with latest visited
@@ -471,12 +488,12 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         tools = {
             TOOL_NONE,
-            TOOL_ZOOM,
-            TOOL_ROI,
+            #TOOL_ZOOM,
+            #TOOL_ROI,
             TOOL_ROA,
             TOOL_RO_ANCHOR,
-            TOOL_POINT,
-            TOOL_LINE,
+            #TOOL_POINT,
+            #TOOL_LINE,
             TOOL_SPOT,
         }
 
@@ -534,7 +551,7 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf = get_general_conf()
 
         # only tool to zoom and pick point/line
-        tools = {TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE}
+        tools = {TOOL_NONE, TOOL_POINT, TOOL_LINE} # TOOL_ZOOM
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The current file it displays. If None, it means there is no file

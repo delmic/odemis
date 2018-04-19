@@ -44,10 +44,13 @@ from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport
     PlotViewport, SpatialSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
-from odemis.gui.cont import settings, tools
+from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
 from odemis.gui.cont.streams import StreamController
+from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
+    TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
+    TOOL_NONE, TOOL_DICHO
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units, spot, limit_invocation
@@ -70,6 +73,10 @@ import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
 
+
+# The constant order of the toolbar buttons
+TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
+              TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT)
 
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
@@ -340,15 +347,15 @@ class SecomStreamsTab(Tab):
 
         # Toolbar
         self.tb = panel.secom_toolbar
-        # TODO: Add the buttons when the functionality is there
-        # tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
-        # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        for t in TOOL_ORDER:
+            if t in tab_data.tool.choices:
+                self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar
-        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         # auto focus
         self._autofocus_f = model.InstantaneousFuture()
-        self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
-        self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
+        self.tb.add_tool(TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
+        self.tb.enable_button(TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
 
@@ -565,7 +572,7 @@ class SecomStreamsTab(Tab):
         if self.curr_s:
             self.curr_s.should_update.subscribe(self._on_stream_update, init=True)
         else:
-            wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, False)
+            wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, False)
 
     def _on_stream_update(self, updated):
         """
@@ -584,7 +591,7 @@ class SecomStreamsTab(Tab):
         f_enable = all((updated, f))
         if not f_enable:
             self.tab_data_model.autofocus_active.value = False
-        wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, f_enable)
+        wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
 
     def terminate(self):
         super(SecomStreamsTab, self).terminate()
@@ -815,13 +822,11 @@ class SparcAcquisitionTab(Tab):
 
         # Toolbar
         self.tb = self.panel.sparc_acq_toolbar
-        self.tb.add_tool(tools.TOOL_ROA, tab_data.tool)
-        self.tb.add_tool(tools.TOOL_RO_ANCHOR, tab_data.tool)
-        self.tb.add_tool(tools.TOOL_SPOT, tab_data.tool)
-        # TODO: Add the buttons when the functionality is there
-        # self.tb.add_tool(tools.TOOL_POINT, tab_data.tool)
-        # self.tb.add_tool(tools.TOOL_RO_ZOOM, tab_data.tool)
-        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+        for t in TOOL_ORDER:
+            if t in tab_data.tool.choices:
+                self.tb.add_tool(t, tab_data.tool)
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+        # TODO: autofocus tool if there is an ebeam-focus
 
         tab_data.tool.subscribe(self.on_tool_change)
 
@@ -928,7 +933,7 @@ class SparcAcquisitionTab(Tab):
 
     def on_tool_change(self, tool):
         """ Ensure spot position is always defined when using the spot """
-        if tool == guimod.TOOL_SPOT:
+        if tool == TOOL_SPOT:
             # Put the spot position at a "good" place if not yet defined
             if self.tab_data_model.spotPosition.value == (None, None):
                 roa = self.tab_data_model.semStream.roi.value
@@ -1035,8 +1040,8 @@ class SparcAcquisitionTab(Tab):
             # Also stop the spot mode (as it's not useful for the spot mode to
             # restart without any stream playing when coming back, and special
             # care would be needed to restart the spotStream in this case)
-            if self.tab_data_model.tool.value == guimod.TOOL_SPOT:
-                self.tab_data_model.tool.value = guimod.TOOL_NONE
+            if self.tab_data_model.tool.value == TOOL_SPOT:
+                self.tab_data_model.tool.value = TOOL_NONE
 
     def terminate(self):
         # make sure the streams are stopped
@@ -1514,12 +1519,12 @@ class AnalysisTab(Tab):
         # Toolbar
         self.tb = panel.ana_toolbar
         # TODO: Add the buttons when the functionality is there
-        # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        self.tb.enable_button(tools.TOOL_POINT, False)
-        self.tb.add_tool(tools.TOOL_LINE, self.tab_data_model.tool)
-        self.tb.enable_button(tools.TOOL_LINE, False)
-        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+        # tb.add_tool(TOOL_ZOOM, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_POINT, self.tab_data_model.tool)
+        self.tb.enable_button(TOOL_POINT, False)
+        self.tb.add_tool(TOOL_LINE, self.tab_data_model.tool)
+        self.tb.enable_button(TOOL_LINE, False)
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # save the views to be able to reset them later
         self._def_views = list(tab_data.visible_views.value)
@@ -1633,7 +1638,7 @@ class AnalysisTab(Tab):
 
         if not extend:
             # Reset tool, layout and visible views
-            self.tab_data_model.tool.value = guimod.TOOL_NONE
+            self.tab_data_model.tool.value = TOOL_NONE
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
             # Create a new file info model object
@@ -1717,8 +1722,8 @@ class AnalysisTab(Tab):
 
             # ########### Update tool menu
 
-            self.tb.enable_button(tools.TOOL_POINT, True)
-            self.tb.enable_button(tools.TOOL_LINE, True)
+            self.tb.enable_button(TOOL_POINT, True)
+            self.tb.enable_button(TOOL_LINE, True)
 
         elif ar_streams:
 
@@ -1741,12 +1746,12 @@ class AnalysisTab(Tab):
 
             # ########### Update tool menu
 
-            self.tb.enable_button(tools.TOOL_POINT, True)
-            self.tb.enable_button(tools.TOOL_LINE, False)
+            self.tb.enable_button(TOOL_POINT, True)
+            self.tb.enable_button(TOOL_LINE, False)
         else:
             # ########### Update tool menu
-            self.tb.enable_button(tools.TOOL_POINT, False)
-            self.tb.enable_button(tools.TOOL_LINE, False)
+            self.tb.enable_button(TOOL_POINT, False)
+            self.tb.enable_button(TOOL_LINE, False)
 
         # Only show the panels that fit the current streams
         self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spec_streams) > 0)
@@ -2058,7 +2063,7 @@ class SecomAlignTab(Tab):
         ccd_spe = StreamController(panel.pnl_opt_streams, opt_stream, self.tab_data_model)
         ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
-        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
+        panel.vp_align_ccd.canvas.allowed_modes = {TOOL_NONE}
 
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
@@ -2104,8 +2109,8 @@ class SecomAlignTab(Tab):
 
         # Toolbar
         tb = panel.lens_align_tb
-        tb.add_tool(tools.TOOL_DICHO, self.tab_data_model.tool)
-        tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
+        tb.add_tool(TOOL_DICHO, self.tab_data_model.tool)
+        tb.add_tool(TOOL_SPOT, self.tab_data_model.tool)
 
         # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
@@ -2219,7 +2224,7 @@ class SecomAlignTab(Tab):
         shown = self.IsShown() # to make sure we don't play streams in the background
 
         # Reset previous mode
-        if tool != guimod.TOOL_DICHO:
+        if tool != TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
             self.panel.pnl_move_to_center.Show(False)
@@ -2240,7 +2245,7 @@ class SecomAlignTab(Tab):
                     self._opt_stream.emtDwellTime.value = self._opt_stream.emtDwellTime.range[0]
                     self.panel.vp_align_ccd.canvas.fit_view_to_next_image = True
 
-        if tool != guimod.TOOL_SPOT:
+        if tool != TOOL_SPOT:
             self._spot_stream.should_update.value = False
             self._spot_stream.is_active.value = False
             self._sem_stream.should_update.value = True
@@ -2249,7 +2254,7 @@ class SecomAlignTab(Tab):
             self._sem_spe.enable(True)
 
         # Set new mode
-        if tool == guimod.TOOL_DICHO:
+        if tool == TOOL_DICHO:
             self.panel.pnl_move_to_center.Show(True)
             self.panel.pnl_align_tools.Show(False)
 
@@ -2267,7 +2272,7 @@ class SecomAlignTab(Tab):
                 self._opt_stream.is_active.value = self._opt_stream.should_update.value
                 self._opt_stream.emtDwellTime.value = self._opt_stream.emtDwellTime.clip(0.1)
             # TODO: with a standard CCD, it'd make sense to also use a very large binning
-        elif tool == guimod.TOOL_SPOT:
+        elif tool == TOOL_SPOT:
             # Do not show the SEM settings being changed during spot mode, and
             # do not allow to change the resolution/scale
             self._sem_spe.enable(False)
@@ -2306,7 +2311,7 @@ class SecomAlignTab(Tab):
                 stream_controller.pause()
         else:
             for stream_controller in self._stream_controllers:
-                if (self.tab_data_model.tool.value == guimod.TOOL_SPOT and
+                if (self.tab_data_model.tool.value == TOOL_SPOT and
                     stream_controller is self._sem_spe):
                     continue
                 stream_controller.resume()
@@ -2320,7 +2325,7 @@ class SecomAlignTab(Tab):
         different purpose).
         """
         # Only update fineAlignDwellTime when spot tool is selected
-        if self.tab_data_model.tool.value != guimod.TOOL_SPOT:
+        if self.tab_data_model.tool.value != TOOL_SPOT:
             return
 
         # dwell time is the based on the exposure time for the spot, as this is

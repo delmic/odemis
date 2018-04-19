@@ -29,8 +29,7 @@ import numpy
 from odemis import model
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
-from odemis.gui.cont.tools import TOOL_LINE
-from odemis.gui.model import TOOL_POINT
+from odemis.gui.model import TOOL_POINT, TOOL_LINE
 from odemis.util.conversion import hex_to_frgb
 import unittest
 import wx
@@ -40,7 +39,6 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
-import odemis.model as omodel
 
 
 test.goto_manual()
@@ -321,7 +319,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        lva = omodel.ListVA()
+        lva = model.ListVA()
 
         dol = vol.DichotomyOverlay(cnvs, lva)
         cnvs.add_view_overlay(dol)
@@ -372,7 +370,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         cnvs.disable_drag()
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        history_va = omodel.ListVA()
+        history_va = model.ListVA()
 
         hol = vol.HistoryOverlay(cnvs, history_va)
         cnvs.add_view_overlay(hol)
@@ -517,9 +515,9 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_world_overlay(psol)
 
         psol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
-        width_va = omodel.IntVA(1)
+        width_va = model.IntVA(1)
 
-        psol.connect_selection(omodel.TupleVA(), width_va)
+        psol.connect_selection(model.TupleVA(), width_va)
         view.mpp.value = 1e-06
 
         psol._selected_pixel_va.value = (8, 8)
@@ -570,8 +568,8 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_world_overlay(slol)
 
         slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
-        width_va = omodel.IntVA(1)
-        line_va = omodel.TupleVA(((None, None), (None, None)))
+        width_va = model.IntVA(1)
+        line_va = model.TupleVA(((None, None), (None, None)))
         slol.connect_selection(line_va, width_va)
         view.mpp.value = 1e-06
         test.gui_loop()
@@ -587,7 +585,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
         # Also connect the pixel va
-        pixel_va = omodel.TupleVA((8, 8))
+        pixel_va = model.TupleVA((8, 8))
         slol.connect_selection(line_va, width_va, pixel_va)
         test.gui_loop()
 
@@ -673,7 +671,7 @@ class OverlayTestCase(test.GuiTestCase):
         phys_points = product(xrange(-200, 201, 50), xrange(-200, 201, 50))
         phys_points = [(a / 1.0e5, b / 1.0e5) for a, b in phys_points]
 
-        point = omodel.VAEnumerated(phys_points[0], choices=frozenset(phys_points))
+        point = model.VAEnumerated(phys_points[0], choices=frozenset(phys_points))
 
         pol.set_point(point)
         test.gui_loop()
@@ -685,7 +683,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop(0.5)
 
-        # point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
+        # point = model.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
         # pol.set_point(point)
 
     def test_mirror_arc_overlay(self):

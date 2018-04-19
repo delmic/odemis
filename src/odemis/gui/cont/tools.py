@@ -35,19 +35,6 @@ from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
 from odemis.gui.util import call_in_wx_main
 import wx
 
-
-# List of tools available
-TOOL_RO_ZOOM = 1  # Select the region to zoom in
-TOOL_ROI = 2  # Select the region of interest (sub-area to be updated)
-TOOL_ROA = 3  # Select the region of acquisition (area to be acquired, SPARC-only)
-TOOL_ZOOM_FIT = 4  # Select a zoom to fit the current image content
-TOOL_POINT = 5  # Select a point
-TOOL_LINE = 6  # Select a line
-TOOL_DICHO = 7  # Dichotomy mode to select a sub-quadrant
-TOOL_SPOT = 8  # Select spot mode on the SEM
-TOOL_RO_ANCHOR = 9  # Select the region of the anchor region for drift correction
-TOOL_AUTO_FOCUS = 10  # Run auto focus procedure on the (active) stream
-
 # Two types of tools:
 # * mode: they are toggle buttons, changing the tool mode of the GUIModel
 # * action: they are just click button, and call a function when pressed
@@ -79,68 +66,68 @@ class ActionTool(Tool):
     pass
 
 TOOLS = {
-    TOOL_RO_ZOOM:
+    model.TOOL_ZOOM:
         ModeTool(
             "btn_view_zoom",
             model.TOOL_ZOOM,
             model.TOOL_NONE,
             "Select region of zoom"
         ),
-    TOOL_ROI:
+    model.TOOL_ROI:
         ModeTool(
             "btn_view_update",
             model.TOOL_ROI,
             model.TOOL_NONE,
             "Select region of interest"
         ),
-    TOOL_ROA:
+    model.TOOL_ROA:
         ModeTool(
             "btn_view_sel",
             model.TOOL_ROA,
             model.TOOL_NONE,
             "Select region of acquisition"
         ),
-    TOOL_RO_ANCHOR:
+    model.TOOL_RO_ANCHOR:
         ModeTool(
             "btn_drift",
             model.TOOL_RO_ANCHOR,
             model.TOOL_NONE,
             "Select anchor region for drift correction"
         ),
-    TOOL_POINT:
+    model.TOOL_POINT:
         ModeTool(
             "btn_view_pick",
             model.TOOL_POINT,
             model.TOOL_NONE,
             "Select point"
         ),
-    TOOL_LINE:
+    model.TOOL_LINE:
         ModeTool(
             "btn_view_1dpick",
             model.TOOL_LINE,
             model.TOOL_NONE,
             "Select line"
         ),
-    TOOL_DICHO:
+    model.TOOL_DICHO:
         ModeTool(
             "btn_view_dicho",
             model.TOOL_DICHO,
             model.TOOL_NONE,
             "Dichotomic search for e-beam centre"
         ),
-    TOOL_SPOT:
+    model.TOOL_SPOT:
         ModeTool(
             "btn_view_spot",
             model.TOOL_SPOT,
             model.TOOL_NONE,
             "E-beam spot mode"
         ),
-    TOOL_ZOOM_FIT:
+    model.TOOL_ACT_ZOOM_FIT:
         ActionTool(
             "btn_view_resize",
             "Zoom to fit content"
         ),
-    TOOL_AUTO_FOCUS:
+    model.TOOL_AUTO_FOCUS:
         ModeTool(
             "btn_view_autofocus",
             model.TOOL_AUTO_FOCUS_ON,
