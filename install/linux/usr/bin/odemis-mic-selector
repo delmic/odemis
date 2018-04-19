@@ -69,7 +69,29 @@ def get_eeprom_ids():
         logging.debug("Failed to access the backend, will try directly")
         pcu = CLASS_PCU(**KWARGS_PCU)
         terminate = True
-    ids = pcu.memoryIDs.value
+
+    try:
+        ids = pcu.memoryIDs.value
+    except IOError as ex:
+        logging.warning("Failed to get IDs: %s", ex)
+        ids = []
+
+    # HACK: it seems the PCU sometimes fails to detect the IDs on the first
+    # call to SID => try a few more times.
+    # With the old powerhubs (oslo), there should always at least be one ID,
+    # but even on the new powerhubs (lund), if we are called it's because the
+    # user expects an ID.
+    if not ids:
+        logging.warning("Failed to find any IDs, trying again")
+        try:
+            ids = pcu.memoryIDs.value
+        except IOError as ex:
+            logging.warning("Failed to get IDs: %s", ex)
+            ids = []
+        if not ids:
+            logging.warning("Failed to find any IDs, trying one last time")
+            ids = pcu.memoryIDs.value
+
     if terminate:
         pcu.terminate()
     logging.debug("Found EEPROM IDs %s", ids)
