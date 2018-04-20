@@ -418,7 +418,7 @@ SPARC2: {
             "3qpirad": [2.356194, 2.356194],
             "lcirc": [0.785398, 1.570796],
             "rcirc": [2.356194, 1.570796],
-            "pass-through": [0.0, 0.0],
+            "pass-through": [0.0, 1.570796],
         },
         fallback: "pass-through",
     },

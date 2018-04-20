@@ -1376,7 +1376,7 @@ class CombinedFixedPositionActuator(model.Actuator):
     two polarization filters).
     """
 
-    def __init__(self, name, role, children, axes_map, axis_name, positions, fallback,
+    def __init__(self, name, role, children, caxes_map, axis_name, positions, fallback,
                  atol=[0.0, 0.0], inverted=None, ref_on_init=None, **kwargs):
         """
         name (string)
@@ -1393,31 +1393,34 @@ class CombinedFixedPositionActuator(model.Actuator):
             raise ValueError("Axes shouldn't be inverted")
         if len(children) != 2:
             raise ValueError("CombinedFixedPositionActuator needs precisely two children")
+        if len(caxes_map) != 2:
+            raise ValueError("CombinedFixedPositionActuator needs precisely two axis names for children axes")
+        if len(atol) != 2:
+            raise ValueError("CombinedFixedPositionActuator needs list of "
+                             "precisely two values for tolerance in position")
 
         self.axis_name = axis_name
         self.positions = positions
         self.atol = atol
         self.fallback = fallback
 
-        #TODO Sabrina rename pol_pos with something more generic: combined_pos
-
         # Convert ref_on_init list to dict with no explicit move after
         if isinstance(ref_on_init, list):
             ref_on_init = {a: None for a in ref_on_init}
         self._ref_on_init = ref_on_init or {}
-        self._axis_to_child = {}  # axis name => (Actuator, axis name)  #TODO Sabrina: rz2: tmcm.qwp, rz1: tmcm.linear
-        self._position = {}
-        self._pol_position = {self.axis_name: self.fallback}
-        self._speed = {}
+        self._axis_to_child = {}  # axis name => (Actuator, caxis name) #TODO Sabrina: bla/rz2: (tmcm, qwp); blub/rz1: (tmcm,linear)
+        self._position = {self.axis_name: self.fallback}
         self._referenced = {}
         axes = {}
 
-        for axis, child in children.items():
-            print axis, child
-            caxis = axes_map[axis]
-            print caxis
-            self._axis_to_child[axis] = (child, caxis)
-            print self._axis_to_child, "axis to child.................."
+        self._children = [children[r] for r in sorted(children.keys())]
+        # axis names of children
+        self._axes_map = [key for key in sorted(children.keys())]
+        # axis names of axes of children
+        self._caxes_map = caxes_map
+        self._atol = atol
+
+        for child, axis in zip(self._children, self._caxes_map):
 
             # Ducktyping (useful to support also testing with MockComponent)
             # At least, it has .axes
@@ -1425,107 +1428,36 @@ class CombinedFixedPositionActuator(model.Actuator):
                 raise ValueError("Child %s is not a component." % (child,))
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % child.name)
-            axes[axis] = copy.deepcopy(child.axes[caxis])
-
-            self._position[axis] = child.position.value[axes_map[axis]]
-            # TODO Sabrina: specify pol_pos here somehow
-            # print pos
-            # # need general key
-            # pol_pos = self.positions[pos["pol"]]
-            # print pol_pos
-            #
-            # # TODO Sabrina: "linear" and "qwp"
-            # # for axis in self.axes:
-            # #     child, child_axis = self._axis_to_child[axis]
-            # #     print "childaxis", child_axis
-            #
-            # # map combined position to single axis positions
-            # # TODO Sabrina: problem will be if axes are both rz??!!
-            # pos = {sorted(self._axis_to_child.keys())[0]: pol_pos[0], sorted(self._axis_to_child.keys())[1]: pol_pos[1]}
-            # print pos
-            # return pos
-
-            if model.hasVA(child, "speed") and caxis in child.speed.value:
-                self._speed[axis] = child.speed.value[caxis]
-            if model.hasVA(child, "referenced") and caxis in child.referenced.value:
-                self._referenced[axis] = child.referenced.value[caxis]
-
-        # TODO Sabrina position mapping
-        # current position of child axes: check if the correspond to a position specified by user
-        # if not move to default "
-        cur_pos = [sorted(self._axis_to_child.keys())[0], sorted(self._axis_to_child.keys())[1]]
-
-
+            # axes[axis] = copy.deepcopy(child.axes[caxis])
+            # self._position[axis] = child.position.value[axes_map[axis]]
+            print self._caxes_map, axis
 
         print "here model.Actuator", axes, children
-        # this set ._axes and ._children
+        # this set ._axes and ._children TODO axes
         model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
 
-        if len(self.children.value) > 1:
-            # will take care of executing axis move asynchronously
-            self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
-            # TODO: make use of the 'Cancellable' part (for now cancelling a running future doesn't work)
-        else:  # Only one child => optimize by passing all requests directly
-            self._executor = None
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
-        # keep a reference to the subscribers so that they are not
-        # automatically garbage collected
-        self._subfun = []
+        # # TODO Sabrina: still needed?
+        # # keep a reference to the subscribers so that they are not
+        # # automatically garbage collected
+        # self._subfun = []
 
-        children_axes = {}  # dict actuator -> set of string (our axes)
-        for axis, (child, ca) in self._axis_to_child.items():
-            logging.debug("adding axis %s to child %s", axis, child.name)
-            if child in children_axes:
-                children_axes[child].add(axis)
-            else:
-                children_axes[child] = {axis}
-            print children_axes, " children axes............................"
-
-        # position & speed: special VAs combining multiple VAs
-        print "self._position...........", self._position
         self.position = model.VigilantAttribute(self._position, readonly=True)
-        # TODO Sabrina:
-        self.pol_position = model.VigilantAttribute(self._pol_position, readonly=True)
-        for c, ax in children_axes.items():
-            # TODO Sabrina why function inside loop
-            def update_position_per_child(value, ax=ax, c=c):
-                logging.debug("updating position of child %s", c.name)
-                print "value......", value # eg. {'linear': 2.35618496, 'qwp': 1.57080128}
-                for a in ax:
-                    print a
-                    try:
-                        self._position[a] = value[axes_map[a]]
-                        print self._position[a], ax, "VA checking.........................................."
-                    except KeyError:
-                        logging.error("Child %s is not reporting position of axis %s", c.name, a)
-                # todo Sabrina: here pos is updated by VA
-                self._updatePosition()
+        for c in self._children:
+            c.position.subscribe(self._updatePosition)
 
-            c.position.subscribe(update_position_per_child)
-            self._subfun.append(update_position_per_child)
-            print c, ax, " VA stuff..........................................."
-
-        # TODO: change the speed range to a dict of speed ranges
-        self.speed = model.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
-        for axis in self._speed.keys():
-            c, ca = self._axis_to_child[axis]
-
-            def update_speed_per_child(value, a=axis, ca=ca, cname=c.name):
-                try:
-                    self._speed[a] = value[ca]
-                except KeyError:
-                    logging.error("Child %s is not reporting speed of axis %s (%s): %s", cname, a, ca, value)
-                self._updateSpeed()
-
-            c.speed.subscribe(update_speed_per_child)
-            self._subfun.append(update_speed_per_child)
-
+        # TODO check code
         # whether the axes are referenced
         self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
 
         for axis in self._referenced.keys():
-            c, ca = self._axis_to_child[axis]
+            index = self._axes_map.index(axis)
+            c = self._children[index]
+            ca = self._caxes_map[index]
 
+            # TODO look up closure funktion in function
             def update_ref_per_child(value, a=axis, ca=ca, cname=c.name):
                 try:
                     self._referenced[a] = value[ca]
@@ -1534,55 +1466,57 @@ class CombinedFixedPositionActuator(model.Actuator):
                 self._updateReferenced()
 
             c.referenced.subscribe(update_ref_per_child)
-            self._subfun.append(update_ref_per_child)
-
-        for axis, pos in self._ref_on_init.items():
-            # If the axis can be referenced => do it now (and move to a known position)
-            if axis not in self._referenced:
-                raise ValueError("Axis '%s' cannot be referenced, while should be referenced at init" % (axis,))
-            if not self._referenced[axis]:
-                # The initialisation will not fail if the referencing fails, but
-                # the state of the component will be updated
-                def _on_referenced(future, axis=axis):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        c, ca = self._axis_to_child[axis]
-                        c.stop({ca})  # prevent any move queued
-                        self.state._set_value(e, force_write=True)
-                        logging.exception(e)
-
-                f = self.reference({axis})
-                f.add_done_callback(_on_referenced)
-
-            # If already referenced => directly move
-            # otherwise => put move on the queue, so that any move by client will
-            # be _after_ the init position.
-            if pos is not None:
-                self.moveAbs({axis: pos})
 
         print " init done"
 
-    def _updatePosition(self):
+    def _updatePosition(self, _=None):
         """
         update the position VA
+        check whether children positions are in consistency with combined position allowed
+        after movement of both children is done
         """
-        # it's read-only, so we change it via _value
-        # TODO Sabrina: VA needs to report pol_pos
-        pos = self._applyInversion(self._position)
-        logging.debug("reporting position %s", pos)
-        print "reporting position %s", pos
-        self.position._set_value(pos, force_write=True)
+        print "----------------------------------------------------------------"
+        # print self._axis_to_child[sorted(self._axis_to_child.keys())[0]][1]
+        actual_pos = [self._children[0].position.value[self._caxes_map[0]],
+                      self._children[1].position.value[self._caxes_map[1]]]
+        # actual_pos = [self._children[0].position.value[self._axis_to_child[sorted(self._axis_to_child.keys())[0]][1]],
+        #               self._children[1].position.value[self._axis_to_child[sorted(self._axis_to_child.keys())[1]][1]]]
+        print actual_pos
+        # check if reached positions correspond to any combined position allowed
+        # TODO rewrite this as it should check if correct pos is reached now
+        if not numpy.any(numpy.isclose(actual_pos, self.positions.values(), rtol=0, atol=self.atol)):
 
-        print "update position...............", self.position
+            # TODO Sabrina request fallback pos and move back to fallback specifications
+            # TODO maybe only report position, and do not move back to fallback
+            logging.exception("Position not supported. Move back to fallback 'pass-through'.")  # TODO Sabrina
+            print "pos not in dictionary for polarization !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            # self.moveAbs({"pol: ""pass-through"})
+            print "fallback pos called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+            # raise ValueError("Axes %s and %s did not reach the anticipated positions of %s (%s). "
+            #                  "The current positions are %s and %s. "
+            #                  % (self._axis_to_child[sorted(self._axis_to_child.keys())[0]][1],
+            #                     self._axis_to_child[sorted(self._axis_to_child.keys())[1]][1],
+            #                     self.position.value[self.axis_name],
+            #                     self.positions[self.position.value[self.axis_name]],
+            #                     self._children[0].position.value[self._axis_to_child[sorted(self._axis_to_child.keys())[0]][1]],
+            #                     self._children[1].position.value[self._axis_to_child[sorted(self._axis_to_child.keys())[1]][1]]))
+        else:
+            print "reached correct position +++++++++++++++++++++++++++++++++++++++++++++++++"
+            # TODO Sabrina shorten code....np.where,
+            # TODO: util.almost_equal cannot handle lists
+            for index, pos in enumerate(numpy.isclose(actual_pos, self.positions.values(), rtol=0, atol=self.atol)):
+                if numpy.all(pos):
+                    pos_index = index
+                    break
+            print "movement done, update VA"
 
-    def _updateSpeed(self):
-        """
-        update the speed VA
-        """
-        # we must not call the setter, so write directly the raw value
-        self.speed._value = self._speed
-        self.speed.notify(self._speed)
+            # TODO Sabrina: line actually needed?
+            # it's read-only, so we change it via _value
+            # pos = self._applyInversion(self._position)
+
+            self.position._set_value({self.axis_name: self.positions.keys()[pos_index]}, force_write=True)
+            logging.debug("reporting position %s", self.position)
+            print self.position
 
     def _updateReferenced(self):
         """
@@ -1591,163 +1525,123 @@ class CombinedFixedPositionActuator(model.Actuator):
         # .referenced is copied to detect changes to it on next update
         self.referenced._set_value(self._referenced.copy(), force_write=True)
 
-    def _setSpeed(self, value):
-        """
-        value (dict string-> float): speed for each axis
-        returns (dict string-> float): the new value
-        """
-        # FIXME the problem with this implementation is that the subscribers
-        # will receive multiple notifications for each set:
-        # * one for each axis (via _updateSpeed from each child)
-        # * the actual one (but it's probably dropped as it's the same value)
-        final_value = value.copy()  # copy
-        for axis, v in value.items():
-            child, ma = self._axis_to_child[axis]
-            new_speed = child.speed.value.copy()  # copy
-            new_speed[ma] = v
-            child.speed.value = new_speed
-            final_value[axis] = child.speed.value[ma]
-        return final_value
-
     def _moveToChildMove(self, mv):
         # TODO Sabrina: mv should have structure {"rz2": 0.0, "rz1": 0.0} instead of {"pol", "pass-through"}
         print "mv", mv
         child_to_move = collections.defaultdict(dict)  # child -> moveRel argument
-        print "child to move", child_to_move
-        for axis, distance in mv.items():
-            print self._axis_to_child
-            print "axis, distance", axis, distance
-            child, child_axis = self._axis_to_child[axis]
-            print "child, child_axis", child, child_axis
-            child_to_move[child].update({child_axis: distance})
-            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
-            print "Moving axis %s (-> %s) by %g", axis, child_axis, distance
+        print "child to move ", child_to_move
+        # iterate over children and map move (mv) of axes to move of axes of children
+        for index, axis in enumerate(self._axes_map):
+            child_to_move[self._children[index]].update({self._caxes_map[index]: mv[axis]})
+            logging.debug("Moving axis %s (-> %s) by %g", axis, self._caxes_map[index], mv[axis])
+        # for axis, distance in mv.items():
+        #     # print self._axis_to_child
+        #     print "axis, distance", axis, distance
+        #     child, child_axis = self._axis_to_child[axis]
+        #     print "child, child_axis", child, child_axis
+        #     child_to_move[child].update({child_axis: distance})
+        #     logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
+        #     print "Moving axis %s (-> %s) by %g", axis, child_axis, distance
 
         return child_to_move
 
     def _axesToChildAxes(self, axes):
         child_to_axes = collections.defaultdict(set)  # child -> set(str): axes
         for axis in axes:
-            child, child_axis = self._axis_to_child[axis]
-            child_to_axes[child].add(child_axis)
+            index = self._axes_map.index(axis)
+            # child, child_axis = self._axis_to_child[axis]
+            child_to_axes[self._children[index]].add(self._caxes_map[index])
             logging.debug("Interpreting axis %s (-> %s)", axis, child_to_axes)
             print "Interpreting axis %s (-> %s)", axis, child_to_axes
+        # for axis in axes:
+        #     child, child_axis = self._axis_to_child[axis]
+        #     child_to_axes[child].add(child_axis)
+        #     logging.debug("Interpreting axis %s (-> %s)", axis, child_to_axes)
+        #     print "Interpreting axis %s (-> %s)", axis, child_to_axes
 
         return child_to_axes
 
     @isasync
-    def moveRel(self, shift, **kwargs):
-        """
-        Move the stage the defined values in m for each axis given.
-        shift dict(string-> float): name of the axis and shift in m
-        **kwargs: Mostly there to support "update" argument (but currently works
-          only if there is only one child)
-        """
+    def moveRel(self, shift):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversion(shift)
-
-        if self._executor:
-            f = self._executor.submit(self._doMoveRel, shift, **kwargs)
-        else:
-            cmv = self._moveToChildMove(shift)
-            child, move = cmv.popitem()
-            assert not cmv
-            f = child.moveRel(move, **kwargs)
-
-        return f
-
-    def _doMoveRel(self, shift, **kwargs):
-        # TODO: updates don't work because we still wait for the end of the
-        # move before we get to the next one => multi-threaded queue? Still need
-        # to ensure the order (ie, X>AB>X can be executed as X/AB>X or X>AB/X but
-        # XA>AB>X must be in the order XA>AB/X
-        futures = []
-        for child, move in self._moveToChildMove(shift).items():
-            f = child.moveRel(move, **kwargs)
-            futures.append(f)
-
-        # just wait for all futures to finish
-        for f in futures:
-            f.result()
+        raise NotImplementedError("Relative move on combined fixed positions axis not supported")
 
     def _map_positions(self, pos):
-        pol_pos = self.positions[pos[self.axis_name]]
-        print pol_pos
+        # incoming pos format: e.g. {"pol": "pass-through"}
+        try:
+            _pos = self.positions[pos[self.axis_name]]
+            # pos format: e.g. [0.0., 1.5]
+        except Exception:
+            logging.exception("Position %s not supported." % pos)
+            # TODO keyerror?
+            raise ValueError("Position %s not supported." % pos)
 
-        # TODO Sabrina: "linear" and "qwp"
-        # for axis in self.axes:
-        #     child, child_axis = self._axis_to_child[axis]
-        #     print "childaxis", child_axis
-        # self._axis_to_child[sorted(self._axis_to_child.keys())[0]][1] --> linear
+        # print "should stop here......................"
+        print _pos
+        # map two axes positions to single axis positions
+        # TODO try accept neccessary?
+        try:
+            pos = {self._axes_map[0]: _pos[0], self._axes_map[1]: _pos[1]}
+            # pos format: e.g. {"bla": 0.0, "blub": 1.5}
+            # pos format: e.g. {axis name child1: 0.0, axis name child2: 1.5}
+            # pos = {sorted(self._axis_to_child.keys())[0]: _pos[0],
+            #        sorted(self._axis_to_child.keys())[1]: _pos[1]}
+        except Exception:
+            raise ValueError("Position of format %s not accepted. " % pos)
 
-        # map combined position to single axis positions
-        # TODO Sabrina: problem will be if axes are both rz??!!
-        pos = {sorted(self._axis_to_child.keys())[0]: pol_pos[0], sorted(self._axis_to_child.keys())[1]: pol_pos[1]}
-        print pos
         return pos
-
 
     @isasync
     def moveAbs(self, pos, **kwargs):
         print " do moveAbs"
         if not pos:
             return model.InstantaneousFuture()
-        # TODO Sabrina: need to rewrite as we pass (dict string -> list [float, float])
+
+        # translate combined position into children positions
+        # (dict string key -> dict string ) --> (dict string key -> list [float, float])
         pos = self._map_positions(pos)
 
-        self._checkMoveAbs(pos)
+        # TODO uncomment
+        # self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
 
-        if self._executor:
-            f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
-        else:
-            cmv = self._moveToChildMove(pos)
-            child, move = cmv.popitem()
-            assert not cmv
-            print "move ", move, child
-            print "move actually"
-            f = child.moveAbs(move, **kwargs)
+        # f = CancellableFuture()
+        # print "f (1)", f
+        # f = self._executor.submitf(f, self._doMoveAbs, pos, **kwargs)
+        f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
+        print "f (2)", f
 
-        # function is called when future is cancelled or finished (actuator is done with moving)
-        # self._on_reached_position()
-        f.add_done_callback(self._on_reached_position)
         return f
 
-    def _on_reached_position(self, future):
-        # check whether children positions are in consistency with combined position
-        actual_pos = [self.position.value[sorted(self._axis_to_child.keys())[0]],
-                      self.position.value[sorted(self._axis_to_child.keys())[1]]]
-        # expected_pos = self.positions[self.pol_position.value[self.axis_name]]
-        if actual_pos not in self.positions.values():
-            raise ValueError("Axes %s and %s did not reach the anticipated positions of %s (%s). "
-                             "The current positions are %s and %s. "
-                             % (self._axis_to_child[sorted(self._axis_to_child.keys())[0]][1],
-                                self._axis_to_child[sorted(self._axis_to_child.keys())[1]][1],
-                                self.pol_position.value[self.axis_name],
-                                self.positions[self.pol_position.value[self.axis_name]],
-                                self.position.value[sorted(self._axis_to_child.keys())[0]],
-                                self.position.value[sorted(self._axis_to_child.keys())[1]]))
-        else:
-            print "reached correct position +++++++++++++++++++++++++++++++++++++++++++++++++"
-            #update VA for pol_position
-            print self.positions.keys()[self.positions.values().index(actual_pos)], self.positions.values().index(actual_pos),"__________________________________________________________________________________-"
-            print self.pol_position
-            self.pol_position._set_value({self.axis_name, self.positions.keys()
-                                         [self.positions.values().index(actual_pos)]}, force_write=True)
-            print self.pol_position
-
     def _doMoveAbs(self, pos, **kwargs):
+        # unsubscribe while moving
+        for c in self._children:
+            c.position.unsubscribe(self._updatePosition)
+
         futures = []
         for child, move in self._moveToChildMove(pos).items():
             f = child.moveAbs(move, **kwargs)
             futures.append(f)
 
         # just wait for all futures to finish
+        exceptions = []
         for f in futures:
-            f.result()
+            try:
+                f.result()
+            except Exception as ex:
+                logging.exception("Exception was raised by ...") # TODO Sabrina argument
+                exceptions.append(ex)
 
+        self._updatePosition()
+
+        if len(exceptions) > 0:
+            raise exceptions[0]
+
+        # subscribe again after movement is done
+        for c in self._children:
+            c.position.subscribe(self._updatePosition)
 
     @isasync
     def reference(self, axes):
@@ -1968,7 +1862,7 @@ class RotationActuator(model.Actuator):
 
     def _doMoveAbs(self, pos):
         axis, position = pos.items()[0]
-        print position, "position we want to reach"
+        print axis, position, "position we want to reach"
         # correct distance for physical offset due to mounting
         position = position + self.offset_mounting
         print position, "position corrected for offset"
