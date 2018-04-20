@@ -29,7 +29,6 @@ import copy
 
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
-from odemis.gui.cont import tools
 from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
@@ -53,7 +52,7 @@ class ViewPortController(object):
             can be used to use a specific class for the View (instead of MicroscopeView)
             If there are more than 4 viewports, only the first 4 will be made visible and any others
             will be hidden.
-        :param toolbar: ToolBar or None-- toolbar to manage the TOOL_ZOOM_FIT tool.
+        :param toolbar: ToolBar or None-- toolbar to manage the TOOL_ACT_ZOOM_FIT tool.
 
         .. note::
             If a 2x2 viewport grid is present, the first four viewports in the _viewports attribute
@@ -192,7 +191,7 @@ class ViewPortController(object):
             # Enable/disable ZOOM_FIT tool according to view ability
             if self._toolbar:
                 can_fit = hasattr(viewport.canvas, "fit_view_to_content")
-                self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
+                self._toolbar.enable_button(model.TOOL_ACT_ZOOM_FIT, can_fit)
 
         for vp in self._viewports:
             vp.SetFocus(False)
