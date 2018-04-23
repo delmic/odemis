@@ -275,10 +275,12 @@ SPARC2: {
         port: "/dev/fake6",
         address: null,
         #TODO: Sabrina check
-        axes: ["l1", "l2", "cl-sel", "fw", "slit", "rz"],
+        axes: ["qwp", "linear", "l1", "l2", "slit"],
+#       axes: ["l1", "l2", "cl-sel", "fw", "slit", "rz"],
         # These values are adapted to make the simulator roughly the same speed
         #TODO: Sabrina check stepsize of rz rad? 6.e-3
-        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9, 3.392e-5], # m/µstep, excepted for the fw and rz: rad/µstep
+        ustepsize: [3.392e-5, 3.392e-5, 25.1e-9, 25.1e-9, 5.e-9], # m/µstep, excepted for the fw and rz: rad/µstep
+#        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9, 3.392e-5], # m/µstep, excepted for the fw and rz: rad/µstep
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
@@ -331,39 +333,39 @@ SPARC2: {
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
-# Mirror in Plate 2, selects between spectrometer and cl-detector
-"CL Selector": {
-    class: actuator.FixedPositionsActuator,
-    role: "cl-det-selector",
-    children: {"x": "Optical Actuators"},
-    init: {
-        axis_name: "cl-sel",
-        positions: {
-            0.003: ["CL Detector"],
-            0.01: ["Spec CCD Flipper"]
-        },
-    },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
-}
+## Mirror in Plate 2, selects between spectrometer and cl-detector
+#"CL Selector": {
+#    class: actuator.FixedPositionsActuator,
+#    role: "cl-det-selector",
+#    children: {"x": "Optical Actuators"},
+#    init: {
+#        axis_name: "cl-sel",
+#        positions: {
+#            0.003: ["CL Detector"],
+#            0.01: ["Spec CCD Flipper"]
+#        },
+#    },
+#    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
+#}
 
-"CL Filter Wheel": {
-    class: actuator.FixedPositionsActuator,
-    role: "cl-filter",
-    children: {"band": "Optical Actuators"},
-    init: {
-        axis_name: "fw",
-        # It supports up to 8 filters
-        positions: {
-            # pos (rad) -> m,m
-            0: [420.e-9, 460.e-9],        # 1
-            0.785398: [500.e-9, 550.e-9], # 2
-#            1.570796: "polariser",        # 3
-            3.9269908: "pass-through",    # 6
-        },
-        cycle: 6.283185, # position of ref switch (0) after a full turn
-    },
-    affects: ["CL Detector"],
-}
+#"CL Filter Wheel": {
+#    class: actuator.FixedPositionsActuator,
+#    role: "cl-filter",
+#    children: {"band": "Optical Actuators"},
+#    init: {
+#        axis_name: "fw",
+#        # It supports up to 8 filters
+#        positions: {
+#            # pos (rad) -> m,m
+#            0: [420.e-9, 460.e-9],        # 1
+#            0.785398: [500.e-9, 550.e-9], # 2
+##            1.570796: "polariser",        # 3
+#            3.9269908: "pass-through",    # 6
+#        },
+#        cycle: 6.283185, # position of ref switch (0) after a full turn
+#    },
+#    affects: ["CL Detector"],
+#}
 
 # Controller for moving the 'Redux' stage
 # Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
