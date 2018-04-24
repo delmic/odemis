@@ -715,36 +715,8 @@ class TestCombinedSensorActuator(unittest.TestCase):
 
 class TestCombinedFixedPostionActuator(unittest.TestCase):
 
-    #TODO Sabrina: generalize axes names "linear" and "qwp"
-    # def setUp_(self):
-    #     self.axis1 = "linear"
-    #     self.axis2 = "qwp"
-    #     axis_name = "pol"
-    #     atol = [3.392e-5, 3.392e-5]
-    #     fallback = "unspecified position"
-    #     self.positions = {
-    #                      # pos -> pos (linear), pos (qwp)
-    #                      "0pirad": [0.0, 0.0],
-    #                      "qpirad": [0.785398, 0.785398],
-    #                      "hpirad": [1.570796, 1.570796],
-    #                      "3qpirad": [2.356194, 2.356194],
-    #                      "lcirc": [0.785398, 1.570796],
-    #                      "rcirc": [2.356194, 1.570796],
-    #                      "pass-through": [0.0, 1.570796],
-    #                      #"fallback": [np.nan, np.nan]
-    #                     }
-    #
-    #
-    #     self.child1 = simulated.Stage("rotstage1", "test1", axes=[self.axis1], ranges={self.axis1: (0, 7)})
-    #     self.child2 = simulated.Stage("rotstage2", "test2", axes=[self.axis2], ranges={self.axis2: (0, 7)})
-    #
-    #     self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
-    #                                              children={"bla": self.child1, "blub": self.child2},
-    #                                              axis_name=axis_name,
-    #                                              caxes_map=[self.axis1,  self.axis2],
-    #                                              positions=self.positions,
-    #                                              atol=atol,
-    #                                              fallback=fallback)
+    # TODO Sabrina: generalize axes names "linear" and "qwp"
+    # TODO fallback in positions?
 
     def setUp(self):
         self.axis1 = "linear"
@@ -761,7 +733,7 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                          "lcirc": [0.785398, 1.570796],
                          "rcirc": [2.356194, 1.570796],
                          "pass-through": [0.0, 1.570796],
-                         #"fallback": [np.nan, np.nan]
+                         # "fallback": "unspecified position"
                         }
 
         # create one child
@@ -780,6 +752,7 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                                                  fallback=fallback)
     def test_moveAbs(self):
         # test don't change position
+        print self.dev.position
         cur_pos = self.dev.position.value[self.dev.axis_name]
         f = self.dev.moveAbs({self.dev.axis_name: cur_pos})
         f.result()
@@ -847,38 +820,28 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
 
     def test_cancel_move(self):
         """test cancel movement while running"""
-        axis_name = "pol"
-        fallback = "unspecified position"
-        atol = [3.392e-5, 3.392e-5]
-        # create one child
-        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
-                                          axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
-                                          unit=["rad", "rad"],
-                                          refproc="Standard",
-                                          )
-
-        self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
-                                                 children={"bla": self.child1, "blub": self.child1},
-                                                 axis_name=axis_name,
-                                                 caxes_map=[self.axis1,  self.axis2],
-                                                 positions=self.positions,
-                                                 atol=atol,
-                                                 fallback=fallback)
 
         # request a position, wait and cancel movement
-        #TODO Sabrina: check position requested not reached (should be previous pos or fallback)
         cur_pos = self.dev.position.value[self.dev.axis_name]
+        print [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
         # enough to check only one position different from current pos
         for pos in self.positions.keys():
             if pos != cur_pos:
+                print pos, cur_pos
                 f = self.dev.moveAbs({self.dev.axis_name: pos})  # move
-                print cur_pos, pos
+                print [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
                 time.sleep(1)
-                self.assertTrue(f.cancel())
-                # check position is previous or fallback
+                print [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+                self.assertTrue(f.cancel())  # fails if for e.g. 10sec
+                cancel_pos = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+                print "cancel position", cancel_pos, cur_pos, pos, self.positions[pos]
+                # check position requested is not reached
+                self.assertNotEqual(cancel_pos, self.positions[pos])
+                # TODO: check position is previous or fallback ("unspecified position = stop pos)
                 print self.dev.position.value[self.dev.axis_name]
                 print "pos reported by axis 1:", self.child1.position.value[self.axis1]
                 print "pos reported by axis 2:", self.child1.position.value[self.axis2]
+                # TODO: callback fct is called why?? _on_referenced
                 break
 
     def test_reference(self):
@@ -886,10 +849,31 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         Try referencing each axis
         check both children report their axis as referenced
         """
+        # move to position different from zero and current position, check if axis was referenced
+        # request a position, wait and cancel movement
+        cur_pos = self.dev.position.value[self.dev.axis_name]
+        # enough to find only one position different from current pos and zero
+        for pos in self.positions.keys():
+            print pos, self.positions[pos]
+            print self.positions[pos] != [0.0, 0.0]
+            if pos != cur_pos and self.positions[pos] != [0.0, 0.0]:
+                print "test referencing", self.dev.referenced, pos, cur_pos
+                f = self.dev.moveAbs({self.dev.axis_name: pos})
+                f.result()
+                print "test referencing", self.dev.referenced, self.dev.referenced.value[self.dev.axis_name]
+                print "current pos is ", self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]
+                break
+        # do referencing now
         f = self.dev.reference({self.dev.axis_name})
         f.result()
         print "test referencing", self.dev.referenced.value[self.dev.axis_name]
+        print "current pos2 is ", self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]
+        # check axis is referenced
         self.assertTrue(self.dev.referenced.value[self.dev.axis_name])
+        # check positions after referencing of children axes are zero
+        self.assertLess(abs(self.child1.position.value[self.axis1]), self.dev.atol[1] / 2.)
+        self.assertLess(abs(self.child1.position.value[self.axis2]), self.dev.atol[1] / 2.)
+
 
 class TestRotationActuator(unittest.TestCase):
 
@@ -1055,13 +1039,18 @@ class TestRotationActuator(unittest.TestCase):
         f.result()
         print "test referencing", self.dev_cycle.referenced
         print "test referencing", self.dev_cycle.referenced.value[self.axis_name]
-        self.assertTrue(self.dev_cycle.referenced.value[self.axis_name])
+        print " current pos is ", self.child1.position.value[self.axis]
 
-        "test2"
+        # now do reference
         f = self.dev_cycle.reference({self.axis_name})
         f.result()
         print "test referencing", self.dev_cycle.referenced.value[self.axis_name]
+        print " current pos2 is ", self.child1.position.value[self.axis]
+        # test if axis is referenced self.child1.position.value[self.axis1]
         self.assertTrue(self.dev_cycle.referenced.value[self.axis_name])
+        # check if position after referencing is zero
+        self.assertLess(abs(self.child1.position.value[self.axis]), self.child1._ustepsize[0] / 2.)
+
 
     def tearDown(self):
         super(TestRotationActuator, self).tearDown()

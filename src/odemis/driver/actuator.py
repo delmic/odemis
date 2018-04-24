@@ -1398,7 +1398,7 @@ class CombinedFixedPositionActuator(model.Actuator):
             raise ValueError("CombinedFixedPositionActuator needs list of "
                              "precisely two values for tolerance in position")
         for key, pos in positions.items():
-            if len(pos) != 2:
+            if not (len(pos) == 2 or type(pos) == str):
                 raise ValueError("Position %s needs to be of format list with exactly two entries. "
                                  "Got instead position %s." % (key, pos))
         if not all(0 <= all(pos) <= cycle for pos in positions.values()):
@@ -1410,7 +1410,8 @@ class CombinedFixedPositionActuator(model.Actuator):
         self.fallback = fallback
         self._axis_to_child = {}  # axis name => (Actuator, caxis name) #TODO Sabrina: bla/rz2: (tmcm, qwp); blub/rz1: (tmcm,linear)
         # TODO: what if empty dict... testcase fails
-        self._position = {self.axis_name: "pass-through"}
+        self._position = {}  #{self.axis_name: "pass-through"} # TODO: initialize pos properly: ask for current pos and map
+        # self._position_children = {}
         self._referenced = {}
         self._referenced_children = {}
         axes = {}
@@ -1424,28 +1425,41 @@ class CombinedFixedPositionActuator(model.Actuator):
         self._atol = atol
         self._cycle = cycle
 
-        for child, caxis in zip(self._children, self._caxes_map):
-
-            print child, caxis
+        for child, caxis, axis in zip(self._children, self._caxes_map, self._axes_map):
+            # tmcm, linear, bla : tmcm, qwp, blub
+            print child, caxis, axis
 
             if not isinstance(child, model.ComponentBase):
                 raise ValueError("Child %s is not a component." % (child,))
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % child.name)
 
+            # initialize axes of children
+            print child.axes  # {"linear": tmcm, "qwp": tmcm}
+            axes[axis] = copy.deepcopy(child.axes[caxis])
 
-        print "here model.Actuator", axes, children
-        # this set ._axes and ._children TODO axes
+            # # get current positions of children
+            # self._position_children[axis] = child.position.value[caxis]
+
+        print "here model.Actuator", "axes", axes, "children",  children
+        # need axes {"bla": tmcm, "blub": tmcm}
+        # this set ._axes and ._children
         model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
+        # create position VA and subscribe to position
         self.position = model.VigilantAttribute(self._position, readonly=True)
         print self.position
         for c in self._children:
             c.position.subscribe(self._updatePosition)
 
+        # update position VA based on current positions of children axes
+        self._updatePosition()
+
+        # TODO: referenced currently only works if both childaxes can be referenced
+        # check if children axes can be referenced, create referenced VA, subscribe to referenced
         checkVAs = [model.hasVA(child, "referenced") and caxis in child.referenced.value
                     for child, caxis in zip(self._children, self._caxes_map)]
         if all(checkVAs):
@@ -1464,31 +1478,35 @@ class CombinedFixedPositionActuator(model.Actuator):
         if not self._referenced.get(self.axis_name, True) or (self._cycle and self.axis_name in self._referenced):
             # The initialisation will not fail if the referencing fails
             f = self.reference({self.axis_name})
-            f.add_done_callback(self._on_referenced)
+            f.result()
+            print "referencing initilized"
+            if not self.referenced.value[self.axis_name]:
+                raise ValueError("Referencing failed for axis %s." % self.axis_name)
+            # update position VA after referencing children axes
+            self._updatePosition()
 
-    def _on_referenced(self, future):
-        future.result()
-        print "referencing initilized", self.referenced
-        if not self.referenced[self.axis_name]:
-            raise ValueError("Referencing failed for axis %s." % self.axis_name)
+        print " done init "
 
-    def _updatePosition(self, _=None): # TODO check if argument needed
+    def _updatePosition(self, _=None):
+        # _=None: optional argument, needed for VA calls
         """
         update the position VA
         """
+        print "_updatePosition"
         pos_children = [self._children[0].position.value[self._caxes_map[0]],
                         self._children[1].position.value[self._caxes_map[1]]]
 
         # check whether children positions are in consistency with combined position allowed
         matching_position = map(lambda pos: util.almost_equal(pos_children[0], pos[0], atol=self.atol[0], rtol=0) &
                                             util.almost_equal(pos_children[1], pos[1], atol=self.atol[1], rtol=0),
-                                self.positions.values())
+                                            self.positions.values())
+
         if any(matching_position):
             print "reached correct position"
             pos_index = matching_position.index(True)
 
-            # TODO Sabrina: line actually needed?
             # it's read-only, so we change it via _value
+            # TODO Sabrina: line actually needed?
             # pos = self._applyInversion(self._position)
             self.position._set_value({self.axis_name: self.positions.keys()[pos_index]}, force_write=True)
             logging.debug("reporting position %s", self.position)
@@ -1499,19 +1517,22 @@ class CombinedFixedPositionActuator(model.Actuator):
             logging.debug("Current position does not match any known position. Reporting position %s. "
                           "Positions of %s are %s." % (self.position, self._caxes_map, pos_children))
 
-        # if it is an unsupported position report the nearest supported one
-        # position can be any in the specified range with the specified stepsize of the actuator
-        # real_pos = self._position[self._axis]
-        # nearest = util.find_closest(real_pos, self._positions.keys())
-        # if not util.almost_equal(real_pos, nearest):
-        #     logging.warning("Reporting axis %s @ %s (known position), while physical axis %s @ %s",
-        #                     self._axis, nearest, self._caxis, real_pos)
-        # pos = {self._axis: nearest}
+            # TODO? if wrong key etc. find closest pos, move there and report back
+            # TODO however sometimes you may not want to move to any position but stay where you are
+            # if it is an unsupported position report the nearest supported one
+            # position can be any in the specified range with the specified stepsize of the actuator
+            # real_pos = self._position[self._axis]
+            # nearest = util.find_closest(real_pos, self._positions.keys())
+            # if not util.almost_equal(real_pos, nearest):
+            #     logging.warning("Reporting axis %s @ %s (known position), while physical axis %s @ %s",
+            #                     self._axis, nearest, self._caxis, real_pos)
+            # pos = {self._axis: nearest}
 
     def _updateReferenced(self, _=None):
         """
         update the referenced VA
         """
+        print "_updateReferenced"
         self._referenced = {self.axis_name:
                             self._children[0].referenced.value[self._caxes_map[0]]
                             & self._children[1].referenced.value[self._caxes_map[1]]}
@@ -1527,7 +1548,6 @@ class CombinedFixedPositionActuator(model.Actuator):
         print "child to move ", child_to_move  # empty dict
         # iterate over children and map move (mv) of axes to move of axes of children
         for index, axis in enumerate(self._axes_map):
-            # TODO Sabrina update function where
             # TODO print gibt None
             print "test", child_to_move[self._children[index]].update({self._caxes_map[index]: mv[axis]})
             # TODO this line however is correct
@@ -1552,7 +1572,9 @@ class CombinedFixedPositionActuator(model.Actuator):
         self._checkMoveRel(shift)
         raise NotImplementedError("Relative move on combined fixed positions axis not supported")
 
-    def _map_positions(self, pos):
+    def _map_positions(self, pos): # TODO: rename _map_axis_to_children_positions
+        # map axis to children positions # TODO correct
+        # dict{axis_name: child pos} -> dict{childname1 (axes1): float, childname2 (axes2): float}
         # incoming pos format: e.g. {"pol": "pass-through"}
         try:
             _pos = self.positions[pos[self.axis_name]]
@@ -1561,17 +1583,18 @@ class CombinedFixedPositionActuator(model.Actuator):
             # report fallback position
             self.position._set_value({self.axis_name: self.fallback}, force_write=True)
             logging.exception("Position %s not supported. Report fallback position." % pos)
+            # TODO: want to move to any known position? setting pass-through here as fallback is not generic
             raise
 
         # map two axes positions to single axis positions
         # pos format: e.g. {"bla": 0.0, "blub": 1.5}
-        # pos format: e.g. {axis name child1: 0.0, axis name child2: 1.5}
+        # pos format: e.g. {childname 1: float, childname 2: float}
         pos = {self._axes_map[0]: _pos[0], self._axes_map[1]: _pos[1]}
 
         return pos
 
     @isasync
-    def moveAbs(self, pos, **kwargs): #update=False, TODO do not need anymore?
+    def moveAbs(self, pos, **kwargs):
         print " do moveAbs"
         if not pos:
             return model.InstantaneousFuture()
@@ -1580,16 +1603,16 @@ class CombinedFixedPositionActuator(model.Actuator):
         # (dict string key -> dict string ) --> (dict string key -> list [float, float])
         pos = self._map_positions(pos)
 
-        # TODO uncomment
         # pos format: e.g. {axis name child1: 0.0, axis name child2: 1.5}
         print pos
-        # self._checkMoveAbs(pos)
+        self._checkMoveAbs(pos)
         print pos
         pos = self._applyInversion(pos)
 
         self._cancelled = False
 
         f = CancellableFuture()
+        print "................................................................"
         f = self._executor.submitf(f, self._doMoveAbs, pos, **kwargs)
         f.task_canceller = self._cancelMovement
         f.add_done_callback(self._resubscribe)
@@ -1664,7 +1687,7 @@ class CombinedFixedPositionActuator(model.Actuator):
             f.result()
         print self.referenced
 
-            # TODO Sabrina:
+            # TODO needed?
             # If we just did homing and ended up to an unsupported position, move to
             # the nearest supported position
             # cp = self._child.position.value[self._caxis]
@@ -1764,6 +1787,7 @@ class RotationActuator(model.Actuator):
         # e.g. rz --> tmcm
         axes = {axis: model.Axis(range=self._pos_rng, unit=ac.unit)}  # TODO: allow the user to override the unit?
 
+        print "here model.Actuator", "axes", axes, "children", children
         model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
 
         # TODO offset mounting from MD
@@ -1923,8 +1947,6 @@ class RotationActuator(model.Actuator):
 
     @isasync
     def reference(self, axes):
-        # set(['rz'])
-        print "7777777777777777777777777777777777777", axes
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
