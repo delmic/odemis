@@ -47,25 +47,25 @@ PQ_MSGTYP_EXPLAINED_STATUSMSG = 0x53    # status message enhanced by a free expl
 PQ_MSGTYP_EXPLAINED_STATUSREPLY = 0x73  # answer on a status message enhanced by a free explaining text (must not be answered)
 
 # Measurement types
-PQ_MEASTYPE_POINTMEAS = 0x00000000      # point measurement  
-PQ_MEASTYPE_IMAGESCAN = 0x00000001      # image scan  
-PQ_MEASTYPE_TEST_POINTMEAS = 0x00000080 # test run for a point measurement; no data will be stored in workspace  
-PQ_MEASTYPE_TEST_IMAGESCAN = 0x00000081 # test run for an image scan; no data will be stored in workspace  
+PQ_MEASTYPE_POINTMEAS = 0x00000000      # point measurement
+PQ_MEASTYPE_IMAGESCAN = 0x00000001      # image scan
+PQ_MEASTYPE_TEST_POINTMEAS = 0x00000080 # test run for a point measurement; no data will be stored in workspace
+PQ_MEASTYPE_TEST_IMAGESCAN = 0x00000081 # test run for an image scan; no data will be stored in workspace
 
-PQ_STOPREASON_CODE_CONTINUE_OK = 0      # no error detected  
-PQ_STOPREASON_CODE_FINISHED_OK = 1      # answer OK on finished server  
-PQ_STOPREASON_CODE_USER_BREAK = 2       # signalling an user break from client's site  
-PQ_STOPREASON_CODE_ERROR = -1           # signalling an error situation on client's site 
+PQ_STOPREASON_CODE_CONTINUE_OK = 0      # no error detected
+PQ_STOPREASON_CODE_FINISHED_OK = 1      # answer OK on finished server
+PQ_STOPREASON_CODE_USER_BREAK = 2       # signalling an user break from client's site
+PQ_STOPREASON_CODE_ERROR = -1           # signalling an error situation on client's site
 
 # Types
-PQ_OPT_DATATYPE_FLOAT = 0x00            # floating point (4 byte, single precision)  
-PQ_OPT_DATATYPE_LONG  = 0x01            # integer (4 byte)  
-PQ_OPT_DATATYPE_ULONG = 0x02            #cardinal (unsigned integer, 4 byte)  
-PQ_OPT_DATATYPE_FLOATS_ARRAY = 0xF0     # floating point array (n × 4 byte, single precision)  
-PQ_OPT_DATATYPE_LONGS_ARRAY = 0xF1      # integer array (n × 4 byte)  
-PQ_OPT_DATATYPE_ULONGS_ARRAY = 0xF2     # cardinal array (n × 4 byte)  
-PQ_OPT_DATATYPE_FIXED_LENGTH_STRING = 0xFF  # character array (n byte string) 
-# it is recommended to be terminated with a NULL character   
+PQ_OPT_DATATYPE_FLOAT = 0x00            # floating point (4 byte, single precision)
+PQ_OPT_DATATYPE_LONG  = 0x01            # integer (4 byte)
+PQ_OPT_DATATYPE_ULONG = 0x02            #cardinal (unsigned integer, 4 byte)
+PQ_OPT_DATATYPE_FLOATS_ARRAY = 0xF0     # floating point array (n × 4 byte, single precision)
+PQ_OPT_DATATYPE_LONGS_ARRAY = 0xF1      # integer array (n × 4 byte)
+PQ_OPT_DATATYPE_ULONGS_ARRAY = 0xF2     # cardinal array (n × 4 byte)
+PQ_OPT_DATATYPE_FIXED_LENGTH_STRING = 0xFF  # character array (n byte string)
+# it is recommended to be terminated with a NULL character
 
 PQ_OPT_DATATYPE_NAME_MAXLEN = 30        # typical max length for string types
 
@@ -108,7 +108,7 @@ ERRCODE = {
 class OptionalDataRecord(object):
     '''
     An object that defines the optional data records used by Symphotime
-    to pass data to and from the server 
+    to pass data to and from the server
     Members:
         name: (string) name of the record
         typ: (int) enum byte denoting the record type. PQ_OPT_DATATYPE_*
@@ -154,13 +154,13 @@ class OptionalDataRecord(object):
                 self.data = data
                 self.nbytes += (2 + 4 * len(data))  # wCount + length of the array
             else:
-                raise TypeError('Type mismatch in optional data record')    
+                raise TypeError('Type mismatch in optional data record')
         elif typ == PQ_OPT_DATATYPE_ULONGS_ARRAY:
             if isinstance(data, list):
                 self.data = data
                 self.nbytes += (2 + 4 * len(data))  # wCount + length of the array
             else:
-                raise TypeError('Type mismatch in optional data record')   
+                raise TypeError('Type mismatch in optional data record')
         elif typ == PQ_OPT_DATATYPE_FIXED_LENGTH_STRING:
             self.data = str(data)
             self.nbytes += (2 + len(data))  # wCount + length of the string
@@ -211,7 +211,7 @@ class OptionalDataRecord(object):
             ValueError if invalid record types are in the list.
         '''
         output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1,'\0')
-        
+
         if self.typ == PQ_OPT_DATATYPE_FLOAT:
             output_string += struct.pack('<Bf', self.typ, self.data)
         elif self.typ == PQ_OPT_DATATYPE_LONG:
@@ -234,7 +234,7 @@ class OptionalDataRecord(object):
             output_string += struct.pack('<BH', self.typ, len(self.data)) + self.data
         else:
             raise ValueError('Invalid record type.')
-        
+
         return output_string
 
 # Helper functions
@@ -269,7 +269,7 @@ def DecodeOptionalDataRecordString(data):
         newRecord = OptionalDataRecord.from_bytes(data[index:])
         records[newRecord.name] = newRecord
         index += newRecord.nbytes
-            
+
     return records
 
 
@@ -295,7 +295,7 @@ class Message(object):
 
         msg_len, msg_type = struct.unpack_from('Hb', raw, 0)
         data = raw[8:]
-        
+
         if len(raw) != msg_len:
             raise ValueError('Invalid message length of %d. Should be %d' % (len(raw), msg_len))
 
@@ -359,14 +359,14 @@ class Message(object):
         msg_len = len(msg) + 2 + 1 + len(MAGIC)  # length of message including header
         header = struct.pack('Hb', msg_len, self._bType) + MAGIC.encode('ascii')
         return header + msg
-    
+
     @abstractmethod
     def __str__(self):
         raise RuntimeError('Abstract method called.')
 
 
 class ExplainedStatusMessage(Message):
-    
+
     def __init__(self, ecStatus, strExplanation=''):
         '''
         Explained Status Message object
@@ -377,16 +377,16 @@ class ExplainedStatusMessage(Message):
         self._bType = PQ_MSGTYP_EXPLAINED_STATUSMSG
         self.ecStatus = ecStatus
         self.strExplanation = strExplanation
-        
+
     def _generateMessageData(self):
         return struct.pack('hH', self.ecStatus, len(self.strExplanation)) + self.strExplanation
 
     def __str__(self):
         return 'EXPLAINED_STATUSMSG. Code: 0x%x Explanation: %s' % (self.ecStatus, self.strExplanation)
 
-        
+
 class DataframeServerReplyMessage(Message):
-    
+
     def __init__(self, ecStatus):
         '''
         Dataframe server reply message
@@ -395,7 +395,7 @@ class DataframeServerReplyMessage(Message):
         Message.__init__(self)
         self._bType = PQ_MSGTYP_DATAFRAME_SRVREPLY
         self.ecStatus = ecStatus
-        
+
     def _generateMessageData(self):
         return struct.pack('h', self.ecStatus)
 
@@ -404,7 +404,7 @@ class DataframeServerReplyMessage(Message):
 
 
 class EncodedStatusMessage(Message):
-    
+
     def __init__(self, ecStatus):
         '''
         Encoded Status Message object
@@ -440,8 +440,8 @@ class EncodedStatusReplyMessage(Message):
 
 
 class DataframeServerRequestMessage(Message):
-    
-    def __init__(self, rvRecVersion, measurement_type, iPixelNumber_X, iPixelNumber_Y, 
+
+    def __init__(self, rvRecVersion, measurement_type, iPixelNumber_X, iPixelNumber_Y,
                  iScanningPattern, fSpatialResolution, odOptional):
         '''
         Dataframe server request message
@@ -523,7 +523,7 @@ class BasicDataFlow(model.DataFlow):
 
     def stop_generate(self):
         self._stop()
-        
+
     def subscribe(self, listener):
         # override subscribe. Only allow a subscriber to be added if no exception is raised on
         # self._check()
@@ -568,10 +568,10 @@ class Controller(model.Detector):
             ValueError if no scanner child is present
         """
         super(Controller, self).__init__(name, role, daemon=daemon, **kwargs)
-        
+
         if not children:
             raise ValueError("Symphotime detector requires a scanner child. ")
-        
+
         self._host = host
         self._port = port
         self._is_connected = False
@@ -588,20 +588,20 @@ class Controller(model.Detector):
 
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
-        
+
         # try get parameters from metadata
         self._metadata[model.MD_PIXEL_SIZE] = (10e-6, 10e-6)
         self.measurement_type = PQ_MEASTYPE_IMAGESCAN
-        
+
         # Children
         try:
             ckwargs = children["scanner"]
         except KeyError:
             raise ValueError("No 'scanner' child configuration provided")
-            
+
         self.scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self.scanner)
-        
+
         # Check for an optional "detector-live" child
         try:
             ckwargs = children["detector-live"]
@@ -621,7 +621,7 @@ class Controller(model.Detector):
         self._measurement_stopped = threading.Event()
         self._measurement_stopped.set()
         self._listener_thread = threading.Thread(target=self._listen)
-        self._listener_thread.daemon = True 
+        self._listener_thread.daemon = True
         self._listener_thread.start()
 
     def terminate(self):
@@ -646,7 +646,7 @@ class Controller(model.Detector):
     def waitTillMeasurementComplete(self):
         logging.debug("Waiting for measurement to end...")
         val = self._measurement_stopped.wait(30)
-        if val: 
+        if val:
             logging.debug("Measurement stopped. Done waiting. ")
         else:
             logging.warning("Timed out waiting for measurement to stop.")
@@ -709,8 +709,8 @@ class Controller(model.Detector):
         self.measurement_type = measurement_type
 
         msg = DataframeServerRequestMessage(T_REC_VERSION, self.measurement_type,
-                                iPixelNumber_X, iPixelNumber_Y, 
-                                iScanningPattern, pixel_size, 
+                                iPixelNumber_X, iPixelNumber_Y,
+                                iScanningPattern, pixel_size,
                                 optional_data)
 
         self._sendMessage(msg)
@@ -727,7 +727,7 @@ class Controller(model.Detector):
             logging.info("Sending user break.")
             self._sendMessage(EncodedStatusMessage (PQ_STOPREASON_CODE_USER_BREAK))
             self._user_break = True
-            
+
     def CheckMeasurement(self, meas_type):
         '''
         Check if a measurement of the same type to meas_type is running.
@@ -769,7 +769,7 @@ class Controller(model.Detector):
                 if len(msg) < 2:
                     # determine if we got enough data to determine how much we need
                     continue
-                
+
                 # once we have two characters, we can read the message length
                 msg_len = struct.unpack_from('H', msg)[0]
 
@@ -796,14 +796,14 @@ class Controller(model.Detector):
         except Exception as e:
             # another exception. End running.
             logging.exception(e)
-            
-        finally: 
+
+        finally:
             # called if shutdown flag is set and loop exits
             logging.debug("Shutting down listening thread...")
 
     def _actOnMessage(self,decoded_msg):
         '''
-        Act on a message received. 
+        Act on a message received.
         decoded_msg: A message dictionary that was decoded with self._decode
         '''
         if isinstance(decoded_msg, ExplainedStatusMessage):
@@ -836,7 +836,7 @@ class Controller(model.Detector):
                     self._measurement_stopped.set()
                     self._notifySubscribers(self.data, [[0]])
             else:
-                # All other status types denote errors. 
+                # All other status types denote errors.
                 self._measurement_stopped.set()
                 raise SPTError(err_status)
 
@@ -859,7 +859,7 @@ class Controller(model.Detector):
                 self.scanner.filename.value = data['ResultingFilename']
             if "ResultingGroupname" in data:
                 self.scanner.directory.value = data['ResultingGroupname']
-                
+
             # If we have a live detector ...
             if self.detector_live:
                 apd_name = "det%d" % self.detector_live.channel # det1, for example
@@ -930,8 +930,8 @@ class Scanner(model.Emitter):
         '''
         # we will fill the set of children with Components later in ._children
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
-        
-        # Define VA's as references to the parent. 
+
+        # Define VA's as references to the parent.
         self.filename = model.StringVA(setter=self._setFilename)
         self.directory = model.StringVA(setter=self._setDirectory)
         self.resolution = model.ResolutionVA((64, 64), ((1, 1), (2048, 2048)))
@@ -976,10 +976,10 @@ class DetectorLive(model.Detector):
 
     def _start(self):
         self.parent.StartMeasurement(measurement_type=PQ_MEASTYPE_TEST_POINTMEAS)
-    
+
     def _stop(self):
         self.parent.StopMeasurement()
-        
+
     def _check(self):
         '''
         Passed to the BasicDataFlow as a check to ensure that a measurement of different type is not
@@ -987,4 +987,4 @@ class DetectorLive(model.Detector):
         '''
         if not self.parent.CheckMeasurement(PQ_MEASTYPE_TEST_POINTMEAS):
             raise RuntimeError("A measurement is already running!")
-    
+
