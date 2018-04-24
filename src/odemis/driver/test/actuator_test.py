@@ -716,7 +716,36 @@ class TestCombinedSensorActuator(unittest.TestCase):
 class TestCombinedFixedPostionActuator(unittest.TestCase):
 
     #TODO Sabrina: generalize axes names "linear" and "qwp"
-    # TODO Sabrina: both children have axis pol
+    # def setUp_(self):
+    #     self.axis1 = "linear"
+    #     self.axis2 = "qwp"
+    #     axis_name = "pol"
+    #     atol = [3.392e-5, 3.392e-5]
+    #     fallback = "unspecified position"
+    #     self.positions = {
+    #                      # pos -> pos (linear), pos (qwp)
+    #                      "0pirad": [0.0, 0.0],
+    #                      "qpirad": [0.785398, 0.785398],
+    #                      "hpirad": [1.570796, 1.570796],
+    #                      "3qpirad": [2.356194, 2.356194],
+    #                      "lcirc": [0.785398, 1.570796],
+    #                      "rcirc": [2.356194, 1.570796],
+    #                      "pass-through": [0.0, 1.570796],
+    #                      #"fallback": [np.nan, np.nan]
+    #                     }
+    #
+    #
+    #     self.child1 = simulated.Stage("rotstage1", "test1", axes=[self.axis1], ranges={self.axis1: (0, 7)})
+    #     self.child2 = simulated.Stage("rotstage2", "test2", axes=[self.axis2], ranges={self.axis2: (0, 7)})
+    #
+    #     self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
+    #                                              children={"bla": self.child1, "blub": self.child2},
+    #                                              axis_name=axis_name,
+    #                                              caxes_map=[self.axis1,  self.axis2],
+    #                                              positions=self.positions,
+    #                                              atol=atol,
+    #                                              fallback=fallback)
+
     def setUp(self):
         self.axis1 = "linear"
         self.axis2 = "qwp"
@@ -735,18 +764,20 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                          #"fallback": [np.nan, np.nan]
                         }
 
-
-        self.child1 = simulated.Stage("rotstage1", "test1", axes=[self.axis1], ranges={self.axis1: (0, 7)})
-        self.child2 = simulated.Stage("rotstage2", "test2", axes=[self.axis2], ranges={self.axis2: (0, 7)})
+        # create one child
+        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+                                          axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
+                                          unit=["rad", "rad"],
+                                          refproc="Standard",
+                                          )
 
         self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
-                                                 children={"bla": self.child1, "blub": self.child2},
+                                                 children={"bla": self.child1, "blub": self.child1},
                                                  axis_name=axis_name,
-                                                 caxes_map=[self.axis1,  self.axis2],
+                                                 caxes_map=[self.axis1, self.axis2],
                                                  positions=self.positions,
                                                  atol=atol,
                                                  fallback=fallback)
-
     def test_moveAbs(self):
         # test don't change position
         cur_pos = self.dev.position.value[self.dev.axis_name]
@@ -754,7 +785,7 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         f.result()
         print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
         print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child2.position.value[self.axis2]
+        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
         self.assertEqual(self.dev.position.value[self.dev.axis_name], cur_pos)
 
         # check all positions possible
@@ -766,23 +797,27 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
             f.result()  # wait
             print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
             print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-            print "pos reported by axis 2:", self.child2.position.value[self.axis2]
+            print "pos reported by axis 2:", self.child1.position.value[self.axis2]
             print "position done", pol_pos, "**********************************************************************"
             self.assertEqual(self.dev.position.value[self.dev.axis_name], pol_pos)
             self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pol_pos][0]),
                             self.dev.atol[0] / 2.)
-            self.assertLess(abs(self.child2.position.value[self.axis2] - self.positions[pol_pos][1]),
+            self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pol_pos][1]),
                             self.dev.atol[1] / 2.)
 
     def test_unsupported_position(self):
-        # test fallback: if unsupported position is requested, move combined actuator to known position
+        """
+        test position not available, test axis not available, test fallback position
+        if unsupported position is requested, move combined actuator to known position
+        """
         pos = "false_key"
         with self.assertRaises(KeyError):
             f = self.dev.moveAbs({self.dev.axis_name: pos})  # move
             f.result()  # wait
         print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child2.position.value[self.axis2]
+        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
         print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
+        # TODO in case we want to test if actuator moved to known position after calling wrong pos
         # self.assertEqual(self.dev.position.value[self.dev.axis_name], self.dev.fallback)
 
         axis_name = "false_axis_name"
@@ -790,8 +825,9 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
             f = self.dev.moveAbs({axis_name: "hpirad"})  # move
             f.result()  # wait
         print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child2.position.value[self.axis2]
+        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
         print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
+        # TODO in case we want to test if actuator moved to known position after calling wrong pos
         # self.assertEqual(self.dev.position.value[self.dev.axis_name], self.dev.fallback)
 
         # unsupported pos
@@ -800,17 +836,17 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         pos1 = {self.axis1: 0.392699}  # pi/8, 7/8*pi
         pos2 = {self.axis2: 2.748893}  # pi/8, 7/8*pi
         f1 = self.child1.moveAbs(pos1)
-        f2 = self.child2.moveAbs(pos2)
+        f2 = self.child1.moveAbs(pos2)
         f1.result()  # wait
         f2.result()
 
         print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child2.position.value[self.axis2]
+        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
         print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
         self.assertEqual(self.dev.position.value[self.dev.axis_name], "unspecified position")
 
     def test_cancel_move(self):
-        "test cancel movement while running"
+        """test cancel movement while running"""
         axis_name = "pol"
         fallback = "unspecified position"
         atol = [3.392e-5, 3.392e-5]
@@ -844,39 +880,6 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                 print "pos reported by axis 1:", self.child1.position.value[self.axis1]
                 print "pos reported by axis 2:", self.child1.position.value[self.axis2]
                 break
-
-    def setUp_(self):
-        self.axis1 = "linear"
-        self.axis2 = "qwp"
-        axis_name = "pol"
-        atol = [3.392e-5, 3.392e-5]
-        fallback = "unspecified position"
-        self.positions = {
-                         # pos -> pos (linear), pos (qwp)
-                         "0pirad": [0.0, 0.0],
-                         "qpirad": [0.785398, 0.785398],
-                         "hpirad": [1.570796, 1.570796],
-                         "3qpirad": [2.356194, 2.356194],
-                         "lcirc": [0.785398, 1.570796],
-                         "rcirc": [2.356194, 1.570796],
-                         "pass-through": [0.0, 1.570796],
-                         #"fallback": [np.nan, np.nan]
-                        }
-
-        # create one child
-        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
-                                          axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
-                                          unit=["rad", "rad"],
-                                          refproc="Standard",
-                                          )
-
-        self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
-                                                 children={"bla": self.child1, "blub": self.child1},
-                                                 axis_name=axis_name,
-                                                 caxes_map=[self.axis1, self.axis2],
-                                                 positions=self.positions,
-                                                 atol=atol,
-                                                 fallback=fallback)
 
     def test_reference(self):
         """
