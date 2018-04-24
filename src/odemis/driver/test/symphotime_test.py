@@ -80,6 +80,13 @@ class TestSymphotime(unittest.TestCase):
         # note: The symphotime simulator must be running before we start the tests. 
         self.controller = symphotime.Controller(**CONFIG_SYMPHOTIME_SIM)
         self.controller.updateMetadata(MD)
+        for c in self.controller.children.value:
+            if c.role == CONFIG_SCANNER["role"]:
+                self.scanner = c
+            elif c.role == CONFIG_LIVE["role"]:
+                self.det_live = c
+            else:
+                self.fail("Unexpected role %s" % (c.role,))
 
     @classmethod
     def tearDownClass(self):
@@ -88,21 +95,26 @@ class TestSymphotime(unittest.TestCase):
     def test_acquisition(self):
         # Test the starting and stopping of acquisition. 
         done = threading.Event()
-        
+
+        # ~ 4s of acquisition (theoretical)
+        self.scanner.resolution.value = (64, 64)
+        self.scanner.dwellTime.value = 1e-3
+        self.scanner.bidirectional.value = False
+
         for filename in ["file1.ptu", "big$file.ptu"]:
             for directory in ["MyMeasurement", "TestGroup"]:
                 done.clear()
-                self.controller.scanner.filename.value = filename
-                self.controller.scanner.directory.value = directory
+                self.scanner.filename.value = filename
+                self.scanner.directory.value = directory
 
                 # This function will execute once the measurement completes.
                 def callback(flow, array):
                     self.assertEqual(array, [[0]])
-                    self.assertEqual(self.controller.scanner.filename.value, filename)
-                    self.assertEqual(self.controller.scanner.directory.value, directory)
+                    self.assertEqual(self.scanner.filename.value, filename)
+                    self.assertEqual(self.scanner.directory.value, directory)
                     self.assertEqual(array.metadata[model.MD_DESCRIPTION], MD[model.MD_DESCRIPTION])
                     self.assertEqual(array.metadata[model.MD_PIXEL_SIZE], MD[model.MD_PIXEL_SIZE])
-                    self.assertEqual(self.controller.scanner.dwellTime.value, array.metadata[model.MD_DWELL_TIME])
+                    self.assertEqual(self.scanner.dwellTime.value, array.metadata[model.MD_DWELL_TIME])
                     # unsub
                     self.controller.data.unsubscribe(callback)
                     self.assertFalse(self.controller.isMeasuring())
@@ -116,21 +128,22 @@ class TestSymphotime(unittest.TestCase):
 
                 # Wait until the measurement completes
                 done.wait(30)
+                self.assertTrue(done.is_set(), "Timeout")
                 self.assertFalse(self.controller.isMeasuring())
 
     def test_bad_filename(self):
         # Test if the filename will get an extension added.
         filename = "filename"
-        self.controller.scanner.filename.value = filename
-        self.assertEqual(self.controller.scanner.filename.value, filename + '.ptu')
+        self.scanner.filename.value = filename
+        self.assertEqual(self.scanner.filename.value, filename + '.ptu')
 
         # Test that a filename that is to long is rejected.
         with self.assertRaises(ValueError):
-            self.controller.scanner.filename.value = 'a' * 256
+            self.scanner.filename.value = 'a' * 256
 
         # Test if the PTU will be appended
-        self.controller.scanner.filename.value = "filename.ome.tiff"
-        self.assertEqual(self.controller.scanner.filename.value, "filename.ome.tiff.ptu")
+        self.scanner.filename.value = "filename.ome.tiff"
+        self.assertEqual(self.scanner.filename.value, "filename.ome.tiff.ptu")
 
     def test_stopping(self):
         # Start measuring, then immediately stop. Be sure that the measurement takes at least 5 seconds.
@@ -162,8 +175,8 @@ class TestSymphotime(unittest.TestCase):
         done1 = threading.Event()
         done2 = threading.Event()
 
-        self.controller.scanner.filename.value = "file.ptu"
-        self.controller.scanner.directory.value = "group"
+        self.scanner.filename.value = "file.ptu"
+        self.scanner.directory.value = "group"
 
         # be sure we are in a non-measuring state
         self.controller.StopMeasurement()
@@ -200,8 +213,8 @@ class TestSymphotime(unittest.TestCase):
         done1 = threading.Event()
         done2 = threading.Event()
         
-        self.controller.scanner.filename.value = "file.ptu"
-        self.controller.scanner.directory.value = "group"
+        self.scanner.filename.value = "file.ptu"
+        self.scanner.directory.value = "group"
 
         # be sure we are in a non-measuring state
         self.controller.StopMeasurement()
@@ -210,17 +223,17 @@ class TestSymphotime(unittest.TestCase):
 
         # This function will execute once the measurement completes.
         def callback1(flow, array):
-            self.controller.detector_live.data.unsubscribe(callback1)
+            self.det_live.data.unsubscribe(callback1)
             done1.set()
 
         def callback2(flow, array):
-            self.controller.detector_live.data.unsubscribe(callback2)
+            self.det_live.data.unsubscribe(callback2)
             done2.set()
 
         # Start measuring
-        self.controller.detector_live.data.subscribe(callback1)
+        self.det_live.data.subscribe(callback1)
         time.sleep(0.1)
-        self.controller.detector_live.data.subscribe(callback2)
+        self.det_live.data.subscribe(callback2)
 
         # Should start measuring now
         self.assertTrue(self.controller.isMeasuring())
@@ -234,8 +247,8 @@ class TestSymphotime(unittest.TestCase):
     def test_live(self):
         # Test the live stream of the apd
         # Check that some count rates do get sent into the array of count_rates
-        self.controller.scanner.filename.value = "test"
-        self.controller.scanner.directory.value = "test"
+        self.scanner.filename.value = "test"
+        self.scanner.directory.value = "test"
 
         logging.debug("Test the Live detector")
         self.assertFalse(self.controller.isMeasuring())
@@ -248,13 +261,13 @@ class TestSymphotime(unittest.TestCase):
             logging.debug("Received new count rate %s", array[0][0])
 
         # Start measuring
-        self.controller.detector_live.data.subscribe(live_callback)
+        self.det_live.data.subscribe(live_callback)
         # Should start measuring now
         self.assertTrue(self.controller.isMeasuring())
 
         # Wait until the measurement completes
         time.sleep(5.0)
-        self.controller.detector_live.data.unsubscribe(live_callback)
+        self.det_live.data.unsubscribe(live_callback)
         time.sleep(0.5)
         self.assertFalse(self.controller.isMeasuring())
 
@@ -266,25 +279,27 @@ class TestSymphotime(unittest.TestCase):
         done = threading.Event()
 
         done.clear()
-        self.controller.scanner.filename.value = "test.ptu"
-        self.controller.scanner.directory.value = "test"
+        self.scanner.filename.value = "test.ptu"
+        self.scanner.directory.value = "test"
 
         # be sure we are in a non-measuring state
         self.controller.StopMeasurement()
         time.sleep(0.5)
         self.assertFalse(self.controller.isMeasuring())
+        self._latest_live = None
 
         # Every time a new count rate is received, add it to the list.
-        def live_callback(flow, array):
-            logging.debug("Received new count rate %s", array[0][0])
+        def live_callback(flow, da):
+            self._latest_live = da
+            logging.debug("Received new count rate %s", da[0][0])
 
-        def measurement_callback(flow, array):
+        def measurement_callback(flow, da):
             self.controller.data.unsubscribe(measurement_callback)
             done.set()
 
         # Start measuring with the live first, then start a real acq
         logging.debug("Start live, then start regular")
-        self.controller.detector_live.data.subscribe(live_callback)
+        self.det_live.data.subscribe(live_callback)
         self.assertTrue(self.controller.isMeasuring())
         time.sleep(0.5)
         with self.assertRaises(RuntimeError):
@@ -294,18 +309,25 @@ class TestSymphotime(unittest.TestCase):
 
         # Wait a bit, then stop.
         time.sleep(5.0)
-        self.controller.detector_live.data.unsubscribe(live_callback)
+        self.det_live.data.unsubscribe(live_callback)
+        self.assertEqual(self._latest_live.shape, (1, 1))
+        # TODO: dwell time should be the period of the count rate update
+        self.assertGreaterEqual(self._latest_live.metadata[model.MD_DWELL_TIME],
+                                self.scanner.dwellTime.value)
+        self.assertEqual(self._latest_live.metadata[model.MD_DET_TYPE],
+                                model.MD_DT_NORMAL)
+
         time.sleep(1.0)
         self.assertFalse(self.controller.isMeasuring())
 
-        # Now try to start measuring the live after real measurmenet is running
+        # Now try to start measuring the live after real measurement is running
         logging.debug("Start regular, then live.")
         self.controller.data.subscribe(measurement_callback)
         time.sleep(0.5)
         self.assertTrue(self.controller.isMeasuring())
         time.sleep(0.5)
         with self.assertRaises(RuntimeError):
-            self.controller.detector_live.data.subscribe(live_callback)
+            self.det_live.data.subscribe(live_callback)
 
         self.controller.data.unsubscribe(measurement_callback)
 

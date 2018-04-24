@@ -580,7 +580,6 @@ class Controller(model.Detector):
             logging.debug("Connecting to %s:%d", self._host, self._port)
             self._socket = socket.create_connection((self._host, self._port))
             self._socket.settimeout(2.0)
-
         except socket.error:
             raise model.HwError("Failed to connect to '%s:%d', check that the Symphotime "
                                 "Server is connected to the network, turned "
@@ -589,6 +588,8 @@ class Controller(model.Detector):
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
 
+        # Data depth is 0, as we don't get the data
+        self._shape = (0,)
         # try get parameters from metadata
         self._metadata[model.MD_PIXEL_SIZE] = (10e-6, 10e-6)
         self.measurement_type = PQ_MEASTYPE_IMAGESCAN
@@ -613,7 +614,7 @@ class Controller(model.Detector):
 
         # Measurement parameters
         self.data = BasicDataFlow(self.StartMeasurement, self.StopMeasurement, self._checkImScan)
-        self._tStart = None  # this will hold the epoch time a measurmenet starts
+        self._tStart = None  # this will hold the epoch time a measurement starts
 
         # Create a thread to listen to messages from SymPhoTime
         self._shutdown_flag = False
@@ -834,7 +835,7 @@ class Controller(model.Detector):
                 if not self._measurement_stopped.is_set():
                     logging.info("Acquisition completed successfully.")
                     self._measurement_stopped.set()
-                    self._notifySubscribers(self.data, [[0]])
+                    self._notifySubscribers(self, [[0]])
             else:
                 # All other status types denote errors.
                 self._measurement_stopped.set()
@@ -863,8 +864,9 @@ class Controller(model.Detector):
             # If we have a live detector ...
             if self.detector_live:
                 apd_name = "det%d" % self.detector_live.channel # det1, for example
-                if apd_name  in data:
-                    self._notifySubscribers(self.detector_live.data, [[data[apd_name]]])
+                if apd_name in data:
+                    # TODO: the DWELL_TIME should be the update rate of this data
+                    self._notifySubscribers(self.detector_live, [[data[apd_name]]])
 
         elif isinstance(decoded_msg, EncodedStatusReplyMessage):
             # Do not answer these types of messages
@@ -903,14 +905,20 @@ class Controller(model.Detector):
         else:
             logging.warning("Unknown message received. Msgtype %s", type(decoded_msg))
 
-    def _notifySubscribers(self, dataflow, data):
-        # update metadata and send data array to subscribers
-        # Will notify 'data' to 'dataflow'
+    def _notifySubscribers(self, det, data):
+        """
+        Will pass the data to the DataFlow of the detector. The metadata will be
+          set automatically.
+        det (Detector)
+        data (numpy array or list of numbers): the data to pass
+        """
+        # Merge metadata of the scanner and detector
         md = self._metadata.copy()
+        md.update(det.getMetadata())
         md[model.MD_DWELL_TIME] = self.scanner.dwellTime.value
         md[model.MD_ACQ_DATE] = self._tStart
         da = model.DataArray(data, md)
-        dataflow.notify(da)
+        det.data.notify(da)
 
 
 class Scanner(model.Emitter):
@@ -930,6 +938,7 @@ class Scanner(model.Emitter):
         '''
         # we will fill the set of children with Components later in ._children
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+        self._shape = (2048, 2048) # Max resolution
 
         # Define VA's as references to the parent.
         self.filename = model.StringVA(setter=self._setFilename)
@@ -969,6 +978,11 @@ class DetectorLive(model.Detector):
         parent (symphotime.Controller): a symphotime server parent object
         '''
         super(DetectorLive, self).__init__(name, role, **kwargs)
+
+        # Data is a ulong
+        self._shape = (2**32,)
+        # Data is normalized to get a count per second
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
 
         self.parent = parent
         self.channel = 1  # hard coded channel of the apd. Typically 1, 2, or 3
