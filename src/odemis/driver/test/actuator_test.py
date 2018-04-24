@@ -723,7 +723,7 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         self.axis2 = "qwp"
         axis_name = "pol"
         atol = [3.392e-5, 3.392e-5]
-        fallback = "unspecified position"
+        fallback = "unspecified position"  # TODO: remove here now
         self.positions = {
                          # pos -> pos (linear), pos (qwp)
                          "0pirad": [0.0, 0.0],
@@ -733,7 +733,7 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                          "lcirc": [0.785398, 1.570796],
                          "rcirc": [2.356194, 1.570796],
                          "pass-through": [0.0, 1.570796],
-                         # "fallback": "unspecified position"
+                         "fallback": "unspecified position"  # use fallback specified above?
                         }
 
         # create one child
@@ -750,46 +750,39 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                                                  positions=self.positions,
                                                  atol=atol,
                                                  fallback=fallback)
+
     def test_moveAbs(self):
-        # test don't change position
-        print self.dev.position
+        """test all possible positions"""
+
+        # test don't change position when already there
         cur_pos = self.dev.position.value[self.dev.axis_name]
         f = self.dev.moveAbs({self.dev.axis_name: cur_pos})
         f.result()
-        print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
-        print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
         self.assertEqual(self.dev.position.value[self.dev.axis_name], cur_pos)
 
-        # check all positions possible
-        # check children report expected positions (e.g. [0.0, 0.0]
-        # check combined actuator reports corresponding expected positions (e.g. "0pirad")
-        for pol_pos in self.positions.keys():
-            print "position to do", pol_pos, "**********************************************************************"
-            f = self.dev.moveAbs({self.dev.axis_name: pol_pos})
-            f.result()  # wait
-            print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
-            print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-            print "pos reported by axis 2:", self.child1.position.value[self.axis2]
-            print "position done", pol_pos, "**********************************************************************"
-            self.assertEqual(self.dev.position.value[self.dev.axis_name], pol_pos)
-            self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pol_pos][0]),
-                            self.dev.atol[0] / 2.)
-            self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pol_pos][1]),
-                            self.dev.atol[1] / 2.)
+        # check all possible positions
+        # check children axes report expected positions (e.g. [float, float]
+        # check axis reports corresponding expected positions (e.g. "key")
+        for pos in self.positions.keys():
+            if type(self.positions[pos]) != str:
+                f = self.dev.moveAbs({self.dev.axis_name: pos})
+                f.result()  # wait
+                self.assertEqual(self.dev.position.value[self.dev.axis_name], pos)
+                self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pos][0]),
+                                self.dev.atol[0] / 2.)
+                self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pos][1]),
+                                self.dev.atol[1] / 2.)
 
     def test_unsupported_position(self):
         """
         test position not available, test axis not available, test fallback position
         if unsupported position is requested, move combined actuator to known position
         """
+
         pos = "false_key"
         with self.assertRaises(KeyError):
             f = self.dev.moveAbs({self.dev.axis_name: pos})  # move
             f.result()  # wait
-        print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
-        print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
         # TODO in case we want to test if actuator moved to known position after calling wrong pos
         # self.assertEqual(self.dev.position.value[self.dev.axis_name], self.dev.fallback)
 
@@ -797,25 +790,18 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         with self.assertRaises(KeyError):
             f = self.dev.moveAbs({axis_name: "hpirad"})  # move
             f.result()  # wait
-        print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
-        print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
         # TODO in case we want to test if actuator moved to known position after calling wrong pos
         # self.assertEqual(self.dev.position.value[self.dev.axis_name], self.dev.fallback)
 
         # unsupported pos
-        # TODO Sabrina: reports continuously now as _updatePostion is continuously called
-        # TODO or no need of update pol_pos as we do manual changes in a plugin or command line....
+        # Note: reports continuously now as _updatePosition is continuously called
+        # TODO: no need of update pos as we do manual changes of children axes in a plugin or command line....
         pos1 = {self.axis1: 0.392699}  # pi/8, 7/8*pi
         pos2 = {self.axis2: 2.748893}  # pi/8, 7/8*pi
         f1 = self.child1.moveAbs(pos1)
         f2 = self.child1.moveAbs(pos2)
         f1.result()  # wait
         f2.result()
-
-        print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-        print "pos reported by axis 2:", self.child1.position.value[self.axis2]
-        print "pos reported by VA:", self.dev.position.value[self.dev.axis_name]
         self.assertEqual(self.dev.position.value[self.dev.axis_name], "unspecified position")
 
     def test_cancel_move(self):
@@ -827,21 +813,12 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         # enough to check only one position different from current pos
         for pos in self.positions.keys():
             if pos != cur_pos:
-                print pos, cur_pos
                 f = self.dev.moveAbs({self.dev.axis_name: pos})  # move
-                print [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
                 time.sleep(1)
-                print [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
                 self.assertTrue(f.cancel())  # fails if for e.g. 10sec
                 cancel_pos = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
-                print "cancel position", cancel_pos, cur_pos, pos, self.positions[pos]
                 # check position requested is not reached
                 self.assertNotEqual(cancel_pos, self.positions[pos])
-                # TODO: check position is previous or fallback ("unspecified position = stop pos)
-                print self.dev.position.value[self.dev.axis_name]
-                print "pos reported by axis 1:", self.child1.position.value[self.axis1]
-                print "pos reported by axis 2:", self.child1.position.value[self.axis2]
-                # TODO: callback fct is called why?? _on_referenced
                 break
 
     def test_reference(self):
@@ -849,25 +826,20 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         Try referencing each axis
         check both children report their axis as referenced
         """
-        # move to position different from zero and current position, check if axis was referenced
+
+        # move to position different from zero and current position
         # request a position, wait and cancel movement
         cur_pos = self.dev.position.value[self.dev.axis_name]
         # enough to find only one position different from current pos and zero
         for pos in self.positions.keys():
-            print pos, self.positions[pos]
-            print self.positions[pos] != [0.0, 0.0]
             if pos != cur_pos and self.positions[pos] != [0.0, 0.0]:
-                print "test referencing", self.dev.referenced, pos, cur_pos
                 f = self.dev.moveAbs({self.dev.axis_name: pos})
                 f.result()
-                print "test referencing", self.dev.referenced, self.dev.referenced.value[self.dev.axis_name]
-                print "current pos is ", self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]
                 break
+
         # do referencing now
         f = self.dev.reference({self.dev.axis_name})
         f.result()
-        print "test referencing", self.dev.referenced.value[self.dev.axis_name]
-        print "current pos2 is ", self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]
         # check axis is referenced
         self.assertTrue(self.dev.referenced.value[self.dev.axis_name])
         # check positions after referencing of children axes are zero
@@ -878,7 +850,9 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
 class TestRotationActuator(unittest.TestCase):
 
     def setUp(self):
+
         # TODO: How to test pos and neg offset with same unittest
+
         self.offset_mounting = 1.
         self.axis = "linear"
         self.axis_name = "rz"
@@ -890,9 +864,6 @@ class TestRotationActuator(unittest.TestCase):
                                           refproc="Standard",
                                           )
 
-        # TODO: not all test cases work with that stage: need to specify ustepsize
-        # self.child1 = simulated.Stage("rotstage1", "test", axes=[self.axis], ranges={self.axis: (0, 7)})
-
         self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.child1}, self.axis,
                                           offset_mounting=self.offset_mounting)
 
@@ -902,49 +873,58 @@ class TestRotationActuator(unittest.TestCase):
         # print self.offset_mounting
 
     def test_cancel_move(self):
-        # request a position, wait and cancel movement
+        """
+        test if cancel is handled correctly
+        request a position, wait and cancel movement
+        """
+
         cur_pos = self.dev_cycle.position.value[self.axis_name]
         new_pos = (cur_pos + 1.5) % self.dev_cycle._cycle
         f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
         time.sleep(1)  # use 10 sec to fail test
         self.assertTrue(f.cancel())
-        print self.dev_cycle.position.value[self.axis_name]
-        print "pos reported by axis:", self.child1.position.value[self.axis]
 
     def test_unsupported_position(self):
+        """
+        test if unsupported position is handled correctly
+        """
+
         # It's optional
         if not hasattr(self.dev_cycle, "moveAbs"):
             self.skipTest("Actuator doesn't support absolute move")
 
+        # TODO: more generic use random number > 2pi
         new_pos = 6.4
         with self.assertRaises(ValueError):
             f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
             f.result()  # wait
 
     def test_cycle_moveAbs(self):
-        # TODO fails when dict self._position is empty dict
+        """
+        test if any position is correctly reached
+        test if current position is requested nothing is done
+        """
+
         # test don't change position
         cur_pos = self.dev_cycle.position.value[self.axis_name]
         f = self.dev_cycle.moveAbs({self.axis_name: cur_pos})
         f.result()
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-             self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
         self.assertEqual(self.dev_cycle.position.value[self.axis_name], cur_pos)
 
-        print " next test"
         # test new position
+        # TODO: more generic use number in range(0, cycle)
         new_pos = 1.570796  # pi/2
         f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-             self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
         # check absolute difference is smaller half the ustepsize
         self.assertLess(abs(self.dev_cycle.position.value[self.axis_name] - new_pos), self.child1._ustepsize[0]/2.)
 
     def test_offset_moveAbs(self):
-        # test if offset is correctly used (accumulation of angles is overrunning 2pi): reset of position zero
+        """
+        test if offset is correctly used
+        when accumulation of angles is overrunning 2pi (pos or neg) do referencing to zero
+        """
+
         new_pos = 1.570796  # pi/2
         # move 4*pi/2
         for i in range(1, 5):
@@ -960,7 +940,6 @@ class TestRotationActuator(unittest.TestCase):
         new_pos = 6.283185
         # move 4*-pi/2
         for i in range(1, 5):
-            print i, "i"
             f = self.dev_cycle.moveAbs({self.axis_name: new_pos-1.570796*i})
             f.result()
             i += 1
@@ -971,15 +950,13 @@ class TestRotationActuator(unittest.TestCase):
         self.assertLess(abs(self.dev_cycle.position.value[self.axis_name] - new_pos), self.child1._ustepsize[0] / 2.)
 
     def test_cycle_offset_mounting(self):
-        print "offset mounting:", self.dev_cycle.offset_mounting, "position VA:", self.dev_cycle.position.value[self.axis_name]
+        """
+        test offset_mounting is correctly used
+        """
         # move to zero + offset: report back zero
         f = self.dev_cycle.moveAbs({self.axis_name: 0})
         f.result()
         # dev_cycle should have value 0 then child1 should have value 1 for offset 1
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
-        # print self.dev_cycle.position.value["rz"], self.dev_cycle.offset_mounting
         self.assertAlmostEqual((self.dev_cycle.position.value[self.axis_name] + self.dev_cycle.offset_mounting)
                                % self.dev_cycle._cycle, self.dev_cycle.offset_mounting % self.dev_cycle._cycle, 4)
 
@@ -987,9 +964,6 @@ class TestRotationActuator(unittest.TestCase):
         new_pos = 1.570796  # pi/2
         f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
         # check if position of actuator minus position requested is almost equal to mounting offset
         # almost equal to correct for quantized stepsize
         self.assertAlmostEqual((self.dev_cycle.position.value[self.axis_name] + self.dev_cycle.offset_mounting)
@@ -1000,9 +974,6 @@ class TestRotationActuator(unittest.TestCase):
         new_pos = 6.283185  # 2pi
         f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
         # check if position of actuator minus position requested is almost equal to mounting offset
         # almost equal to correct for quantized stepsize
         self.assertAlmostEqual((self.dev_cycle.position.value[self.axis_name] + self.dev_cycle.offset_mounting)
@@ -1013,39 +984,26 @@ class TestRotationActuator(unittest.TestCase):
         with self.assertRaises(ValueError):
             f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
             f.result()  # wait
-        print "position not supported"
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
 
         new_pos = -0.5
         with self.assertRaises(ValueError):
             f = self.dev_cycle.moveAbs({self.axis_name: new_pos})  # move
             f.result()  # wait
-        print "position not supported"
-        print "pos reported by VA:", self.dev_cycle.position.value[self.axis_name], \
-            "should be different from tmcm pos: ", \
-            self.child1.position.value[self.axis], "by offset:", self.dev_cycle.offset_mounting
 
     def test_reference(self):
         """
         try referencing axis
         check axis is referenced
         """
+
         # move to random position, check if axis was referenced
         new_pos = 0.4
-        print "test referencing" , self.dev_cycle.referenced
         f = self.dev_cycle.moveAbs({self.axis_name: new_pos})
         f.result()
-        print "test referencing", self.dev_cycle.referenced
-        print "test referencing", self.dev_cycle.referenced.value[self.axis_name]
-        print " current pos is ", self.child1.position.value[self.axis]
 
         # now do reference
         f = self.dev_cycle.reference({self.axis_name})
         f.result()
-        print "test referencing", self.dev_cycle.referenced.value[self.axis_name]
-        print " current pos2 is ", self.child1.position.value[self.axis]
         # test if axis is referenced self.child1.position.value[self.axis1]
         self.assertTrue(self.dev_cycle.referenced.value[self.axis_name])
         # check if position after referencing is zero

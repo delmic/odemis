@@ -366,6 +366,7 @@ SPARC2: {
             "lcirc": [0.785398, 1.570796],
             "rcirc": [2.356194, 1.570796],
             "pass-through": [0.0, 1.570796],
+            "fallback": "unspecified position"
         },
     },
     affects: ["Lens1 Mover"],
