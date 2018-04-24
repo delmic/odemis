@@ -7,7 +7,7 @@ SPARC2: {
                "Camera", "Spectrometer IR", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
-               "Slit", "CL Selector", "CL Filter Wheel",
+               "Slit",
                "Lens1 Mover", "Lens2 Switch", "Polarization Analyzer",
                "Linear Polarizer", "Quarter Wave Plate"],
 }
@@ -141,18 +141,6 @@ SPARC2: {
     },
 }
 
-# "Camera": {
-#     class: simcam.Camera,
-#     role: ccd,
-#     power_supplier: "Power Control Unit",
-#     init: {
-#         image: "sparc-ar-mirror-align.h5", # only for simulator
-#     },
-#     children: {
-#         focus: "Spectrograph focus",
-#     },
-# }
-
 "Spectrometer Vis-NIR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer-integrated,
@@ -215,13 +203,6 @@ SPARC2: {
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
-
-# "Spectrograph focus": {
-#     # Normally child of Spectrograph, but for the simulator: child of Camera
-#     role: "focus",
-#     affects: ["Camera", "Spectral Camera"],
-# }
-
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
@@ -282,7 +263,8 @@ SPARC2: {
         ustepsize: [3.392e-5, 3.392e-5, 25.1e-9, 25.1e-9, 5.e-9], # m/µstep, excepted for the fw and rz: rad/µstep
 #        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9, 3.392e-5], # m/µstep, excepted for the fw and rz: rad/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
+        refswitch: {"l1": 0, "l2": 0},
+#        refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
     },
 }
@@ -333,40 +315,6 @@ SPARC2: {
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
-## Mirror in Plate 2, selects between spectrometer and cl-detector
-#"CL Selector": {
-#    class: actuator.FixedPositionsActuator,
-#    role: "cl-det-selector",
-#    children: {"x": "Optical Actuators"},
-#    init: {
-#        axis_name: "cl-sel",
-#        positions: {
-#            0.003: ["CL Detector"],
-#            0.01: ["Spec CCD Flipper"]
-#        },
-#    },
-#    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
-#}
-
-#"CL Filter Wheel": {
-#    class: actuator.FixedPositionsActuator,
-#    role: "cl-filter",
-#    children: {"band": "Optical Actuators"},
-#    init: {
-#        axis_name: "fw",
-#        # It supports up to 8 filters
-#        positions: {
-#            # pos (rad) -> m,m
-#            0: [420.e-9, 460.e-9],        # 1
-#            0.785398: [500.e-9, 550.e-9], # 2
-##            1.570796: "polariser",        # 3
-#            3.9269908: "pass-through",    # 6
-#        },
-#        cycle: 6.283185, # position of ref switch (0) after a full turn
-#    },
-#    affects: ["CL Detector"],
-#}
-
 # Controller for moving the 'Redux' stage
 # Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {
@@ -399,18 +347,15 @@ SPARC2: {
     },
 }
 
-#TODO Sabrina
 "Polarization Analyzer": {
-    class: actuator.CombinedFixedPositionsActuator,
-    role: "polarization-analyzer",
-    children: {"linear": "Linear Polarizer", "qwp": "Quarter Wave Plate"}, # alphabetically sorted
+    class: actuator.CombinedFixedPositionActuator,
+    role: "polarization-analyzer",   # linear
+    children: {"Pol1": "Linear Polarizer", "Pol2": "Quarter Wave Plate"}, # alphabetically sorted
     init: {
         axis_name: "pol",
-        axes_map: ["rz", "rz"],
+        caxes_map: ["rz", "rz"], # ["rz", "rz"] # ["linearPol", "qwpPol"]
         atol: [3.392e-5, 3.392e-5], # rad (~the step size of the motor)
-        #axes_map: {"linear": ["rz", 3.392e-5],
-        #           "qwp": ["rz", 3.392e-5],
-        #}
+        fallback: "pass-through",
         # It supports 7 positions
         positions: {
             # pos -> pos (linear), pos (qwp)
@@ -422,34 +367,31 @@ SPARC2: {
             "rcirc": [2.356194, 1.570796],
             "pass-through": [0.0, 1.570796],
         },
-        fallback: "pass-through",
     },
     affects: ["Lens1 Mover"],
 }
 
 "Linear Polarizer": {
     class: actuator.RotationActuator,
-    role: "linear-polarizer",
-    children: {"linear": "Optical Actuators"},
+    role: "linear-polarizer", #null, TODO Sabrina change to null
+    children: {"rz": "Optical Actuators"},  # linearPol
     init: {
-        axis_name: "rz"
+        axis_name: "linear"  #"rz"
     },
-    metadata: {
-        POS_COR: 12.e-3,  # rad
-    },
+#    metadata: {
+#        POS_COR: 12.e-3,  # rad
+#    },
 }
 
 "Quarter Wave Plate": {
     class: actuator.RotationActuator,
     role: "quarter-wave-plate", #null, TODO Sabrina change to null
-    children: {"qwp": "Optical Actuators"},
+    children: {"rz": "Optical Actuators"}, # qwpPol
     init: {
-        axis_name: "rz",
-        offset-mounting: 6.e-3,
-#        pos_min: 0,
-#        pos_max: 6.283185,
-#        pos_rng: [0, 6.283185],
+        axis_name: "qwp", #"rz",
+        offset_mounting: 1  #6.e-3,
     },
+    # TODO add here MD
     metadata: {
         POS_COR: 6.e-3,  # rad
     },
