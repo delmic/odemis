@@ -336,8 +336,8 @@ class AcquisitionTask(object):
         finally:
             # Don't hold references to the streams once it's over
             self._streams = []
-            self._streamTimes = {}
             self._streams_left.clear()
+            self._streamTimes = {}
             self._current_stream = None
             self._current_future = None
 
@@ -389,7 +389,14 @@ class AcquisitionTask(object):
         Called when the current future has made a progress (and so it should
         provide a better time estimation).
         """
-        if self._current_future != f:
+        # If the acquisition is cancelled or failed, we might receive updates
+        # from the sub-future a little after. Let's not make a fuss about it.
+        if self._future.is_done():
+            return
+
+        # There is a tiny chance that self._current_future is already set to
+        # None, but the future isn't officially ended yet. Also fine.
+        if self._current_future != f and self._current_future is not None:
             logging.warning("Progress update not from the current future: %s instead of %s",
                             f, self._current_future)
             return
