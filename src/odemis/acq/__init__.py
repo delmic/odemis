@@ -303,7 +303,11 @@ class AcquisitionTask(object):
 
                 # Wait for the acquisition to be finished.
                 # Will pass down exceptions, included in case it's cancelled
-                raw_images[s] = f.result()
+                das = f.result()
+                if not isinstance(das, collections.Iterable):
+                    logging.warning("Future of %s didn't return a list of DataArrays, but %s", s, das)
+                    das = []
+                raw_images[s] = das
 
                 # update the time left
                 expected_time -= self._streamTimes[s]
