@@ -109,7 +109,8 @@ def parse_config(configfile):
 
 odemis_config = parse_config("/etc/odemis.conf")
 
-# Updates the python path if requested
+
+# Updates the python path if requesteds
 if "PYTHONPATH" in odemis_config:
     logging.debug("PYTHONPATH from config: '%s'", odemis_config["PYTHONPATH"])
     os.environ["PYTHONPATH"] = odemis_config["PYTHONPATH"]
@@ -563,6 +564,8 @@ def main(args):
                     starter.show_popup("Starting Odemis back-end")
 
                     # Get the model file out of the various ways
+                    #TODO: Sabrina only for testing/debugging
+                    options.model_conf = "../share/odemis/sim/sparc2-polarizer-sim.odm.yaml"
                     if options.model_conf:
                         modelfile = options.model_conf
                     elif "MODEL" in odemis_config:

@@ -147,6 +147,7 @@ class MainGUIData(object):
         "e-beam": "ebeam",
         "chamber-light": "chamber_light",
         "overview-light": "overview_light",
+        "polarizer": "polarizer",
     }
 
     def __init__(self, microscope):

@@ -24,11 +24,12 @@ from __future__ import division
 
 import logging
 import math
+import random
 from odemis import model
 import odemis
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
-    CombinedSensorActuator
+    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator
 from odemis.util import test
 import os
 import time
@@ -38,6 +39,7 @@ import simulated_test
 
 
 logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 DELPHI_CONFIG = CONFIG_PATH + "sim/delphi-sim.odm.yaml"
@@ -709,6 +711,397 @@ class TestCombinedSensorActuator(unittest.TestCase):
         f = self.dev.moveAbs(move)
         with self.assertRaises(IOError):
             f.result()  # should raise an error
+
+
+class TestCombinedFixedPostionActuator(unittest.TestCase):
+
+    def setUp(self):
+        self.axis1 = "linear"
+        self.axis2 = "qwp"
+        self.axis_name = "pol"
+        self.atol = [3.392e-5, 3.392e-5]
+        self.fallback = "unspecified position"
+        self.positions = {
+                         # pos (str) -> list(pos (float), pos (float))
+                         "0pirad": [0.5, 0.5],
+                         "qpirad": [0.785398, 0.785398],
+                         "hpirad": [1.570796, 1.570796],
+                         "3qpirad": [2.356194, 2.356194],
+                         "lcirc": [0.785398, 1.570796],
+                         "rcirc": [2.356194, 1.570796],
+                         "pass-through": [0.0, 1.570796],
+                        }
+
+        # create one child
+        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+                                          axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
+                                          unit=["rad", "rad"],
+                                          refproc="Standard",
+                                          )
+
+        self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
+                                                 children={"bla": self.child1, "blub": self.child1},
+                                                 axis_name=self.axis_name,
+                                                 caxes_map=[self.axis1, self.axis2],
+                                                 positions=self.positions,
+                                                 atol=self.atol,
+                                                 fallback=self.fallback)
+
+    def test_moveAbs(self):
+        """test all possible positions"""
+
+        axis_name = self.dev.axes.keys()[0]
+
+        # check all possible positions
+        # check children axes report expected positions (e.g. [float, float]
+        # check axis reports corresponding expected positions (e.g. "key")
+        for pos in self.dev.axes[axis_name].choices:
+            if pos == self.fallback:
+                with self.assertRaises(ValueError):
+                    f = self.dev.moveAbs({self.axis_name: pos})  # move
+                    f.result()  # wait
+            else:
+                f = self.dev.moveAbs({axis_name: pos})
+                f.result()  # wait
+                self.assertEqual(self.dev.position.value[axis_name], pos)
+                self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pos][0]),
+                                self.atol[0] / 2.)
+                self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pos][1]),
+                                self.atol[1] / 2.)
+
+    def test_unsupported_position(self):
+        """
+        test position not available, test axis not available, test fallback position
+        if unsupported position is requested, move combined actuator to known position
+        """
+
+        axis_name = self.dev.axes.keys()[0]
+        pos = "false_key"
+        with self.assertRaises(ValueError):
+            f = self.dev.moveAbs({axis_name: pos})  # move
+            f.result()  # wait
+
+        axis_name = "false_axis_name"
+        with self.assertRaises(ValueError):
+            f = self.dev.moveAbs({axis_name: "hpirad"})  # move
+            f.result()  # wait
+
+        # move to unsupported pos, check reports back fallback position
+        axis_name = self.dev.axes.keys()[0]
+        # Note: reports continuously now as _updatePosition is continuously called
+        pos1 = {self.axis1: 0.392699}  # pi/8, 7/8*pi
+        pos2 = {self.axis2: 2.748893}  # pi/8, 7/8*pi
+        f1 = self.child1.moveAbs(pos1)
+        f2 = self.child1.moveAbs(pos2)
+        f1.result()  # wait
+        f2.result()
+        # if children axes are moved to unspecified position, check VA reports fallback position
+        self.assertEqual(self.dev.position.value[axis_name], self.fallback)
+
+        # move to a known position again, check that both children are at the right place
+        for pos in self.dev.axes[axis_name].choices:
+            if pos != self.fallback:
+                f = self.dev.moveAbs({axis_name: pos})
+                f.result()  # wait
+                self.assertEqual(self.dev.position.value[axis_name], pos)
+                self.assertLess(abs(self.child1.position.value[self.axis1] - self.positions[pos][0]),
+                                self.atol[0] / 2.)
+                self.assertLess(abs(self.child1.position.value[self.axis2] - self.positions[pos][1]),
+                                self.atol[1] / 2.)
+                # only need to check one position
+                break
+
+    def test_cancel_move(self):
+        """test cancel movement while running"""
+
+        axis_name = self.dev.axes.keys()[0]
+
+        # request a position, wait and cancel movement
+        cur_pos = self.dev.position.value[axis_name]
+        # enough to check only one position different from current pos
+        for pos in self.dev.axes[axis_name].choices:
+            if pos != self.fallback and pos != cur_pos:
+                f = self.dev.moveAbs({axis_name: pos})  # move
+                time.sleep(1)
+                self.assertTrue(f.cancel())  # fails if for e.g. 10sec
+                cancel_pos = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+                # check position requested is not reached
+                self.assertNotEqual(cancel_pos, self.positions[pos])
+                break
+
+    def test_stop_move(self):
+        """test stop movement while running"""
+        axis_name = self.dev.axes.keys()[0]
+
+        # request to move to 3 different positions, stop after some time
+        for i in range(3):
+            for pos in self.dev.axes[axis_name].choices:
+                if pos != self.fallback:
+                    f = self.dev.moveAbs({axis_name: pos})  # move
+
+        time.sleep(0.1)
+        self.dev.stop()
+
+        # check if position of children axes are still the same after some time: movement stopped
+        stop_pos_1 = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+        time.sleep(5)
+        stop_pos_2 = [self.child1.position.value[self.axis1], self.child1.position.value[self.axis2]]
+
+        # check position requested is not reached
+        self.assertEqual(stop_pos_1, stop_pos_2)
+
+    def test_reference(self):
+        """
+        Try referencing each axis
+        check both children report their axis as referenced
+        """
+
+        axis_name = self.dev.axes.keys()[0]
+
+        # move to position different from zero and current position
+        # request a position, wait and cancel movement
+        cur_pos = self.dev.position.value[axis_name]
+        # enough to find only one position different from current pos and zero
+        for pos in self.dev.axes[axis_name].choices:
+            if pos != self.fallback and pos != cur_pos and self.positions[pos] != [0.0, 0.0]:
+                f = self.dev.moveAbs({axis_name: pos})
+                f.result()
+                break
+
+        # do referencing now
+        f = self.dev.reference({axis_name})
+        f.result()
+        # check axis is referenced and children axes are referenced
+        self.assertTrue(self.dev.referenced.value[axis_name])
+        # self.assertTrue(self.child1.referenced.value[self.axis1])
+        # self.assertTrue(self.child1.referenced.value[self.axis2])
+
+    def tearDown(self):
+        axis_name = self.dev.axes.keys()[0]
+        self.dev.terminate()
+        super(TestCombinedFixedPostionActuator, self).tearDown()
+
+
+class TestRotationActuator(unittest.TestCase):
+
+    def setUp(self):
+
+        self.axis = "linear"
+        self.axis_name = "rz"
+
+        # # create 1 child
+        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+                                          axes=[self.axis], ustepsize=[3.392e-5],
+                                          unit=["rad"],
+                                          refproc="Standard",
+                                          )
+
+        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.child1}, self.axis)
+
+    def test_unsupported_position(self):
+        """
+        test if unsupported position is handled correctly
+        """
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        # It's optional
+        if not hasattr(self.dev_cycle, "moveAbs"):
+            self.skipTest("Actuator doesn't support absolute move")
+
+        # generate random pos > 2pi
+        new_pos = random.uniform(2*math.pi, 10) + 0.0001  # to exclude 2pi
+        with self.assertRaises(ValueError):
+            f = self.dev_cycle.moveAbs({axis_name: new_pos})  # move
+            f.result()  # wait
+
+    def test_cycle_moveAbs(self):
+        """
+        test if any position is correctly reached
+        test if current position is requested nothing is done
+        """
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        # test don't change position
+        cur_pos = self.dev_cycle.position.value[axis_name]
+        f = self.dev_cycle.moveAbs({axis_name: cur_pos})
+        f.result()
+        self.assertEqual(self.dev_cycle.position.value[axis_name], cur_pos)
+
+        # test new position
+        new_pos = random.uniform(0, 2*math.pi)
+        f = self.dev_cycle.moveAbs({axis_name: new_pos})
+        f.result()
+        # check absolute difference is smaller half the ustepsize
+        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos), self.child1._ustepsize[0]/2.)
+
+    def test_offset_moveAbs(self):
+        """
+        test if offset is correctly used
+        when accumulation of angles is overrunning 2pi (pos or neg) do referencing to zero
+        only works for cycle = 2pi
+        """
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        new_pos = 1.570796  # pi/2
+        # move 4*pi/2
+        for i in range(1, 5):
+            print i, "i"
+            f = self.dev_cycle.moveAbs({axis_name: new_pos*i})
+            f.result()
+            i += 1
+        # move again by pi/2 --> overrun 2pi
+        f = self.dev_cycle.moveAbs({axis_name: new_pos})
+        f.result()
+        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos), self.child1._ustepsize[0] / 2.)
+
+        new_pos = 6.283185
+        # move 4*-pi/2
+        for i in range(1, 5):
+            f = self.dev_cycle.moveAbs({axis_name: new_pos-1.570796*i})
+            f.result()
+            i += 1
+        # move again by -pi/2 --> overrun -2pi
+        new_pos = 4.712389
+        f = self.dev_cycle.moveAbs({axis_name: new_pos})
+        f.result()
+        self.assertLess(abs(self.dev_cycle.position.value[axis_name] - new_pos), self.child1._ustepsize[0] / 2.)
+
+    def test_cycle_offset_mounting(self):
+        """
+        test offset_mounting is correctly used
+        mounting offset should be float
+        value can be pos and neg within range of cycle/2
+        """
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        offset = "any_offset"
+        # raise exception if offset value is not string and abs(value) not within range of cycle/2
+        with self.assertRaises(ValueError):
+            # set mounting offset
+            self.dev_cycle.updateMetadata({model.MD_POS_COR: offset})
+
+        # test a positive and negative offset
+        offsets = [1., -1.]
+        for offset in offsets:
+
+            _pos = self.dev_cycle.position.value[axis_name]
+
+            # set mounting offset
+            self.dev_cycle.updateMetadata({model.MD_POS_COR: offset})
+
+            # check if position has changed after offset has changed
+            _pos_with_offset = self.dev_cycle.position.value[axis_name]
+            self.assertNotEqual(_pos, _pos_with_offset)
+
+            # get offset value
+            _offset_mounting = self.dev_cycle._metadata.get(model.MD_POS_COR)
+
+            # move to zero + offset: report back zero
+            f = self.dev_cycle.moveAbs({axis_name: 0})
+            f.result()
+            # dev_cycle should have value 0 then child1 should have value 1 for offset 1
+            self.assertAlmostEqual((self.dev_cycle.position.value[axis_name] + _offset_mounting)
+                                   % self.dev_cycle._cycle, _offset_mounting
+                                   % self.dev_cycle._cycle, 4)
+
+            # move to any position in range allowed + offset: report position without offset
+            new_pos = random.uniform(0, 2*math.pi)
+            f = self.dev_cycle.moveAbs({axis_name: new_pos})
+            f.result()
+            # check if position of actuator minus position requested is almost equal to mounting offset
+            # almost equal to correct for quantized stepsize
+            self.assertAlmostEqual((self.dev_cycle.position.value[axis_name] + _offset_mounting)
+                                   % self.dev_cycle._cycle, self.child1.position.value[self.axis]
+                                   % self.dev_cycle._cycle, 4)
+
+            # supported position + offset overrunning cycle: report position without offset
+            # check that position is mapped back correctly when cycle is overrun
+            new_pos = 2*math.pi
+            f = self.dev_cycle.moveAbs({axis_name: new_pos})
+            f.result()
+            # check if position of actuator minus position requested is almost equal to mounting offset
+            # almost equal to correct for quantized stepsize
+            self.assertAlmostEqual((self.dev_cycle.position.value[axis_name] + _offset_mounting)
+                                   % self.dev_cycle._cycle, self.child1.position.value[self.axis]
+                                   % self.dev_cycle._cycle, 4)
+
+            # move to unsupported position: report position without offset
+            new_pos = random.uniform(2*math.pi, 7) + 0.00001  # to select pos > 2pi
+            with self.assertRaises(ValueError):
+                f = self.dev_cycle.moveAbs({axis_name: new_pos})  # move
+                f.result()  # wait
+
+            new_pos = random.uniform(-10, -0.5)
+            with self.assertRaises(ValueError):
+                f = self.dev_cycle.moveAbs({axis_name: new_pos})  # move
+                f.result()  # wait
+
+    def test_cancel_move(self):
+        """
+        test if cancel is handled correctly
+        request a position, wait and cancel movement
+        """
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        cur_pos = self.dev_cycle.position.value[axis_name]
+        new_pos = (cur_pos + random.uniform(0, 2*math.pi)) % self.dev_cycle._cycle
+        f = self.dev_cycle.moveAbs({axis_name: new_pos})  # move
+        time.sleep(0.1)  # use 10 sec to fail test
+        self.assertTrue(f.cancel())
+
+    def test_stop_move(self):
+        """test stop movement while running"""
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        # request to move to 3 different positions, stop after some time
+        i=1
+        while i <= 3:
+            pos = random.uniform(0, 2*math.pi) % self.dev_cycle._cycle
+            print pos
+            f = self.dev_cycle.moveAbs({axis_name: pos})  # move
+            i += 1
+
+        time.sleep(1)
+        self.dev_cycle.stop()
+
+        # check if position of children axes are still the same after some time: movement stopped
+        stop_pos_1 = [self.child1.position.value[self.axis]]
+        time.sleep(5)
+        stop_pos_2 = [self.child1.position.value[self.axis]]
+
+        # check position requested is not reached
+        self.assertEqual(stop_pos_1, stop_pos_2)
+
+    def test_reference(self):
+        """
+        try referencing axis
+        check axis is referenced
+        """
+
+        axis_name = self.dev_cycle.axes.keys()[0]
+
+        # move to random position, check if axis was referenced
+        new_pos = random.uniform(0, 2*math.pi)
+        f = self.dev_cycle.moveAbs({axis_name: new_pos})
+        f.result()
+
+        # now do reference
+        f = self.dev_cycle.reference({axis_name})
+        f.result()
+        # test if axis is referenced self.child1.position.value[self.axis1]
+        self.assertTrue(self.dev_cycle.referenced.value[axis_name])
+        # check if position after referencing is zero
+        self.assertLess(abs(self.child1.position.value[self.axis]), self.child1._ustepsize[0] / 2.)
+
+    def tearDown(self):
+        self.dev_cycle.terminate()
+        super(TestRotationActuator, self).tearDown()
 
 
 if __name__ == "__main__":

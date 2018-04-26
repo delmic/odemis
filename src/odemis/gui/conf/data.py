@@ -751,6 +751,10 @@ STREAM_SETTINGS_CONFIG = {
             ("band", {  # from filter
                 "label": "Filter",
             }),
+            #TODO Sabrina
+            # ("linear", {  # from polarization analyzer
+            #     "label": "Polarization Analyzer",
+            # }),
         )),
     stream.CLSettingsStream:
         OrderedDict((
