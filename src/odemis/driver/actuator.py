@@ -1535,6 +1535,7 @@ class CombinedFixedPositionActuator(model.Actuator):
 
     def _doMoveAbs(self, pos):
 
+        print pos, self._axis_name, self._positions
         _pos = self._positions[pos[self._axis_name]]
 
         # unsubscribe while moving
@@ -1602,8 +1603,7 @@ class CombinedFixedPositionActuator(model.Actuator):
         if not any(pos_matching):
             # chose any position to move to
             for key in self._positions:
-                pos = self._positions[key]
-                self._doMoveAbs({self._axis_name: pos})
+                self._doMoveAbs({self._axis_name: key})
                 break
 
         # resubscribe after referencing
@@ -1729,7 +1729,6 @@ class RotationActuator(model.Actuator):
 
     def updateMetadata(self, md):
         for key, value in md.items():
-            print ".................",value
             if isinstance(value, float) and (0.0 <= abs(value) <= self._cycle/2):
                 super(RotationActuator, self).updateMetadata(md)
                 self._updatePosition()

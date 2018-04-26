@@ -776,7 +776,6 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         """
 
         axis_name = self.dev.axes.keys()[0]
-
         pos = "false_key"
         with self.assertRaises(ValueError):
             f = self.dev.moveAbs({axis_name: pos})  # move
@@ -788,6 +787,7 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
             f.result()  # wait
 
         # move to unsupported pos, check reports back fallback position
+        axis_name = self.dev.axes.keys()[0]
         # Note: reports continuously now as _updatePosition is continuously called
         pos1 = {self.axis1: 0.392699}  # pi/8, 7/8*pi
         pos2 = {self.axis2: 2.748893}  # pi/8, 7/8*pi
@@ -871,12 +871,10 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         # do referencing now
         f = self.dev.reference({axis_name})
         f.result()
-        # check axis is referenced
+        # check axis is referenced and children axes are referenced
         self.assertTrue(self.dev.referenced.value[axis_name])
-        # check positions after referencing of children axes are zero
-        # TODO if zero not in choices actuator moves to any known pos, need different test here
-        # self.assertLess(abs(self.child1.position.value[self.axis1]), self.atol[1] / 2.)
-        # self.assertLess(abs(self.child1.position.value[self.axis2]), self.atol[1] / 2.)
+        # self.assertTrue(self.child1.referenced.value[self.axis1])
+        # self.assertTrue(self.child1.referenced.value[self.axis2])
 
     def tearDown(self):
         axis_name = self.dev.axes.keys()[0]
