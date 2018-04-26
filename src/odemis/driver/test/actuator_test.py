@@ -747,21 +747,10 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
                                                  atol=self.atol,
                                                  fallback=self.fallback)
 
-    def tearDown(self):
-        axis_name = self.dev.axes.keys()[0]
-        self.dev.terminate()
-        super(TestCombinedFixedPostionActuator, self).tearDown()
-
     def test_moveAbs(self):
         """test all possible positions"""
 
         axis_name = self.dev.axes.keys()[0]
-
-        # test don't change position when already there
-        cur_pos = self.dev.position.value[axis_name]
-        f = self.dev.moveAbs({axis_name: cur_pos})
-        f.result()
-        self.assertEqual(self.dev.position.value[axis_name], cur_pos)
 
         # check all possible positions
         # check children axes report expected positions (e.g. [float, float]
@@ -788,20 +777,15 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
 
         axis_name = self.dev.axes.keys()[0]
 
-        # TODO raises error in self._checkMoveAbs --> don't test at all?
-        # pos = "false_key"
-        # with self.assertRaises(KeyError):
-        #     f = self.dev.moveAbs({self.axis_name: pos})  # move
-        #     f.result()  # wait
-        # # TODO in case we want to test if actuator moved to known position after calling wrong pos
-        # # self.assertEqual(self.dev.position.value[self.dev.axis_name], self.dev.fallback)
+        pos = "false_key"
+        with self.assertRaises(ValueError):
+            f = self.dev.moveAbs({axis_name: pos})  # move
+            f.result()  # wait
 
-        # axis_name = "false_axis_name"
-        # with self.assertRaises(KeyError):
-        #     f = self.dev.moveAbs({axis_name: "hpirad"})  # move
-        #     f.result()  # wait
-        # # TODO in case we want to test if actuator moved to known position after calling wrong pos
-        # # self.assertEqual(self.dev.position.value[self.dev.axis_name], self.dev.fallback)
+        axis_name = "false_axis_name"
+        with self.assertRaises(ValueError):
+            f = self.dev.moveAbs({axis_name: "hpirad"})  # move
+            f.result()  # wait
 
         # move to unsupported pos, check reports back fallback position
         # Note: reports continuously now as _updatePosition is continuously called
@@ -894,6 +878,11 @@ class TestCombinedFixedPostionActuator(unittest.TestCase):
         # self.assertLess(abs(self.child1.position.value[self.axis1]), self.atol[1] / 2.)
         # self.assertLess(abs(self.child1.position.value[self.axis2]), self.atol[1] / 2.)
 
+    def tearDown(self):
+        axis_name = self.dev.axes.keys()[0]
+        self.dev.terminate()
+        super(TestCombinedFixedPostionActuator, self).tearDown()
+
 
 class TestRotationActuator(unittest.TestCase):
 
@@ -985,15 +974,31 @@ class TestRotationActuator(unittest.TestCase):
     def test_cycle_offset_mounting(self):
         """
         test offset_mounting is correctly used
+        mounting offset should be float
+        value can be pos and neg within range of cycle/2
         """
 
         axis_name = self.dev_cycle.axes.keys()[0]
 
+        offset = "any_offset"
+        # raise exception if offset value is not string and abs(value) not within range of cycle/2
+        with self.assertRaises(ValueError):
+            # set mounting offset
+            self.dev_cycle.updateMetadata({model.MD_POS_COR: offset})
+
         # test a positive and negative offset
         offsets = [1., -1.]
         for offset in offsets:
+
+            _pos = self.dev_cycle.position.value[axis_name]
+
             # set mounting offset
             self.dev_cycle.updateMetadata({model.MD_POS_COR: offset})
+
+            # check if position has changed after offset has changed
+            _pos_with_offset = self.dev_cycle.position.value[axis_name]
+            self.assertNotEqual(_pos, _pos_with_offset)
+
             # get offset value
             _offset_mounting = self.dev_cycle._metadata.get(model.MD_POS_COR)
 
@@ -1048,7 +1053,7 @@ class TestRotationActuator(unittest.TestCase):
         cur_pos = self.dev_cycle.position.value[axis_name]
         new_pos = (cur_pos + random.uniform(0, 2*math.pi)) % self.dev_cycle._cycle
         f = self.dev_cycle.moveAbs({axis_name: new_pos})  # move
-        time.sleep(1)  # use 10 sec to fail test
+        time.sleep(0.1)  # use 10 sec to fail test
         self.assertTrue(f.cancel())
 
     def test_stop_move(self):
@@ -1064,7 +1069,7 @@ class TestRotationActuator(unittest.TestCase):
             f = self.dev_cycle.moveAbs({axis_name: pos})  # move
             i += 1
 
-        time.sleep(2)
+        time.sleep(1)
         self.dev_cycle.stop()
 
         # check if position of children axes are still the same after some time: movement stopped

@@ -1456,23 +1456,29 @@ class CombinedFixedPositionActuator(model.Actuator):
 
             self._updateReferenced()
 
-    def _updatePosition(self, _=None):
-        # _=None: optional argument, needed for VA calls
-        """
-        update the position VA
-        """
+    def _readPositionfromChildren(self):
+        """"""
         pos_children = [self._children[0].position.value[self._caxes_map[0]],
                         self._children[1].position.value[self._caxes_map[1]]]
 
         # check whether children positions are in consistency with combined position allowed
-        matching_position = map(
+        pos_matching = map(
             lambda pos: util.almost_equal(pos_children[0], pos[0], atol=self._atol[0], rtol=0) &
                         util.almost_equal(pos_children[1], pos[1], atol=self._atol[1], rtol=0)
                         if isinstance(pos[0], float) and isinstance(pos[1], float) else False,
                         self._positions.values())
 
-        if any(matching_position):
-            pos_index = matching_position.index(True)
+        return pos_matching, pos_children
+
+    def _updatePosition(self, _=None):
+        # _=None: optional argument, needed for VA calls
+        """
+        update the position VA
+        """
+        pos_matching, pos_children = self._readPositionfromChildren()
+
+        if any(pos_matching):
+            pos_index = pos_matching.index(True)
 
             # it's read-only, so we change it via _value
             self.position._set_value({self._axis_name: self._positions.keys()[pos_index]}, force_write=True)
@@ -1529,7 +1535,6 @@ class CombinedFixedPositionActuator(model.Actuator):
 
     def _doMoveAbs(self, pos):
 
-        print pos
         _pos = self._positions[pos[self._axis_name]]
 
         # unsubscribe while moving
@@ -1589,19 +1594,12 @@ class CombinedFixedPositionActuator(model.Actuator):
         for f in futures:
             f.result()
 
+        # check if referencing pos matches any position allowed
+        pos_matching, pos_children = self._readPositionfromChildren()
+
         # If we just did referencing and ended up to an unsupported position,
         # move to any supported position
-        pos_children = [self._children[0].position.value[self._caxes_map[0]],
-                        self._children[1].position.value[self._caxes_map[1]]]
-
-        # check whether children positions are in consistency with combined position allowed
-        matching_position = map(
-            lambda pos: util.almost_equal(pos_children[0], pos[0], atol=self._atol[0], rtol=0) &
-                        util.almost_equal(pos_children[1], pos[1], atol=self._atol[1], rtol=0)
-                        if isinstance(pos[0], float) and isinstance(pos[1], float) else False,
-                        self._positions.values())
-
-        if not any(matching_position):
+        if not any(pos_matching):
             # chose any position to move to
             for key in self._positions:
                 pos = self._positions[key]
@@ -1660,7 +1658,6 @@ class RotationActuator(model.Actuator):
     defined by the user upon initialization.
     """
 
-    #TODO Sabrina: use offset mounting from Metadata (float)
     def __init__(self, name, role, children, axis_name, cycle=2*math.pi, inverted=None, **kwargs):
         """
         name (string)
@@ -1690,6 +1687,7 @@ class RotationActuator(model.Actuator):
         self._child_future = None
         self._caxis = axis_name
         self._pos_rng = (0, cycle)
+
         # Executor used to reference and move to nearest position
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1709,8 +1707,8 @@ class RotationActuator(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
 
-        # set offset due to mounting of components
-        self._metadata[model.MD_POS_COR] = 0
+        # set offset due to mounting of components (float)
+        self._metadata[model.MD_POS_COR] = 0.
 
         self.position = model.VigilantAttribute({}, readonly=True)
 
@@ -1720,7 +1718,7 @@ class RotationActuator(model.Actuator):
         if model.hasVA(child, "referenced") and axis_name in child.referenced.value:
             self._referenced[axis] = child.referenced.value[axis_name]
             self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
-            child.referenced.subscribe(self._update_child_ref)
+            child.referenced.subscribe(self._updateReferenced)
 
         # If the axis can be referenced => do it now (and move to a known position)
         # In case of cyclic move always reference
@@ -1730,10 +1728,16 @@ class RotationActuator(model.Actuator):
             f.add_done_callback(self._on_referenced)
 
     def updateMetadata(self, md):
-        super(RotationActuator, self).updateMetadata(md)
-        # If MD_POS_COR has changed, the reported position has changed too.
-        # if md contains value check if in certain range or is float
-        self._updatePosition()
+        for key, value in md.items():
+            print ".................",value
+            if isinstance(value, float) and (0.0 <= abs(value) <= self._cycle/2):
+                super(RotationActuator, self).updateMetadata(md)
+                self._updatePosition()
+                logging.debug("reporting metadata entry %s with value %s." % (value, key))
+            else:
+                logging.exception("value %s for metadata entry %s is not allowed. "
+                                  "Value should be in range -%s/2 and +%s/2." % (value, key, self._cycle, self._cycle))
+                raise ValueError("value %s for metadata entry %s is not allowed." % (value, key))
 
     def _on_referenced(self, future):
         try:
@@ -1742,10 +1746,6 @@ class RotationActuator(model.Actuator):
             self._child.stop({self._caxis})  # prevent any move queued
             self.state._set_value(e, force_write=True)
             logging.exception(e)
-
-    def _update_child_ref(self, value):
-        self._referenced[self._axis] = value[self._caxis]
-        self._updateReferenced()
 
     def _updatePosition(self, _=None):
         """
@@ -1760,10 +1760,11 @@ class RotationActuator(model.Actuator):
         logging.debug("reporting position %s", pos)
         self.position._set_value(pos, force_write=True)
 
-    def _updateReferenced(self):
+    def _updateReferenced(self, _=None):
         """
         update the referenced VA
         """
+        self._referenced[self._axis] = self._child.referenced.value[self._caxis]
         # .referenced is copied to detect changes to it on next update
         self.referenced._set_value(self._referenced.copy(), force_write=True)
 
@@ -1872,4 +1873,4 @@ class RotationActuator(model.Actuator):
 
         self._child.position.unsubscribe(self._updatePosition)
         if hasattr(self, "referenced"):
-            self._child.referenced.subscribe(self._update_child_ref)
+            self._child.referenced.subscribe(self._updateReferenced)
