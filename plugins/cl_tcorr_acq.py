@@ -186,9 +186,6 @@ class CorrelatorScanStream(stream.Stream):
         future._acq_done.wait(5)
         return True
 
-    def _discard_data(self, sed, data):
-        pass
-
     def _runAcquisition(self, future):
 
         self._detector.pixelDuration.value = self.pixelDuration.value
@@ -322,15 +319,17 @@ class CorrelatorScanStream(stream.Stream):
 
         except CancelledError:
             logging.info("Time correlator stream cancelled")
-            self._stop_spot()
             with future._acq_lock:
                 self._acq_state = FINISHED
             raise  # Just don't log the exception
         except Exception:
             logging.exception("Failure during Correlator acquisition")
+            raise
         finally:
             logging.debug("TC acquisition finished")
-            self._sed.data.unsubscribe(self._discard_data)
+            # Make sure all detectors are stopped
+            self._stop_spot()
+            self._detector.data.unsubscribe(self._receive_tc_data)
             future._acq_done.set()
             self._resume_hw_settings()
 
@@ -554,11 +553,7 @@ class CorrelatorScanStream(stream.Stream):
         act_tr = self._emitter.translation.value
 
         if math.hypot(x-act_tr[0], y - act_tr[1]) > 1e-3: # Anything below a thousand of a pixel is just float error
-            logging.warning("Trans = %s instead of %s, will wait a bit" % (act_tr, (x, y)))
-            time.sleep(0.1)
-            act_tr = self._emitter.translation.value
-        if math.hypot(x-act_tr[0], y - act_tr[1]) > 1e-3: # Anything below a thousand of a pixel is just float error
-            raise IOError("Trans = %s instead of %s" % (act_tr, (x, y)))
+            logging.warning("Ebeam trans = %s instead of requested %s", act_tr, (x, y))
 
         self._sed.data.subscribe(self._receive_sem_data)
         # self._sed.softwareTrigger.notify() # Go! (for one acquisition, and then the spot will stay there)
@@ -626,7 +621,7 @@ class CorrelatorScanStream(stream.Stream):
         dat.shape += (1, 1)
 
         dur_cor = time.time() - startt
-        if dur_cor < dwellT*0.99:
+        if dur_cor < dwellT * 0.99:
             logging.error("Correlator data arrived after %g s, while expected at least %g s", dur_cor, dwellT)
         # wait for the SE data, in case it hasn't arrived yet
         if not self.sem_data_received.wait(3):
