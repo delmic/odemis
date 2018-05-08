@@ -395,7 +395,7 @@ class AcquisitionTask(object):
         """
         # If the acquisition is cancelled or failed, we might receive updates
         # from the sub-future a little after. Let's not make a fuss about it.
-        if self._future.is_done():
+        if self._future.done():
             return
 
         # There is a tiny chance that self._current_future is already set to
