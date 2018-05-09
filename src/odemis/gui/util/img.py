@@ -2128,7 +2128,12 @@ def insert_tile_to_image(tile, ovv):
     ovv_sz = ovv.shape[1], ovv.shape[0]
 
     # Tile size, pos in ovv image (px)
-    tile_sz_px = (int(tile_size_m[0] / ovv_mpp[0]), int(tile_size_m[1] / ovv_mpp[1]), c)
+    tile_sz_px = (int(round(tile_size_m[0] / ovv_mpp[0])),
+                  int(round(tile_size_m[1] / ovv_mpp[1])),
+                  c)
+    if 0 in tile_sz_px:
+        logging.debug("Not drawing tile which would be too small %s", tile_sz_px)
+        return ovv
     tile_pos_px = (int(tile_pos_m[0] / ovv_mpp[0]), int(tile_pos_m[1] / ovv_mpp[1]))
     # Change origin of coordinates from center of the image to top left of ovv image,
     # the position indicates the top left part of the tile, not its center.
