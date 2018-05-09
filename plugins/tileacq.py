@@ -53,7 +53,7 @@ from odemis.gui.util import call_in_wx_main
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.2"
+    __version__ = "1.3"
     __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
@@ -69,15 +69,15 @@ class TileAcqPlugin(Plugin):
             "control_type": odemis.gui.CONTROL_INT,  # no slider
         }),
         ("overlap", {
-            "tooltip": "Approximate amount of overlapping area between tiles.",
+            "tooltip": "Approximate amount of overlapping area between tiles",
         }),
 
         ("filename", {
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
         }),
-        ("Stitch", {
-            "tooltip": "Use all the tiles to create a large-scale image"
+        ("stitch", {
+            "tooltip": "Use all the tiles to create a large-scale image at the end of the acquisition",
         }),
         ("expectedDuration", {
         }),
@@ -690,8 +690,9 @@ class TileAcqPlugin(Plugin):
                     logging.debug("Acquisition cancelled")
                     return
 
-                # Sort tiles (largest sem on first position)
-                da_list.append(self.sort_das(das, ss))
+                if self.stitch.value:
+                    # Sort tiles (largest sem on first position)
+                    da_list.append(self.sort_das(das, ss))
 
                 # Check the FoV is correct using the data, and if not update
                 if i == 0:
