@@ -28,6 +28,7 @@ from odemis.model import HwError
 import random
 import threading
 import time
+from decorator import decorator
 
 
 # Based on phdefin.h
@@ -179,6 +180,25 @@ class PHDLL(CDLL):
         - 77: "ERROR_HARDWARE_F14",
         - 78: "ERROR_HARDWARE_F15",
     }
+
+
+@decorator
+def autoretry(f, self, *args, **kwargs):
+    """
+    Decorator to automatically retry a call to a function (once) if it fails
+    with a PHError.
+    This is to handle the fact that almost every command seems to potentially
+    fail with USB_VCMD_FAIL or BULKRD_FAIL randomly (due to issues on the USB
+    connection). Just calling the function again deals with it fine.
+    """
+    try:
+        res = f(self, *args, **kwargs)
+    except PHError as ex:
+        # TODO: GetFlags() + GetHardwareDebugInfo()
+        logging.warning("Will try again after: %s", ex)
+        time.sleep(0.1)
+        res = f(self, *args, **kwargs)
+    return res
 
 
 class PH300(model.Detector):
@@ -451,6 +471,7 @@ class PH300(model.Detector):
         stop_ovfl = 1 if stop else 0
         self._dll.PH_SetStopOverflow(self._idx, stop_ovfl, stopcount)
 
+    @autoretry
     def GetCountRate(self, channel):
         """
         Note: need at least 100 ms per reading (otherwise will return the same value)
@@ -459,31 +480,18 @@ class PH300(model.Detector):
         """
         # TODO: check if we need a lock (to avoid multithread access)
         rate = c_int()
-        try:
-            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
-        except PHError as ex:
-            # TODO: GetFlags() + GetHardwareDebugInfo()
-            logging.warning("Will try again after: %s", ex)
-            time.sleep(0.1)
-            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
+        self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
         return rate.value
 
+    @autoretry
     def ClearHistMem(self, block=0):
         """
         block (0 <= int): block number to clear
         """
         assert(0 <= block)
-        # TODO: It seems that pretty much every function can actually fail with
-        # -36 or -37. In most cases, just waiting a little and trying again is
-        # enough, but might need to have more generic solution.
-        try:
-            self._dll.PH_ClearHistMem(self._idx, block)
-        except PHError as ex:
-            # TODO: GetFlags() + GetHardwareDebugInfo()
-            logging.warning("Will try again after: %s", ex)
-            time.sleep(0.1)
-            self.ClearHistMem()
+        self._dll.PH_ClearHistMem(self._idx, block)
 
+    @autoretry
     def StartMeas(self, tacq):
         """
         tacq (0<int): acquisition time in milliseconds
@@ -491,9 +499,11 @@ class PH300(model.Detector):
         assert(ACQTMIN <= tacq <= ACQTMAX)
         self._dll.PH_StartMeas(self._idx, tacq)
 
+    @autoretry
     def StopMeas(self):
         self._dll.PH_StopMeas(self._idx)
 
+    @autoretry
     def CTCStatus(self):
         """
         Reports the status of the acquisition (CTC)
@@ -503,6 +513,7 @@ class PH300(model.Detector):
         self._dll.PH_CTCStatus(self._idx, byref(ctcstatus))
         return ctcstatus.value > 0
 
+    @autoretry
     def GetHistogram(self, block=0):
         """
         block (0<=int): only useful if routing
@@ -511,14 +522,7 @@ class PH300(model.Detector):
         buf = numpy.empty((1, HISTCHAN), dtype=numpy.uint32)
 
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
-        try:
-            self._dll.PH_GetHistogram(self._idx, buf_ct, block)
-        except PHError as ex:
-            # TODO: GetFlags() + GetHardwareDebugInfo()
-            logging.warning("Will try again after: %s", ex)
-            time.sleep(0.1)
-            self._dll.PH_GetHistogram(self._idx, buf_ct, block)
-
+        self._dll.PH_GetHistogram(self._idx, buf_ct, block)
         return buf
 
     def GetElapsedMeasTime(self):
@@ -954,6 +958,9 @@ class FakePHDLL(object):
         ctcstatus = _deref(p_ctcstatus, c_int)
         if self._acq_end > time.time():
             ctcstatus.value = 0  # 0 if still running
+            # DEBUG
+#             if random.randint(0, 10) == 0:
+#                 raise PHError(-37, PHDLL.err_code[-37])  # bad luck
         else:
             ctcstatus.value = 1
 
