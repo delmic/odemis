@@ -467,6 +467,9 @@ def rescale_hq(data, shape):
     return (DataArray or numpy.array): The image rescaled. It has the same shape
         as the 'shape' parameter. The returned object has the same type of the 'data' parameter
     """
+    if 0 in shape:
+        raise ValueError("Requested shape is %s, but it should be at least 1 px in each dimension" % (shape,))
+
     scale = tuple(n / o for o, n in zip(data.shape, shape))
 
     if hasattr(data, "metadata"):
