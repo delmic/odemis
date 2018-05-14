@@ -1,3 +1,46 @@
+odemis (2.8.0-1) precise; urgency=medium
+
+  * New version: 2.8
+  * Main new features:
+    - GUI detects filename pattern entered by user and follows it
+    - Option to insert streams from a second acquisition file in the Analysis tab
+    - Tile plugin will show a warning if attempting to acquire too many
+      tiles given the computer memory available
+    - Background subtraction available in SPARC mirror alignment
+    - Support for Rigol DG1000z as clock generator
+    - Support for synchronisation with PicoQuant SymPhoTime
+  * Main bugs fixed:
+    - Spectrum and chronogram plot rounded too much the values displayed
+    - Tile acquisition doesn't require anymore a lot of memory when stitching is disabled
+    - After exporting a spectrum, the spectrum plot would not display correctly the legend anymore
+  * Improvements and bug fixes already present in v2.7 branch:
+    - Support for Zeiss SEM contron via the Remcon interface
+    - Support for software interlock between andorshrk and external component
+    - Timelapse plugin has option to acquire the SEM image only once, at the end
+    - When doing large moves, don't show every intermediary position in the overview image (SECOM/DELPHI)
+    - plugin tile-acq wouldn't accept to store filenames containing "%"
+    - stitching would too easily fail on the tiles on the back zigzag line
+    - ensure the lens1 is always in place for acquisition (SPARC)
+    - fix (rare) GUI crash when a plugin would display an acquisition in the analysis tab
+    - Exporting pyramidal TIFF image didn't use the right field-of-view
+    - Windows version would try to write libtiff header file in directory without permissions
+    - Windows version would fail to start if username contained non-ascii characters
+    - Stage movement of Zeiss SEM always failing if axes are inverted
+    - Ensure the backend log file is rotated as soon as it's > 100Mb
+    - Tile plugin would try to open stiched file, even if no stitching was performed
+    - Associate Odemis Viewer to TIFF and HDF5 files in Windows too
+    - Show PicoHarp SyncDivider option in the time-correlator plugin
+    - Support saving pyramidal image in Serialized TIFF too
+    - Add SyncDivider control to the picoquant driver
+    - Display spectrometer camera in SPARC alignment if no calibration camera
+    - Avoid closed-loop axes staying locked on the physical limits (SECOM)
+    - Handle renamed Serialized TIFF with multiple streams
+    - Don't move the chamber view based on the stage position (SPARC)
+    - Store snapshot of spectrum with correct metadata (SPARC)
+    - Store the output of cliccd as a float, to avoid quantisation (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 14 May 2018 12:55:21 +0200
+
 odemis (2.7.0-1) precise; urgency=medium
 
   * New version: 2.7
