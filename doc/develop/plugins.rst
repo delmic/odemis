@@ -97,32 +97,33 @@ The Plugin class provides a few helper functions:
 
       * Text (on the whole top)
 
+      * Settings (on the top right)
+
       * View (on the left) + Streams (on the bottom right)
 
-      * Settings (on the top right)
+      * Information text (at the bottom)
 
       * Progress bar (at the bottom)
 
       * Buttons (at the very bottom)
 
-    .. py:method:: __init__(plugin, title, text="")
+    .. py:method:: __init__(plugin, title, text=None)
 
       Creates a window for acquisition.
+      Note that when not used anymore, it _must_ be deleted by calling `Destroy()`.
 
       :param plugin: The plugin that creates that window (ie, 'self').
-
       :param title: The title of the window.
       :type title: str
-
-      :param text: Informational text displayed at the top.
-      :type text: str
+      :param text: Informational text displayed at the top. If None, the text
+          is hidden.
+      :type text: str or None
 
     .. py:method:: addSettings(objWithVA, conf=None)
 
       Adds settings as one widget on a line for each VigilantAttribute in the object.
 
       :param objWithVA: An object that contains :py:class:`VigilantAttribute` s.
-
       :param conf: Allows to override the automatic selection of the widget.
          Among other things, it allows to force a StringVA to specify a filename with
          a file selection dialog.  See odemis.gui.conf.data for documentation.
@@ -137,20 +138,22 @@ The Plugin class provides a few helper functions:
       the window and the button number will be the return code of the dialog.
 
       :param label: text displayed on the button
-
       :param callback: is the function to be called 
          when the button is pressed (with the event and the dialog as arguments).
+      :param face_colour: Colour of the button, among "def", "blue", "red", and
+         "orange".
 
-    .. py:method:: addStream(stream)
+    .. py:method:: addStream(stream, index=0)
 
-       Adds a stream to the canvas, and a stream panel to the panel box.
-       It also ensure the panel box and canvas as shown.
-       If this method is not called, the canvas is hidden.
+       Adds a stream to the viewport, and a stream entry to the panel box.
+       It also ensures the panel box and viewport are shown.
+       If this method is not called, the stream entry and viewports are hidden.
 
        :param stream: Stream to be shown.
-
-       :returns: The stream panel created to show the stream in the panel.
-       :rtype: StreamPanel
+       :param index: Index of the viewport to add the stream to.
+          0 = left, 1 = right, 2 = spectrum viewport. If None, it will not show the stream
+          on any viewport (and it will be added to the ``.hidden_view``)
+       :type index: int or None
 
     .. py:method:: showProgress(future)
 
@@ -159,6 +162,16 @@ The Plugin class provides a few helper functions:
        As long as progress is active, the buttons are disabled. 
        If future is cancellable, show a cancel button next to the progress bar.
 
+    .. py:method:: setAcquisitionInfo(self, text=None, lvl=logging.INFO)
+
+       Displays information label above progress bar.
+
+       :param text: text to be displayed. If None is passed, the information
+          label will be hidden.
+       :type text: str or None
+       :param lvl: log level, which selects the display colour.
+       :type lvl: int, from logging.*
+
     .. py:method:: ShowModal()
 
        Inherited from the standard wx.Dialog. It shows the window and prevents from
@@ -166,21 +179,25 @@ The Plugin class provides a few helper functions:
 
     .. py:method:: Destroy()
 
-       Inherited from the standard wx.Dialog. Hides the window.
+       Inherited from the standard wx.Dialog. Hides the window, and cleans it up
+       from the memory. It should *always* be called after the window is not used.
+       It is not safe to call it several times. You can protect from calling it
+       on an already destroyed Dialog *dlg* by using ``if dlg:``.
 
-    .. py:attribute:: text 
+    .. py:attribute:: text
 
        (wx.StaticText): the widget containing the description text. Allows to 
        change the text displayed.
-
-    .. py:attribute:: canvas
-
-       (MicCanvas): The canvas that is shown in the view. It allows adding overlay.
 
     .. py:attribute:: buttons
 
        (list of wx.Button): The buttons which were added.
        It allows enabling/disabling buttons and change label.
+
+    .. py:attribute:: microscope_view
+
+       (MicroscopeView): The view that shows the streams. It allows adding overlays,
+       and modifying the field of view.
 
 
 Debugging tips
@@ -253,6 +270,9 @@ When that entry is selected, it shows an acquisition window and then acquire
             ans = dlg.ShowModal()
             if ans == 1:
                 self.showAcquisition(self.filename.value)
+
+            if dlg: # If dlg hasn't been destroyed yet
+                dlg.Destroy()
 
         def acquire(self, dlg):
             ccd = self.main_data.ccd
