@@ -312,6 +312,8 @@ class TileAcqPlugin(Plugin):
 
         # Don't hold references
         self._unsubscribe_vas()
+        if dlg: # If dlg hasn't been destroyed yet
+            dlg.Destroy()
         self._dlg = None
 
     # black list of VAs name which are known to not affect the acquisition time
@@ -358,10 +360,8 @@ class TileAcqPlugin(Plugin):
         # streams. On the SECOM/DELPHI, they are the same (for now)
         live_st = self._get_streams()
         tab_data = self.main_app.main_data.tab.value.tab_data_model
-        if hasattr(tab_data, "acquisitionStreams"):  # Odemis v2.7+
+        if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
-        elif hasattr(tab_data, "acquisitionView"):  # Odemis v2.6 and earlier
-            acq_st = tab_data.acquisitionView.getStreams()
         else:
             # No special acquisition streams
             return live_st

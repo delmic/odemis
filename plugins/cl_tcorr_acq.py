@@ -869,6 +869,9 @@ class Correlator2D(Plugin):
         else:
             logging.debug("Unknown return code %d", ans)
 
+        if dlg: # If dlg hasn't been destroyed yet
+            dlg.Destroy()
+
     def crop_time_dim(self, das):
         """
         For each DataArray, crop the time dimension to some "manageable" size

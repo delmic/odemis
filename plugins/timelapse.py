@@ -49,7 +49,7 @@ import wx
 
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
-    __version__ = "1.1"
+    __version__ = "1.2"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -215,6 +215,9 @@ class TimelapsePlugin(Plugin):
         except AttributeError:
             pass # Not a SPARC
 
+        # Stop the stream(s) playing to not interfere with the acquisition
+        stream_paused = tab.streambar_controller.pauseStreams()
+
         self.filename.value = self._get_new_filename()
         dlg = AcquisitionDialog(self, "Timelapse acquisition",
                                 "The same streams will be acquired multiple times, defined by the 'number of acquisitions'.\n"
@@ -249,7 +252,14 @@ class TimelapsePlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
+        if dlg: # If dlg hasn't been destroyed yet
+            dlg.Destroy()
+
     def acquire(self, dlg):
+        main_data = self.main_app.main_data
+        str_ctrl = main_data.tab.value.streambar_controller
+        stream_paused = str_ctrl.pauseStreams()
+
         nb = self.numberOfAcquisitions.value
         p = self.period.value
         ss, last_ss = self._get_acq_streams()

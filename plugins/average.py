@@ -152,6 +152,9 @@ class AveragePlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
+        if dlg: # If dlg hasn't been destroyed yet
+            dlg.Destroy()
+
     def _update_exp_dur(self, _=None):
         """
         Called when VA that affects the expected duration is changed

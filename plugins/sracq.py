@@ -248,6 +248,9 @@ class SRAcqPlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
+        if dlg: # If dlg hasn't been destroyed yet
+            dlg.Destroy()
+
     def acquire(self, dlg):
         # Make sure the stream is not playing
         self._stream.should_update.value = False
