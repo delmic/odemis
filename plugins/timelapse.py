@@ -37,7 +37,8 @@ import logging
 import math
 from odemis import model, dataio, acq
 from odemis.acq import stream
-from odemis.acq.stream._base import UNDEFINED_ROI
+from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
+    SpectrumStream, UNDEFINED_ROI, StaticStream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -152,6 +153,9 @@ class TimelapsePlugin(Plugin):
             except ValueError:
                 pass  # spotStream was not there anyway
 
+        for s in ss:
+            if isinstance(s, StaticStream):
+                ss.remove(s)
         return ss
 
     def _get_acq_streams(self):
@@ -164,7 +168,8 @@ class TimelapsePlugin(Plugin):
         if not self._dlg:
             return []
 
-        live_st = self._dlg.microscope_view.getStreams()
+        live_st = (self._dlg.microscope_view.getStreams() +
+                   self._dlg.hidden_view.getStreams())
         logging.debug("View has %d streams", len(live_st))
 
         # On the SPARC, the acquisition streams are not the same as the live
@@ -216,7 +221,7 @@ class TimelapsePlugin(Plugin):
             pass # Not a SPARC
 
         # Stop the stream(s) playing to not interfere with the acquisition
-        stream_paused = tab.streambar_controller.pauseStreams()
+        tab.streambar_controller.pauseStreams()
 
         self.filename.value = self._get_new_filename()
         dlg = AcquisitionDialog(self, "Timelapse acquisition",
@@ -226,7 +231,13 @@ class TimelapsePlugin(Plugin):
         dlg.addSettings(self, self.vaconf)
         ss = self._get_live_streams(tab.tab_data_model)
         for s in ss:
-            dlg.addStream(s)
+            if isinstance(s, (ARStream, SpectrumStream, MonochromatorSettingsStream)):
+                # TODO: instead of hard-coding the list, a way to detect the type
+                # of live image?
+                logging.info("Not showing stream %s, for which the live image is not spatial", s)
+                dlg.addStream(s, index=None)
+            else:
+                dlg.addStream(s)
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
@@ -235,11 +246,10 @@ class TimelapsePlugin(Plugin):
 
         # Update acq time when streams are added/removed
         dlg.microscope_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
+        dlg.hidden_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         # TODO: update the acquisition time whenever a setting changes
 
         # TODO: disable "acquire" button if no stream selected
-
-        # TODO: don't even try to display streams which have no spatial projection
 
         # TODO: also display the repetition and axis settings for the SPARC streams.
 
