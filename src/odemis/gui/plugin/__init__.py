@@ -328,7 +328,6 @@ class AcquisitionDialog(xrcfr_plugin):
 
         self.entries = []  # Setting entries
         self._acq_future_connector = None
-        self.canvas = None
         self.buttons = []  # The buttons
         self.current_future = None
         self.btn_cancel.Bind(wx.EVT_BUTTON, self._cancel_future)
@@ -343,12 +342,12 @@ class AcquisitionDialog(xrcfr_plugin):
         self.viewport_l.setView(self.microscope_view, self._dmodel)
         self.microscope_view_r = MicroscopeView("Plugin View right")
         self.viewport_r.setView(self.microscope_view_r, self._dmodel)
-        self.microscope_view_spectrum = MicroscopeView("Plugin View spectrum")
-        self.viewport_spectrum.setView(self.microscope_view_spectrum, self._dmodel)
+        self.spectrum_view = MicroscopeView("Plugin View spectrum")
+        self.spectrum_viewport.setView(self.spectrum_view, self._dmodel)
         self._dmodel.focussedView.value = self.microscope_view
         self._dmodel.views.value = [self.microscope_view, self.microscope_view_r,
-                                    self.microscope_view_spectrum]
-        self._viewports = (self.viewport_l, self.viewport_r, self.viewport_spectrum)
+                                    self.spectrum_view]
+        self._viewports = (self.viewport_l, self.viewport_r, self.spectrum_viewport)
 
         self.streambar_controller = StreamBarController(
             self._dmodel,

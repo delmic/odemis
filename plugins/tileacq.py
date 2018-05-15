@@ -133,7 +133,7 @@ class TileAcqPlugin(Plugin):
         if not self._dlg:
             return []
         ss = self._dlg.microscope_view.getStreams() + self._dlg.microscope_view_r.getStreams() + \
-            self._dlg.microscope_view_spectrum.getStreams()
+            self._dlg.spectrum_view.getStreams()
         logging.debug("View has %d streams", len(ss))
         return ss
 
