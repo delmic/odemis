@@ -62,7 +62,7 @@ The following subclasses exist:
   Abstract class for all specialized streams which are actually a combination
   of multiple streams acquired simultaneously. The main difference from a
   normal stream is the init arguments are Streams, and .raw is composed of all
-  the .raw from the sub-streams.
+  the .raw from the sub-streams. # TODO: explain raw : not explained before here
 
   - SEMCCDMDStream:
     Abstract class for multiple detector Stream made of SEM + CCD.
@@ -87,7 +87,7 @@ The following subclasses exist:
     one for the SED, and the second one for the CL or Monochromator. 
 
 - RepetitionStream:
-  Abstract class for streams which are actually a set multiple acquisition
+  Abstract class for streams which are actually a set of multiple acquisitions
   repeated over a grid.
 
   - SpectrumSettingsStream:
