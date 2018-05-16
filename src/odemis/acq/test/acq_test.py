@@ -279,8 +279,10 @@ class SPARCTestCase(unittest.TestCase):
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
         self.assertLessEqual(self.end, time.time())
-        self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
+
+        time.sleep(0.1)
+        self.assertEqual(self.done, 1)
 
     def test_sync_path_guess(self):
         """
@@ -336,7 +338,6 @@ class SPARCTestCase(unittest.TestCase):
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
         self.assertLessEqual(self.end, time.time())
-        self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
 
         # assert optical path configuration
@@ -344,6 +345,9 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(self.lenswitch.position.value, exp_pos["lens-switch"])
         self.assertEqual(self.spec_det_sel.position.value, exp_pos["spec-det-selector"])
         self.assertEqual(self.ar_spec_sel.position.value, exp_pos["ar-spec-selector"])
+
+        time.sleep(0.1)
+        self.assertEqual(self.done, 1)
 
     def test_leech(self):
         """
@@ -401,14 +405,17 @@ class SPARCTestCase(unittest.TestCase):
 
         self.assertGreaterEqual(self.updates, 1)  # at least one update at end
         self.assertLessEqual(self.end, time.time())
-        self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
+
+        time.sleep(0.1)
+        self.assertEqual(self.done, 1)
 
         for da in data:
             pcmd = da.metadata[model.MD_EBEAM_CURRENT_TIME]
             self.assertEqual(len(pcmd), 2)
 
     def on_done(self, future):
+        logging.debug("On done called")
         self.done += 1
 
     def on_progress_update(self, future, start, end):
