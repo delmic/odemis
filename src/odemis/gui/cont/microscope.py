@@ -1302,9 +1302,15 @@ class DelphiStateController(SecomStateController):
             future._delphi_load_state = f
             f.result()
 
-            f = self._main_data.focus.reference({"z"})
-            future._delphi_load_state = f
-            f.result()
+            if self.good_optical_focus is not None:
+                f = self._main_data.focus.reference({"z"})
+                future._delphi_load_state = f
+                try:
+                    f.result()
+                except Exception as ex:
+                    # It's annoying (and it's a sign of an issue with the hardware),
+                    # but we can deal with the focus not being referenced
+                    logging.error("Focus referencing failed: %s. Optical focus will need to be done manually.", ex)
 
             if future._delphi_load_state == CANCELLED:
                 return
