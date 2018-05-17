@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division, absolute_import, print_function
 
 import argparse
 import logging
@@ -392,7 +393,7 @@ class BackendStarter(object):
         wx.CallAfter(self._component_frame.EndModal, ret)
 
     def _show_component(self, name, state):
-        print "Component %s: %s" % (name, state)
+        print("Component %s: %s" % (name, state))
         # It needs to run in the GUI thread
         wx.CallAfter(self._show_component_in_frame, name, state)
 
