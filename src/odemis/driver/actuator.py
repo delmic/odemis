@@ -24,11 +24,13 @@ from __future__ import division
 
 import collections
 from concurrent import futures
+from concurrent.futures._base import CancelledError
 import copy
 import logging
 import math
 import numbers
 import numpy
+import itertools
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
@@ -932,7 +934,6 @@ class FixedPositionsActuator(model.Actuator):
     one axis/actuator and it can also apply cyclic move e.g. in case the
     actuator moves a filter wheel.
     """
-
     def __init__(self, name, role, children, axis_name, positions, cycle=None,
                  inverted=None, **kwargs):
         """
@@ -1088,7 +1089,7 @@ class FixedPositionsActuator(model.Actuator):
                 else:
                     move = {self._caxis: mod1}
             else:
-                move = {self._caxis:-mod2}
+                move = {self._caxis: -mod2}
                 self._move_sum -= mod2
 
             self._child.moveRel(move).result()
@@ -1366,3 +1367,563 @@ class CombinedSensorActuator(model.Actuator):
 
         self._child.position.unsubscribe(self._update_child_position)
         self._sensor.position.unsubscribe(self._updatePosition)
+
+
+class CombinedFixedPositionActuator(model.Actuator):
+    """
+    A generic actuator component which only allows moving to fixed positions
+    defined by the user upon initialization. It is actually a wrapper to move
+    two rotational actuators to fixed relative and absolute position (e.g.
+    two polarization filters).
+    """
+
+    def __init__(self, name, role, children, caxes_map, axis_name, positions, fallback,
+                 atol=(0.0, 0.0), inverted=None, **kwargs):
+        """
+        name (string)
+        role (string)
+        children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
+        caxes_map (list): axis names in the children actuator
+        axis_name (string): axis name in this actuator
+        positions (dict str -> list with two entries): position combinations possible for children axes
+                                                       reported position name for axis  --> positions of each child axis
+        fallback (str): position string reported when none of combination of child positions fits the children
+                        positions. Fallback position can be equal to one of the positions allowed. If fallback is not
+                        equal to one of the positions allowed, it is not possible to request moving to this fallback
+                        position.
+        atol: absolute tolerance in the position of each child
+        """
+        if inverted:
+            raise ValueError("Axes shouldn't be inverted")
+        if len(children) != 2:
+            raise ValueError("CombinedFixedPositionActuator needs precisely two children")
+        if len(caxes_map) != 2:
+            raise ValueError("CombinedFixedPositionActuator needs precisely two axis names for children axes")
+        if len(atol) != 2:
+            raise ValueError("CombinedFixedPositionActuator needs list of "
+                             "precisely two values for tolerance in position")
+        for key, pos in positions.items():
+            if not (len(pos) == 2 or type(pos) == str):
+                raise ValueError("Position %s needs to be of format list with exactly two entries. "
+                                 "Got instead position %s." % (key, pos))
+
+        self._axis_name = axis_name
+        self._positions = positions
+        self._atol = atol
+        self._fallback = fallback
+
+        self._children = [children[r] for r in sorted(children.keys())]
+        self._children_futures = None
+        # axis names of children
+        self._axes_map = [key for key in sorted(children.keys())]
+        # axis names of axes of children
+        self._caxes_map = caxes_map
+
+        for i, (c, ac) in enumerate(zip(self._children, self._caxes_map)):
+            if ac not in c.axes:
+                raise ValueError("Child %s has no axis named %s" % (c.name, ac))
+
+            if hasattr(c.axes[ac], "range"):
+                mn, mx = c.axes[ac].range
+                for key, pos in self._positions.items():
+                    if not mn <= pos[i] <= mx:
+                        raise ValueError("Position %s with key %s is out of range for children." % (pos[i], key))
+
+            elif hasattr(c.axes[ac], "choices"):
+                for pos in self._positions.values():
+                    if pos[i] not in c.axes[ac].choices:
+                        raise ValueError("Position %s is not in range of choices for children." % pos[i])
+
+        axes = {axis_name: model.Axis(choices=set(positions.keys() + [fallback]))}
+
+        # this set ._axes and ._children
+        model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # create position VA and subscribe to position
+        self.position = model.VigilantAttribute({}, readonly=True)
+        for c in self._children:
+            # subscribe to variable of each children axis and call now with init=True
+            c.position.subscribe(self._updatePosition, init=True)
+
+        # check if children axes can be referenced, create referenced VA, subscribe to referenced
+        # list with entries True and/or False for children
+        self._children_refd = [model.hasVA(child, "referenced") and caxis in child.referenced.value
+                               for child, caxis in zip(self._children, self._caxes_map)]
+        if any(self._children_refd):
+            # whether the axes are referenced
+            self.referenced = model.VigilantAttribute({}, readonly=True)
+            for c in itertools.compress(self._children, self._children_refd):
+                # subscribe to variable of each children axis and call now with init=True
+                c.referenced.subscribe(self._updateReferenced, init=True)
+
+    def _readPositionfromChildren(self):
+        """
+        check if the children axes positions correspond to any allowed combined axis position
+        :return: position key in position dict for child axis
+        """
+        pos_children_cur = [c.position.value[ca] for c, ca in zip(self._children, self._caxes_map)]
+
+        # check whether children positions are in consistency with positions allowed
+        for pos_key, pos_children in self._positions.items():
+            for ap, cp, atol in zip(pos_children_cur, pos_children, self._atol):
+                if isinstance(cp, numbers.Real) and not util.almost_equal(ap, cp, atol=atol, rtol=0):
+                    break
+            else:  # Never found a position _not_ different from actual children axes positions => it's a match!
+                return pos_key
+        else:
+            raise LookupError("Did not find any matching position. Reporting position %s." % pos_children_cur)
+
+    def _updatePosition(self, _=None):
+        # _=None: optional argument, needed for VA calls
+        """
+        update the position VA
+        """
+        try:
+            pos_key_matching = self._readPositionfromChildren()
+
+            # it's read-only, so we change it via _value
+            self.position._set_value({self._axis_name: pos_key_matching}, force_write=True)
+            logging.debug("reporting position %s", self.position.value)
+
+        except LookupError:
+            self.position._set_value({self._axis_name: self._fallback}, force_write=True)
+            pos_children = [c.position.value[ca] for c, ca in zip(self._children, self._caxes_map)]
+            logging.warning("Current position does not match any known position. Reporting position %s. "
+                            "Positions of %s are %s." % (self.position.value, self._caxes_map, pos_children))
+
+    def _updateReferenced(self, _=None):
+        """
+        update the referenced VA
+        """
+        # Referenced if all the (referenceable) children are referenced
+        refd = all(c.referenced.value[ac] for c, ac, r in zip(self._children, self._caxes_map, self._children_refd)
+                   if r)
+        # .referenced is copied to detect changes to it on next update
+        self.referenced._set_value({self._axis_name: refd}, force_write=True)
+        logging.debug("Reporting referenced axis %s as %s.", self._axis_name, refd)
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        raise NotImplementedError("Relative move on combined fixed positions axis not supported")
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+
+        self._checkMoveAbs(pos)
+        if pos[self._axis_name] == self._fallback:
+            # raise error if user asks to move to fallback position
+            raise ValueError("Not allowed to move to fallback position %s" % self._fallback)
+
+        f = self._executor.submit(self._doMoveAbs, pos)
+
+        # TODO: will be needed when cancel is implemented
+        # self._cancelled = False
+        # f = CancellableFuture()
+        # f = self._executor.submitf(f, self._doMoveAbs, pos)
+        # f.task_canceller = self._cancelMovement
+
+        return f
+
+    # TODO: needs to be implemented properly
+    # def _cancelMovement(self, future):
+    #     cancelled = False
+    #     if self._children_futures:
+    #         if len(self._children_futures) == 0:
+    #             return True
+    #         for f in self._children_futures:
+    #             cancelled = cancelled | f.cancel()
+    #     self._cancelled = cancelled
+    #     return cancelled
+
+    def _doMoveAbs(self, pos):
+        _pos = self._positions[pos[self._axis_name]]
+        futures_children = []
+        # TODO: needed when cancel will be implemented
+        # self._children_futures = []
+
+        try:
+            # unsubscribe children axes VAs while moving: during moving no reporting of the children axes positions
+            # is conducted as they would report positions, which do not match any position specified in positions.
+            # The _updatePosition function would continuously report the fallback position.
+            for c in self._children:
+                c.position.unsubscribe(self._updatePosition)
+
+            for child, ac, cp in zip(self._children, self._caxes_map, _pos):
+                f = child.moveAbs({ac: cp})
+                futures_children.append(f)
+                # TODO: needed when cancel will be implemented
+                # self._children_futures.append(f)
+
+            # just wait for all futures to finish
+            exceptions = []
+            for f in futures_children:
+                try:
+                    f.result()
+                except Exception as ex:
+                    logging.debug("Exception was raised by %s." % ex)
+                    exceptions.append(ex)
+
+            # TODO: needed when cancel will be implemented
+            # for f in self._children_futures:
+            #     try:
+            #         f.result()
+            #     except CancelledError:
+            #         logging.debug("Movement was cancelled.")
+            #     except Exception as ex:
+            #         logging.debug("Exception was raised by %s." % ex)
+            #         exceptions.append(ex)
+            # self._children_futures = None
+
+            self._updatePosition()
+
+            if exceptions:
+                raise exceptions[0]
+
+        finally:
+            # Resubscribe again after movement is done in finally to ensure that VAs are resubscribed also when an
+            # unusual event has occurred (e.g. cancel).
+            for c in self._children:
+                c.position.subscribe(self._updatePosition)
+
+    @isasync
+    def reference(self, axis):
+        if not axis:
+            return model.InstantaneousFuture()
+        self._checkReference(axis)
+        f = self._executor.submit(self._doReference, axis)
+
+        return f
+
+    # use doc string from model.actuator.reference
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def _doReference(self, axes):
+        try:
+            # unsubscribe children axes VAs while moving: during moving no reporting of the children axes positions
+            # is conducted as they would report positions, which do not match any position specified in positions.
+            # The _updatePosition function would continuously report the fallback position.
+            for c in self._children:
+                c.position.unsubscribe(self._updatePosition)
+
+            # try:
+            futures = []
+            for child, caxis in zip(self._children, self._caxes_map):
+                f = child.reference({caxis})
+                futures.append(f)
+
+            # just wait for all futures to finish
+            for f in futures:
+                f.result()
+
+            try:
+                # check if referencing pos matches any position allowed
+                self._readPositionfromChildren()
+            except LookupError:
+                # If we just did referencing and ended up to an unsupported position,
+                # move to closest supported position
+                pos_children = [c.position.value[ca] for c, ca in zip(self._children, self._caxes_map)]
+                pos_distances = {key: abs(pos_children[0] - pos[0]) + abs(pos_children[1] + pos[1])
+                                 for key, pos in self._positions.items()}
+                pos_key_closest = util.index_closest(0.0, pos_distances)
+                self._doMoveAbs({self._axis_name: pos_key_closest})
+        finally:
+            # Resubscribe again after movement is done in finally to ensure that VAs are resubscribed also when an
+            # unusual event has occurred (e.g. cancel).
+            for c in self._children:
+                c.position.subscribe(self._updatePosition)
+
+    def stop(self, axes=None):
+        """
+        stops the motion
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
+        """
+        # Empty the queue for the given axes
+        if self._executor:
+            self._executor.cancel()
+
+        if axes is not None and self._axis_name not in axes:
+            logging.warning("Trying to stop without any existing axis")
+            return
+
+        threads = []
+        for child, ac in zip(self._children, self._caxes_map):
+            # it's synchronous, but we want to stop all of them as soon as possible
+            thread = threading.Thread(name="Stopping axis", target=child.stop, args=({ac},))
+            thread.start()
+            threads.append(thread)
+
+        # wait for completion
+        for thread in threads:
+            thread.join(1)
+            if thread.is_alive():
+                logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+        for c in self._children:
+            c.position.unsubscribe(self._updatePosition)
+        for c in itertools.compress(self._children, self._children_refd):
+            c.referenced.unsubscribe(self._updateReferenced)
+
+
+class RotationActuator(model.Actuator):
+    """
+    Wrapper component for a single actuator axis which does complete rotations but reports it as a (almost) infinite
+    linear axis. It ensures that a move is done by going via the fastest direction, that referencing is done regularly
+    in order to avoid error accumulation in the position and converts the reported position to a limited range
+    0 -> cycle. It also supports to pass an offset to the position conversion, via the MD_POS_COR metadata.
+    """
+
+    def __init__(self, name, role, children, axis_name, cycle=2*math.pi, inverted=None, **kwargs):
+        """
+        name (string)
+        role (string)
+        children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
+        axis_name (str): axis name in the child actuator
+        cycle (float): 0 < float. Default value = 2pi.
+        """
+        if inverted:
+            raise ValueError("Axes shouldn't be inverted")
+
+        if len(children) != 1:
+            raise ValueError("RotationActuator needs precisely one child")
+
+        self._cycle = cycle
+        # counter to check when current position has overrun cycle
+        # and is close to zero again (pos and neg direction)
+        self._move_sum = 0
+        # check when a specified number of rotations was performed
+        self._move_num_total = 0
+        axis, child = children.items()[0]
+        self._axis = axis
+        self._child = child
+        self._child_future = None
+        self._caxis = axis_name
+
+        # Executor used to reference and move to nearest position
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        if not isinstance(child, model.ComponentBase):
+            raise ValueError("Child %s is not a component." % (child,))
+        if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+            raise ValueError("Child %s is not an actuator." % child.name)
+        if not self._cycle >= 0:
+            raise ValueError("Cycle needs to be a positive number. Got value %s." % self._cycle)
+
+        # just an offset to reference switch position
+        # 5% of cycle value should be sufficient to take care of the accumulated rotation error
+        self._offset = self._cycle*0.05
+
+        ac = child.axes[axis_name]
+        # dict {axis_name --> driver}
+        axes = {axis: model.Axis(range=(0, self._cycle), unit=ac.unit)}  # TODO: allow the user to override the unit?
+
+        model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
+
+        # set offset due to mounting of components (float)
+        self._metadata[model.MD_POS_COR] = 0.
+
+        self.position = model.VigilantAttribute({}, readonly=True)
+
+        logging.debug("Subscribing to position of child %s", child.name)
+        # subscribe to variable and call now with init=True
+        child.position.subscribe(self._updatePosition, init=True)
+
+        if model.hasVA(child, "referenced") and axis_name in child.referenced.value:
+            self._referenced = {}
+            self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
+            # subscribe to variable and call now with init=True
+            child.referenced.subscribe(self._updateReferenced, init=True)
+
+            # If the axis can be referenced => do it now (and move to a known position)
+            # In case of cyclic move always reference
+            if not self.referenced.value[axis]:
+                # The initialisation will not fail if the referencing fails
+                f = self.reference({axis})
+                f.add_done_callback(self._on_referenced)
+
+    def updateMetadata(self, md):
+        for key, value in md.items():
+            if isinstance(value, numbers.Real) and (0 <= abs(value) <= self._cycle/2):
+                super(RotationActuator, self).updateMetadata(md)
+                self._updatePosition()
+                logging.debug("reporting metadata entry %s with value %s." % (value, key))
+            else:
+                logging.error("value %s for metadata entry %s is not allowed. "
+                                  "Value should be in range -%s/2 and +%s/2." % (value, key, self._cycle, self._cycle))
+                raise ValueError("value %s for metadata entry %s is not allowed." % (value, key))
+
+    def _on_referenced(self, future):
+        try:
+            future.result()
+        except Exception as e:
+            self._child.stop({self._caxis})  # prevent any move queued
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
+
+    def _updatePosition(self, _=None):
+        """
+        update the position VA
+        """
+        p = self._child.position.value[self._caxis] - self._metadata[model.MD_POS_COR]
+        p %= self._cycle
+        pos = {self._axis: p}
+        logging.debug("reporting position %s", pos)
+        self.position._set_value(pos, force_write=True)
+
+    def _updateReferenced(self, _=None):
+        """
+        update the referenced VA
+        """
+        # get child VA value, update dict value
+        self._referenced[self._axis] = self._child.referenced.value[self._caxis]
+        # ._referenced is copied to detect changes to it on next update
+        # update VA value
+        self.referenced._set_value(self._referenced.copy(), force_write=True)
+
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the rotation actuator by a defined shift.
+        shift dict(string-> float): name of the axis and shift
+        """
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        f = self._executor.submit(self._doMoveRel, shift)
+
+        # TODO: needed when cancel will be implemented
+        # f = CancellableFuture()
+        # f = self._executor.submitf(f, self._doMoveRel, shift)
+        # f.task_canceller = self._cancelMovement
+
+        return f
+
+    def _doMoveRel(self, shift):
+        """
+        shift dict(string-> float): name of the axis and shift
+        """
+        cur_pos = self._child.position.value[self._caxis]
+        pos = cur_pos + shift[self._axis]
+        self._doMoveAbs({self._axis: pos})
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the actuator to the defined position for a given axis.
+        pos dict(string-> float): name of the axis and position
+        """
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        f = self._executor.submit(self._doMoveAbs, pos)
+
+        # TODO: needed when cancel will be implemented
+        # f = CancellableFuture()
+        # f = self._executor.submitf(f, self._doMoveAbs, pos)
+        # f.task_canceller = self._cancelMovement
+
+        return f
+
+    def _doMoveAbs(self, pos):
+        """
+        pos dict(string-> float): name of the axis and position
+        """
+        position = pos[self._axis]
+        # correct distance for physical offset due to mounting
+        position = position + self._metadata[model.MD_POS_COR]
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, position)
+
+        # do referencing after i=5 moves or when actuator has accumulated 2pi steps
+        # --> do correct for accumulated errors
+        if self._move_num_total == 5 or abs(self._move_sum) >= self._cycle:
+            # to get rid of accumulated error
+
+            self._child.moveRel({self._caxis: self._offset}).result()
+            self._child.reference({self._caxis}).result()
+
+            self._move_sum = 0
+            self._move_num_total = 0
+
+        # Optimize by moving through the closest way
+        cur_pos = self._child.position.value[self._caxis]
+        vector = position - cur_pos
+        # mod1 and mod2 should be always positive as self._cycle should be positive
+        mod1 = vector % self._cycle
+        mod2 = -vector % self._cycle
+
+        self._move_num_total += 1
+
+        if mod1 < mod2:
+            move = mod1
+        else:
+            move = -mod2
+
+        self._move_sum += abs(move)
+        _child_future = self._child.moveRel({self._caxis: move})
+        _child_future.result()
+
+        # TODO: needed when cancel will be implemented
+        # self._child_future = self._child.moveRel({self._caxis: move})
+        # self._child_future.result()
+        # self._child_future = None
+
+    # TODO: need a proper implementation
+    # def _cancelMovement(self, future):
+        # if self._child_future:
+        #     return self._child_future.cancel()
+        # return False
+
+    def _doReference(self, axes):
+        logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
+        f = self._child.reference({self._caxis})
+        f.result()
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+
+        f = self._executor.submit(self._doReference, axes)
+        return f
+
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def stop(self, axes=None):
+        """
+        stops the motion
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
+        """
+        # Empty the queue for the given axes
+        if self._executor:
+            self._executor.cancel()
+
+        if axes is not None:
+            axes = set()
+            if self._axis in axes:
+                axes.add(self._caxis)
+
+        self._child.stop(axes=axes)
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+        self._child.position.unsubscribe(self._updatePosition)
+        if hasattr(self, "referenced"):
+            self._child.referenced.subscribe(self._updateReferenced)
