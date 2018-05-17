@@ -1064,34 +1064,41 @@ class FixedPositionsActuator(model.Actuator):
         axis, distance = pos.items()[0]
         logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
 
-        if self._cycle is None:
-            move = {self._caxis: distance}
-            self._child.moveAbs(move).result()
-        else:
-            # Optimize by moving through the closest way
-            cur_pos = self._child.position.value[self._caxis]
-            vector1 = distance - cur_pos
-            mod1 = vector1 % self._cycle
-            vector2 = cur_pos - distance
-            mod2 = vector2 % self._cycle
-            if abs(mod1) < abs(mod2):
-                self._move_sum += mod1
-                if self._move_sum >= self._cycle:
-                    # Once we are about to complete a full cycle, reference again
-                    # to get rid of accumulated error
-                    self._move_sum = 0
-                    # move to the reference switch
-                    move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
-                    self._child.moveRel({self._caxis: move_to_ref}).result()
-                    self._child.reference({self._caxis}).result()
-                    move = {self._caxis: distance}
-                else:
-                    move = {self._caxis: mod1}
-            else:
-                move = {self._caxis:-mod2}
-                self._move_sum -= mod2
+        try:
+            # While it's moving, don't listen to the intermediary positions,
+            # as it will not fit any known position, and be confusing.
+            self._child.position.unsubscribe(self._update_child_position)
 
-            self._child.moveRel(move).result()
+            if self._cycle is None:
+                move = {self._caxis: distance}
+                self._child.moveAbs(move).result()
+            else:
+                # Optimize by moving through the closest way
+                cur_pos = self._child.position.value[self._caxis]
+                vector1 = distance - cur_pos
+                mod1 = vector1 % self._cycle
+                vector2 = cur_pos - distance
+                mod2 = vector2 % self._cycle
+                if abs(mod1) < abs(mod2):
+                    self._move_sum += mod1
+                    if self._move_sum >= self._cycle:
+                        # Once we are about to complete a full cycle, reference again
+                        # to get rid of accumulated error
+                        self._move_sum = 0
+                        # move to the reference switch
+                        move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
+                        self._child.moveRel({self._caxis: move_to_ref}).result()
+                        self._child.reference({self._caxis}).result()
+                        move = {self._caxis: distance}
+                    else:
+                        move = {self._caxis: mod1}
+                else:
+                    move = {self._caxis:-mod2}
+                    self._move_sum -= mod2
+
+                self._child.moveRel(move).result()
+        finally:
+            self._child.position.subscribe(self._update_child_position, init=True)
 
     def _doReference(self, axes):
         logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
