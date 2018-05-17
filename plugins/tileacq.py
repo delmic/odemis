@@ -26,29 +26,27 @@ see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from collections import OrderedDict
-import logging
-import math
-from odemis import model, acq, dataio, util
-from odemis.acq import stream
-import odemis.gui
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.util import dataio as udataio
-from odemis.util import img, TimeoutError
-import os
-import time
-import wx
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
-import threading
-
+import logging
+import math
+import numpy
+from odemis import model, acq, dataio, util
 from odemis.acq import stitching
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
-    FluoStream, MultipleDetectorStream
-import numpy
-import psutil
+    FluoStream, MultipleDetectorStream, MonochromatorSettingsStream
+import odemis.gui
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import call_in_wx_main
+from odemis.util import dataio as udataio
+from odemis.util import img, TimeoutError
+import os
+import psutil
+import threading
+import time
+import wx
 
 
 class TileAcqPlugin(Plugin):
@@ -132,8 +130,7 @@ class TileAcqPlugin(Plugin):
         """
         if not self._dlg:
             return []
-        ss = self._dlg.microscope_view.getStreams() + self._dlg.microscope_view_r.getStreams() + \
-            self._dlg.microscope_view_spectrum.getStreams()
+        ss = self._dlg.microscope_view.getStreams() + self._dlg.hidden_view.getStreams()
         logging.debug("View has %d streams", len(ss))
         return ss
 
@@ -256,7 +253,6 @@ class TileAcqPlugin(Plugin):
             box.Destroy()
             return
 
-        tab = self.main_app.main_data.tab.value
         tab.streambar_controller.pauseStreams()
 
         # If no ROI is selected, select entire area
@@ -280,11 +276,11 @@ class TileAcqPlugin(Plugin):
         self._dlg = dlg
         dlg.addSettings(self, self.vaconf)
         for s in ss:
-            # add ARStream and Spectrum stream in different view
-            if isinstance(s, ARStream):
-                dlg.addStream(s, index=1)
-            elif isinstance(s, SpectrumStream):
-                dlg.addStream(s, index=2)
+            if isinstance(s, (ARStream, SpectrumStream, MonochromatorSettingsStream)):
+                # TODO: instead of hard-coding the list, a way to detect the type
+                # of live image?
+                logging.info("Not showing stream %s, for which the live image is not spatial", s)
+                dlg.addStream(s, index=None)
             else:
                 dlg.addStream(s, index=0)
 
@@ -312,6 +308,8 @@ class TileAcqPlugin(Plugin):
 
         # Don't hold references
         self._unsubscribe_vas()
+        if dlg: # If dlg hasn't been destroyed yet
+            dlg.Destroy()
         self._dlg = None
 
     # black list of VAs name which are known to not affect the acquisition time
@@ -358,10 +356,8 @@ class TileAcqPlugin(Plugin):
         # streams. On the SECOM/DELPHI, they are the same (for now)
         live_st = self._get_streams()
         tab_data = self.main_app.main_data.tab.value.tab_data_model
-        if hasattr(tab_data, "acquisitionStreams"):  # Odemis v2.7+
+        if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
-        elif hasattr(tab_data, "acquisitionView"):  # Odemis v2.6 and earlier
-            acq_st = tab_data.acquisitionView.getStreams()
         else:
             # No special acquisition streams
             return live_st
@@ -369,7 +365,7 @@ class TileAcqPlugin(Plugin):
         # Discard the acquisition streams which are not visible
         ss = []
         for acs in acq_st:
-            if isinstance(acs, stream.MultipleDetectorStream):
+            if isinstance(acs, MultipleDetectorStream):
                 if any(subs in live_st for subs in acs.streams):
                     ss.append(acs)
                     break
@@ -595,6 +591,35 @@ class TileAcqPlugin(Plugin):
             sfov = asfov
         return sfov
 
+    def _estimateStreamPixels(self, s):
+        """
+        return (int): the number of pixels the stream will generate during an
+          acquisition
+        """
+        if isinstance(s, MultipleDetectorStream):
+            px = sum(self._estimateStreamPixels(st) for st in s.streams)
+            if hasattr(s, 'repetition'):
+                px *= s.repetition.value[0] * s.repetition.value[1]
+
+            return px
+        elif isinstance(s, (ARStream, SpectrumStream)):
+            # Temporarily reports 0 px, as we don't stitch these streams for now
+            return 0
+
+        if hasattr(s, 'emtResolution'):
+            px = numpy.prod(s.emtResolution.value)
+        elif hasattr(s, 'detResolution'):
+            px = numpy.prod(s.detResolution.value)
+        else:
+            # This can happen if there is no local setting. Be "optimistic" by
+            # assuming it'll only acquire one pixel.
+            # For SEM streams in MDStreams, it's actually correct, as it will
+            # be multiplied by the repetition.
+            logging.info("Resolution of stream %s cannot be determined.", s)
+            px = 1
+
+        return px
+
     MEMPP = 2e-8  # memory per pixel in GB, found empirically
     @call_in_wx_main
     def _memory_check(self, _=None):
@@ -605,19 +630,13 @@ class TileAcqPlugin(Plugin):
         """
         if self.stitch.value:
             # Number of pixels for acquisition
-            pxs = 0
-            for s in self._get_acq_streams():
-                if hasattr(s, 'emtResolution'):
-                    pxs += s.emtResolution.value[0] * s.emtResolution.value[1]
-                elif hasattr(s, 'repetition'):
-                    pxs += s.repetition.value[0] * s.repetition.value[1]
-                else:
-                    logging.warning("Resolution of stream %s cannot be determined." % s)
-            pxs = pxs * self.nx.value * self.ny.value
+            pxs = sum(self._estimateStreamPixels(s) for s in self._get_acq_streams())
+            pxs *= self.nx.value * self.ny.value
 
             # Memory calculation
             mem_est = pxs * self.MEMPP
             mem_computer = psutil.virtual_memory().total / 1024 ** 3  # in GB
+            logging.debug("Estimating %g GB needed, while %g GB available", mem_est, mem_computer)
             # Assume computer is using 2 GB RAM for odemis and other programs
             mem_sufficient = mem_est < mem_computer - 2
         else:
@@ -738,7 +757,7 @@ class TileAcqPlugin(Plugin):
             ft.set_result(None)  # Indicate it's over
 
             # End of the (completed) acquisition
-            if not ft._task_state == CANCELLED:
+            if ft._task_state != CANCELLED:
                 dlg.Destroy()
 
             # Open analysis tab

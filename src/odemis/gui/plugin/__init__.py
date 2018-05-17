@@ -37,7 +37,7 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
-from odemis.gui.model import MicroscopeView, MicroscopyGUIData
+from odemis.gui.model import MicroscopeView, MicroscopyGUIData, StreamView
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.model import VigilantAttribute, getVAs
@@ -328,7 +328,6 @@ class AcquisitionDialog(xrcfr_plugin):
 
         self.entries = []  # Setting entries
         self._acq_future_connector = None
-        self.canvas = None
         self.buttons = []  # The buttons
         self.current_future = None
         self.btn_cancel.Bind(wx.EVT_BUTTON, self._cancel_future)
@@ -339,16 +338,17 @@ class AcquisitionDialog(xrcfr_plugin):
         # Create a minimal model for use in the streambar controller
 
         self._dmodel = MicroscopyGUIData(plugin.main_app.main_data)
+        self.hidden_view = StreamView("Plugin View Hidden")
         self.microscope_view = MicroscopeView("Plugin View left")
         self.viewport_l.setView(self.microscope_view, self._dmodel)
         self.microscope_view_r = MicroscopeView("Plugin View right")
         self.viewport_r.setView(self.microscope_view_r, self._dmodel)
-        self.microscope_view_spectrum = MicroscopeView("Plugin View spectrum")
-        self.viewport_spectrum.setView(self.microscope_view_spectrum, self._dmodel)
+        self.spectrum_view = MicroscopeView("Plugin View spectrum")
+        self.spectrum_viewport.setView(self.spectrum_view, self._dmodel)
         self._dmodel.focussedView.value = self.microscope_view
         self._dmodel.views.value = [self.microscope_view, self.microscope_view_r,
-                                    self.microscope_view_spectrum]
-        self._viewports = (self.viewport_l, self.viewport_r, self.viewport_spectrum)
+                                    self.spectrum_view]
+        self._viewports = (self.viewport_l, self.viewport_r, self.spectrum_viewport)
 
         self.streambar_controller = StreamBarController(
             self._dmodel,
@@ -438,22 +438,33 @@ class AcquisitionDialog(xrcfr_plugin):
 
         stream (Stream or None): Stream to be added. Use None to force a viewport
           to be seen without adding a stream.
-        index (0, 1, or 2): Index of the viewport to add the stream. 0 = left,
-          1 = right, 2 = spectrum viewport
+        index (0, 1, 2, or None): Index of the viewport to add the stream. 0 = left,
+          1 = right, 2 = spectrum viewport. If None, it will not show the stream
+          on any viewport (and it will be added to the .hidden_view)
         """
-        viewport = self._viewports[index]
-        v = self._dmodel.views.value[index]
-        assert viewport.microscope_view is v
+        need_fit = False
 
-        if not self.fp_streams.IsShown() or not viewport.IsShown():
-            self.fp_streams.Show()
-            viewport.Show()
+        if index is None:
+            v = self.hidden_view
+        else:
+            viewport = self._viewports[index]
+            v = self._dmodel.views.value[index]
+            assert viewport.microscope_view is v
+
+            if not viewport.IsShown():
+                viewport.Show()
+                need_fit = True
+
+        if stream:
+            if not self.fp_streams.IsShown():
+                self.fp_streams.Show()
+                need_fit = True
+            self.streambar_controller.addStream(stream, add_to_view=v)
+
+        if need_fit:
             self.Layout()
             self.Fit()
             self.Update()
-
-        if stream:
-            self.streambar_controller.addStream(stream, add_to_view=v)
 
     @call_in_wx_main
     def showProgress(self, future):

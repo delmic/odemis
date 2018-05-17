@@ -506,6 +506,8 @@ class MonoScanPlugin(Plugin):
         else:
             logging.debug("Unknown return code %d", ans)
 
+        dlg.Destroy()
+
     def acquire(self, dlg):
         # Configure the monochromator stream according to the settings
         # TODO: read the value from spotPosition instead?
@@ -519,10 +521,7 @@ class MonoScanPlugin(Plugin):
         exporter = dataio.find_fittest_converter(fn)
 
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
-        try:
-            str_ctrl = self.main_app.main_data.tab.value.streambar_controller
-        except AttributeError:  # Odemis v2.6 and earlier
-            str_ctrl = self.main_app.main_data.tab.value.stream_controller
+        str_ctrl = self.main_app.main_data.tab.value.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
 
         try:

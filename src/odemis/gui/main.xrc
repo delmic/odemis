@@ -4910,7 +4910,7 @@
             <flag>wxEXPAND</flag>
           </object>
           <object class="sizeritem">
-            <object class="PointSpectrumViewport" name="viewport_spectrum">
+            <object class="PointSpectrumViewport" name="spectrum_viewport">
               <hidden>1</hidden>
               <XRCED>
                 <assign_var>1</assign_var>

@@ -273,7 +273,9 @@ class AutomaticOverlayPlugin(Plugin):
         dlg.addButton("Align", self.align, face_colour='blue')
         dlg.addButton("Cancel", None)
         dlg.pnl_gauge.Hide()
-        dlg.ShowModal()
+        dlg.ShowModal() # Blocks until the window is closed
+
+        dlg.Destroy()
 
     def _update_im_ref(self):
         """
