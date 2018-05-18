@@ -13,6 +13,7 @@ odemis (2.8.0-1) precise; urgency=medium
     - Spectrum and chronogram plot rounded too much the values displayed
     - Tile acquisition doesn't require anymore a lot of memory when stitching is disabled
     - After exporting a spectrum, the spectrum plot would not display correctly the legend anymore
+    - Tileacq and Timelapse plugins now handle properly any stream of the SPARC
   * Improvements and bug fixes already present in v2.7 branch:
     - Support for Zeiss SEM contron via the Remcon interface
     - Support for software interlock between andorshrk and external component
