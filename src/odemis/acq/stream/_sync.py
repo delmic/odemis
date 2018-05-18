@@ -26,6 +26,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+import Queue
 from abc import ABCMeta, abstractmethod
 from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
@@ -37,7 +38,8 @@ import numpy
 from odemis import model, util
 from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
-from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
+from odemis.acq.stream._live import LiveStream
+from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, MD_DWELL_TIME
 from odemis.util import img, units, spot, executeAsyncTask
 import random
 import threading
@@ -2000,3 +2002,274 @@ class ScannedFluoMDStream(MultipleDetectorStream):
                 s._unlinkHwVAs()
             self._current_future = None
             self._acq_done.set()
+
+
+class ScannedRemoteTCStream(LiveStream):
+    
+    def __init__(self, name, helper_stream, **kwargs):
+        '''
+        A stream that typically connects to a remote Symphotime server as time correlator detector
+        used to run FLIM on SECOM. Runs the acquisition and updates .image while runAcquisition is running.
+
+        helper_stream: (ScannedTCSettingsStream) contains all necessary devices as children
+        '''
+        super(ScannedRemoteTCStream, self).__init__(name, helper_stream.time_correlator,
+            helper_stream.time_correlator.dataflow, helper_stream.emitter, **kwargs)
+
+        # Retrieve devices from the helper stream
+        self._stream = helper_stream
+        self._emitter = helper_stream.lemitter
+        self._tc_scanner = helper_stream.tc_scanner
+        self._tc_detector = helper_stream.tc_detector
+        self._pdetector = helper_stream.pdetector
+        self._scanner = helper_stream.scanner
+        self._time_correlator = helper_stream.time_correlator
+
+        # the total dwell time
+        self._dwellTime = helper_stream.dwellTime
+        self.roi = helper_stream.roi
+        self.repetition = helper_stream.repetition
+
+        # For the acquisition
+        self._acq_lock = threading.Lock()
+        self._acq_state = RUNNING
+        self._acq_done = threading.Event()
+        self._frame_done = threading.Event()
+        self._acq_thread = None  # thread
+        self._acq_rep_tot = 0  # number of acquisitions to do
+        self._acq_rep_n = 0  # number of acquisitions so far
+        self._prog_sum = 0  # s, for progress time estimation
+        self._data_queue = Queue.Queue()
+        self._frame_thread = None
+
+        self._current_future = None
+        self._acq_state = None
+
+        self._new_acquisition = False
+        self._acq_thread = None
+
+    def acquire(self):
+        # Make sure every stream is prepared, not really necessary to check _prepared
+        f = self.prepare()
+        f.result()
+
+        self._stream._linkHwVAs()
+
+        # TODO: if already acquiring, queue the Future for later acquisition
+        if self._current_future is not None and not self._current_future.done():
+            raise IOError("Cannot do multiple acquisitions simultaneously")
+
+        if not self._acq_done.is_set():
+            if self._acq_thread and self._acq_thread.isAlive():
+                logging.debug("Waiting for previous acquisition to fully finish")
+                self._acq_thread.join(10)
+                if self._acq_thread.isAlive():
+                    logging.error("Previous acquisition not ending")
+
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateAcquisitionTime())
+        self._current_future = f
+        self._acq_state = RUNNING  # TODO: move to per acquisition
+        self._prog_sum = 0
+        f.task_canceller = self._cancelAcquisition
+
+        # run task in separate thread
+        self._acq_thread = executeAsyncTask(f, self._runAcquisition, args=(f,))
+        return f
+
+    def _prepareHardware(self):
+        '''
+        Prepare hardware for acquisition and return the best pixel dwelltime value
+        '''
+
+        scale, res, trans = self._computeROISettings(self._stream.roi.value)
+
+        # always in this order
+        self._scanner.scale.value = scale
+        self._scanner.resolution.value = res
+        self._scanner.translation.value = trans
+
+        logging.debug("Scanner set to scale %s, res %s, trans %s",
+                      self._scanner.scale.value,
+                      self._scanner.resolution.value,
+                      self._scanner.translation.value)
+
+        # The dwell time from the Nikon C2 will set based on what the device is capable of
+        # As a result, we need to recalculate our total dwell time based around this value
+        # and the number of frames we can compute
+        px_dt = min(self._dwellTime.value, self._scanner.dwellTime.range[1])
+        self._scanner.dwellTime.value = px_dt
+        px_dt = self._scanner.dwellTime.value
+        nfr = int(math.ceil(self._dwellTime.value / px_dt))  # number of frames
+        px_dt = self._dwellTime.value / nfr  # the new dwell time per frame (slightly shorter than we asked before)
+        self._scanner.dwellTime.value = px_dt  # try set the C2 dwell time value again.
+        logging.info("Total dwell time: %f s, Pixel Dwell time: %f, Resolution: %s, collecting %d frames...",
+                     self._dwellTime.value, px_dt, self._scanner.resolution.value, nfr)
+
+        self._tc_scanner.dwellTime.value = self._dwellTime.value
+
+        return px_dt, nfr
+
+    def _setEmission(self, value):
+        # set all light emissions at once to a value
+        em = self._emitter.emissions.value
+        em = [value] * len(em)
+        self._emitter.emissions.value = em
+
+    def _computeROISettings(self, roi):
+        """
+        roi (4 0<=floats<=1)
+        return:
+            scale (2 ints)
+            res (2 ints)
+            trans (2 floats)
+        """
+        # We should remove res setting from the GUI when this ROI is used.
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        shape = self._scanner.shape
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+        res = self.repetition.value
+        scale = (width[0] * shape[0] / res[0], width[1] * shape[1] / res[1])
+
+        return scale, res, trans
+
+    def _runAcquisition(self, future=None):
+
+        logging.debug("Starting job: acquisition")
+        self._frame_thread = threading.Thread(target=self._frameThread)
+
+        try:
+            self._new_acquisition = True
+            self._acq_done.clear()
+
+            px_dt, nfr = self._prepareHardware()
+            frame_time = px_dt * numpy.prod(self._scanner.resolution.value)
+            logging.info("Theoretical minimum frame time: %f s", frame_time)
+
+            # Start Symphotime acquisition
+            self._time_correlator.data.subscribe(self._onAcqStop)
+
+            # Turn on the lights
+            self._setEmission(1)
+
+            # Start the acquisition
+            self._pdetector.data.subscribe(self._onNewData)
+            self._new_acquisition = True
+
+            # start frame processing thread
+            self._frame_thread.start()
+
+            # For each frame
+            for i in range(nfr):
+                # premature cancellation occurred if the flag has already been set.
+                if self._acq_done.is_set():
+                    raise CancelledError("Acquisition canceled")
+
+                self._frame_done.clear()
+                # turn on the light and pulse the laser (period already set)
+                logging.info("Getting frame %d", i + 1)
+
+                # wait for the measurement to run for the total dwell time
+                # this will stop blocking if the acquisition is cancelled
+                tstart = time.time()
+
+                if not self._frame_done.wait(frame_time * 3 + 1):
+                    raise IOError("Timed out waiting for frame. waited %f s" % (time.time() - tstart,))
+
+                logging.debug("waited %f s", time.time() - tstart)
+
+        except CancelledError:
+            logging.info("Acquisition cancelled")
+            self._acq_state = CANCELLED
+            raise
+        except Exception:
+            logging.exception("Failure during ScannedTC acquisition")
+            raise
+        finally:
+            self._acq_done.set()
+            self._frame_thread.join()
+            logging.debug("Ending job: acquisition")
+            self._stream._unlinkHwVAs()
+            self._acq_state = FINISHED
+
+            # End Symphotime acq
+            # The measurement is stopped.
+            self._pdetector.data.unsubscribe(self._onNewData)
+            self._time_correlator.data.unsubscribe(self._onAcqStop)
+
+            # turn off the light
+            self._setEmission(0)
+
+    def _onAcqStop(self, dataflow, data):
+        pass
+
+    def _frameThread(self):
+        # frame data is put into a queue to be processed later.
+        # This thread processes the data that has been queued.
+        logging.debug("Starting Frame acquisition thread")
+
+        # Stop when there is no more data to process and the acquisition is over
+        while not (self._acq_done.is_set() and self._data_queue.empty()):
+            try:
+                data = self._data_queue.get(timeout=0.1)
+            except Queue.Empty:
+                continue # will check again whether the acquisition is cancelled
+
+            if self._new_acquisition:
+                logging.debug("New acq in queue shape %s", data[0].shape)
+                # clear the old data if a new acq has started
+                data = data.astype(numpy.uint32)
+                self.raw = [data]
+                self._new_acquisition = False
+
+                # Force update histogram to ensure it exists.
+                self._updateHistogram(data)
+                self._shouldUpdateImage()
+                
+            else:
+                if self.raw[0].shape == data.shape:
+                    logging.debug("Acq in queue shape %s", data[0].shape)
+                    data = data.astype(numpy.uint32)
+                    self.raw[0] += data  # use array addition by index to add the counts
+                    self.raw[0].metadata[MD_DWELL_TIME] += data.metadata[MD_DWELL_TIME]
+                else:
+                    logging.error("New data array from tc-detector has different shape %s from previous one, can't accumulate data",
+                                   data.shape)
+
+                self._shouldUpdateHistogram()
+                self._shouldUpdateImage()
+
+        logging.debug("Exiting Frame acquisition thread")
+
+    def _onNewData(self, dataflow, data):
+        # Add frame data to the queue for processing later.
+        # This way, if the frame time is very fast, we will not miss frames.
+        logging.debug("New data received of shape %s", data.shape)
+        self._data_queue.put(data)
+        self._frame_done.set()
+
+    def _cancelAcquisition(self, future):
+        with self._acq_lock:
+            if self._acq_state == FINISHED:
+                return False  # too late
+            self._acq_state = CANCELLED
+
+        logging.debug("Cancelling acquisition of components %s and %s",
+                      self._pdetector.name, self._time_correlator.name)
+
+        self._acq_done.set()
+        self._frame_done.set()
+
+        # Wait for the thread to be complete (and hardware state restored)
+        if self._acq_thread:
+            self._acq_thread.join(5)
+
+        if self._frame_thread:
+            self._frame_thread.join(5)
+
+        return True
+

@@ -26,12 +26,12 @@ from concurrent.futures.thread import ThreadPoolExecutor
 import copy
 import logging
 import math
+import re
 from odemis import model, util
 from odemis.acq import stream
 from odemis.model import NotApplicableError
 import time
 from odemis.util import TimeoutError
-
 
 GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
 
@@ -215,7 +215,7 @@ SPARC2_MODES = {
 SECOM_MODES = {'fluo': ("ccd",
                 {'ccd': {'fanSpeed': 1},
                 }),
-               'confocal': ("photo-detectorN",
+               'confocal': ("photo-detector(\d*)",
                 {
                 }),
                'overlay': ("ccd",
@@ -226,6 +226,12 @@ SECOM_MODES = {'fluo': ("ccd",
                 }),
                'bsd': ("bs-detector",
                 {'ccd': {'fanSpeed': 0}, # To avoid vibrations
+                }),
+               'flim': ("time-correlator",
+                {
+                }),
+               'flim-setup': ("tc-detector",
+                {
                 }),
               }
 
@@ -265,20 +271,20 @@ class OpticalPathManager(object):
         elif microscope.role in ("sparc-simplex", "sparc"):
             self._modes = copy.deepcopy(SPARC_MODES)
         elif microscope.role in ("secom", "delphi"):
-            self._modes = SECOM_MODES # Just to know it's a SECOM/DELPHI
+            self._modes = copy.deepcopy(SECOM_MODES)
         else:
             raise NotImplementedError("Microscope role '%s' unsupported" % (microscope.role,))
 
         # Currently only used with the SECOM/DELPHI
         self.quality = ACQ_QUALITY_FAST
 
-        # keep list of already accessed components, to avoid creating new proxys
+        # keep list of all components, to avoid creating new proxies
         # every time the mode changes
-        self._known_comps = dict()  # str (role) -> component
+        self._cached_components = model.getComponents()
 
         # All the actuators in the microscope, to cache proxy's to them
         self._actuators = []
-        for comp in model.getComponents():
+        for comp in self._cached_components:
             if hasattr(comp, 'axes') and isinstance(comp.axes, dict):
                 self._actuators.append(comp)
 
@@ -303,7 +309,7 @@ class OpticalPathManager(object):
             except KeyError:
                 pass  # Mode to delete is just not there
 
-        if self._modes is SECOM_MODES:
+        if self.microscope.role in ("secom", "delphi"):
             # To record the fan settings when in "fast" acq quality
             try:
                 ccd = self._getComponent("ccd")
@@ -391,17 +397,18 @@ class OpticalPathManager(object):
 
     def _getComponent(self, role):
         """
-        same as model.getComponent, but optimised by caching the result
-        return Component
-        raise LookupError: if no component found
-        """
-        try:
-            comp = self._known_comps[role]
-        except LookupError:
-            comp = model.getComponent(role=role)
-            self._known_comps[role] = comp
+        same as model.getComponent, but optimised by caching the result.
+        Uses regex to match the name to a list of cached components
 
-        return comp
+        return Component
+        raise LookupError: if matching component not found
+        """
+        # if we have not returned raise an exception
+        for comp in self._cached_components:
+            if comp.role is not None and re.match(role + '$', comp.role):
+                return comp
+        # if not found...
+        raise LookupError("No component with the role %s" % (role,))
 
     def setAcqQuality(self, quality):
         """
@@ -415,7 +422,7 @@ class OpticalPathManager(object):
             return
         self.quality = quality
 
-        if self._modes is SECOM_MODES:
+        if self.microscope.role in ("secom", "delphi"):
             if quality == ACQ_QUALITY_FAST:
                 # Restore the fan (if it was active before)
                 self._setCCDFan(True)
@@ -460,7 +467,7 @@ class OpticalPathManager(object):
         logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
 
         # Special SECOM mode: just look at the fan and be done
-        if self._modes is SECOM_MODES:
+        if self.microscope.role in ("secom", "delphi"):
             if self.quality == ACQ_QUALITY_FAST:
                 self._setCCDFan(True)
             elif self.quality == ACQ_QUALITY_BEST:
@@ -692,7 +699,8 @@ class OpticalPathManager(object):
             return "overlay"
         else:
             for mode, conf in self.guessed.items():
-                if conf[0] == guess_stream.detector.role:
+                # match the name using regex
+                if re.match(conf[0] + '$', guess_stream.detector.role):
                     return mode
         # In case no mode was found yet
         raise LookupError("No mode can be inferred for the given stream")

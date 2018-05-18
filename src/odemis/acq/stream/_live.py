@@ -614,6 +614,10 @@ class SpotSEMStream(LiveStream):
         return
 
 
+class SpotScannerStream(SpotSEMStream):
+    pass
+
+
 class CameraStream(LiveStream):
     """ Abstract class representing streams which have a digital camera as a
     detector.
