@@ -40,6 +40,7 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
+from odemis.acq.stream._base import POL_6POS, POL_POSITIONS
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -50,6 +51,7 @@ SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 SECOM_CONFOCAL_CONFIG = CONFIG_PATH + "sim/secom2-confocal.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
+SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
@@ -941,7 +943,7 @@ class SPARCTestCase(unittest.TestCase):
         self.ccd.binning.value = (4, 4) # hopefully always supported
 
         # Long acquisition
-        self.ccd.exposureTime.value = 0.2 # s
+        self.ccd.exposureTime.value = 0.2  # s
         ars.repetition.value = (2, 3)
         exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
@@ -1047,7 +1049,7 @@ class SPARCTestCase(unittest.TestCase):
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4) # hopefully always supported
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
 
         # Long acquisition (small rep to avoid being too long)
         # The acquisition method is different for time > 0.1 s, but we had bugs
@@ -1086,7 +1088,7 @@ class SPARCTestCase(unittest.TestCase):
                             phys_roi[1] <= pos[1] <= phys_roi[3])
 
         # Short acquisition (< 0.1s)
-        self.ccd.exposureTime.value = 0.03 # s
+        self.ccd.exposureTime.value = 0.03  # s
         ars.repetition.value = (30, 20)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
         phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
@@ -2188,6 +2190,217 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertGreater(len(pcmd), 500 / 10)
 
 
+class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARCv2
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SPARC2POL_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.analyzer = model.getComponent(role="pol-analyzer")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def _roiToPhys(self, repst):
+        """
+        Compute the (expected) physical position of a stream ROI
+        repst (RepetitionStream): the repetition stream with ROI
+        return:
+            pos (tuple of 2 floats): physical position of the center
+            pxs (tuple of 2 floats): pixel size in m
+            res (tuple of ints): number of pixels
+        """
+        res = repst.repetition.value
+        pxs = (repst.pixelSize.value,) * 2
+
+        # To compute pos, we need to convert the ROI to physical coordinates
+        roi = repst.roi.value
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        try:
+            sem_center = repst.detector.getMetadata()[model.MD_POS]
+        except KeyError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        emt = repst.emitter
+        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                     emt.shape[1] * emt.pixelSize.value[1])
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+        return pos, pxs, res
+
+    def test_acq_arpol(self):
+        """
+        Test short acquisition for AR with polarization analyzer component
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # test when polarization analyzer hardware is present
+        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        list_positions = ars.polarization.choices
+        for pos in list_positions:
+            ars.polarization.value = pos
+
+            # Short acquisition (< 0.1s)
+            self.ccd.exposureTime.value = 0.03  # s
+            # TODO use fixed repetition value -> set ROI?
+            ars.repetition.value = (10, 5)
+            num_ar = numpy.prod(ars.repetition.value)
+            exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+
+            # Start acquisition
+            # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
+            timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+            start = time.time()
+            f = sas.acquire()
+
+            # sas.raw: array containing as first entry the sem scan image for the scanning positions,
+            # rest are ar images
+            # data: array should contain same images as sas.raw
+
+            # wait until it's over
+            data = f.result(timeout)
+            dur = time.time() - start
+            logging.debug("Acquisition took %g s", dur)
+            self.assertTrue(f.done())
+
+            # check if number of images in the received data (sem image + ar images) is the same as
+            # number of images stored in raw
+            self.assertEqual(len(data), len(sas.raw))
+
+            # check that sem data array has same shape as expected for the scanning positions of ebeam
+            sem_da = sas.raw[0]  # sem data array for scanning positions
+            self.assertEqual(sem_da.shape, exp_res[::-1])
+
+            # check that number of angle resolved images is same as the total number of ebeam positions
+            # include if multiple polarization images are required per ebeam position
+            ar_das = sas.raw[1:]  # angle resolved data arrays
+            if hasattr(sas, "_polarization") and sas._polarization.value == POL_6POS:
+                self.assertEqual(len(ar_das), num_ar*6)
+            else:
+                self.assertEqual(len(ar_das), num_ar)
+
+            # check if metadata is correctly stored
+            if pos == POL_6POS:
+                # check for each of the 6 polarization positions
+                for i in range(6):
+                    for d in ar_das[num_ar*i: num_ar*(i+1)]:
+                        md = d.metadata
+                        # check if model.MD_ARPOL_POLARIZATION is in metadata
+                        self.assertIn(model.MD_ARPOL_POLARIZATION, md)
+                        self.assertIn(model.MD_ARPOL_POS_LINPOL, md)
+                        self.assertIn(model.MD_ARPOL_POS_QWP, md)
+                        # check that each image has correct polarization position
+                        self.assertEqual(md[model.MD_ARPOL_POLARIZATION], POL_POSITIONS[i])
+            else:
+                for d in ar_das:
+                    md = d.metadata
+                    # check if model.MD_ARPOL_POLARIZATION is in metadata
+                    self.assertIn(model.MD_ARPOL_POLARIZATION, md)
+                    self.assertIn(model.MD_ARPOL_POS_LINPOL, md)
+                    self.assertIn(model.MD_ARPOL_POS_QWP, md)
+                    # check that each image has correct polarization position
+                    self.assertEqual(md[model.MD_ARPOL_POLARIZATION], pos)
+
+    def test_acq_arpol_leech(self):
+        """
+        Test acquisition for SEM AR POL intensity + 1 leech
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        # test when polarization analyzer hardware is present
+        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        ars.polarization.value = "vertical"
+        ars.roi.value = (0, 0.2, 0.3, 0.6)
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 1  # s
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
+
+        self.ccd.exposureTime.value = 0.03  # s
+        ars.repetition.value = (10, 5)  # TODO use fixed repetition value -> set ROI?
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        logging.debug("Expecting acquisition of %g s", timeout)
+        start = time.time()
+
+        for l in sas.leeches:
+            l.series_start()
+
+        f = sas.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        for l in sas.leeches:
+            l.series_complete(data)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        # check if number of images in the received data (sem image + ar images) is the same as
+        # number of images stored in raw
+        self.assertEqual(len(data), len(sas.raw))
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = sas.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check that number of angle resolved images is same as the total number of ebeam positions
+        # include if multiple polarization images are required per ebeam position
+        ar_das = sas.raw[1:-1]  # angle resolved data arrays
+        if sas._polarization.value == POL_6POS:
+            self.assertEqual(len(ar_das), num_ar * 6)
+        else:
+            self.assertEqual(len(ar_das), num_ar)
+
+        # check last image in .raw has a time axis greater than 1
+        ar_drift = sas.raw[-1]  # angle resolved data arrays
+        self.assertGreaterEqual(ar_drift.shape[-4], 2)
+
+
 # @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):
     """
@@ -2436,6 +2649,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
 
 FILENAME = u"test" + tiff.EXTENSIONS[0]
+
 
 # @skip("faster")
 class StaticStreamsTestCase(unittest.TestCase):
@@ -3262,6 +3476,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         md[model.MD_DIMS] = "YXCT"
         new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
         self.assertRaises(ValueError, strUpd.update, new_da)
+
 
 if __name__ == "__main__":
     unittest.main()

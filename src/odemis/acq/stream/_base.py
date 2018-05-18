@@ -26,7 +26,9 @@ import numbers
 import numpy
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
-                          MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
+                          MD_SHEAR, VigilantAttribute, VigilantAttributeBase,
+                          MD_ARPOL_HORIZONTAL, MD_ARPOL_VERTICAL, MD_ARPOL_POSDIAG,
+                          MD_ARPOL_NEGDIAG, MD_ARPOL_RHC, MD_ARPOL_LHC)
 from odemis.util import img
 import threading
 import time
@@ -36,6 +38,12 @@ import weakref
 # Contains the base of the streams. Can be imported from other stream modules.
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
+
+# use hardcode list of polarization positions necessary for polarimetry analysis
+POL_POSITIONS = (MD_ARPOL_HORIZONTAL, MD_ARPOL_VERTICAL, MD_ARPOL_POSDIAG,
+                 MD_ARPOL_NEGDIAG, MD_ARPOL_RHC, MD_ARPOL_LHC)
+# constant used to acquire all 6 polarization positions
+POL_6POS = "6Pol"
 
 
 class Stream(object):
@@ -92,7 +100,7 @@ class Stream(object):
         self._opm = opm
 
         # Dataflow (Live image stream with meta data)
-        # Note: A Detectors can have multiple dataflows, so that's why a Stream
+        # Note: A Detector can have multiple dataflows, so that's why a Stream
         # has a separate attribute.
         self._dataflow = dataflow
 
@@ -438,8 +446,9 @@ class Stream(object):
             logging.warning("Going to link Hw VAs, while already linked")
 
         # Make sure the VAs are set in the right order to keep values
-        hwvas = self._hwvas.items() # must be a list
+        hwvas = self._hwvas.items()  # must be a list
         hwvas.sort(key=self._index_in_va_order)
+
         for vaname, hwva in hwvas:
             if hwva.readonly:
                 continue

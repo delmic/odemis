@@ -716,20 +716,23 @@ class TestCombinedSensorActuator(unittest.TestCase):
 class TestCombinedFixedPositionActuator(unittest.TestCase):
 
     def setUp(self):
-        self.axis1 = "linear"
-        self.axis2 = "qwp"
+        self.axis1 = "qwp"
+        self.axis2 = "linear"
         self.axis_name = "pol"
         self.atol = [3.392e-5, 3.392e-5]
         self.fallback = "unspecified position"
         self.positions = {
+                         # [qwp, linear]
                          # pos (str) -> list(pos (float), pos (float))
-                         "0pirad": [0.5, 0.5],
-                         "qpirad": [0.785398, 0.785398],
-                         "hpirad": [1.570796, 1.570796],
-                         "3qpirad": [2.356194, 2.356194],
-                         "lcirc": [0.785398, 1.570796],
-                         "rcirc": [2.356194, 1.570796],
-                         "pass-through": [0.0, 1.570796],
+                         "horizontal": [0.1, 0.1],  # use value different from [0.0, 0.0] to test some
+                                                    # allowed position is reached after referencing
+                         "vertical": [1.570796, 1.570796],  # (pi/2, pi/2)
+                         "posdiag": [0.785398, 0.785398],  # (pi/4, pi/4)
+                         "negdiag": [2.356194, 2.356194],  # (3pi/4, 3pi/4)
+                         "rhc": [0.0, 0.785398],  # (0, pi/4)
+                         "lhc": [0.0, 2.356194],  # (0, 3pi/4)
+                         "pass-through": [1.6, 1.6],  # 91.67 degree: choose something close to vertical
+                                                      # as it will fit most real samples best
                         }
 
         # create one child

@@ -34,13 +34,13 @@ from odemis.acq.stream._sync import MomentOfInertiaMDStream
 from odemis.util import img
 import time
 
-from ._base import Stream, UNDEFINED_ROI
+from ._base import Stream, UNDEFINED_ROI, POL_6POS, POL_POSITIONS
 from ._live import LiveStream
 
 
 class RepetitionStream(LiveStream):
     """
-    Abstract class for streams which are actually a set multiple acquisition
+    Abstract class for streams which are actually a set of multiple acquisition
     repeated over a grid.
 
     Beware, these special streams are for settings only. So the image generated
@@ -620,12 +620,22 @@ class ARSettingsStream(CCDSettingsStream):
 
     See StaticARStream for displaying a stream with polar projection.
     """
-    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter, analyzer=None, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_AR
+
         super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
+        self.analyzer = analyzer
+        if analyzer:
+            positions = set(POL_POSITIONS) | {"pass-through"}
+            # check positions specified in yaml file are correct
+            for pos in positions:
+                if pos not in analyzer.axes["pol"].choices:
+                    raise ValueError("Polarization analyzer %s misses position '%s'" % (analyzer, pos))
+            # hardcode the 6 pol pos + pass-through + the option to record all 6 positions sequentially
+            self.polarization = model.VAEnumerated("pass-through", choices={POL_6POS} | positions)
 
     # onActive & projection: same as the standard LiveStream
 
