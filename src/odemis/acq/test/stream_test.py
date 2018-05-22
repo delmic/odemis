@@ -49,6 +49,7 @@ SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 SECOM_CONFOCAL_CONFIG = CONFIG_PATH + "sim/secom2-confocal.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
+SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
@@ -919,7 +920,7 @@ class SPARCTestCase(unittest.TestCase):
         self.ccd.binning.value = (4, 4) # hopefully always supported
 
         # Long acquisition
-        self.ccd.exposureTime.value = 0.2 # s
+        self.ccd.exposureTime.value = 0.2  # s
         ars.repetition.value = (2, 3)
         exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
@@ -1025,7 +1026,7 @@ class SPARCTestCase(unittest.TestCase):
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4) # hopefully always supported
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
 
         # Long acquisition (small rep to avoid being too long)
         # The acquisition method is different for time > 0.1 s, but we had bugs
@@ -1064,7 +1065,7 @@ class SPARCTestCase(unittest.TestCase):
                             phys_roi[1] <= pos[1] <= phys_roi[3])
 
         # Short acquisition (< 0.1s)
-        self.ccd.exposureTime.value = 0.03 # s
+        self.ccd.exposureTime.value = 0.03  # s
         ars.repetition.value = (30, 20)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
         phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
@@ -2167,6 +2168,279 @@ class SPARC2TestCase(unittest.TestCase):
 
 
 # @skip("faster")
+class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARC2
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SPARC2POL_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.pol = model.getComponent(role="polarization-analyzer")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def _roiToPhys(self, repst):
+        """
+        Compute the (expected) physical position of a stream ROI
+        repst (RepetitionStream): the repetition stream with ROI
+        return:
+            pos (tuple of 2 floats): physical position of the center
+            pxs (tuple of 2 floats): pixel size in m
+            res (tuple of ints): number of pixels
+        """
+        res = repst.repetition.value
+        pxs = (repst.pixelSize.value,) * 2
+
+        # To compute pos, we need to convert the ROI to physical coordinates
+        roi = repst.roi.value
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        try:
+            sem_center = repst.detector.getMetadata()[model.MD_POS]
+        except KeyError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        emt = repst.emitter
+        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                     emt.shape[1] * emt.pixelSize.value[1])
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+        return pos, pxs, res
+
+    # #     @skip("simple")
+    # def test_progressive_future(self):
+    #     """
+    #     Test .acquire interface (should return a progressive future with updates)
+    #     """
+    #     self.image = None
+    #     self.done = False
+    #     self.updates = 0
+    #
+    #     # Create the stream
+    #     sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+    #     ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+    #     sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+    #
+    #     ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+    #     self.ccd.binning.value = (4, 4)  # hopefully always supported
+    #
+    #     # Long acquisition
+    #     self.ccd.exposureTime.value = 0.2  # s
+    #     ars.repetition.value = (2, 3)
+    #     exp_shape = ars.repetition.value[::-1]
+    #     num_ar = numpy.prod(ars.repetition.value)
+    #
+    #     # Start acquisition
+    #     timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+    #     f = sas.acquire()
+    #     f.add_update_callback(self.on_progress_update)
+    #     f.add_done_callback(self.on_done)
+    #
+    #     data = f.result(timeout)
+    #     self.assertEqual(len(data), num_ar + 1)
+    #     self.assertEqual(data[0].shape, exp_shape)
+    #     self.assertGreaterEqual(self.updates, 4)  # at least a couple of updates
+    #     self.assertLessEqual(self.end, time.time())
+    #     self.assertTrue(self.done)
+    #     self.assertTrue(not f.cancelled())
+    #
+    #     # short acquisition
+    #     self.done = False
+    #     self.updates = 0
+    #     self.ccd.exposureTime.value = 0.02  # s
+    #     ars.repetition.value = (5, 4)
+    #     exp_shape = ars.repetition.value[::-1]
+    #     num_ar = numpy.prod(ars.repetition.value)
+    #
+    #     # Start acquisition
+    #     timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+    #     f = sas.acquire()
+    #     f.add_update_callback(self.on_progress_update)
+    #     f.add_done_callback(self.on_done)
+    #
+    #     data = f.result(timeout)
+    #     self.assertEqual(len(data), num_ar + 1)
+    #     self.assertEqual(data[0].shape, exp_shape)
+    #     self.assertGreaterEqual(self.updates, 5)  # at least a few updates
+    #     self.assertLessEqual(self.end, time.time())
+    #     self.assertTrue(self.done)
+    #     self.assertTrue(not f.cancelled())
+    #
+    # #     @skip("simple")
+    # def test_sync_future_cancel(self):
+    #     self.image = None
+    #
+    #     # Create the stream
+    #     sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+    #     ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+    #     sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+    #
+    #     ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+    #     self.ccd.binning.value = (4, 4)  # hopefully always supported
+    #
+    #     # Long acquisition
+    #     self.updates = 0
+    #     self.ccd.exposureTime.value = 0.2  # s
+    #     ars.repetition.value = (2, 3)
+    #
+    #     # Start acquisition
+    #     f = sas.acquire()
+    #     f.add_update_callback(self.on_progress_update)
+    #     f.add_done_callback(self.on_done)
+    #
+    #     time.sleep(self.ccd.exposureTime.value)  # wait a bit
+    #     f.cancel()
+    #
+    #     self.assertGreaterEqual(self.updates, 1)  # at least at the end
+    #     self.assertLessEqual(self.end, time.time())
+    #     self.assertTrue(f.cancelled())
+    #
+    #     # short acquisition
+    #     self.updates = 0
+    #     self.ccd.exposureTime.value = 0.02  # s
+    #     ars.repetition.value = (5, 4)
+    #
+    #     # Start acquisition
+    #     f = sas.acquire()
+    #     f.add_update_callback(self.on_progress_update)
+    #     f.add_done_callback(self.on_done)
+    #
+    #     time.sleep(self.ccd.exposureTime.value)  # wait a bit
+    #     f.cancel()
+    #
+    #     self.assertGreaterEqual(self.updates, 1)  # at least at the end
+    #     self.assertLessEqual(self.end, time.time())
+    #     self.assertTrue(f.cancelled())
+    #
+    # def on_done(self, future):
+    #     self.done = True
+    #
+    # def on_progress_update(self, future, start, end):
+    #     self.start = start
+    #     self.end = end
+    #     self.updates += 1
+
+    #     @skip("simple")
+    def test_acq_ar(self):
+        """
+        Test short & long acquisition for AR
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
+
+        # Long acquisition (small rep to avoid being too long)
+        # The acquisition method is different for time > 0.1 s, but we had bugs
+        # with dwell time > 4s, so let's directly test both.
+        # self.ccd.exposureTime.value = 5  # s
+        # ars.repetition.value = (2, 3)
+        # num_ar = numpy.prod(ars.repetition.value)
+        # exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+        # phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
+        #             exp_pos[1] - (exp_pxs[1] * exp_res[1] / 2),
+        #             exp_pos[0] + (exp_pxs[0] * exp_res[0] / 2),
+        #             exp_pos[1] + (exp_pxs[1] * exp_res[1] / 2),
+        #             )
+        #
+        # # Start acquisition
+        # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        # start = time.time()
+        # f = sas.acquire()
+        #
+        # # wait until it's over
+        # data = f.result(timeout)
+        # print len(data), data[0]
+        # print len(sas.raw), len(sas.raw[0])
+        # dur = time.time() - start
+        # logging.debug("Acquisition took %g s", dur)
+        # self.assertTrue(f.done())
+        # self.assertEqual(len(data), len(sas.raw))
+        # sem_da = sas.raw[0]
+        # self.assertEqual(sem_da.shape, exp_res[::-1])
+        # ar_das = sas.raw[1:]
+        # self.assertEqual(len(ar_das), num_ar)
+        # for d in ar_das:
+        #     md = d.metadata
+        #     self.assertIn(model.MD_POS, md)
+        #     self.assertIn(model.MD_AR_POLE, md)
+        #     pos = md[model.MD_POS]
+        #     self.assertTrue(phys_roi[0] <= pos[0] <= phys_roi[2] and
+        #                     phys_roi[1] <= pos[1] <= phys_roi[3])
+
+        # Short acquisition (< 0.1s)
+        self.ccd.exposureTime.value = 0.03  # s
+        ars.repetition.value = (30, 20)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+        phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
+                    exp_pos[1] - (exp_pxs[1] * exp_res[1] / 2),
+                    exp_pos[0] + (exp_pxs[0] * exp_res[0] / 2),
+                    exp_pos[1] + (exp_pxs[1] * exp_res[1] / 2),
+                    )
+
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
+        f = sas.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        print len(data), len(data[0]), len(data[1]), len(data[2]), len(data[0][0]), data[0].shape, data[1].shape, data[0][0].shape
+        print len(sas.raw), len(sas.raw[0]), len(sas.raw[1]), len(sas.raw[2]), sas.raw[0].shape, sas.raw[1].shape
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sas.raw))
+        sem_da = sas.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        ar_das = sas.raw[1:]  # angle resolved data arrays
+        self.assertEqual(len(ar_das), num_ar)
+        for d in ar_das:
+            md = d.metadata
+            # print ".............metadata", md  # TODO continously called...VA??
+            self.assertIn(model.MD_POS, md)
+            self.assertIn(model.MD_AR_POLE, md)
+            pos = md[model.MD_POS]
+            self.assertTrue(phys_roi[0] <= pos[0] <= phys_roi[2] and
+                            phys_roi[1] <= pos[1] <= phys_roi[3])
+
+
+# @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):
     """
     Tests of the *SettingsStreams, to be run with a (simulated) 4-detector SPARC
@@ -2414,6 +2688,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
 
 FILENAME = u"test" + tiff.EXTENSIONS[0]
+
 
 # @skip("faster")
 class StaticStreamsTestCase(unittest.TestCase):
@@ -3240,6 +3515,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         md[model.MD_DIMS] = "YXCT"
         new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
         self.assertRaises(ValueError, strUpd.update, new_da)
+
 
 if __name__ == "__main__":
     unittest.main()
