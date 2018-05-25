@@ -142,43 +142,59 @@ class MetadataUpdater(model.Component):
             logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
             return
 
-        # Depends on the actual size of the ccd's density (should be constant)
-        captor_mpp = comp.pixelSize.value # m, m
-
         # update static information
         md = {model.MD_LENS_NAME: lens.hwVersion}
         comp.updateMetadata(md)
 
-        if model.hasVA(comp, "binning"):
-            binva = comp.binning
-        elif model.hasVA(comp, "scale"):
-            binva = comp.scale
+        # List of direct VA -> MD mapping
+        md_va_list = {"numericalAperture": model.MD_LENS_NA,
+                      "refractiveIndex": model.MD_LENS_RI,
+                      "xMax": model.MD_AR_XMAX,
+                      "holeDiameter": model.MD_AR_HOLE_DIAMETER,
+                      "focusDistance": model.MD_AR_FOCUS_DISTANCE,
+                      "parabolaF": model.MD_AR_PARABOLA_F,
+                      "rotation": model.MD_ROTATION,
+                     }
+
+        # If it's a scanner (ie, it has a "scale"), the component will take care
+        # by itself of updating .pixelSize and MD_PIXEL_SIZE depending on the
+        # MD_LENS_MAG.
+        # For DigitalCamera, the .pixelSize is the SENSOR_PIXEL_SIZE, and we
+        # compute PIXEL_SIZE every time the LENS_MAG *or* binning change.
+        if model.hasVA(comp, "scale"):
+            md_va_list["magnification"] = model.MD_LENS_MAG
         else:
-            logging.debug("No binning")
-            binva = None
-
-        # we need to keep the information on the detector to update
-        def updatePixelDensity(unused, lens=lens, comp=comp, binva=binva):
-            # the formula is very simple: actual MpP = CCD MpP * binning / Mag
-            if binva is not None:
-                binning = binva.value
+            # TODO: instead of updating PIXEL_SIZE everytime the CCD changes binning,
+            # just let the CCD component compute the value based on its sensor
+            # pixel size + MAG, like for the scanners.
+            if model.hasVA(comp, "binning"):
+                binva = comp.binning
             else:
-                binning = 1, 1
-            mag = lens.magnification.value
-            mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag)
-            md = {model.MD_PIXEL_SIZE: mpp,
-                  model.MD_LENS_MAG: mag}
-            comp.updateMetadata(md)
+                logging.debug("No binning")
+                binva = None
 
-        lens.magnification.subscribe(updatePixelDensity, init=True)
-        self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
-        # TODO: instead of updating PIXEL_SIZE everytime the CCD changes binning,
-        # just let the CCD component compute the value based on its sensor
-        # pixel size + MAG?
-        binva.subscribe(updatePixelDensity)
-        self._onTerminate.append((binva.unsubscribe, (updatePixelDensity,)))
+            # Depends on the actual size of the ccd's density (should be constant)
+            captor_mpp = comp.pixelSize.value  # m, m
 
-        # update pole position, if available
+            # we need to keep the information on the detector to update
+            def updatePixelDensity(unused, lens=lens, comp=comp, binva=binva):
+                # the formula is very simple: actual MpP = CCD MpP * binning / Mag
+                if binva is None:
+                    binning = 1, 1
+                else:
+                    binning = binva.value
+                mag = lens.magnification.value
+                mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag)
+                md = {model.MD_PIXEL_SIZE: mpp,
+                      model.MD_LENS_MAG: mag}
+                comp.updateMetadata(md)
+
+            lens.magnification.subscribe(updatePixelDensity, init=True)
+            self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
+            binva.subscribe(updatePixelDensity)
+            self._onTerminate.append((binva.unsubscribe, (updatePixelDensity,)))
+
+        # update pole position (if available), taking into account the binning
         if model.hasVA(lens, "polePosition"):
             def updatePolePos(unused, lens=lens, comp=comp):
                 # the formula is: Pole = Pole_no_binning / binning
@@ -199,31 +215,18 @@ class MetadataUpdater(model.Component):
             except AttributeError:
                 pass
 
-        if model.hasVA(lens, "rotation"):
-            def updateRotation(unused, lens=lens, comp=comp):
-                rot = lens.rotation.value
-                md = {model.MD_ROTATION: rot}
-                comp.updateMetadata(md)
-
-            lens.rotation.subscribe(updateRotation, init=True)
-            self._onTerminate.append((lens.rotation.unsubscribe, (updateRotation,)))
-
         # update metadata for VAs which can be directly copied
-        md_va_list = (("numericalAperture", model.MD_LENS_NA),
-                      ("refractiveIndex", model.MD_LENS_RI),
-                      ("xMax", model.MD_AR_XMAX),
-                      ("holeDiameter", model.MD_AR_HOLE_DIAMETER),
-                      ("focusDistance", model.MD_AR_FOCUS_DISTANCE),
-                      ("parabolaF", model.MD_AR_PARABOLA_F))
-        for va_name, md_key in md_va_list:
+        for va_name, md_key in md_va_list.items():
             if model.hasVA(lens, va_name):
-                def updateARData(val, md_key=md_key, comp=comp):
+
+                def updateMDFromVA(val, md_key=md_key, comp=comp):
                     md = {md_key: val}
                     comp.updateMetadata(md)
 
+                logging.debug("Listening to VA %s.%s -> MD %s", lens.name, va_name, md_key)
                 va = getattr(lens, va_name)
-                va.subscribe(updateARData, init=True)
-                self._onTerminate.append((va.unsubscribe, (updateARData,)))
+                va.subscribe(updateMDFromVA, init=True)
+                self._onTerminate.append((va.unsubscribe, (updateMDFromVA,)))
 
     def observeLight(self, light, comp):
 
