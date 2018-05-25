@@ -1122,7 +1122,7 @@ class SpotModeBase(object):
         self._spot_radius = 12
 
         # Spot position as a percentage (x, y) where x and y [0..1]
-        self.r_pos = spot_va  # or TupleVA((0.5, 0.5))
+        self.r_pos = spot_va  or TupleVA((0.5, 0.5))
         self.r_pos.subscribe(self.on_spot_change)
 
     @abstractmethod

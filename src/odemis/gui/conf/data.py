@@ -780,6 +780,13 @@ STREAM_SETTINGS_CONFIG = {
             ("pixelSize", {
                 "control_type": odemis.gui.CONTROL_FLT,
             }),
+            ("power", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            }),
+            ("period", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+            }),
         )),
 }
 
