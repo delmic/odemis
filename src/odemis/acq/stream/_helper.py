@@ -227,7 +227,12 @@ class RepetitionStream(LiveStream):
             logging.error("Computed impossibly small pixel size %s", pxs)
 
         logging.debug("Computed roi = %s, rep = %s, pxs = %g", roi, rep, pxs)
-        return tuple(roi), tuple(rep), pxs
+
+        # Set a valid roi from reading back the hardware
+        self.emitter.resolution.value = rep
+        valid_rep = self.emitter.resolution.clip(rep)
+
+        return tuple(roi), tuple(valid_rep), pxs
 
     def _setROI(self, roi):
         """

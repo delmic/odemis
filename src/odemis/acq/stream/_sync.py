@@ -37,11 +37,13 @@ import math
 import numpy
 from odemis import model, util
 from odemis.acq import leech
+from odemis.acq.stream._live import LiveStream
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, MD_DWELL_TIME
 from odemis.util import img, units, spot, executeAsyncTask
 import random
+import Queue
 import threading
 import time
 
@@ -2029,6 +2031,7 @@ class ScannedRemoteTCStream(LiveStream):
         self._dwellTime = helper_stream.dwellTime
         self.roi = helper_stream.roi
         self.repetition = helper_stream.repetition
+        self.filename = self._tc_scanner.filename
 
         # For the acquisition
         self._acq_lock = threading.Lock()
@@ -2180,7 +2183,9 @@ class ScannedRemoteTCStream(LiveStream):
                 if not self._frame_done.wait(frame_time * 3 + 1):
                     raise IOError("Timed out waiting for frame. waited %f s" % (time.time() - tstart,))
 
-                logging.debug("waited %f s", time.time() - tstart)
+                dur = time.time() - tstart
+                logging.debug("waited %f s", dur)
+                self._updateProgress(future, dur, i, nfr)
 
         except CancelledError:
             logging.info("Acquisition cancelled")
@@ -2203,6 +2208,8 @@ class ScannedRemoteTCStream(LiveStream):
 
             # turn off the light
             self._setEmission(0)
+
+        return self.raw
 
     def _onAcqStop(self, dataflow, data):
         pass
@@ -2245,6 +2252,29 @@ class ScannedRemoteTCStream(LiveStream):
 
         logging.debug("Exiting Frame acquisition thread")
 
+    def _updateProgress(self, future, dur, current, tot, bonus=0):
+        """
+        update end time of future by indicating the time for one new pixel
+        future (ProgressiveFuture): future to update
+        dur (float): time it took to do this acquisition
+        current (1<int<=tot): current number of acquisitions done
+        tot (0<int): number of acquisitions
+        bonus (0<float): additional time needed (eg, for leeches)
+        """
+        # Trick: we don't count the first frame because it's often
+        # much slower and so messes up the estimation
+        if current <= 1:
+            return
+
+        self._prog_sum += dur
+        ratio = (tot - current) / (current - 1)
+        left = self._prog_sum * ratio
+        time_assemble = 0.001 * tot  # very rough approximation
+        # add some overhead for the end of the acquisition
+        tot_left = left + time_assemble + bonus + 0.1
+        tot_left *= 1.1  # extra padding
+        future.set_progress(end=time.time() + tot_left)
+
     def _onNewData(self, dataflow, data):
         # Add frame data to the queue for processing later.
         # This way, if the frame time is very fast, we will not miss frames.
@@ -2272,4 +2302,8 @@ class ScannedRemoteTCStream(LiveStream):
             self._frame_thread.join(5)
 
         return True
+
+    def estimateAcquisitionTime(self):
+
+        return self._dwellTime.value * numpy.prod(self.repetition.value) * 1.2 + 1.0
 

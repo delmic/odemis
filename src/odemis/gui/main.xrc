@@ -4257,6 +4257,12 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="ChronographViewport" name="vp_flim_chronograph">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <object class="OverviewViewport" name="vp_overview_sem">
             <hidden>1</hidden>
             <XRCED>

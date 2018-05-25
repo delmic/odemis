@@ -35,7 +35,8 @@ from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
-    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream
+    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, ScannedRemoteTCStream, \
+    ScannedTCSettingsStream
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -300,6 +301,11 @@ class SecomStreamsTab(Tab):
         vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
+        if main_data.time_correlator:
+            vis_views = self.tab_data_model.visible_views.value[0:3]
+            vis_views.append(panel.vp_flim_chronograph.microscope_view)
+            self.tab_data_model.visible_views.value = vis_views
+
         # Special overview button selection
         self.overview_controller = viewcont.OverviewController(main_data, tab_data,
                                                                panel.vp_overview_sem.canvas,
@@ -324,6 +330,9 @@ class SecomStreamsTab(Tab):
                 panel.btn_secom_view_br,
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
             (
+                panel.btn_secom_view_br,
+                (panel.vp_flim_chronograph, panel.lbl_secom_view_br)),
+            (
                 panel.btn_secom_overview,
                 (panel.vp_overview_sem, panel.lbl_secom_overview)),
         ])
@@ -342,7 +351,8 @@ class SecomStreamsTab(Tab):
 
         self._streambar_controller = streamcont.SecomStreamsController(
             tab_data,
-            panel.pnl_secom_streams
+            panel.pnl_secom_streams,
+            view_ctrl=self.view_controller
         )
 
         # Toolbar
@@ -358,6 +368,13 @@ class SecomStreamsTab(Tab):
         self.tb.enable_button(TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
+
+        if TOOL_SPOT in tab_data.tool.choices:
+            spot_stream = acqstream.SpotScannerStream("Spot", main_data.tc_detector,
+                                              main_data.tc_detector.data, main_data.laser_mirror)
+            tab_data.spotStream = spot_stream
+            # TODO: add to tab_data.streams and move the handling to the stream controller?
+            tab_data.spotPosition.subscribe(self._onSpotPosition)
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
@@ -409,9 +426,6 @@ class SecomStreamsTab(Tab):
 
         # If both SEM and Optical are present (= SECOM & DELPHI)
         if (main_data.ebeam and main_data.light):
-            # Viewport type checking to avoid mismatches
-            for vp in viewports[:4]:
-                assert(isinstance(vp, MicroscopeViewport))
 
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
@@ -426,7 +440,7 @@ class SecomStreamsTab(Tab):
                   # align on the optical streams
                   "cls": guimod.ContentView,
                   "stage": main_data.stage,
-                  "stream_classes": EMStream,
+                  "stream_classes": EMStream
                   }),
                 (viewports[2],
                  {"name": "Combined 1",
@@ -437,8 +451,16 @@ class SecomStreamsTab(Tab):
                  {"name": "Combined 2",
                   "stage": main_data.stage,
                   "stream_classes": (EMStream, OpticalStream),
-                  }),
+                 })
             ])
+            
+            if main_data.time_correlator:
+                vpv[viewports[4]] = {
+                  "name": "FLIM",
+                  "stage": main_data.stage,
+                  "stream_classes": (ScannedTCSettingsStream),
+                  }
+            
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
@@ -449,7 +471,7 @@ class SecomStreamsTab(Tab):
                 vpv[viewport] = {"name": "SEM %d" % (i + 1),
                                  "stage": main_data.stage,
                                  "stream_classes": EMStream,
-                                 }
+                      }
 
         # If Optical only: all optical
         elif not main_data.ebeam and main_data.light:
@@ -479,10 +501,10 @@ class SecomStreamsTab(Tab):
                 "stream_classes": (RGBCameraStream, BrightfieldStream),
             }
 
-        # If there are 5 viewports, we'll assume that the last one is an overview camera stream
-        if len(viewports) == 5:
+        # If there are 6 viewports, we'll assume that the last one is an overview camera stream
+        if len(viewports) == 6:
             logging.debug("Inserting Overview viewport")
-            vpv[viewports[4]] = {
+            vpv[viewports[5]] = {
                 "cls": guimod.OverviewView,
                 "name": "Overview",
                 "stage": main_data.stage,
@@ -497,6 +519,16 @@ class SecomStreamsTab(Tab):
                     vp.canvas.fit_view_to_next_image = False
 
         return vpv
+
+    def _onSpotPosition(self, pos):
+        """
+        Called when the spot position is changed (via the overlay)
+        """
+        if None not in pos:
+            assert len(pos) == 2
+            assert all(0 <= p <= 1 for p in pos)
+            # Just use the same value for LT and RB points
+            self.tab_data_model.spotStream.roi.value = (pos + pos)
 
     def _onAutofocus(self, active):
         # Determine which stream is active

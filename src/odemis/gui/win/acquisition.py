@@ -29,16 +29,16 @@ import logging
 import math
 from odemis import acq, model, dataio
 from odemis.acq import stream, path
-from odemis.acq.stream import EMStream, OpticalStream, ScannedFluoStream
+from odemis.acq.stream import EMStream, OpticalStream, ScannedFluoStream, ScannedTCSettingsStream, ScannedRemoteTCStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq
+from odemis.gui.model import TOOL_NONE
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
-from odemis.util.filename import guess_pattern, create_filename, update_counter
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
@@ -47,7 +47,10 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 
+
+EXTRA_VIEW_STREAMS = [ScannedRemoteTCStream]
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
@@ -103,14 +106,19 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Compute the preset values for each preset
         self._preset_values = {}  # dict string -> dict (SettingEntries -> value)
-        orig_entries = get_global_settings_entries(self._settings_controller)
+        self._orig_entries = get_global_settings_entries(self._settings_controller)
         for sc in self.streambar_controller.stream_controllers:
-            orig_entries += get_local_settings_entries(sc)
-        self._orig_settings = preset_as_is(orig_entries) # to detect changes
+            self._orig_entries += get_local_settings_entries(sc)
+        self._orig_settings = preset_as_is(self._orig_entries)  # to detect changes
         for n, preset in presets.items():
-            self._preset_values[n] = preset(orig_entries)
+            self._preset_values[n] = preset(self._orig_entries)
         # Presets which have been confirmed on the hardware
         self._presets_confirmed = set() # (string)
+
+        # Get all the VA's from the stream and subscribe to them for changes.
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.subscribe(self.on_setting_change)
 
         # If it could be possible to do fine alignment, allow the user to choose
         if self._can_fine_align(self._tab_data_model.streams.value):
@@ -183,7 +191,7 @@ class AcquisitionDialog(xrcfr_acq):
         new.focussedView = model.VigilantAttribute(view)
         new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
                                              choices={guimodel.VIEW_LAYOUT_ONE})
-
+        new.tool = model.IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
         return new
 
     def add_all_streams(self):
@@ -195,6 +203,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
+
             self._view.addStream(s)  # Add first to the view, so "visible" button is correct
             self.streambar_controller.add_acquisition_stream_cont(s)
             # listen to changes in local VAs
@@ -389,6 +398,11 @@ class AcquisitionDialog(xrcfr_acq):
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
         """
+
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.unsubscribe(self.on_setting_change)
+
         if self.acq_future:
             # TODO: ask for confirmation before cancelling?
             # What to do if the acquisition is done while asking for
@@ -459,6 +473,18 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
+
+        # Add extra viewable streams to view. However, do not add incompatible streams.
+        for s in streams:
+            if s not in self._view.getStreams() and s in EXTRA_VIEW_STREAMS:
+                self._view.addStream(s)
+
+        # Update the filename in the streams
+        for s in streams:
+            if hasattr(s, "filename"):
+                pathname, base = os.path.split(self.filename.value)
+                s.filename.value = base
+
         self.acq_future = acq.acquire(streams)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,

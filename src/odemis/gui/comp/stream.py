@@ -1264,6 +1264,7 @@ class StreamBar(wx.Panel):
         acq.stream.MonochromatorSettingsStream,
         acq.stream.MomentOfInertiaLiveStream,
         acq.stream.CameraCountStream,
+        acq.stream.ScannedTCSettingsStream
     )
 
     def __init__(self, *args, **kwargs):

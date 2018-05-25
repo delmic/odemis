@@ -29,6 +29,7 @@ import logging
 import math
 from odemis import model
 from odemis.acq import path, leech
+import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
@@ -39,7 +40,7 @@ from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 import os
 import threading
 import time
-
+import re
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -115,7 +116,9 @@ class MainGUIData(object):
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
         "time-correlator": "time_correlator",
-        "tc-detector": "tcd",
+        # "tc-detector": "tcd",
+        "tc-scanner": "tc_scanner",
+        "tc-detector": "tc_detector",
         "spectrometer": "spectrometer",
         "sp-ccd": "sp_ccd",
         "spectrometer-integrated": "spectrometer_int",
@@ -170,7 +173,8 @@ class MainGUIData(object):
         self.laser_mirror = None  # the scanner on confocal SECOM
         self.photo_ds = []  # List of all the photo detectors on confocal SECOM
         self.time_correlator = None # life-time measurement on SECOM or SPARC
-        self.tcd = None # the raw detector of the time-correlator (for settings)
+        self.tc_detector = None  # the raw detector of the time-correlator (for settings)
+        self.tc_scanner = None  # copy of the scanner settings for FLIM
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
@@ -234,7 +238,7 @@ class MainGUIData(object):
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 
-            if not any((self.ccd, self.photo_ds, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer)):
+            if not any((self.ccd, self.photo_ds, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer, self.time_correlator)):
                 raise KeyError("No detector found in the microscope")
 
             if not self.light and not self.ebeam:
@@ -446,13 +450,17 @@ class LiveViewGUIData(MicroscopyGUIData):
         tools = {TOOL_NONE,} # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
-            if main.tcd: # Can even show live settings
+            if main.tc_detector:  # Can even show live settings
                 tools.add(TOOL_SPOT)
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The SpotConfocalstream, used to control spot mode.
         # It is set at start-up by the tab controller.
         self.spotStream = None
+
+        self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
 
         # The position of the spot. Two floats 0->1. (None, None) if undefined.
         self.spotPosition = model.TupleVA((None, None))
@@ -509,6 +517,10 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
+        self.roa = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+
         # The Spot SEM stream, used to control spot mode.
         # It is set at start-up by the tab controller.
         self.spotStream = None
@@ -557,6 +569,10 @@ class AnalysisGUIData(MicroscopyGUIData):
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed
         self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
+
+        self.roa = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
 
         # The current file being used for calibration. It is set to u""
         # when no calibration is used. They are directly synchronised with the

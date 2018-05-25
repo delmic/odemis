@@ -82,6 +82,8 @@ class StreamController(object):
         self.stream_bar = stream_bar
         self.view = view
 
+        self._stream_config = data.get_stream_settings_config()
+
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
         if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream)):
@@ -147,6 +149,22 @@ class StreamController(object):
             self._add_wl_ctrls()
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
+                
+        # Add entries from the stream config based on the dictionary
+        stream_config = self._stream_config.get(type(self.stream), {})
+        # present. (and get the controls via stream_cont.entries[vaname])
+        # Add VAs (in same order as config)
+        vas = stream_config.keys()
+        vactrls = []
+        for vaname in vas:
+            try:
+                va = getattr(self.stream, vaname)
+            except AttributeError:
+                logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
+                continue
+            conf = stream_config.get(vaname)
+            ent = self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
+            vactrls.append(ent.value_ctrl)
 
         # Set the visibility button on the stream panel
         if view:
@@ -892,7 +910,7 @@ class StreamController(object):
 class StreamBarController(object):
     """  Manages the streams and their corresponding stream panels in the stream bar """
 
-    def __init__(self, tab_data, stream_bar, static=False, locked=False, ignore_view=False):
+    def __init__(self, tab_data, stream_bar, static=False, locked=False, ignore_view=False, view_ctrl=None):
         """
         :param tab_data: (MicroscopyGUIData) the representation of the microscope Model
         :param stream_bar: (StreamBar) an empty stream bar
@@ -907,6 +925,22 @@ class StreamBarController(object):
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._stream_bar = stream_bar
+
+        # Never allow SEM and CLi Stream to play with spot mode (because they are
+        # spatial, so it doesn't make sense to see just one point), and force
+        # AR, Spectrum, and Monochromator streams with spot mode (because the
+        # first two otherwise could be playing with beam "blanked", which shows
+        # weird signal, and the last one would be very slow to update).
+        # TODO: it could make sense to allow AR and Spectrum stream to play
+        # while doing a normal scan, but the scheduler would need to allow playing
+        # on spatial stream simultaneously (just the SE?) and force to play it
+        # when not in spot mode. (for now, we keep it simple)
+        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream)
+        self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
+                               acqstream.MonochromatorSettingsStream, acqstream.ScannedTCSettingsStream)
+        tab_data.tool.subscribe(self.on_tool_change)
+
+        self._view_controller = view_ctrl
 
         self.stream_controllers = []
 
@@ -935,11 +969,30 @@ class StreamBarController(object):
         # Stream preparation future
         self.preparation_future = model.InstantaneousFuture()
 
+        # Force the ROA to be defined by the user on first use
+        # TODO: Not necessary since it is set to this by default.
+        # tab_data.roa.value = acqstream.UNDEFINED_ROI
+        if hasattr(tab_data, "roa"):
+            tab_data.roa.subscribe(self._onROA)
+
+        # for storing the ROI listeners of the repetition streams
+        self._roi_listeners = {}  # RepetitionStream -> callable
+
+        # Repetition visualisation
+        self._hover_stream = None  # stream for which the repetition must be displayed
+        self._rep_listeners = {}  # RepetitionStream -> callable
+        self._rep_ctrl = {}  # wx Control -> RepetitionStream
+
+        # Repetition Combobox updater
+        self._repct_listeners = {}  # RepetitionStream -> callable
+
         # If any stream already present: listen to them in the scheduler (but
         # don't display)
         for s in self._tab_data_model.streams.value:
             logging.debug("Adding stream present at init to scheduler: %s", s)
             self._scheduleStream(s)
+
+        self._stream_config = data.get_stream_settings_config()
 
     def pause(self):
         """ Pause (=freeze) SettingEntry related control updates """
@@ -972,7 +1025,7 @@ class StreamBarController(object):
 
         It's added at the end of the list. If an action with the same title exists, it is replaced.
 
-        :param title: (string) Text displayed in the menu
+        :param title: (string) Textab_data.t displayed in the menu
         :param callback: (callable) function to call when the action is selected
 
         """
@@ -1164,6 +1217,39 @@ class StreamBarController(object):
         returns (StreamPanel): the panel created
         """
         return self._add_sem_stream("EBIC", self._main_data_model.ebic, **kwargs)
+
+    def addScannedTCSettings(self, **kwargs):
+        """
+        Creates a new ScannedTCSettingStream and panel in the stream bar.
+        returns (StreamPanel): the panel created
+        """
+
+        detector = self._main_data_model.photo_ds[0]
+
+        s = acqstream.ScannedTCSettingsStream(
+            "FLIM %s" % (detector.name,),
+            detector,
+            self._main_data_model.light,
+            self._main_data_model.laser_mirror,
+            self._main_data_model.time_correlator,
+            self._main_data_model.tc_detector,
+            self._main_data_model.tc_scanner
+        )
+
+        self._connectROI(s)
+
+        stream_cont = self._add_stream(s, add_to_view=True, **kwargs)
+        stream_cont.stream_panel.show_visible_btn(False)
+        vactrls = []
+
+        for vaname, ent in stream_cont.entries.iteritems():
+            vactrls.append(ent.value_ctrl)
+            if vaname == "repetition":
+                self._connectRepContent(s, ent.value_ctrl)
+
+        self._connectRepOverlay(s, vactrls)
+
+        return stream_cont
 
     def _add_sem_stream(self, name, detector, **kwargs):
         if self._main_data_model.role == "delphi":
@@ -1379,6 +1465,12 @@ class StreamBarController(object):
         # => need more ways to change current stream (at least pick one from the
         # current view?)
 
+        # Don't mess too much with the spot stream => just copy "should_update"
+        if hasattr(self._tab_data_model, "spotStream"):
+            if stream is self._tab_data_model.spotStream:
+                stream.is_active.value = updated
+                return
+
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
             if not updated:
@@ -1408,6 +1500,31 @@ class StreamBarController(object):
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
 
         if updated:
+            # Activate or deactivate spot mode based on what the stream needs
+            # Note: changing tool is fine, because it will only _pause_ the
+            # other streams, and we will not come here again.
+            if isinstance(stream, self._spot_incompatible):
+                logging.info("Stopping spot mode because %s starts", stream)
+                if self._tab_data_model.tool.value == TOOL_SPOT:
+                    self._tab_data_model.tool.value = TOOL_NONE
+            elif isinstance(stream, self._spot_required):
+                logging.info("Starting spot mode because %s starts", stream)
+                spots = self._tab_data_model.spotStream
+                was_active = spots.is_active.value
+                self._tab_data_model.tool.value = TOOL_SPOT
+
+                # Hack: to be sure the settings of the spot streams are correct
+                # (because the concurrent stream might have changed them, cf
+                # Monochromator), we stop/start it each time a stream plays
+                if was_active:
+                    # FIXME: when switching from one Monochromator stream to
+                    # another one, it seems to mess up the resolution on the
+                    # first time => needs to be done after the old stream is paused
+                    # and before the new one plays
+                    logging.debug("Resetting spot mode")
+                    spots.is_active.value = False
+                    spots.is_active.value = True
+
             # put it back to the beginning of the list to indicate it's the
             # latest stream used
             l = self._tab_data_model.streams.value
@@ -1420,6 +1537,18 @@ class StreamBarController(object):
                 return  # fast path
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
+
+    def on_tool_change(self, tool):
+        """ Pause the SE and CLI streams when the Spot mode tool is activated """
+        spots = self._tab_data_model.spotStream
+        if tool == TOOL_SPOT:
+            # Make sure the streams non compatible are not playing
+            paused_st = self.pauseStreams(self._spot_incompatible)
+            spots.should_update.value = True
+        else:
+            # Make sure that the streams requiring the spot are not playing
+            paused_st = self.pauseStreams(self._spot_required)
+            spots.should_update.value = False
 
     def _prepareAndActivate(self, stream, updated):
         """
@@ -1607,6 +1736,218 @@ class StreamBarController(object):
     def _has_visible_streams(self):
         return any(s.IsShown() for s in self._stream_bar.stream_panels)
 
+    # ROA synchronisation methods
+    # Updating the ROI requires a bit of care, because the streams might
+    # update back their ROI with a modified value. To avoid loops, we disable
+    # and re-enable before and after each (direct) change.
+
+    def _connectROI(self, stream):
+        """
+        Connect the .roi of the (repetition) stream to the global ROA
+        """
+        # First, start with the same ROI as the global ROA
+        stream.roi.value = self._tab_data_model.roa.value
+
+        listener = functools.partial(self._onStreamROI, stream)
+        stream.roi.subscribe(listener)
+        self._roi_listeners[stream] = listener
+
+    def _disableROISub(self):
+        self._tab_data_model.roa.unsubscribe(self._onROA)
+        for s, listener in self._roi_listeners.items():
+            s.roi.unsubscribe(listener)
+
+    def _enableROISub(self):
+        self._tab_data_model.roa.subscribe(self._onROA)
+        for s, listener in self._roi_listeners.items():
+            s.roi.subscribe(listener)
+
+    def _onStreamROI(self, stream, roi):
+        """
+        Called when the ROI of a stream is changed.
+        Used to update the global ROA.
+        stream (Stream): the stream which is changed
+        roi (4 floats): roi
+        """
+        self._disableROISub()
+        try:
+            # Set the global ROA to the new ROI (defined by the user)
+            logging.debug("setting roa from %s to %s", stream.name.value, roi)
+            self._tab_data_model.roa.value = roi
+
+            # Update all the other streams to (almost) the same ROI too
+            for s in self._roi_listeners:
+                if s is not stream:
+                    logging.debug("setting roi of %s to %s", s.name.value, roi)
+                    s.roi.value = roi
+        finally:
+            self._enableROISub()
+
+    def _onROA(self, roi):
+        """
+        called when the SEM concurrent roi (region of acquisition) is changed
+        To synchronise global ROA -> streams ROI
+        """
+        self._disableROISub()
+        try:
+            # Set all the streams to the requested ROA
+            for s in self._roi_listeners:
+                logging.debug("setting roi of %s to %s", s.name.value, roi)
+                s.roi.value = roi
+
+            # Read back the ROA from the "main" stream (= latest played)
+            for s in self._tab_data_model.streams.value:  # in LRU order
+                if s in self._roi_listeners:
+                    logging.debug("setting roa back from %s to %s",
+                                  s.name.value, s.roi.value)
+                    self._tab_data_model.roa.value = s.roi.value
+                    break
+        finally:
+            self._enableROISub()
+
+    # Repetition visualisation on focus/hover methods
+    # The global rule (in order):
+    # * if mouse is hovering an entry (repetition or pixel size) => display
+    #   repetition for this stream
+    # * if an entry of stream has focus => display repetition for this stream
+    # * don't display repetition
+
+    def _connectRepOverlay(self, stream, controls):
+        """
+        Connects the stream VAs and controls to display the repetition overlay
+          when needed.
+        stream (RepetitionStream)
+        controls (list of wx.Controls): controls that are used to change the
+          repetition/pixel size info
+        """
+
+        listener = functools.partial(self._onRepStreamVA, stream)
+        # repetition VA not needed: if it changes, either roi or pxs also change
+        stream.roi.subscribe(listener)
+        stream.pixelSize.subscribe(listener)
+        self._repct_listeners[stream] = listener
+
+        for c in controls:
+            self._rep_ctrl[c] = stream
+            c.Bind(wx.EVT_SET_FOCUS, self._onRepFocus)
+            c.Bind(wx.EVT_KILL_FOCUS, self._onRepFocus)
+            c.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
+            c.Bind(wx.EVT_LEAVE_WINDOW, self._onRepHover)
+            # To handle the combobox, which send leave window events when the
+            # mouse goes into the text ctrl child of the combobox.
+            if hasattr(c, "TextCtrl"):
+                tc = c.TextCtrl
+                self._rep_ctrl[tc] = stream
+                tc.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
+
+    @wxlimit_invocation(0.1)
+    def _updateRepOverlay(self):
+        """
+        Ensure the repetition overlay is displaying the right thing
+        """
+
+        if self._view_controller is None:
+            return
+
+        if self._hover_stream:
+            stream = self._hover_stream
+        else:
+            # TODO: save _focused_stream on enter/leave and avoid call to FindFocus?
+            focused = wx.Window.FindFocus()
+            stream = self._rep_ctrl.get(focused)  # 'None' if not an interesting control
+
+        # Convert stream to right display (for each spatial/SEM/Optical view)
+        views = self._tab_data_model.visible_views.value
+        em_views = [v for v in views if (issubclass(acqstream.EMStream, v.stream_classes) or 
+                                         issubclass(acqstream.OpticalStream, v.stream_classes))]
+        em_cvs = [vp.canvas for vp in self._view_controller.views_to_viewports(em_views)]
+        for cvs in em_cvs:
+            if stream is None:
+                cvs.show_repetition(None)
+            else:
+                rep = stream.repetition.value
+                if isinstance(stream, acqstream.ARStream):
+                    style = RepetitionSelectOverlay.FILL_POINT
+                else:
+                    style = RepetitionSelectOverlay.FILL_GRID
+                cvs.show_repetition(rep, style)
+
+    def _onRepStreamVA(self, stream, val):
+        """
+        Called when one of the repetition VAs of a RepetitionStream is modified
+        stream (RepetitionStream)
+        val (value): new VA value, unused
+        """
+        self._updateRepOverlay()
+
+    def _onRepFocus(self, evt):
+        """
+        Called when any control related to the repetition get/loose focus
+        """
+        self._updateRepOverlay()
+        evt.Skip()
+
+    def _onRepHover(self, evt):
+        if evt.Entering():
+            stream = self._rep_ctrl[evt.EventObject]
+        elif evt.Leaving():
+            stream = None
+        else:
+            logging.warning("neither leaving nor entering")
+        # logging.debug("Event hover on stream %s", stream)
+        self._hover_stream = stream
+        self._updateRepOverlay()
+        evt.Skip()
+
+    # Repetition combobox content updater
+
+    def _connectRepContent(self, stream, control):
+        """
+        Connects the stream repetition VA to ensure the combobox choices are
+        always up-to-date
+        stream (RepetitionStream)
+        control (Combobox)
+        """
+
+        listener = functools.partial(self._onStreamRep, stream.repetition, control)
+        stream.repetition.subscribe(listener, init=True)
+        self._rep_listeners[stream] = listener
+
+    def _onStreamRep(self, va, control, rep):
+        """
+        Called when the repetition VAs of a RepetitionStream is modified.
+        Recalculate the repetition presets according to the repetition ratio
+        """
+        ratio = rep[1] / rep[0]
+
+        # Create the entries:
+        choices = [(1, 1)]  # 1 x 1 should always be there
+
+        # Add a couple values below/above the current repetition
+        for m in (1 / 4, 1 / 2, 1, 2, 4, 10):
+            x = int(round(rep[0] * m))
+            y = int(round(x * ratio))
+            choices.append((x, y))
+
+        # remove non-possible ones
+        def is_compatible(c):
+            # TODO: it's actually further restricted by the current size of
+            # the ROI (and the minimum size of the pixelSize), so some of the
+            # big repetitions might actually not be valid. It's not a big
+            # problem as the VA setter will silently limit the repetition
+            return (va.range[0][0] <= c[0] <= va.range[1][0] and
+                    va.range[0][1] <= c[1] <= va.range[1][1])
+
+        choices = [choice for choice in choices if is_compatible(choice)]
+
+        # remove duplicates and sort
+        choices = sorted(set(choices))
+
+        # replace the old list with this new version
+        control.Clear()
+        for choice in choices:
+            control.Append(u"%s x %s px" % choice, choice)
+
 
 class SecomStreamsController(StreamBarController):
     """
@@ -1680,6 +2021,12 @@ class SecomStreamsController(StreamBarController):
             compatible = view.is_compatible(acqstream.SEMStream)
             return enabled and compatible
 
+        def flim_capable():
+            enabled = (self._main_data_model.time_correlator is not None)
+            view = self._tab_data_model.focussedView.value
+            compatible = view.is_compatible(acqstream.ScannedTCSettingsStream)
+            return enabled and compatible
+
         # SED
         if self._main_data_model.ebeam and self._main_data_model.sed:
             self.add_action("Secondary electrons", self.addSEMSED, sem_capable)
@@ -1689,6 +2036,9 @@ class SecomStreamsController(StreamBarController):
         # EBIC
         if self._main_data_model.ebeam and self._main_data_model.ebic:
             self.add_action("EBIC", self.addEBIC, sem_capable)
+        # FLIM
+        if self._main_data_model.time_correlator is not None:
+            self.add_action("FLIM", self.addScannedTCSettings, flim_capable)
 
     def _onStreamUpdate(self, stream, updated):
         if updated:
@@ -1748,40 +2098,14 @@ class SparcStreamsController(StreamBarController):
     Note: tab_data.spotStream should be part of the streams
     """
     def __init__(self, tab_data, stream_bar, view_ctrl, **kwargs):
-        super(SparcStreamsController, self).__init__(tab_data, stream_bar, **kwargs)
-        self._view_controller = view_ctrl
+        super(SparcStreamsController, self).__init__(tab_data, stream_bar, view_ctrl=view_ctrl, ** kwargs)
 
-        self._stream_config = data.get_stream_settings_config()
-
-        # Never allow SEM and CLi Stream to play with spot mode (because they are
-        # spatial, so it doesn't make sense to see just one point), and force
-        # AR, Spectrum, and Monochromator streams with spot mode (because the
-        # first two otherwise could be playing with beam "blanked", which shows
-        # weird signal, and the last one would be very slow to update).
-        # TODO: it could make sense to allow AR and Spectrum stream to play
-        # while doing a normal scan, but the scheduler would need to allow playing
-        # on spatial stream simultaneously (just the SE?) and force to play it
-        # when not in spot mode. (for now, we keep it simple)
-        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream)
-        self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
-                               acqstream.MonochromatorSettingsStream)
-        tab_data.tool.subscribe(self.on_tool_change)
+        # self._stream_config = data.get_stream_settings_config()
 
         # Force the ROA to be defined by the user on first use
         # semStream is semcl_stream set in tabs.py
-        tab_data.semStream.roi.value = acqstream.UNDEFINED_ROI
-        tab_data.semStream.roi.subscribe(self._onROA)
-
-        # for storing the ROI listeners of the repetition streams
-        self._roi_listeners = {}  # RepetitionStream -> callable
-
-        # Repetition visualisation
-        self._hover_stream = None  # stream for which the repetition must be displayed
-        self._rep_listeners = {}  # RepetitionStream -> callable
-        self._rep_ctrl = {}  # wx Control -> RepetitionStream
-
-        # Repetition Combobox updater
-        self._repct_listeners = {}  # RepetitionStream -> callable
+        tab_data.roa = tab_data.semStream.roi
+        tab_data.roa.subscribe(self._onROA)
 
         # Each stream will be created both as a SettingsStream and a MDStream
         # When the SettingsStream is deleted, automatically remove the MDStream
@@ -2165,52 +2489,7 @@ class SparcStreamsController(StreamBarController):
                                   play=False
                                   )
 
-    # Stream scheduling related methods
-
-    def on_tool_change(self, tool):
-        """ Pause the SE and CLI streams when the Spot mode tool is activated """
-        spots = self._tab_data_model.spotStream
-        if tool == TOOL_SPOT:
-            # Make sure the streams non compatible are not playing
-            paused_st = self.pauseStreams(self._spot_incompatible)
-            spots.should_update.value = True
-        else:
-            # Make sure that the streams requiring the spot are not playing
-            paused_st = self.pauseStreams(self._spot_required)
-            spots.should_update.value = False
-
     def _onStreamUpdate(self, stream, updated):
-
-        # Don't mess too much with the spot stream => just copy "should_update"
-        if stream is self._tab_data_model.spotStream:
-            stream.is_active.value = updated
-            return
-
-        if updated:
-            # Activate or deactivate spot mode based on what the stream needs
-            # Note: changing tool is fine, because it will only _pause_ the
-            # other streams, and we will not come here again.
-            if isinstance(stream, self._spot_incompatible):
-                logging.info("Stopping spot mode because %s starts", stream)
-                if self._tab_data_model.tool.value == TOOL_SPOT:
-                    self._tab_data_model.tool.value = TOOL_NONE
-            elif isinstance(stream, self._spot_required):
-                logging.info("Starting spot mode because %s starts", stream)
-                spots = self._tab_data_model.spotStream
-                was_active = spots.is_active.value
-                self._tab_data_model.tool.value = TOOL_SPOT
-
-                # Hack: to be sure the settings of the spot streams are correct
-                # (because the concurrent stream might have changed them, cf
-                # Monochromator), we stop/start it each time a stream plays
-                if was_active:
-                    # FIXME: when switching from one Monochromator stream to
-                    # another one, it seems to mess up the resolution on the
-                    # first time => needs to be done after the old stream is paused
-                    # and before the new one plays
-                    logging.debug("Resetting spot mode")
-                    spots.is_active.value = False
-                    spots.is_active.value = True
 
         fv = self._tab_data_model.focussedView.value
         if (isinstance(stream, fv.stream_classes) and  # view is compatible
@@ -2236,210 +2515,3 @@ class SparcStreamsController(StreamBarController):
         for s in self._tab_data_model.streams.value:
             if model.hasVA(s, "useScanStage"):
                 s.useScanStage.value = use
-
-    # ROA synchronisation methods
-    # Updating the ROI requires a bit of care, because the streams might
-    # update back their ROI with a modified value. To avoid loops, we disable
-    # and re-enable before and after each (direct) change.
-
-    def _connectROI(self, stream):
-        """
-        Connect the .roi of the (repetition) stream to the global ROA
-        """
-        # First, start with the same ROI as the global ROA
-        stream.roi.value = self._tab_data_model.semStream.roi.value
-
-        listener = functools.partial(self._onStreamROI, stream)
-        stream.roi.subscribe(listener)
-        self._roi_listeners[stream] = listener
-
-    def _disableROISub(self):
-        self._tab_data_model.semStream.roi.unsubscribe(self._onROA)
-        for s, listener in self._roi_listeners.items():
-            s.roi.unsubscribe(listener)
-
-    def _enableROISub(self):
-        self._tab_data_model.semStream.roi.subscribe(self._onROA)
-        for s, listener in self._roi_listeners.items():
-            s.roi.subscribe(listener)
-
-    def _onStreamROI(self, stream, roi):
-        """
-        Called when the ROI of a stream is changed.
-        Used to update the global ROA.
-        stream (Stream): the stream which is changed
-        roi (4 floats): roi
-        """
-        self._disableROISub()
-        try:
-            # Set the global ROA to the new ROI (defined by the user)
-            logging.debug("setting roa from %s to %s", stream.name.value, roi)
-            self._tab_data_model.semStream.roi.value = roi
-
-            # Update all the other streams to (almost) the same ROI too
-            for s in self._roi_listeners:
-                if s is not stream:
-                    logging.debug("setting roi of %s to %s", s.name.value, roi)
-                    s.roi.value = roi
-        finally:
-            self._enableROISub()
-
-    def _onROA(self, roi):
-        """
-        called when the SEM concurrent roi (region of acquisition) is changed
-        To synchronise global ROA -> streams ROI
-        """
-        self._disableROISub()
-        try:
-            # Set all the streams to the requested ROA
-            for s in self._roi_listeners:
-                logging.debug("setting roi of %s to %s", s.name.value, roi)
-                s.roi.value = roi
-
-            # Read back the ROA from the "main" stream (= latest played)
-            for s in self._tab_data_model.streams.value: # in LRU order
-                if s in self._roi_listeners:
-                    logging.debug("setting roa back from %s to %s",
-                                  s.name.value, s.roi.value)
-                    self._tab_data_model.semStream.roi.value = s.roi.value
-                    break
-        finally:
-            self._enableROISub()
-
-    # Repetition visualisation on focus/hover methods
-    # The global rule (in order):
-    # * if mouse is hovering an entry (repetition or pixel size) => display
-    #   repetition for this stream
-    # * if an entry of stream has focus => display repetition for this stream
-    # * don't display repetition
-
-    def _connectRepOverlay(self, stream, controls):
-        """
-        Connects the stream VAs and controls to display the repetition overlay
-          when needed.
-        stream (RepetitionStream)
-        controls (list of wx.Controls): controls that are used to change the
-          repetition/pixel size info
-        """
-
-        listener = functools.partial(self._onRepStreamVA, stream)
-        # repetition VA not needed: if it changes, either roi or pxs also change
-        stream.roi.subscribe(listener)
-        stream.pixelSize.subscribe(listener)
-        self._rep_listeners[stream] = listener
-
-        for c in controls:
-            self._rep_ctrl[c] = stream
-            c.Bind(wx.EVT_SET_FOCUS, self._onRepFocus)
-            c.Bind(wx.EVT_KILL_FOCUS, self._onRepFocus)
-            c.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
-            c.Bind(wx.EVT_LEAVE_WINDOW, self._onRepHover)
-            # To handle the combobox, which send leave window events when the
-            # mouse goes into the text ctrl child of the combobox.
-            if hasattr(c, "TextCtrl"):
-                tc = c.TextCtrl
-                self._rep_ctrl[tc] = stream
-                tc.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
-
-    @wxlimit_invocation(0.1)
-    def _updateRepOverlay(self):
-        """
-        Ensure the repetition overlay is displaying the right thing
-        """
-
-        if self._hover_stream:
-            stream = self._hover_stream
-        else:
-            # TODO: save _focused_stream on enter/leave and avoid call to FindFocus?
-            focused = wx.Window.FindFocus()
-            stream = self._rep_ctrl.get(focused) # 'None' if not an interesting control
-
-        # Convert stream to right display (for each spatial/SEM view)
-        views = self._tab_data_model.visible_views.value
-        em_views = [v for v in views if issubclass(acqstream.EMStream, v.stream_classes)]
-        em_cvs = [vp.canvas for vp in self._view_controller.views_to_viewports(em_views)]
-        for cvs in em_cvs:
-            if stream is None:
-                cvs.show_repetition(None)
-            else:
-                rep = stream.repetition.value
-                if isinstance(stream, acqstream.ARStream):
-                    style = RepetitionSelectOverlay.FILL_POINT
-                else:
-                    style = RepetitionSelectOverlay.FILL_GRID
-                cvs.show_repetition(rep, style)
-
-    def _onRepStreamVA(self, stream, val):
-        """
-        Called when one of the repetition VAs of a RepetitionStream is modified
-        stream (RepetitionStream)
-        val (value): new VA value, unused
-        """
-        self._updateRepOverlay()
-
-    def _onRepFocus(self, evt):
-        """
-        Called when any control related to the repetition get/loose focus
-        """
-        self._updateRepOverlay()
-        evt.Skip()
-
-    def _onRepHover(self, evt):
-        if evt.Entering():
-            stream = self._rep_ctrl[evt.EventObject]
-        elif evt.Leaving():
-            stream = None
-        else:
-            logging.warning("neither leaving nor entering")
-        # logging.debug("Event hover on stream %s", stream)
-        self._hover_stream = stream
-        self._updateRepOverlay()
-        evt.Skip()
-
-    # Repetition combobox content updater
-
-    def _connectRepContent(self, stream, control):
-        """
-        Connects the stream repetition VA to ensure the combobox choices are
-        always up-to-date
-        stream (RepetitionStream)
-        control (Combobox)
-        """
-
-        listener = functools.partial(self._onStreamRep, stream.repetition, control)
-        stream.repetition.subscribe(listener, init=True)
-        self._repct_listeners[stream] = listener
-
-    def _onStreamRep(self, va, control, rep):
-        """
-        Called when the repetition VAs of a RepetitionStream is modified.
-        Recalculate the repetition presets according to the repetition ratio
-        """
-        ratio = rep[1] / rep[0]
-
-        # Create the entries:
-        choices = [(1, 1)]  # 1 x 1 should always be there
-
-        # Add a couple values below/above the current repetition
-        for m in (1 / 4, 1 / 2, 1, 2, 4, 10):
-            x = int(round(rep[0] * m))
-            y = int(round(x * ratio))
-            choices.append((x, y))
-
-        # remove non-possible ones
-        def is_compatible(c):
-            # TODO: it's actually further restricted by the current size of
-            # the ROI (and the minimum size of the pixelSize), so some of the
-            # big repetitions might actually not be valid. It's not a big
-            # problem as the VA setter will silently limit the repetition
-            return (va.range[0][0] <= c[0] <= va.range[1][0] and
-                    va.range[0][1] <= c[1] <= va.range[1][1])
-        choices = [choice for choice in choices if is_compatible(choice)]
-
-        # remove duplicates and sort
-        choices = sorted(set(choices))
-
-        # replace the old list with this new version
-        control.Clear()
-        for choice in choices:
-            control.Append(u"%s x %s px" % choice, choice)
