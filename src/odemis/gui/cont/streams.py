@@ -1233,7 +1233,8 @@ class StreamBarController(object):
             self._main_data_model.laser_mirror,
             self._main_data_model.time_correlator,
             self._main_data_model.tc_detector,
-            self._main_data_model.tc_scanner
+            self._main_data_model.tc_scanner,
+            opm=self._main_data_model.opm,
             # emtvas={"power", "period"}
         )
 
@@ -2033,7 +2034,15 @@ class SecomStreamsController(StreamBarController):
             enabled = (self._main_data_model.time_correlator is not None)
             view = self._tab_data_model.focussedView.value
             compatible = view.is_compatible(acqstream.ScannedTCSettingsStream)
-            return enabled and compatible
+
+            # Check if there is a FLIM stream already
+            flim_already = False
+            for s in self._tab_data_model.streams.value:
+                if isinstance(s, acqstream.ScannedTCSettingsStream):
+                    flim_already = True
+                    break
+
+            return enabled and compatible and not flim_already
 
         # SED
         if self._main_data_model.ebeam and self._main_data_model.sed:
