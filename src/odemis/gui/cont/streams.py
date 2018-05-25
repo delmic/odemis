@@ -2037,10 +2037,10 @@ class SecomStreamsController(StreamBarController):
 
             # Check if there is a FLIM stream already
             flim_already = False
-            for s in self._tab_data_model.streams.value:
-                if isinstance(s, acqstream.ScannedTCSettingsStream):
-                    flim_already = True
-                    break
+            
+            if any( isinstance(s, acqstream.ScannedTCSettingsStream) 
+                    for s in self._tab_data_model.streams.value):
+                flim_already = True
 
             return enabled and compatible and not flim_already
 
