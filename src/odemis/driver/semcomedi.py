@@ -2828,26 +2828,22 @@ class Scanner(model.Emitter):
         return phy_pos
 
     def _onMagnification(self, mag):
-        self._updatePixelSize()
-
-    def _onScale(self, s):
-        self._updatePixelSize()
-
-    def _updatePixelSize(self):
-        """
-        Update the pixel size using the scale, HFWNoMag and magnification
-        """
-        mag = self.magnification.value
         self.parent._metadata[model.MD_LENS_MAG] = mag
 
         # Pixel size is the same in both dimensions
         pxs = (self.HFWNoMag / (self._shape[0] * mag),) * 2
-        # it's read-only, so we change it only via _value
-        self.pixelSize._value = pxs
-        self.pixelSize.notify(pxs)
+        # The VA contains the pixelSize for a scale == 1
+        self.pixelSize._set_value(pxs, force_write=True)
+        self._updatePixelSizeMD()
 
-        # If scaled up, the pixels are bigger
-        pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
+    def _onScale(self, s):
+        self._updatePixelSizeMD()
+
+    def _updatePixelSizeMD(self):
+        # If scaled up, the pixels are bigger => update metadata
+        pxs = self.pixelSize.value
+        scale = self.scale.value
+        pxs_scaled = (pxs[0] * scale[0], pxs[1] * scale[1])
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, value):
