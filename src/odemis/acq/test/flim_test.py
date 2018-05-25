@@ -89,15 +89,17 @@ class TestFlim(unittest.TestCase):
         logging.info("image: dim %s" , im.shape)
         self._image = im
 
-    def validate_scan_sim(self, remote, repetition, dwelltime, pixel_size):
-        self.assertIsNotNone(remote.raw)
-        self.assertIsNotNone(remote.raw[0].metadata)
-        self.assertEqual(remote.raw[0].shape[::-1], repetition)
-        self.assertEqual(remote.raw[0].metadata[MD_DWELL_TIME], dwelltime)
-        # self.assertEqual(remote.raw[0].metadata[MD_PIXEL_SIZE], pixel_size)
-        
+    def validate_scan_sim(self, das, repetition, dwelltime, pixel_size):
+        self.assertIsNotNone(das)
+        self.assertIsNotNone(das[0].metadata)
+        self.assertEqual(das[0].shape[::-1], repetition)
+        self.assertAlmostEqual(das[0].metadata[MD_DWELL_TIME], dwelltime)
+        md_pxs = das[0].metadata[MD_PIXEL_SIZE]
+        self.assertAlmostEqual(md_pxs[0], pixel_size)
+        self.assertAlmostEqual(md_pxs[1], pixel_size)
+
         # Check MD_POS is remotely correct, by checking it's +- 10cm.
-        pos = remote.raw[0].metadata[MD_POS]
+        pos = das[0].metadata[MD_POS]
         assert -0.1 < pos[0] < 0.1 and -0.1 < pos[1] < 0.1
 
     def test_flim_acq_simple(self):
@@ -126,10 +128,12 @@ class TestFlim(unittest.TestCase):
             self.assertTrue(any(em > 0) for em in self.ex_light.emissions.value)
             self.assertGreater(self.ex_light.power.value, 0)
             self.assertGreater(self.ex_light.period.value, 0)
-            f.result()  # wait for the result. This blocks
+            das = f.result()  # wait for the result. This blocks
+            # self.assertEqual(das, remote.raw) # FIXME: for now it doesn't return anything
+            das = remote.raw
             time.sleep(0.3)
-            self.validate_scan_sim(remote, rep, helper.dwellTime.value,
-                                   helper.time_correlator.getMetadata()[MD_PIXEL_SIZE])
+            self.validate_scan_sim(das, rep, helper.dwellTime.value,
+                                   helper.pixelSize.value)
             time.sleep(0.3)
 
     def test_repetitions_and_roi(self):
@@ -221,6 +225,49 @@ class TestFlim(unittest.TestCase):
         self.assertGreaterEqual(self._image.shape[0], 10, "Not enough data.")
         # make sure there are times for each value.
         self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
+
+    def test_rep_ss(self):
+        """
+        Test the RepetitionStream part of the ScannedTCSettingsStream,
+        when used on a confocal microscope, and especially the NikonC2
+        """
+        # Create the stream
+        tcs = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
+                                             self.sft, self.apd, self.tc_scanner)
+        self._image = None
+        tcs.image.subscribe(self._on_image)
+
+        self.assertEqual(tcs.repetition.range[1], self.lscanner.shape,
+                         "Maximum repetition not equal to the hardware max resolution")
+
+        sshape = self.lscanner.shape
+        # For now, we assume the scanner has a square shape
+        assert sshape[0] == sshape[1]
+
+        # Check that the pixel size is properly computed
+        # We assume there is no PIXEL_SIZE_COR
+
+        # To compute the full FoV: pixel size * shape (shape == scale * res)
+        fov = tuple(ps * sh for ps, sh in
+                    zip(self.lscanner.pixelSize.value, self.lscanner.shape))
+
+        # At full FoV, with the max resolution, it should be the same as PIXEL_SIZE
+        tcs.roi.value = (0, 0, 1, 1)  # Full FoV
+        tcs.repetition.value = tcs.repetition.range[1]
+        pxs = tcs.pixelSize.value  # 1 float
+        scan_pxs = self.lscanner.pixelSize.value  # 2 floats
+        self.assertEqual(scan_pxs, (pxs, pxs))
+        s_fov = pxs * tcs.repetition.value[0], pxs * tcs.repetition.value[1]
+        self.assertEqual(fov, s_fov)
+
+        # At full FoV, with rep = 1, 1, the pixelSize should be the same as the whole FoV
+        tcs.roi.value = (0, 0, 1, 1)  # Full FoV
+        tcs.repetition.value = (1, 1)
+        assert tcs.roi.value == (0, 0, 1, 1)
+        assert tcs.repetition.value == (1, 1)
+        pxs = tcs.pixelSize.value  # 1 float
+        scan_pxs = self.lscanner.pixelSize.value  # 2 floats
+        self.assertEqual(fov, (pxs, pxs))
 
 
 if __name__ == "__main__":

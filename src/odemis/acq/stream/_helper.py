@@ -65,6 +65,11 @@ class RepetitionStream(LiveStream):
         # and allow us to ensure each pixel is square. (Non-square pixels are
         # not a problem for the hardware, but annoying to display data in normal
         # software).
+        # TODO: only have ROI + rep here, and add pixel size into the GUI controller?
+        # This way, the code is much simpler here. It doesn't even need to know
+        # about the physical unit (ie, the FoV). Changing any of the VA wouldn't
+        # affect the other one. Of course, all the current complexity would go
+        # into the GUI controller then (there is no free lunch!).
 
         # We ensure in the setters that all the data is always consistent:
         # roi set: roi + pxs → repetition + roi + pxs
@@ -117,8 +122,7 @@ class RepetitionStream(LiveStream):
         # This allows to keep the ROI at the same place in the SEM FoV.
         # Note: this is to be done only if the user needs to manually update the
         # magnification.
-        # TODO: only do this if the SEM component doesn't support horizontalFoV?
-        # or move the whole code to the GUI.
+        # TODO: move the whole code to the GUI. and subscribe to emitter.pixelSize instead?
         try:
             magva = self._getEmitterVA("magnification")
             self._prev_mag = magva.value
@@ -343,6 +347,10 @@ class RepetitionStream(LiveStream):
 
         return rep
 
+    # TODO: instead of caring about the pixel size in m, just use the scale, which
+    # is a ratio between pixel size and FoV. The advantage is that it's fixed.
+    # In this case, the only moment it's useful to know the current pixelSize
+    # is when converting it back in physical units for .pixelSize.
     def _getPixelSizeRange(self):
         """
         return (tuple of 2 floats): min and max value of the pixel size at the
@@ -359,10 +367,13 @@ class RepetitionStream(LiveStream):
         max_pxs = min(epxs[0] * shape[0], epxs[1] * shape[1])
         return (min_pxs, max_pxs)
 
-    # TODO: only return the time needed for the live view? And for the real
-    # acquisition, use the MDStream method?
     @abstractmethod
     def estimateAcquisitionTime(self):
+        """
+        Estimates the acquisition time for the "live" update of the RepetitionStream.
+        To get the acquisition time of the actual stream (ie, the corresponding
+        MDStream), you need to ask that stream.
+        """
         return self.SETUP_OVERHEAD
 
 
