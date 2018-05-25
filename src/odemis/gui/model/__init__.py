@@ -40,7 +40,6 @@ from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 import os
 import threading
 import time
-import re
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -116,7 +115,6 @@ class MainGUIData(object):
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
         "time-correlator": "time_correlator",
-        # "tc-detector": "tcd",
         "tc-scanner": "tc_scanner",
         "tc-detector": "tc_detector",
         "spectrometer": "spectrometer",
@@ -517,7 +515,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
-        self.roa = model.TupleContinuous((0, 0, 1, 1),
+        self.roa = model.TupleContinuous((0, 0, 0, 0),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
@@ -569,10 +567,6 @@ class AnalysisGUIData(MicroscopyGUIData):
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed
         self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
-
-        self.roa = model.TupleContinuous((0, 0, 1, 1),
-                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
 
         # The current file being used for calibration. It is set to u""
         # when no calibration is used. They are directly synchronised with the
@@ -1347,7 +1341,7 @@ class StreamView(View):
 
     def _onNewImage(self, im):
         """
-        Called when one stream has its image updated
+        Called when one stream has        "tc-detector": "tcd", its image updated
         im (DataArray)
         """
         # just let everyone know that the composited image has changed
