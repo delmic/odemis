@@ -1138,7 +1138,7 @@ class ScannedTCSettingsStream(RepetitionStream):
             try:
                 dt = data.metadata[model.MD_DWELL_TIME]
             except KeyError:
-                dt = data.metadata.get(model.MD_EXP_TIME, self.lemitter.dwellTime.value)
+                dt = data.metadata.get(model.MD_EXP_TIME, self.scanner.dwellTime.value)
                 logging.warning("No dwell time metadata found in the ScannedTCSettings data, "
                                 "will use %f s", dt)
 

@@ -1190,7 +1190,7 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             hwdetvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
-            emtvas={"power"}  # TODO: more VAs? Eg: frequency
+            emtvas={"power", "period"}
         )
         self._ensure_power_non_null(s)
 
@@ -1234,6 +1234,7 @@ class StreamBarController(object):
             self._main_data_model.time_correlator,
             self._main_data_model.tc_detector,
             self._main_data_model.tc_scanner
+            # emtvas={"power", "period"}
         )
 
         self._connectROI(s)
@@ -1507,6 +1508,9 @@ class StreamBarController(object):
                 logging.info("Stopping spot mode because %s starts", stream)
                 if self._tab_data_model.tool.value == TOOL_SPOT:
                     self._tab_data_model.tool.value = TOOL_NONE
+                    spots = self._tab_data_model.spotStream
+                    spots.is_active.value = False
+
             elif isinstance(stream, self._spot_required):
                 logging.info("Starting spot mode because %s starts", stream)
                 spots = self._tab_data_model.spotStream
@@ -1523,6 +1527,10 @@ class StreamBarController(object):
                     # and before the new one plays
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
+                    spots.is_active.value = True
+                else:
+                    # make it active
+                    logging.debug("Starting spot mode")
                     spots.is_active.value = True
 
             # put it back to the beginning of the list to indicate it's the
@@ -2224,7 +2232,7 @@ class SparcStreamsController(StreamBarController):
 
     def addEBIC(self, **kwargs):
         # Need to use add_to_view=True to force only showing on the right
-        # view (and not on the current view)
+        # view (and not onself.cnvs.update_drawing() the current view)
         # TODO: should it be handled the same way as CLIntensity? (ie, respects
         # the ROA)
         return super(SparcStreamsController, self).addEBIC(add_to_view=True, **kwargs)

@@ -575,6 +575,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
 
     def on_spot_change(self, _):
         self._ratio_to_phys()
+        self.cnvs.update_drawing()
 
     def on_size(self, evt):
         self._ratio_to_phys()

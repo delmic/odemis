@@ -375,6 +375,7 @@ class SecomStreamsTab(Tab):
             tab_data.spotStream = spot_stream
             # TODO: add to tab_data.streams and move the handling to the stream controller?
             tab_data.spotPosition.subscribe(self._onSpotPosition)
+            tab_data.tool.subscribe(self.on_tool_change)
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
@@ -529,6 +530,7 @@ class SecomStreamsTab(Tab):
             assert all(0 <= p <= 1 for p in pos)
             # Just use the same value for LT and RB points
             self.tab_data_model.spotStream.roi.value = (pos + pos)
+            logging.debug("Updating spot stream roi to %s", self.tab_data_model.spotStream.roi.value)
 
     def _onAutofocus(self, active):
         # Determine which stream is active
@@ -713,6 +715,22 @@ class SecomStreamsTab(Tab):
             return 2
         else:
             return None
+
+    def on_tool_change(self, tool):
+        """ Ensure spot position is always defined when using the spot """
+        if tool == TOOL_SPOT:
+            # Put the spot position at a "good" place if not yet defined
+            if self.tab_data_model.spotPosition.value == (None, None):
+                roa = self.tab_data_model.roa.value
+                if roa == acqstream.UNDEFINED_ROI:
+                    # If no ROA => just at the center of the FoV
+                    pos = (0.5, 0.5)
+                else:  # Otherwise => in the center of the ROI
+                    pos = ((roa[0] + roa[2]) / 2, (roa[1] + roa[3]) / 2)
+
+                self.tab_data_model.spotPosition.value = pos
+            # TODO: reset the spot position as defined in the spec?
+            # Too much reset for the user and not really helpful?
 
 
 class SparcAcquisitionTab(Tab):

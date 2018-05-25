@@ -2020,7 +2020,7 @@ class ScannedRemoteTCStream(LiveStream):
 
         # Retrieve devices from the helper stream
         self._stream = helper_stream
-        self._emitter = helper_stream.lemitter
+        self._emitter = helper_stream.lemitter  # TODO: Shold be emitter
         self._tc_scanner = helper_stream.tc_scanner
         self._tc_detector = helper_stream.tc_detector
         self._pdetector = helper_stream.pdetector

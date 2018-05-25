@@ -29,7 +29,8 @@ import logging
 import math
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection
+from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection, \
+    OpticalStream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
@@ -48,6 +49,7 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
+from odemis.acq.stream._helper import ScannedTCSettingsStream
 
 
 @decorator
@@ -283,7 +285,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _set_spot_mode(self, tool_mode):
 
-        if not any(isinstance(s, EMStream) for s in self.microscope_view.stream_tree):
+        if not any(isinstance(s, (EMStream, OpticalStream)) for s in self.microscope_view.stream_tree):
             return
 
         use_world = hasattr(self._tab_data_model, 'spotPosition')
@@ -1209,7 +1211,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._on_sem_mag)
-
 
 
 class SparcARCanvas(DblMicroscopeCanvas):
