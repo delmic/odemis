@@ -515,7 +515,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
-        self.roa = model.TupleContinuous((0, 0, 0, 0),
+        self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
@@ -1341,8 +1341,7 @@ class StreamView(View):
 
     def _onNewImage(self, im):
         """
-        Called when one stream has        "tc-detector": "tcd", its image updated
-        im (DataArray)
+        Called when one stream has im (DataArray)
         """
         # just let everyone know that the composited image has changed
         self.lastUpdate.value = time.time()
