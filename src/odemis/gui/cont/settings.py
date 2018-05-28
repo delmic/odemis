@@ -418,9 +418,6 @@ class SettingsBarController(object):
                 msg = "Error adding %s setting for: %s"
                 logging.exception(msg, hw_comp.name, name)
 
-    def add_stream(self, stream):
-        pass
-
     def add_spec_chronograph(self, setting_cont, ftsize=None):
         """
 
