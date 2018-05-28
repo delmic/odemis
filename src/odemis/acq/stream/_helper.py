@@ -87,10 +87,12 @@ class RepetitionStream(LiveStream):
         # it will be assigned to the resolution of the emitter (but cannot be
         # directly set, as one might want to use the emitter while configuring
         # the stream).
+        # TODO: If the acquisition code only acquires spot by spot, the
+        # repetition is not limited by the resolution or the scale.
         res = emitter.resolution.value
         if 1 in res:  # 1x1 or something like that ?
             rep = emitter.resolution.clip((2048, 2048))
-            logging.info("resolution of SEM is too small %s, will use %s",
+            logging.info("Resolution of scanner is too small %s, will use %s",
                          res, rep)
         else:
             rep = res
@@ -213,6 +215,9 @@ class RepetitionStream(LiveStream):
         rep = (max(1, min(rep[0], max_rep[0])),
                max(1, min(rep[1], max_rep[1])))
 
+        # Ensure it's really compatible with the hardware
+        rep = self.emitter.resolution.clip(rep)
+
         # update the ROI so that it's _exactly_ pixel size * repetition,
         # while keeping its center fixed
         roi_center = ((roi[0] + roi[2]) / 2,
@@ -226,6 +231,7 @@ class RepetitionStream(LiveStream):
         roi = self._fitROI(roi)
 
         # Double check we didn't end up with scale < 1
+        # TODO: for some scanners, the scale can be < 1 => check the scale range
         rep_full = (rep[0] / roi_size[0], rep[1] / roi_size[1])
         if any(rf > s for rf, s in zip(rep_full, eshape)):
             logging.error("Computed impossibly small pixel size %s", pxs)
@@ -312,9 +318,10 @@ class RepetitionStream(LiveStream):
         eshape = self.emitter.shape
         phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1])  # max physical ROI
 
-        # clamp repetition to be sure it's correct
-        rep = (min(repetition[0], self.repetition.range[1][0]),
-               min(repetition[1], self.repetition.range[1][1]))
+        # clamp repetition to be sure it's correct (it'll be clipped against
+        # the scanner resolution later on, to be sure it's compatible with the
+        # hardware)
+        rep = self.repetition.clip(repetition)
 
         # If ROI is undefined => link repetition and pxs as if ROI is full
         if roi == UNDEFINED_ROI:
@@ -1042,7 +1049,7 @@ class ScannedTCSettingsStream(RepetitionStream):
 
         detector: (model.Detector) typically a photo-detector
         emitter: (model.Light) Typically an extended light (pulsed laser)
-        scanner: (model.Emitter) typically laser-scanner
+        scanner: (model.Emitter) typically laser-mirror
         time_correlator: (model.Detector) typically Symphotime controller
         detector_live: (model.Detector)Typically an APD
         scanner_extra: (model.Emitter) The Symphotime scanner device wrapped by the Symphotime controller
@@ -1095,11 +1102,6 @@ class ScannedTCSettingsStream(RepetitionStream):
     # Note: we assume we are in spot mode, if not the dwell time will be messed up!
     # TODO: if the dwell time is small (eg, < 0.1s), do multiple acquisitions
     # at the same spot (how?)
-
-    def _setRepetition(self, repetition):
-        self.scanner.resolution.value = repetition
-        valid_rep = self.scanner.resolution.clip(repetition)
-        return RepetitionStream._setRepetition(self, valid_rep)
 
     def _append(self, count, date):
         """

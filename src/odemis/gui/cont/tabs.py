@@ -26,6 +26,7 @@ from __future__ import division
 
 import collections
 from concurrent.futures import CancelledError
+from functools import partial
 import gc
 import logging
 import math
@@ -73,7 +74,6 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
-
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
@@ -383,6 +383,15 @@ class SecomStreamsTab(Tab):
         # and add the stream on the first time.
         if hasattr(tab_data, 'opticalState'):
             tab_data.opticalState.subscribe(self.onOpticalState)
+            if self.main_data.ccd:
+                self._add_opt_stream = self._streambar_controller.addFluo
+            elif self.main_data.photo_ds:
+                # Use the first photo-detector in alphabetical order
+                pd0 = min(self.main_data.photo_ds, key=lambda d: d.name)
+                self._add_opt_stream = partial(self._streambar_controller.addConfocal,
+                                               detector=pd0)
+            else:
+                logging.error("No optical detector found")
 
         if hasattr(tab_data, 'emState'):
             tab_data.emState.subscribe(self.onEMState)
@@ -645,11 +654,7 @@ class SecomStreamsTab(Tab):
             if not has_opt:
                 # We don't forbid to remove it, as for the user it can be easier
                 # to remove than change all the values
-                if self.main_data.ccd:
-                    self._streambar_controller.addFluo(add_to_view=True, play=False)
-                elif self.main_data.photo_ds:
-                    pd0 = min(self.main_data.photo_ds, key=lambda d: d.name)
-                    self._streambar_controller.addConfocal(detector=pd0, add_to_view=True, play=False)
+                self._add_opt_stream(add_to_view=True, play=False)
 
         if hasattr(self.tab_data_model, 'emState'):
             has_sem = any(isinstance(s, acqstream.EMStream)
@@ -675,7 +680,7 @@ class SecomStreamsTab(Tab):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._streambar_controller.addFluo(add_to_view=True)
+                sp = self._add_opt_stream(add_to_view=True)
                 opts = sp.stream
 
             self._streambar_controller.resumeStreams({opts})
