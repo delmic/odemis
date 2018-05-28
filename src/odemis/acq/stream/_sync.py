@@ -2260,10 +2260,6 @@ class ScannedRemoteTCStream(LiveStream):
         tot (0<int): number of acquisitions
         bonus (0<float): additional time needed (eg, for leeches)
         """
-        # Trick: we don't count the first frame because it's often
-        # much slower and so messes up the estimation
-        if current <= 1:
-            return
 
         self._prog_sum += dur
         ratio = (tot - current) / (current - 1)
@@ -2303,5 +2299,5 @@ class ScannedRemoteTCStream(LiveStream):
         return True
 
     def estimateAcquisitionTime(self):
-        return self._dwellTime.value * numpy.prod(self.repetition.value) * 1.2 + 1.0
+        return self._dwellTime.value * numpy.prod(self.repetition.value) * 3.0 + 1.0
 

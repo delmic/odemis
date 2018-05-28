@@ -168,9 +168,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.on_preset(None) # will force setting the current preset
 
-        # TODO: use the presets VAs and subscribe to each of them, instead of
-        # using pub/sub messages
-        pub.subscribe(self.on_setting_change, 'setting.changed')
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.subscribe(self.on_streams_changed)
@@ -407,14 +404,19 @@ class AcquisitionDialog(xrcfr_acq):
             self.btn_secom_acquire.SetLabel("START")
             self.last_saved_file = None
 
-    def on_close(self, evt):
-        """ Close event handler that executes various cleanup actions
-        """
-
+    def terminate_listeners(self):
         for entry in self._orig_entries:
             if hasattr(entry, "vigilattr"):
                 entry.vigilattr.unsubscribe(self.on_setting_change)
 
+        self.remove_all_streams()
+        # stop listening to events
+        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+
+    def on_close(self, evt):
+        """ Close event handler that executes various cleanup actions
+        """
         if self.acq_future:
             # TODO: ask for confirmation before cancelling?
             # What to do if the acquisition is done while asking for
@@ -423,11 +425,7 @@ class AcquisitionDialog(xrcfr_acq):
             logging.info(msg)
             self.acq_future.cancel()
 
-        self.remove_all_streams()
-        # stop listening to events
-        pub.unsubscribe(self.on_setting_change, 'setting.changed')
-        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
-        self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self.terminate_listeners()
 
         self.EndModal(wx.ID_CANCEL)
 
@@ -435,16 +433,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         Called to open the file which was just acquired
         """
-
-        for entry in self._orig_entries:
-            if hasattr(entry, "vigilattr"):
-                entry.vigilattr.unsubscribe(self.on_setting_change)
-
-        self.remove_all_streams()
-        # stop listening to events
-        pub.unsubscribe(self.on_setting_change, 'setting.changed')
-        self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
-        self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self.terminate_listeners()
 
         self.EndModal(wx.ID_OPEN)
         logging.debug("My return code is %d", self.GetReturnCode())
