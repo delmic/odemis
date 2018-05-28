@@ -301,6 +301,8 @@ class SecomStreamsTab(Tab):
         vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
+        # Add a special view for a ScannedTCSettingsStream used for FLIM
+        # if a time correlator is present
         if main_data.time_correlator:
             vis_views = self.tab_data_model.visible_views.value[0:3]
             vis_views.append(panel.vp_flim_chronograph.microscope_view)
@@ -472,7 +474,7 @@ class SecomStreamsTab(Tab):
                 vpv[viewport] = {"name": "SEM %d" % (i + 1),
                                  "stage": main_data.stage,
                                  "stream_classes": EMStream,
-                      }
+                                 }
 
         # If Optical only: all optical
         elif not main_data.ebeam and main_data.light:

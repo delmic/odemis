@@ -935,7 +935,7 @@ class StreamBarController(object):
         # while doing a normal scan, but the scheduler would need to allow playing
         # on spatial stream simultaneously (just the SE?) and force to play it
         # when not in spot mode. (for now, we keep it simple)
-        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream)
+        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream, acqstream.ScannedRemoteTCStream)
         self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
                                acqstream.MonochromatorSettingsStream, acqstream.ScannedTCSettingsStream)
         tab_data.tool.subscribe(self.on_tool_change)
@@ -969,9 +969,6 @@ class StreamBarController(object):
         # Stream preparation future
         self.preparation_future = model.InstantaneousFuture()
 
-        # Force the ROA to be defined by the user on first use
-        # TODO: Not necessary since it is set to this by default.
-        # tab_data.roa.value = acqstream.UNDEFINED_ROI
         if hasattr(tab_data, "roa"):
             tab_data.roa.subscribe(self._onROA)
 
@@ -1025,7 +1022,7 @@ class StreamBarController(object):
 
         It's added at the end of the list. If an action with the same title exists, it is replaced.
 
-        :param title: (string) Textab_data.t displayed in the menu
+        :param title: (string) Text displayed in the menu
         :param callback: (callable) function to call when the action is selected
 
         """
@@ -1529,10 +1526,6 @@ class StreamBarController(object):
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
                     spots.is_active.value = True
-                else:
-                    # make it active
-                    logging.debug("Starting spot mode")
-                    spots.is_active.value = True
 
             # put it back to the beginning of the list to indicate it's the
             # latest stream used
@@ -1666,7 +1659,7 @@ class StreamBarController(object):
         streams (set of streams): Streams that will be resumed
         """
         for s in streams:
-            s.should_update.value = True
+            s.should_update.vScannedTCSettingsStreamalue = True
             # it will be activated by the stream scheduler
 
     def removeStream(self, stream):

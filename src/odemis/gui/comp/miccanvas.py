@@ -49,7 +49,6 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
-from odemis.acq.stream._helper import ScannedTCSettingsStream
 
 
 @decorator

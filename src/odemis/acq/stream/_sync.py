@@ -37,7 +37,6 @@ import math
 import numpy
 from odemis import model, util
 from odemis.acq import leech
-from odemis.acq.stream._live import LiveStream
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, MD_DWELL_TIME
@@ -2180,7 +2179,7 @@ class ScannedRemoteTCStream(LiveStream):
                 # this will stop blocking if the acquisition is cancelled
                 tstart = time.time()
 
-                if not self._frame_done.wait(frame_time * 3 + 1):
+                if not self._frame_done.wait(frame_time * 5 + 1):
                     raise IOError("Timed out waiting for frame. waited %f s" % (time.time() - tstart,))
 
                 dur = time.time() - tstart
@@ -2198,13 +2197,13 @@ class ScannedRemoteTCStream(LiveStream):
             self._acq_done.set()
             self._frame_thread.join()
             logging.debug("Ending job: acquisition")
-            self._stream._unlinkHwVAs()
-            self._acq_state = FINISHED
 
             # End Symphotime acq
             # The measurement is stopped.
             self._pdetector.data.unsubscribe(self._onNewData)
             self._time_correlator.data.unsubscribe(self._onAcqStop)
+            self._stream._unlinkHwVAs()
+            self._acq_state = FINISHED
 
             # turn off the light
             self._setEmission(0)
@@ -2304,6 +2303,5 @@ class ScannedRemoteTCStream(LiveStream):
         return True
 
     def estimateAcquisitionTime(self):
-
         return self._dwellTime.value * numpy.prod(self.repetition.value) * 1.2 + 1.0
 

@@ -40,6 +40,8 @@ from odemis.util import img, fluo, executeAsyncTask
 import sys
 import threading
 import time
+from odemis.acq.stream._sync import ScannedRemoteTCStream
+from odemis.acq.stream._helper import ScannedTCSettingsStream
 
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
@@ -134,6 +136,10 @@ def foldStreams(streams, reuse=None):
                     break
             else:
                 scan_fluos.append({s})
+
+        elif isinstance(s, ScannedTCSettingsStream):
+            remote = ScannedRemoteTCStream("FLIM", s)
+            folds.add(remote)
         else:
             folds.add(s)
 
@@ -218,6 +224,8 @@ def _weight_stream(stream):
         return 100 + ewl_bonus
     elif isinstance(stream, OpticalStream):
         return 90 # any other kind of optical after fluorescence
+    elif isinstance(stream, ScannedRemoteTCStream):
+        return 85  # Stream for FLIM acquisition with time correlator
     elif isinstance(stream, EMStream):
         return 50 # can be done after any light
     elif isinstance(stream, (SEMCCDMDStream, SEMMDStream)):

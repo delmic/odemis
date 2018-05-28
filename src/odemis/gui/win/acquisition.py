@@ -29,14 +29,16 @@ import logging
 import math
 from odemis import acq, model, dataio
 from odemis.acq import stream, path
-from odemis.acq.stream import EMStream, OpticalStream, ScannedFluoStream, ScannedTCSettingsStream, ScannedRemoteTCStream
+from odemis.acq.stream import EMStream, OpticalStream, ScannedFluoStream, \
+    ScannedTCSettingsStream, ScannedRemoteTCStream, ScannedFluoMDStream, \
+    ARStream, SpectrumStream, MonochromatorSettingsStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.model import TOOL_NONE
+from odemis.gui.model import TOOL_NONE, StreamView
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -49,8 +51,8 @@ from wx.lib.pubsub import pub
 import odemis.gui.model as guimodel
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
+NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream, ScannedTCSettingsStream, ScannedFluoMDStream)
 
-EXTRA_VIEW_STREAMS = [ScannedRemoteTCStream]
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
@@ -93,6 +95,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
+
+        self._hidden_view = StreamView("Plugin View Hidden")
 
         self.streambar_controller = StreamBarController(self._tab_data_model,
                                                         self.pnl_secom_streams)
@@ -169,6 +173,7 @@ class AcquisitionDialog(xrcfr_acq):
         pub.subscribe(self.on_setting_change, 'setting.changed')
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
+        self._hidden_view.stream_tree.flat.subscribe(self.on_streams_changed)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -204,8 +209,14 @@ class AcquisitionDialog(xrcfr_acq):
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
 
-            self._view.addStream(s)  # Add first to the view, so "visible" button is correct
-            self.streambar_controller.add_acquisition_stream_cont(s)
+            if isinstance(s, NON_SPATIAL_STREAMS):
+                v = self._hidden_view
+            else:
+                v = self._view
+
+            v.addStream(s)  # Add first to the view, so "visible" button is correct
+            # self.streambar_controller.add_acquisition_stream_cont(s)
+            self.streambar_controller._add_stream_cont(s, show_panel=True, static=True, view=v)
             # listen to changes in local VAs
             local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
             for lva in local_vas:
@@ -230,7 +241,8 @@ class AcquisitionDialog(xrcfr_acq):
         return (list of Streams): the streams to be acquired
         """
         # Only acquire the streams which are displayed
-        streams = self._view.getStreams()
+        # FIXME: _view should only have the spatial streams
+        streams = self._view.getStreams() + self._hidden_view.getStreams()
 
         # Add the overlay stream if requested, and folds all the streams
         if streams and self.chkbox_fine_align.Value:
@@ -290,7 +302,7 @@ class AcquisitionDialog(xrcfr_acq):
             self.Layout()
 
         # Enable/disable Fine alignment check box
-        streams = self._view.getStreams()
+        streams = self._view.getStreams() + self._hidden_view.getStreams()
         can_fa = self._can_fine_align(streams)
         if self.chkbox_fine_align.Enabled:
             self._prev_fine_align = self.chkbox_fine_align.Value
@@ -415,6 +427,7 @@ class AcquisitionDialog(xrcfr_acq):
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
         self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
 
         self.EndModal(wx.ID_CANCEL)
 
@@ -423,10 +436,15 @@ class AcquisitionDialog(xrcfr_acq):
         Called to open the file which was just acquired
         """
 
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.unsubscribe(self.on_setting_change)
+
         self.remove_all_streams()
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
         self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
 
         self.EndModal(wx.ID_OPEN)
         logging.debug("My return code is %d", self.GetReturnCode())
@@ -473,14 +491,13 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
-
-        # Add extra viewable streams to view. However, do not add incompatible streams.
+        v_streams = self._view.getStreams()  # visible streams
         for s in streams:
-            if s not in self._view.getStreams() and s in EXTRA_VIEW_STREAMS:
+            # Add extra viewable streams to view. However, do not add incompatible streams.
+            if s not in v_streams and not isinstance(s, NON_SPATIAL_STREAMS):
                 self._view.addStream(s)
 
-        # Update the filename in the streams
-        for s in streams:
+            # Update the filename in the streams
             if hasattr(s, "filename"):
                 pathname, base = os.path.split(self.filename.value)
                 s.filename.value = base
@@ -522,7 +539,7 @@ class AcquisitionDialog(xrcfr_acq):
         self._acq_future_connector = None
 
         try:
-            data, exp = future.result(1) # timeout is just for safety
+            data, exp = future.result(2.0)  # timeout is just for safety
             self.conf.fn_count = update_counter(self.conf.fn_count)
         except CancelledError:
             # put back to original state:
