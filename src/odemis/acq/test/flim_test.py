@@ -84,6 +84,10 @@ class TestFlim(unittest.TestCase):
             return
         test.stop_backend()
 
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
     def _on_image(self, im):
         # Is called when an image is received in the live setting stream
         logging.info("image: dim %s" , im.shape)
@@ -136,6 +140,13 @@ class TestFlim(unittest.TestCase):
                                    helper.pixelSize.value)
             time.sleep(0.3)
 
+    def _validate_rep(self, s):
+        # Check that repetition is always compatible with the scanner, which can
+        # only do power of two.
+        rep = s.repetition.value
+        hw_rep = self.lscanner.resolution.clip(rep)
+        self.assertEqual(hw_rep, rep)
+
     def test_repetitions_and_roi(self):
         logging.debug("Testing repetitions and roi")
 
@@ -147,13 +158,27 @@ class TestFlim(unittest.TestCase):
         helper.dwellTime.value = 1e-3  # seconds
         helper.roi.value = (0, 0, 0.1, 0.1)
         helper.repetition.value = (64, 64)
-        
+        self._validate_rep(helper)
+
         f = remote.acquire()
         time.sleep(0.1)
         f.cancel()
         
         self.assertEqual(helper.scanner.resolution.value, (64, 64))
         
+        # Try "wrong" repetition values
+        helper.pixelSize.value *= 1.1
+        self._validate_rep(helper)
+        helper.roi.value = (0.1, 0.1, 0.2, 0.3)
+        self._validate_rep(helper)
+        helper.repetition.value = (64, 64)
+        self.assertEqual(helper.repetition.value, (64, 64))
+        helper.repetition.value = (62, 63)
+        self.assertEqual(helper.repetition.value, (64, 64))
+
+        helper.repetition.value = (2047, 63)
+        self.assertEqual(helper.repetition.value, (2048, 64))
+
         helper.roi.value = (0, 0.3, 0.9, 0.5)
         helper.repetition.value = (256, 64)
 
