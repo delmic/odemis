@@ -29,9 +29,7 @@ import logging
 import math
 from odemis import acq, model, dataio
 from odemis.acq import stream, path
-from odemis.acq.stream import EMStream, OpticalStream, ScannedFluoStream, \
-    ScannedTCSettingsStream, ScannedRemoteTCStream, ScannedFluoMDStream, \
-    ARStream, SpectrumStream, MonochromatorSettingsStream
+from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.conf import get_acqui_conf
@@ -50,8 +48,6 @@ from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
 from odemis.util.filename import guess_pattern, create_filename, update_counter
-
-NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream, ScannedTCSettingsStream, ScannedFluoMDStream)
 
 
 class AcquisitionDialog(xrcfr_acq):

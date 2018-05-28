@@ -4,7 +4,7 @@ secom-flim-sim: {
     children: ["Extended Light", "Optical Objective",
                "SEM E-beam", "SEM Detector", "Switch Sensor", "Fiber Selector",
                "Galvano Mirror", "PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Pinhole",
-               "Symphotime Controller", "SPT Scanner", 
+               "Symphotime Controller", "SPT Scanner", "SPT Detector Live",
                "Sample Stage", "Objective Stage", "Optical Focus"]
 }
 
@@ -102,7 +102,7 @@ Light: {
 "Symphotime Controller": {
     class: symphotime.Controller,
     role: "time-correlator",
-    children: {"scanner": "SPT Scanner"},
+    children: {"scanner": "SPT Scanner", "detector-live": "SPT Detector Live"},
     init: {
         host: "localhost",
     },
@@ -110,6 +110,10 @@ Light: {
 
 "SPT Scanner":  {
     role: "tc-scanner",
+}
+
+"SPT Detector Live":  {
+    role: "tc-detector",
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -187,7 +191,7 @@ Light: {
 
 "APD": {
     # Internal child of Nikon C2, so no class
-    role: tc-detector,
+    role: null,
     init: {
         channel: 3,
     },

@@ -1087,7 +1087,7 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.image.value = model.DataArray([])  # start with an empty array
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
-        self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
+        self.windowPeriod = model.FloatContinuous(0, range=(0, 1e6), unit="s")
 
     def estimateAcquisitionTime(self):
         # 1 pixel => the dwell time (of the emitter)

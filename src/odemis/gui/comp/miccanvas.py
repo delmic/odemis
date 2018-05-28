@@ -30,7 +30,7 @@ import math
 from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection, \
-    OpticalStream
+    OpticalStream, NON_SPATIAL_STREAMS
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
@@ -49,6 +49,7 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
+from odemis.gui.win.acquisition import NON_SPATIAL_STREAMS
 
 
 @decorator
@@ -418,7 +419,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             image = s.image.value
 
-            if image.ndim < 3:
+            if isinstance(s, NON_SPATIAL_STREAMS):
                 logging.debug("Skipping stream %s which does not appear to have an RGB image", s.name.value)
                 continue
 

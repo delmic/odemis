@@ -977,18 +977,18 @@ class DetectorLive(model.Detector):
         '''
         parent (symphotime.Controller): a symphotime server parent object
         '''
-        super(DetectorLive, self).__init__(name, role, **kwargs)
+        super(DetectorLive, self).__init__(name, role, parent=parent, **kwargs)
 
         # Data is a ulong
         self._shape = (2**32,)
         # Data is normalized to get a count per second
-        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
-        self.parent = parent
         self.channel = 1  # hard coded channel of the apd. Typically 1, 2, or 3
         self.data = BasicDataFlow(self._start, self._stop, self._check)
 
     def _start(self):
+        self._metadata[model.MD_DWELL_TIME] = self.parent.scanner.dwellTime.value
         self.parent.StartMeasurement(measurement_type=PQ_MEASTYPE_TEST_POINTMEAS)
 
     def _stop(self):
