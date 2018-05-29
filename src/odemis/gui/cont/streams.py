@@ -220,8 +220,7 @@ class StreamController(object):
             if conf is not None:
                 logging.debug("%s hardware configuration found", name)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
-            self.entries[se.name] = se
+            self.add_setting_entry(name, va, self.stream.emitter, conf)
             add_divider = True
 
         # Process the emitter VAs first
@@ -234,8 +233,7 @@ class StreamController(object):
                 logging.debug("%s emitter configuration found for %s", name,
                               self.stream.emitter.role)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
-            self.entries[se.name] = se
+            self.add_setting_entry(name, va, self.stream.emitter, conf)
             add_divider = True
 
         # Then process the detector
@@ -248,8 +246,7 @@ class StreamController(object):
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.detector, conf)
-            self.entries[se.name] = se
+            self.add_setting_entry(name, va, self.stream.detector, conf)
             add_divider = True
 
         if add_divider:  # TODO: only do so, if some other controls are displayed
