@@ -356,6 +356,13 @@ class DataFlow(DataFlowBase):
     def notify(self, data):
         # publish the data remotely
         if self.pipe and len(self._remote_listeners) > 0:
+            # TODO: is there any way to know how many recipients of the pipe?
+            # If possible, we would detect it's 0, because some listener closed
+            # without unsubscribing, and we would kick it out.
+            # => use zmq_socket_monitor() to detect connection/disconnection and
+            # update the count of subscribers, or detect when a remote_listener
+            # is gone (if there is a way to associate it)
+
             # TODO thread-safe for self.pipe ?
             dformat = {"dtype": str(data.dtype), "shape": data.shape}
             self.pipe.send_pyobj(dformat, zmq.SNDMORE)

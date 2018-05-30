@@ -1345,7 +1345,7 @@ class ChamberTab(Tab):
         mstate = self._get_mirror_state(self.tab_data_model.main.mirror)
 
         if mstate == MIRROR_NOT_REFD:
-            txt_warning = ("Parking the mirror at least once is required in order "
+            txt_warning = ("Parking the mirror is required at least once in order "
                            "to reference the actuators.")
         elif mstate == MIRROR_BAD:
             txt_warning = "The mirror is neither fully parked nor entirely engaged."
