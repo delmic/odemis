@@ -4484,6 +4484,18 @@
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_opt_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_sem">
                         <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -4704,6 +4716,18 @@
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_opt_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_sem">
                         <label>SEM SETTINGS</label>

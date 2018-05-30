@@ -131,6 +131,10 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "cubic",
             },
+            "emissions":
+            {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
         },
     "brightlight": {
             "power":

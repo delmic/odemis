@@ -853,7 +853,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)
-        def cb_set(value, ctrl=value_ctrl, u=unit, acc=accuracy):
+        def cb_set(value, va=va, ctrl=value_ctrl, u=unit, acc=accuracy):
+            # Re-read the value from the VA because it'll be called via
+            # CallAfter(), and if the value is changed multiple times, it might
+            # not be in chronological order.
+            value = va.value
             for i in range(ctrl.Count):
                 d = ctrl.GetClientData(i)
                 if (d == value or

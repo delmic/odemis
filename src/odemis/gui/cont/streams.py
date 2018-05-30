@@ -104,6 +104,7 @@ class StreamController(object):
         # To update the local resolution without hardware feedback
         self._resva = None
         self._resmx = None
+        self._binva = None
 
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
         # wavelength colour
@@ -118,6 +119,8 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
+        # TODO: make it a list, as the dict keys are not used right now, and
+        # they could be just looked up via the SettingEntry.name anyway
         self.entries = OrderedDict()  # name -> SettingEntry
 
         # Add local hardware settings to the stream panel
@@ -167,14 +170,14 @@ class StreamController(object):
         """ Pause (freeze) SettingEntry related control updates """
         # TODO: just call enable(False) from here? or is there any reason to
         # want to pause without showing it to the user?
-        for _, entry in self.entries.iteritems():
+        for entry in self.entries.values():
             entry.pause()
 
         self.stream_panel.enable(False)
 
     def resume(self):
         """ Resume SettingEntry related control updates """
-        for _, entry in self.entries.iteritems():
+        for entry in self.entries.values():
             entry.resume()
 
         self.stream_panel.enable(True)
@@ -191,7 +194,7 @@ class StreamController(object):
         # When all are enabled now, the position the toggle button is in, immediately causes
         # the right slider to be disabled again.
 
-        for entry in [e for _, e in self.entries.iteritems() if e.value_ctrl]:
+        for entry in (e for e in self.entries.values() if e.value_ctrl):
             entry.value_ctrl.Enable(enabled)
 
     def _add_hw_setting_controls(self):
@@ -395,26 +398,44 @@ class StreamController(object):
         for n in ("Binning", "Scale"):
             fn = prefix + n
             if hasattr(self.stream, fn):
-                binva = getattr(self.stream, fn)
+                self._binva = getattr(self.stream, fn)
                 break
         else:
             logging.warning("Stream has resolution VA but no binning/scale, "
                             "so it will not be updated.")
             return
 
-        binva.subscribe(self._update_resolution)
+        self._binva.subscribe(self._update_resolution)
+        self._resva.subscribe(self._on_resolution)
 
     def _update_resolution(self, scale, crop=1.0):
         """
         scale (2 ints or floats): new divisor of the resolution
         crop (0 < float <= 1): ratio of the FoV used
         """
-        # TODO: only do this if the stream is not playing,
+        # if the stream is not playing, the hardware should take care of it
+        if self.stream.is_active.value:
+            return
         newres = (int((self._resmx[0] * crop) // scale[0]),
                   int((self._resmx[1] * crop) // scale[1]))
         newres = self._resva.clip(newres)
         logging.debug("Updated resolution to %s", newres)
         self._resva.value = newres
+
+    def _on_resolution(self, res, crop=1.0):
+        # if the stream is not playing, the hardware should take care of it
+        if self.stream.is_active.value:
+            return
+        scale = self._binva.value
+        maxres = (int((self._resmx[0] * crop) // scale[0]),
+                  int((self._resmx[1] * crop) // scale[1]))
+        maxres = self._resva.clip(maxres)
+        newres = (min(res[0], maxres[0]), min(res[1], maxres[1]))
+        if newres != res:
+            logging.debug("Limiting resolution to %s", newres)
+            self._resva.unsubscribe(self._on_resolution)  # to avoid infinite recursion
+            self._resva.value = newres
+            self._resva.subscribe(self._on_resolution)
 
     def sync_tint_on_emission(self, emission_wl, exitation_wl):
         """ Set the tint to the same colour as emission, if no dye has been selected. If a dye is
@@ -1124,6 +1145,7 @@ class StreamBarController(object):
         # As there is only one stream per detector, we can put its VAs directly
         # instead of them being a local copy. This also happens to work around
         # an issue with detecting IntContinuous in local VAs.
+        # set_stream contains the shared settings for the laser_mirror and light
         s = acqstream.ScannedFluoStream(
             "Confocal %s" % (detector.name,),
             detector,
@@ -1134,9 +1156,8 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             hwdetvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
-            emtvas={"power"}  # TODO: more VAs? Eg: frequency
+            setting_stream=self._tab_data_model.confocal_set_stream,
         )
-        self._ensure_power_non_null(s)
 
         return self._add_stream(s, **kwargs)
 

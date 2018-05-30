@@ -335,6 +335,46 @@ class SecomStreamsTab(Tab):
             panel.pnl_secom_grid.viewports
         )
 
+        # When using the confocal microscope, we don't have a real "global"
+        # hardware settings. Instead, we have a mock stream with all the common
+        # settings passed as local settings, and it will be "attached" to all
+        # the confocal streams, which will eventually be acquired simultaneously.
+        # TODO: as the ScannedFluoStream will be folded into a single
+        # ScannedFluoMDStream, maybe we could directly use that stream to put
+        # the settings.
+        # Note: This means there is only one light power for all the confocal
+        # streams, which in theory could be incorrect if multiple excitation
+        # wavelengths were active simultaneously and independently. However,
+        # Odemis doesn't currently supports such setup anyway, so no need to
+        # complicate the GUI with have a separate VA on each stream.
+        # all set the same hardware (light).
+        if main_data.laser_mirror:
+            # HACK: ideally, the laser_mirror would be the "scanner", but there
+            # is no such concept on the basic Stream, and no "scanner_vas" either.
+            # So instead, we declare it as a detector, and it works surprisingly
+            # fine.
+            conf_set_stream = acqstream.SettingStream("Confocal shared settings",
+                                      detector=main_data.laser_mirror,
+                                      dataflow=None,
+                                      emitter=main_data.light,
+                                      detvas=get_local_vas(main_data.laser_mirror, main_data.hw_settings_config),
+                                      emtvas=get_local_vas(main_data.light, main_data.hw_settings_config),
+                                      )
+            del conf_set_stream.auto_bc
+            del conf_set_stream.histogram
+
+            # Set some nice default values
+            if conf_set_stream.emtPower.value == 0 and hasattr(conf_set_stream.emtPower, "range"):
+                # cf StreamBarController._ensure_power_non_null()
+                # Default to power = 10% (if 0)
+                conf_set_stream.emtPower.value = conf_set_stream.emtPower.range[1] * 0.1
+            # TODO: the period should always be set to the min? And not even be changed?
+            if hasattr(conf_set_stream, "emtPeriod"):
+                # Use max frequency
+                conf_set_stream.emtPeriod.value = conf_set_stream.emtPeriod.range[0]
+
+            tab_data.confocal_set_stream = conf_set_stream
+
         self._settingbar_controller = settings.SecomSettingsController(
             panel,
             tab_data
@@ -363,11 +403,11 @@ class SecomStreamsTab(Tab):
         # and add the stream on the first time.
         if hasattr(tab_data, 'opticalState'):
             tab_data.opticalState.subscribe(self.onOpticalState)
-            if self.main_data.ccd:
+            if main_data.ccd:
                 self._add_opt_stream = self._streambar_controller.addFluo
-            elif self.main_data.photo_ds:
+            elif main_data.photo_ds:
                 # Use the first photo-detector in alphabetical order
-                pd0 = min(self.main_data.photo_ds, key=lambda d: d.name)
+                pd0 = min(main_data.photo_ds, key=lambda d: d.name)
                 self._add_opt_stream = partial(self._streambar_controller.addConfocal,
                                                detector=pd0)
             else:
@@ -2070,7 +2110,7 @@ class SecomAlignTab(Tab):
         # force this view to never follow the tool mode (just standard view)
         panel.vp_align_ccd.canvas.allowed_modes = {TOOL_NONE}
 
-        # No stream controller, because it does far too much (including hiding
+        # No streams controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
         # Use all VAs as HW VAs, so the values are shared with the streams tab
         sem_stream = acqstream.SEMStream("SEM", main_data.sed,
