@@ -731,6 +731,7 @@ class SparcAcquisitionTab(Tab):
 
         tab_data.acquisitionStreams.add(sem_stream)  # it should also be saved
 
+        tab_data.fovComp = main_data.ebeam
         # This stream is a bit tricky, because it will play (potentially)
         # simultaneously as another one, and it changes the SEM settings at
         # play and pause.

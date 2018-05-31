@@ -25,7 +25,6 @@ from __future__ import division
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
-import copy
 import heapq
 import logging
 import math
@@ -33,11 +32,13 @@ import numpy
 from odemis import model
 from odemis import util
 from odemis.dataio import tiff
-from odemis.util import TimeoutError, img, spot, executeAsyncTask
+from odemis.util import TimeoutError, spot, executeAsyncTask
 from odemis.util.img import Subtract
 import os
 import threading
 import time
+
+from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 
 from . import coordinates, transform
 
@@ -735,8 +736,7 @@ class GridScanner(object):
         SEM has not sent any image yet.
         returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
         """
-        sem_width = (self.escan.shape[0] * self.escan.pixelSize.value[0],
-                     self.escan.shape[1] * self.escan.pixelSize.value[1])
+        sem_width = compute_scanner_fov(self.escan)
         sem_rect = [-sem_width[0] / 2,  # left
                     - sem_width[1] / 2,  # top
                     sem_width[0] / 2,  # right
@@ -750,18 +750,7 @@ class GridScanner(object):
         Returns the (theoretical) field of view of the CCD.
         returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
         """
-        # The only way to get the right info is to look at what metadata the
-        # images will get
-        md = copy.copy(self.ccd.getMetadata())
-        img.mergeMetadata(md)  # apply correction info from fine alignment
-
-        shape = self.ccd.shape[0:2]
-        pxs = md[model.MD_PIXEL_SIZE]
-        # compensate for binning
-        binning = self.ccd.binning.value
-        pxs = [p / b for p, b in zip(pxs, binning)]
-
-        width = (shape[0] * pxs[0], shape[1] * pxs[1])
+        width = compute_camera_fov(self.ccd)
         phys_rect = [-width[0] / 2,  # left
                      - width[1] / 2,  # top
                      width[0] / 2,  # right
