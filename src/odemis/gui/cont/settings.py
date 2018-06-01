@@ -32,15 +32,17 @@ import collections
 import logging
 from odemis import model, util
 import odemis.dataio
+from odemis.gui import img
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
-import odemis.gui.util
 from odemis.gui.util import call_in_wx_main
+import odemis.gui.util
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
 import time
@@ -49,7 +51,6 @@ from wx.lib.pubsub import pub
 
 import odemis.gui.comp.hist as hist
 import odemis.gui.conf as guiconf
-from odemis.gui import img
 
 
 class SettingsController(object):
@@ -380,7 +381,12 @@ class SettingsBarController(object):
         """ Return a list of all the setting entries of all the panels """
         entries = []
         for setting_controller in self.setting_controllers:
-            entries.extend(setting_controller.entries)
+            ets = setting_controller.entries
+            if isinstance(ets, collections.Mapping):
+                # To handle StreamController.entries which is a dict
+                # TODO: make StreamController.entries a list and drop this
+                ets = ets.values()
+            entries.extend(ets)
         return entries
 
     def enable(self, enabled):
@@ -417,9 +423,6 @@ class SettingsBarController(object):
             except TypeError:
                 msg = "Error adding %s setting for: %s"
                 logging.exception(msg, hw_comp.name, name)
-
-    def add_stream(self, stream):
-        pass
 
     def add_spec_chronograph(self, setting_cont, ftsize=None):
         """
@@ -471,9 +474,20 @@ class SecomSettingsController(SettingsBarController):
             # Hide exposureTime as it's in local settings of the stream
             self.add_hw_component(main_data.ccd, self._optical_panel, hidden={"exposureTime"})
 
-        if main_data.laser_mirror:
-            self.add_hw_component(main_data.laser_mirror, self._optical_panel)
+        #if main_data.laser_mirror:
+        #    self.add_hw_component(main_data.laser_mirror, self._optical_panel)
+        if hasattr(tab_data, "confocal_set_stream"):
+            conf_set_e = StreamController(tab_panel.pnl_opt_streams, tab_data.confocal_set_stream, tab_data)
+            conf_set_e.stream_panel.flatten()  # removes the expander header
+            # StreamController looks pretty much the same as SettingController
+            self.setting_controllers.append(conf_set_e)
+        else:
+            tab_panel.pnl_opt_streams.Hide()  # Not needed
 
+        # For now, we assume that the pinhole (axis) is global: valid for all
+        # the confocal streams and FLIM stream. That's partly because most likely
+        # the user wouldn't want to have separate values... and also because
+        # anyway we don't currently support local stream axes.
         if main_data.pinhole:
             for a in ("d",):
                 if a not in main_data.pinhole.axes:

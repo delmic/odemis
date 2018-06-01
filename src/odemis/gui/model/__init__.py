@@ -463,6 +463,9 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         if main.ccd or main.photo_ds:
             self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            if main.laser_mirror:
+                # For storing shared settings to all confocal streams
+                self.confocal_set_stream = None
 
         if main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)

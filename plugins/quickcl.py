@@ -70,7 +70,6 @@ class ContentAcquisitionDialog(AcquisitionDialog):
 
         self.SetTitle(title)
 
-        self.entries = []  # Setting entries
         self._acq_future_connector = None
         self.canvas = None
         self.buttons = []  # The buttons

@@ -1833,8 +1833,10 @@ class ScannedFluoMDStream(MultipleDetectorStream):
         """
         super(ScannedFluoMDStream, self).__init__(name, streams)
 
+        self._setting_stream = self._s0.setting_stream
         for s in streams[1:]:
             assert self._s0.scanner == s.scanner
+            assert self._setting_stream == s.setting_stream
 
         self._trigger = self._det0.softwareTrigger
 
@@ -1879,6 +1881,10 @@ class ScannedFluoMDStream(MultipleDetectorStream):
         Adapt the emitter/scanner/detector settings.
         return (float): estimated time per acquisition
         """
+        # TODO: all the linkHwVAs should happen here
+        if self._setting_stream:
+            self._setting_stream._linkHwVAs()
+
         # All streams have the same excitation, so do it only once
         self._streams[0]._setup_excitation()
         for s in self._streams:
@@ -2000,6 +2006,8 @@ class ScannedFluoMDStream(MultipleDetectorStream):
         finally:
             for s in self._streams:
                 s._unlinkHwVAs()
+            if self._setting_stream:
+                self._setting_stream._unlinkHwVAs()
             self._current_future = None
             self._acq_done.set()
 
