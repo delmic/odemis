@@ -117,6 +117,7 @@ class MainGUIData(object):
         "time-correlator": "time_correlator",
         "tc-scanner": "tc_scanner",
         "tc-detector": "tc_detector",
+        "tc-detector-live": "tc_detector_live",
         "spectrometer": "spectrometer",
         "sp-ccd": "sp_ccd",
         "spectrometer-integrated": "spectrometer_int",
@@ -172,6 +173,7 @@ class MainGUIData(object):
         self.photo_ds = []  # List of all the photo detectors on confocal SECOM
         self.time_correlator = None # life-time measurement on SECOM or SPARC
         self.tc_detector = None  # the raw detector of the time-correlator (for settings)
+        self.tc_detector_live = None  # Symphotime APD count live detector
         self.tc_scanner = None  # copy of the scanner settings for FLIM
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)

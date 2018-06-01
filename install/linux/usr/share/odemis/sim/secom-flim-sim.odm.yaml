@@ -113,7 +113,7 @@ Light: {
 }
 
 "SPT Detector Live":  {
-    role: "tc-detector",
+    role: "tc-detector-live",
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -191,7 +191,7 @@ Light: {
 
 "APD": {
     # Internal child of Nikon C2, so no class
-    role: null,
+    role: tc-detector,
     init: {
         channel: 3,
     },
