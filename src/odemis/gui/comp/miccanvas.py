@@ -29,7 +29,7 @@ import logging
 import math
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection
+from odemis.acq.stream import EMStream, DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
@@ -262,7 +262,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._spotmode_ol is None:
                 if use_world:
                     spot_va = self._tab_data_model.spotPosition
-                    self._spotmode_ol = world_overlay.SpotModeOverlay(self, spot_va)
+                    self._spotmode_ol = world_overlay.SpotModeOverlay(self, spot_va,
+                                                                      self._tab_data_model.fovComp)
                 else:
                     spot_va = None
                     self._spotmode_ol = view_overlay.SpotModeOverlay(self, spot_va)
@@ -798,153 +799,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).on_motion(evt)
 
-    def _get_sem_rect(self):
-        """
-        Returns the (theoretical) scanning area of the SEM. Works even if the
-        SEM has not send any image yet.
-        returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
-        raises AttributeError in case no SEM is found
-        """
-        # Ideally, we'd like to know the position of the SEM image.
-        # As long as the SEM image stays at the center of the view, view_pos
-        # will be correct... but that will break if for some reason the SEM
-        # is shifted/dragged.
-        # TODO: try to use getMetadata()[MD_POS] if possible?
-        sem_center = self.microscope_view.view_pos.value
-
-        sem = self._tab_data_model.main.ebeam
-        # TODO: pixelSize will be updated when the SEM magnification changes,
-        # so we might want to recompute this ROA whenever pixelSize changes so
-        # that it's always correct (but maybe not here in the view)
-        sem_width = (sem.shape[0] * sem.pixelSize.value[0],
-                     sem.shape[1] * sem.pixelSize.value[1])
-        sem_rect = (sem_center[0] - sem_width[0] / 2,  # left
-                    sem_center[1] - sem_width[1] / 2,  # top
-                    sem_center[0] + sem_width[0] / 2,  # right
-                    sem_center[1] + sem_width[1] / 2)  # bottom
-
-        return sem_rect
-
-    def convert_spot_ratio_to_phys(self, r_spot):
-        if r_spot in (None, (None, None)):
-            return None
-        else:
-            # convert relative position to physical position
-            try:
-                sem_rect = self._get_sem_rect()
-            except AttributeError:
-                logging.warning("Trying to convert a SEM ROI, but no SEM available")
-                return None
-
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        phys_pos = (
-            sem_rect[0] + r_spot[0] * (sem_rect[2] - sem_rect[0]),
-            sem_rect[1] + (1 - r_spot[1]) * (sem_rect[3] - sem_rect[1])
-        )
-
-        return phys_pos
-
-    def convert_spot_phys_to_ratio(self, p_spot):
-        """ Clip the physical spot to the SEM FoV and convert it into a ratio
-
-        p_spot (tuple of floats): spot in physical coordinates (m)
-        returns:
-            p_spot (2 floats): The clipped physical spot
-            r_spot (2 floats): The spot position as a ratio
-        """
-
-        # Get the position of the overlay in physical coordinates
-        if p_spot is None:
-            return p_spot, (0.5, 0.5)
-
-        # Position of the complete SEM scan in physical coordinates
-        l, t, r, b = self._get_sem_rect()
-
-        # Take only the intersection so that that ROA is always inside the SEM scan
-        p_spot = min(max(l, p_spot[0]), r), min(max(t, p_spot[1]), b)
-
-        # Convert the ROI into relative value compared to the SEM scan
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        r_spot = (
-            (p_spot[0] - l) / (r - l),
-            1 - (p_spot[1] - t) / (b - t)
-        )
-
-        return p_spot, r_spot
-
-    def convert_roi_phys_to_ratio(self, phys_rect):
-        """
-        Convert and truncate the ROI in physical coordinates to the coordinates
-         relative to the SEM FoV
-        phys_rect (None or 4 floats): physical position of the tl and br points
-        return (4 floats): tlbr positions relative to the FoV
-        """
-        sem = self._tab_data_model.main.ebeam
-
-        # Get the position of the overlay in physical coordinates
-        if phys_rect is None:
-            return UNDEFINED_ROI
-
-        # Position of the complete SEM scan in physical coordinates
-        sem_rect = self._get_sem_rect()
-
-        # Take only the intersection so that that ROA is always inside the SEM scan
-        phys_rect = util.rect_intersect(phys_rect, sem_rect)
-        if phys_rect is None:
-            return UNDEFINED_ROI
-
-        # Convert the ROI into relative value compared to the SEM scan
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
-                    1 - (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
-                    (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
-                    1 - (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
-
-        # and is at least one pixel big
-        rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
-        rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
-        if rel_rect[2] > 1:  # if went too far
-            rel_rect[0] -= rel_rect[2] - 1
-            rel_rect[2] = 1
-        rel_rect[3] = max(rel_rect[3], rel_rect[1] + rel_pixel_size[1])
-        if rel_rect[3] > 1:
-            rel_rect[1] -= rel_rect[3] - 1
-            rel_rect[3] = 1
-
-        return rel_rect
-
-    def convert_roi_ratio_to_phys(self, roi):
-        """
-        Convert the ROI in relative coordinates (to the SEM FoV) into physical
-         coordinates
-        roi (4 floats): tlbr positions relative to the FoV
-        return (None or 4 floats): physical position of the tl and br points, or
-          None if no ROI is defined
-        """
-        if roi == UNDEFINED_ROI:
-            return None
-        else:
-            # convert relative position to physical position
-            try:
-                sem_rect = self._get_sem_rect()
-            except AttributeError:
-                logging.warning("Trying to convert a SEM ROI, but no SEM available")
-                return None
-
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
-                     sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
-                     sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
-                     sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
-
-        return phys_rect
-
-    # TODO: this is just a subtraction -> just let the caller do it
-    def selection_to_real_size(self, start_p_pos, end_p_pos):
-        w = abs(start_p_pos[0] - end_p_pos[0])
-        h = abs(start_p_pos[1] - end_p_pos[1])
-        return w, h
-
     def draw(self):
         """ Redraw the buffer while calculating the number of frames we *could* display
 
@@ -1145,14 +999,15 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # Get the region of interest and link it to the ROA overlay
 
         self._roa = sem_stream.roi
-        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa)
+        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
+                                                                 tab_data.fovComp)
         self.add_world_overlay(self.roa_overlay)
 
         # Link drift correction region
 
         self._dc_region = tab_data.driftCorrector.roi
         self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
-            self, self._dc_region, colour=gui.SELECTION_COLOUR_2ND)
+            self, self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
         self.add_world_overlay(self.driftcor_overlay)
 
         # Regions depend on the magnification (=field of view)

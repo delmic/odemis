@@ -503,6 +503,10 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # view are different)
         self.acquisitionStreams = set()
 
+        # Component to which the (relative) ROIs and spot position refer to for
+        # the field-of-view.
+        self.fovComp = None
+
         # The SEM concurrent stream that is used to select the acquisition settings
         # eg, ROI (aka ROA). It also gets Leeches to run during the entire
         # series of acquisition (ie, the drift corrector and/or PCD acquirer).
