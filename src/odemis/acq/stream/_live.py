@@ -35,6 +35,13 @@ import weakref
 from ._base import Stream
 
 
+class SettingStream(Stream):
+    """
+    Mock stream used to hold local VAs
+    """
+    pass
+
+
 class LiveStream(Stream):
     """
     Abstract class for any stream that can do continuous acquisition.
@@ -474,7 +481,7 @@ class AlignedSEMStream(SEMStream):
                     raise NotImplementedError("Unknown shiftbeam method %s" % (self._shiftebeam,))
             except LookupError:
                 self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
-                # logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
+                logging.info("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
                 self._setStatus(logging.WARNING, (u"Automatic SEM alignment unsuccessful", u"Need to focus all streams"))
                 logging.exception("Failure while looking for the ebeam center")
@@ -936,7 +943,9 @@ class ScannedFluoStream(FluoStream):
     .scale (to specify the distance between each pixel) and the .roi (the left-
     top, and right-bottom points of the scanned area).
     """
-    def __init__(self, name, detector, dataflow, emitter, scanner, em_filter, **kwargs):
+
+    def __init__(self, name, detector, dataflow, emitter, scanner, em_filter,
+                 setting_stream=None, **kwargs):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -946,6 +955,9 @@ class ScannedFluoStream(FluoStream):
         em_filter (Filter or None): the HwComponent to modify the emission light
           filtering. If None, it will assume it's fixed and indicated on the
           MD_OUT_WL of the detector.
+        setting_stream (SettingStream or None): if present, its local settings
+          will be used when this stream becomes active. In practice, it's used to
+          share the scanner and emitter settings between all ScannedFluoStreams.
         """
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FLUO
@@ -953,30 +965,57 @@ class ScannedFluoStream(FluoStream):
         super(ScannedFluoStream, self).__init__(name, detector, dataflow, emitter,
                                                 em_filter, **kwargs)
         self._scanner = scanner
+        self._setting_stream = setting_stream
 
         # TODO: support ROI via the .roi + scanner (cf SEMStream)
+
+    def _is_active_setter(self, active):
+
+        if self._setting_stream:
+            # To also (un)link the VAs of the setting stream.
+            # When activating it _must_ happen before activating this stream,
+            # but when stopping, any order is fine.
+            self._setting_stream.is_active.value = active
+        return super(ScannedFluoStream, self)._is_active_setter(active)
 
     @property
     def scanner(self):
         return self._scanner
 
+    @property
+    def setting_stream(self):
+        return self._setting_stream
+
+    def _getScannerVA(self, vaname):
+        # With setting stream, it's a little mess, as we don't even know whether
+        # the scanner is the emitter or detector.
+        if self._setting_stream and self._scanner is self._setting_stream.emitter:
+            return self._setting_stream._getEmitterVA(vaname)
+        elif self._setting_stream and self._scanner is self._setting_stream.detector:
+            return self._setting_stream._getDetectorVA(vaname)
+        else:
+            return getattr(self._scanner, vaname)
+
     def estimateAcquisitionTime(self):
-        # The same as SEMStream
+        # Same formula as SEMStream
         try:
+            res = self._getScannerVA("resolution").value
+            # TODO: change to this method once we support .roi:
             # Compute the number of pixels to acquire
-            shape = self._scanner.shape
-            scale = self._scanner.scale.value
-            roi = self.roi.value
-            width = (roi[2] - roi[0], roi[3] - roi[1])
-            res = [max(1, int(round(shape[0] * width[0] / scale[0]))),
-                   max(1, int(round(shape[1] * width[1] / scale[1])))]
+#             shape = self._scanner.shape
+#             scale = self._getScannerVA("scale").value
+#             roi = self.roi.value
+#             width = (roi[2] - roi[0], roi[3] - roi[1])
+#             res = [max(1, int(round(shape[0] * width[0] / scale[0]))),
+#                    max(1, int(round(shape[1] * width[1] / scale[1])))]
 
             # Typically there are a few more pixels inserted at the beginning of
             # each line for the settle time of the beam. We don't take this into
             # account and so tend to slightly under-estimate.
 
             # Each pixel x the dwell time in seconds
-            duration = self._scanner.dwellTime.value * numpy.prod(res)
+            dt = self._getScannerVA("dwellTime").value
+            duration = dt * numpy.prod(res)
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 

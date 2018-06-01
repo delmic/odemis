@@ -30,6 +30,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
+from odemis.acq.stream import Stream
 from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.util import test, conversion, img
@@ -760,26 +761,47 @@ class SECOMConfocalTestCase(unittest.TestCase):
 
     def test_acq_conf_multi_det(self):
         """
-        Check the acquisition of several confocal streams
+        Check the acquisition of several confocal streams and setting stream
         """
+        set_s = stream.SettingStream("Confocal shared settings",
+                       detector=self.laser_mirror,
+                       dataflow=None,
+                       emitter=self.light,
+                       detvas={"scale", "resolution", "dwellTime"},
+                       emtvas={"power"},
+                      )
+
         sfluos = []
         for d in self.photo_ds:
             s = stream.ScannedFluoStream("fluo %s" % (d.name,), d, d.data, self.light,
-                                         self.laser_mirror, None)
+                                         self.laser_mirror, None, setting_stream=set_s)
             sfluos.append(s)
 
         assert len(sfluos) > 1
-        acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
 
         # Not too fast scan, to avoid acquiring too many images
-        self.laser_mirror.scale.value = (8, 8)
-        self.laser_mirror.resolution.value = (256, 256)
-        self.laser_mirror.dwellTime.value = 10e-6  # s ~ 0.7s for a whole image
-        exp_shape = self.laser_mirror.resolution.value
+        set_s.detScale.value = (8, 8)
+        set_s.detResolution.value = (256, 256)
+        set_s.detDwellTime.value = 10e-6  # s ~ 0.7s for a whole image
+        exp_shape = set_s.detResolution.value
 
-        self.assertGreater(acqs.estimateAcquisitionTime(), 0.5)
+        acqt = sfluos[0].estimateAcquisitionTime()
+        assert 0.5 < acqt < 2
 
-        timeout = 1 + 1.5 * acqs.estimateAcquisitionTime()
+
+        # Let's play one stream for a little while, to simulate using it
+        sfluos[0].is_active.value = True
+        time.sleep(acqt * 2)
+        sfluos[0].is_active.value = False
+
+        # Change the hardware settings to detect issues with the setting stream
+        self.laser_mirror.scale.value = (1, 1)
+
+        acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
+        acqt = acqs.estimateAcquisitionTime()
+        assert 0.5 < acqt < 2
+
+        timeout = 1 + 1.5 * acqt
         f = acqs.acquire()
         f.add_update_callback(self._on_progress_update)
         f.add_done_callback(self._on_done)

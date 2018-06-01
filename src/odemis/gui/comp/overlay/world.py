@@ -28,6 +28,7 @@ import logging
 import math
 from odemis import model, util
 from odemis.acq.stream import UNDEFINED_ROI
+from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase
 from odemis.gui.util.raster import rasterize_line
@@ -35,7 +36,7 @@ from odemis.util import clip_line
 import wx
 
 import odemis.gui as gui
-from odemis.gui import img
+from odemis.util.comp import compute_scanner_fov, get_fov_rect
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -260,13 +261,24 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     FILL_GRID = 1
     FILL_POINT = 2
 
-    def __init__(self, cnvs, roa=None, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, roa=None, scanner=None, colour=gui.SELECTION_COLOUR):
+        """
+        roa (None or VA of 4 floats): If not None, it's linked to the rectangle
+          displayed (ie, when the user changes the rectangle, its value is
+          updated, and when its value changes, the rectangle is redrawn
+          accordingly). Value is relative to the scanner.
+        scanner (None or HwComponent): The scanner component to which the relative
+          ROA values refer to. Required if a roa argument is passed.
+        """
         WorldSelectOverlay.__init__(self, cnvs, colour)
 
         self._fill = self.FILL_NONE
         self._repetition = (0, 0)
         self._roa = roa
+        self._scanner = scanner
         if roa:
+            if not scanner:
+                raise ValueError("scanner is required when roa VA passed")
             self._roa.subscribe(self.on_roa, init=True)
 
         self._bmp = None  # used to cache repetition with FILL_POINT
@@ -293,13 +305,92 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self._repetition = val
         self._bmp = None
 
+    def _get_scanner_rect(self):
+        """
+        Returns the (theoretical) scanning area of the scanner. Works even if the
+        scanner has not send any image yet.
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
+        raises ValueError if scanner is not set or not actually a scanner
+        """
+        if self._scanner is None:
+            raise ValueError("Scanner not set")
+        fov = compute_scanner_fov(self._scanner)
+        return get_fov_rect(self._scanner, fov)
+
+    def convert_roi_phys_to_ratio(self, phys_rect):
+        """
+        Convert and truncate the ROI in physical coordinates to the coordinates
+          relative to the SEM FoV. It also ensures the ROI can never be smaller
+          than a pixel (of the scanner).
+        phys_rect (None or 4 floats): physical position of the tl and br points
+        return (4 floats): tlbr positions relative to the FoV
+        """
+        # Get the position of the overlay in physical coordinates
+        if phys_rect is None:
+            return UNDEFINED_ROI
+
+        # Position of the complete scan in physical coordinates
+        sem_rect = self._get_scanner_rect()
+
+        # Take only the intersection so that that ROA is always inside the SEM scan
+        phys_rect = util.rect_intersect(phys_rect, sem_rect)
+        if phys_rect is None:
+            return UNDEFINED_ROI
+
+        # Convert the ROI into relative value compared to the SEM scan
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
+                    1 - (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
+                    (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
+                    1 - (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
+
+        # and is at least one pixel big
+        shape = self._scanner.shape
+        rel_pixel_size = (1 / shape[0], 1 / shape[1])
+        rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
+        if rel_rect[2] > 1:  # if went too far
+            rel_rect[0] -= rel_rect[2] - 1
+            rel_rect[2] = 1
+        rel_rect[3] = max(rel_rect[3], rel_rect[1] + rel_pixel_size[1])
+        if rel_rect[3] > 1:
+            rel_rect[1] -= rel_rect[3] - 1
+            rel_rect[3] = 1
+
+        return rel_rect
+
+    def convert_roi_ratio_to_phys(self, roi):
+        """
+        Convert the ROI in relative coordinates (to the SEM FoV) into physical
+         coordinates
+        roi (4 floats): tlbr positions relative to the FoV
+        return (None or 4 floats): physical position of the tl and br points, or
+          None if no ROI is defined
+        """
+        if roi == UNDEFINED_ROI:
+            return None
+
+        # convert relative position to physical position
+        try:
+            sem_rect = self._get_scanner_rect()
+        except ValueError:
+            logging.warning("Trying to convert a scanner ROI, but no scanner set")
+            return None
+
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
+                     sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
+                     sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
+                     sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
+
+        return phys_rect
+
     def on_roa(self, roa):
         """ Update the ROA overlay with the new roa VA data
 
         roi (tuple of 4 floats): top, left, bottom, right position relative to the SEM image
 
         """
-        phys_rect = self.cnvs.convert_roi_ratio_to_phys(roa)
+        phys_rect = self.convert_roi_ratio_to_phys(roa)
         self.set_physical_sel(phys_rect)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
@@ -310,7 +401,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             if self.active:
                 if self.get_size() != (None, None):
                     phys_rect = self.get_physical_sel()
-                    rel_rect = self.cnvs.convert_roi_phys_to_ratio(phys_rect)
+                    rel_rect = self.convert_roi_phys_to_ratio(phys_rect)
 
                     # Update VA. We need to unsubscribe to be sure we don't received
                     # intermediary values as the VA is modified by the stream further on, and
@@ -566,12 +657,19 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
 
     """
 
-    def __init__(self, cnvs, spot_va=None):
+    def __init__(self, cnvs, spot_va=None, scanner=None):
+        """
+        scanner (None or HwComponent): The scanner component to which the relative
+          spot position values refers to. If provided, the spot will be clipped
+          to its FoV.
+        """
+
         WorldOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
         SpotModeBase.__init__(self, cnvs, spot_va=spot_va)
 
         self.p_pos = None
+        self._scanner = scanner  # component used to position the spot physically
 
     def on_spot_change(self, _):
         self._ratio_to_phys()
@@ -581,17 +679,76 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         self._ratio_to_phys()
         WorldOverlay.on_size(self, evt)
 
+    def _get_scanner_rect(self):
+        """
+        Returns the (theoretical) scanning area of the scanner. Works even if the
+        scanner has not send any image yet.
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
+        raises ValueError if scanner is not set or not actually a scanner
+        """
+        if self._scanner is None:
+            raise ValueError("Scanner not set")
+        fov = compute_scanner_fov(self._scanner)
+        return get_fov_rect(self._scanner, fov)
+
+    def convert_spot_ratio_to_phys(self, r_spot):
+        """
+        Convert the spot position represented as a ration into a physical position
+        r_spot (2 floats or None): The spot position as a ratio
+        returns (2 floats or None): spot in physical coordinates (m)
+        """
+        if r_spot in (None, (None, None)):
+            return None
+
+        # convert relative position to physical position
+        try:
+            sem_rect = self._get_scanner_rect()
+        except ValueError:
+            logging.warning("Trying to convert a scanner ROI, but no scanner set")
+            return None
+
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        phys_pos = (
+            sem_rect[0] + r_spot[0] * (sem_rect[2] - sem_rect[0]),
+            sem_rect[1] + (1 - r_spot[1]) * (sem_rect[3] - sem_rect[1])
+        )
+
+        return phys_pos
+
+    def convert_spot_phys_to_ratio(self, p_spot):
+        """
+        Clip the physical spot to the SEM FoV and convert it into a ratio
+        p_spot (2 floats): spot in physical coordinates (m)
+        returns:
+            p_spot (2 floats): The clipped physical spot
+            r_spot (2 floats): The spot position as a ratio
+        """
+        # Position of the complete SEM scan in physical coordinates
+        l, t, r, b = self._get_scanner_rect()
+
+        # Take only the intersection so that that ROA is always inside the SEM scan
+        p_spot = min(max(l, p_spot[0]), r), min(max(t, p_spot[1]), b)
+
+        # Convert the ROI into relative value compared to the SEM scan
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        r_spot = (
+            (p_spot[0] - l) / (r - l),
+            1 - (p_spot[1] - t) / (b - t)
+        )
+
+        return p_spot, r_spot
+
     def _phys_to_ratio(self):
         if self.p_pos is None:
             self.r_pos.value = (0.5, 0.5)
         else:
             # Since converting to a ratio possibly involves clipping, the p_pos is also updated
-            p_pos, self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(self.p_pos)
+            p_pos, self.r_pos.value = self.convert_spot_phys_to_ratio(self.p_pos)
             self.p_pos = p_pos
 
     def _ratio_to_phys(self):
         try:
-            self.p_pos = self.cnvs.convert_spot_ratio_to_phys(self.r_pos.value)
+            self.p_pos = self.convert_spot_ratio_to_phys(self.r_pos.value)
         except (TypeError, KeyError):
             self.p_pos = None
 

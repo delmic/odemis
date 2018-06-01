@@ -225,6 +225,8 @@ class AcquisitionDialog(xrcfr_acq):
             for lva in local_vas:
                 lva.unsubscribe(self.on_setting_change)
 
+        # TODO: need to have a .clear() on the settings_controller to clean up?
+        self._settings_controller = None
         self._acq_streams = {}  # also empty the cache
 
         gc.collect()  # To help reclaiming some memory

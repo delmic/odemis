@@ -27,6 +27,8 @@ import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq.stream import UNDEFINED_ROI
+from odemis.driver import simsem
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
 from odemis.gui.model import TOOL_POINT, TOOL_LINE
@@ -39,10 +41,18 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
-
+from odemis.util.comp import compute_scanner_fov, get_fov_rect
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
+
+# To create a simulated SEM
+CONFIG_SED = {"name": "sed", "role": "none"}
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
+CONFIG_SEM = {"name": "sem_int",
+                  "role": "none",
+                  "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
+                  }
 
 
 class OverlayTestCase(test.GuiTestCase):
@@ -461,6 +471,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.activate()
         cnvs.add_world_overlay(rsol)
         cnvs.scale = 400
+        cnvs.update_drawing()
 
         test.gui_loop()
         wroi = [-0.1, 0.3, 0.2, 0.4]  # in m
@@ -475,11 +486,33 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.fill = wol.RepetitionSelectOverlay.FILL_POINT
 
         pos = cnvs.margins[0] + 10,  cnvs.margins[1] + 10
-        rsol.add_label("Repetition fill will change in 3 seconds.",
+        rsol.add_label("Repetition fill will change in 2 seconds.",
                        pos, colour=(0.8, 0.2, 0.1))
 
-        cnvs.update_drawing()
-        test.gui_loop()
+        # cnvs.update_drawing()
+        test.gui_loop(2)
+
+        rsol.set_physical_sel((-0.1, -0.3, 0.4, 0.4))
+        rsol.repetition = (50, 80)
+        rsol.fill = wol.RepetitionSelectOverlay.FILL_GRID
+
+        pos = cnvs.margins[0] + 10, cnvs.margins[1] + 10
+        rsol.add_label("Repetition fill will change in 2 seconds.",
+                       pos, colour=(0.8, 0.2, 0.1))
+
+        # cnvs.update_drawing()
+        test.gui_loop(2)
+
+        # Fine grid => solid colour
+        rsol.repetition = (500, 800)
+        rsol.fill = wol.RepetitionSelectOverlay.FILL_GRID
+
+        pos = cnvs.margins[0] + 10, cnvs.margins[1] + 10
+        rsol.add_label("Repetition fill will change in 2 seconds.",
+                       pos, colour=(0.8, 0.2, 0.1))
+
+        # cnvs.update_drawing()
+        test.gui_loop(2)
 
         tol = vol.TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool")
@@ -495,6 +528,86 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
 
         test.gui_loop()
+
+    def test_roa_select_overlay_va(self):
+
+        sem = simsem.SimSEM(**CONFIG_SEM)
+        for child in sem.children.value:
+            if child.name == CONFIG_SCANNER["name"]:
+                ebeam = child
+        # Simulate a stage move
+        ebeam.updateMetadata({model.MD_POS: (1e-3, -0.2e-3)})
+
+        # but it should be a simple miccanvas
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        roa = model.TupleVA(UNDEFINED_ROI)
+        rsol = wol.RepetitionSelectOverlay(cnvs, roa=roa, scanner=ebeam)
+        rsol.activate()
+        cnvs.add_world_overlay(rsol)
+        cnvs.scale = 100000
+        cnvs.update_drawing()
+
+        # Undefined ROA => sel = None
+        roi_back = rsol.get_physical_sel()
+        self.assertEqual(roi_back, None)
+
+        # Full FoV
+        roa.value = (0, 0, 1, 1)
+        test.gui_loop(0.1)
+        # Expect the whole SEM FoV
+        fov = compute_scanner_fov(ebeam)
+        ebeam_rect = get_fov_rect(ebeam, fov)
+        roi_back = rsol.get_physical_sel()
+
+        for o, b in zip(ebeam_rect, roi_back):
+            self.assertAlmostEqual(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_rect, roi_back))
+
+        # Hald the FoV
+        roa.value = (0.25, 0.25, 0.75, 0.75)
+        test.gui_loop(0.1)
+        # Expect the whole SEM FoV
+        fov = compute_scanner_fov(ebeam)
+        fov = (fov[0] / 2, fov[1] / 2)
+        ebeam_rect = get_fov_rect(ebeam, fov)
+        roi_back = rsol.get_physical_sel()
+
+        for o, b in zip(ebeam_rect, roi_back):
+            self.assertAlmostEqual(o, b, msg="ebeam FoV (%s) != ROI (%s)" % (ebeam_rect, roi_back))
+
+        test.gui_loop()
+
+        sem.terminate()
+
+    def test_spot_mode_world_overlay(self):
+        sem = simsem.SimSEM(**CONFIG_SEM)
+        for child in sem.children.value:
+            if child.name == CONFIG_SCANNER["name"]:
+                ebeam = child
+        # Simulate a stage move
+        ebeam.updateMetadata({model.MD_POS: (1e-3, -0.2e-3)})
+
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        spotPosition = model.TupleVA((0.1, 0.1))
+        sol = wol.SpotModeOverlay(cnvs, spot_va=spotPosition, scanner=ebeam)
+        sol.activate()
+        cnvs.add_world_overlay(sol)
+        cnvs.scale = 100000
+        cnvs.update_drawing()
+        test.gui_loop(1)
+
+        spotPosition.value = (0.5, 0.5)
+
+        test.gui_loop(1)
+
+        spotPosition.value = (None, None)
+
+        test.gui_loop()
+        self.assertIsNone(sol.p_pos, None)
 
     def test_pixel_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)

@@ -326,7 +326,6 @@ class AcquisitionDialog(xrcfr_plugin):
             self.pnl_desc.GetSizer().Add(self.lbl_description, flag=wx.EXPAND | wx.ALL, border=10)
             self.lbl_description.SetLabel(text)
 
-        self.entries = []  # Setting entries
         self._acq_future_connector = None
         self.buttons = []  # The buttons
         self.current_future = None
@@ -363,7 +362,7 @@ class AcquisitionDialog(xrcfr_plugin):
     def addSettings(self, objWithVA, conf=None):
         """
         Adds settings as one widget on a line for each VigilantAttribute (VA) in
-         the given object. Each setting entry created is added to .entries.
+         the given object. Each setting entry created is added to setting_controller.entries.
         objWithVA (object): an object with VAs.
 
         conf (None or dict of str->config): allows to override the automatic

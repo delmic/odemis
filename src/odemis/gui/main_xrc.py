@@ -432,6 +432,7 @@ class xrcpnl_tab_secom_streams(wx.Panel):
         self.lbl_stream_status = xrc.XRCCTRL(self, "lbl_stream_status")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
@@ -466,6 +467,7 @@ class xrcfr_acq(wx.Dialog):
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.chkbox_fine_align = xrc.XRCCTRL(self, "chkbox_fine_align")
@@ -5015,6 +5017,18 @@ def __init_resources():
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_opt_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_sem">
                         <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -5235,6 +5249,18 @@ def __init_resources():
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_opt_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_sem">
                         <label>SEM SETTINGS</label>

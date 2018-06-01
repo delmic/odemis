@@ -471,6 +471,9 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         if main.ccd or main.photo_ds:
             self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            if main.laser_mirror:
+                # For storing shared settings to all confocal streams
+                self.confocal_set_stream = None
 
         if main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
@@ -510,6 +513,10 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # List of streams to be acquired (as the ones used to display the live
         # view are different)
         self.acquisitionStreams = set()
+
+        # Component to which the (relative) ROIs and spot position refer to for
+        # the field-of-view.
+        self.fovComp = None
 
         # The SEM concurrent stream that is used to select the acquisition settings
         # eg, ROI (aka ROA). It also gets Leeches to run during the entire
