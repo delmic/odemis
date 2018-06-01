@@ -304,7 +304,6 @@ class SettingsController(object):
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
         # Make sure the message is sent form the main thread
-        wx.CallAfter(pub.sendMessage, 'setting.changed')
         evt.Skip()
 
     def Refresh(self):

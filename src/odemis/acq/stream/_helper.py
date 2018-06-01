@@ -1090,6 +1090,7 @@ class ScannedTCSettingsStream(RepetitionStream):
         # VA's
         self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
         self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
+        # TODO: Change these to Local VA's
         self.power = emitter.power
         self.period = emitter.period
         self.image.value = model.DataArray([])  # start with an empty array

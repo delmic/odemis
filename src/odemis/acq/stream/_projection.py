@@ -109,13 +109,10 @@ class RGBSpatialProjection(DataProjection):
         self.image = model.VigilantAttribute(None)
 
         # Don't call at init, so don't set metadata if default value
-        if hasattr(self.stream, "tint"):
-            self.stream.tint.subscribe(self._onTint)
-        if hasattr(self.stream, "intensityRange"):
-            self.stream.intensityRange.subscribe(self._onIntensityRange)
-        if hasattr(self.stream, "auto_bc"):
-            self.stream.auto_bc.subscribe(self._onAutoBC)
-            self.stream.auto_bc_outliers.subscribe(self._onOutliers)
+        self.stream.tint.subscribe(self._onTint)
+        self.stream.intensityRange.subscribe(self._onIntensityRange)
+        self.stream.auto_bc.subscribe(self._onAutoBC)
+        self.stream.auto_bc_outliers.subscribe(self._onOutliers)
 
         if hasattr(stream, '_das'):
             raw = stream._das

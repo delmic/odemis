@@ -236,7 +236,6 @@ class AcquisitionDialog(xrcfr_acq):
         return (list of Streams): the streams to be acquired
         """
         # Only acquire the streams which are displayed
-        # FIXME: _view should only have the spatial streams
         streams = self._view.getStreams() + self._hidden_view.getStreams()
 
         # Add the overlay stream if requested, and folds all the streams
@@ -526,7 +525,7 @@ class AcquisitionDialog(xrcfr_acq):
         self._acq_future_connector = None
 
         try:
-            data, exp = future.result(2.0)  # timeout is just for safety
+            data, exp = future.result(1)  # timeout is just for safety
             self.conf.fn_count = update_counter(self.conf.fn_count)
         except CancelledError:
             # put back to original state:

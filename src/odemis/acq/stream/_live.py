@@ -548,7 +548,6 @@ class SpotSEMStream(LiveStream):
         # always in this order
         self._emitter.resolution.value = (1, 1)
         self._emitter.translation.value = trans
-        logging.debug("Updating %s.translation to %s", self._emitter.name, trans)
 
     def _onROI(self, roi):
         """

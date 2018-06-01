@@ -420,10 +420,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             image = s.image.value
 
-            if isinstance(s, NON_SPATIAL_STREAMS):
-                logging.debug("Skipping stream %s which does not appear to have an RGB image", s.name.value)
-                continue
-
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             ostream = s.stream if isinstance(s, DataProjection) else s
