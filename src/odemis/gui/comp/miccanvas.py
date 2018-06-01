@@ -181,7 +181,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if hasattr(tab_data, "roa"):
             # Get the region of interest and link it to the ROA overlay
             self._roa = tab_data.roa
-            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa)
+            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa, scanner=tab_data.scanner)
             self.add_world_overlay(self.roa_overlay)
 
         if hasattr(tab_data, "driftCorrector"):

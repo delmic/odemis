@@ -450,8 +450,12 @@ class LiveViewGUIData(MicroscopyGUIData):
         tools = {TOOL_NONE,} # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
+            self.scanner = main.tc_scanner
             if main.tc_detector:  # Can even show live settings
                 tools.add(TOOL_SPOT)
+        else:
+            self.scanner = None
+
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The SpotConfocalstream, used to control spot mode.
