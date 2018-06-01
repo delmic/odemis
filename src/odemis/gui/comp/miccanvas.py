@@ -128,6 +128,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
         self.roa_overlay = None
+        if self._tab_data_model.fovComp is not None:
+            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
+                self._tab_data_model.fovComp)
+        else:
+            self.roa_overlay = None
 
         self._dc_region = None  # The ROI VA of the drift correction
         self.driftcor_overlay = None

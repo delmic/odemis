@@ -462,6 +462,10 @@ class LiveViewGUIData(MicroscopyGUIData):
         # It is set at start-up by the tab controller.
         self.spotStream = None
 
+        # Component to which the (relative) ROIs and spot position refer to for
+        # the field-of-view.
+        self.fovComp = None
+
         self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))

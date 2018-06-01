@@ -462,6 +462,8 @@ class SecomStreamsTab(Tab):
 
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
+        # tab_data.fovComp = main_data.ebeam
+
     @property
     def settingsbar_controller(self):
         return self._settingbar_controller
