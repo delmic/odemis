@@ -47,7 +47,6 @@ from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
 import time
 import wx
-from wx.lib.pubsub import pub
 
 import odemis.gui.comp.hist as hist
 import odemis.gui.conf as guiconf
@@ -303,7 +302,6 @@ class SettingsController(object):
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
-        # Make sure the message is sent form the main thread
         evt.Skip()
 
     def Refresh(self):
