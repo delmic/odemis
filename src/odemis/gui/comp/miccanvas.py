@@ -128,11 +128,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
         self.roa_overlay = None
-        if self._tab_data_model.fovComp is not None:
-            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
-                self._tab_data_model.fovComp)
-        else:
-            self.roa_overlay = None
 
         self._dc_region = None  # The ROI VA of the drift correction
         self.driftcor_overlay = None
@@ -159,8 +154,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
         assert(self.microscope_view is None)
 
-        sem = tab_data.main.ebeam
-
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
@@ -182,32 +175,37 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
-        # Associate the ROI of the SEM concurrent stream to the region of acquisition
-        if hasattr(tab_data, "roa"):
-            # Get the region of interest and link it to the ROA overlay
-            self._roa = tab_data.roa
-            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa, scanner=tab_data.scanner)
-            self.add_world_overlay(self.roa_overlay)
-
-        if hasattr(tab_data, "driftCorrector"):
-            # Link drift correction region
-            self._dc_region = tab_data.driftCorrector.roi
-            self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
-                self, self._dc_region, colour=gui.SELECTION_COLOUR_2ND)
-            self.add_world_overlay(self.driftcor_overlay)
-
-            if sem:
-                # Regions depend on the magnification (=field of view)
-                if isinstance(sem.magnification, VigilantAttributeBase):
-                    sem.magnification.subscribe(self._on_sem_mag)
-
         if tab_data.tool:
             # only create these overlays if they could be possibly used
+            # if guimodel.TOOL_ROA in tab_data.tool.choices:
+            # FIXME: need to find a better way to indicate we want to show the ROA
+            # without allowing to modify it. (cf SECOM acquisition window)
+            if hasattr(tab_data, "roa") and tab_data.roa:
+                # Get the region of interest and link it to the ROA overlay
+                self._roa = tab_data.roa
+                self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
+                                                                         tab_data.fovComp)
+                self.add_world_overlay(self.roa_overlay)
+
+            if guimodel.TOOL_RO_ANCHOR in tab_data.tool.choices:
+                # Link drift correction region
+                self._dc_region = tab_data.driftCorrector.roi
+                self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(self,
+                    self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
+                self.add_world_overlay(self.driftcor_overlay)
+
+            if self.roa_overlay or self.driftcor_overlay:
+                # Regions depend on the field of view (=pixelSize/magnification)
+                if model.hasVA(tab_data.fovComp, "pixelSize"):
+                    tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
+
             if guimodel.TOOL_POINT in tab_data.tool.choices:
                 self.points_overlay = world_overlay.PointsOverlay(self)
                 self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
+
             if guimodel.TOOL_LINE in tab_data.tool.choices:
                 self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
+
             tab_data.tool.subscribe(self._on_tool, init=True)
 
     @call_in_wx_main
@@ -289,10 +287,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.Refresh(eraseBackground=False)
 
     def _set_spot_mode(self, tool_mode):
-
-        if not any(isinstance(s, (EMStream, OpticalStream)) for s in self.microscope_view.stream_tree):
-            return
-
         use_world = hasattr(self._tab_data_model, 'spotPosition')
 
         if tool_mode == guimodel.TOOL_SPOT:
@@ -946,17 +940,28 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         wx.CallAfter(self.request_drawing_update)
 
-    def _on_sem_mag(self, mag):
+    def _on_hw_fov(self, pxs):
         """
-        Called when the magnification of the SEM changes
+        Called when the FoV of the component linked to the ROIs changes.
+          The notification happens when the pixelSize is updated.
+        pxs (float, float): the new pixelSize
         """
-        # That means the pixelSize changes, so the (relative) ROA is different
+        # The FoV changes, so the (relative) ROA is different.
         # Either we update the ROA so that physically it stays the same, or
         # we update the selection so that the ROA stays the same. It's probably
         # that the user has forgotten to set the magnification before, so let's
         # pick solution 2.
-        self.roa_overlay.on_roa(self._roa.value)
-        self.driftcor_overlay.on_roa(self._dc_region.value)
+
+        # TODO: acq.stream.RepetitionStream has something similar, as it has an
+        # extra attribute pixelSize which is linked to the hw pixelSize.
+        # Probably both codes are at the wrong place. It should go into a
+        # controller in the GUI. => drop RepetitionStream.pixelSize and provide
+        # something equivalent in the GUI layer, and in that layer, update
+        # pixelSize whenever the fovComp.pixelSize changes.
+        if self.roa_overlay:
+            self.roa_overlay.on_roa(self._roa.value)
+        if self.driftcor_overlay:
+            self.driftcor_overlay.on_roa(self._dc_region.value)
 
 
 class OverviewCanvas(DblMicroscopeCanvas):

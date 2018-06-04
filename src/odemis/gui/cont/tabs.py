@@ -296,6 +296,10 @@ class SecomStreamsTab(Tab):
 
         self.main_data = main_data
 
+        # If a time_correlator is present, there is a ROA based on the laser_mirror
+        if main_data.time_correlator:
+            tab_data.fovComp = main_data.laser_mirror
+
         # Order matters!
         # First we create the views, then the streams
         vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
@@ -462,7 +466,6 @@ class SecomStreamsTab(Tab):
 
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
-        # tab_data.fovComp = main_data.ebeam
 
     @property
     def settingsbar_controller(self):
@@ -927,6 +930,9 @@ class SparcAcquisitionTab(Tab):
                 self.tb.add_tool(t, tab_data.tool)
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         # TODO: autofocus tool if there is an ebeam-focus
+
+        # Don't show ROA/spot on the AR view
+        panel.vp_sparc_tr.canvas.allowed_modes = {TOOL_NONE}
 
         tab_data.tool.subscribe(self.on_tool_change)
 
