@@ -720,7 +720,7 @@ class Correlator2D(Plugin):
     def __init__(self, microscope, main_app):
         # Called when the plugin is loaed (ie, at GUI initialisation)
         super(Correlator2D, self).__init__(microscope, main_app)
-        if not microscope:
+        if not microscope or microscope.role not in ("sparc", "sparc2"):
             return
         try:
             self.ebeam = model.getComponent(role="e-beam")
