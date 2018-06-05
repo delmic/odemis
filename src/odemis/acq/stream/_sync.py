@@ -47,6 +47,7 @@ import threading
 import time
 
 from ._base import Stream
+from odemis.model._components import hasVA
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -2038,7 +2039,10 @@ class ScannedRemoteTCStream(LiveStream):
         self._dwellTime = helper_stream.dwellTime
         self.roi = helper_stream.roi
         self.repetition = helper_stream.repetition
-        self.filename = self._tc_scanner.filename
+        if self._tc_scanner is not None and hasVA(self._tc_scanner, "filename"):
+            self.filename = self._tc_scanner.filename
+        else:
+            self.filename = model.StringVA()
 
         # For the acquisition
         self._acq_lock = threading.Lock()
@@ -2104,7 +2108,8 @@ class ScannedRemoteTCStream(LiveStream):
         logging.info("Total dwell time: %f s, Pixel Dwell time: %f, Resolution: %s, collecting %d frames...",
                      self._dwellTime.value, px_dt, self._scanner.resolution.value, nfr)
 
-        self._tc_scanner.dwellTime.value = self._dwellTime.value
+        if self._tc_scanner is not None and hasVA(self._tc_scanner, "dwellTime"):
+            self._tc_scanner.dwellTime.value = self._dwellTime.value
 
         return px_dt, nfr
 
@@ -2180,10 +2185,8 @@ class ScannedRemoteTCStream(LiveStream):
                 self._updateProgress(future, dur, i + 1, nfr)
 
             # Acquisition completed
-            self._pdetector.data.unsubscribe(self._onNewData)
-            self._time_correlator.data.unsubscribe(self._onAcqStop)
             logging.debug("FLIM acquisition completed successfully.")
-            return self.raw
+
         except CancelledError:
             logging.info("Acquisition cancelled")
             self._acq_state = CANCELLED
@@ -2208,6 +2211,8 @@ class ScannedRemoteTCStream(LiveStream):
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
                 self._acq_state = FINISHED
+
+        return self.raw
 
     def _onAcqStop(self, dataflow, data):
         pass
