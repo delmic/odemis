@@ -2182,7 +2182,7 @@ class ScannedRemoteTCStream(LiveStream):
             # Acquisition completed
             self._pdetector.data.unsubscribe(self._onNewData)
             self._time_correlator.data.unsubscribe(self._onAcqStop)
-
+            logging.debug("FLIM acquisition completed successfully.")
             return self.raw
         except CancelledError:
             logging.info("Acquisition cancelled")
@@ -2194,11 +2194,6 @@ class ScannedRemoteTCStream(LiveStream):
         finally:
             logging.debug("FLIM acquisition ended")
 
-            with self._acq_lock:
-                if self._acq_state == CANCELLED:
-                    raise CancelledError()
-                self._acq_state = FINISHED
-
             # Ensure all the detectors are stopped
             self._pdetector.data.unsubscribe(self._onNewData)
             self._time_correlator.data.unsubscribe(self._onAcqStop)
@@ -2208,6 +2203,11 @@ class ScannedRemoteTCStream(LiveStream):
 
             # If cancelled, some data might still be queued => forget about it
             self._data_queue = Queue.Queue()
+
+            with self._acq_lock:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                self._acq_state = FINISHED
 
     def _onAcqStop(self, dataflow, data):
         pass
