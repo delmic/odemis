@@ -1,0 +1,325 @@
+secom-flim-sim: {
+    class: Microscope,
+    role: secom,
+    children: ["Extended Light", "Optical Objective",
+               "SEM E-beam", "SEM Detector", "Switch Sensor", "Fiber Selector",
+               "Galvano Mirror", "PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Pinhole",
+               "Time Correlator",
+               "Sample Stage", "Objective Stage", "Optical Focus"]
+}
+
+# We cannot control the power of the laser by software. At best, it could be 
+# possible to turn it on/off _if it's set to use the external clock_ by setting the
+# trigger frequency to 0. So for now, just a simulated component, to make Odemis
+# happy, and to be able to store the actual power used in the metadata.
+Light: {
+    class: simulated.Light,
+    role: null,
+    init: {
+        max_power: 0.5, # W
+        # generated wavelength -> 99% low, 25% low, centre, 25% high, 99% high in m
+        spectra: [[475.0e-9, 580.0e-9, 485.0e-9, 490.0e-9, 495.0e-9]] # m
+    },
+}
+
+"Rigol Wave Generator": {
+    class: rigol.WaveGenerator,
+    role: null,
+    init: {
+        host: "fake", # IP address or "fake"
+        # port: 5555, # TCP/IP Port of the device (default is 5555)
+        channel: 1, # default channel is 1, but 1 or 2 are available.
+        limits: [0, 5] # maximum range is -10 to 10 V
+    },
+}
+
+"Extended Light": {
+    class: emitter.ExtendedLight,
+    role: light,
+    children: {
+        "light": "Light",
+        "clock": "Rigol Wave Generator",
+    },
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD"],
+}
+
+
+# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
+# sudo modprobe comedi comedi_num_legacy_minors=4
+# sudo modprobe comedi_test
+# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+"SEM Scan Interface": {
+    class: semcomedi.SEMComedi,
+    role: null,
+    init: {device: "/dev/comedi0"},
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
+}
+
+# Connect:
+# X -> AO 0
+# Y -> AO 1
+# Ground -> AO GND
+"SEM E-beam": {
+    # Internal child of SEM ExtXY, so no class
+    role: e-beam,
+    init: {
+        channels: [1, 0],
+        limits: [[-8, 8], [0, 5]],  # V
+        park: [-5, -5], # V
+        #max_res: [16384, 16384], # px
+        settle_time: 10.e-6, # s
+        hfw_nomag: 0.25, # m
+        # Digital output port mapping on the Delmic scanning box v2:
+        # 0 = Relay
+        # 1 = Open drain output (Y0.0)
+        # 2 = Digital Out 1
+        # 3 = Digital Out 0
+        # 4 = Status led
+        # output ports -> True (indicate scanning) or False (indicate parked) + VA name
+        # Conventional VA names are: external, blanker, led, power
+        scanning_ttl: {0: [True, "external"], 4: True},
+    },
+    properties: {
+        scale: [8, 8], # (ratio), start with a pretty fast scan
+        dwellTime: 5.e-6, # s
+        magnification: 1000, # (ratio), start low for a big field of view
+    },
+    affects: ["SEM Detector", "PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"] # affects the PMTs in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SEM Scan interface, so no class
+    role: se-detector,
+    init: {
+        channel: 0, # 0-> sawtooth waves, 1-> square waves
+        limits: [-3, 3] # V
+    },
+}
+
+# Fake time correlator that stands in for a Symphotime Simulator
+"Time Correlator": {
+    class: static.TimeCorrelator,
+    role: "time-correlator",
+}
+
+# Quanta SEM driven via external X/Y connection, using a DAQ board
+"Nikon C2": {
+    class: nikonc.CorbaC2,
+    role: null,
+    init: {
+        host: "fake", # Use "fake" to use a simulator
+        port: 6666,
+    },
+    # detectors can be added or removed, up to 4
+    children: {
+        scanner: "Galvano Mirror",
+        detector0: "PMT1 @ 447/60",
+        detector1: "PMT2 @ 525/50",
+        detector2: "PMT3 @ 561LP",
+        detector3: "APD",
+        pinhole: "Pinhole",
+        sensor: "Switch Sensor",
+    }
+}
+
+"Galvano Mirror": {
+    # Internal child of Nikon C2, so no class
+    role: laser-mirror,
+#    role: e-beam,
+    init: {
+        hfw_nomag: 10.0e-3,  # m # The horizontal field of view if the lens is 1x
+        #galvano_enabled: False,  # When "False", everything will behave the same
+                                 # in software but the mirror will not move. 
+    },
+    properties: {
+        scale: [8, 8], # (ratio), start with a pretty fast scan
+        resolution: [256, 256],
+    },
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"] # affects the CCD in case of cathodoluminescence
+}
+
+# The light goes first through a MHE46310  C1 Dichroic Mirror EX 405/488/561
+
+"PMT1 @ 447/60": {
+    # Internal child of Nikon C2, so no class
+    role: photo-detector0,
+    init: {
+        channel: 0,
+    },
+    metadata: {
+        # MHE46610  C2 Filter Cube 447/60
+        OUT_WL: [417.0e-9, 477.0e-9], # m
+    }
+}
+
+"PMT2 @ 525/50": {
+    # Internal child of Nikon C2, so no class
+    role: photo-detector1,
+    init: {
+        channel: 2,
+    },
+    metadata: {
+        # MHE46700  C2 Filter Cube 525/50  561LP
+        OUT_WL: [500.e-9, 550.e-9], # m
+    }
+}
+
+"PMT3 @ 561LP": {
+    # Internal child of Nikon C2, so no class
+    role: photo-detector2,
+    init: {
+        channel: 2,
+    },
+    metadata: {
+        OUT_WL: [561.e-9, 1361.e-9], # m
+    }
+}
+
+"APD": {
+    # Internal child of Nikon C2, so no class
+    role: tc-detector,
+    init: {
+        channel: 3,
+    },
+}
+
+"Pinhole": {
+    # Internal child of Nikon C2, so no class
+    creator: "Nikon C2",
+    role: pinhole,
+}
+
+"Switch Sensor": {
+    # Internal child of Nikon C2, so no class
+    creator: "Nikon C2",
+    role: null,
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+       mag: 100.0, # ratio, (actually of the complete light path)
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Galvano Mirror"]
+}
+
+# TODO: either remove completely (and put info via OUT_WL), or put one filter
+# per photo-detector.
+# "Optical Emission Filter": {
+#     class: static.LightFilter,
+#     role: filter,
+#     init: {band: [[420.e-9, 460.e-9],
+#                   [590.e-9, 624.e-9],
+#                   [677.e-9, 723.e-9]]}, # m,m
+#     affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"]
+# }
+
+"Selector motor": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake1",
+        axes: ["rx"],
+        ustepsize: [122.0e-6],  # rad/µstep
+        unit: ["rad"],
+        abs_encoder: [True],
+    },
+}
+
+# wrapper for selector motor + selector position of Nikcon C2
+#"Fiber Selector": {
+#    class: actuator.CombinedSensorActuator,
+#    role: det-selector,
+#    children: {actuator: "Selector motor",
+#               sensor: "Switch Sensor"},
+#    init: {
+#        axis_actuator: "rx",
+#        axis_sensor: "fiber-switch",
+#        positions: {
+#            0: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"],
+#            3.14: ["APD", "Symphotime Controller"], # rad, +180° to switch
+#        },
+#        # Conversion from the axis position to the (expected) sensor output
+#        to_sensor: {
+#            0: 0,
+#            3.14: 1.5707963267948966,
+#        },
+#    },
+#    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP",
+#            "APD", "Symphotime Controller"], # rad, +180° to switch
+#}
+
+# wrapper for selector motor, with sensor in order to simulate more easily
+"Fiber Selector": {
+    class: actuator.FixedPositionsActuator,
+    role: "det-selector",
+    children: {"rx": "Selector motor"},
+    init: {
+        axis_name: "rx",
+        positions: {
+            0: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"],
+            3.14: ["APD", "Symphotime Controller"], # rad, +180° to switch
+        },
+    },
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP",
+              "APD"], # rad, +180° to switch
+}
+
+# Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
+
+# Axes should be synchronized with the camera
+# Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
+"Sample Stage": {
+    class: actuator.MultiplexActuator,
+    role: stage,
+    # It changes the position, which matters for the scanners (and indirectly
+    # the detectors)  
+    affects: ["Galvano Mirror", "SEM E-beam"],
+    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    init: {
+        axes_map: {"x": "sx", "y": "sy"},
+    },
+}
+
+"Objective Stage": {
+    class: actuator.MultiplexActuator,
+    role: align,
+    affects: ["Galvano Mirror"],
+    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    init: {
+        axes_map: {"x": "ox", "y": "oy"},
+    },
+}
+
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)
+"Optical Focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    affects: ["Galvano Mirror"],
+    children: {"z": "Stage Actuators"},
+    init: {
+        axes_map: {"z": "oz"}
+    },
+}
+
+"Stage Actuators": {
+    class: pigcs.FakeBus,
+    role: null,
+    init: {
+        port: "/dev/fake",
+        # axis -> controller, channel, closed-loop?
+        axes: {"ox": [1, 1, False], "oy": [2, 1, False],
+               "oz": [3, 1, True],
+               "sx": [4, 1, True], "sy": [5, 1, True]},
+        inverted: ["ox", "oy"],
+        #dist_to_steps: {"ox": 100000, "oy": 100000}, # step/m
+        # automatically turn off close loop when not moving to avoid vibrations
+        auto_suspend: {"oz": 1, "sx": 1, "sy": 1}, # s
+    },
+}

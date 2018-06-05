@@ -275,3 +275,16 @@ class Spectrograph(model.Actuator):
             cr = polynomial.polyadd(polynomial.polymul(cr, c2), [a])
 
         return cr
+
+    
+class TimeCorrelator(model.Detector):
+    """
+    A very simple Time Correlator that stands in for a Symphotime Controller. Allows one
+    to run FLIM without running the Symphotime simulator.
+    """
+
+    def __init__(self, name, role, **kwargs):
+        super(TimeCorrelator, self).__init__(name, role, **kwargs)
+        self.data = model.DataFlow()
+        # Data depth is 0, as we don't get the data
+        self._shape = (0,)
