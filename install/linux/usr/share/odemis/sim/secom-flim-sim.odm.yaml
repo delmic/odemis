@@ -148,7 +148,7 @@ Light: {
         scale: [8, 8], # (ratio), start with a pretty fast scan
         resolution: [256, 256],
     },
-    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"] # affects the CCD in case of cathodoluminescence
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD"] # affects the CCD in case of cathodoluminescence
 }
 
 "PMT1 @ 447/60": {
@@ -238,6 +238,7 @@ Light: {
     },
 }
 
+# wrapper for selector motor, with sensor in order to simulate more easily
 "Fiber Selector": {
     class: actuator.FixedPositionsActuator,
     role: det-selector,
