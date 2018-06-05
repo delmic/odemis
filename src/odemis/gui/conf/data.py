@@ -135,7 +135,9 @@ HW_SETTINGS_CONFIG = {
             {
                 "label": "Laser period",
                 "tooltip": "Time between two laser pulses",
+                "control_type": odemis.gui.CONTROL_SLIDER,
                 "range": (1e-12, 1),  # max 1s as anything longer wouldn't be useful
+                "scale": "log",
             },
             "emissions":
             {

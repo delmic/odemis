@@ -741,7 +741,7 @@ class SecomStreamsTab(Tab):
                 if isinstance(s, acqstream.EMStream):
                     sems = s
                     break
-            else: # Could happen if the user has deleted all the optical streams
+            else:  # Could happen if the user has deleted all the EM streams
                 sp = self._add_em_stream(add_to_view=True)
                 sp.show_remove_btn(False)
                 sems = sp.stream
