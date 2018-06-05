@@ -1206,7 +1206,6 @@ class StreamBarController(object):
             focuser=self._main_data_model.focus,
             opm=self._main_data_model.opm,
             hwdetvas=get_local_vas(detector, self._main_data_model.hw_settings_config),
-            emtvas={"power", "period"},
             setting_stream=self._tab_data_model.confocal_set_stream,
         )
 
