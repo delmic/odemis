@@ -1401,15 +1401,6 @@ class StreamBarController(object):
         else:
             return stream
 
-    def add_acquisition_stream_cont(self, stream):
-        """ Create a stream controller for the given existing stream, adapted to acquisition
-
-        :return: StreamController
-
-        """
-
-        return self._add_stream_cont(stream, show_panel=True, static=True)
-
     def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False,
                          view=None):
         """ Create and add a stream controller for the given stream
