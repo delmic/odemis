@@ -1,4 +1,4 @@
-secom-flim-sim: {
+"SECOM-FLIM Sim": {
     class: Microscope,
     role: secom,
     children: ["Extended Light", "Optical Objective",
@@ -40,7 +40,7 @@ Light: {
         "light": "Light",
         "clock": "Rigol Wave Generator",
     },
-    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD"],
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Time Correlator"],
 }
 
 
@@ -126,7 +126,6 @@ Light: {
 "Galvano Mirror": {
     # Internal child of Nikon C2, so no class
     role: laser-mirror,
-#    role: e-beam,
     init: {
         hfw_nomag: 10.0e-3,  # m # The horizontal field of view if the lens is 1x
         #galvano_enabled: False,  # When "False", everything will behave the same
@@ -136,10 +135,8 @@ Light: {
         scale: [8, 8], # (ratio), start with a pretty fast scan
         resolution: [256, 256],
     },
-    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"] # affects the CCD in case of cathodoluminescence
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD"] # affects the CCD in case of cathodoluminescence
 }
-
-# The light goes first through a MHE46310  C1 Dichroic Mirror EX 405/488/561
 
 "PMT1 @ 447/60": {
     # Internal child of Nikon C2, so no class
@@ -148,7 +145,6 @@ Light: {
         channel: 0,
     },
     metadata: {
-        # MHE46610  C2 Filter Cube 447/60
         OUT_WL: [417.0e-9, 477.0e-9], # m
     }
 }
@@ -160,7 +156,6 @@ Light: {
         channel: 2,
     },
     metadata: {
-        # MHE46700  C2 Filter Cube 525/50  561LP
         OUT_WL: [500.e-9, 550.e-9], # m
     }
 }
@@ -230,43 +225,20 @@ Light: {
     },
 }
 
-# wrapper for selector motor + selector position of Nikcon C2
-#"Fiber Selector": {
-#    class: actuator.CombinedSensorActuator,
-#    role: det-selector,
-#    children: {actuator: "Selector motor",
-#               sensor: "Switch Sensor"},
-#    init: {
-#        axis_actuator: "rx",
-#        axis_sensor: "fiber-switch",
-#        positions: {
-#            0: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"],
-#            3.14: ["APD", "Symphotime Controller"], # rad, +180° to switch
-#        },
-#        # Conversion from the axis position to the (expected) sensor output
-#        to_sensor: {
-#            0: 0,
-#            3.14: 1.5707963267948966,
-#        },
-#    },
-#    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP",
-#            "APD", "Symphotime Controller"], # rad, +180° to switch
-#}
-
 # wrapper for selector motor, with sensor in order to simulate more easily
 "Fiber Selector": {
     class: actuator.FixedPositionsActuator,
-    role: "det-selector",
+    role: det-selector,
     children: {"rx": "Selector motor"},
     init: {
         axis_name: "rx",
         positions: {
             0: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"],
-            3.14: ["APD", "Symphotime Controller"], # rad, +180° to switch
+            3.14: ["APD", "Time Correlator"], # rad, +180° to switch
         },
     },
     affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP",
-              "APD"], # rad, +180° to switch
+              "APD", "Time Correlator"],
 }
 
 # Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
@@ -289,7 +261,7 @@ Light: {
 "Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
-    affects: ["Galvano Mirror"],
+    affects: ["Galvano Mirror", "Time Correlator"],
     children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
@@ -301,7 +273,7 @@ Light: {
 "Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
-    affects: ["Galvano Mirror"],
+    affects: ["Galvano Mirror", "Time Correlator"],
     children: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}
