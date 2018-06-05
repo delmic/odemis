@@ -47,7 +47,7 @@ import threading
 import time
 
 from ._base import Stream
-from odemis.model._components import hasVA
+from odemis.model import hasVA
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -2041,8 +2041,6 @@ class ScannedRemoteTCStream(LiveStream):
         self.repetition = helper_stream.repetition
         if self._tc_scanner is not None and hasVA(self._tc_scanner, "filename"):
             self.filename = self._tc_scanner.filename
-        else:
-            self.filename = model.StringVA()
 
         # For the acquisition
         self._acq_lock = threading.Lock()
