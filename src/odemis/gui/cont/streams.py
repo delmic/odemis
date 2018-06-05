@@ -1678,7 +1678,7 @@ class StreamBarController(object):
         streams (set of streams): Streams that will be resumed
         """
         for s in streams:
-            s.should_update.vScannedTCSettingsStreamalue = True
+            s.should_update.value = True
             # it will be activated by the stream scheduler
 
     def removeStream(self, stream):
