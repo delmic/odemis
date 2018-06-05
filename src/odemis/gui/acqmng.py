@@ -28,6 +28,8 @@ import collections
 import logging
 from odemis import model
 
+EXTRA_STREAM_VAS = ("dwellTime", "pixelSize", "repetition")
+
 
 def get_global_settings_entries(settings_cont):
     """
@@ -50,6 +52,10 @@ def get_local_settings_entries(stream_cont):
     """
     local_entries = []
     local_vas = set(stream_cont.stream.emt_vas.values()) | set(stream_cont.stream.det_vas.values())
+    for vaname in EXTRA_STREAM_VAS:
+        if hasattr(stream_cont.stream, vaname):
+            local_vas.add(getattr(stream_cont.stream, vaname))
+
     for e in stream_cont.entries.values():
         if hasattr(e, "vigilattr") and e.vigilattr in local_vas:
             logging.debug("Added local setting %s", e.name)

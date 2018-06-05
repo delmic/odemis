@@ -29,6 +29,7 @@ import logging
 import math
 from odemis import model
 from odemis.acq import path, leech
+import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
@@ -39,7 +40,6 @@ from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 import os
 import threading
 import time
-
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -115,7 +115,9 @@ class MainGUIData(object):
         "laser-mirror": "laser_mirror",
         # photo-detectorN -> photo_ds[]
         "time-correlator": "time_correlator",
-        "tc-detector": "tcd",
+        "tc-scanner": "tc_scanner",
+        "tc-detector": "tc_detector",
+        "tc-detector-live": "tc_detector_live",
         "spectrometer": "spectrometer",
         "sp-ccd": "sp_ccd",
         "spectrometer-integrated": "spectrometer_int",
@@ -170,7 +172,9 @@ class MainGUIData(object):
         self.laser_mirror = None  # the scanner on confocal SECOM
         self.photo_ds = []  # List of all the photo detectors on confocal SECOM
         self.time_correlator = None # life-time measurement on SECOM or SPARC
-        self.tcd = None # the raw detector of the time-correlator (for settings)
+        self.tc_detector = None  # the raw detector of the time-correlator (for settings)
+        self.tc_detector_live = None  # Symphotime APD count live detector
+        self.tc_scanner = None  # copy of the scanner settings for FLIM
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
@@ -234,7 +238,7 @@ class MainGUIData(object):
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 
-            if not any((self.ccd, self.photo_ds, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer)):
+            if not any((self.ccd, self.photo_ds, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer, self.time_correlator)):
                 raise KeyError("No detector found in the microscope")
 
             if not self.light and not self.ebeam:
@@ -446,13 +450,25 @@ class LiveViewGUIData(MicroscopyGUIData):
         tools = {TOOL_NONE,} # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
-            if main.tcd: # Can even show live settings
+            self.scanner = main.tc_scanner
+            if main.tc_detector:  # Can even show live settings
                 tools.add(TOOL_SPOT)
+        else:
+            self.scanner = None
+
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The SpotConfocalstream, used to control spot mode.
         # It is set at start-up by the tab controller.
         self.spotStream = None
+
+        # Component to which the (relative) ROIs and spot position refer to for
+        # the field-of-view.
+        self.fovComp = None
+
+        self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
 
         # The position of the spot. Two floats 0->1. (None, None) if undefined.
         self.spotPosition = model.TupleVA((None, None))
@@ -515,6 +531,10 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # series of acquisition (ie, the drift corrector and/or PCD acquirer).
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
+
+        self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
 
         # The Spot SEM stream, used to control spot mode.
         # It is set at start-up by the tab controller.
@@ -1338,8 +1358,7 @@ class StreamView(View):
 
     def _onNewImage(self, im):
         """
-        Called when one stream has its image updated
-        im (DataArray)
+        Called when one stream has im (DataArray)
         """
         # just let everyone know that the composited image has changed
         self.lastUpdate.value = time.time()

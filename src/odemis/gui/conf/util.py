@@ -42,7 +42,6 @@ from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_pr
     si_scale_val, readable_time, value_to_str
 import re
 import wx
-from wx.lib.pubsub import pub
 
 import odemis.gui.conf as guiconf
 import odemis.util.units as utun
@@ -349,7 +348,6 @@ def bind_setting_context_menu(settings_entry):
     def reset_value(_):
         """ Reset the value of the setting VA back to its original value """
         settings_entry.vigilattr.value = orig_val
-        wx.CallAfter(pub.sendMessage, 'setting.changed')
 
     def show_reset_menu(evt):
         """ Create and show a context menu which has a menu item to reset the settings's value """

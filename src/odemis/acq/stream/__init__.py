@@ -36,7 +36,6 @@ from ._projection import *
 
 from abc import ABCMeta
 
-
 # Generic cross-cut types
 class OpticalStream:
     __metaclass__ = ABCMeta
@@ -83,6 +82,7 @@ ARStream.register(ARSettingsStream)
 ARStream.register(StaticARStream)
 ARStream.register(SEMARMDStream)
 
+NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream, ScannedTCSettingsStream, ScannedFluoMDStream)
 
 # TODO: make it like a VA, so that it's possible to know when it changes
 # TODO: move it to its own file

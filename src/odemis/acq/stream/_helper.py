@@ -237,7 +237,12 @@ class RepetitionStream(LiveStream):
             logging.error("Computed impossibly small pixel size %s", pxs)
 
         logging.debug("Computed roi = %s, rep = %s, pxs = %g", roi, rep, pxs)
-        return tuple(roi), tuple(rep), pxs
+
+        # Set a valid roi from reading back the hardware
+        self.emitter.resolution.value = rep
+        valid_rep = self.emitter.resolution.clip(rep)
+
+        return tuple(roi), tuple(valid_rep), pxs
 
     def _setROI(self, roi):
         """
@@ -1037,7 +1042,8 @@ class OverlayStream(Stream):
 
 class ScannedTCSettingsStream(RepetitionStream):
 
-    def __init__(self, name, detector, emitter, scanner, time_correlator, detector_live, scanner_extra, **kwargs):
+    def __init__(self, name, detector, emitter, scanner, time_correlator,
+                 tc_dectector, scanner_extra, tc_detector_live=None, **kwargs):
         """
         A helper stream used to define FLIM acquisition settings and run a live setting stream
         that gets a time-series from an APD (tc_detector)
@@ -1046,12 +1052,19 @@ class ScannedTCSettingsStream(RepetitionStream):
         emitter: (model.Light) Typically an extended light (pulsed laser)
         scanner: (model.Emitter) typically laser-mirror
         time_correlator: (model.Detector) typically Symphotime controller
-        detector_live: (model.Detector)Typically an APD
+        tc_detector: (model.Detector)Typically an APD
         scanner_extra: (model.Emitter) The Symphotime scanner device wrapped by the Symphotime controller
+        tc_detector_live: (model.Detector) typically a Symphotime Live detector - gets apd counts
 
         Warning: do not use local .dwellTime, but use the one provided by the stream.
         """
-        RepetitionStream.__init__(self, name, detector_live, detector_live.data, scanner, **kwargs)
+        self.tc_detector = tc_dectector
+        self.tc_detector_live = tc_detector_live
+
+        if self.tc_detector_live is not None:
+            RepetitionStream.__init__(self, name, self.tc_detector_live, self.tc_detector_live.data, scanner, **kwargs)
+        else:
+            RepetitionStream.__init__(self, name, self.tc_detector, self.tc_detector.data, scanner, **kwargs)
 
         # Fuzzing is not handled for FLIM streams (and doesn't make much
         # sense as it's the same as software-binning
@@ -1068,19 +1081,22 @@ class ScannedTCSettingsStream(RepetitionStream):
         # Child devices
         self.lemitter = emitter
         self.tc_scanner = scanner_extra
-        self.tc_detector = detector_live
+
         self.scanner = scanner
         self.time_correlator = time_correlator
-        self.dataflow = detector_live.data
+        self.dataflow = tc_dectector.data
         self.pdetector = detector
 
         # VA's
         self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
         self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
+        # TODO: Change these to Local VA's
+        self.power = emitter.power
+        self.period = emitter.period
         self.image.value = model.DataArray([])  # start with an empty array
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
-        self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
+        self.windowPeriod = model.FloatContinuous(30.0, range=(0, 1e6), unit="s")
 
     def estimateAcquisitionTime(self):
         # 1 pixel => the dwell time (of the emitter)
@@ -1146,7 +1162,7 @@ class ScannedTCSettingsStream(RepetitionStream):
             try:
                 dt = data.metadata[model.MD_DWELL_TIME]
             except KeyError:
-                dt = data.metadata.get(model.MD_EXP_TIME, self.lemitter.dwellTime.value)
+                dt = data.metadata.get(model.MD_EXP_TIME, self.scanner.dwellTime.value)
                 logging.warning("No dwell time metadata found in the ScannedTCSettings data, "
                                 "will use %f s", dt)
 

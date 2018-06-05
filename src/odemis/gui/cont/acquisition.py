@@ -58,6 +58,8 @@ import time
 import wx
 
 import odemis.gui.model as guimod
+from odemis.acq.stream._helper import ScannedTCSettingsStream
+from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 
 
 class SnapshotController(object):
@@ -354,10 +356,21 @@ class SecomAcquiController(object):
         # Only possible to acquire if there are streams, and the chamber is
         # under vacuum
         tab_data.streams.subscribe(self.on_stream_chamber)
-        tab_data.main.chamberState.subscribe(self.on_stream_chamber, init=True)
+        tab_data.main.chamberState.subscribe(self.on_stream_chamber)
+        tab_data.roa.subscribe(self.on_stream_chamber, init=True)
 
         # Disable the "acquire image" button while preparation is in progress
         self._main_data_model.is_preparing.subscribe(self.on_preparation)
+
+    # Some streams (eg, TCSettingsStream) require a ROA for acquiring.
+    # So if any of this type of Stream is present, forbid to acquire until the ROA is defined.
+    def _roa_is_valid(self):
+        roa_valid = True
+        if hasattr(self._tab_data_model, "roa") and self._main_data_model.time_correlator is not None and \
+            any(isinstance(s, ScannedTCSettingsStream) for s in self._tab_data_model.streams.value):
+            roa_valid = self._tab_data_model.roa.value != UNDEFINED_ROI
+
+        return roa_valid
 
     @call_in_wx_main
     def on_stream_chamber(self, _):
@@ -368,11 +381,14 @@ class SecomAcquiController(object):
         st_present = not not self._tab_data_model.streams.value
         ch_vacuum = (self._tab_data_model.main.chamberState.value
                      in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN})
-        self._tab_panel.btn_secom_acquire.Enable(st_present and ch_vacuum and not self._main_data_model.is_preparing.value)
+
+        should_enable = st_present and ch_vacuum and not self._main_data_model.is_preparing.value and self._roa_is_valid()
+
+        self._tab_panel.btn_secom_acquire.Enable(should_enable)
 
     @call_in_wx_main
     def on_preparation(self, is_preparing):
-        self._tab_panel.btn_secom_acquire.Enable(not is_preparing)
+        self._tab_panel.btn_secom_acquire.Enable(not is_preparing and self._roa_is_valid())
 
     def on_acquire(self, evt):
         self.open_acquisition_dialog()
@@ -398,6 +414,10 @@ class SecomAcquiController(object):
         streambar_controller = secom_live_tab.streambar_controller
         streambar_controller.pauseStreams()
         streambar_controller.pause()
+
+        if self._tab_data_model.tool.value == TOOL_SPOT:
+            self._tab_data_model.tool.value = TOOL_NONE
+
         streambar_controller.enable(False)
 
         # create the dialog
@@ -408,6 +428,9 @@ class SecomAcquiController(object):
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
             action = acq_dialog.ShowModal()
+        except Exception:
+            logging.exception("Failed to create acquisition dialog")
+            raise
         finally:
             acqmng.apply_preset(orig_settings)
 

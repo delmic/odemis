@@ -770,6 +770,28 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Filter",
             }),
         )),
+    stream.ScannedTCSettingsStream:
+        OrderedDict((
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+            }),
+            ("power", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            }),
+            ("period", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+            }),
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+        )),
 }
 
 

@@ -29,7 +29,8 @@ import logging
 import math
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import EMStream, DataProjection
+from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection, \
+    OpticalStream, NON_SPATIAL_STREAMS
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
@@ -48,6 +49,7 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
+from odemis.gui.win.acquisition import NON_SPATIAL_STREAMS
 
 
 @decorator
@@ -124,6 +126,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Simple image caching dictionary {obj_id: rgb image}
         self.images_cache = {}
 
+        self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
+        self.roa_overlay = None
+        if self._tab_data_model.fovComp is not None:
+            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
+                self._tab_data_model.fovComp)
+        else:
+            self.roa_overlay = None
+
+        self._dc_region = None  # The ROI VA of the drift correction
+        self.driftcor_overlay = None
+
     # Ability manipulation
 
     def disable_zoom(self):
@@ -146,6 +159,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
         assert(self.microscope_view is None)
 
+        sem = tab_data.main.ebeam
+
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
@@ -166,6 +181,25 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view.interpolate_content.subscribe(self._on_interpolate_content, init=True)
 
         tab_data.main.debug.subscribe(self._on_debug, init=True)
+
+        # Associate the ROI of the SEM concurrent stream to the region of acquisition
+        if hasattr(tab_data, "roa"):
+            # Get the region of interest and link it to the ROA overlay
+            self._roa = tab_data.roa
+            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa, scanner=tab_data.scanner)
+            self.add_world_overlay(self.roa_overlay)
+
+        if hasattr(tab_data, "driftCorrector"):
+            # Link drift correction region
+            self._dc_region = tab_data.driftCorrector.roi
+            self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
+                self, self._dc_region, colour=gui.SELECTION_COLOUR_2ND)
+            self.add_world_overlay(self.driftcor_overlay)
+
+            if sem:
+                # Regions depend on the magnification (=field of view)
+                if isinstance(sem.magnification, VigilantAttributeBase):
+                    sem.magnification.subscribe(self._on_sem_mag)
 
         if tab_data.tool:
             # only create these overlays if they could be possibly used
@@ -216,6 +250,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._set_point_select_mode(tool_mode)
         self._set_line_select_mode(tool_mode)
 
+        self._set_roa_mode(tool_mode)
+        self._set_dc_mode(tool_mode)
+
         # TODO: return the cursor? return whether a redraw/refresh is needed?
 
     # Overlay creation and activation
@@ -253,7 +290,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _set_spot_mode(self, tool_mode):
 
-        if not any(isinstance(s, EMStream) for s in self.microscope_view.stream_tree):
+        if not any(isinstance(s, (EMStream, OpticalStream)) for s in self.microscope_view.stream_tree):
             return
 
         use_world = hasattr(self._tab_data_model, 'spotPosition')
@@ -880,6 +917,47 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         wx.CallAfter(self.request_drawing_update)
 
+    def _set_roa_mode(self, tool_mode):
+        if tool_mode == guimodel.TOOL_ROA:
+            self.roa_overlay.activate()
+        elif self.roa_overlay:
+            self.roa_overlay.deactivate()
+
+    def _set_dc_mode(self, tool_mode):
+        if tool_mode == guimodel.TOOL_RO_ANCHOR:
+            self.driftcor_overlay.activate()
+        elif self.driftcor_overlay:
+            self.driftcor_overlay.deactivate()
+
+        # TODO: maybe should not be called directly, but should be a VA on the view or the tab?
+    def show_repetition(self, rep, style=None):
+        """ Change/display repetition on the ROA if the ROA is visible
+
+        rep (None or tuple of 2 ints): if None, repetition is hidden
+        style (overlay.FILL_*): type of repetition display
+
+        """
+
+        if rep is None:
+            self.roa_overlay.fill = world_overlay.RepetitionSelectOverlay.FILL_NONE
+        else:
+            self.roa_overlay.fill = style
+            self.roa_overlay.repetition = rep
+
+        wx.CallAfter(self.request_drawing_update)
+
+    def _on_sem_mag(self, mag):
+        """
+        Called when the magnification of the SEM changes
+        """
+        # That means the pixelSize changes, so the (relative) ROA is different
+        # Either we update the ROA so that physically it stays the same, or
+        # we update the selection so that the ROA stays the same. It's probably
+        # that the user has forgotten to set the magnification before, so let's
+        # pick solution 2.
+        self.roa_overlay.on_roa(self._roa.value)
+        self.driftcor_overlay.on_roa(self._dc_region.value)
+
 
 class OverviewCanvas(DblMicroscopeCanvas):
     """ Canvas for displaying the overview stream """
@@ -949,31 +1027,6 @@ class SecomCanvas(DblMicroscopeCanvas):
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
-    def __init__(self, *args, **kwargs):
-        super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
-
-        self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
-        self.roa_overlay = None
-
-        self._dc_region = None  # The ROI VA of the drift correction
-        self.driftcor_overlay = None
-
-    def _set_tool_mode(self, tool_mode):
-        super(SparcAcquiCanvas, self)._set_tool_mode(tool_mode)
-        self._set_roa_mode(tool_mode)
-        self._set_dc_mode(tool_mode)
-
-    def _set_roa_mode(self, tool_mode):
-        if tool_mode == guimodel.TOOL_ROA:
-            self.roa_overlay.activate()
-        elif self.roa_overlay:
-            self.roa_overlay.deactivate()
-
-    def _set_dc_mode(self, tool_mode):
-        if tool_mode == guimodel.TOOL_RO_ANCHOR:
-            self.driftcor_overlay.activate()
-        elif self.driftcor_overlay:
-            self.driftcor_overlay.deactivate()
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
@@ -1014,35 +1067,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._on_sem_mag)
-
-    # TODO: maybe should not be called directly, but should be a VA on the view or the tab?
-    def show_repetition(self, rep, style=None):
-        """ Change/display repetition on the ROA if the ROA is visible
-
-        rep (None or tuple of 2 ints): if None, repetition is hidden
-        style (overlay.FILL_*): type of repetition display
-
-        """
-
-        if rep is None:
-            self.roa_overlay.fill = world_overlay.RepetitionSelectOverlay.FILL_NONE
-        else:
-            self.roa_overlay.fill = style
-            self.roa_overlay.repetition = rep
-
-        wx.CallAfter(self.request_drawing_update)
-
-    def _on_sem_mag(self, mag):
-        """
-        Called when the magnification of the SEM changes
-        """
-        # That means the pixelSize changes, so the (relative) ROA is different
-        # Either we update the ROA so that physically it stays the same, or
-        # we update the selection so that the ROA stays the same. It's probably
-        # that the user has forgotten to set the magnification before, so let's
-        # pick solution 2.
-        self.roa_overlay.on_roa(self._roa.value)
-        self.driftcor_overlay.on_roa(self._dc_region.value)
 
 
 class SparcARCanvas(DblMicroscopeCanvas):

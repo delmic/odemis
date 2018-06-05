@@ -416,6 +416,7 @@ class xrcpnl_tab_secom_streams(wx.Panel):
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
+        self.vp_flim_chronograph = xrc.XRCCTRL(self, "vp_flim_chronograph")
         self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
         self.btn_press = xrc.XRCCTRL(self, "btn_press")
         self.btn_opt = xrc.XRCCTRL(self, "btn_opt")
@@ -4779,6 +4780,12 @@ def __init_resources():
           <object class="LiveViewport" name="vp_secom_br">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ChronographViewport" name="vp_flim_chronograph">
+            <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
