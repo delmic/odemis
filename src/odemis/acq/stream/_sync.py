@@ -2243,7 +2243,7 @@ class ScannedRemoteTCStream(LiveStream):
 
         self._shouldUpdateImage()
 
-    def _updateProgress(self, future, dur, current, tot, bonus=0):
+    def _updateProgress(self, future, dur, current, tot, bonus=2):
         """
         update end time of future by indicating the time for one new pixel
         future (ProgressiveFuture): future to update
@@ -2288,5 +2288,5 @@ class ScannedRemoteTCStream(LiveStream):
         return True
 
     def estimateAcquisitionTime(self):
-        return self._dwellTime.value * numpy.prod(self.repetition.value) * 3.0 + 1.0
+        return self._dwellTime.value * numpy.prod(self.repetition.value) * 1.2 + 1.0
 

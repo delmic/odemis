@@ -192,7 +192,8 @@ def computeThumbnail(streamTree, acqTask):
 
     iim = streams[0].image.value
     # add some basic info to the image
-    iim.metadata[model.MD_DESCRIPTION] = "Composited image preview"
+    if iim is not None:
+        iim.metadata[model.MD_DESCRIPTION] = "Composited image preview"
     return iim
 
 
