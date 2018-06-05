@@ -140,6 +140,9 @@ def foldStreams(streams, reuse=None):
         elif isinstance(s, ScannedTCSettingsStream):
             remote = ScannedRemoteTCStream("FLIM", s)
             folds.add(remote)
+        elif isinstance(s, ScannedRemoteTCStream):
+            # Don't add extra FLIM streams
+            continue
         else:
             folds.add(s)
 
