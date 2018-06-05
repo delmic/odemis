@@ -70,6 +70,7 @@ class TestFlim(unittest.TestCase):
         cls.ex_light = model.getComponent(role="light")
         cls.lscanner = model.getComponent(role="laser-mirror")
         cls.apd = model.getComponent(role="tc-detector")
+        cls.tcdl = model.getComponent(role="tc-detector-live")
         cls.detector = model.getComponent(role="photo-detector0")
 
         cls.ex_light.period.value = 0.0001
@@ -265,6 +266,54 @@ class TestFlim(unittest.TestCase):
         self.assertIsNotNone(self._image.metadata[MD_ACQ_DATE], "No metadata")
         self.assertEqual(self._image.ndim, 1)
         self.assertGreaterEqual(self._image.shape[0], 10, "Not enough data.")
+        # make sure there are times for each value.
+        self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
+
+    def test_setting_stream_tcd_live(self):
+        """
+        Test live setting stream acquisition with the tc_detector_live
+        """
+        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
+                                                self.sft, self.apd, self.tc_scanner,
+                                                self.tcdl)
+        spots = stream.SpotScannerStream("spot", helper.tc_detector,
+                                     helper.tc_detector.data, helper.scanner)
+        # Test start and stop of the apd.
+        self._image = None
+        helper.image.subscribe(self._on_image)
+
+        spots.should_update.value = True
+        spots.is_active.value = True
+
+        # shouldn't affect
+        helper.roi.value = (0.15, 0.6, 0.8, 0.8)
+        helper.repetition.value = (1, 1)
+
+        helper.dwellTime.value = 0.1  # s
+        helper.windowPeriod.value = 10  # s
+
+        # Start acquisition
+        helper.should_update.value = True
+        helper.is_active.value = True
+
+        # move spot
+        time.sleep(8.0)
+        spots.roi.value = (0.1, 0.3, 0.1, 0.3)
+        time.sleep(2.0)
+        spots.roi.value = (0.5, 0.2, 0.5, 0.2)
+        time.sleep(2.0)
+
+        # move spot
+        helper.image.unsubscribe(self._on_image)
+        helper.is_active.value = False
+        spots.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No data received")
+        self.assertIsInstance(self._image, model.DataArray)
+        self.assertIsNotNone(self._image.metadata[MD_ACQ_DATE], "No metadata")
+        self.assertEqual(self._image.ndim, 1)
+        # TODO: by default the simulator only sends data for 5s... every 1.5s => 3 data
+        self.assertGreaterEqual(self._image.shape[0], 3, "Not enough data.")
         # make sure there are times for each value.
         self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
 

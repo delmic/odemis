@@ -1070,12 +1070,11 @@ class ScannedTCSettingsStream(RepetitionStream):
         Warning: do not use local .dwellTime, but use the one provided by the stream.
         """
         self.tc_detector = tc_dectector
-        self.tc_detector_live = tc_detector_live
-
-        if self.tc_detector_live is not None:
-            RepetitionStream.__init__(self, name, self.tc_detector_live, self.tc_detector_live.data, scanner, **kwargs)
+        if tc_detector_live:
+            det_live = tc_detector_live
         else:
-            RepetitionStream.__init__(self, name, self.tc_detector, self.tc_detector.data, scanner, **kwargs)
+            det_live = tc_dectector
+        RepetitionStream.__init__(self, name, det_live, det_live.data, scanner, **kwargs)
 
         # Fuzzing is not handled for FLIM streams (and doesn't make much
         # sense as it's the same as software-binning
@@ -1099,11 +1098,16 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.pdetector = detector
 
         # VA's
-        self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
-        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
-        # TODO: Change these to Local VA's
+        # TODO: Change these to Local VA's (emtPower and emtPeriod), but this
+        # means that emitter should be self.emitter. For now, RepetitionStream
+        # needs to get the scanner as emitter as that's where it reads the
+        # res/pxs. => RepetitionStream should accept emitter+scanner.
         self.power = emitter.power
         self.period = emitter.period
+        self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
+
+        # Raw: series of data (normalized)/acq date (s)
+        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
         self.image.value = model.DataArray([])  # start with an empty array
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
