@@ -256,9 +256,9 @@ class TestSymphotime(unittest.TestCase):
         count_rates = []
 
         # Every time a new count rate is received, add it to the list.
-        def live_callback(flow, array):
+        def live_callback(df, array):
             count_rates.append(array[0][0])
-            logging.debug("Received new count rate %s", array[0][0])
+            logging.debug("Received new count rate %s, md=%s", array[0][0], array.metadata)
 
         # Start measuring
         self.det_live.data.subscribe(live_callback)
@@ -311,11 +311,12 @@ class TestSymphotime(unittest.TestCase):
         time.sleep(5.0)
         self.det_live.data.unsubscribe(live_callback)
         self.assertEqual(self._latest_live.shape, (1, 1))
+        md = self._latest_live.metadata
         # TODO: dwell time should be the period of the count rate update
-        self.assertGreaterEqual(self._latest_live.metadata[model.MD_DWELL_TIME],
+        self.assertGreaterEqual(md[model.MD_DWELL_TIME],
                                 self.scanner.dwellTime.value)
-        self.assertEqual(self._latest_live.metadata[model.MD_DET_TYPE],
-                                model.MD_DT_NORMAL)
+        self.assertEqual(md[model.MD_DET_TYPE], model.MD_DT_NORMAL)
+        assert time.time() - 10 <= md[model.MD_ACQ_DATE] <= time.time()
 
         time.sleep(1.0)
         self.assertFalse(self.controller.isMeasuring())

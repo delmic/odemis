@@ -111,10 +111,10 @@ class TestFlim(unittest.TestCase):
     def test_flim_acq_simple(self):
         logging.debug("Testing acquisition")
 
-        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
+        helper = stream.ScannedTCSettingsStream("FLIM settings", self.detector, self.ex_light, self.lscanner,
                                                 self.sft, self.apd, self.tc_scanner)
 
-        remote = stream.ScannedRemoteTCStream("remote", helper)
+        remote = stream.ScannedRemoteTCStream("Remote", helper)
         # Configure values and test acquisition for several short dwell times.
         for dwellTime in (2e-5, 10e-5, 2e-3, 8e-3, 100e-3):
             helper.dwellTime.value = dwellTime  # seconds
@@ -125,6 +125,7 @@ class TestFlim(unittest.TestCase):
 
             helper.roi.value = (0, 0, 0.1, 0.1)
             helper.repetition.value = rep
+            self.assertEqual(helper.repetition.value, rep)
             f = remote.acquire()
             time.sleep(0.1)
             # Check we didn't ask for too short dwell time, which the hardware
@@ -135,7 +136,7 @@ class TestFlim(unittest.TestCase):
             self.assertGreater(self.ex_light.power.value, 0)
             self.assertGreater(self.ex_light.period.value, 0)
             das = f.result()  # wait for the result. This blocks
-            # self.assertEqual(das, remote.raw) # FIXME: for now it doesn't return anything
+            self.assertEqual(das, remote.raw)
             das = remote.raw
             time.sleep(0.3)
             self.validate_scan_sim(das, rep, helper.dwellTime.value,

@@ -2027,7 +2027,7 @@ class ScannedRemoteTCStream(LiveStream):
 
         # Retrieve devices from the helper stream
         self._stream = helper_stream
-        self._emitter = helper_stream.lemitter  # TODO: Shold be emitter
+        self._emitter = helper_stream.lemitter  # TODO: Should be emitter
         self._tc_scanner = helper_stream.tc_scanner
         self._tc_detector = helper_stream.tc_detector
         self._pdetector = helper_stream.pdetector
@@ -2043,38 +2043,25 @@ class ScannedRemoteTCStream(LiveStream):
         # For the acquisition
         self._acq_lock = threading.Lock()
         self._acq_state = RUNNING
-        self._acq_done = threading.Event()
-        self._frame_done = threading.Event()
         self._acq_thread = None  # thread
-        self._acq_rep_tot = 0  # number of acquisitions to do
-        self._acq_rep_n = 0  # number of acquisitions so far
         self._prog_sum = 0  # s, for progress time estimation
         self._data_queue = Queue.Queue()
-        self._frame_thread = None
-
         self._current_future = None
-        self._acq_state = None
-
-        self._new_acquisition = False
-        self._acq_thread = None
 
     def acquire(self):
         # Make sure every stream is prepared, not really necessary to check _prepared
         f = self.prepare()
         f.result()
 
-        self._stream._linkHwVAs()
-
         # TODO: if already acquiring, queue the Future for later acquisition
         if self._current_future is not None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
-        if not self._acq_done.is_set():
-            if self._acq_thread and self._acq_thread.isAlive():
-                logging.debug("Waiting for previous acquisition to fully finish")
-                self._acq_thread.join(10)
-                if self._acq_thread.isAlive():
-                    logging.error("Previous acquisition not ending")
+        if self._acq_thread and self._acq_thread.isAlive():
+            logging.debug("Waiting for previous acquisition to fully finish")
+            self._acq_thread.join(10)
+            if self._acq_thread.isAlive():
+                logging.error("Previous acquisition not ending, will acquire anyway")
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2147,14 +2134,12 @@ class ScannedRemoteTCStream(LiveStream):
 
         return scale, res, trans
 
-    def _runAcquisition(self, future=None):
-
-        logging.debug("Starting job: acquisition")
-        self._frame_thread = threading.Thread(target=self._frameThread)
-
+    def _runAcquisition(self, future):
+        logging.debug("Starting FLIM acquisition")
         try:
-            self._new_acquisition = True
-            self._acq_done.clear()
+            self._stream._linkHwVAs()
+            self.raw = []
+            assert self._data_queue.empty()
 
             px_dt, nfr = self._prepareHardware()
             frame_time = px_dt * numpy.prod(self._scanner.resolution.value)
@@ -2168,32 +2153,37 @@ class ScannedRemoteTCStream(LiveStream):
 
             # Start the acquisition
             self._pdetector.data.subscribe(self._onNewData)
-            self._new_acquisition = True
-
-            # start frame processing thread
-            self._frame_thread.start()
 
             # For each frame
             for i in range(nfr):
-                # premature cancellation occurred if the flag has already been set.
-                if self._acq_done.is_set():
-                    raise CancelledError("Acquisition canceled")
-
-                self._frame_done.clear()
-                # turn on the light and pulse the laser (period already set)
-                logging.info("Getting frame %d", i + 1)
-
-                # wait for the measurement to run for the total dwell time
-                # this will stop blocking if the acquisition is cancelled
+                # wait for the next raw frame
+                logging.info("Getting frame %d/%d", i + 1, nfr)
                 tstart = time.time()
+                ttimeout = tstart + frame_time * 5 + 1
 
-                if not self._frame_done.wait(frame_time * 5 + 1):
-                    raise IOError("Timed out waiting for frame. waited %f s" % (time.time() - tstart,))
+                while True:  # until the frame arrives, timed out, or cancelled
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError("Acquisition canceled")
 
+                    try:
+                        data = self._data_queue.get(timeout=0.1)
+                    except Queue.Empty:
+                        if time.time() > ttimeout:
+                            raise IOError("Timed out waiting for frame, after %f s" % (time.time() - tstart,))
+                        continue  # will check again whether the acquisition is cancelled
+                    break  # data has been received
+
+                # Got the frame -> accumulate it
                 dur = time.time() - tstart
-                logging.debug("waited %f s", dur)
-                self._updateProgress(future, dur, i, nfr)
+                logging.debug("Received frame %d after %f s", i, dur)
+                self._add_frame(data)
+                self._updateProgress(future, dur, i + 1, nfr)
 
+            # Acquisition completed
+            self._pdetector.data.unsubscribe(self._onNewData)
+            self._time_correlator.data.unsubscribe(self._onAcqStop)
+
+            return self.raw
         except CancelledError:
             logging.info("Acquisition cancelled")
             self._acq_state = CANCELLED
@@ -2202,62 +2192,53 @@ class ScannedRemoteTCStream(LiveStream):
             logging.exception("Failure during ScannedTC acquisition")
             raise
         finally:
-            self._acq_done.set()
-            self._frame_thread.join()
-            logging.debug("Ending job: acquisition")
+            logging.debug("FLIM acquisition ended")
 
-            # End Symphotime acq
-            # The measurement is stopped.
+            with self._acq_lock:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                self._acq_state = FINISHED
+
+            # Ensure all the detectors are stopped
             self._pdetector.data.unsubscribe(self._onNewData)
             self._time_correlator.data.unsubscribe(self._onAcqStop)
             self._stream._unlinkHwVAs()
-            self._acq_state = FINISHED
-
             # turn off the light
             self._setEmission(0)
 
-        return self.raw
+            # If cancelled, some data might still be queued => forget about it
+            self._data_queue = Queue.Queue()
 
     def _onAcqStop(self, dataflow, data):
         pass
 
-    def _frameThread(self):
-        # frame data is put into a queue to be processed later.
-        # This thread processes the data that has been queued.
-        logging.debug("Starting Frame acquisition thread")
+    def _add_frame(self, data):
+        """
+        Accumulate the raw frame to update the .raw
+        data (DataArray): the new raw frame
+        """
 
-        # Stop when there is no more data to process and the acquisition is over
-        while not (self._acq_done.is_set() and self._data_queue.empty()):
-            try:
-                data = self._data_queue.get(timeout=0.1)
-            except Queue.Empty:
-                continue # will check again whether the acquisition is cancelled
+        if not self.raw:
+            logging.debug("New acq in queue shape %s", data[0].shape)
+            # TODO: be more careful with the dtype
+            data = data.astype(numpy.uint32)
+            self.raw = [data]
 
-            if self._new_acquisition:
-                logging.debug("New acq in queue shape %s", data[0].shape)
-                # clear the old data if a new acq has started
-                data = data.astype(numpy.uint32)
-                self.raw = [data]
-                self._new_acquisition = False
-
-                # Force update histogram to ensure it exists.
-                self._updateHistogram(data)
-                self._shouldUpdateImage()
-                
+            # Force update histogram to ensure it exists.
+            self._updateHistogram(data)
+        else:
+            if self.raw[0].shape == data.shape:
+                logging.debug("Acq in queue shape %s", data[0].shape)
+                # data = data.astype(numpy.uint32)
+                self.raw[0] += data  # Uses numpy element-wise addition
+                self.raw[0].metadata[MD_DWELL_TIME] += data.metadata[MD_DWELL_TIME]
             else:
-                if self.raw[0].shape == data.shape:
-                    logging.debug("Acq in queue shape %s", data[0].shape)
-                    data = data.astype(numpy.uint32)
-                    self.raw[0] += data  # use array addition by index to add the counts
-                    self.raw[0].metadata[MD_DWELL_TIME] += data.metadata[MD_DWELL_TIME]
-                else:
-                    logging.error("New data array from tc-detector has different shape %s from previous one, can't accumulate data",
-                                   data.shape)
+                logging.error("New data array from tc-detector has different shape %s from previous one, can't accumulate data",
+                               data.shape)
 
-                self._shouldUpdateHistogram()
-                self._shouldUpdateImage()
+            self._shouldUpdateHistogram()
 
-        logging.debug("Exiting Frame acquisition thread")
+        self._shouldUpdateImage()
 
     def _updateProgress(self, future, dur, current, tot, bonus=0):
         """
@@ -2268,6 +2249,10 @@ class ScannedRemoteTCStream(LiveStream):
         tot (0<int): number of acquisitions
         bonus (0<float): additional time needed (eg, for leeches)
         """
+        # Trick: we don't count the first frame because it's often
+        # much slower and so messes up the estimation
+        if current <= 1:
+            return
 
         self._prog_sum += dur
         ratio = (tot - current) / (current - 1)
@@ -2283,7 +2268,6 @@ class ScannedRemoteTCStream(LiveStream):
         # This way, if the frame time is very fast, we will not miss frames.
         logging.debug("New data received of shape %s", data.shape)
         self._data_queue.put(data)
-        self._frame_done.set()
 
     def _cancelAcquisition(self, future):
         with self._acq_lock:
@@ -2294,15 +2278,9 @@ class ScannedRemoteTCStream(LiveStream):
         logging.debug("Cancelling acquisition of components %s and %s",
                       self._pdetector.name, self._time_correlator.name)
 
-        self._acq_done.set()
-        self._frame_done.set()
-
         # Wait for the thread to be complete (and hardware state restored)
         if self._acq_thread:
             self._acq_thread.join(5)
-
-        if self._frame_thread:
-            self._frame_thread.join(5)
 
         return True
 
