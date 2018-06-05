@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 
 import logging
 from odemis import model
@@ -90,7 +91,7 @@ class TestFlim(unittest.TestCase):
 
     def _on_image(self, im):
         # Is called when an image is received in the live setting stream
-        logging.info("image: dim %s" , im.shape)
+        logging.info("image with shape %s, md= %s" , im.shape, im.metadata)
         self._image = im
 
     def validate_scan_sim(self, das, repetition, dwelltime, pixel_size):
@@ -147,6 +148,12 @@ class TestFlim(unittest.TestCase):
         hw_rep = self.lscanner.resolution.clip(rep)
         self.assertEqual(hw_rep, rep)
 
+        # Check the repetition ratio is the same as the roi ratio (ie pixel is square)
+        roi = s.roi.value
+        roi_ratio = (roi[2] - roi[0]) / (roi[3] - roi[1])
+        rep_ratio = rep[0] / rep[1]
+        self.assertAlmostEqual(roi_ratio, rep_ratio)
+
     def test_repetitions_and_roi(self):
         logging.debug("Testing repetitions and roi")
 
@@ -187,6 +194,16 @@ class TestFlim(unittest.TestCase):
         f.cancel()
 
         self.assertEqual(helper.scanner.resolution.value, (256, 64))
+
+        helper.roi.value = (0, 0, 0.1, 0.1)
+        helper.repetition.value = (64, 64)
+        self._validate_rep(helper)
+
+        helper.repetition.value = (64, 1)
+        self._validate_rep(helper)
+
+        helper.repetition.value = (1, 64)
+        self._validate_rep(helper)
 
     def test_cancelling(self):
         logging.debug("Testing cancellation")

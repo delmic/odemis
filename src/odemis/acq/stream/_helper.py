@@ -229,6 +229,21 @@ class RepetitionStream(LiveStream):
                roi_center[0] + roi_size[0] / 2,
                roi_center[1] + roi_size[1] / 2]
         roi = self._fitROI(roi)
+        # In case the roi got modified again and the aspect ratio is not anymore
+        # the same as the rep, we shrink it to ensure the pixels are square (and
+        # it should still fit within the FoV).
+        roi_center = ((roi[0] + roi[2]) / 2,
+                      (roi[1] + roi[3]) / 2)
+        rel_pxs = (roi[2] - roi[0]) / rep[0], (roi[3] - roi[1]) / rep[1]
+        if rel_pxs[0] != rel_pxs[1]:
+            logging.debug("Shrinking ROI to ensure pixel is square")
+            sq_pxs = min(rel_pxs)
+            roi_size = sq_pxs * rep[0], sq_pxs * rep[1]
+            roi = (roi_center[0] - roi_size[0] / 2,
+                   roi_center[1] - roi_size[1] / 2,
+                   roi_center[0] + roi_size[0] / 2,
+                   roi_center[1] + roi_size[1] / 2)
+            pxs = sq_pxs * phy_size[0]
 
         # Double check we didn't end up with scale < 1
         # TODO: for some scanners, the scale can be < 1 => check the scale range
@@ -238,11 +253,7 @@ class RepetitionStream(LiveStream):
 
         logging.debug("Computed roi = %s, rep = %s, pxs = %g", roi, rep, pxs)
 
-        # Set a valid roi from reading back the hardware
-        self.emitter.resolution.value = rep
-        valid_rep = self.emitter.resolution.clip(rep)
-
-        return tuple(roi), tuple(valid_rep), pxs
+        return tuple(roi), tuple(rep), pxs
 
     def _setROI(self, roi):
         """
