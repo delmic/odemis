@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 
 import logging
 from odemis import model
@@ -69,6 +70,7 @@ class TestFlim(unittest.TestCase):
         cls.ex_light = model.getComponent(role="light")
         cls.lscanner = model.getComponent(role="laser-mirror")
         cls.apd = model.getComponent(role="tc-detector")
+        cls.tcdl = model.getComponent(role="tc-detector-live")
         cls.detector = model.getComponent(role="photo-detector0")
 
         cls.ex_light.period.value = 0.0001
@@ -90,7 +92,7 @@ class TestFlim(unittest.TestCase):
 
     def _on_image(self, im):
         # Is called when an image is received in the live setting stream
-        logging.info("image: dim %s" , im.shape)
+        logging.info("image with shape %s, md= %s" , im.shape, im.metadata)
         self._image = im
 
     def validate_scan_sim(self, das, repetition, dwelltime, pixel_size):
@@ -109,10 +111,10 @@ class TestFlim(unittest.TestCase):
     def test_flim_acq_simple(self):
         logging.debug("Testing acquisition")
 
-        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
+        helper = stream.ScannedTCSettingsStream("FLIM settings", self.detector, self.ex_light, self.lscanner,
                                                 self.sft, self.apd, self.tc_scanner)
 
-        remote = stream.ScannedRemoteTCStream("remote", helper)
+        remote = stream.ScannedRemoteTCStream("Remote", helper)
         # Configure values and test acquisition for several short dwell times.
         for dwellTime in (2e-5, 10e-5, 2e-3, 8e-3, 100e-3):
             helper.dwellTime.value = dwellTime  # seconds
@@ -123,6 +125,7 @@ class TestFlim(unittest.TestCase):
 
             helper.roi.value = (0, 0, 0.1, 0.1)
             helper.repetition.value = rep
+            self.assertEqual(helper.repetition.value, rep)
             f = remote.acquire()
             time.sleep(0.1)
             # Check we didn't ask for too short dwell time, which the hardware
@@ -133,7 +136,7 @@ class TestFlim(unittest.TestCase):
             self.assertGreater(self.ex_light.power.value, 0)
             self.assertGreater(self.ex_light.period.value, 0)
             das = f.result()  # wait for the result. This blocks
-            # self.assertEqual(das, remote.raw) # FIXME: for now it doesn't return anything
+            self.assertEqual(das, remote.raw)
             das = remote.raw
             time.sleep(0.3)
             self.validate_scan_sim(das, rep, helper.dwellTime.value,
@@ -146,6 +149,12 @@ class TestFlim(unittest.TestCase):
         rep = s.repetition.value
         hw_rep = self.lscanner.resolution.clip(rep)
         self.assertEqual(hw_rep, rep)
+
+        # Check the repetition ratio is the same as the roi ratio (ie pixel is square)
+        roi = s.roi.value
+        roi_ratio = (roi[2] - roi[0]) / (roi[3] - roi[1])
+        rep_ratio = rep[0] / rep[1]
+        self.assertAlmostEqual(roi_ratio, rep_ratio)
 
     def test_repetitions_and_roi(self):
         logging.debug("Testing repetitions and roi")
@@ -187,6 +196,16 @@ class TestFlim(unittest.TestCase):
         f.cancel()
 
         self.assertEqual(helper.scanner.resolution.value, (256, 64))
+
+        helper.roi.value = (0, 0, 0.1, 0.1)
+        helper.repetition.value = (64, 64)
+        self._validate_rep(helper)
+
+        helper.repetition.value = (64, 1)
+        self._validate_rep(helper)
+
+        helper.repetition.value = (1, 64)
+        self._validate_rep(helper)
 
     def test_cancelling(self):
         logging.debug("Testing cancellation")
@@ -248,6 +267,54 @@ class TestFlim(unittest.TestCase):
         self.assertIsNotNone(self._image.metadata[MD_ACQ_DATE], "No metadata")
         self.assertEqual(self._image.ndim, 1)
         self.assertGreaterEqual(self._image.shape[0], 10, "Not enough data.")
+        # make sure there are times for each value.
+        self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
+
+    def test_setting_stream_tcd_live(self):
+        """
+        Test live setting stream acquisition with the tc_detector_live
+        """
+        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
+                                                self.sft, self.apd, self.tc_scanner,
+                                                self.tcdl)
+        spots = stream.SpotScannerStream("spot", helper.tc_detector,
+                                     helper.tc_detector.data, helper.scanner)
+        # Test start and stop of the apd.
+        self._image = None
+        helper.image.subscribe(self._on_image)
+
+        spots.should_update.value = True
+        spots.is_active.value = True
+
+        # shouldn't affect
+        helper.roi.value = (0.15, 0.6, 0.8, 0.8)
+        helper.repetition.value = (1, 1)
+
+        helper.dwellTime.value = 0.1  # s
+        helper.windowPeriod.value = 10  # s
+
+        # Start acquisition
+        helper.should_update.value = True
+        helper.is_active.value = True
+
+        # move spot
+        time.sleep(8.0)
+        spots.roi.value = (0.1, 0.3, 0.1, 0.3)
+        time.sleep(2.0)
+        spots.roi.value = (0.5, 0.2, 0.5, 0.2)
+        time.sleep(2.0)
+
+        # move spot
+        helper.image.unsubscribe(self._on_image)
+        helper.is_active.value = False
+        spots.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No data received")
+        self.assertIsInstance(self._image, model.DataArray)
+        self.assertIsNotNone(self._image.metadata[MD_ACQ_DATE], "No metadata")
+        self.assertEqual(self._image.ndim, 1)
+        # TODO: by default the simulator only sends data for 5s... every 1.5s => 3 data
+        self.assertGreaterEqual(self._image.shape[0], 3, "Not enough data.")
         # make sure there are times for each value.
         self.assertEqual(len(self._image.metadata[MD_ACQ_DATE]), self._image.shape[0])
 

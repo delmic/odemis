@@ -614,7 +614,8 @@ class Controller(model.Detector):
 
         # Measurement parameters
         self.data = BasicDataFlow(self.StartMeasurement, self.StopMeasurement, self._checkImScan)
-        self._tStart = None  # this will hold the epoch time a measurement starts
+        self._acq_md = {}  # Metadata as it was configured at measurement starts
+        self._acq_md_live = {}  # Metadata for live detector
 
         # Create a thread to listen to messages from SymPhoTime
         self._shutdown_flag = False
@@ -659,9 +660,11 @@ class Controller(model.Detector):
         msg: Message type object
         '''
         logging.debug("S: Msgtype %s", msg)
-        time.sleep(0.02)  # wait a bit to prevent flooding the server.
         with self._net_access:
             self._socket.sendall(msg.to_bytes())
+
+        # FIXME: should be moved to whichever caller could be too frequent
+        # time.sleep(0.02)  # wait a bit to prevent flooding the server.
 
     def StartMeasurement(self, measurement_type=PQ_MEASTYPE_IMAGESCAN):
         '''
@@ -670,6 +673,8 @@ class Controller(model.Detector):
         if self.isMeasuring():
             # already measuring. Don't start again.
             return
+
+        self._measurement_stopped.clear()
 
         # determine measurement parameters
         pixel_size = self._metadata[model.MD_PIXEL_SIZE][0]
@@ -708,6 +713,11 @@ class Controller(model.Detector):
         logging.info("Requesting an acquisition. Pixel size: %f m, Resolution: %d x %d", pixel_size, iPixelNumber_X, iPixelNumber_Y)
 
         self.measurement_type = measurement_type
+        self._acq_md = {model.MD_DWELL_TIME: self.scanner.dwellTime.value,
+                        model.MD_ACQ_DATE: time.time()}
+        if self.detector_live:
+            self._acq_md_live = {model.MD_DWELL_TIME: self.detector_live._metadata[model.MD_DWELL_TIME],
+                                 model.MD_ACQ_DATE: self._acq_md[model.MD_ACQ_DATE]}
 
         msg = DataframeServerRequestMessage(T_REC_VERSION, self.measurement_type,
                                 iPixelNumber_X, iPixelNumber_Y,
@@ -715,9 +725,6 @@ class Controller(model.Detector):
                                 optional_data)
 
         self._sendMessage(msg)
-
-        self._tStart = time.time()  # the measuremnet start time in seconds from the epoch
-        self._measurement_stopped.clear()
 
     def StopMeasurement(self):
         '''
@@ -835,7 +842,7 @@ class Controller(model.Detector):
                 if not self._measurement_stopped.is_set():
                     logging.info("Acquisition completed successfully.")
                     self._measurement_stopped.set()
-                    self._notifySubscribers(self, [[0]])
+                    self._notifySubscribers(self, [[0]], self._acq_md)
             else:
                 # All other status types denote errors.
                 self._measurement_stopped.set()
@@ -866,7 +873,9 @@ class Controller(model.Detector):
                 apd_name = "det%d" % self.detector_live.channel # det1, for example
                 if apd_name in data:
                     # TODO: the DWELL_TIME should be the update rate of this data
-                    self._notifySubscribers(self.detector_live, [[data[apd_name]]])
+                    self._notifySubscribers(self.detector_live, [[data[apd_name]]], self._acq_md_live)
+                    # The next live data starts now
+                    self._acq_md_live[model.MD_ACQ_DATE] = time.time()
 
         elif isinstance(decoded_msg, EncodedStatusReplyMessage):
             # Do not answer these types of messages
@@ -905,19 +914,18 @@ class Controller(model.Detector):
         else:
             logging.warning("Unknown message received. Msgtype %s", type(decoded_msg))
 
-    def _notifySubscribers(self, det, data):
+    def _notifySubscribers(self, det, data, md):
         """
         Will pass the data to the DataFlow of the detector. The metadata will be
           set automatically.
         det (Detector)
         data (numpy array or list of numbers): the data to pass
+        md (dict str->value): extra metadata
         """
-        # Merge metadata of the scanner and detector
-        md = self._metadata.copy()
-        md.update(det.getMetadata())
-        md[model.MD_DWELL_TIME] = self.scanner.dwellTime.value
-        md[model.MD_ACQ_DATE] = self._tStart
-        da = model.DataArray(data, md)
+        # Merge metadata of the detector and the extra one
+        fullmd = det.getMetadata().copy()
+        fullmd.update(md)
+        da = model.DataArray(data, fullmd)
         det.data.notify(da)
 
 
@@ -982,14 +990,20 @@ class DetectorLive(model.Detector):
         # Data is a ulong
         self._shape = (2**32,)
         # Data is normalized to get a count per second
-        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+        self._metadata[model.MD_DWELL_TIME] = 2  # s
 
         self.channel = 1  # hard coded channel of the apd. Typically 1, 2, or 3
         self.data = BasicDataFlow(self._start, self._stop, self._check)
 
     def _start(self):
+        # FIXME: it's probably not the same dwell time as the one set, but just
+        # some fixed (low) value, eg 0.5Hz.
         self._metadata[model.MD_DWELL_TIME] = self.parent.scanner.dwellTime.value
         self.parent.StartMeasurement(measurement_type=PQ_MEASTYPE_TEST_POINTMEAS)
+        # TODO: check whether it automatically stops, after a given amount of
+        # points (in which case we should restart it), or it keeps acquiring
+        # forever until receiving StopMeasurement.
 
     def _stop(self):
         self.parent.StopMeasurement()

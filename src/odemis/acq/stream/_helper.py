@@ -229,6 +229,21 @@ class RepetitionStream(LiveStream):
                roi_center[0] + roi_size[0] / 2,
                roi_center[1] + roi_size[1] / 2]
         roi = self._fitROI(roi)
+        # In case the roi got modified again and the aspect ratio is not anymore
+        # the same as the rep, we shrink it to ensure the pixels are square (and
+        # it should still fit within the FoV).
+        roi_center = ((roi[0] + roi[2]) / 2,
+                      (roi[1] + roi[3]) / 2)
+        rel_pxs = (roi[2] - roi[0]) / rep[0], (roi[3] - roi[1]) / rep[1]
+        if rel_pxs[0] != rel_pxs[1]:
+            logging.debug("Shrinking ROI to ensure pixel is square")
+            sq_pxs = min(rel_pxs)
+            roi_size = sq_pxs * rep[0], sq_pxs * rep[1]
+            roi = (roi_center[0] - roi_size[0] / 2,
+                   roi_center[1] - roi_size[1] / 2,
+                   roi_center[0] + roi_size[0] / 2,
+                   roi_center[1] + roi_size[1] / 2)
+            pxs = sq_pxs * phy_size[0]
 
         # Double check we didn't end up with scale < 1
         # TODO: for some scanners, the scale can be < 1 => check the scale range
@@ -238,11 +253,7 @@ class RepetitionStream(LiveStream):
 
         logging.debug("Computed roi = %s, rep = %s, pxs = %g", roi, rep, pxs)
 
-        # Set a valid roi from reading back the hardware
-        self.emitter.resolution.value = rep
-        valid_rep = self.emitter.resolution.clip(rep)
-
-        return tuple(roi), tuple(valid_rep), pxs
+        return tuple(roi), tuple(rep), pxs
 
     def _setROI(self, roi):
         """
@@ -1059,12 +1070,11 @@ class ScannedTCSettingsStream(RepetitionStream):
         Warning: do not use local .dwellTime, but use the one provided by the stream.
         """
         self.tc_detector = tc_dectector
-        self.tc_detector_live = tc_detector_live
-
-        if self.tc_detector_live is not None:
-            RepetitionStream.__init__(self, name, self.tc_detector_live, self.tc_detector_live.data, scanner, **kwargs)
+        if tc_detector_live:
+            det_live = tc_detector_live
         else:
-            RepetitionStream.__init__(self, name, self.tc_detector, self.tc_detector.data, scanner, **kwargs)
+            det_live = tc_dectector
+        RepetitionStream.__init__(self, name, det_live, det_live.data, scanner, **kwargs)
 
         # Fuzzing is not handled for FLIM streams (and doesn't make much
         # sense as it's the same as software-binning
@@ -1088,11 +1098,16 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.pdetector = detector
 
         # VA's
-        self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
-        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
-        # TODO: Change these to Local VA's
+        # TODO: Change these to Local VA's (emtPower and emtPeriod), but this
+        # means that emitter should be self.emitter. For now, RepetitionStream
+        # needs to get the scanner as emitter as that's where it reads the
+        # res/pxs. => RepetitionStream should accept emitter+scanner.
         self.power = emitter.power
         self.period = emitter.period
+        self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
+
+        # Raw: series of data (normalized)/acq date (s)
+        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
         self.image.value = model.DataArray([])  # start with an empty array
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
