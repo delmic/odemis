@@ -44,7 +44,6 @@ from odemis.util import units
 import os.path
 import time
 import wx
-from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
 from odemis.util.filename import guess_pattern, create_filename, update_counter
@@ -94,11 +93,12 @@ class AcquisitionDialog(xrcfr_acq):
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
-
         self._hidden_view = StreamView("Plugin View Hidden")
 
         self.streambar_controller = StreamBarController(self._tab_data_model,
-                                                        self.pnl_secom_streams)
+                                                        self.pnl_secom_streams,
+                                                        static=True,
+                                                        ignore_view=True)
         # The streams currently displayed are the one visible
         self.add_all_streams()
 
@@ -218,23 +218,12 @@ class AcquisitionDialog(xrcfr_acq):
             else:
                 v = self._view
 
-            v.addStream(s)  # Add first to the view, so "visible" button is correct
-            # self.streambar_controller.add_acquisition_stream_cont(s)
-            self.streambar_controller._add_stream_cont(s, show_panel=True, static=True, view=v)
-            # listen to changes in local VAs
-            local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
-            for lva in local_vas:
-                lva.subscribe(self.on_setting_change)
+            self.streambar_controller.addStream(s, add_to_view=v)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
         # Ensure we don't update the view after the window is destroyed
         self.streambar_controller.clear()
-        for s in list(self._tab_data_model.streams.value):  # copy, as it's modified by stream cont
-            # Stop listening to changes in local VAs
-            local_vas = set(s.emt_vas.values()) | set(s.det_vas.values())
-            for lva in local_vas:
-                lva.unsubscribe(self.on_setting_change)
 
         # TODO: need to have a .clear() on the settings_controller to clean up?
         self._settings_controller = None
@@ -415,12 +404,12 @@ class AcquisitionDialog(xrcfr_acq):
             self.last_saved_file = None
 
     def terminate_listeners(self):
-        self.stop_listening_to_va()
-
-        self.remove_all_streams()
         # stop listening to events
         self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
+        self.stop_listening_to_va()
+
+        self.remove_all_streams()
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
