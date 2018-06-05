@@ -72,6 +72,9 @@ class AcquisitionDialog(xrcfr_acq):
 
         # The name of the last file that got written to disk (used for auto viewing on close)
         self.last_saved_file = None
+        
+        # True when acquisition occurs
+        self.acquiring = False
 
         # a ProgressiveFuture if the acquisition is going on
         self.acq_future = None
@@ -115,10 +118,7 @@ class AcquisitionDialog(xrcfr_acq):
         # Presets which have been confirmed on the hardware
         self._presets_confirmed = set() # (string)
 
-        # Get all the VA's from the stream and subscribe to them for changes.
-        for entry in self._orig_entries:
-            if hasattr(entry, "vigilattr"):
-                entry.vigilattr.subscribe(self.on_setting_change)
+        self.start_listening_to_va()
 
         # If it could be possible to do fine alignment, allow the user to choose
         if self._can_fine_align(self._tab_data_model.streams.value):
@@ -167,6 +167,17 @@ class AcquisitionDialog(xrcfr_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.subscribe(self.on_streams_changed)
+        
+    def start_listening_to_va(self):
+        # Get all the VA's from the stream and subscribe to them for changes.
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.subscribe(self.on_setting_change)
+                
+    def stop_listening_to_va(self):
+        for entry in self._orig_entries:
+            if hasattr(entry, "vigilattr"):
+                entry.vigilattr.unsubscribe(self.on_setting_change)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -291,7 +302,9 @@ class AcquisitionDialog(xrcfr_acq):
     @wxlimit_invocation(0.1)
     def update_setting_display(self):
         # if gauge was left over from an error => now hide it
-        if self.gauge_acq.IsShown():
+        if self.acquiring:
+            self.gauge_acq.Show()
+        elif self.gauge_acq.IsShown():
             self.gauge_acq.Hide()
             self.Layout()
 
@@ -402,9 +415,7 @@ class AcquisitionDialog(xrcfr_acq):
             self.last_saved_file = None
 
     def terminate_listeners(self):
-        for entry in self._orig_entries:
-            if hasattr(entry, "vigilattr"):
-                entry.vigilattr.unsubscribe(self.on_setting_change)
+        self.stop_listening_to_va()
 
         self.remove_all_streams()
         # stop listening to events
@@ -458,6 +469,7 @@ class AcquisitionDialog(xrcfr_acq):
             return
 
         logging.info("Acquire button clicked, starting acquisition")
+        self.acquiring = True
 
         self.btn_secom_acquire.Disable()
 
@@ -505,6 +517,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         logging.info("Cancel button clicked, stopping acquisition")
         self.acq_future.cancel()
+        self.acquiring = False
         self.btn_cancel.SetLabel("Close")
         # all the rest will be handled by on_acquisition_done()
 
@@ -517,6 +530,8 @@ class AcquisitionDialog(xrcfr_acq):
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self._resume_settings()
+        
+        self.acquiring = False
 
         # re-enable estimation time updates
         self._view.lastUpdate.subscribe(self.on_streams_changed)
