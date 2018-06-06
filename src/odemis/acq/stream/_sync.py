@@ -2031,7 +2031,6 @@ class ScannedRemoteTCStream(LiveStream):
         self._emitter = helper_stream.lemitter  # TODO: Should be emitter
         self._tc_scanner = helper_stream.tc_scanner
         self._tc_detector = helper_stream.tc_detector
-        self._pdetector = helper_stream.pdetector
         self._scanner = helper_stream.scanner
         self._time_correlator = helper_stream.time_correlator
 
@@ -2155,7 +2154,7 @@ class ScannedRemoteTCStream(LiveStream):
             self._setEmission(1)
 
             # Start the acquisition
-            self._pdetector.data.subscribe(self._onNewData)
+            self._tc_detector.data.subscribe(self._onNewData)
 
             # For each frame
             for i in range(nfr):
@@ -2196,7 +2195,7 @@ class ScannedRemoteTCStream(LiveStream):
             logging.debug("FLIM acquisition ended")
 
             # Ensure all the detectors are stopped
-            self._pdetector.data.unsubscribe(self._onNewData)
+            self._tc_detector.data.unsubscribe(self._onNewData)
             self._time_correlator.data.unsubscribe(self._onAcqStop)
             self._stream._unlinkHwVAs()
             # turn off the light
@@ -2279,7 +2278,7 @@ class ScannedRemoteTCStream(LiveStream):
             self._acq_state = CANCELLED
 
         logging.debug("Cancelling acquisition of components %s and %s",
-                      self._pdetector.name, self._time_correlator.name)
+                      self._tc_detector.name, self._time_correlator.name)
 
         # Wait for the thread to be complete (and hardware state restored)
         if self._acq_thread:

@@ -111,8 +111,8 @@ class TestFlim(unittest.TestCase):
     def test_flim_acq_simple(self):
         logging.debug("Testing acquisition")
 
-        helper = stream.ScannedTCSettingsStream("FLIM settings", self.detector, self.ex_light, self.lscanner,
-                                                self.sft, self.apd, self.tc_scanner)
+        helper = stream.ScannedTCSettingsStream("FLIM settings", self.apd, self.ex_light, self.lscanner,
+                                                self.sft, self.tc_scanner)
 
         remote = stream.ScannedRemoteTCStream("Remote", helper)
         # Configure values and test acquisition for several short dwell times.
@@ -159,8 +159,8 @@ class TestFlim(unittest.TestCase):
     def test_repetitions_and_roi(self):
         logging.debug("Testing repetitions and roi")
 
-        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
-                                                self.sft, self.apd, self.tc_scanner)
+        helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
+                                                self.sft, self.tc_scanner)
         
         remote = stream.ScannedRemoteTCStream("remote", helper)
 
@@ -210,8 +210,8 @@ class TestFlim(unittest.TestCase):
     def test_cancelling(self):
         logging.debug("Testing cancellation")
 
-        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
-                                                self.sft, self.apd, self.tc_scanner)
+        helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
+                                                self.sft, self.tc_scanner)
 
         remote = stream.ScannedRemoteTCStream("remote", helper)
 
@@ -228,8 +228,8 @@ class TestFlim(unittest.TestCase):
 
     def test_setting_stream(self):
 
-        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
-                                                self.sft, self.apd, self.tc_scanner)
+        helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
+                                                self.sft, self.tc_scanner)
         spots = stream.SpotScannerStream("spot", helper.tc_detector,
                                      helper.tc_detector.data, helper.scanner)
         # Test start and stop of the apd.
@@ -274,9 +274,8 @@ class TestFlim(unittest.TestCase):
         """
         Test live setting stream acquisition with the tc_detector_live
         """
-        helper = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
-                                                self.sft, self.apd, self.tc_scanner,
-                                                self.tcdl)
+        helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light,
+                         self.lscanner, self.sft, self.tc_scanner, self.tcdl)
         spots = stream.SpotScannerStream("spot", helper.tc_detector,
                                      helper.tc_detector.data, helper.scanner)
         # Test start and stop of the apd.
@@ -324,8 +323,8 @@ class TestFlim(unittest.TestCase):
         when used on a confocal microscope, and especially the NikonC2
         """
         # Create the stream
-        tcs = stream.ScannedTCSettingsStream('Stream', self.detector, self.ex_light, self.lscanner,
-                                             self.sft, self.apd, self.tc_scanner)
+        tcs = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
+                                             self.sft, self.tc_scanner)
         self._image = None
         tcs.image.subscribe(self._on_image)
 
