@@ -1054,26 +1054,27 @@ class OverlayStream(Stream):
 class ScannedTCSettingsStream(RepetitionStream):
 
     def __init__(self, name, detector, emitter, scanner, time_correlator,
-                 tc_dectector, scanner_extra, tc_detector_live=None, **kwargs):
+                 scanner_extra, tc_detector_live=None, **kwargs):
         """
         A helper stream used to define FLIM acquisition settings and run a live setting stream
         that gets a time-series from an APD (tc_detector)
 
-        detector: (model.Detector) typically a photo-detector
-        emitter: (model.Light) Typically an extended light (pulsed laser)
+        detector: (model.Detector) a photo-detector, synchronized with the scanner
+        emitter: (model.Light) The light (typically a pulsed laser)
         scanner: (model.Emitter) typically laser-mirror
         time_correlator: (model.Detector) typically Symphotime controller
-        tc_detector: (model.Detector)Typically an APD
-        scanner_extra: (model.Emitter) The Symphotime scanner device wrapped by the Symphotime controller
-        tc_detector_live: (model.Detector) typically a Symphotime Live detector - gets apd counts
+        scanner_extra: (model.Emitter or None) extra scanner that receives the same
+           settings as the scanner. Typically, the Symphotime scanner, as it
+           needs the information to reconstruct the image.
+        tc_detector_live: (model.Detector or None) the detector to use in the
+          live mode. Typically a Symphotime Live detector - gets apd counts
 
         Warning: do not use local .dwellTime, but use the one provided by the stream.
         """
-        self.tc_detector = tc_dectector
         if tc_detector_live:
             det_live = tc_detector_live
         else:
-            det_live = tc_dectector
+            det_live = detector
         RepetitionStream.__init__(self, name, det_live, det_live.data, scanner, **kwargs)
 
         # Fuzzing is not handled for FLIM streams (and doesn't make much
@@ -1090,12 +1091,10 @@ class ScannedTCSettingsStream(RepetitionStream):
 
         # Child devices
         self.lemitter = emitter
-        self.tc_scanner = scanner_extra
-
         self.scanner = scanner
         self.time_correlator = time_correlator
-        self.dataflow = tc_dectector.data
-        self.pdetector = detector
+        self.tc_detector = detector
+        self.tc_scanner = scanner_extra
 
         # VA's
         # TODO: Change these to Local VA's (emtPower and emtPeriod), but this

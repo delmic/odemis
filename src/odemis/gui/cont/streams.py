@@ -1244,17 +1244,13 @@ class StreamBarController(object):
         Creates a new ScannedTCSettingStream and panel in the stream bar.
         returns (StreamPanel): the panel created
         """
-
-        detector = self._main_data_model.photo_ds[0]
-
         s = acqstream.ScannedTCSettingsStream(
-            "FLIM %s" % (detector.name,),
-            detector,
+            "FLIM",
+            self._main_data_model.tc_detector,
             self._main_data_model.light,
             self._main_data_model.laser_mirror,
             self._main_data_model.time_correlator,
-            self._main_data_model.tc_detector,
-            self._main_data_model.tc_scanner,
+            scanner_extra=self._main_data_model.tc_scanner,
             tc_detector_live=self._main_data_model.tc_detector_live,
             opm=self._main_data_model.opm,
             # emtvas={"power", "period"}
