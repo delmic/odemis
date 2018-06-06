@@ -80,6 +80,7 @@ LOSSY = False
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
 
+
 def _convertToTiffTag(metadata):
     """
     Converts DataArray tags to libtiff tags.
@@ -142,6 +143,7 @@ def _convertToTiffTag(metadata):
 
     return tiffmd
 
+
 def _GetFieldDefault(tfile, tag, default=None):
     """
     Same as TIFF.GetField(), but if the tag is not defined, return default
@@ -158,6 +160,8 @@ def _GetFieldDefault(tfile, tag, default=None):
 
 # factor for value -> m
 resunit_to_m = {T.RESUNIT_INCH: 0.0254, T.RESUNIT_CENTIMETER: 0.01}
+
+
 def _readTiffTag(tfile):
     """
     Reads the tiff tags of the current page and convert them into metadata
@@ -218,6 +222,7 @@ def _readTiffTag(tfile):
 
     return md
 
+
 def _isThumbnail(tfile):
     """
     Detects whether the current image of a file is a thumbnail or not
@@ -229,6 +234,7 @@ def _isThumbnail(tfile):
         return True
 
     return False
+
 
 def _guessModelName(das):
     """
@@ -248,6 +254,7 @@ def _guessModelName(das):
             return "SECOM"
 
     return None
+
 
 def _indent(elem, level=0):
     """
@@ -269,7 +276,9 @@ def _indent(elem, level=0):
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
 
+
 _ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2012-06"
+
 
 def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids=None):
     """
@@ -824,6 +833,24 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
+        # TODO what does .find do? seems to work anyways
+        poldata = ime.find("POLData")  # there must be only one per Image
+        try:
+            pol = str(poldata.attrib["Polarization"])
+            md[model.MD_ARPOL_POLARIZATION] = pol
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            posqwp = float(poldata.attrib["QuarterWavePlate"])
+            md[model.MD_ARPOL_POS_QWP] = posqwp
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            poslinpol = float(poldata.attrib["LinearPolarizer"])
+            md[model.MD_ARPOL_POS_LINPOL] = poslinpol
+        except (AttributeError, KeyError, ValueError):
+            pass
+
         # ROIs (for now we only care about PolePosition)
         for roirfe in ime.findall("ROIRef"):
             try:
@@ -961,6 +988,7 @@ WHITELIST_MD_MERGE = frozenset([model.MD_FILTER_NAME,
                                 model.MD_SW_VERSION, model.MD_LENS_NAME,
                                 model.MD_SENSOR_TEMP, model.MD_ACQ_DATE])
 
+
 def _canBeMerged(das):
     """
     Check whether multiple DataArrays can be merged into a larger DA without
@@ -986,6 +1014,7 @@ def _canBeMerged(das):
                 return False
 
     return True
+
 
 def _countNeededIFDs(da):
     """
@@ -1049,6 +1078,7 @@ def _findImageGroups(das):
         prev_da = da
 
     return groups
+
 
 def _dtype2OMEtype(dtype):
     """
@@ -1417,11 +1447,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                                   da.metadata[model.MD_AR_POLE],
                                   shp_attrib={"TheC": "%d" % chan})
             ET.SubElement(ime, "ROIRef", attrib={"xmlns": _ROI_NS, "ID": rid})
+
     # Store mirror data if any
     if any(rd in globalMD for rd in [model.MD_AR_XMAX,
-                                        model.MD_AR_HOLE_DIAMETER,
-                                        model.MD_AR_FOCUS_DISTANCE,
-                                        model.MD_AR_PARABOLA_F]):
+                                     model.MD_AR_HOLE_DIAMETER,
+                                     model.MD_AR_FOCUS_DISTANCE,
+                                     model.MD_AR_PARABOLA_F]):
+
         ardata = ET.SubElement(ime, "ARData")
         if model.MD_AR_XMAX in globalMD:
             ardata.attrib["XMax"] = "%.15f" % globalMD[model.MD_AR_XMAX]
@@ -1431,6 +1463,20 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             ardata.attrib["FocusDistance"] = "%.15f" % globalMD[model.MD_AR_FOCUS_DISTANCE]
         if model.MD_AR_PARABOLA_F in globalMD:
             ardata.attrib["ParabolaF"] = "%.15f" % globalMD[model.MD_AR_PARABOLA_F]
+
+    # Store polarization analyzer data if any
+    if any(rd in globalMD for rd in [model.MD_ARPOL_POLARIZATION,
+                                     model.MD_ARPOL_POS_QWP,
+                                     model.MD_ARPOL_POS_LINPOL]):
+
+        poldata = ET.SubElement(ime, "POLData")
+        if model.MD_ARPOL_POLARIZATION in globalMD:
+            poldata.attrib["Polarization"] = "%s" % globalMD[model.MD_ARPOL_POLARIZATION]
+        if model.MD_ARPOL_POS_QWP in globalMD:
+            poldata.attrib["QuarterWavePlate"] = "%.15f" % globalMD[model.MD_ARPOL_POS_QWP]
+        if model.MD_ARPOL_POS_LINPOL in globalMD:
+            poldata.attrib["LinearPolarizer"] = "%.15f" % globalMD[model.MD_ARPOL_POS_LINPOL]
+
 
 def _createPointROI(rois, name, p, shp_attrib=None):
     """
@@ -1465,6 +1511,7 @@ def _createPointROI(rois, name, p, shp_attrib=None):
     rois[rid] = roie
     return rid
 
+
 def _mergeCorrectionMetadata(da):
     """
     Create a new DataArray with metadata updated to with the correction metadata
@@ -1475,6 +1522,7 @@ def _mergeCorrectionMetadata(da):
     md = da.metadata.copy() # to avoid modifying the original one
     img.mergeMetadata(md)
     return model.DataArray(da, md) # create a view
+
 
 def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False,
                        file_index=None, uuid_list=None, pyramid=False):

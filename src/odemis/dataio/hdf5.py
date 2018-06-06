@@ -79,6 +79,8 @@ CAN_SAVE_PYRAMID = False
 
 # h5py doesn't implement explicitly HDF5 image, and is not willing to cf:
 # http://code.google.com/p/h5py/issues/detail?id=157
+
+
 def _create_image_dataset(group, dataset_name, image, **kwargs):
     """
     Create a dataset respecting the HDF5 image specification
@@ -115,6 +117,7 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     image_dataset.attrs["IMAGE_VERSION"] = numpy.string_("1.2")
 
     return image_dataset
+
 
 def _read_image_dataset(dataset):
     """
@@ -163,13 +166,13 @@ def _read_image_dataset(dataset):
     else:
         raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
-
     # TODO: support DISPLAY_ORIGIN
     dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL")
     if dorig != "UL":
         logging.warning("Image rotation %d not handled", dorig)
 
     return image
+
 
 def _add_image_info(group, dataset, image):
     """
@@ -501,9 +504,9 @@ def _parse_physical_data(pdgroup, da):
 
     try:
         cd = pdgroup["ChannelDescription"]
-        n = numpy.prod(cd.shape) # typically like (N,)
+        n = numpy.prod(cd.shape)  # typically like (N,)
     except KeyError:
-        n = 0 # that means all are together
+        n = 0  # that means all are together
 
     if n > 1:
         # need to separate it
@@ -532,13 +535,13 @@ def _parse_physical_data(pdgroup, da):
 
         # MicroscopeMode helps us to find out the bandwidth of the wavelength
         # and it's also a way to keep it stable, if saving the data again.
-        h_width = 1e-9 # 1 nm : default is to just almost keep the value
+        h_width = 1e-9  # 1 nm : default is to just almost keep the value
         try:
             mm = pdgroup["MicroscopeMode"][i]
             if mm == MM_FLUORESCENCE:
-                h_width = 10e-9 # 10 nm => narrow band
-            if mm == MM_TRANSMISSION: # we set it for brightfield
-                h_width = 100e-9 # 100 nm => large band
+                h_width = 10e-9  # 10 nm => narrow band
+            if mm == MM_TRANSMISSION:  # we set it for brightfield
+                h_width = 100e-9  # 100 nm => large band
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -559,13 +562,13 @@ def _parse_physical_data(pdgroup, da):
                 raise ValueError
             if isinstance(ds[i], basestring):
                 md[model.MD_OUT_WL] = ds[i]
-            elif len(ds.shape) == 1: # Only one value per channel
+            elif len(ds.shape) == 1:  # Only one value per channel
                 ewl = float(ds[i])  # in m
                 # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
                 # more precision in C scale (now explicitly saved as tuple here)
                 if model.MD_OUT_WL not in md:
                     md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
-            else: # full band for each channel
+            else:  # full band for each channel
                 md[model.MD_OUT_WL] = tuple(ds[i])
         except (TypeError, KeyError, IndexError, ValueError):
             pass
@@ -593,7 +596,7 @@ def _parse_physical_data(pdgroup, da):
 
         try:
             ds = pdgroup["IntegrationTime"]
-            it = float(ds[i]) # s
+            it = float(ds[i])  # s
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
@@ -655,7 +658,7 @@ def _parse_physical_data(pdgroup, da):
 
         try:
             ds = pdgroup["PolePosition"]
-            pp = tuple(ds[i]) # px
+            pp = tuple(ds[i])  # px
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
@@ -703,18 +706,50 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
+        try:
+            ds = pdgroup["Polarization"]
+            pol = str(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_ARPOL_POLARIZATION] = pol
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["QuarterWavePlate"]
+            posqwp = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_ARPOL_POS_QWP] = posqwp
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["LinearPolarizer"]
+            poslinpol = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_ARPOL_POS_LINPOL] = poslinpol
+        except (KeyError, IndexError, ValueError):
+            pass
+
     return das
 
 # Enums used in SVI HDF5
 # State: how "trustable" is the value
+
+
 ST_INVALID = 111
 ST_DEFAULT = 112
 ST_ESTIMATED = 113
 ST_REPORTED = 114
 ST_VERIFIED = 115
 _dtstate = h5py.special_dtype(enum=('i', {
-     "Invalid":ST_INVALID, "Default":ST_DEFAULT, "Estimated":ST_ESTIMATED,
-     "Reported":ST_REPORTED, "Verified":ST_VERIFIED}))
+     "Invalid": ST_INVALID, "Default": ST_DEFAULT, "Estimated": ST_ESTIMATED,
+     "Reported": ST_REPORTED, "Verified": ST_VERIFIED}))
 
 # MicroscopeMode
 MM_NONE = 0
@@ -722,8 +757,8 @@ MM_TRANSMISSION = 1
 MM_REFLECTION = 2
 MM_FLUORESCENCE = 3
 _dtmm = h5py.special_dtype(enum=('i', {
-     "None":MM_NONE, "Transmission":MM_TRANSMISSION ,
-     "Reflection":MM_REFLECTION, "Fluorescence":MM_FLUORESCENCE}))
+     "None": MM_NONE, "Transmission": MM_TRANSMISSION ,
+     "Reflection": MM_REFLECTION, "Fluorescence": MM_FLUORESCENCE}))
 _dictmm = h5py.check_dtype(enum=_dtmm)
 # MicroscopeType
 MT_NONE = 111
@@ -733,17 +768,18 @@ MT_4PIEXCITATION = 114
 MT_NIPKOWDISKCONFOCAL = 115
 MT_GENERICSENSOR = 118
 _dtmt = h5py.special_dtype(enum=('i', {
-    "None":MT_NONE, "WideField":MT_WIDEFIELD, "Confocal":MT_CONFOCAL,
-    "4PiExcitation":MT_4PIEXCITATION, "NipkowDiskConfocal":MT_NIPKOWDISKCONFOCAL,
-    "GenericSensor":MT_GENERICSENSOR}))
+    "None": MT_NONE, "WideField": MT_WIDEFIELD, "Confocal": MT_CONFOCAL,
+    "4PiExcitation": MT_4PIEXCITATION, "NipkowDiskConfocal": MT_NIPKOWDISKCONFOCAL,
+    "GenericSensor": MT_GENERICSENSOR}))
 _dictmt = h5py.check_dtype(enum=_dtmt)
 # ImagingDirection
 ID_UPWARD = 0
 ID_DOWNWARD = 1
 ID_BOTH = 2
 _dtid = h5py.special_dtype(enum=('i', {
-    "Upward":ID_UPWARD, "Downward":ID_DOWNWARD, "Both":ID_BOTH}))
+    "Upward": ID_UPWARD, "Downward": ID_DOWNWARD, "Both": ID_BOTH}))
 _dictid = h5py.check_dtype(enum=_dtid)
+
 
 def _h5svi_set_state(dataset, state):
     """
@@ -763,6 +799,7 @@ def _h5svi_set_state(dataset, state):
 
     dataset.attrs["State"] = fullstate
 
+
 def _h5svi_get_state(dataset, default=None):
     """
     Read the "State" of a dataset: the confidence that can be put in the value
@@ -779,6 +816,7 @@ def _h5svi_get_state(dataset, default=None):
 
     return state.tolist()
 
+
 def _h5py_enum_commit(group, name, dtype):
     """
     Commit (=save under a name) a enum to a group
@@ -788,7 +826,8 @@ def _h5py_enum_commit(group, name, dtype):
     """
     enum_type = h5py.h5t.py_create(dtype, logical=True)
     enum_type.commit(group.id, name)
-    #TODO: return the TypeEnumID created?
+    # TODO: return the TypeEnumID created?
+
 
 def _add_image_metadata(group, image, mds):
     """
@@ -855,7 +894,7 @@ def _add_image_metadata(group, image, mds):
         elif not isinstance(ewl, collections.Iterable) and typ > 1:
             ewls[i] = (ewl,) * typ
 
-    gp["EmissionWavelength"] = ewls # in m
+    gp["EmissionWavelength"] = ewls  # in m
     _h5svi_set_state(gp["EmissionWavelength"], state)
 
     mags = [md.get(model.MD_LENS_MAG) for md in mds]
@@ -890,7 +929,7 @@ def _add_image_metadata(group, image, mds):
                 id.append("Downward")
         else:
             mm.append("Reflection")  # SEM
-            mt.append("GenericSensor") # ScanningElectron?
+            mt.append("GenericSensor")  # ScanningElectron?
             id.append("Upward")
     # Microscope* is the old format, Microscope*Str is new format
     # FIXME: it seems h5py doesn't allow to directly set the dataset type to a
@@ -917,7 +956,7 @@ def _add_image_metadata(group, image, mds):
     state = [ST_DEFAULT if v is None else ST_REPORTED for v in ri]
     _h5svi_set_state(gp["RefractiveIndexLensImmersionMedium"], state)
     # Made up, but probably reasonable
-    gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(mds) # ratio (no unit)
+    gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(mds)  # ratio (no unit)
     _h5svi_set_state(gp["RefractiveIndexSpecimenEmbeddingMedium"], ST_DEFAULT)
 
     na = [md.get(model.MD_LENS_NA) for md in mds]
@@ -929,20 +968,20 @@ def _add_image_metadata(group, image, mds):
     _h5svi_set_state(gp["ObjectiveQuality"], ST_DEFAULT)
 
     # Only for confocal microscopes
-    gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(mds) # unit? m?
+    gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(mds)  # unit? m?
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeSpacing"], ST_DEFAULT)
-    gp["BackprojectedIlluminationPinholeRadius"] = [280e-9] * len(mds) # unit? m?
+    gp["BackprojectedIlluminationPinholeRadius"] = [280e-9] * len(mds)  # unit? m?
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeRadius"], ST_DEFAULT)
-    gp["BackprojectedPinholeRadius"] = [280e-9] * len(mds) # unit? m?
+    gp["BackprojectedPinholeRadius"] = [280e-9] * len(mds)  # unit? m?
     _h5svi_set_state(gp["BackprojectedPinholeRadius"], ST_DEFAULT)
 
     # Only for confocal microscopes?
-    gp["ExcitationBeamOverfillFactor"] = [2.0] * len(mds) # unit?
+    gp["ExcitationBeamOverfillFactor"] = [2.0] * len(mds)  # unit?
     _h5svi_set_state(gp["ExcitationBeamOverfillFactor"], ST_DEFAULT)
 
     # Only for fluorescence acquisitions. Almost always 1, excepted for super fancy techniques.
     # Number of simultaneously absorbed photons by a fluorophore in a fluorescence event
-    gp["ExcitationPhotonCount"] = [1] * len(mds) # photons
+    gp["ExcitationPhotonCount"] = [1] * len(mds)  # photons
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
     # Below are additional metadata from us (Delmic)
@@ -1009,6 +1048,16 @@ def _add_image_metadata(group, image, mds):
     # ParabolaF: parabola_parameter=1/4f
     # (only meaningful for AR/SPARC)
     pf, st_pf = [], []
+    # Polarization: position (string) of polarization analyzer
+    # (only meaningful for AR/SPARC with polarization analyzer)
+    pol, st_pol = [], []
+    # Polarization: position (float) of quarter wave plate
+    # (only meaningful for AR/SPARC with polarization analyzer)
+    posqwp, st_posqwp = [], []
+    # Polarization: position (float) of linear polarizer
+    # (only meaningful for AR/SPARC with polarization analyzer)
+    poslinpol, st_poslinpol = [], []
+
     for md in mds:
         if model.MD_AR_POLE in md:
             pp.append(md[model.MD_AR_POLE])
@@ -1040,6 +1089,26 @@ def _add_image_metadata(group, image, mds):
         else:
             pf.append(0)
             st_pf.append(ST_INVALID)
+
+        if model.MD_ARPOL_POLARIZATION in md:
+            pol.append(md[model.MD_ARPOL_POLARIZATION])
+            st_pol.append(ST_REPORTED)
+        else:
+            pol.append("")
+            st_pol.append(ST_INVALID)
+        if model.MD_ARPOL_POS_QWP in md:
+            posqwp.append(md[model.MD_ARPOL_POS_QWP])
+            st_posqwp.append(ST_REPORTED)
+        else:
+            posqwp.append(0)
+            st_posqwp.append(ST_INVALID)
+        if model.MD_ARPOL_POS_LINPOL in md:
+            poslinpol.append(md[model.MD_ARPOL_POS_LINPOL])
+            st_poslinpol.append(ST_REPORTED)
+        else:
+            poslinpol.append(0)
+            st_poslinpol.append(ST_INVALID)
+
     if not all(st == ST_INVALID for st in st_pp):
         gp["PolePosition"] = pp
         _h5svi_set_state(gp["PolePosition"], st_pp)
@@ -1056,6 +1125,16 @@ def _add_image_metadata(group, image, mds):
         gp["ParabolaF"] = pf
         _h5svi_set_state(gp["ParabolaF"], st_pf)
 
+    if not all(st == ST_INVALID for st in st_pol):
+        gp["Polarization"] = pol
+        _h5svi_set_state(gp["Polarization"], st_pol)
+    if not all(st == ST_INVALID for st in st_posqwp):
+        gp["QuarterWavePlate"] = posqwp
+        _h5svi_set_state(gp["QuarterWavePlate"], st_posqwp)
+    if not all(st == ST_INVALID for st in st_poslinpol):
+        gp["LinearPolarizer"] = poslinpol
+        _h5svi_set_state(gp["LinearPolarizer"], st_poslinpol)
+
 
 def _add_svi_info(group):
     """
@@ -1068,6 +1147,7 @@ def _add_svi_info(group):
     gi["FileSpecificationVersion"] = "0.02"  # SVI has typically 0.01d8
     gi["ImageHistory"] = ""
     gi["URL"] = "www.delmic.com"
+
 
 def _add_acquistion_svi(group, data, mds, **kwargs):
     """
@@ -1088,6 +1168,7 @@ def _add_acquistion_svi(group, data, mds, **kwargs):
     _add_image_info(gi, ids, data)
     _add_image_metadata(group, data, mds)
     _add_svi_info(group)
+
 
 def _findImageGroups(das):
     """
@@ -1137,6 +1218,7 @@ def _findImageGroups(das):
 
     gdata = [[das[i] for i in g] for g in groups]
     return gdata
+
 
 def _adjustDimensions(da):
     """
@@ -1191,6 +1273,7 @@ def _adjustDimensions(da):
     da = model.DataArray(da, md)
     return da
 
+
 def _groupImages(das):
     """
     Group images into larger ndarray, to follow the HDF5 SVI flavour.
@@ -1232,6 +1315,7 @@ def _groupImages(das):
 
     return acq, mds
 
+
 def _updateRGBMD(da):
     """
     update MD_DIMS of the DataArray containing RGB if needed. Trying to guess
@@ -1248,6 +1332,7 @@ def _updateRGBMD(da):
         dims = "YXC"
 
     da.metadata[model.MD_DIMS] = dims
+
 
 def _thumbFromHDF5(filename):
     """
@@ -1286,6 +1371,7 @@ def _thumbFromHDF5(filename):
 
     return thumbs
 
+
 def _dataFromSVIHDF5(f):
     """
     Read microscopy data from an HDF5 file using the SVI convention.
@@ -1303,7 +1389,7 @@ def _dataFromSVIHDF5(f):
             image = imagedata["Image"]
             physicaldata = obj["PhysicalData"]
         except KeyError:
-            continue # not conforming => try next object
+            continue  # not conforming => try next object
 
         # Read the raw data
         try:
@@ -1320,6 +1406,7 @@ def _dataFromSVIHDF5(f):
         das = _parse_physical_data(physicaldata, da)
         data.extend(das)
     return data
+
 
 def _dataFromHDF5(filename):
     """
@@ -1338,6 +1425,7 @@ def _dataFromHDF5(filename):
 
     data = []
     # go rough: return any dataset with numbers (and more than one element)
+
     def addIfWorthy(name, obj):
         try:
             if not isinstance(obj, h5py.Dataset):
@@ -1356,6 +1444,7 @@ def _dataFromHDF5(filename):
     f.visititems(addIfWorthy)
     return data
 
+
 def _mergeCorrectionMetadata(da):
     """
     Create a new DataArray with metadata updated to with the correction metadata
@@ -1366,6 +1455,7 @@ def _mergeCorrectionMetadata(da):
     md = da.metadata.copy() # to avoid modifying the original one
     img.mergeMetadata(md)
     return model.DataArray(da, md) # create a view
+
 
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
@@ -1434,6 +1524,7 @@ def export(filename, data, thumbnail=None):
         data = [data]
     _saveAsHDF5(filename, data, thumbnail)
 
+
 def read_data(filename):
     """
     Read an HDF5 file and return its content (skipping the thumbnail).
@@ -1452,6 +1543,7 @@ def read_data(filename):
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
 
     return _dataFromHDF5(filename)
+
 
 def read_thumbnail(filename):
     """
