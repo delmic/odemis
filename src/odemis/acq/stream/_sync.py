@@ -2024,7 +2024,7 @@ class ScannedRemoteTCStream(LiveStream):
         helper_stream: (ScannedTCSettingsStream) contains all necessary devices as children
         '''
         super(ScannedRemoteTCStream, self).__init__(name, helper_stream.time_correlator,
-            helper_stream.time_correlator.dataflow, helper_stream.emitter, **kwargs)
+            helper_stream.time_correlator.dataflow, helper_stream.emitter, opm=helper_stream._opm, **kwargs)
 
         # Retrieve devices from the helper stream
         self._stream = helper_stream
