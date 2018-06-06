@@ -390,6 +390,14 @@ class SecomStreamsTab(Tab):
 
             tab_data.confocal_set_stream = conf_set_stream
 
+        if TOOL_SPOT in tab_data.tool.choices:
+            spot_stream = acqstream.SpotScannerStream("Spot", main_data.tc_detector,
+                                              main_data.tc_detector.data, main_data.laser_mirror)
+            tab_data.spotStream = spot_stream
+            # TODO: add to tab_data.streams and move the handling to the stream controller?
+            tab_data.spotPosition.subscribe(self._onSpotPosition)
+            tab_data.tool.subscribe(self.on_tool_change)
+
         self._settingbar_controller = settings.SecomSettingsController(
             panel,
             tab_data
@@ -414,14 +422,6 @@ class SecomStreamsTab(Tab):
         self.tb.enable_button(TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
-
-        if TOOL_SPOT in tab_data.tool.choices:
-            spot_stream = acqstream.SpotScannerStream("Spot", main_data.tc_detector,
-                                              main_data.tc_detector.data, main_data.laser_mirror)
-            tab_data.spotStream = spot_stream
-            # TODO: add to tab_data.streams and move the handling to the stream controller?
-            tab_data.spotPosition.subscribe(self._onSpotPosition)
-            tab_data.tool.subscribe(self.on_tool_change)
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.

@@ -953,7 +953,7 @@ class StreamBarController(object):
         # while doing a normal scan, but the scheduler would need to allow playing
         # on spatial stream simultaneously (just the SE?) and force to play it
         # when not in spot mode. (for now, we keep it simple)
-        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream, acqstream.ScannedRemoteTCStream)
+        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream, acqstream.OpticalStream)
         self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
                                acqstream.MonochromatorSettingsStream, acqstream.ScannedTCSettingsStream)
         tab_data.tool.subscribe(self.on_tool_change)
@@ -1003,9 +1003,15 @@ class StreamBarController(object):
 
         # If any stream already present: listen to them in the scheduler (but
         # don't display)
-        for s in self._tab_data_model.streams.value:
+        for s in tab_data.streams.value:
             logging.debug("Adding stream present at init to scheduler: %s", s)
             self._scheduleStream(s)
+
+        # TODO: use the same behaviour on the SPARC
+        self._spot_stream = None
+        if hasattr(tab_data, "spotStream") and tab_data.spotStream:
+            self._spot_stream = tab_data.spotStream
+            self._scheduleStream(self._spot_stream)
 
         self._stream_config = data.get_stream_settings_config()
 
@@ -2063,7 +2069,7 @@ class SecomStreamsController(StreamBarController):
     def _onStreamUpdate(self, stream, updated):
         if updated:
             fv = self._tab_data_model.focussedView.value
-            if stream not in fv.stream_tree.flat.value:
+            if stream not in fv.stream_tree.flat.value and stream is not self._spot_stream:
                 # if the stream is hidden in the current focused view, then unhide
                 # it everywhere
                 for v in self._tab_data_model.views.value:
