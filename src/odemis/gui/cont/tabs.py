@@ -431,7 +431,7 @@ class SecomStreamsTab(Tab):
                 self._add_opt_stream = self._streambar_controller.addFluo
             elif main_data.photo_ds:
                 # Use the first photo-detector in alphabetical order
-                pd0 = min(main_data.photo_ds, key=lambda d: d.name)
+                pd0 = min(main_data.photo_ds, key=lambda d: d.role)
                 self._add_opt_stream = partial(self._streambar_controller.addConfocal,
                                                detector=pd0)
             else:
