@@ -338,6 +338,7 @@ SPARC2: {
     init: {
         axis_name: "linear",
     },
+    affects: ["Camera", "Spectral Camera"]
 }
 
 "Quarter Wave Plate": {
@@ -350,4 +351,5 @@ SPARC2: {
     metadata: {
         POS_COR: 6.e-3,  # rad
     },
+    affects: ["Camera", "Spectral Camera"]
 }
