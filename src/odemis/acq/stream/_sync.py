@@ -40,8 +40,7 @@ from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 import random
 import Queue
-from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_ARPOL_POLARIZATION, MD_DWELL_TIME
+from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, MD_POL_MODE, MD_DWELL_TIME
 from odemis.util import img, units, spot, executeAsyncTask
 import threading
 import time
@@ -1180,7 +1179,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             ccd_data.metadata[MD_POS] = cor_pos
 
             if self._analyzer:
-                ccd_data.metadata[MD_ARPOL_POLARIZATION] = pol_pos
+                ccd_data.metadata[MD_POL_MODE] = pol_pos
 
             self._acq_data[-1][-1] = self._preprocessData(len(self._streams) - 1, ccd_data, px_idx)
             logging.debug("Processed CCD data %d = %s", n, px_idx)

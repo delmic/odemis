@@ -658,9 +658,9 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
                      model.MD_AR_PARABOLA_F: 2e-3,
                      model.MD_LENS_MAG: 60,  # ratio
-                     model.MD_ARPOL_POLARIZATION: pol_positions[idx],
-                     model.MD_ARPOL_POS_QWP: qwp_positions[idx],  # rad
-                     model.MD_ARPOL_POS_LINPOL: linpol_positions[idx],  # rad
+                     model.MD_POL_MODE: pol_positions[idx],
+                     model.MD_POL_POS_QWP: qwp_positions[idx],  # rad
+                     model.MD_POL_POS_LINPOL: linpol_positions[idx],  # rad
                              })
 
         # create 2 simple greyscale images
@@ -694,12 +694,12 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
             self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
-            if model.MD_ARPOL_POLARIZATION in md:
-                self.assertEqual(im.metadata[model.MD_ARPOL_POLARIZATION], md[model.MD_ARPOL_POLARIZATION])
-            if model.MD_ARPOL_POS_QWP in md:
-                self.assertEqual(im.metadata[model.MD_ARPOL_POS_QWP], md[model.MD_ARPOL_POS_QWP])
-            if model.MD_ARPOL_POS_LINPOL in md:
-                self.assertEqual(im.metadata[model.MD_ARPOL_POS_LINPOL], md[model.MD_ARPOL_POS_LINPOL])
+            if model.MD_POL_MODE in md:
+                self.assertEqual(im.metadata[model.MD_POL_MODE], md[model.MD_POL_MODE])
+            if model.MD_POL_POS_QWP in md:
+                self.assertEqual(im.metadata[model.MD_POL_POS_QWP], md[model.MD_POL_POS_QWP])
+            if model.MD_POL_POS_LINPOL in md:
+                self.assertEqual(im.metadata[model.MD_POL_POS_LINPOL], md[model.MD_POL_POS_LINPOL])
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

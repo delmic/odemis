@@ -27,8 +27,8 @@ import numpy
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase,
-                          MD_ARPOL_HORIZONTAL, MD_ARPOL_VERTICAL, MD_ARPOL_POSDIAG,
-                          MD_ARPOL_NEGDIAG, MD_ARPOL_RHC, MD_ARPOL_LHC)
+                          MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
+                          MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC)
 from odemis.util import img
 import threading
 import time
@@ -40,8 +40,8 @@ import weakref
 UNDEFINED_ROI = (0, 0, 0, 0)
 
 # use hardcode list of polarization positions necessary for polarimetry analysis
-POL_POSITIONS = (MD_ARPOL_HORIZONTAL, MD_ARPOL_VERTICAL, MD_ARPOL_POSDIAG,
-                 MD_ARPOL_NEGDIAG, MD_ARPOL_RHC, MD_ARPOL_LHC)
+POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
+                 MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC)
 # constant used to acquire all 6 polarization positions
 POL_6POS = "6Pol"
 

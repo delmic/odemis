@@ -2318,21 +2318,21 @@ class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
                 for i in range(6):
                     for d in ar_das[num_ar*i: num_ar*(i+1)]:
                         md = d.metadata
-                        # check if model.MD_ARPOL_POLARIZATION is in metadata
-                        self.assertIn(model.MD_ARPOL_POLARIZATION, md)
-                        self.assertIn(model.MD_ARPOL_POS_LINPOL, md)
-                        self.assertIn(model.MD_ARPOL_POS_QWP, md)
+                        # check if model.MD_POL_MODE is in metadata
+                        self.assertIn(model.MD_POL_MODE, md)
+                        self.assertIn(model.MD_POL_POS_LINPOL, md)
+                        self.assertIn(model.MD_POL_POS_QWP, md)
                         # check that each image has correct polarization position
-                        self.assertEqual(md[model.MD_ARPOL_POLARIZATION], POL_POSITIONS[i])
+                        self.assertEqual(md[model.MD_POL_MODE], POL_POSITIONS[i])
             else:
                 for d in ar_das:
                     md = d.metadata
-                    # check if model.MD_ARPOL_POLARIZATION is in metadata
-                    self.assertIn(model.MD_ARPOL_POLARIZATION, md)
-                    self.assertIn(model.MD_ARPOL_POS_LINPOL, md)
-                    self.assertIn(model.MD_ARPOL_POS_QWP, md)
+                    # check if model.MD_POL_MODE is in metadata
+                    self.assertIn(model.MD_POL_MODE, md)
+                    self.assertIn(model.MD_POL_POS_LINPOL, md)
+                    self.assertIn(model.MD_POL_POS_QWP, md)
                     # check that each image has correct polarization position
-                    self.assertEqual(md[model.MD_ARPOL_POLARIZATION], pos)
+                    self.assertEqual(md[model.MD_POL_MODE], pos)
 
     def test_acq_arpol_leech(self):
         """

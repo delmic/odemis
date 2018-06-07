@@ -700,9 +700,9 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
                      model.MD_AR_PARABOLA_F: 2e-3,
                      model.MD_LENS_MAG: 60,  # ratio
-                     model.MD_ARPOL_POLARIZATION: "vertical",
-                     model.MD_ARPOL_POS_QWP: 1.570796,  # rad
-                     model.MD_ARPOL_POS_LINPOL: 1.570796,  # rad
+                     model.MD_POL_MODE: "vertical",
+                     model.MD_POL_POS_QWP: 1.570796,  # rad
+                     model.MD_POL_POS_LINPOL: 1.570796,  # rad
                      },
                     # same AR image MD but different beam pos (MD_POS)
                     {model.MD_SW_VERSION: "1.0-test",
@@ -721,9 +721,9 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
                      model.MD_AR_PARABOLA_F: 2e-3,
                      model.MD_LENS_MAG: 60,  # ratio
-                     model.MD_ARPOL_POLARIZATION: "vertical",
-                     model.MD_ARPOL_POS_QWP: 1.570796,  # rad
-                     model.MD_ARPOL_POS_LINPOL: 1.570796,  # rad
+                     model.MD_POL_MODE: "vertical",
+                     model.MD_POL_POS_QWP: 1.570796,  # rad
+                     model.MD_POL_POS_LINPOL: 1.570796,  # rad
                      },
                     ]
         # create 2 simple greyscale images
@@ -755,12 +755,12 @@ class TestTiffIO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
             numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
             numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
-            if model.MD_ARPOL_POLARIZATION in md:
-                self.assertEqual(im.metadata[model.MD_ARPOL_POLARIZATION], md[model.MD_ARPOL_POLARIZATION])
-            if model.MD_ARPOL_POS_QWP in md:
-                self.assertEqual(im.metadata[model.MD_ARPOL_POS_QWP], md[model.MD_ARPOL_POS_QWP])
-            if model.MD_ARPOL_POS_LINPOL in md:
-                self.assertEqual(im.metadata[model.MD_ARPOL_POS_LINPOL], md[model.MD_ARPOL_POS_LINPOL])
+            if model.MD_POL_MODE in md:
+                self.assertEqual(im.metadata[model.MD_POL_MODE], md[model.MD_POL_MODE])
+            if model.MD_POL_POS_QWP in md:
+                self.assertEqual(im.metadata[model.MD_POL_POS_QWP], md[model.MD_POL_POS_QWP])
+            if model.MD_POL_POS_LINPOL in md:
+                self.assertEqual(im.metadata[model.MD_POL_POS_LINPOL], md[model.MD_POL_POS_LINPOL])
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)

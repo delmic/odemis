@@ -837,17 +837,17 @@ def _updateMDFromOME(root, das):
         poldata = ime.find("POLData")  # there must be only one per Image
         try:
             pol = str(poldata.attrib["Polarization"])
-            md[model.MD_ARPOL_POLARIZATION] = pol
+            md[model.MD_POL_MODE] = pol
         except (AttributeError, KeyError, ValueError):
             pass
         try:
             posqwp = float(poldata.attrib["QuarterWavePlate"])
-            md[model.MD_ARPOL_POS_QWP] = posqwp
+            md[model.MD_POL_POS_QWP] = posqwp
         except (AttributeError, KeyError, ValueError):
             pass
         try:
             poslinpol = float(poldata.attrib["LinearPolarizer"])
-            md[model.MD_ARPOL_POS_LINPOL] = poslinpol
+            md[model.MD_POL_POS_LINPOL] = poslinpol
         except (AttributeError, KeyError, ValueError):
             pass
 
@@ -1465,17 +1465,17 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             ardata.attrib["ParabolaF"] = "%.15f" % globalMD[model.MD_AR_PARABOLA_F]
 
     # Store polarization analyzer data if any
-    if any(rd in globalMD for rd in [model.MD_ARPOL_POLARIZATION,
-                                     model.MD_ARPOL_POS_QWP,
-                                     model.MD_ARPOL_POS_LINPOL]):
+    if any(rd in globalMD for rd in [model.MD_POL_MODE,
+                                     model.MD_POL_POS_QWP,
+                                     model.MD_POL_POS_LINPOL]):
 
         poldata = ET.SubElement(ime, "POLData")
-        if model.MD_ARPOL_POLARIZATION in globalMD:
-            poldata.attrib["Polarization"] = "%s" % globalMD[model.MD_ARPOL_POLARIZATION]
-        if model.MD_ARPOL_POS_QWP in globalMD:
-            poldata.attrib["QuarterWavePlate"] = "%.15f" % globalMD[model.MD_ARPOL_POS_QWP]
-        if model.MD_ARPOL_POS_LINPOL in globalMD:
-            poldata.attrib["LinearPolarizer"] = "%.15f" % globalMD[model.MD_ARPOL_POS_LINPOL]
+        if model.MD_POL_MODE in globalMD:
+            poldata.attrib["Polarization"] = "%s" % globalMD[model.MD_POL_MODE]
+        if model.MD_POL_POS_QWP in globalMD:
+            poldata.attrib["QuarterWavePlate"] = "%.15f" % globalMD[model.MD_POL_POS_QWP]
+        if model.MD_POL_POS_LINPOL in globalMD:
+            poldata.attrib["LinearPolarizer"] = "%.15f" % globalMD[model.MD_POL_POS_LINPOL]
 
 
 def _createPointROI(rois, name, p, shp_attrib=None):

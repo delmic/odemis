@@ -95,16 +95,16 @@ MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror
 MD_AR_FOCUS_DISTANCE = "Focus distance"  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 MD_AR_PARABOLA_F = "Parabola parameter"  # m, parabola_parameter=1/4f
 
-MD_ARPOL_POLARIZATION = "Polarization"  # (string), position of the polarization analyzer (see POL_POSITIONS in _base.py)
-MD_ARPOL_POS_QWP = "Position quarter wave plate"  # rad, position of the quarter wave plate
-MD_ARPOL_POS_LINPOL = "Position linear polarizer"  # rad, position of the linear polarizer
+MD_POL_MODE = "Polarization"  # (string), position of the polarization analyzer (see POL_POSITIONS in _base.py)
+MD_POL_POS_QWP = "Position quarter wave plate"  # rad, position of the quarter wave plate
+MD_POL_POS_LINPOL = "Position linear polarizer"  # rad, position of the linear polarizer
 
-MD_ARPOL_HORIZONTAL = "horizontal"  # (string) polarization analyzer position
-MD_ARPOL_VERTICAL = "vertical"  # (string) polarization analyzer position
-MD_ARPOL_POSDIAG = "posdiag"  # (string) polarization analyzer position
-MD_ARPOL_NEGDIAG = "negdiag"  # (string) polarization analyzer position
-MD_ARPOL_RHC = "rhc"  # (string) polarization analyzer position
-MD_ARPOL_LHC = "lhc"  # (string) polarization analyzer position
+MD_POL_HORIZONTAL = "horizontal"  # (string) polarization analyzer position
+MD_POL_VERTICAL = "vertical"  # (string) polarization analyzer position
+MD_POL_POSDIAG = "posdiag"  # (string) polarization analyzer position
+MD_POL_NEGDIAG = "negdiag"  # (string) polarization analyzer position
+MD_POL_RHC = "rhc"  # (string) polarization analyzer position
+MD_POL_LHC = "lhc"  # (string) polarization analyzer position
 
 MD_DET_TYPE = "Detector type"
 # The following tags are to be used as the values of MD_DET_TYPE
