@@ -43,7 +43,6 @@ Light: {
     affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Symphotime Controller"],
 }
 
-
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
 # sudo modprobe comedi comedi_num_legacy_minors=4
 # sudo modprobe comedi_test
@@ -153,7 +152,7 @@ Light: {
 
 "PMT1 @ 447/60": {
     # Internal child of Nikon C2, so no class
-    role: photo-detector0,
+    role: photo-detector1,
     init: {
         channel: 0,
     },
@@ -164,9 +163,9 @@ Light: {
 
 "PMT2 @ 525/50": {
     # Internal child of Nikon C2, so no class
-    role: photo-detector1,
+    role: photo-detector0,
     init: {
-        channel: 2,
+        channel: 1,
     },
     metadata: {
         OUT_WL: [500.e-9, 550.e-9], # m

@@ -125,7 +125,7 @@ Light: {
     # Internal child of Nikon C2, so no class
     role: photo-detector1,
     init: {
-        channel: 2,
+        channel: 1,
     },
     metadata: {
         OUT_WL: [500.e-9, 550.e-9], # m
@@ -135,7 +135,6 @@ Light: {
 "PMT3 @ 561LP": {
     # Internal child of Nikon C2, so no class
     role: photo-detector2,
-    #role: cl-detector,
     init: {
         channel: 2,
     },
@@ -146,6 +145,7 @@ Light: {
 
 "Pinhole": {
     # Internal child of Nikon C2, so no class
+    creator: "Nikon C2",
     role: pinhole,
 }
 
