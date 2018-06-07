@@ -2232,9 +2232,8 @@ class ScannedRemoteTCStream(LiveStream):
         Accumulate the raw frame to update the .raw
         data (DataArray): the new raw frame
         """
-
+        logging.debug("Adding frame of shape %s and type %s", data.shape, data.dtype)
         if not self.raw:
-            logging.debug("New acq in queue shape %s", data[0].shape)
             # TODO: be more careful with the dtype
             data = data.astype(numpy.uint32)
             self.raw = [data]
@@ -2243,8 +2242,6 @@ class ScannedRemoteTCStream(LiveStream):
             self._updateHistogram(data)
         else:
             if self.raw[0].shape == data.shape:
-                logging.debug("Acq in queue shape %s", data[0].shape)
-                # data = data.astype(numpy.uint32)
                 self.raw[0] += data  # Uses numpy element-wise addition
                 self.raw[0].metadata[MD_DWELL_TIME] += data.metadata[MD_DWELL_TIME]
             else:
