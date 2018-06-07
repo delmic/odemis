@@ -162,7 +162,7 @@ The following subclasses exist:
 
     - **CCDSettingsStream(RepetitionStream):**
 
-      TODO
+      .. TODO
 
         - *SpectrumSettingsStream(CCDSettingsStreamStream):*
 
@@ -188,7 +188,7 @@ The following subclasses exist:
 
     - **PMTSettingsStream(RepetitionStream):**
 
-      TODO
+      .. TODO
 
         - *MonochromatorSettingsStream(PMTSettingsStream):*
 
