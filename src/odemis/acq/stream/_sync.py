@@ -40,7 +40,8 @@ from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 import random
 import Queue
-from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, MD_ARPOL_POLARIZATION
+from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
+    MD_ARPOL_POLARIZATION, MD_DWELL_TIME
 from odemis.util import img, units, spot, executeAsyncTask
 import threading
 import time
