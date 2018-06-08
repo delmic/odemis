@@ -712,7 +712,7 @@ def _parse_physical_data(pdgroup, da):
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_ARPOL_POLARIZATION] = pol
+            md[model.MD_POL_MODE] = pol
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -722,7 +722,7 @@ def _parse_physical_data(pdgroup, da):
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_ARPOL_POS_QWP] = posqwp
+            md[model.MD_POL_POS_QWP] = posqwp
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -732,7 +732,7 @@ def _parse_physical_data(pdgroup, da):
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_ARPOL_POS_LINPOL] = poslinpol
+            md[model.MD_POL_POS_LINPOL] = poslinpol
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -1090,20 +1090,20 @@ def _add_image_metadata(group, image, mds):
             pf.append(0)
             st_pf.append(ST_INVALID)
 
-        if model.MD_ARPOL_POLARIZATION in md:
-            pol.append(md[model.MD_ARPOL_POLARIZATION])
+        if model.MD_POL_MODE in md:
+            pol.append(md[model.MD_POL_MODE])
             st_pol.append(ST_REPORTED)
         else:
             pol.append("")
             st_pol.append(ST_INVALID)
-        if model.MD_ARPOL_POS_QWP in md:
-            posqwp.append(md[model.MD_ARPOL_POS_QWP])
+        if model.MD_POL_POS_QWP in md:
+            posqwp.append(md[model.MD_POL_POS_QWP])
             st_posqwp.append(ST_REPORTED)
         else:
             posqwp.append(0)
             st_posqwp.append(ST_INVALID)
-        if model.MD_ARPOL_POS_LINPOL in md:
-            poslinpol.append(md[model.MD_ARPOL_POS_LINPOL])
+        if model.MD_POL_POS_LINPOL in md:
+            poslinpol.append(md[model.MD_POL_POS_LINPOL])
             st_poslinpol.append(ST_REPORTED)
         else:
             poslinpol.append(0)

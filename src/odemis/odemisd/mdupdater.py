@@ -311,7 +311,7 @@ class MetadataUpdater(model.Component):
         if model.hasVA(qwp, "position"):
             def updatePosition(unused, qwp=qwp, comp_affected=comp_affected):
                 pos = qwp.position.value["rz"]
-                md = {model.MD_ARPOL_POS_QWP: pos}
+                md = {model.MD_POL_POS_QWP: pos}
                 comp_affected.updateMetadata(md)
 
             qwp.position.subscribe(updatePosition, init=True)
@@ -322,7 +322,7 @@ class MetadataUpdater(model.Component):
         if model.hasVA(linpol, "position"):
             def updatePosition(unused, linpol=linpol, comp_affected=comp_affected):
                 pos = linpol.position.value["rz"]
-                md = {model.MD_ARPOL_POS_LINPOL: pos}
+                md = {model.MD_POL_POS_LINPOL: pos}
                 comp_affected.updateMetadata(md)
 
             linpol.position.subscribe(updatePosition, init=True)
