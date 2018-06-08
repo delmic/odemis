@@ -2140,29 +2140,42 @@ class ScannedFluoMDStream(MultipleDetectorStream):
 
 class ScannedRemoteTCStream(LiveStream):
     
-    def __init__(self, name, helper_stream, **kwargs):
+    def __init__(self, name, stream, **kwargs):
         '''
-        A stream that typically connects to a remote Symphotime server as time correlator detector
-        used to run FLIM on SECOM. Runs the acquisition and updates .image while runAcquisition is running.
+        A stream aimed at FLIM acquisition with a time-correlator on a SECOM.
+        It acquires by scanning the defined ROI multiple times. Each scanned
+        frame uses the maximum dwell time accepted by the scanner and is
+        accumulated until the stream.dwellTime is reached.
 
-        helper_stream: (ScannedTCSettingsStream) contains all necessary devices as children
+        It acquires simultaneously the "rough" data received via the tc_detector
+        (eg, an APD) synchronised with the laser-mirror and the actual FLIM data
+        acquired by the time-correlator. For now, we expect the time-correlator
+        to store the data separately, which is why it's not returned by the
+        stream.
+
+        During the acquisition, it updates .image with the latest raw data.
+
+        stream: (ScannedTCSettingsStream) contains all necessary devices as children
         '''
-        super(ScannedRemoteTCStream, self).__init__(name, helper_stream.time_correlator,
-            helper_stream.time_correlator.dataflow, helper_stream.emitter, opm=helper_stream._opm, **kwargs)
+        # We don't use the stream.detector because it's the tc_detector, which
+        # we only use for synchronizing the scanner and recording the basic data,
+        # or it's the tc_detector_live, which we don't use at all.
+        super(ScannedRemoteTCStream, self).__init__(name, stream.time_correlator,
+            stream.time_correlator.dataflow, stream.emitter, opm=stream._opm, **kwargs)
 
         # Retrieve devices from the helper stream
-        self._stream = helper_stream
-        self._emitter = helper_stream.lemitter  # TODO: Should be emitter
-        self._tc_scanner = helper_stream.tc_scanner
-        self._tc_detector = helper_stream.tc_detector
-        self._scanner = helper_stream.scanner
-        self._time_correlator = helper_stream.time_correlator
+        self._stream = stream
+        # self._emitter = stream.emitter  # =.emitter
+        # self._time_correlator = stream.time_correlator  # =.detector
+        self._scanner = stream.scanner
+        self._tc_detector = stream.tc_detector  # synchronize to the scanner
+        self._tc_scanner = stream.tc_scanner  # might be None
 
         # the total dwell time
-        self._dwellTime = helper_stream.dwellTime
-        self.roi = helper_stream.roi
-        self.repetition = helper_stream.repetition
-        if self._tc_scanner is not None and hasVA(self._tc_scanner, "filename"):
+        self._dwellTime = stream.dwellTime
+        self.roi = stream.roi
+        self.repetition = stream.repetition
+        if self._tc_scanner and hasVA(self._tc_scanner, "filename"):
             self.filename = self._tc_scanner.filename
 
         # For the acquisition
@@ -2229,7 +2242,7 @@ class ScannedRemoteTCStream(LiveStream):
         logging.info("Total dwell time: %f s, Pixel Dwell time: %f, Resolution: %s, collecting %d frames...",
                      self._dwellTime.value, px_dt, self._scanner.resolution.value, nfr)
 
-        if self._tc_scanner is not None and hasVA(self._tc_scanner, "dwellTime"):
+        if self._tc_scanner and hasVA(self._tc_scanner, "dwellTime"):
             self._tc_scanner.dwellTime.value = self._dwellTime.value
 
         return px_dt, nfr
@@ -2272,7 +2285,7 @@ class ScannedRemoteTCStream(LiveStream):
             logging.info("Theoretical minimum frame time: %f s", frame_time)
 
             # Start Symphotime acquisition
-            self._time_correlator.data.subscribe(self._onAcqStop)
+            self._detector.data.subscribe(self._onAcqStop)
 
             # Turn on the lights
             self._setEmission(1)
@@ -2320,7 +2333,7 @@ class ScannedRemoteTCStream(LiveStream):
 
             # Ensure all the detectors are stopped
             self._tc_detector.data.unsubscribe(self._onNewData)
-            self._time_correlator.data.unsubscribe(self._onAcqStop)
+            self._detector.data.unsubscribe(self._onAcqStop)
             self._stream._unlinkHwVAs()
             # turn off the light
             self._setEmission(0)
@@ -2343,9 +2356,8 @@ class ScannedRemoteTCStream(LiveStream):
         Accumulate the raw frame to update the .raw
         data (DataArray): the new raw frame
         """
-
+        logging.debug("Adding frame of shape %s and type %s", data.shape, data.dtype)
         if not self.raw:
-            logging.debug("New acq in queue shape %s", data[0].shape)
             # TODO: be more careful with the dtype
             data = data.astype(numpy.uint32)
             self.raw = [data]
@@ -2354,8 +2366,6 @@ class ScannedRemoteTCStream(LiveStream):
             self._updateHistogram(data)
         else:
             if self.raw[0].shape == data.shape:
-                logging.debug("Acq in queue shape %s", data[0].shape)
-                # data = data.astype(numpy.uint32)
                 self.raw[0] += data  # Uses numpy element-wise addition
                 self.raw[0].metadata[MD_DWELL_TIME] += data.metadata[MD_DWELL_TIME]
             else:
@@ -2402,7 +2412,7 @@ class ScannedRemoteTCStream(LiveStream):
             self._acq_state = CANCELLED
 
         logging.debug("Cancelling acquisition of components %s and %s",
-                      self._tc_detector.name, self._time_correlator.name)
+                      self._tc_detector.name, self._detector.name)
 
         # Wait for the thread to be complete (and hardware state restored)
         if self._acq_thread:

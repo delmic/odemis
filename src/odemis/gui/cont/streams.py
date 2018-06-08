@@ -1253,7 +1253,7 @@ class StreamBarController(object):
             scanner_extra=self._main_data_model.tc_scanner,
             tc_detector_live=self._main_data_model.tc_detector_live,
             opm=self._main_data_model.opm,
-            # emtvas={"power", "period"}
+            emtvas=get_local_vas(self._main_data_model.light, self._main_data_model.hw_settings_config),
         )
 
         self._connectROI(s)

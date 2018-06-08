@@ -125,25 +125,23 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
-    "light": {
-            "power":
-            {
+    "light":
+        OrderedDict((
+            ("power", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "cubic",
-            },
-            "period":
-            {
+            }),
+            ("period", {
                 "label": "Laser period",
                 "tooltip": "Time between two laser pulses",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "range": (1e-12, 1),  # max 1s as anything longer wouldn't be useful
                 "scale": "log",
-            },
-            "emissions":
-            {
+            }),
+            ("emissions", {
                 "control_type": odemis.gui.CONTROL_NONE,
-            },
-        },
+            }),
+        )),
     "brightlight": {
             "power":
             {
@@ -781,13 +779,6 @@ STREAM_SETTINGS_CONFIG = {
     stream.ScannedTCSettingsStream:
         OrderedDict((
             ("dwellTime", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "scale": "log",
-            }),
-            ("power", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
-            }),
-            ("period", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
             }),

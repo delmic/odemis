@@ -31,6 +31,7 @@ import numpy
 from odemis import model
 from odemis.acq import align
 from odemis.acq.stream._sync import MomentOfInertiaMDStream
+from odemis.model import VigilantAttributeBase
 from odemis.util import img
 import time
 
@@ -50,13 +51,19 @@ class RepetitionStream(LiveStream):
     acquisition.
     """
 
-    def __init__(self, name, detector, dataflow, emitter, sstage=None, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter, scanner=None, sstage=None, **kwargs):
         """
+        emitter (Emitter): the component that generates energy, and possibly
+          also controls the position of the energy (eg, e-beam).
+        scanner (None or Scanner): the component that controls the position of
+          the energy (eg, laser-mirror). If None, emitter is expected to
+          control the position.
         sstage (None or Actuator): scan stage. If None, it will use the ebeam
           to scan (= standard behaviour).
         """
         super(RepetitionStream, self).__init__(name, detector, dataflow, emitter,
                                                **kwargs)
+        self._scanner = scanner or emitter  # fallback to emitter if no scanner
 
         # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
@@ -89,20 +96,20 @@ class RepetitionStream(LiveStream):
         # the stream).
         # TODO: If the acquisition code only acquires spot by spot, the
         # repetition is not limited by the resolution or the scale.
-        res = emitter.resolution.value
+        res = self._scanner.resolution.value
         if 1 in res:  # 1x1 or something like that ?
-            rep = emitter.resolution.clip((2048, 2048))
+            rep = self._scanner.resolution.clip((2048, 2048))
             logging.info("Resolution of scanner is too small %s, will use %s",
                          res, rep)
         else:
             rep = res
         self.repetition = model.ResolutionVA(rep,
-                                             emitter.resolution.range,
+                                             self._scanner.resolution.range,
                                              setter=self._setRepetition)
 
         # the size of the pixel, used both horizontally and vertically
-        epxs = emitter.pixelSize.value
-        eshape = emitter.shape
+        epxs = self._scanner.pixelSize.value
+        eshape = self._scanner.shape
         phy_size_x = epxs[0] * eshape[0]  # one dim is enough
         pxs = phy_size_x / rep[0]
         # actual range is dynamic, as it changes with the magnification
@@ -126,11 +133,30 @@ class RepetitionStream(LiveStream):
         # magnification.
         # TODO: move the whole code to the GUI. and subscribe to emitter.pixelSize instead?
         try:
-            magva = self._getEmitterVA("magnification")
+            magva = self._getScannerVA("magnification")
             self._prev_mag = magva.value
             magva.subscribe(self._onMagnification)
         except AttributeError:
             pass
+
+    @property
+    def scanner(self):
+        """
+        The component used to scan. Either the scanner argument, or, if it was
+        None, the emitter argument.
+        """
+        return self._scanner
+
+    def _getScannerVA(self, vaname):
+
+        # If it's actually the emitter, check the local VAs (eg "emtDwellTime")
+        if self._scanner is self._emitter:
+            return self._getEmitterVA(vaname)
+
+        hwva = getattr(self._scanner, vaname)
+        if not isinstance(hwva, VigilantAttributeBase):
+            raise AttributeError("Scanner has not VA %s" % (vaname,))
+        return hwva
 
     def _onMagnification(self, mag):
         """
@@ -200,8 +226,8 @@ class RepetitionStream(LiveStream):
         roi = self._fitROI(roi)
 
         # compute the repetition (ints) that fits the ROI with the pixel size
-        epxs = self.emitter.pixelSize.value
-        eshape = self.emitter.shape
+        epxs = self._scanner.pixelSize.value
+        eshape = self._scanner.shape
         phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
         roi_size = (roi[2] - roi[0], roi[3] - roi[1])
 
@@ -216,7 +242,7 @@ class RepetitionStream(LiveStream):
                max(1, min(rep[1], max_rep[1])))
 
         # Ensure it's really compatible with the hardware
-        rep = self.emitter.resolution.clip(rep)
+        rep = self._scanner.resolution.clip(rep)
 
         # update the ROI so that it's _exactly_ pixel size * repetition,
         # while keeping its center fixed
@@ -325,8 +351,8 @@ class RepetitionStream(LiveStream):
         returns (tuple of 2 ints): new (valid) repetition
         """
         roi = self.roi.value
-        epxs = self.emitter.pixelSize.value
-        eshape = self.emitter.shape
+        epxs = self._scanner.pixelSize.value
+        eshape = self._scanner.shape
         phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1])  # max physical ROI
 
         # clamp repetition to be sure it's correct (it'll be clipped against
@@ -380,13 +406,13 @@ class RepetitionStream(LiveStream):
           current magnification, in m.
         """
         # Two things to take care of:
-        # * current pixel size of the emitter (which depends on the magnification)
+        # * current pixel size of the scanner (which depends on the magnification)
         # * merge horizontal/vertical dimensions into one fits-all
 
-        # The current emitter pixel size is the minimum size
-        epxs = self.emitter.pixelSize.value
+        # The current scanner pixel size is the minimum size
+        epxs = self._scanner.pixelSize.value
         min_pxs = max(epxs)
-        shape = self.emitter.shape
+        shape = self._scanner.shape
         max_pxs = min(epxs[0] * shape[0], epxs[1] * shape[1])
         return (min_pxs, max_pxs)
 
@@ -536,7 +562,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
 
     def estimateAcquisitionTime(self):
         # 1 pixel => the dwell time (of the emitter)
-        duration = self._getEmitterVA("dwellTime").value
+        duration = self._getScannerVA("dwellTime").value
         # Add the setup time
         duration += self.SETUP_OVERHEAD
 
@@ -680,12 +706,12 @@ class CLSettingsStream(PMTSettingsStream):
         self.pixelSize.subscribe(self._onPixelSize)
 
         try:
-            self._getEmitterVA("dwellTime").subscribe(self._onDwellTime)
+            self._getScannerVA("dwellTime").subscribe(self._onDwellTime)
         except AttributeError:
             # if emitter has no dwell time -> no problem
             pass
         try:
-            self._getEmitterVA("resolution").subscribe(self._onResolution)
+            self._getScannerVA("resolution").subscribe(self._onResolution)
         except AttributeError:
             pass
 
@@ -699,7 +725,7 @@ class CLSettingsStream(PMTSettingsStream):
             res = tuple(int(round(s / scale)) for s in self._emitter.shape[:2])
 
             # Each pixel x the dwell time (of the emitter) + 20% overhead
-            dt = self._getEmitterVA("dwellTime").value
+            dt = self._getScannerVA("dwellTime").value
             duration = numpy.prod(res) * dt * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
@@ -1085,7 +1111,8 @@ class ScannedTCSettingsStream(RepetitionStream):
             det_live = tc_detector_live
         else:
             det_live = detector
-        RepetitionStream.__init__(self, name, det_live, det_live.data, scanner, **kwargs)
+        RepetitionStream.__init__(self, name, det_live, det_live.data, emitter,
+                                  scanner, **kwargs)
 
         # Fuzzing is not handled for FLIM streams (and doesn't make much
         # sense as it's the same as software-binning
@@ -1100,19 +1127,11 @@ class ScannedTCSettingsStream(RepetitionStream):
         del self.histogram
 
         # Child devices
-        self.lemitter = emitter
-        self.scanner = scanner
         self.time_correlator = time_correlator
         self.tc_detector = detector
         self.tc_scanner = scanner_extra
 
         # VA's
-        # TODO: Change these to Local VA's (emtPower and emtPeriod), but this
-        # means that emitter should be self.emitter. For now, RepetitionStream
-        # needs to get the scanner as emitter as that's where it reads the
-        # res/pxs. => RepetitionStream should accept emitter+scanner.
-        self.power = emitter.power
-        self.period = emitter.period
         self.dwellTime = model.FloatContinuous(10e-6, range=(scanner.dwellTime.range[0], 100), unit="s")
 
         # Raw: series of data (normalized)/acq date (s)
@@ -1201,9 +1220,9 @@ class ScannedTCSettingsStream(RepetitionStream):
         
     def _setEmission(self, value):
         # set all light emissions at once to a value
-        em = self.lemitter.emissions.value
+        em = self.emitter.emissions.value
         em = [value] * len(em)
-        self.lemitter.emissions.value = em
+        self.emitter.emissions.value = em
 
     def _onActive(self, active):
         if active: 

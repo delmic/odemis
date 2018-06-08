@@ -26,7 +26,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq.align import FindEbeamCenter
-from odemis.model import MD_POS_COR
+from odemis.model import MD_POS_COR, VigilantAttributeBase
 from odemis.util import img, conversion, fluo
 import threading
 import time
@@ -992,8 +992,11 @@ class ScannedFluoStream(FluoStream):
             return self._setting_stream._getEmitterVA(vaname)
         elif self._setting_stream and self._scanner is self._setting_stream.detector:
             return self._setting_stream._getDetectorVA(vaname)
-        else:
-            return getattr(self._scanner, vaname)
+
+        hwva = getattr(self._scanner, vaname)
+        if not isinstance(hwva, VigilantAttributeBase):
+            raise AttributeError("Scanner has not VA %s" % (vaname,))
+        return hwva
 
     def estimateAcquisitionTime(self):
         # Same formula as SEMStream
