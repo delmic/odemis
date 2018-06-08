@@ -31,7 +31,7 @@ import numpy
 from odemis import model
 from odemis.acq import align
 from odemis.acq.stream._sync import MomentOfInertiaMDStream
-from odemis.model import VigilantAttributeBase
+from odemis.model import VigilantAttributeBase, MD_POL_NONE
 from odemis.util import img
 import time
 
@@ -655,13 +655,13 @@ class ARSettingsStream(CCDSettingsStream):
         self.pixelSize.value *= 30
         self.analyzer = analyzer
         if analyzer:
-            positions = set(POL_POSITIONS) | {"pass-through"}
+            positions = set(POL_POSITIONS) | {MD_POL_NONE}
             # check positions specified in yaml file are correct
             for pos in positions:
                 if pos not in analyzer.axes["pol"].choices:
                     raise ValueError("Polarization analyzer %s misses position '%s'" % (analyzer, pos))
             # hardcode the 6 pol pos + pass-through + the option to record all 6 positions sequentially
-            self.polarization = model.VAEnumerated("pass-through", choices={POL_6POS} | positions)
+            self.polarization = model.VAEnumerated(MD_POL_NONE, choices={POL_6POS} | positions)
 
     # onActive & projection: same as the standard LiveStream
 

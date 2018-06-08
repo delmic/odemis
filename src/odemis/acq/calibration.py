@@ -37,7 +37,7 @@ def get_ar_data(das):
     (typically, a "background" image, ie, an image taken without ebeam).
 
     :param das: (list of DataArrays): all the DA into which to look for.
-    :return: (DataArray): the first DA that seems good.
+    :return: (DataArray): if polarimetry, return list of bg DAs, else the first DA that seems good.
     :raises: LookupError: if no DA can be found
     """
     # TODO: also allow to pass an expected resolution, in order to support
@@ -56,13 +56,16 @@ def get_ar_data(das):
     elif len(ar_data) == 1:
         return ar_data[0]
     else:
-        # look for the first one (in terms of time), hoping that it's the one
-        # the user expects to be representing the background
-        logging.warning("AR calibration file contained %d AR data, "
-                        "will pick the earliest acquired", len(das))
-        earliest = min(ar_data,
-                       key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
-        return earliest
+        if model.MD_POL_MODE in da.metadata:
+            return ar_data  # return the list of bg images
+        else:
+            # look for the first one (in terms of time), hoping that it's the one
+            # the user expects to be representing the background
+            logging.warning("AR calibration file contained %d AR data, "
+                            "will pick the earliest acquired", len(das))
+            earliest = min(ar_data,
+                           key=lambda d: d.metadata.get(model.MD_ACQ_DATE, float("inf")))
+            return earliest
 
 # TODO:
 # Same thing for the spectrum. However, we need both a background (to subtract

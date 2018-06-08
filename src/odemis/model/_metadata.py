@@ -99,6 +99,8 @@ MD_POL_MODE = "Polarization"  # (string), position of the polarization analyzer 
 MD_POL_POS_QWP = "Position quarter wave plate"  # rad, position of the quarter wave plate
 MD_POL_POS_LINPOL = "Position linear polarizer"  # rad, position of the linear polarizer
 
+# MD_POL_MODE values
+MD_POL_NONE = "pass-through"  # no (specific) polarization
 MD_POL_HORIZONTAL = "horizontal"  # (string) polarization analyzer position
 MD_POL_VERTICAL = "vertical"  # (string) polarization analyzer position
 MD_POL_POSDIAG = "posdiag"  # (string) polarization analyzer position

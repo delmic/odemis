@@ -2756,7 +2756,6 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertLessEqual(ir[1][1], 3)  # Should be rounded to the next power of 2 -1
         self.assertEqual(h[2], da.shape[1])
 
-
 #     @skip("simple")
     def test_ar(self):
         """Test StaticARStream"""
@@ -2877,6 +2876,129 @@ class StaticStreamsTestCase(unittest.TestCase):
         im2d0 = ars.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2d0.shape[2], 3)
+
+    #     @skip("simple")
+    def test_arpol(self):
+        """Test StaticARPOLStream"""
+
+        metadata = []
+        pol_positions = list(POL_POSITIONS)
+        qwp_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
+
+        # ARPOL metadata
+        for idx in range(len(pol_positions)):
+            metadata.append({model.MD_SW_VERSION: "1.0-test",
+                             model.MD_HW_NAME: "fake ccd",
+                             model.MD_DESCRIPTION: "ARPOL",
+                             model.MD_ACQ_DATE: time.time(),
+                             model.MD_BPP: 12,
+                             model.MD_BINNING: (1, 1),  # px, px
+                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+                             model.MD_POS: (1.2e-3, -30e-3),  # m
+                             model.MD_EXP_TIME: 1.2,  # s
+                             model.MD_AR_POLE: (253.1, 65.1),
+                             model.MD_LENS_MAG: 0.4,  # ratio
+                             model.MD_POL_MODE: pol_positions[idx],
+                             model.MD_POL_POS_LINPOL: qwp_positions[idx],  # rad
+                             model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
+                             })
+
+        # ARPOL data
+        data = []
+        for md in metadata:
+            data_pol = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+            data.append(data_pol)
+
+        logging.info("setting up stream")
+        ars = stream.StaticARStream("test arpol static stream", data)
+
+        # wait a bit for the image to update
+        e = threading.Event()
+
+        def on_im(im):
+            if im is not None:
+                e.set()
+
+        ars.image.subscribe(on_im)
+        e.wait()
+
+        # Control AR projection
+        im2d0 = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d0.shape[2], 3)
+
+        # changing polarization position
+        logging.info("changing polarization position")
+        e.clear()
+        # change position once
+        for p in ars.polarizationStatic.choices:
+            if p != (None, None) and p != ars.polarizationStatic.value:
+                ars.polarizationStatic.value = p
+                break
+        else:
+            self.fail("Failed to find another polarization position in ARPOL")
+
+        e.wait()
+        im2d1 = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d1.shape[2], 3)
+        self.assertFalse(im2d0 is im2d1)
+
+        # testing background correction
+        logging.info("testing image background correction")
+        # test background correction from image using a different image for each polarization position
+        bg_data = []  # list of background images
+        for idx in range(len(pol_positions)):
+            dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16) + idx  # different bg image for each pol
+            calib = model.DataArray(dcalib, metadata[idx])
+            bg_data.append(calib)
+
+        e.clear()
+        ars.background.value = bg_data
+
+        # test if bg VA shows same values as stored in bg_data
+        for idx, pol_pos in enumerate(pol_positions):
+            bg_VA = [bg_im for bg_im in ars.background.value if bg_im.metadata[model.MD_POL_MODE] == pol_pos]
+            bg_im = [bg_im for bg_im in bg_data if bg_im.metadata[model.MD_POL_MODE] == pol_pos]
+            self.assertEqual(len(bg_VA), 1)
+            numpy.testing.assert_equal(bg_VA[0], bg_im[0][0, 0, 0])
+        e.wait()
+
+        im2dc = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2dc.shape[2], 3)
+
+        self.assertFalse(im2d1 is im2dc)
+
+        # test bg correction passing only 1 bg image but have six images -> should raise an error
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
+        e.clear()
+        with self.assertRaises(ValueError):
+            ars._setBackground(bg_data)
+
+        # test 1 image + corresponding bg image
+        # ARPOL data
+        data = [model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), metadata[0])]
+        logging.info("setting up stream")
+        ars = stream.StaticARStream("test arpol static stream", data)
+
+        # wait a bit for the image to update
+        e = threading.Event()
+
+        def on_im(im):
+            if im is not None:
+                e.set()
+
+        ars.image.subscribe(on_im)
+        e.wait()
+        # corresponding bg image
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
+        e.clear()
+        ars.background.value = bg_data
+        # test if bg VA shows same values as stored in bg_data
+        numpy.testing.assert_equal(ars.background.value[0], bg_data[0][0, 0, 0])
 
     def _create_spec_data(self):
         # Spectrum

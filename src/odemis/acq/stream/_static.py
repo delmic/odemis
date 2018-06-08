@@ -31,11 +31,11 @@ import math
 import numpy
 from odemis import model
 from odemis.acq import calibration
-from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute
+from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, MD_PIXEL_SIZE, VigilantAttribute
 from odemis.util import img, conversion, polar, spectrum
 from scipy import ndimage
 
-from ._base import Stream
+from ._base import Stream, POL_POSITIONS
 
 
 class StaticStream(Stream):
@@ -244,10 +244,10 @@ class StaticARStream(StaticStream):
         """
         name (string)
         data (model.DataArray(Shadow) of shape (YX) or list of such DataArray(Shadow)).
-         The metadata MD_POS and MD_AR_POLE should be provided
+         The metadata MD_POS, MD_AR_POLE and MD_POL_MODE should be provided
         """
         if not isinstance(data, collections.Iterable):
-            data = [data] # from now it's just a list of DataArray
+            data = [data]  # from now it's just a list of DataArray
 
         # TODO: support DAS, as a "delayed loading" by only calling .getData()
         # when the projection for the particular data needs to be computed (or
@@ -256,52 +256,66 @@ class StaticARStream(StaticStream):
         data = [d.getData() if isinstance(d, model.DataArrayShadow) else d for d in data]
 
         # find positions of each acquisition
-        # tuple of 2 floats -> DataArray: position on SEM -> data
+        # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
+        self._pos = {}
         self._sempos = {}
         for d in data:
             try:
+                self._pos[d.metadata[MD_POS] + (d.metadata.get(MD_POL_MODE, None),)] = img.ensure2DImage(d)
                 self._sempos[d.metadata[MD_POS]] = img.ensure2DImage(d)
             except KeyError:
                 logging.info("Skipping DataArray without known position")
 
         # Cached conversion of the CCD image to polar representation
         # TODO: automatically fill it in a background thread
-        self._polar = {} # dict tuple 2 floats -> DataArray
+        self._polar = {}  # dict tuple 2 floats -> DataArray
 
-        # SEM position displayed, (None, None) == no point selected
+        # SEM position VA
+        # SEM position displayed, (None, None) == no point selected (x, y)
         self.point = model.VAEnumerated((None, None),
                      choices=frozenset([(None, None)] + list(self._sempos.keys())))
 
-        if self._sempos:
+        if self._pos:
             # Pick one point, e.g., top-left
-            bbtl = (min(x for x, y in self._sempos.keys() if x is not None),
-                    min(y for x, y in self._sempos.keys() if y is not None))
+            bbtl = (min(x for x, y, pol in self._pos.keys() if x is not None),
+                    min(y for x, y, pol in self._pos.keys() if y is not None))
+
             # top-left point is the closest from the bounding-box top-left
             def dis_bbtl(v):
                 try:
                     return math.hypot(bbtl[0] - v[0], bbtl[1] - v[1])
                 except TypeError:
-                    return float("inf") # for None, None
+                    return float("inf")  # for None, None
             self.point.value = min(self._sempos.keys(), key=dis_bbtl)
 
         # no need for init=True, as Stream.__init__ will update the image
         self.point.subscribe(self._onPoint)
 
+        # polarization VA
+        # check if any polarization analyzer hardware, (None) == no analyzer hardware (pol)
+        if self._pos.keys()[0][-1]:
+            # use first entry in acquisition to populate VA (acq could have 1 or 6 pol pos)
+            self.polarizationStatic = model.VAEnumerated(self._pos.keys()[0][-1],
+                                choices=frozenset(list(POL_POSITIONS)))
+
+        if self._pos.keys()[0][-1]:
+            self.polarizationStatic.subscribe(self._onPolarization)
+
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_AR
-        super(StaticARStream, self).__init__(name, list(self._sempos.values()), *args, **kwargs)
+        super(StaticARStream, self).__init__(name, list(self._pos.values()), *args, **kwargs)
 
     def _project2Polar(self, pos):
         """
         Return the polar projection of the image at the given position.
-        pos (tuple of 2 floats): position (must be part of the ._sempos
+        pos (float, float, string or None): position (must be part of the ._pos)
         returns DataArray: the polar projection
         """
         if pos in self._polar:
             polard = self._polar[pos]
         else:
             # Compute the polar representation
-            data = self._sempos[pos]
+            data = self._pos[pos]
             try:
                 if numpy.prod(data.shape) > (1280 * 1080):
                     # AR conversion fails with very large images due to too much
@@ -321,7 +335,7 @@ class StaticARStream(StaticStream):
                     data = img.rescale_hq(data, small_shape)
                     dtype = numpy.float16
                 else:
-                    dtype = None # just let the function use the best one
+                    dtype = None  # just let the function use the best one
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
@@ -332,12 +346,14 @@ class StaticARStream(StaticStream):
                 # TODO: could use the size of the canvas that will display
                 # the image to save some computation time.
 
-                bg_data = self.background.value
-                if bg_data is None:
+                # Get bg image, if existing. It must match the polarization (defaulting to MD_POL_NONE).
+                bg_image = self._getBackground(data.metadata.get(MD_POL_MODE, MD_POL_NONE))
+
+                if bg_image is None:
                     # Simple version: remove the background value
                     data0 = polar.ARBackgroundSubtract(data)
                 else:
-                    data0 = img.Subtract(data, bg_data) # metadata from data
+                    data0 = img.Subtract(data, bg_image)  # metadata from data
 
                 # Warning: allocates lot of memory, which will not be free'd until
                 # the current thread is terminated.
@@ -347,9 +363,34 @@ class StaticARStream(StaticStream):
                 self._polar[pos] = polard
             except Exception:
                 logging.exception("Failed to convert to azimuthal projection")
-                return data # display it raw as fallback
+                return data  # display it raw as fallback
 
         return polard
+
+    def _getBackground(self, pol_mode):
+        """
+        Get background image from background VA
+        :param pol_mode: metadata
+        :return: (DataArray or None): the background image corresponding to the given polarization,
+                 or None, if no background corresponds.
+        """
+        bg_data = self.background.value  # list containing DataArrays, DataArray or None
+
+        if bg_data is None:
+            return None
+
+        if isinstance(bg_data, model.DataArray):
+            bg_data = [bg_data]  # convert to list of bg images
+
+        for bg in bg_data:
+            # if no analyzer hardware, set MD_POL_MODE = "pass-through" (MD_POL_NONE)
+            if bg.metadata.get(MD_POL_MODE, MD_POL_NONE) == pol_mode:
+                # should be only one bg image with the same metadata entry
+                return bg  # DataArray
+
+            # Nothing found e.g. pol_mode = "rhc" but no bg image with "rhc"
+            logging.debug("No background image with polarization mode %s ." % pol_mode)
+            return None
 
     def _find_metadata(self, md):
         # For polar view, no PIXEL_SIZE nor POS
@@ -367,7 +408,11 @@ class StaticARStream(StaticStream):
             if pos == (None, None):
                 self.image.value = None
             else:
-                polard = self._project2Polar(pos)
+                if self._pos.keys()[0][-1]:
+                    pol = self.polarizationStatic.value
+                else:
+                    pol = None
+                polard = self._project2Polar(pos + (pol,))
                 # update the histogram
                 # TODO: cache the histogram per image
                 # FIXME: histogram should not include the black pixels outside
@@ -382,47 +427,72 @@ class StaticARStream(StaticStream):
     def _onPoint(self, pos):
         self._shouldUpdateImage()
 
-    def _setBackground(self, data):
-        """Called when the background is about to be changed"""
-        if data is None:
+    def _onPolarization(self, pos):
+        self._shouldUpdateImage()
+
+    def _setBackground(self, bg_data):
+        """
+        Called when the background is about to be changed
+        :param bg_data: (None, DataArray or list of DataArrays) background image(s)
+        :return: (None, DataArray or list of DataArrays)
+        :raises: (ValueError) the background data is not compatible with the data
+                 (ex: incompatible resolution (shape), encoding (data type), format (bits),
+                 polarization of images).
+        """
+        if bg_data is None:
             # simple baseline background value will be subtracted
-            return data
+            return bg_data
 
-        # check it's compatible with the data
-        data = img.ensure2DImage(data)
-        arpole = data.metadata[model.MD_AR_POLE] # we expect the data has AR_POLE
+        isDataArray = False
+        if isinstance(bg_data, model.DataArray):
+            bg_data = [bg_data]
+            isDataArray = True
 
-        # TODO: allow data which is the same shape but lower binning by
-        # estimating the binned image
-        # Check the background data and all the raw data have the same resolution
-        # TODO: how to handle if the .raw has different resolutions?
-        for r in self.raw:
-            if data.shape != r.shape:
-                raise ValueError("Incompatible resolution of background data "
-                                 "%s with the angular resolved resolution %s." %
-                                 (data.shape, r.shape))
-            if data.dtype != r.dtype:
-                raise ValueError("Incompatible encoding of background data "
-                                 "%s with the angular resolved encoding %s." %
-                                 (data.dtype, r.dtype))
-            try:
-                if data.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
-                    raise ValueError(
-                        "Incompatible format of background data "
-                        "(%d bits) with the angular resolved format "
-                        "(%d bits)." %
-                        (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
-            except KeyError:
-                pass # no metadata, let's hope it's the same BPP
+        bg_data = [img.ensure2DImage(d) for d in bg_data]
 
-        # check the AR pole is at the same position
-        for r in self.raw:
-            if r.metadata[model.MD_AR_POLE] != arpole:
-                logging.warning("Pole position of background data %s is "
-                                "different from the data %s.",
-                                arpole, r.metadata[model.MD_AR_POLE])
+        for d in bg_data:
+            # TODO check if MD_AR_POLE in MD? will fail in set_ar_background anyways,
+            # but maybe nicer to check here already
+            arpole = d.metadata[model.MD_AR_POLE]  # we expect the data has AR_POLE
 
-        return data
+            # TODO: allow data which is the same shape but lower binning by
+            # estimating the binned image
+            # Check the background data and all the raw data have the same resolution
+            # TODO: how to handle if the .raw has different resolutions?
+            for r in self.raw:
+                if d.shape != r.shape:
+                    raise ValueError("Incompatible resolution of background data "
+                                     "%s with the angular resolved resolution %s." %
+                                     (d.shape, r.shape))
+                if d.dtype != r.dtype:
+                    raise ValueError("Incompatible encoding of background data "
+                                     "%s with the angular resolved encoding %s." %
+                                     (d.dtype, r.dtype))
+                try:
+                    if d.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
+                        raise ValueError(
+                            "Incompatible format of background data "
+                            "(%d bits) with the angular resolved format "
+                            "(%d bits)." %
+                            (d.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
+                except KeyError:
+                    pass  # no metadata, let's hope it's the same BPP
+
+                # check the AR pole is at the same position
+                if r.metadata[model.MD_AR_POLE] != arpole:
+                    logging.warning("Pole position of background data %s is "
+                                    "different from the data %s.",
+                                    arpole, r.metadata[model.MD_AR_POLE])
+
+                if MD_POL_MODE in r.metadata:  # check if we have polarization analyzer hardware present
+                    # check if we have at least one bg image with the corresponding MD_POL_MODE to the image data
+                    if not any(bg_im.metadata[MD_POL_MODE] == r.metadata[MD_POL_MODE] for bg_im in bg_data):
+                        raise ValueError("No AR background with polarization %s" % r.metadata[MD_POL_MODE])
+
+        if isDataArray:
+            return bg_data[0]
+        else:  # list
+            return bg_data
 
     def _onBackground(self, data):
         """Called after the background has changed"""
@@ -965,6 +1035,7 @@ class StaticSpectrumStream(StaticStream):
 # updated. So we need to use the "old" way of directly computing the projection,
 # as for the live streams. Eventually, when DataProjection supports updated .raw,
 # we could simplify/merge the two stream classes.
+
 
 class RGBUpdatableStream(StaticStream):
     """
