@@ -1069,9 +1069,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.add_world_overlay(self.driftcor_overlay)
 
         # Regions depend on the magnification (=field of view)
-
-        if isinstance(sem.magnification, VigilantAttributeBase):
-            sem.magnification.subscribe(self._on_sem_mag)
+        if model.hasVA(tab_data.fovComp, "pixelSize"):
+            tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
 
 
 class SparcARCanvas(DblMicroscopeCanvas):
