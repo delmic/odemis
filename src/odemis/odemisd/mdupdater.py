@@ -81,11 +81,11 @@ class MetadataUpdater(model.Component):
         # For each component
         # For each component it affects
         # Subscribe to the changes of the attributes that matter
-        for a in components:
+        for a in components:  # component in components of microscope
             for dn in a.affects.value:
                 # TODO: if component not alive yet, wait for it
                 try:
-                    d = self._getComponent(dn)
+                    d = self._getComponent(dn)  # get components affected when changing the value of a
                 except LookupError:
                     # TODO: stop subscriptions if the component was there (=> just died)
                     self._observed[a.name].discard(dn)
@@ -111,6 +111,12 @@ class MetadataUpdater(model.Component):
                 elif a.role in ("cl-filter", "filter"):
                     # update the output wavelength range
                     self.observeFilter(a, d)
+                elif a.role == "quarter-wave-plate":
+                    # update the position of the qwp in the polarization analyzer
+                    self.observeQWP(a, d)
+                elif a.role == "lin-pol":
+                    # update the position of the linear polarizer in the polarization analyzer
+                    self.observeLinPol(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
                     continue
@@ -299,6 +305,28 @@ class MetadataUpdater(model.Component):
 
         filter.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
+
+    def observeQWP(self, qwp, comp_affected):
+
+        if model.hasVA(qwp, "position"):
+            def updatePosition(unused, qwp=qwp, comp_affected=comp_affected):
+                pos = qwp.position.value["rz"]
+                md = {model.MD_ARPOL_POS_QWP: pos}
+                comp_affected.updateMetadata(md)
+
+            qwp.position.subscribe(updatePosition, init=True)
+            self._onTerminate.append((qwp.position.unsubscribe, (updatePosition,)))
+
+    def observeLinPol(self, linpol, comp_affected):
+
+        if model.hasVA(linpol, "position"):
+            def updatePosition(unused, linpol=linpol, comp_affected=comp_affected):
+                pos = linpol.position.value["rz"]
+                md = {model.MD_ARPOL_POS_LINPOL: pos}
+                comp_affected.updateMetadata(md)
+
+            linpol.position.subscribe(updatePosition, init=True)
+            self._onTerminate.append((linpol.position.unsubscribe, (updatePosition,)))
 
     def terminate(self):
         self._mic.alive.unsubscribe(self._onAlive)
