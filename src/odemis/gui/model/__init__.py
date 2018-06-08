@@ -686,11 +686,22 @@ class ActuatorGUIData(MicroscopyGUIData):
             logging.warning("Not moving axis %s because a distance of %g m is too big.",
                             axis, ss)
 
+        logging.debug("Requesting %s.%s to move by %s m", a.name, axis, ss)
         move = {axis: ss}
         f = a.moveRel(move)
 
         if sync:
             f.result()  # wait until the future is complete
+        else:
+            f.add_done_callback(self._on_axis_move_done)
+
+    def _on_axis_move_done(self, f):
+        """
+        Called whenever a move is completed, just to log error
+        """
+        ex = f.exception()
+        if ex:
+            logging.warning("Move failed: %s", ex)
 
 
 class SecomAlignGUIData(ActuatorGUIData):
@@ -1210,7 +1221,7 @@ class StreamView(View):
             return
 
         move = {"x": shift[0], "y": shift[1]}
-        logging.debug("Sending move request of %s", move)
+        logging.debug("Requesting stage to move by %s m", move)
 
         # Only pass the "update" keyword if the actuator accepts it for sure
         # It should increase latency in case of slow moves (ex: closed-loop
@@ -1262,6 +1273,7 @@ class StreamView(View):
                 logging.info("Restricting stage axis %s move to %g mm due to stage limit",
                              ax, p * 1e3)
 
+        logging.debug("Requesting stage to move to %s m", move)
         f = self._stage.moveAbs(move)
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
