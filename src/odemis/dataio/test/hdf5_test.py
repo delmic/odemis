@@ -38,6 +38,8 @@ from unittest.case import skip
 logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = u"test" + hdf5.EXTENSIONS[0]
+
+
 class TestHDF5IO(unittest.TestCase):
 
     def tearDown(self):
@@ -177,7 +179,6 @@ class TestHDF5IO(unittest.TestCase):
         for i in range(num):
             subim = im[i, 0, 0] # just one channel
             self.assertEqual(subim.shape, size[::-1])
-
 
     def testExportCube(self):
         """
@@ -511,60 +512,62 @@ class TestHDF5IO(unittest.TestCase):
 
 # TODO: test compatibility with Hyperspy for loading spectra (exported by Odemis)
 
-
-    def testReadMDAR(self):
+    def testReadAndSaveMDAR(self):
         """
         Checks that we can read back the metadata of an Angular Resolved image
         """
         metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     # TODO why not in checked - see below..
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "sem survey",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
-                     model.MD_POS: (1e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
-                     model.MD_LENS_MAG: 1200, # ratio
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_LENS_MAG: 1200,  # ratio
                      model.MD_EBEAM_VOLTAGE: 10000,  # V
                      model.MD_EBEAM_CURRENT: 2.6,  # A
-                    },
+                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake ccd",
                      model.MD_DESCRIPTION: "AR",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1), # px, px
-                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_POS: (1.2e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (1.2e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
                      model.MD_AR_POLE: (253.1, 65.1),
                      model.MD_AR_XMAX: 12e-3,
                      model.MD_AR_HOLE_DIAMETER: 0.6e-3,
                      model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
                      model.MD_AR_PARABOLA_F: 2e-3,
-                     model.MD_LENS_MAG: 60, # ratio
-                    },
+                     model.MD_LENS_MAG: 60,  # ratio
+                     },
+                    # same AR image MD but different beam pos (MD_POS)
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake ccd",
                      model.MD_DESCRIPTION: "AR",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1), # px, px
-                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_POS: (1e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
                      model.MD_AR_POLE: (253.1, 65.1),
                      model.MD_AR_XMAX: 12e-3,
                      model.MD_AR_HOLE_DIAMETER: 0.6e-3,
                      model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
                      model.MD_AR_PARABOLA_F: 2e-3,
-                     model.MD_LENS_MAG: 60, # ratio
-                    },
+                     model.MD_LENS_MAG: 60,  # ratio
+                     },
                     ]
+
         # create 2 simple greyscale images
-        sizes = [(512, 256), (500, 400), (500, 400)] # different sizes to ensure different acquisitions
+        sizes = [(512, 256), (500, 400), (500, 400)]  # different sizes to ensure different acquisitions
         dtype = numpy.dtype("uint16")
         ldata = []
         for s, md in zip(sizes, metadata):
@@ -575,13 +578,13 @@ class TestHDF5IO(unittest.TestCase):
         tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
         tdtype = numpy.uint8
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
-        thumbnail[:, :, 1] += 255 # green
+        thumbnail[:, :, 1] += 255  # green
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
 
         # check it's here
-        st = os.stat(FILENAME) # this test also that the file is created
+        st = os.stat(FILENAME)  # this tests also that the file is created
         self.assertGreater(st.st_size, 0)
 
         # check data
@@ -609,6 +612,94 @@ class TestHDF5IO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT], md[model.MD_EBEAM_CURRENT])
             if model.MD_EBEAM_VOLTAGE in md:
                 self.assertEqual(im.metadata[model.MD_EBEAM_VOLTAGE], md[model.MD_EBEAM_VOLTAGE])
+
+        # check thumbnail
+        rthumbs = hdf5.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
+    def testReadAndSaveMDARPOL(self):
+        """
+        Checks that we can read back the metadata of an Angular Resolved image with an polarization analyzer
+        """
+        pol_positions = ["horizontal", "vertical", "posdiag", "negdiag", "rhc", "lhc"]
+        qwp_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "sem survey",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_LENS_MAG: 1200,  # ratio
+                     model.MD_EBEAM_VOLTAGE: 10000,  # V
+                     model.MD_EBEAM_CURRENT: 2.6,  # A
+                     }
+                    ]
+
+        for idx in range(len(pol_positions)):
+            metadata.append({model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake ccd",
+                     model.MD_DESCRIPTION: "POL",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (1.2e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_AR_POLE: (253.1, 65.1),
+                     model.MD_AR_XMAX: 12e-3,
+                     model.MD_AR_HOLE_DIAMETER: 0.6e-3,
+                     model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+                     model.MD_AR_PARABOLA_F: 2e-3,
+                     model.MD_LENS_MAG: 60,  # ratio
+                     model.MD_ARPOL_POLARIZATION: pol_positions[idx],
+                     model.MD_ARPOL_POS_QWP: qwp_positions[idx],  # rad
+                     model.MD_ARPOL_POS_LINPOL: linpol_positions[idx],  # rad
+                             })
+
+        # create 2 simple greyscale images
+        # different sizes to ensure different acquisitions
+        sizes = [(512, 256), (500, 400), (500, 400), (500, 400), (500, 400), (500, 400), (500, 400)]
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for s, md in zip(sizes, metadata):
+            a = model.DataArray(numpy.zeros(s[::-1], dtype), md)
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255  # green
+
+        # export
+        hdf5.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this tests also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for im, md in zip(rdata, metadata):
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
+            self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+            if model.MD_ARPOL_POLARIZATION in md:
+                self.assertEqual(im.metadata[model.MD_ARPOL_POLARIZATION], md[model.MD_ARPOL_POLARIZATION])
+            if model.MD_ARPOL_POS_QWP in md:
+                self.assertEqual(im.metadata[model.MD_ARPOL_POS_QWP], md[model.MD_ARPOL_POS_QWP])
+            if model.MD_ARPOL_POS_LINPOL in md:
+                self.assertEqual(im.metadata[model.MD_ARPOL_POS_LINPOL], md[model.MD_ARPOL_POS_LINPOL])
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)
@@ -785,7 +876,6 @@ class TestHDF5IO(unittest.TestCase):
                 break
         else:
             self.fail("Out wl %s is not within original metadata" % (owl,))
-
 
     def testReadMDMnchr(self):
         """
@@ -977,5 +1067,5 @@ class TestHDF5IO(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
+    # import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
