@@ -766,15 +766,15 @@ class BufferedCanvas(wx.Panel):
         # new bitmap to copy the DC
         # On Windows, the bitmap was made partly transparent because the depth was 32 bit by
         # default. This cause weird colours and parts of the thumbnail being completely transparent.
-        bitmap = wx.EmptyBitmap(*self.ClientSize, depth=24)
+        bitmap = wx.EmptyBitmap(*csize, depth=24)
         dc = wx.MemoryDC()
         dc.SelectObject(bitmap)
 
         # simplified version of on_paint()
-        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
-                  (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
+        margin = ((self._bmp_buffer_size[0] - csize[0]) // 2,
+                  (self._bmp_buffer_size[1] - csize[1]) // 2)
 
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
+        dc.BlitPointSize((0, 0), csize, self._dc_buffer, margin)
 
         # close the DC, to be sure the bitmap can be used safely
         del dc
@@ -1625,15 +1625,16 @@ class DraggableCanvas(BitmapCanvas):
         else:
             dc_view = wx.PaintDC(self)
 
-        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                        (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
+        csize = self.ClientSize
+        self.margins = ((self._bmp_buffer_size[0] - csize.x) // 2,
+                        (self._bmp_buffer_size[1] - csize.y) // 2)
 
         src_pos = (self.margins[0] - self.drag_shift[0], self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
             (0, 0),             # destination point
-            self.ClientSize,    # size of area to copy
+            csize,  # size of area to copy
             self._dc_buffer,    # source
             src_pos             # source point
         )
