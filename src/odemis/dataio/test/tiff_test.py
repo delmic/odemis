@@ -671,63 +671,48 @@ class TestTiffIO(unittest.TestCase):
         """
         Checks that we can read back the metadata of an Angular Resolved image
         """
+        pol_positions = ["horizontal", "vertical", "posdiag", "negdiag", "rhc", "lhc"]
+        qwp_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "sem survey",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 2),  # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_POS: (1e-3, -30e-3),  # m
-                     model.MD_DWELL_TIME: 1e-6,  # s
+                     model.MD_EXP_TIME: 1.2,  # s
                      model.MD_LENS_MAG: 1200,  # ratio
                      model.MD_EBEAM_VOLTAGE: 10000,  # V
                      model.MD_EBEAM_CURRENT: 2.6,  # A
-                     },
-                    {model.MD_SW_VERSION: "1.0-test",
-                     model.MD_HW_NAME: "fake ccd",
-                     model.MD_DESCRIPTION: "AR",
-                     model.MD_ACQ_DATE: time.time(),
-                     model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1),  # px, px
-                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
-                     model.MD_POS: (1.2e-3, -30e-3),  # m
-                     model.MD_EXP_TIME: 1.2,  # s
-                     model.MD_AR_POLE: (253.1, 65.1),  # px
-                     model.MD_AR_XMAX: 12e-3,
-                     model.MD_AR_HOLE_DIAMETER: 0.6e-3,
-                     model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
-                     model.MD_AR_PARABOLA_F: 2e-3,
-                     model.MD_LENS_MAG: 60,  # ratio
-                     model.MD_POL_MODE: "vertical",
-                     model.MD_POL_POS_QWP: 1.570796,  # rad
-                     model.MD_POL_POS_LINPOL: 1.570796,  # rad
-                     },
-                    # same AR image MD but different beam pos (MD_POS)
-                    {model.MD_SW_VERSION: "1.0-test",
-                     model.MD_HW_NAME: "fake ccd",
-                     model.MD_DESCRIPTION: "AR",
-                     model.MD_ACQ_DATE: time.time(),
-                     model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1),  # px, px
-                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
-                     model.MD_POS: (1e-3, -30e-3),  # m
-                     model.MD_EXP_TIME: 1.2,  # s
-                     model.MD_AR_POLE: (253.1, 65.1),  # px
-                     model.MD_AR_XMAX: 12e-3,
-                     model.MD_AR_HOLE_DIAMETER: 0.6e-3,
-                     model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
-                     model.MD_AR_PARABOLA_F: 2e-3,
-                     model.MD_LENS_MAG: 60,  # ratio
-                     model.MD_POL_MODE: "vertical",
-                     model.MD_POL_POS_QWP: 1.570796,  # rad
-                     model.MD_POL_POS_LINPOL: 1.570796,  # rad
-                     },
+                     }
                     ]
+
+        for idx in range(len(pol_positions)):
+            metadata.append({model.MD_SW_VERSION: "1.0-test",
+                             model.MD_HW_NAME: "fake ccd",
+                             model.MD_DESCRIPTION: "POL",
+                             model.MD_ACQ_DATE: time.time(),
+                             model.MD_BPP: 12,
+                             model.MD_BINNING: (1, 1),  # px, px
+                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                             model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                             model.MD_POS: (1.2e-3, -30e-3),  # m
+                             model.MD_EXP_TIME: 1.2,  # s
+                             model.MD_AR_POLE: (253.1, 65.1),
+                             model.MD_AR_XMAX: 12e-3,
+                             model.MD_AR_HOLE_DIAMETER: 0.6e-3,
+                             model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+                             model.MD_AR_PARABOLA_F: 2e-3,
+                             model.MD_LENS_MAG: 60,  # ratio
+                             model.MD_POL_MODE: pol_positions[idx],
+                             model.MD_POL_POS_QWP: qwp_positions[idx],  # rad
+                             model.MD_POL_POS_LINPOL: linpol_positions[idx],  # rad
+                             })
+
         # create 2 simple greyscale images
-        sizes = [(512, 256), (500, 400), (500, 400)]  # different sizes to ensure different acquisitions
+        # different sizes to ensure different acquisitions
+        sizes = [(512, 256), (500, 400), (500, 400), (500, 400), (500, 400), (500, 400), (500, 400)]  # different sizes to ensure different acquisitions
         dtype = numpy.dtype("uint16")
         ldata = []
         for s, md in zip(sizes, metadata):
