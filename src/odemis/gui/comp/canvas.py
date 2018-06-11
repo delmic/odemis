@@ -1562,12 +1562,12 @@ class DraggableCanvas(BitmapCanvas):
         self.was_dragged = self.dragging
         super(DraggableCanvas, self).on_motion(evt)
 
-    # keycode to px: 100px ~= a 10th of the screen
+    # keycode to HFW ratio: 10% of the screen
     _key_to_move = {
-        wx.WXK_LEFT: (100, 0),
-        wx.WXK_RIGHT: (-100, 0),
-        wx.WXK_UP: (0, 100),
-        wx.WXK_DOWN: (0, -100),
+        wx.WXK_LEFT: (0.1, 0),
+        wx.WXK_RIGHT: (-0.1, 0),
+        wx.WXK_UP: (0, 0.1),
+        wx.WXK_DOWN: (0, -0.1),
     }
 
     def on_char(self, evt):
@@ -1576,9 +1576,16 @@ class DraggableCanvas(BitmapCanvas):
         if CAN_DRAG in self.abilities and key in self._key_to_move:
             move = self._key_to_move[key]
             if evt.ShiftDown(): # softer
-                move = tuple(s // 8 for s in move)
+                move = tuple(s / 8 for s in move)
 
-            self.shift_view(move)
+            # convert HFW ratio to pixels
+            hfw_px = self.ClientSize.x
+            move_px = tuple(int(hfw_px * s) for s in move)
+            if not any(move_px):
+                logging.info("Not applying keyboard move of %s (HFW = %d px)", move, hfw_px)
+                return
+
+            self.shift_view(move_px)
         else:
             super(DraggableCanvas, self).on_char(evt)
 
