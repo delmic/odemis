@@ -766,15 +766,15 @@ class BufferedCanvas(wx.Panel):
         # new bitmap to copy the DC
         # On Windows, the bitmap was made partly transparent because the depth was 32 bit by
         # default. This cause weird colours and parts of the thumbnail being completely transparent.
-        bitmap = wx.EmptyBitmap(*self.ClientSize, depth=24)
+        bitmap = wx.EmptyBitmap(*csize, depth=24)
         dc = wx.MemoryDC()
         dc.SelectObject(bitmap)
 
         # simplified version of on_paint()
-        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
-                  (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
+        margin = ((self._bmp_buffer_size[0] - csize[0]) // 2,
+                  (self._bmp_buffer_size[1] - csize[1]) // 2)
 
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
+        dc.BlitPointSize((0, 0), csize, self._dc_buffer, margin)
 
         # close the DC, to be sure the bitmap can be used safely
         del dc
@@ -1562,12 +1562,12 @@ class DraggableCanvas(BitmapCanvas):
         self.was_dragged = self.dragging
         super(DraggableCanvas, self).on_motion(evt)
 
-    # keycode to px: 100px ~= a 10th of the screen
+    # keycode to HFW ratio: 10% of the screen
     _key_to_move = {
-        wx.WXK_LEFT: (100, 0),
-        wx.WXK_RIGHT: (-100, 0),
-        wx.WXK_UP: (0, 100),
-        wx.WXK_DOWN: (0, -100),
+        wx.WXK_LEFT: (0.1, 0),
+        wx.WXK_RIGHT: (-0.1, 0),
+        wx.WXK_UP: (0, 0.1),
+        wx.WXK_DOWN: (0, -0.1),
     }
 
     def on_char(self, evt):
@@ -1576,9 +1576,16 @@ class DraggableCanvas(BitmapCanvas):
         if CAN_DRAG in self.abilities and key in self._key_to_move:
             move = self._key_to_move[key]
             if evt.ShiftDown(): # softer
-                move = tuple(s // 8 for s in move)
+                move = tuple(s / 8 for s in move)
 
-            self.shift_view(move)
+            # convert HFW ratio to pixels
+            hfw_px = self.ClientSize.x
+            move_px = tuple(int(hfw_px * s) for s in move)
+            if not any(move_px):
+                logging.info("Not applying keyboard move of %s (HFW = %d px)", move, hfw_px)
+                return
+
+            self.shift_view(move_px)
         else:
             super(DraggableCanvas, self).on_char(evt)
 
@@ -1618,15 +1625,16 @@ class DraggableCanvas(BitmapCanvas):
         else:
             dc_view = wx.PaintDC(self)
 
-        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                        (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
+        csize = self.ClientSize
+        self.margins = ((self._bmp_buffer_size[0] - csize.x) // 2,
+                        (self._bmp_buffer_size[1] - csize.y) // 2)
 
         src_pos = (self.margins[0] - self.drag_shift[0], self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
             (0, 0),             # destination point
-            self.ClientSize,    # size of area to copy
+            csize,  # size of area to copy
             self._dc_buffer,    # source
             src_pos             # source point
         )
