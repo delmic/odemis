@@ -81,14 +81,15 @@ class ContentAcquisitionDialog(AcquisitionDialog):
 
         # Create a minimal model for use in the streambar controller
 
-        data_model = MicroscopyGUIData(plugin.main_app.main_data)
+        self._dmodel = MicroscopyGUIData(plugin.main_app.main_data)
         self.microscope_view = ContentView("Plugin View left", stage=stage, fov_hw=fov_hw)
-        self.viewport_l.setView(self.microscope_view, data_model)
-        data_model.focussedView.value = self.microscope_view
-        data_model.views.value = [self.microscope_view]
+        self.viewport_l.setView(self.microscope_view, self._dmodel)
+        self._dmodel.focussedView.value = self.microscope_view
+        self._dmodel.views.value = [self.microscope_view]
+        self._viewports = (self.viewport_l,)
 
         self.streambar_controller = StreamBarController(
-            data_model,
+            self._dmodel,
             self.pnl_streams,
             ignore_view=True
         )
@@ -100,6 +101,8 @@ class ContentAcquisitionDialog(AcquisitionDialog):
 class LiveCLStream(SEMStream):
     """
     Same as the SEMStream, but different class to convince the GUI it's a CLStream
+    Also provide a special logScale mode where the projection is applied with a
+    logarithmic scale (beta).
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
@@ -127,10 +130,10 @@ class LiveCLStream(SEMStream):
         # Compute the log (= data goes from 0->N)
         # Map to RGB 0->255
 
-        LOG_MAX = 8  # Map between 0 -> LOG_MAX
+        LOG_MAX = 8  # Map between 0 -> LOG_MAX (magical value that tends to work)
         irange = self._getDisplayIRange()
         data = numpy.clip(data, irange[0], irange[1])
-        # Actually map data to 0-> e-1, and compute log (x+1)
+        # Actually map data to 0 -> (e^N)-1, and compute log(x+1)
         data -= irange[0]
         data = data * ((math.exp(LOG_MAX) - 1) / (float(irange[1]) - float(irange[0])))
         data = numpy.log1p(data)
