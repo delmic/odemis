@@ -175,38 +175,37 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
-        if tab_data.tool:
-            # only create these overlays if they could be possibly used
-            # if guimodel.TOOL_ROA in tab_data.tool.choices:
-            # FIXME: need to find a better way to indicate we want to show the ROA
-            # without allowing to modify it. (cf SECOM acquisition window)
-            if hasattr(tab_data, "roa") and tab_data.roa:
-                # Get the region of interest and link it to the ROA overlay
-                self._roa = tab_data.roa
-                self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
-                                                                         tab_data.fovComp)
-                self.add_world_overlay(self.roa_overlay)
+        # only create these overlays if they could be possibly used
+        # if guimodel.TOOL_ROA in tab_data.tool.choices:
+        # FIXME: need to find a better way to indicate we want to show the ROA
+        # without allowing to modify it. (cf SECOM acquisition window)
+        if hasattr(tab_data, "roa") and tab_data.roa:
+            # Get the region of interest and link it to the ROA overlay
+            self._roa = tab_data.roa
+            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
+                                                                     tab_data.fovComp)
+            self.add_world_overlay(self.roa_overlay)
 
-            if guimodel.TOOL_RO_ANCHOR in tab_data.tool.choices:
-                # Link drift correction region
-                self._dc_region = tab_data.driftCorrector.roi
-                self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(self,
-                    self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
-                self.add_world_overlay(self.driftcor_overlay)
+        if guimodel.TOOL_RO_ANCHOR in tab_data.tool.choices:
+            # Link drift correction region
+            self._dc_region = tab_data.driftCorrector.roi
+            self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(self,
+                self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
+            self.add_world_overlay(self.driftcor_overlay)
 
-            if self.roa_overlay or self.driftcor_overlay:
-                # Regions depend on the field of view (=pixelSize/magnification)
-                if model.hasVA(tab_data.fovComp, "pixelSize"):
-                    tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
+        if self.roa_overlay or self.driftcor_overlay:
+            # Regions depend on the field of view (=pixelSize/magnification)
+            if model.hasVA(tab_data.fovComp, "pixelSize"):
+                tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
 
-            if guimodel.TOOL_POINT in tab_data.tool.choices:
-                self.points_overlay = world_overlay.PointsOverlay(self)
-                self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
+        if guimodel.TOOL_POINT in tab_data.tool.choices:
+            self.points_overlay = world_overlay.PointsOverlay(self)
+            self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
 
-            if guimodel.TOOL_LINE in tab_data.tool.choices:
-                self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
+        if guimodel.TOOL_LINE in tab_data.tool.choices:
+            self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
 
-            tab_data.tool.subscribe(self._on_tool, init=True)
+        tab_data.tool.subscribe(self._on_tool, init=True)
 
     @call_in_wx_main
     def _on_tool(self, tool_mode):
