@@ -420,7 +420,8 @@ class MicroscopyGUIData(object):
         self.views = model.ListVA()
 
         # Current tool selected (from the toolbar, cf cont.tools)
-        self.tool = None  # Needs to be overridden by a IntEnumerated
+        # Child can update the .choices with extra TOOL_*
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
 
         # The MicroscopeView currently focused, it is one of the `views` or `None`.
         # See class docstring for more info.
@@ -453,7 +454,7 @@ class LiveViewGUIData(MicroscopyGUIData):
             if main.tc_detector:  # Can even show live settings
                 tools.add(TOOL_SPOT)
 
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+        self.tool.choices = tools
 
         # The SpotConfocalstream, used to control spot mode.
         # It is set at start-up by the tab controller.
@@ -502,7 +503,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
 
         # more tools: for selecting the sub-region of acquisition
 
-        tools = {
+        self.tool.choices = {
             TOOL_NONE,
             #TOOL_ZOOM,
             #TOOL_ROI,
@@ -512,8 +513,6 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
             #TOOL_LINE,
             TOOL_SPOT,
         }
-
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # List of streams to be acquired (as the ones used to display the live
         # view are different)
@@ -555,7 +554,6 @@ class ChamberGUIData(MicroscopyGUIData):
 
     def __init__(self, main):
         MicroscopyGUIData.__init__(self, main)
-        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # VA for autofocus procedure mode
@@ -575,8 +573,7 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf = get_general_conf()
 
         # only tool to zoom and pick point/line
-        tools = {TOOL_NONE, TOOL_POINT, TOOL_LINE} # TOOL_ZOOM
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+        self.tool.choices = {TOOL_NONE, TOOL_POINT, TOOL_LINE}  # TOOL_ZOOM
 
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed
@@ -708,8 +705,7 @@ class SecomAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)
         # Tools are for lens alignment (mirror alignment actually needs none)
-        tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+        self.tool.choices = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
 
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
@@ -720,7 +716,6 @@ class SecomAlignGUIData(ActuatorGUIData):
 class SparcAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)
-        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Same values than the modes of the OpticalPathManager
@@ -744,7 +739,6 @@ class SparcAlignGUIData(ActuatorGUIData):
 class Sparc2AlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)
-        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
