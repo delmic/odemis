@@ -979,23 +979,26 @@ class Stream(object):
 
     def _updateHistogram(self, data=None):
         """
-        data (DataArray): the raw data to use, default to .raw[0]
+        data (DataArray): the raw data to use, default to .raw[0] - background
+          (if present).
         """
         # Compute histogram and compact version
         if data is None:
-            if isinstance(self.raw, tuple):
+            if isinstance(self.raw, tuple):  # Pyramidal => use the smallest
                 data = self._getMergedRawImage(self._das.maxzoom)
             elif not self.raw or not isinstance(self.raw, list):
+                logging.debug("Not computing histogram as .raw is ")
                 return
+            else:  # the normal case: .raw is a list of DataArrays
+                data = self.raw[0]
 
-        data = self.raw[0] if data is None else data
-
-        bkg = self.background.value
-        if bkg is not None:
-            try:
-                data = img.Subtract(data, bkg)
-            except Exception as ex:
-                logging.info("Failed to subtract background when computing histogram: %s", ex)
+            # We only do background subtraction when automatically selecting raw
+            bkg = self.background.value
+            if bkg is not None:
+                try:
+                    data = img.Subtract(data, bkg)
+                except Exception as ex:
+                    logging.info("Failed to subtract background when computing histogram: %s", ex)
 
         # Depth can change at each image (depends on hardware settings)
         self._updateDRange(data)
