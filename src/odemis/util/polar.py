@@ -140,6 +140,8 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
 #     qz = interp(xi, yi)
 #     qz = qz[:, ::-1]
 
+# TODO: try scipy.spatial.Delaunay
+
     result = model.DataArray(qz, data.metadata)
 
     return result
