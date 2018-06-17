@@ -21,6 +21,7 @@ see http://www.gnu.org/licenses/.
 '''
 
 # A simple GUI to acquire quickly CL data and export it to TIFF or PNG files.
+from __future__ import division
 
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError
@@ -29,22 +30,22 @@ import math
 import numpy
 from odemis import dataio, model, gui, acq, util
 from odemis.acq import stream
-from odemis.acq.stream import CLStream, SEMStream
+from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream
 from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.conf.data import get_local_vas
+from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import img
-from odemis.util.filename import guess_pattern, create_filename, update_counter
 from odemis.model import InstantaneousFuture
+from odemis.util.dataio import splitext
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os
 import time
 import wx
-from odemis.util.dataio import splitext
 
 # Set to "True" to show a "Save" button
 ALLOW_SAVE = False
@@ -174,14 +175,12 @@ class QuickCLPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(QuickCLPlugin, self).__init__(microscope, main_app)
-        # Can only be used with a SPARC with CL detector
+        # Can only be used with a SPARC with CL detector (or monochromator)
         if not microscope:
             return
         main_data = self.main_app.main_data
-        if not main_data.ebeam or not main_data.cld:
+        if not main_data.ebeam or not (main_data.cld or main_data.monochromator):
             return
-        self.light = main_data.light
-        self.ccd = main_data.ccd
 
         self.conf = get_acqui_conf()
         self.filename = model.StringVA("")
@@ -217,34 +216,98 @@ class QuickCLPlugin(Plugin):
         )
 
         # This stream is used both for rendering and acquisition.
-        # We use a SEMStream to just have a basic live feed
-        # TODO: one problem with using the SEMStream is that they get the same
-        # icon, and might end-up switch in the view after hiding/showing.
-        self._cl_stream = LiveCLStream(
-            "CL intensity",
-            main_data.cld,
-            main_data.cld.data,
-            main_data.ebeam,
-            focuser=main_data.ebeam_focus,
-            emtvas=emtvas,
-            detvas=get_local_vas(main_data.cld, main_data.hw_settings_config),
-            opm=main_data.opm,
-        )
-        # TODO: allow to type in the resolution of the CL?
-        # TODO: add the cl-filter axis (or reset it to pass-through?)
-        self.logScale = self._cl_stream.logScale
+        # LiveCLStream is more or less like a SEMStream, but ensures the icon in
+        # the merge slider is correct, and provide a few extra.
+        if main_data.cld:
+            self._cl_stream = LiveCLStream(
+                "CL intensity",
+                main_data.cld,
+                main_data.cld.data,
+                main_data.ebeam,
+                focuser=main_data.ebeam_focus,
+                emtvas=emtvas,
+                detvas=get_local_vas(main_data.cld, main_data.hw_settings_config),
+                opm=main_data.opm,
+            )
+            # TODO: allow to type in the resolution of the CL?
+            # TODO: add the cl-filter axis (or reset it to pass-through?)
+            self.logScale = self._cl_stream.logScale
 
-        if hasattr(self._cl_stream, "detGain"):
-            self._cl_stream.detGain.subscribe(self._on_cl_gain)
+            if hasattr(self._cl_stream, "detGain"):
+                self._cl_stream.detGain.subscribe(self._on_cl_gain)
 
-        # Update the acquisition time when it might change (ie, the scan settings
-        # change)
-        self._cl_stream.emtDwellTime.subscribe(self._update_exp_dur)
-        self._cl_stream.emtResolution.subscribe(self._update_exp_dur)
+            # Update the acquisition time when it might change (ie, the scan settings
+            # change)
+            self._cl_stream.emtDwellTime.subscribe(self._update_exp_dur)
+            self._cl_stream.emtResolution.subscribe(self._update_exp_dur)
+
+        # Note: for now we don't really support SPARC with BOTH CL-detector and
+        # monochromator.
+        if main_data.monochromator:
+            self._mn_stream = LiveCLStream(
+                "Monochromator",
+                main_data.monochromator,
+                main_data.monochromator.data,
+                main_data.ebeam,
+                focuser=main_data.ebeam_focus,
+                emtvas=emtvas,
+                detvas=get_local_vas(main_data.monochromator, main_data.hw_settings_config),
+                opm=main_data.opm,
+            )
+            self._mn_stream.emtDwellTime.subscribe(self._update_exp_dur)
+            self._mn_stream.emtResolution.subscribe(self._update_exp_dur)
+
+            # spg = self._getAffectingSpectrograph(main_data.spectrometer)
+            # TODO: show axes
 
         self._dlg = None
 
         self.addMenu("Acquisition/Quick CL...\tF2", self.start)
+
+    def _show_mn_axes(self, sctrl):
+        main_data = self.main_app.main_data
+        spg = self._getAffectingSpectrograph(main_data.monochromator)
+
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg,
+                "slit-monochromator": spg,
+               }
+
+        stream_configs = get_stream_settings_config()
+        stream_config = stream_configs.get(MonochromatorSettingsStream, {})
+
+        # Add Axes (in same order as config)
+        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        for axisname in axes_names:
+            comp = axes[axisname]
+            if comp is None:
+                logging.debug("Skipping axis %s for non existent component",
+                              axisname)
+                continue
+            if axisname not in comp.axes:
+                logging.debug("Skipping non existent axis %s on component %s",
+                              axisname, comp.name)
+                continue
+            conf = stream_config.get(axisname)
+            sctrl.add_axis_entry(axisname, comp, conf)
+
+    def _getAffectingSpectrograph(self, comp):
+        """
+        Find which spectrograph matters for the given component (ex, spectrometer)
+        comp (Component): the hardware which is affected by a spectrograph
+        return (None or Component): the spectrograph affecting the component
+        """
+        cname = comp.name
+        main_data = self.main_app.main_data
+        for spg in (main_data.spectrograph, main_data.spectrograph_ded):
+            if spg is not None and cname in spg.affects.value:
+                return spg
+        else:
+            logging.warning("No spectrograph found affecting component %s", cname)
+            # spg should be None, but in case it's an error in the microscope file
+            # and actually, there is a spectrograph, then use that one
+            return main_data.spectrograph
 
     def _update_filename(self):
         """
@@ -274,11 +337,20 @@ class QuickCLPlugin(Plugin):
         # Save pattern
         self.conf.fn_ptn, self.conf.fn_count = guess_pattern(fn)
 
+    def _get_acq_streams(self):
+        ss = []
+        if hasattr(self, "_cl_stream"):
+            ss.append(self._cl_stream)
+        if hasattr(self, "_mn_stream"):
+            ss.append(self._mn_stream)
+
+        return ss
+
     def _update_exp_dur(self, _=None):
         """
         Shows how long the CL takes to acquire
         """
-        tott = self._cl_stream.estimateAcquisitionTime()
+        tott = sum(s.estimateAcquisitionTime() for s in self._get_acq_streams())
         tott = math.ceil(tott)  # round-up to 1s
 
         # Use _set_value as it's read only
@@ -341,7 +413,7 @@ class QuickCLPlugin(Plugin):
         self._update_exp_dur()
 
         # immediately switch optical path, to save time
-        main_data.opm.setPath(self._cl_stream)  # non-blocking
+        main_data.opm.setPath(self._get_acq_streams()[0])  # non-blocking
 
         # Add connection to SEM hFoV if possible
         fov_hw = None
@@ -377,7 +449,16 @@ class QuickCLPlugin(Plugin):
                 logging.debug("Pass-through not found in the CL-filter")
 
         dlg.addStream(self._sem_stream)
-        dlg.addStream(self._cl_stream)
+        for s in self._get_acq_streams():
+            dlg.addStream(s)
+
+        if hasattr(self, "_mn_stream"):
+            self._show_mn_axes(dlg.streambar_controller.stream_controllers[-1])
+
+        # Don't allow removing the streams
+        for sctrl in dlg.streambar_controller.stream_controllers:
+            sctrl.stream_panel.show_remove_btn(False)
+
         dlg.addSettings(self, self.vaconf)
         if ALLOW_SAVE:
             dlg.addButton("Save", self.save, face_colour='blue')
@@ -405,8 +486,8 @@ class QuickCLPlugin(Plugin):
         # Stop the streams
         dlg.streambar_controller.pauseStreams()
 
-        # Acquire CL (to be sure it's the right data)
-        ss = [self._cl_stream]
+        # Acquire (even if it was live, to be sure it's the data is up-to-date)
+        ss = self._get_acq_streams()
         dur = acq.estimateTime(ss)
         startt = time.time()
         future._cur_f = InstantaneousFuture()
@@ -430,8 +511,8 @@ class QuickCLPlugin(Plugin):
         Stores the current CL data into a PNG file
         """
         f = model.ProgressiveFuture()
-        ss = [self._cl_stream]
 
+        # Note: the user never needs to store the raw data or the SEM data
         try:
             das = self._acquire(dlg, f)
         except CancelledError:
@@ -441,29 +522,48 @@ class QuickCLPlugin(Plugin):
             logging.exception("Failed to acquire CL data: %s", e)
             return
 
-        # Note: the user never needs to store the raw data or the SEM data
-        fn = self.filename.value
-        exporter = dataio.find_fittest_converter(fn, allowlossy=True)
+        exporter = dataio.find_fittest_converter(self.filename.value, allowlossy=True)
 
-        try:
-            rgbi = self._cl_stream.image.value
-            if self.hasDatabar.value:
-                # Use MPP and FoV so that the whole image is displayed, at 1:1
-                view_pos = rgbi.metadata[model.MD_POS]
-                pxs = rgbi.metadata[model.MD_PIXEL_SIZE]
-                # Shape is YXC
-                view_hfw = rgbi.shape[1] * pxs[0], rgbi.shape[0] * pxs[1]
-                exdata = img.images_to_export_data(ss,
-                                                   view_hfw, view_pos,
-                                                   draw_merge_ratio=1.0,
-                                                   raw=False,
-                                                   interpolate_data=False,
-                                                   logo=self.main_app.main_frame.legend_logo)
+        ss = self._get_acq_streams()
+        for s in ss:
+            if len(ss) > 1:
+                # Add a -StreamName after the filename
+                bn, ext = splitext(self.filename.value)
+                fn = bn + "-" + s.name.value + ext
             else:
-                exdata = rgbi
-            exporter.export(fn, exdata)
-        except Exception:
-            logging.exception("Failed to store data in %s", fn)
+                fn = self.filename.value
+
+            # We actually don't care about the DAs, and will get the corresponding
+            # .image, as it has been projected to RGB.
+            rgbi = s.image.value
+            try:
+                while rgbi.metadata[model.MD_ACQ_DATE] < s.raw[0].metadata[model.MD_ACQ_DATE]:
+                    logging.debug("Waiting a for the RGB projection")
+                    time.sleep(1)
+                    rgbi = s.image.value
+            except KeyError:
+                # No date to check => let's hope it's fine
+                pass
+
+            try:
+                if self.hasDatabar.value:
+                    # Use MPP and FoV so that the whole image is displayed, at 1:1
+                    view_pos = rgbi.metadata[model.MD_POS]
+                    pxs = rgbi.metadata[model.MD_PIXEL_SIZE]
+                    # Shape is YXC
+                    view_hfw = rgbi.shape[1] * pxs[0], rgbi.shape[0] * pxs[1]
+                    exdata = img.images_to_export_data([s],
+                                                       view_hfw, view_pos,
+                                                       draw_merge_ratio=1.0,
+                                                       raw=False,
+                                                       interpolate_data=False,
+                                                       logo=self.main_app.main_frame.legend_logo)
+                else:
+                    exdata = rgbi
+
+                exporter.export(fn, exdata)
+            except Exception:
+                logging.exception("Failed to store data in %s", fn)
 
         f.set_result(None)  # Indicate it's over
         self._update_filename()
@@ -484,7 +584,7 @@ class QuickCLPlugin(Plugin):
             return
 
         fn = self.filename.value
-        bn, ext = os.path.splitext(fn)
+        bn, ext = splitext(fn)
         if ext == ".png":
             logging.debug("Using HDF5 instead of PNG")
             fn = bn + ".h5"
