@@ -507,10 +507,6 @@ class MonochromatorSettingsStream(PMTSettingsStream):
     """
     A stream acquiring a count corresponding to the light at a given wavelength,
     typically with a counting PMT as a detector via a spectrograph.
-    Currently, it's a bit ugly because the 'spectrometer' component controls
-    the grating and centre wavelength and also provides the CCD. For the
-    monochromator, we need to change the grating/cw via the (child)
-    'spectrograph' component. So both SpectrumSS and MonochromatorSS
 
     The raw data is in count/s.
 
@@ -521,7 +517,8 @@ class MonochromatorSettingsStream(PMTSettingsStream):
     The live view shows the raw data over a period of time, which is the easiest
     to allow configuring the settings correctly. Same as CameraCountStream.
     """
-    def __init__(self, name, detector, dataflow, emitter, spectrograph, **kwargs):
+
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
         """
         emtvas: don't put resolution or scale, if it will be used with a
           concurrent SEM stream
@@ -545,8 +542,6 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         # on the second dim.
         self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
         self.image.value = model.DataArray([]) # start with an empty array
-
-        # TODO: grating/cw as VAs (from the spectrograph)
 
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included

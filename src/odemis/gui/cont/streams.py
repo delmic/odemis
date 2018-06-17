@@ -2229,9 +2229,9 @@ class SparcStreamsController(StreamBarController):
 
     def _getAffectingSpectrograph(self, comp):
         """
-        Find which spectrograph matters for the given spectrometer
-        comp (Component): name of the spectrometer
-        return (None or Component): the spectrograph corresponding to the spectrometer
+        Find which spectrograph matters for the given component (ex, spectrometer)
+        comp (Component): the hardware which is affected by a spectrograph
+        return (None or Component): the spectrograph affecting the component
         """
         cname = comp.name
         main_data = self._main_data_model
@@ -2239,7 +2239,7 @@ class SparcStreamsController(StreamBarController):
             if spg is not None and cname in spg.affects.value:
                 return spg
         else:
-            logging.warning("No spectrograph found affecting spectrometer %s", cname)
+            logging.warning("No spectrograph found affecting component %s", cname)
             # spg should be None, but in case it's an error in the microscope file
             # and actually, there is a spectrograph, then use that one
             return main_data.spectrograph
@@ -2478,7 +2478,6 @@ class SparcStreamsController(StreamBarController):
             main_data.monochromator,
             main_data.monochromator.data,
             main_data.ebeam,
-            spectrograph=spg,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             emtvas={"dwellTime"},
