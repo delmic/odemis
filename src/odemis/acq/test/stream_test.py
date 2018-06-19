@@ -1296,7 +1296,7 @@ class SPARCTestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
                         emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.MonochromatorSettingsStream("test",
-                      self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
+                      self.mnchr, self.mnchr.data, self.ebeam,
                       emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
@@ -2513,7 +2513,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         """ Tests MonochromatorSettingsStream """
         # Create the stream and a SpotStream (to drive the ebeam)
         mcs = stream.MonochromatorSettingsStream("test",
-                      self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
+                      self.mnchr, self.mnchr.data, self.ebeam,
                       emtvas={"dwellTime", })
         spots = stream.SpotSEMStream("spot", self.sed, self.sed.data, self.ebeam)
 
