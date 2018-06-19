@@ -36,7 +36,7 @@ from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
-    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, ScannedRemoteTCStream, \
+    RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
     ScannedTCSettingsStream
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
@@ -54,7 +54,8 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
     TOOL_NONE, TOOL_DICHO
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
+    ScannerFoVAdapter
 from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 import os.path
@@ -296,14 +297,61 @@ class SecomStreamsTab(Tab):
 
         self.main_data = main_data
 
+        # First we create the views, then the streams
+        vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
+
         # If a time_correlator is present, there is a ROA based on the laser_mirror
         if main_data.time_correlator:
             tab_data.fovComp = main_data.laser_mirror
 
-        # Order matters!
-        # First we create the views, then the streams
-        vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
+        # When using the confocal microscope, we don't have a real "global"
+        # hardware settings. Instead, we have a mock stream with all the common
+        # settings passed as local settings, and it will be "attached" to all
+        # the confocal streams, which will eventually be acquired simultaneously.
+        # TODO: as the ScannedFluoStream will be folded into a single
+        # ScannedFluoMDStream, maybe we could directly use that stream to put
+        # the settings.
+        # Note: This means there is only one light power for all the confocal
+        # streams, which in theory could be incorrect if multiple excitation
+        # wavelengths were active simultaneously and independently. However,
+        # Odemis doesn't currently supports such setup anyway, so no need to
+        # complicate the GUI with a separate power setting on each stream.
+        fov_adp = None
+        if main_data.laser_mirror:
+            # HACK: ideally, the laser_mirror would be the "scanner", but there
+            # is no such concept on the basic Stream, and no "scanner_vas" either.
+            # So instead, we declare it as a detector, and it works surprisingly
+            # fine.
+            detvas = get_local_vas(main_data.laser_mirror, main_data.hw_settings_config)
+            detvas -= {"resolution", "scale"}
+            conf_set_stream = acqstream.ScannerSettingsStream("Confocal shared settings",
+                                      detector=main_data.laser_mirror,
+                                      dataflow=None,
+                                      emitter=main_data.light,
+                                      detvas=detvas,
+                                      emtvas=get_local_vas(main_data.light, main_data.hw_settings_config),
+                                      )
 
+            # Set some nice default values
+            if conf_set_stream.emtPower.value == 0 and hasattr(conf_set_stream.emtPower, "range"):
+                # cf StreamBarController._ensure_power_non_null()
+                # Default to power = 10% (if 0)
+                conf_set_stream.emtPower.value = conf_set_stream.emtPower.range[1] * 0.1
+            # TODO: the period should always be set to the min? And not even be changed?
+            if hasattr(conf_set_stream, "emtPeriod"):
+                # Use max frequency
+                conf_set_stream.emtPeriod.value = conf_set_stream.emtPeriod.range[0]
+
+            tab_data.confocal_set_stream = conf_set_stream
+
+            # Link the .zoom to "all" (1) the optical view
+            fov_adp = ScannerFoVAdapter(conf_set_stream)
+            for vp, v in vpv.items():
+                if v.get("stream_classes") == OpticalStream:
+                    v["fov_hw"] = fov_adp
+                    vp.canvas.fit_view_to_next_image = False
+
+        # Order matters!
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Unhide a special view for a ScannedTCSettingsStream used for FLIM
@@ -341,46 +389,6 @@ class SecomStreamsTab(Tab):
             buttons,
             panel.pnl_secom_grid.viewports
         )
-
-        # When using the confocal microscope, we don't have a real "global"
-        # hardware settings. Instead, we have a mock stream with all the common
-        # settings passed as local settings, and it will be "attached" to all
-        # the confocal streams, which will eventually be acquired simultaneously.
-        # TODO: as the ScannedFluoStream will be folded into a single
-        # ScannedFluoMDStream, maybe we could directly use that stream to put
-        # the settings.
-        # Note: This means there is only one light power for all the confocal
-        # streams, which in theory could be incorrect if multiple excitation
-        # wavelengths were active simultaneously and independently. However,
-        # Odemis doesn't currently supports such setup anyway, so no need to
-        # complicate the GUI with have a separate VA on each stream.
-        # all set the same hardware (light).
-        if main_data.laser_mirror:
-            # HACK: ideally, the laser_mirror would be the "scanner", but there
-            # is no such concept on the basic Stream, and no "scanner_vas" either.
-            # So instead, we declare it as a detector, and it works surprisingly
-            # fine.
-            conf_set_stream = acqstream.SettingStream("Confocal shared settings",
-                                      detector=main_data.laser_mirror,
-                                      dataflow=None,
-                                      emitter=main_data.light,
-                                      detvas=get_local_vas(main_data.laser_mirror, main_data.hw_settings_config),
-                                      emtvas=get_local_vas(main_data.light, main_data.hw_settings_config),
-                                      )
-            del conf_set_stream.auto_bc
-            del conf_set_stream.histogram
-
-            # Set some nice default values
-            if conf_set_stream.emtPower.value == 0 and hasattr(conf_set_stream.emtPower, "range"):
-                # cf StreamBarController._ensure_power_non_null()
-                # Default to power = 10% (if 0)
-                conf_set_stream.emtPower.value = conf_set_stream.emtPower.range[1] * 0.1
-            # TODO: the period should always be set to the min? And not even be changed?
-            if hasattr(conf_set_stream, "emtPeriod"):
-                # Use max frequency
-                conf_set_stream.emtPeriod.value = conf_set_stream.emtPeriod.range[0]
-
-            tab_data.confocal_set_stream = conf_set_stream
 
         if TOOL_SPOT in tab_data.tool.choices:
             spot_stream = acqstream.SpotScannerStream("Spot", main_data.tc_detector,

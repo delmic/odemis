@@ -978,13 +978,21 @@ class StreamView(View):
             self.stream_classes = stream_classes
         self._stage = stage
 
-        # TODO: need more generic API to report the FoV.
-        # Maybe something like .fov, and internally, the StreamView would do the
-        # "Right Thing", whether it is done by updating the FoV on the stream,
-        # change the horizontalFoV in the hardware, or change the scale/res/trans
-        # on the hardware.
+        # Two variations on adapting the content based on what the view shows.
+        # They are only used as an _indication_ from the widgets, about what
+        # is displayed. To change the area (zoom), use the .mpp .
+        # TODO: need more generic API to report the FoV. Ideally, it would have
+        # just something like .fov, .view_pos and .mpp. It would take care of
+        # the hardware link that the viewport currently does.
+
+        # .fov_hw allows the viewport to link the mpp/fov with the hardware
+        # (which provides .horizontalFoV).
         self.fov_hw = fov_hw
 
+        # .fov allows the viewport to report back the area shown (and actually
+        # drawn, including the margins, via fov_buffer). This is used to update
+        # the (static) streams with a projection which can be resized via .rect
+        # and .mpp.
         self.fov = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
         self.fov_buffer = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
         self.fov_buffer.subscribe(self._onFovBuffer)

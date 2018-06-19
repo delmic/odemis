@@ -791,6 +791,20 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_FLT,
             }),
         )),
+    stream.ScannerSettingsStream:
+        OrderedDict((
+            ("resolution", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels in the image",
+                "choices": util.resolution_from_range,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("zoom", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Reduce the area of acquisition to optically increase the magnification",
+                "scale": "log",
+            }),
+        )),
 }
 
 
