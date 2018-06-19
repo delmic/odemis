@@ -684,6 +684,13 @@ class SECOMConfocalTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
+    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
+        """
+        check two tuples are almost equal (value by value)
+        """
+        for f, s in zip(first, second):
+            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
+
     def _on_image(self, im):
         self._image = im
 
@@ -765,11 +772,11 @@ class SECOMConfocalTestCase(unittest.TestCase):
         """
         Check the acquisition of several confocal streams and setting stream
         """
-        set_s = stream.SettingStream("Confocal shared settings",
+        set_s = stream.ScannerSettingsStream("Confocal shared settings",
                        detector=self.laser_mirror,
                        dataflow=None,
                        emitter=self.light,
-                       detvas={"scale", "resolution", "dwellTime"},
+                       detvas={"dwellTime"},
                        emtvas={"power"},
                       )
 
@@ -782,14 +789,13 @@ class SECOMConfocalTestCase(unittest.TestCase):
         assert len(sfluos) > 1
 
         # Not too fast scan, to avoid acquiring too many images
-        set_s.detScale.value = (8, 8)
-        set_s.detResolution.value = (256, 256)
+        set_s.resolution.value = (256, 256)
+        set_s.zoom.value = 1
         set_s.detDwellTime.value = 10e-6  # s ~ 0.7s for a whole image
-        exp_shape = set_s.detResolution.value
+        exp_shape = set_s.resolution.value
 
         acqt = sfluos[0].estimateAcquisitionTime()
         assert 0.5 < acqt < 2
-
 
         # Let's play one stream for a little while, to simulate using it
         sfluos[0].is_active.value = True
@@ -799,6 +805,11 @@ class SECOMConfocalTestCase(unittest.TestCase):
         # Change the hardware settings to detect issues with the setting stream
         self.laser_mirror.scale.value = (1, 1)
 
+        set_s.zoom.value = 2
+        hwshape = self.laser_mirror.shape
+        hwpxs = self.laser_mirror.pixelSize.value
+        exp_pxs = (hwpxs[0] * (hwshape[0] / exp_shape[0]) / set_s.zoom.value,
+                   hwpxs[1] * (hwshape[1] / exp_shape[1]) / set_s.zoom.value)
         acqs = stream.ScannedFluoMDStream("acq fluo", sfluos)
         acqt = acqs.estimateAcquisitionTime()
         assert 0.5 < acqt < 2
@@ -813,6 +824,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
         for d in data:
             self.assertEqual(d.shape, exp_shape)
             self.assertIn(model.MD_OUT_WL, d.metadata)
+            self.assertTupleAlmostEqual(d.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
         self.assertGreaterEqual(self.updates, 1)  # at least 1 update
         self.assertLessEqual(self.end, time.time())
