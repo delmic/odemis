@@ -39,12 +39,14 @@ from odemis.model import NotApplicableError
 from odemis.util import fluo
 from odemis.util.conversion import reproduce_typed_value
 from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
-    si_scale_val, readable_time, value_to_str
+    si_scale_val, value_to_str
 import re
 import wx
 
 import odemis.gui.conf as guiconf
 import odemis.util.units as utun
+
+MIN_RES = 128 * 128  # px, minimum amount of pixels acceptable in an acquisition
 
 
 def resolution_from_range(comp, va, conf, init=None):
@@ -62,22 +64,20 @@ def resolution_from_range(comp, va, conf, init=None):
         return {cur_val: str(cur_val)}
 
     try:
-        if init is None:
-            choices = {cur_val}
-        else:
-            choices = init
-        num_pixels = cur_val[0] * cur_val[1]
+        choices = {cur_val}
+        if init is not None:
+            choices |= init
+        num_pixels = min(MIN_RES, cur_val[0] * cur_val[1])
         res = va.range[1]  # start with max resolution
 
-        for _ in range(10):
+        while len(choices) < 6:
             choices.add(res)
             res = (res[0] // 2, res[1] // 2)
 
-            if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
+            if res[0] * res[1] < num_pixels:
                 break
 
-        choices = sorted(list(choices))
-        return OrderedDict(tuple((v, "%d x %d" % v) for v in choices))
+        return OrderedDict(tuple((v, "%d x %d" % v) for v in sorted(choices)))
     except NotApplicableError:
         return {cur_val: str(cur_val)}
 
@@ -85,9 +85,6 @@ def resolution_from_range(comp, va, conf, init=None):
 def resolution_from_range_plus_point(comp, va, conf):
     """ Same as resolution_from_range() but also add a 1x1 value """
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
-
-
-MIN_RES = 128 * 128  # px, minimum amount of pixels to consider it acceptable
 
 
 def binning_1d_from_2d(comp, va, conf):
