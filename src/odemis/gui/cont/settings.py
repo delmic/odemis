@@ -240,7 +240,7 @@ class SettingsController(object):
 
         num_rows = 0
 
-        if isinstance(detector.brightness, VigilantAttributeBase):
+        if model.hasVA(detector, "brightness"):
             brightness_entry = self.add_setting_entry("brightness", detector.brightness, detector,
                                                       sld_conf)
             # TODO: 'Ugly' detaching somewhat nullifies the cleanliness created by using
@@ -252,7 +252,7 @@ class SettingsController(object):
             gb_sizer.Add(brightness_entry.value_ctrl, (num_rows, 2), flag=wx.EXPAND)
             num_rows += 1
 
-        if isinstance(detector.contrast, VigilantAttributeBase):
+        if model.hasVA(detector, "contrast"):
             contrast_entry = self.add_setting_entry("contrast", detector.contrast, detector,
                                                     sld_conf)
 
@@ -499,7 +499,7 @@ class SecomSettingsController(SettingsBarController):
             # TODO: check if detector has a .applyAutoContrast() method, instead
             # of detecting indirectly via the presence of .bpp.
             det = main_data.sed or main_data.bsd
-            if det and hasattr(det, "bpp") and isinstance(det.bpp, VigilantAttributeBase):
+            if det and model.hasVA(det, "bpp"):
                 self._sem_panel.add_bc_control(det)
 
 
