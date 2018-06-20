@@ -219,12 +219,18 @@ class MultiplexActuator(model.Actuator):
             final_value[axis] = child.speed.value[ma]
         return final_value
 
-    def _moveToChildMove(self, mv):
-        child_to_move = collections.defaultdict(dict)  # child -> moveRel argument
+    def _moveToChildMove(self, mv, rel):
+        """
+        mv (dict str->value)
+        rel (bool): indicate whether the move is relative or absolute
+        return (dict str -> dict): child component -> move argument
+        """
+        child_to_move = collections.defaultdict(dict)  # child -> moveRel/moveAbs argument
         for axis, distance in mv.items():
             child, child_axis = self._axis_to_child[axis]
             child_to_move[child].update({child_axis: distance})
-            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
+            logging.debug("Moving axis %s (-> %s) %s %g", axis, child_axis,
+                          "by" if rel else "to", distance)
 
         return child_to_move
 
@@ -253,7 +259,7 @@ class MultiplexActuator(model.Actuator):
         if self._executor:
             f = self._executor.submit(self._doMoveRel, shift, **kwargs)
         else:
-            cmv = self._moveToChildMove(shift)
+            cmv = self._moveToChildMove(shift, rel=True)
             child, move = cmv.popitem()
             assert not cmv
             f = child.moveRel(move, **kwargs)
@@ -266,7 +272,7 @@ class MultiplexActuator(model.Actuator):
         # to ensure the order (ie, X>AB>X can be executed as X/AB>X or X>AB/X but
         # XA>AB>X must be in the order XA>AB/X
         futures = []
-        for child, move in self._moveToChildMove(shift).items():
+        for child, move in self._moveToChildMove(shift, rel=True).items():
             f = child.moveRel(move, **kwargs)
             futures.append(f)
 
@@ -284,7 +290,7 @@ class MultiplexActuator(model.Actuator):
         if self._executor:
             f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
         else:
-            cmv = self._moveToChildMove(pos)
+            cmv = self._moveToChildMove(pos, rel=False)
             child, move = cmv.popitem()
             assert not cmv
             f = child.moveAbs(move, **kwargs)
@@ -293,7 +299,7 @@ class MultiplexActuator(model.Actuator):
 
     def _doMoveAbs(self, pos, **kwargs):
         futures = []
-        for child, move in self._moveToChildMove(pos).items():
+        for child, move in self._moveToChildMove(pos, rel=False).items():
             f = child.moveAbs(move, **kwargs)
             futures.append(f)
 
