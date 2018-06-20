@@ -1761,7 +1761,11 @@ class FakeShamrockDLL(object):
 
     def ShamrockGetCalibration(self, device, calibval, npixels):
         center = (self._np - 1) / 2 # pixel containing center wl
-        px_wl = self._pw / 50 # in nm
+        lpmm = self._gratings[self._cg - 1][0]
+        if lpmm == 0:
+            px_wl = 0
+        else:
+            px_wl = self._pw / (lpmm / 6)  # in nm
         minwl = self._gratings[self._cg - 1][4]
         for i in range(npixels):
             # return stupid values (that look slightly correct)
