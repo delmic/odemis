@@ -41,14 +41,14 @@ def compute_scanner_fov(comp):
         # is the depth, which we don't care.
         shape = comp.shape
         if len(shape) < 2:
-            raise ValueError("Component %s shape is too small %s", comp.name, shape)
+            raise ValueError("Component %s shape is too small %s" % (comp.name, shape))
     except AttributeError:
-        raise ValueError("Component %s doesn't have a shape", comp)
+        raise ValueError("Component %s doesn't have a shape" % (comp,))
 
     try:
         pxs = comp.pixelSize.value
     except AttributeError:
-        raise ValueError("Component %s doesn't have pixelSize", comp)
+        raise ValueError("Component %s doesn't have pixelSize" % (comp,))
 
     return (shape[0] * pxs[0], shape[1] * pxs[1])
 
@@ -70,16 +70,16 @@ def compute_camera_fov(comp):
         # is the depth, which we don't care.
         shape = comp.shape
         if len(shape) < 2:
-            raise ValueError("Component %s shape is too small %s", comp.name, shape)
+            raise ValueError("Component %s shape is too small %s" % (comp.name, shape))
     except AttributeError:
-        raise ValueError("Component %s doesn't have a shape", comp)
+        raise ValueError("Component %s doesn't have a shape" % (comp,))
 
     md = copy.copy(comp.getMetadata())
     img.mergeMetadata(md)  # apply correction info from fine alignment
     try:
         pxs = md[model.MD_PIXEL_SIZE]
     except KeyError:
-        raise ValueError("Component %s doesn't have a MD_PIXEL_SIZE", comp)
+        raise ValueError("Component %s doesn't have a MD_PIXEL_SIZE" % (comp,))
 
     # compensate for binning
     try:
