@@ -82,7 +82,9 @@ ARStream.register(ARSettingsStream)
 ARStream.register(StaticARStream)
 ARStream.register(SEMARMDStream)
 
-NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream, ScannedTCSettingsStream, ScannedFluoMDStream)
+NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream,
+                       ScannedTCSettingsStream, ScannedFluoMDStream, OverlayStream)
+
 
 # TODO: make it like a VA, so that it's possible to know when it changes
 # TODO: move it to its own file
