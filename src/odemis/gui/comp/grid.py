@@ -97,9 +97,24 @@ class ViewportGrid(wx.Panel):
         """ Hide all viewports """
         self.set_shown_viewports()
 
+    def get_4_viewports(self):
+        """
+        Gets the first 4 valid viewports to display in the 2 x 2 grid and returns them.
+        Does not show them - this is handled by other existing functions.
+        """
+        counter = 0
+        viewports = []
+        for v in self.viewports:
+            if counter >= 4: break
+            if v._microscope_view is not None:
+                viewports.append(v)
+                counter += 1
+
+        return viewports
+
     def show_grid_viewports(self):
         """ Show all grid viewports """
-        self.visible_viewports = self.viewports[:4]
+        self.visible_viewports = self.get_4_viewports()
         self._layout_viewports()
         self._show_hide_viewports()
 
@@ -142,7 +157,7 @@ class ViewportGrid(wx.Panel):
                 self.visible_viewports = self.viewports[:1]
 
             else:
-                self.visible_viewports = self.viewports[:4]
+                self.visible_viewports = self.get_4_viewports()
 
         self.grid_layout = AttrDict({
             'tl': AttrDict({
@@ -212,7 +227,7 @@ class ViewportGrid(wx.Panel):
             vvps[0].SetPosition((0, 0))
             # TODO: Make invisible ones small!
         else:
-            gvps = self.viewports[:4]
+            gvps = self.get_4_viewports()
             num_vis_grid = sum(vp in vvps for vp in gvps)
             if num_vis_grid != num_vis_total:
                 raise ValueError("If multiple viewports are visible, they should all reside in the "

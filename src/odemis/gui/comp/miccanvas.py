@@ -421,7 +421,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # FluoStreams are merged using the "Screen" method that handles colour
             # merging without decreasing the intensity.
             ostream = s.stream if isinstance(s, DataProjection) else s
-            if isinstance(ostream, stream.OpticalStream):
+            if isinstance(ostream, (stream.FluoStream, stream.StaticFluoStream)):
                 images_opt.append((image, BLEND_SCREEN, s.name.value, s))
             elif isinstance(ostream, (stream.SpectrumStream, stream.CLStream)):
                 images_spc.append((image, BLEND_DEFAULT, s.name.value, s))
@@ -983,6 +983,12 @@ class OverviewCanvas(DblMicroscopeCanvas):
         # This canvas can have a special overlay for tracking position history
         self.history_overlay = None
 
+        # Disable certain tools in overview. Don't list ROA, ROI, or spot mode
+        self.allowed_modes = guimodel.ALL_TOOL_MODES - {guimodel.TOOL_SPOT,
+                                                        guimodel.TOOL_ROA,
+                                                        guimodel.TOOL_ROI,
+                                                        guimodel.TOOL_RO_ANCHOR}
+
         self.SetMinSize((400, 400))
 
     def _on_view_mpp(self, mpp):
@@ -1084,6 +1090,8 @@ class SparcARCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcARCanvas, self).__init__(*args, **kwargs)
         self.abilities -= {CAN_ZOOM, CAN_DRAG}
+        self.allowed_modes = {guimodel.TOOL_NONE}
+
         # same as flip argument of set_images(): int with wx.VERTICAL and/or wx.HORIZONTAL or just use MD_FLIP
         self.flip = 0
 

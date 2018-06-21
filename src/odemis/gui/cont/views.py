@@ -131,7 +131,7 @@ class ViewPortController(object):
     def _set_visible_views(self, visible_views):
         """ Set the order of the viewports so it will match the list of visible views
 
-        This method should normally ben called when the visible_views VA in the MicroscopeGUIData
+        This method should normally be called when the visible_views VA in the MicroscopeGUIData
         object gets changed.
 
         """

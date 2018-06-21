@@ -303,14 +303,13 @@ class SecomStreamsTab(Tab):
         # Order matters!
         # First we create the views, then the streams
         vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
+
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
-        # Add a special view for a ScannedTCSettingsStream used for FLIM
+        # Unhide a special view for a ScannedTCSettingsStream used for FLIM
         # if a time correlator is present
         if main_data.time_correlator:
-            vis_views = self.tab_data_model.visible_views.value[0:3]
-            vis_views.append(panel.vp_flim_chronograph.microscope_view)
-            self.tab_data_model.visible_views.value = vis_views
+            panel.vp_flim_chronograph.Show()
 
         # Special overview button selection
         self.overview_controller = viewcont.OverviewController(main_data, tab_data,
@@ -320,28 +319,21 @@ class SecomStreamsTab(Tab):
 
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
-            (
-                panel.btn_secom_view_all,
+            (panel.btn_secom_view_all,
                 (None, panel.lbl_secom_view_all)),
-            (
-                panel.btn_secom_view_tl,
+            (panel.btn_secom_view_tl,
                 (panel.vp_secom_tl, panel.lbl_secom_view_tl)),
-            (
-                panel.btn_secom_view_tr,
+            (panel.btn_secom_view_tr,
                 (panel.vp_secom_tr, panel.lbl_secom_view_tr)),
-            (
-                panel.btn_secom_view_bl,
+            (panel.btn_secom_view_bl,
                 (panel.vp_secom_bl, panel.lbl_secom_view_bl)),
-            (
-                panel.btn_secom_view_br,
+            (panel.btn_secom_view_br,
                 (panel.vp_secom_br, panel.lbl_secom_view_br)),
-            (
-                panel.btn_secom_view_br,
-                (panel.vp_flim_chronograph, panel.lbl_secom_view_br)),
-            (
-                panel.btn_secom_overview,
+            (panel.btn_secom_overview,
                 (panel.vp_overview_sem, panel.lbl_secom_overview)),
         ])
+        if main_data.time_correlator:
+            buttons[panel.btn_secom_view_br] = (panel.vp_flim_chronograph, panel.lbl_secom_view_br)
 
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
@@ -504,20 +496,22 @@ class SecomStreamsTab(Tab):
                   "stage": main_data.stage,
                   "stream_classes": (EMStream, OpticalStream),
                   }),
-                (viewports[3],
-                 {"name": "Combined 2",
-                  "stage": main_data.stage,
-                  "stream_classes": (EMStream, OpticalStream),
-                 })
             ])
-            
+
             if main_data.time_correlator:
                 vpv[viewports[4]] = {
                   "name": "FLIM",
                   "stage": main_data.stage,
-                  "stream_classes": (ScannedTCSettingsStream),
+                  "stream_classes": (ScannedTCSettingsStream,),
                   }
-            
+
+            else:
+                vpv[viewports[3]] = {
+                  "name": "Combined 2",
+                  "stage": main_data.stage,
+                  "stream_classes": (EMStream, OpticalStream),
+                 }
+
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
@@ -930,9 +924,6 @@ class SparcAcquisitionTab(Tab):
                 self.tb.add_tool(t, tab_data.tool)
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         # TODO: autofocus tool if there is an ebeam-focus
-
-        # Don't show ROA/spot on the AR view
-        panel.vp_sparc_tr.canvas.allowed_modes = {TOOL_NONE}
 
         tab_data.tool.subscribe(self.on_tool_change)
 

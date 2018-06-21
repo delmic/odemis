@@ -357,7 +357,9 @@ class SecomAcquiController(object):
         # under vacuum
         tab_data.streams.subscribe(self.on_stream_chamber)
         tab_data.main.chamberState.subscribe(self.on_stream_chamber)
-        tab_data.roa.subscribe(self.on_stream_chamber, init=True)
+
+        if hasattr(tab_data, "roa"):
+            tab_data.roa.subscribe(self.on_stream_chamber, init=True)
 
         # Disable the "acquire image" button while preparation is in progress
         self._main_data_model.is_preparing.subscribe(self.on_preparation)

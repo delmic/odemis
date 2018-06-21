@@ -30,7 +30,8 @@ from concurrent.futures._base import CancelledError
 import logging
 from odemis import gui, model, util
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, \
-                              StaticStream, DataProjection, CLStream
+                              StaticStream, DataProjection, CLStream, FluoStream, \
+                              StaticFluoStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -382,7 +383,7 @@ class MicroscopeViewport(ViewPort):
                 len(self._microscope_view.stream_tree) >= 2
         ):
             streams = self._microscope_view.getStreams()
-            all_opt = all(isinstance(s, OpticalStream) for s in streams)
+            all_opt = all(isinstance(s, (FluoStream, StaticFluoStream)) for s in streams)
 
             # If all images are optical, assume they are merged using screen blending and no
             # merge ratio is required
@@ -399,7 +400,7 @@ class MicroscopeViewport(ViewPort):
                 # never mixed with any other stream.
                 if (
                         any(isinstance(s, EMStream) for s in streams) and
-                        any(isinstance(s, OpticalStream) for s in streams)
+                        any(isinstance(s, (FluoStream, StaticFluoStream)) for s in streams)
                 ):
                     # TODO: don't hard-code MD_AT_FLUO and MD_AT_EM but use the
                     # acquisitionType of the corresponding streams.
