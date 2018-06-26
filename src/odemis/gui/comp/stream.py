@@ -1252,7 +1252,7 @@ class StreamBar(wx.Panel):
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
     STREAM_ORDER = (
-        acq.stream.SettingStream,
+        acq.stream.ScannerSettingsStream,
         acq.stream.SEMStream,
         acq.stream.StaticSEMStream,
         acq.stream.BrightfieldStream,

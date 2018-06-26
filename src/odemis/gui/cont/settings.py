@@ -471,8 +471,6 @@ class SecomSettingsController(SettingsBarController):
             # Hide exposureTime as it's in local settings of the stream
             self.add_hw_component(main_data.ccd, self._optical_panel, hidden={"exposureTime"})
 
-        #if main_data.laser_mirror:
-        #    self.add_hw_component(main_data.laser_mirror, self._optical_panel)
         if hasattr(tab_data, "confocal_set_stream"):
             conf_set_e = StreamController(tab_panel.pnl_opt_streams, tab_data.confocal_set_stream, tab_data)
             conf_set_e.stream_panel.flatten()  # removes the expander header

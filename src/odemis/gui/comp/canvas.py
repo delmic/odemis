@@ -495,6 +495,7 @@ class BufferedCanvas(wx.Panel):
             # logging.debug("Buffer size didn't change, refreshing...")
             # eraseBackground=False prevents flicker
             self.Refresh(eraseBackground=False)
+        evt.Skip()
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """

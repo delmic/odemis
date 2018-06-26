@@ -94,8 +94,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # None (all allowed) or a set of guimodel.TOOL_* allowed (rest is treated like NONE)
         self.allowed_modes = None
 
-        self._previous_size = self.ClientSize
-
         # Overlays
 
         # Passive overlays that only display information, but offer no interaction
@@ -613,37 +611,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Called when the view.mpp is updated """
         self.scale = 1 / mpp
         wx.CallAfter(self.request_drawing_update)
-
-    def on_size(self, event):
-        new_size = event.Size
-
-        # Update the mpp, so that _about_ the same data will be displayed.
-        if self.microscope_view and self._previous_size != new_size:
-            if self.microscope_view.fov_hw:
-                if all(v > 0 for v in new_size):
-                    # Connected to the HW FoV => ensure that the HW FoV stays constant
-                    # => Do the same as MicroscopeViewport.set_mpp_from_fov()
-                    hfov = self.microscope_view.fov_hw.horizontalFoV.value
-                    shape = self.microscope_view.fov_hw.shape
-                    fov = (hfov, hfov * shape[1] / shape[0])
-                    mpp = max(phy / px for phy, px in zip(fov, new_size))
-                    mpp = self.microscope_view.mpp.clip(mpp)
-                    logging.debug("Updating mpp to %g due to canvas resize to %s, to keep HW FoV to %s m",
-                                  mpp, new_size, fov)
-                    self.microscope_view.mpp.value = mpp
-            else:
-                # Keep the area of the FoV constant
-                prev_area = self._previous_size[0] * self._previous_size[1]
-                new_area = new_size[0] * new_size[1]
-                if prev_area > 0 and new_area > 0:
-                    ratio = math.sqrt(prev_area) / math.sqrt(new_area)
-                    mpp = ratio * self.microscope_view.mpp.value
-                    mpp = self.microscope_view.mpp.clip(mpp)
-                    logging.debug("Updating mpp to %g due to canvas resize from %s to %s, to keep area",
-                                  mpp, self._previous_size, new_size)
-                    self.microscope_view.mpp.value = mpp
-        super(DblMicroscopeCanvas, self).on_size(event)
-        self._previous_size = new_size
 
     @microscope_view_check
     def Zoom(self, inc, block_on_zero=False):

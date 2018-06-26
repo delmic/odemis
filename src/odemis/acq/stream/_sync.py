@@ -2011,7 +2011,7 @@ class ScannedFluoMDStream(MultipleDetectorStream):
         """
         # TODO: all the linkHwVAs should happen here
         if self._setting_stream:
-            self._setting_stream._linkHwVAs()
+            self._setting_stream.is_active.value = True
 
         # All streams have the same excitation, so do it only once
         self._streams[0]._setup_excitation()
@@ -2135,7 +2135,7 @@ class ScannedFluoMDStream(MultipleDetectorStream):
             for s in self._streams:
                 s._unlinkHwVAs()
             if self._setting_stream:
-                self._setting_stream._unlinkHwVAs()
+                self._setting_stream.is_active.value = False
             self._current_future = None
             self._acq_done.set()
 

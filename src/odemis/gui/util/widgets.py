@@ -26,8 +26,9 @@ from __future__ import division
 import collections
 import logging
 import math
-from odemis.util import RepeatingTimer
+from odemis import model
 from odemis.gui.util import call_in_wx_main_wrapper, call_in_wx_main, dead_object_wrapper
+from odemis.util import RepeatingTimer
 from odemis.util import units
 import time
 import wx
@@ -414,3 +415,64 @@ class EllipsisAnimator(RepeatingTimer):
             self._label.SetLabel(msg)
         except Exception:
             logging.exception("Unexpected failure during status message animation")
+
+
+class ScannerFoVAdapter(object):
+    """
+    Wrap a stream which has a scanner (as detector) and a .zoom, to behave as a
+    "standard" scanner with .horizontalFoV.
+    In practice, it's used to control the ScannerSettingsStream via the standard
+    zooming functions of a MicroscopeView (fov_hw).
+    """
+
+    def __init__(self, setting_stream):
+        """
+        settings_stream (Stream): stream with .zoom and a .detector
+        """
+        self._setting_stream = setting_stream
+        self._scanner = self._setting_stream.detector
+        self.shape = self._scanner.shape
+        # For the range, assume the pixelSize will not change
+        pxs = self._scanner.pixelSize.value
+        zrng = self._setting_stream.zoom.range
+        hfov_rng = (self.shape[0] * pxs[0] / zrng[1],
+                    self.shape[0] * pxs[0] / zrng[0])
+        hfov = self.shape[0] * pxs[0] / self._setting_stream.zoom.value
+        self.horizontalFoV = model.FloatContinuous(hfov, range=hfov_rng, unit="m",
+                                                   setter=self._set_hfov)
+        self.horizontalFoV.clip_on_range = True
+
+        self._scanner.pixelSize.subscribe(self._on_pixel_size)
+        self._setting_stream.zoom.subscribe(self._update_hfov)
+
+    def _set_hfov(self, hfov):
+        pxs = self._scanner.pixelSize.value
+        zoom = self.shape[0] * pxs[0] / hfov
+
+        # Unsubscribe temporarily to avoid any chance of infinite recursion
+        self._setting_stream.zoom.unsubscribe(self._update_hfov)
+        self._setting_stream.zoom.value = self._setting_stream.zoom.clip(zoom)
+        self._setting_stream.zoom.subscribe(self._update_hfov)
+
+        zoom = self._setting_stream.zoom.value
+        hfov = self.shape[0] * pxs[0] / zoom
+        logging.debug("Updating zoom to %s => HFW %s m", zoom, hfov)
+        return hfov
+
+    def _on_pixel_size(self, pxs):
+        """
+        Called when the lens magnification is changed (ie, rarely)
+        """
+        # All the FoV values need to be updated
+        zrng = self._setting_stream.zoom.range
+        hfov_rng = (self.shape[0] * pxs[0] / zrng[1],
+                    self.shape[0] * pxs[0] / zrng[0])
+        self.horizontalFoV.range = hfov_rng
+        self._update_hfov()
+
+    def _update_hfov(self, _=None):
+        zoom = self._setting_stream.zoom.value
+        pxs = self._scanner.pixelSize.value
+        hfov = self.shape[0] * pxs[0] / zoom
+        self.horizontalFoV.value = hfov
+

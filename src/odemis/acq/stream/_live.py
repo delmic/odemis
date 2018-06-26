@@ -35,13 +35,6 @@ import weakref
 from ._base import Stream
 
 
-class SettingStream(Stream):
-    """
-    Mock stream used to hold local VAs
-    """
-    pass
-
-
 class LiveStream(Stream):
     """
     Abstract class for any stream that can do continuous acquisition.
@@ -931,6 +924,113 @@ class FluoStream(CameraStream):
         super(FluoStream, self)._onNewData(dataflow, data)
 
 
+class ScannerSettingsStream(Stream):
+
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        detector: the Scanner
+        emitter: the light
+        Do not put local scale! Also not recommended to put local resolution.
+        """
+        Stream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+
+        # No support for an actual image
+        del self.auto_bc
+        del self.histogram
+
+        # To indicate the settings should be applied, is_active should be set
+        self.is_active.subscribe(self._onActive)
+
+        hwres = detector.resolution
+        hwscale = detector.scale
+        # Resolution assumes that we scan the whole roi. For smaller ROIs, the
+        # actual hardware setting is proportional.
+        self.resolution = model.TupleContinuous(hwres.value, range=hwres.range,
+                                                cls=(int, long, float),
+                                                setter=self._setResolution)
+        self.resolution.subscribe(self._onResolution)
+
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the scanner => between 0 and 1)
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+        self.roi.subscribe(self._onROI)
+
+        mxzoom = min(1 / hwscale.range[0][0], 1 / hwscale.range[0][1])
+        z = min((detector.shape[0] / hwres.value[0]) / hwscale.value[0], mxzoom)
+        self.zoom = model.FloatContinuous(z, range=(1, mxzoom))
+        self.zoom.subscribe(self._onZoom)
+
+    def _computeROISettings(self, roi):
+        """
+        roi (4 0<=floats<=1)
+        return:
+            scale (2 floats)
+            res (2 int)
+            trans (2 floats)
+        """
+        z = self.zoom.value
+        # We should remove res setting from the GUI when this ROI is used.
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0]), (roi[3] - roi[1])
+
+        shape = self._detector.shape
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = shape[0] * (center[0] - 0.5) / z, shape[1] * (center[1] - 0.5) / z
+
+        # We use resolution as a shortcut to define the pitch between pixels
+        # (ie, the scale) and it represents the resolution _if_ the ROI was full.
+        full_res = self.resolution.value
+        res = (max(1, int(round(full_res[0] * width[0]))),
+               max(1, int(round(full_res[1] * width[1]))))
+
+        s = (shape[0] / full_res[0]) / z, (shape[1] / full_res[1]) / z
+
+        return s, res, trans
+
+    def _applyROI(self):
+        """
+        Update the scanning area of the SEM according to the roi
+        Note: should only be called when active (because it directly modifies
+          the hardware settings)
+        """
+        scale, res, trans = self._computeROISettings(self.roi.value)
+
+        # always in this order
+        self._detector.scale.value = scale
+        self._detector.resolution.value = res
+        self._detector.translation.value = trans
+
+        if self._detector.scale.value != scale:
+            logging.warning("Scale set to %s, instead of %s", self._detector.scale.value, scale)
+
+        if self._detector.resolution.value != res:
+            logging.warning("Resolution set to %s, instead of %s", self._detector.resolution.value, res)
+
+        if self._detector.translation.value != trans:
+            logging.warning("Translation set to %s, instead of %s", self._detector.translation.value, trans)
+
+    def _onZoom(self, z):
+        if self.is_active.value:
+            self._applyROI()
+
+    def _onResolution(self, r):
+        if self.is_active.value:
+            self._applyROI()
+
+    def _setResolution(self, res):
+        return self.detector.resolution.clip(res)
+
+    def _onROI(self, roi):
+        if self.is_active.value:
+            self._applyROI()
+
+    def _onActive(self, active):
+        if active:
+            self._applyROI()
+
+
 class ScannedFluoStream(FluoStream):
     """ Stream containing images obtained via epifluorescence using a "scanner"
       (ie, a confocal microscope).
@@ -954,13 +1054,12 @@ class ScannedFluoStream(FluoStream):
         em_filter (Filter or None): the HwComponent to modify the emission light
           filtering. If None, it will assume it's fixed and indicated on the
           MD_OUT_WL of the detector.
-        setting_stream (SettingStream or None): if present, its local settings
+        setting_stream (ScannerSettingsStream or None): if present, its local settings
           will be used when this stream becomes active. In practice, it's used to
           share the scanner and emitter settings between all ScannedFluoStreams.
         """
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FLUO
-        # TODO: for now it's not possible to have local VAs for the scanner.
         super(ScannedFluoStream, self).__init__(name, detector, dataflow, emitter,
                                                 em_filter, **kwargs)
         self._scanner = scanner
@@ -1001,7 +1100,10 @@ class ScannedFluoStream(FluoStream):
     def estimateAcquisitionTime(self):
         # Same formula as SEMStream
         try:
-            res = self._getScannerVA("resolution").value
+            if self._setting_stream:
+                res = self._setting_stream.resolution.value
+            else:
+                res = self._getScannerVA("resolution").value
             # TODO: change to this method once we support .roi:
             # Compute the number of pixels to acquire
 #             shape = self._scanner.shape
