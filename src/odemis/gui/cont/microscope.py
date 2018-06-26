@@ -35,7 +35,7 @@ from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector, \
     EllipsisAnimator
-from odemis.model import VigilantAttributeBase, InstantaneousFuture
+from odemis.model import InstantaneousFuture
 from odemis.util import executeAsyncTask
 import threading
 import time
@@ -356,12 +356,12 @@ class SecomStateController(object):
         if self._main_data.ebeam is None:
             return
 
-        power = self._main_data.ebeam.power
-        if not isinstance(power, model.VigilantAttributeBase):
+        if not model.hasVA(self._main_data.ebeam, "power"):
             # We cannot change the power => nothing else to try
             logging.debug("Ebeam doesn't support setting power")
             return
 
+        power = self._main_data.ebeam.power
         if on:
             try:
                 power.value = power.range[1]  # max!
@@ -1083,11 +1083,9 @@ class DelphiStateController(SecomStateController):
                 return False
 
             # TODO: just subscribe to the change of sample holder?
-            if (
-                    isinstance(self._main_data.chamber.registeredSampleHolder,
-                               VigilantAttributeBase) and
-                    not self._main_data.chamber.registeredSampleHolder.value
-            ):
+            if (model.hasVA(self._main_data.chamber, "registeredSampleHolder") and
+                not self._main_data.chamber.registeredSampleHolder.value
+               ):
                 self.request_holder_calib()  # async
                 return False
 
@@ -1164,7 +1162,7 @@ class DelphiStateController(SecomStateController):
         # Also allow to "register" the sample holder, if that's the first time
         # it is inserted in the Phenom.
 
-        if isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase):
+        if model.hasVA(self._main_data.chamber, "registeredSampleHolder"):
             need_register = not self._main_data.chamber.registeredSampleHolder.value
         else:
             need_register = False

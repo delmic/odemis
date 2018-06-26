@@ -97,36 +97,44 @@ class MetadataUpdater(model.Component):
 
                 if a.role == "stage":
                     # update the image position
-                    self.observeStage(a, d)
-                    #TODO : support more metadata
+                    observed = self.observeStage(a, d)
                 elif a.role == "lens":
                     # update the pixel size, mag, and pole position
-                    self.observeLens(a, d)
+                    observed = self.observeLens(a, d)
                 elif a.role == "light":
                     # update the emitted light wavelength
-                    self.observeLight(a, d)
-                elif a.role.startswith("spectrograph"):
+                    observed = self.observeLight(a, d)
+                elif a.role.startswith("spectrograph"):  # spectrograph-XXX too
                     # update the output wavelength range
-                    self.observeSpectrograph(a, d)
+                    observed = self.observeSpectrograph(a, d)
                 elif a.role in ("cl-filter", "filter"):
                     # update the output wavelength range
-                    self.observeFilter(a, d)
+                    observed = self.observeFilter(a, d)
                 elif a.role == "quarter-wave-plate":
                     # update the position of the qwp in the polarization analyzer
-                    self.observeQWP(a, d)
+                    observed = self.observeQWP(a, d)
                 elif a.role == "lin-pol":
                     # update the position of the linear polarizer in the polarization analyzer
-                    self.observeLinPol(a, d)
+                    observed = self.observeLinPol(a, d)
                 else:
-                    logging.debug("not observing %s which affects %s", a.name, d.name)
-                    continue
+                    observed = False
 
-                logging.info("Observing affect %s -> %s", a.name, dn)
+                if observed:
+                    logging.info("Observing affect %s -> %s", a.name, dn)
+                else:
+                    logging.info("Not observing unhandled affect %s (%s) -> %s (%s)",
+                                 a.name, a.role, dn, d.role)
+
                 self._observed[a.name].add(dn)
 
         # TODO: drop subscriptions to dead components
 
     def observeStage(self, stage, comp):
+        """
+        return bool: True if will actually update the affected component,
+                     False if the affect is not supported (here)
+        """
+
         # we need to keep the information on the detector to update
         def updateStagePos(pos, comp=comp):
             # We need axes X and Y
@@ -143,10 +151,11 @@ class MetadataUpdater(model.Component):
         stage.position.subscribe(updateStagePos, init=True)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
 
+        return True
+
     def observeLens(self, lens, comp):
         if comp.role not in ("ccd", "sp-ccd", "laser-mirror"):
-            logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
-            return
+            return False
 
         # update static information
         md = {model.MD_LENS_NAME: lens.hwVersion}
@@ -234,6 +243,8 @@ class MetadataUpdater(model.Component):
                 va.subscribe(updateMDFromVA, init=True)
                 self._onTerminate.append((va.unsubscribe, (updateMDFromVA,)))
 
+        return True
+
     def observeLight(self, light, comp):
 
         def updateInputWL(emissions, light=light, comp=comp):
@@ -269,14 +280,11 @@ class MetadataUpdater(model.Component):
         light.emissions.subscribe(updateInputWL, init=True)
         self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
 
+        return True
+
     def observeSpectrograph(self, spectrograph, comp):
-        if comp.role == "spectrometer":
-            # Currently, the spectrometers are special, and they automatically
-            # pick up the right metadata by having the spectrograph as child.
-            return
-        elif comp.role != "monochromator":
-            logging.warning("Does not know what to do with a spectrograph affecting a %s", comp.role)
-            return
+        if comp.role != "monochromator":
+            return False
 
         if 'slit-monochromator' not in spectrograph.axes:
             logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
@@ -296,6 +304,8 @@ class MetadataUpdater(model.Component):
         spectrograph.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
 
+        return True
+
     def observeFilter(self, filter, comp):
         # FIXME: If a monochromator + spectrograph, which MD_OUT_WL to pick?
         # update any affected component
@@ -305,6 +315,8 @@ class MetadataUpdater(model.Component):
 
         filter.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
+
+        return True
 
     def observeQWP(self, qwp, comp_affected):
 
@@ -317,6 +329,8 @@ class MetadataUpdater(model.Component):
             qwp.position.subscribe(updatePosition, init=True)
             self._onTerminate.append((qwp.position.unsubscribe, (updatePosition,)))
 
+        return True
+
     def observeLinPol(self, linpol, comp_affected):
 
         if model.hasVA(linpol, "position"):
@@ -327,6 +341,8 @@ class MetadataUpdater(model.Component):
 
             linpol.position.subscribe(updatePosition, init=True)
             self._onTerminate.append((linpol.position.unsubscribe, (updatePosition,)))
+
+        return True
 
     def terminate(self):
         self._mic.alive.unsubscribe(self._onAlive)

@@ -108,15 +108,13 @@ class PMT(model.Detector):
         # In case of counting PMT these VAs are not available since a
         # spectrograph is given instead of the control unit.
         try:
-            if (hasattr(ctrl, "gain")
-                and isinstance(ctrl.gain, model.VigilantAttributeBase)):
+            if model.hasVA(ctrl, "gain"):
                 gain = ctrl.gain.range[0]
                 self.gain = model.FloatContinuous(gain, ctrl.gain.range, unit="V",
                                                   setter=self._setGain)
                 self._last_gain = gain
                 self._setGain(gain)  # Just start with no gain
-            if (hasattr(ctrl, "powerSupply")
-                and isinstance(ctrl.powerSupply, model.VigilantAttributeBase)):
+            if model.hasVA(ctrl, "powerSupply"):
                 self.powerSupply = ctrl.powerSupply
                 # Turn on the controller
                 self.powerSupply.value = True
@@ -127,8 +125,7 @@ class PMT(model.Detector):
                           "then restart Odemis.")
 
         # Protection VA should be available anyway
-        if not (hasattr(ctrl, "protection")
-            and isinstance(ctrl.protection, model.VigilantAttributeBase)):
+        if not model.hasVA(ctrl, "protection"):
             raise IOError("Given component appears to be neither a PMT control "
                           "unit or a spectrograph since protection VA is not "
                           "available.")
