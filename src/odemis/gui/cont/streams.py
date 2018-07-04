@@ -29,7 +29,9 @@ import functools
 import gc
 import logging
 import numpy
+import time
 from odemis import model, util
+from odemis.acq.stream import StaticStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
@@ -45,6 +47,7 @@ from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+from odemis.util.units import readable_str
 import wx
 from wx.lib.pubsub import pub
 
@@ -71,7 +74,8 @@ PEAK_METHOD_TO_STATE = {None: None, "gaussian": 0, "lorentzian": 1}
 class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None, viewctrl=None):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None,
+                 viewctrl=None):
         """
         view (MicroscopeView or None): Link stream to a view. If view is None, the stream
         will be linked to the focused view. Passing a view to the controller ensures 
@@ -122,6 +126,10 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
+        # Metadata display in analysis tab (static streams)
+        if isinstance(self.stream, StaticStream):
+            self._display_metadata()
+
         # TODO: make it a list, as the dict keys are not used right now, and
         # they could be just looked up via the SettingEntry.name anyway
         self.entries = OrderedDict()  # name -> SettingEntry
@@ -143,6 +151,11 @@ class StreamController(object):
             self._add_excitation_ctrl()
         elif hasattr(stream, "emission"):  # only emission
             self._add_emission_ctrl()
+
+        # Add metadata button to show dialog with full list of metadata
+        if isinstance(self.stream, StaticStream):
+            metadata_btn = self.stream_panel.add_metadata_button()
+            metadata_btn.Bind(wx.EVT_BUTTON, self._on_metadata_btn)
 
         # TODO: Change the way in which BC controls are hidden (Use config in data.py)
         if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
@@ -205,6 +218,36 @@ class StreamController(object):
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
+
+    def _display_metadata(self):
+        """ 
+        Display metadata for integration time, ebeam voltage, probe current and
+        emission/excitation wavelength
+        """
+
+        if not self.stream.raw:
+            return
+
+        if isinstance(self.stream.raw[0], tuple):
+            # Show metadata for first element of raw in case of AR acquisitions or
+            # stitched images
+            md = self.stream.raw[0][0].metadata
+        else:
+            md = self.stream.raw[0].metadata
+
+        # Use "integration time" instead of "exposure time" since, in some cases, the dwell
+        # time is stored in MD_EXP_TIME
+        if model.MD_EXP_TIME in md:
+            self.add_metadata("Integration Time", md[model.MD_EXP_TIME], 's')
+        elif model.MD_DWELL_TIME in md.keys():
+            self.add_metadata(model.MD_DWELL_TIME, md[model.MD_DWELL_TIME], 's')
+
+        if model.MD_EBEAM_VOLTAGE in md:
+            self.add_metadata(model.MD_EBEAM_VOLTAGE, md[model.MD_EBEAM_VOLTAGE], 'V')
+
+        if model.MD_EBEAM_CURRENT in md:
+            self.add_metadata(model.MD_EBEAM_CURRENT, md[model.MD_EBEAM_CURRENT], 'A')
+
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
@@ -324,6 +367,42 @@ class StreamController(object):
 
         return ae
 
+    def add_metadata(self, key, value, unit=None):
+        """ Adds an entry representing specific metadata
+
+        According to the metadata key, the right representation is used for the value.
+
+        :param key: (model.MD_*) the metadata key
+        :param value: (depends on the metadata) the value to display
+        :param unit: (None or string) unit of the values. If necessary a SI prefix
+        will be used to make the value more readable, unless None is given.
+        """
+
+        # By default the key is a nice user-readable string
+        label = unicode(key)
+
+        # Convert value to a nice string according to the metadata type
+        try:
+            if key == model.MD_ACQ_DATE:
+                # convert to a date using the user's preferences
+                nice_str = time.strftime(u"%c", time.localtime(value))
+            else:
+                # Still try to beautify a bit if it's a number
+                if (
+                    isinstance(value, (int, long, float)) or
+                    (
+                        isinstance(value, collections.Iterable) and
+                        len(value) > 0 and
+                        isinstance(value[0], (int, long, float))
+                    )
+                ):
+                    nice_str = readable_str(value, unit, 3)
+                else:
+                    nice_str = unicode(value)
+            self.stream_panel.add_readonly_field(label, nice_str)
+        except Exception:
+            logging.exception("Trying to convert metadata %s", key)
+
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
 
@@ -403,6 +482,30 @@ class StreamController(object):
         self.update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
                                    self._dye_ewl, self.stream.emission.value)
 
+    def _on_metadata_btn(self, evt):
+        if not self.stream.raw:
+            # Show empty window if no metadata are present
+            md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, "")
+            md_frame.ShowModal()
+            return
+
+        if isinstance(self.stream.raw[0], tuple):
+            # Show metadata for first element of raw in case of AR acquisitions or
+            # stitched images
+            md = self.stream.raw[0][0].metadata
+        else:
+            md = self.stream.raw[0].metadata
+
+        text = ""
+        for key in sorted(md):
+            if key == model.MD_ACQ_DATE:  # display date in readable format
+                text += ("%s: %s\n" % (key, time.strftime(u"%c", time.localtime(md[key]))))
+            else:
+                text += ("%s: %s\n" % (key, md[key]))
+
+        md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
+        md_frame.ShowModal()
+    
     # Panel state methods
 
     def to_locked_mode(self):
