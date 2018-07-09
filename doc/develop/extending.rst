@@ -330,6 +330,46 @@ To read an acquisition file you can use code such as:
     print das[0].metadata
 
 
+Starting odemis from the terminal/console
+=================================================
+
+After setting up the development environment it is possible to start odemis via the terminal.
+It is also possible to specify a specific configuration (*.yaml) file used for staring odemis.
+
+
+Starting odemis
+-----------------------
+
+Odemis can be started from the terminal by typing the following command in the terminal
+(from ``~/development/odemis``)::
+
+    odemis-start
+
+The default configuration file (*.yaml) is used, which can be found and changed in
+``~/development/odemis/install/linux/etc/odemis.conf``.
+
+Starting odemis with configuration file
+----------------------------------------
+
+Odemis can be started using different hardware configuration files (*.yaml).
+There are various examples, hardware tests and simulators available in
+``~/development/odemis/install/linux/usr/share/odemis/``.
+
+Launch odemis with a configuration file by typing the following command in the terminal
+(from ``~/development/odemis``)::
+
+    odemis-start install/linux/usr/share/odemis/sim/sparc2-sim.odm.yaml
+
+
+Starting odemis with no GUI
+----------------------------------------
+
+The odemis backend without launching the GUI can be started with the following
+(from ``~/development/odemis``)::
+
+    odemis-start --nogui
+
+
 Automating the acquisition of data
 ==================================
 
@@ -391,12 +431,15 @@ To list all the properties of a component::
 .. note:
     When the name of a component which contains spaces is given as a 
     parameter, it should be put into quotes, such as ``"EBeam ExtXY"``.
+.. TODO last line too long
 
 To acquire
 5 images sequentially from the secondary electron detector at 5 different 
 positions on the sample, you could write this in bash::
 
     for i in $(seq 5); do odemis-cli --acquire "SED ExtXY" --output etd-pos$i.h5; odemis-cli --move OLStage y -100; done
+
+.. TODO line too long
 
 For more complex tasks, it might be easier to write a specialised python script.
 In this case, the program directly accesses the back-end. In addition to reading
