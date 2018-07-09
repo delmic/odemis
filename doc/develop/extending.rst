@@ -330,6 +330,54 @@ To read an acquisition file you can use code such as:
     print das[0].metadata
 
 
+Starting odemis from the terminal/console
+=================================================
+
+After setting up the development environment it is possible to start odemis via the terminal.
+It is also possible to specify a specific configuration (*.yaml) file used for staring odemis.
+
+
+Starting Odemis
+-----------------------
+
+Odemis can be started from the terminal by typing the following command in the terminal::
+
+    odemis-start
+
+The default microscope file (*.yaml) is defined in the configuration file, which can be found and changed in
+``/etc/odemis.conf``.
+
+Starting Odemis with configuration file
+----------------------------------------
+
+Odemis can be started using different hardware microscope files (*.yaml).
+There are various examples, hardware tests and simulators available in
+``~/development/odemis/install/linux/usr/share/odemis/``.
+
+Launch Odemis with a microscope file by typing the following command in the terminal::
+
+    odemis-start ~/development/odemis/install/linux/usr/share/odemis/sim/sparc2-sim.odm.yaml
+
+
+Starting Odemis with no GUI
+----------------------------------------
+
+The Odemis backend can be started without launching the GUI by using the following command::
+
+    odemis-start --nogui
+
+
+
+Starting the Odemis-Viewer
+----------------------------------------
+
+The Odemis Viewer runs without a microscope file specified and is a useful tool to load and perform some basic
+analysis on previously acquired data sets. The Odemis viewer can be started by using the following command::
+
+    odemis-gui --standalone
+
+
+
 Automating the acquisition of data
 ==================================
 
@@ -386,7 +434,8 @@ To list all the properties of a component::
         hwVersion (RO Attribute)	 value: SP-FAKE (s/n: 12345)
         position (RO Vigilant Attribute)	 value: {'wavelength': 0.0} (unit: m)
         speed (RO Vigilant Attribute)	 value: 1e-07 (unit: m/s) (range: 1e-07 → 1e-07)
-        grating (Vigilant Attribute)	 value: 2 (choices: 1: '300 g/mm BLZ=  345NM', 2: '600 g/mm BLZ=   89NM', 3: '1200 g/mm BLZ= 700NM')
+        grating (Vigilant Attribute)	 value: 2 (choices: 1: '300 g/mm BLZ=  345NM',
+                                    2: '600 g/mm BLZ=   89NM', 3: '1200 g/mm BLZ= 700NM')
 
 .. note:
     When the name of a component which contains spaces is given as a 
@@ -396,7 +445,11 @@ To acquire
 5 images sequentially from the secondary electron detector at 5 different 
 positions on the sample, you could write this in bash::
 
-    for i in $(seq 5); do odemis-cli --acquire "SED ExtXY" --output etd-pos$i.h5; odemis-cli --move OLStage y -100; done
+    for i in $(seq 5); do
+        odemis-cli --acquire "SED ExtXY" --output etd-pos$i.h5
+        odemis-cli --move OLStage y -100
+    done
+
 
 For more complex tasks, it might be easier to write a specialised python script.
 In this case, the program directly accesses the back-end. In addition to reading
