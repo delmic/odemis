@@ -554,6 +554,7 @@ are two simple ways. The simplest way is to decorate the function with the speci
 always run from within the main GUI thread. Another way is to call every GUI
 related function using the special ``wx.CallAfter()`` function.
 
+
 Speed optimization
 ==================
 To speed up the code, first, you need to profile the code to see where is the 
@@ -582,6 +583,30 @@ detailed profile statistics for the decorated functions within your module::
     kernprof.py -l -v your_module.py
 
 
+It is also possible to write your own runtime tracker:
+
+.. code-block:: python
+
+    import time
+
+    def timeit(method):
+
+        def timed(*args, **kw):
+            ts = time.time()
+            result = method(*args, **kw)
+            te = time.time()
+
+            print '%r (%r, %r) %2.2f sec' % \
+                  (method.__name__, args, kw, te-ts)
+            return result
+
+        return timed
+
+    @timeit
+    def yourFunctionToTrack():
+        do something
+
+
 Memory optimization
 ===================
 The main thing to look at is memory leaks. That is to say, data which is not used
@@ -590,23 +615,90 @@ data to stay in memory while not used anymore:
 
 * Some object still in use has a reference to the data. For example, if a
   temporary result is hold as an attribute ``self._temp``, that object will not be
-  dereferenced until self is unreferenced, or ``self._temp`` is replaced.
+  de-referenced until self is unreferenced, or ``self._temp`` is replaced.
 * Some objects have cyclic dependencies, and one of them has a ``__del__`` method.
   Python 2 is not able to garbage collect any of these objects.
-* A C library has not free'd some data.
+* A ``C`` library has not free'd some data.
  
 
-Only a few memory profilers are able to detect C library memory leakage. One of
-them is ``memory_profile``. You can install with::
+Only a few memory profilers are able to detect ``C`` library memory leakage. One of
+them is ``memory_profiler``. You can install it with::
 
    sudo easy_install -U memory_profiler
 
-In order to find the leaks, it's possible to then add a decorator ``@profile`` 
-to the suspect methods, and then run::
- 
-   python -m memory_profiler program.py
+or if you have installed the pip package::
 
-It will list line-per-line the change of memory usage.
+    pip install memory_profiler --user
+    
+
+In order to find the leaks, it's possible to add a decorator ``@profile``
+to the suspect methods/functions, and then run::
+
+    python -m memory_profiler program.py
+
+It will list line-per-line the change of memory usage after closing the GUI.
+.. TODO: the memory usage listed in terminal of viewer is not line-by-line and displays something weired..
+
+It is also possible to add an import statement in the module where you want to track a function and decorate the
+function with the decorator ``@profile``. The advantage is that the line-by-line memory usage is displayed in
+the terminal of the Odemis GUI and you don't need to close the GUI. Thus, it is possible to check the same
+function multiple times with different e.g. input images:
+
+.. code-block:: python
+
+    from memory_profiler import profile
+
+    @profile
+    def yourFunctionToTrack():
+        do something
+
+You may also want to combine tracking of memory and time. You can do this by combining the following two decorators
+(be aware of the order of the decorators!):
+
+.. code-block:: python
+
+    from memory_profiler import profile
+    import time
+
+    def timeit(method):
+
+        def timed(*args, **kw):
+            ts = time.time()
+            result = method(*args, **kw)
+            te = time.time()
+
+            print '%r (%r, %r) %2.2f sec' % \
+                  (method.__name__, args, kw, te-ts)
+            return result
+
+        return timed
+
+    @timeit
+    @profile
+    def yourFunctionToTrack():
+        do something
+
+Another option to track the memory usage is the cProfile package::
+
+    python -m cProfile -s cumtime program.py
+
+It will display the overall used memory per function, the number of calls per function and many more
+quantities regarding memory usage. However, you need to close the GUI before the statistics are displayed
+within the terminal. This tool might be useful to analyze the overall performance of the GUI.
+.. TODO how use with import cProfile statement - did not find a decorator...
+
+If you use the editor ``PyCharm`` you can pass the following arguments in the interpreter options
+(depending on which profiler you may choose)::
+
+    Run --> Edit Configurations --> Interpreter options : -m cProfile -s cumtime
+
+or::
+
+    Run --> Edit Configurations --> Interpreter options : -m memory_profiler
+
+If you add the memory_profiler option, you don't need the import statement but the decorator as explained before.
+Both options display the used memory after closing the GUI.
+
 
 Another possibility is to use ``pympler``, which allows to list the biggest objects
 that were recently created. You can add in your program, or in the Python console
@@ -620,7 +712,26 @@ of the Odemis GUI:
    # After every interesting call
    tr.print_diff()
 
-As it will not detect C library memory allocations, if no new large object has
+As it will not detect ``C`` library memory allocations, if no new large object has
 appeared and the Python process uses more memory, then it's likely a C library
 memory leak.
 
+To test numpy arrays for memory usage, it is possible to call::
+
+    numpy.ndarray.nbytes
+
+It displays the total bytes consumed by the elements of the array.
+It does not include memory consumed by non-element attributes of the array object.
+
+A similar and more generic way is to use the sys function to check on the memory allocated to your
+object of interest::
+
+    sys.getsizeof(yourObject)
+
+It returns the size of an object in bytes. The object can be any type of object.
+All built-in objects will return correct results, but this does not have to hold true for
+third-party extensions as it is implementation specific.
+Only the memory consumption directly attributed to the object is accounted for,
+not the memory consumption of objects it refers to.
+In other words, for objects created via a ``C`` library, the reported size might be correct,
+or might be underestimated.
