@@ -58,6 +58,12 @@ The following subclasses exist:
     - **SpotSEMStream(LiveStream):**
 
       Stream which forces the SEM to be in spot mode when active.
+	  
+    - **ScannedRemoteTCStream(LiveStream):**
+
+      Stream used to run a FLIM acquisition. Requires a time correlator to operate. 
+	  
+	  Works in coordination with a helper stream (ScannedTCSettingsStream) which is used to set up the measurement. 
 
     - **CameraStream(LiveStream):**
 
@@ -198,6 +204,10 @@ The following subclasses exist:
         - *CLSettingsStream(PMTSettingsStream):*
 
           A spatial cathodoluminescense stream, typically with a PMT as a detector.
+		  
+    - **ScannedTCSettingsStream(RepetitionStream):**
+
+      Helper stream used to set up a FLIM acquisition. Requires a time correlator to operate. 
 
     - **OverlayStream(Stream):**
 

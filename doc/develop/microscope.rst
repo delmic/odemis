@@ -78,6 +78,7 @@ Actuators:
  * align: Alignment actuator for the SECOM and DELPHI microscopes.
    For the SECOM, it must have two axes: "a" and "b".
    For the DELPHI, it must have two axes: "x" and "y".
+ * delayer: Actuator for optical path length extender to add time delay. 
 
 Detectors:
  * se-detector: Secondary electron detector of the SEM (detector).
