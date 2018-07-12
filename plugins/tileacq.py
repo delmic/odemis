@@ -770,10 +770,13 @@ class TileAcqPlugin(Plugin):
             # on alignment detection)
         except CancelledError:
             logging.debug("Acquisition cancelled")
-        except Exception, e:
-            logging.info("An error occurred. Acquisition unsuccessful.")
+        except Exception as ex:
+            logging.exception("Acquisition failed.")
             ft.running_subf.cancel()
-            raise
+            ft.set_result(None)
+            # Show also in the window. It will be hidden next time a setting is changed.
+            self._dlg.setAcquisitionInfo("Acquisition failed: %s" % (ex,),
+                                         lvl=logging.ERROR)
         finally:
             logging.info("Tiled acquisition ended")
             main_data.stage.moveAbs(orig_pos)
