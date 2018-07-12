@@ -51,7 +51,7 @@ import wx
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.3"
+    __version__ = "1.4"
     __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
@@ -213,13 +213,13 @@ class TileAcqPlugin(Plugin):
         if hasattr(stage.axes["x"], "range"):
             max_x = stage.axes["x"].range[1]
             if tile_pos[0] > max_x:
-                self.nx.value = int((max_x - orig_pos["x"]) / (overlap * tile_size[0]))
+                self.nx.value = max(1, int((max_x - orig_pos["x"]) / (overlap * tile_size[0])))
                 logging.info("Restricting number of tiles in x direction to %i due to stage limit."
                               % self.nx.value)
         if hasattr(stage.axes["y"], "range"):
             min_y = stage.axes["y"].range[0]
             if tile_pos[1] < min_y:
-                self.ny.value = int(-(min_y - orig_pos["y"]) / (overlap * tile_size[1]))
+                self.ny.value = max(1, int(-(min_y - orig_pos["y"]) / (overlap * tile_size[1])))
                 logging.info("Restricting number of tiles in y direction to %i due to stage limit."
                               % self.ny.value)
 
@@ -293,6 +293,7 @@ class TileAcqPlugin(Plugin):
         dlg.microscope_view.stream_tree.flat.subscribe(self._update_total_area, init=True)
         dlg.microscope_view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
 
+        self._check_range()
         self._memory_check()
 
         # TODO: disable "acquire" button if no stream selected.
