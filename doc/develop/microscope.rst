@@ -161,6 +161,7 @@ Detectors:
  * chamber-ccd: A (optical) view of the inside chamber.
  * time-correlator: A one-dimension detector with "T", the time, as dimension.
    It reports the energy emission over time (from a specific event).
+ * tc-detector: A detector, typically an APD, which reports a count of detected photons over time. 
 
 System:
  * lens: Contains parameters concerning the parabolic mirror and the lens system.
