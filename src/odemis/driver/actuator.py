@@ -669,18 +669,17 @@ class ConvertStage(model.Actuator):
                       pos_child[self._axes_child["y"]]]
         vpos = self._convertPosFromChild(vpos_child)
         # it's read-only, so we change it via _value
-        self.position._value = {"x": vpos[0],
-                                "y": vpos[1]}
-        self.position.notify(self.position.value)
+        self.position._set_value({"x": vpos[0], "y": vpos[1]}, force_write=True)
 
     def updateMetadata(self, md):
         self._metadata.update(md)
         self._updateConversion()
+        self._updatePosition(self._child.position.value)
 
     @isasync
     def moveRel(self, shift):
         # shift is a vector, so relative conversion
-        vshift = [shift.get("x", 0), shift.get("y", 0)]
+        vshift = shift.get("x", 0), shift.get("y", 0)
         vshift_child = self._convertPosToChild(vshift, absolute=False)
 
         shift_child = {self._axes_child["x"]: vshift_child[0],
@@ -692,7 +691,8 @@ class ConvertStage(model.Actuator):
     @isasync
     def moveAbs(self, pos):
         # pos is a position, so absolute conversion
-        vpos = [pos.get("x", 0), pos.get("y", 0)]
+        cpos = self.position.value
+        vpos = pos.get("x", cpos["x"]), pos.get("y", cpos["y"])
         vpos_child = self._convertPosToChild(vpos)
 
         pos_child = {self._axes_child["x"]: vpos_child[0],
