@@ -107,8 +107,8 @@ class SettingsController(object):
                                                           style)
 
         if tooltip is not None:
-            lbl_ctrl.SetToolTipString(tooltip)
-            value_ctrl.SetToolTipString(tooltip)
+            lbl_ctrl.SetToolTip(tooltip)
+            value_ctrl.SetToolTip(tooltip)
 
         # Add the corresponding setting entry
         ne = SettingEntry(name=label, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
@@ -226,7 +226,7 @@ class SettingsController(object):
 
         btn_autoadjust = ImageTextToggleButton(self.panel, height=24, label="Auto adjust",
                                                icon=img.getBitmap("icon/ico_contrast.png"))
-        btn_autoadjust.SetToolTipString("Adjust detector brightness/contrast")
+        btn_autoadjust.SetToolTip("Adjust detector brightness/contrast")
 
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)
@@ -436,7 +436,7 @@ class SettingsBarController(object):
         # the "Mean" value bellow the graph
         lbl_mean = wx.StaticText(setting_cont.panel, label="Mean")
         tooltip_txt = "Average intensity value of the last image"
-        lbl_mean.SetToolTipString(tooltip_txt)
+        lbl_mean.SetToolTip(tooltip_txt)
         self.txt_mean = wx.TextCtrl(setting_cont.panel,
                                     style=wx.BORDER_NONE | wx.TE_READONLY)
         if ftsize is not None:
@@ -445,7 +445,7 @@ class SettingsBarController(object):
             self.txt_mean.SetFont(f)
         self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
         self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-        self.txt_mean.SetToolTipString(tooltip_txt)
+        self.txt_mean.SetToolTip(tooltip_txt)
         setting_cont.add_widgets(lbl_mean, self.txt_mean)
 
 

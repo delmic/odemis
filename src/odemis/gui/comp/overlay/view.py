@@ -428,7 +428,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
     def _store_event_pos(self, evt):
         """ Position the focus line at the position of the given mouse event """
-        x, y = evt.GetPositionTuple()
+        x, y = evt.Position
         x = max(1, min(self.view_width, x))
         if self.map_y_from_x:
             # Y will be automatically mapped at drawing
@@ -560,7 +560,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
 
     def _store_event_pos(self, evt):
         """ Position the focus line at the position of the given mouse event """
-        x, y = evt.GetPositionTuple()
+        x, y = evt.Position
         if self.peaks is not None:
             # Store in the same format as the data, so it still works after resize
             x = max(min(self.view_width, x), 1)
@@ -1141,7 +1141,7 @@ class PolarOverlay(base.ViewOverlay):
 
     def on_left_up(self, evt):
         if self.active:
-            self._calculate_display(evt.GetPositionTuple())
+            self._calculate_display(evt.Position)
             self.dragging = False
             self.cnvs.Refresh()
 
@@ -1150,7 +1150,7 @@ class PolarOverlay(base.ViewOverlay):
     def on_motion(self, evt):
         # Only change the values when the user is dragging
         if self.active and self.dragging:
-            self._calculate_display(evt.GetPositionTuple())
+            self._calculate_display(evt.Position)
             self.cnvs.Refresh()
         else:
             base.ViewOverlay.on_motion(self, evt)
@@ -1332,7 +1332,7 @@ class PointSelectOverlay(base.ViewOverlay):
 
     def on_left_up(self, evt):
         if self.active:
-            v_pos = evt.GetPositionTuple()
+            v_pos = evt.Position
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
 
             self.v_pos.value = v_pos

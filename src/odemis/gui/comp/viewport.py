@@ -42,6 +42,7 @@ from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units, spectrum, peak
 import wx
+from odemis.util import no_conflict
 
 
 class ViewPort(wx.Panel):
@@ -794,7 +795,7 @@ class AngularResolvedViewport(ViewPort):
 
 class PlotViewport(ViewPort):
     """ Class for displaying plotted data """
-    __metaclass__ = ABCMeta
+    __metaclass__ = no_conflict.classmaker()
 
     # Default class
     canvas_class = miccanvas.BarPlotCanvas
@@ -947,8 +948,8 @@ class PointSpectrumViewport(PlotViewport):
 
     def setView(self, view, tab_data):
         super(PointSpectrumViewport, self).setView(view, tab_data)
-        wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
-        wx.CallAfter(self.left_legend.SetToolTipString, "Intensity")
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
         self._peak_fitter = peak.PeakFitter()
         self._peak_future = model.InstantaneousFuture()
         self._curve_overlay = overlay.view.CurveOverlay(self.canvas)
@@ -1083,8 +1084,8 @@ class ChronographViewport(PlotViewport):
 
     def setView(self, view, tab_data):
         super(ChronographViewport, self).setView(view, tab_data)
-        wx.CallAfter(self.bottom_legend.SetToolTipString, "Time (s)")
-        wx.CallAfter(self.left_legend.SetToolTipString, "Count per second")
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Time (s)")
+        wx.CallAfter(self.left_legend.SetToolTip, "Count per second")
 
     def _on_new_data(self, data):
         if data.size:
@@ -1188,8 +1189,8 @@ class SpatialSpectrumViewport(ViewPort):
         # the stream tree itself... it just there is nothing to do that.
         microscope_view.lastUpdate.subscribe(self.connect_stream)
 
-        wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
-        wx.CallAfter(self.left_legend.SetToolTipString, "Distance from origin")
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Distance from origin")
 
     def connect_stream(self, _=None):
         """ This method will connect this ViewPort to the Spectrum Stream so it

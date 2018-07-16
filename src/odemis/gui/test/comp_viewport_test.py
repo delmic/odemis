@@ -117,10 +117,10 @@ class ViewportTestCase(test.GuiTestCase):
                 q.rotate(1)
 
                 v.bottom_legend.range = (min(xs), max(xs))
-                v.bottom_legend.SetToolTipString(u"Time (s)")
+                v.bottom_legend.SetToolTip(u"Time (s)")
 
                 v.left_legend.range = (min(ys), max(ys))
-                v.left_legend.SetToolTipString(u"Count per second")
+                v.left_legend.SetToolTip(u"Count per second")
 
                 time.sleep(0.01)
 

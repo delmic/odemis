@@ -31,6 +31,7 @@ import numpy
 import threading
 from types import NoneType
 import zmq
+import types
 
 from odemis.util.weak import WeakMethod, WeakRefLostError
 
@@ -81,7 +82,10 @@ class VigilantAttributeBase(object):
         init (boolean): if True calls the listener directly, to initialise it
         """
         assert callable(listener)
-        self._listeners.add(WeakMethod(listener))
+        if isinstance(listener, types.BuiltinMethodType):
+            self._listeners.add(listener)
+        else:
+            self._listeners.add(WeakMethod(listener))
 
         if init:
             listener(self.value)
@@ -290,7 +294,7 @@ class VigilantAttribute(VigilantAttributeBase):
         # add string to listeners if listener is string
         if isinstance(listener, basestring):
             self._remote_listeners.add(listener)
-            if init:
+            if init and self.pipe is not None:
                 self.pipe.send_pyobj(self.value)
         else:
             VigilantAttributeBase.subscribe(self, listener, init)

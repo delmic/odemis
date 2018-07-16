@@ -611,9 +611,9 @@ class ViewButtonController(object):
         size_sub = (max(1, (size[0] - border_width) // 2),
                     max(1, (size[1] - border_width) // 2))
         # starts with an empty image with the border colour everywhere
-        im_22 = wx.EmptyImage(*size, clear=False)
-        im_22.SetRGBRect(wx.Rect(0, 0, *size),
-                         *btn_all.GetBackgroundColour().Get())
+        im_22 = wx.Image(*size, clear=False)
+        im_22.SetRGB(wx.Rect(0, 0, *size),
+                     *(btn_all.GetBackgroundColour().Get()[:-1]))
 
         i = 0
 
@@ -627,7 +627,7 @@ class ViewButtonController(object):
                 sim = img.wxImageScaleKeepRatio(im, size_sub, wx.IMAGE_QUALITY_HIGH)
             else:
                 # Create an empty black image, if no image is set
-                sim = wx.EmptyImage(*size_sub)
+                sim = wx.Image(*size_sub)
 
             # compute placement
             y, x = divmod(i, 2)

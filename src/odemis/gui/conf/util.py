@@ -357,7 +357,7 @@ def bind_setting_context_menu(settings_entry):
         mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
         eo = evt.GetEventObject()
         eo.Bind(wx.EVT_MENU, reset_value, mi)
-        menu.AppendItem(mi)
+        menu.Append(mi)
         # Disable the menu item if the value has not changed
         disable = settings_entry.vigilattr.value != orig_val
         mi.Enable(disable)
@@ -854,7 +854,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)
         def cb_set(value, ctrl=value_ctrl, u=unit, acc=accuracy):
-            for i in range(ctrl.Count):
+            for i in range(ctrl.GetCount()):
                 d = ctrl.GetClientData(i)
                 if (d == value or
                     (all(isinstance(v, float) for v in (value, d)) and
@@ -907,8 +907,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     else:
         logging.error("Unknown control type %s", control_type)
 
-    value_ctrl.SetToolTipString(tooltip)
-    lbl_ctrl.SetToolTipString(tooltip)
+    value_ctrl.SetToolTip(tooltip)
+    lbl_ctrl.SetToolTip(tooltip)
 
     return setting_entry
 
@@ -995,7 +995,7 @@ def create_axis_entry(container, name, comp, conf=None):
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)
         def cb_set(value, ctrl=value_ctrl, unit=unit):
-            for i in range(ctrl.Count):
+            for i in range(ctrl.GetCount()):
                 if ((isinstance(value, float) and util.almost_equal(ctrl.GetClientData(i), value)) or
                     ctrl.GetClientData(i) == value):
                     logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
@@ -1028,8 +1028,8 @@ def create_axis_entry(container, name, comp, conf=None):
     else:
         logging.error("Unknown control type %s", control_type)
 
-    value_ctrl.SetToolTipString(tooltip)
-    lbl_ctrl.SetToolTipString(tooltip)
+    value_ctrl.SetToolTip(tooltip)
+    lbl_ctrl.SetToolTip(tooltip)
 
     return axis_entry
 

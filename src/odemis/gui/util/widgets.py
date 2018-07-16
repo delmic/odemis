@@ -309,9 +309,9 @@ class ProgressiveFutureConnector(object):
             self._bar.Range = 100
             self._bar.Value = 100
             if self._label is None:
-                self._bar.SetToolTipString("Completed")
+                self._bar.SetToolTip("Completed")
         elif self._label is None:
-            self._bar.SetToolTipString("Cancelled")
+            self._bar.SetToolTip("Cancelled")
 
         # Drop references to avoid holding the object in memory
         self._future = None
@@ -372,7 +372,7 @@ class ProgressiveFutureConnector(object):
             lbl_txt += u" left"
 
         if self._label is None:
-            self._bar.SetToolTipString(lbl_txt)
+            self._bar.SetToolTip(lbl_txt)
         else:
             # TODO: if the text is too big for the label, rewrite with full=False
             # we could try to rely on IsEllipsized() (which requires support for

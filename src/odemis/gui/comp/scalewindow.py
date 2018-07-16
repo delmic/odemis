@@ -79,7 +79,7 @@ class BufferedWindow(wx.Control):
 
         # Initialise the buffer to "something". It will be updated as soon as
         # OnSize is called
-        self._Buffer = wx.EmptyBitmap(1, 1)
+        self._Buffer = wx.Bitmap(1, 1)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -114,14 +114,14 @@ class BufferedWindow(wx.Control):
 
         :param `event`: a `wx.SizeEvent` event to be processed.
         """
-        Width, Height = self.GetClientSizeTuple()
+        Width, Height = wx.Window.GetClientSize(self)
         Width = max(Width, 1)
         Height = max(Height, 1)
 
         # Make new off screen bitmap: this bitmap will always have the
         # current drawing in it, so it can be used to save the image to
         # a file, or whatever.
-        self._Buffer = wx.EmptyBitmap(Width, Height)
+        self._Buffer = wx.Bitmap(Width, Height)
         self.update_drawing()
 
     def update_drawing(self):

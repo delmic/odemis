@@ -125,7 +125,7 @@ class StreamPanelHeader(wx.Control):
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
         # The spacer is responsible for creating padding on the right side of the header panel
-        self._sz.AddSpacer((64, 16))
+        self._sz.AddSpacer(64)#todo: 16 left in vertical
 
         # Set the sizer of the Control
         self.SetSizerAndFit(self._sz)
@@ -141,7 +141,7 @@ class StreamPanelHeader(wx.Control):
                                       bitmap=img.getBitmap("icon/ico_rem_str.png"),
                                       size=self.BUTTON_SIZE)
         btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
-        btn_rem.SetToolTipString("Remove stream")
+        btn_rem.SetToolTip("Remove stream")
         self._add_ctrl(btn_rem)
         return btn_rem
 
@@ -172,7 +172,7 @@ class StreamPanelHeader(wx.Control):
             colour=self.Parent.stream.tint.value,
             use_hover=True
         )
-        tint_btn.SetToolTipString("Stream display colour")
+        tint_btn.SetToolTip("Stream display colour")
 
         # Tint event handlers
         tint_btn.Bind(wx.EVT_BUTTON, self._on_tint_click)
@@ -188,7 +188,7 @@ class StreamPanelHeader(wx.Control):
         peak_btn.bmpSelected = [img.getBitmap("icon/ico_peak_%s.png" % (m,)) for m in ("gaussian", "lorentzian")]
         peak_btn.bmpSelectedHover = [img.getBitmap("icon/ico_peak_%s_h.png" % (m,)) for m in ("gaussian", "lorentzian")]
 
-        peak_btn.SetToolTipString("Select peak fitting (Gaussian, Lorentzian, or none)")
+        peak_btn.SetToolTip("Select peak fitting (Gaussian, Lorentzian, or none)")
         self._add_ctrl(peak_btn)
         return peak_btn
 
@@ -200,7 +200,7 @@ class StreamPanelHeader(wx.Control):
         visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
         visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
 
-        visibility_btn.SetToolTipString("Toggle stream visibility")
+        visibility_btn.SetToolTip("Toggle stream visibility")
         self._add_ctrl(visibility_btn)
         return visibility_btn
 
@@ -214,7 +214,7 @@ class StreamPanelHeader(wx.Control):
 
         # TODO: add a tooltip for when selected ("Turn off stream" vs "Activate stream")
         # => on ImageToggleButton
-        update_btn.SetToolTipString("Update stream")
+        update_btn.SetToolTip("Update stream")
 
         self._vac_updated = VigilantAttributeConnector(
             self.Parent.stream.should_update,
@@ -545,7 +545,7 @@ class StreamPanel(wx.Panel):
             # move & resize the container window
             yoffset = self.main_sizer.GetSize().GetHeight()
             if oursz.y - yoffset > 0:
-                self._panel.SetDimensions(0, yoffset, oursz.x, oursz.y - yoffset)
+                wx.Window.SetSize(self._panel, 0, yoffset, oursz.x, oursz.y - yoffset)
                 # this is very important to make the pane window layout show
                 # correctly
                 self._panel.Show()
@@ -571,7 +571,8 @@ class StreamPanel(wx.Panel):
         if not self._collapsed:
             pbs = self._panel.GetBestSize()
             sz.width = max(sz.GetWidth(), pbs.x)
-            sz.height = sz.y + pbs.y
+            # For wxPython 4 this is no longer needed
+            # sz.height = sz.y + pbs.y
 
         return sz
 
@@ -713,7 +714,7 @@ class StreamPanel(wx.Panel):
 
         lbl_ctrl = wx.StaticText(self._panel, -1, label_text)
         if tooltip:
-            lbl_ctrl.SetToolTipString(tooltip)
+            lbl_ctrl.SetToolTip(tooltip)
 
         self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -726,7 +727,7 @@ class StreamPanel(wx.Panel):
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
                                                    label="Auto")
-        btn_autobc.SetToolTipString("Toggle image auto brightness/contrast")
+        btn_autobc.SetToolTip("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         sld_bc_outliers = UnitFloatSlider(
@@ -739,7 +740,7 @@ class StreamPanel(wx.Panel):
             accuracy=2
         )
 
-        sld_bc_outliers.SetToolTipString("Amount of dark and bright pixels to ignore")
+        sld_bc_outliers.SetToolTip("Amount of dark and bright pixels to ignore")
 
         autobc_sz = wx.BoxSizer(wx.HORIZONTAL)
         autobc_sz.Add(btn_autobc, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=5)
@@ -774,7 +775,7 @@ class StreamPanel(wx.Panel):
 
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
         tooltip_txt = "Value mapped to black"
-        lbl_lowi.SetToolTipString(tooltip_txt)
+        lbl_lowi.SetToolTip(tooltip_txt)
 
         txt_lowi = FloatTextCtrl(self._panel, -1,
                                  self.stream.intensityRange.value[0],
@@ -784,12 +785,12 @@ class StreamPanel(wx.Panel):
         txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
 
-        txt_lowi.SetToolTipString(tooltip_txt)
+        txt_lowi.SetToolTip(tooltip_txt)
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
 
         tooltip_txt = "Value mapped to white"
-        lbl_highi.SetToolTipString(tooltip_txt)
+        lbl_highi.SetToolTip(tooltip_txt)
         txt_highi = FloatTextCtrl(self._panel, -1,
                                   self.stream.intensityRange.value[1],
                                   style=wx.NO_BORDER, size=(-1, 14),
@@ -797,7 +798,7 @@ class StreamPanel(wx.Panel):
                                   key_step=1, accuracy=6)
         txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
-        txt_highi.SetToolTipString(tooltip_txt)
+        txt_highi.SetToolTip(tooltip_txt)
 
         # Add controls to sizer for spacing
         lh_sz = wx.BoxSizer(wx.HORIZONTAL)
@@ -1126,7 +1127,7 @@ class StreamPanel(wx.Panel):
         btn_fit_rgb = buttons.ImageTextToggleButton(self._panel, height=24,
                                                     icon=img.getBitmap("icon/ico_bgr.png"),
                                                     label="RGB")
-        btn_fit_rgb.SetToolTipString("Toggle sub-bandwidths to Blue/Green/Red display")
+        btn_fit_rgb.SetToolTip("Toggle sub-bandwidths to Blue/Green/Red display")
 
         self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP | wx.BOTTOM,
                           border=5)
@@ -1163,7 +1164,7 @@ class StreamPanel(wx.Panel):
         tooltip_txt = "Center wavelength of the spectrum"
 
         lbl_scenter = wx.StaticText(self._panel, -1, "Center")
-        lbl_scenter.SetToolTipString(tooltip_txt)
+        lbl_scenter.SetToolTip(tooltip_txt)
 
         txt_scenter = UnitFloatCtrl(self._panel, -1, (wl[0] + wl[1]) / 2,
                                     style=wx.NO_BORDER, size=(-1, 14),
@@ -1173,11 +1174,11 @@ class StreamPanel(wx.Panel):
 
         txt_scenter.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_scenter.SetForegroundColour(FG_COLOUR_EDIT)
-        txt_scenter.SetToolTipString(tooltip_txt)
+        txt_scenter.SetToolTip(tooltip_txt)
 
         tooltip_txt = "Bandwidth of the spectrum"
         lbl_sbw = wx.StaticText(self._panel, -1, "Bandwidth")
-        lbl_sbw.SetToolTipString(tooltip_txt)
+        lbl_sbw.SetToolTip(tooltip_txt)
 
         txt_sbw = UnitFloatCtrl(self._panel, -1, (wl[1] - wl[0]),
                                 style=wx.NO_BORDER, size=(-1, 14),
@@ -1186,7 +1187,7 @@ class StreamPanel(wx.Panel):
                                 accuracy=3)
         txt_sbw.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_sbw.SetForegroundColour(FG_COLOUR_EDIT)
-        txt_sbw.SetToolTipString(tooltip_txt)
+        txt_sbw.SetToolTip(tooltip_txt)
 
         cb_wl_sz = wx.BoxSizer(wx.HORIZONTAL)
         cb_wl_sz.Add(lbl_scenter, 0,
@@ -1226,7 +1227,7 @@ class StreamPanel(wx.Panel):
             max_val=self.stream.selectionWidth.range[1],
             unit="px",
         )
-        sld_selection_width.SetToolTipString(tooltip_txt)
+        sld_selection_width.SetToolTip(tooltip_txt)
 
         self.gb_sizer.Add(sld_selection_width, (self.num_rows, 1), span=(1, 2), border=5,
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL)
@@ -1398,7 +1399,7 @@ class StreamBar(wx.Panel):
             self._sz = wx.BoxSizer(wx.VERTICAL)
             self.SetSizer(self._sz)
 
-        self._sz.InsertWindow(ins_pos, spanel,
+        self._sz.Insert(ins_pos, spanel,
                               flag=self.DEFAULT_STYLE,
                               border=self.DEFAULT_BORDER)
 

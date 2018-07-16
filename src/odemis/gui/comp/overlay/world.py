@@ -390,7 +390,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 point.SetMaskColour(wx.BLACK)
 
                 horz_dc = wx.MemoryDC()
-                horz_bmp = wx.EmptyBitmap(int(end_x - start_x), 3)
+                horz_bmp = wx.Bitmap(int(end_x - start_x), 3)
                 horz_dc.SelectObject(horz_bmp)
                 horz_dc.SetBackground(wx.BLACK_BRUSH)
                 horz_dc.Clear()
@@ -401,7 +401,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     blit(x, 0, 3, 3, point_dc, 0, 0)
 
                 total_dc = wx.MemoryDC()
-                self._bmp = wx.EmptyBitmap(int(end_x - start_x), int(end_y - start_y))
+                self._bmp = wx.Bitmap(int(end_x - start_x), int(end_y - start_y))
                 total_dc.SelectObject(self._bmp)
                 total_dc.SetBackground(wx.BLACK_BRUSH)
                 total_dc.Clear()
@@ -414,7 +414,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._bmp.SetMaskColour(wx.BLACK)
                 self._bmp_bpos = cl_pos
 
-            self.cnvs.dc_buffer.DrawBitmapPoint(
+            wx.DC.DrawBitmap(self.cnvs.dc_buffer,
                 self._bmp,
                 wx.Point(int(start_x), int(start_y)),
                 useMask=True
@@ -613,7 +613,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
     def on_left_up(self, evt):
         if self.active:
             DragMixin._on_left_up(self, evt)
-            self.p_pos = self.cnvs.view_to_phys(evt.GetPositionTuple(), self.offset_b)
+            self.p_pos = self.cnvs.view_to_phys(evt.Position, self.offset_b)
             self._phys_to_ratio()
             self.cnvs.update_drawing()
         else:
@@ -621,7 +621,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
 
     def on_motion(self, evt):
         if self.active and self.left_dragging:
-            self.p_pos = self.cnvs.view_to_phys(evt.GetPositionTuple(), self.offset_b)
+            self.p_pos = self.cnvs.view_to_phys(evt.Position, self.offset_b)
             self._phys_to_ratio()
             self.cnvs.update_drawing()
         else:
@@ -913,7 +913,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
         """ Start drawing a selection line if the overlay is active """
 
         if self.active:
-            v_pos = evt.GetPositionTuple()
+            v_pos = evt.Position
             if self.is_over_pixel_data(v_pos):
                 LineSelectOverlay.on_left_down(self, evt)
                 self._snap_to_pixel()
@@ -968,7 +968,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
 
         if self.active:
-            v_pos = evt.GetPositionTuple()
+            v_pos = evt.Position
             if self.is_over_pixel_data(v_pos):
                 LineSelectOverlay.on_motion(self, evt)
                 # Little test for real time spectrum display, which was too slow, as expected
@@ -1039,7 +1039,7 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
         """ Update the current mouse position """
 
         if self.active:
-            v_pos = evt.GetPositionTuple()
+            v_pos = evt.Position
             PixelDataMixin._on_motion(self, evt)
             DragMixin._on_motion(self, evt)
 
@@ -1048,7 +1048,7 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
 
                 # Cache the current data pixel position
                 old_pixel_pos = self._pixel_pos
-                self._pixel_pos = self.view_to_data_pixel(evt.GetPositionTuple())
+                self._pixel_pos = self.view_to_data_pixel(evt.Position)
 
                 if self._pixel_pos != old_pixel_pos:
                     if self.is_over_pixel_data() and self.left_dragging:
@@ -1213,7 +1213,7 @@ class PointsOverlay(WorldOverlay):
         """ Detect when the cursor hovers over a dot """
         if self.active:
             if not self.cnvs.left_dragging and self.choices:
-                v_x, v_y = evt.GetPositionTuple()
+                v_x, v_y = evt.Position
                 b_x, b_y = self.cnvs.view_to_buffer((v_x, v_y))
                 offset = self.cnvs.get_half_buffer_size()
 

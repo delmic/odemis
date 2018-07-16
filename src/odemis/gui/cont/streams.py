@@ -605,7 +605,7 @@ class StreamController(object):
                 """
                 # The control can be a label or a combo-box, but we are connected only
                 # when it's a combo-box
-                for i in range(value_ctrl.Count):
+                for i in range(value_ctrl.GetCount()):
                     if value_ctrl.GetClientData(i) == value:
                         value_ctrl.SetSelection(i)
                         break
@@ -680,7 +680,7 @@ class StreamController(object):
                 Called to update the widgets (text + colour display) when the VA changes.
                 returns nothing
                 """
-                for i in range(value_ctrl.Count):
+                for i in range(value_ctrl.GetCount()):
                     if value_ctrl.GetClientData(i) == value:
                         value_ctrl.SetSelection(i)
                         break
@@ -863,11 +863,11 @@ class StreamController(object):
             # No dye known => no peak information
             lbl_ctrl.LabelText = u""
             lbl_ctrl.SetToolTip(None)
-            col_ctrl.SetToolTipString(u"Centre wavelength colour")
+            col_ctrl.SetToolTip(u"Centre wavelength colour")
         else:
             wl_nm = int(round(wl * 1e9))
             lbl_ctrl.LabelText = u"Peak at %d nm" % wl_nm
-            col_ctrl.SetToolTipString(u"Peak wavelength colour")
+            col_ctrl.SetToolTip(u"Peak wavelength colour")
 
             fit = fluo.estimate_fit_to_dye(wl, band)
             # Update colour
@@ -886,7 +886,7 @@ class StreamController(object):
             if isinstance(band[0], collections.Iterable):  # multi-band
                 band = fluo.find_best_band_for_dye(wl, band)
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
-            lbl_ctrl.SetToolTipString(tooltip % (low, high))
+            lbl_ctrl.SetToolTip(tooltip % (low, high))
 
 
 class StreamBarController(object):

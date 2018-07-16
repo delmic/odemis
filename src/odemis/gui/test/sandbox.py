@@ -24,7 +24,7 @@ class DrawPanelDBT(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self.t = None
-        self.w, self.h = self.GetClientSizeTuple()
+        self.w, self.h = wx.Window.GetClientSize(self)
         self.buffer = wx.EmptyBitmap(self.w, self.h)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -43,8 +43,8 @@ class DrawPanelDBT(wx.Panel):
 
     #-------------------------------------------------------------------------
     def OnSize(self, event):
-        self.w, self.h = self.GetClientSizeTuple()
-        self.buffer = wx.EmptyBitmap(self.w, self.h)
+        self.w, self.h = wx.Window.GetClientSize(self)
+        self.buffer = wx.Bitmap(self.w, self.h)
         self.Refresh()
         self.Update()
         # After drawing empty bitmap start update
@@ -234,7 +234,7 @@ class CairoPanel(wx.Panel):
         width, height = self.GetClientSize()
 
         dcb = wx.MemoryDC()
-        buff = wx.EmptyBitmap(2 * width, 2 * height)
+        buff = wx.Bitmap(2 * width, 2 * height)
         dcb.SelectObject(buff)
 
         cr = wx.lib.wxcairo.ContextFromDC(dcb)
@@ -264,11 +264,13 @@ class CairoPanel(wx.Panel):
         cr.show_text(self.text)
         cr.stroke()
 
-        dcp.BlitPointSize(
-            (0, 0),             # destination point
-            self.ClientSize,    # size of area to copy
-            dcb,                # source
-            (0, 0)              # source point
+        wx.DC.Blit(
+            dcp,
+            0, 0,  # destination point
+            self.ClientSize[0],  # size of area to copy
+            self.ClientSize[1],  # size of area to copy
+            dcb,  # source
+            0, 0  # source point
         )
 
     #Change what text is shown

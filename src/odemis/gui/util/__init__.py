@@ -59,7 +59,7 @@ def ignore_dead(f, self, *args, **kwargs):
     """
     try:
         return f(self, *args, **kwargs)
-    except (wx.PyDeadObjectError, RuntimeError):
+    except RuntimeError:
         logging.warn("Dead object ignored in %s", f.__name__)
 
 
@@ -115,12 +115,12 @@ def dead_object_wrapper(f):
             app = wx.GetApp()
             if app:
                 return f(*args, **kwargs)
-        except (wx.PyDeadObjectError, RuntimeError):
+        except RuntimeError:
             logging.warning("Dead object ignored in %s", f.__name__)
         except TypeError:
             # If a wx.Window is destroyed and then passed as a parameter, a TypeError might reulst
             # instead of a PyDeadObjectError.
-            if all([isinstance(a, wx._core._wxPyDeadObject) for a in args]):
+            if all([isinstance(a, RuntimeError) for a in args]):
                 logging.warning("Dead object parameter ignored in %s", f.__name__)
             else:
                 raise

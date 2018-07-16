@@ -25,7 +25,7 @@ from __future__ import division
 from odemis.util.conversion import hex_to_frgba
 from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 from odemis.gui import img
 from odemis.gui.util import wxlimit_invocation
 import collections
@@ -35,14 +35,15 @@ import odemis.gui as gui
 import time
 import wx
 import wx.lib.wxcairo as wxcairo
+from odemis.util import no_conflict
 
 
-class BaseSlider(wx.PyControl):
+class BaseSlider(wx.Control):
     """ This abstract base class makes sure that all custom sliders implement
     the right interface. This interface closely resembles the interface of
     wx.Slider.
     """
-    __metaclass__ = ABCMeta
+    __metaclass__ = no_conflict.classmaker()
 
     # The abstract methods must be implemented by any class inheriting from
     # BaseSlider
@@ -52,7 +53,7 @@ class BaseSlider(wx.PyControl):
 
     @abstractmethod
     def Enable(self, *args, **kwargs):
-        return wx.PyControl.Enable(self, *args, **kwargs)
+        return wx.Control.Enable(self, *args, **kwargs)
 
     @abstractmethod
     def OnPaint(self, event=None):
@@ -295,7 +296,7 @@ class Slider(BaseSlider):
             # Layout Events
             self.Unbind(wx.EVT_PAINT, self.OnPaint)
             self.Unbind(wx.EVT_SIZE, self.OnSize)
-        except (wx.PyDeadObjectError, AttributeError):
+        except (RuntimeError, AttributeError):
             pass
 
     def OnPaint(self, event=None):
@@ -814,7 +815,7 @@ class VisualRangeSlider(BaseSlider):
     def Enable(self, enable=True):  #pylint: disable=W0221
 
         if enable != self.Enabled:
-            wx.PyControl.Enable(self, enable)
+            wx.Control.Enable(self, enable)
             # Uncomment if you need different colour when disabled
             # dim = 0.2
             # if enable:
@@ -927,9 +928,9 @@ class VisualRangeSlider(BaseSlider):
         if self.mode is None:
             hover = self._hover(x)
             if hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
-                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
+                self.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
             elif hover == gui.HOVER_SELECTION:
-                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW)) # A closed hand!
+                self.SetCursor(wx.Cursor(wx.CURSOR_SIZENESW)) # A closed hand!
             else:
                 self.SetCursor(wx.STANDARD_CURSOR)
 
@@ -992,8 +993,8 @@ class VisualRangeSlider(BaseSlider):
     def OnSize(self, event=None):
         self._update_pixel_value()
 
-        self._content_buffer = wx.EmptyBitmap(*self.ClientSize)
-        self._buffer = wx.EmptyBitmap(*self.ClientSize)
+        self._content_buffer = wx.Bitmap(*self.ClientSize)
+        self._buffer = wx.Bitmap(*self.ClientSize)
         self.UpdateContent()
         self.UpdateSelection()
 

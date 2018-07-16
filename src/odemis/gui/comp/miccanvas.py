@@ -785,7 +785,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 softener = 1
 
             # We only care of the vertical position for the focus
-            pos = evt.GetPositionTuple()
+            pos = evt.Position
             # Flip the sign for vertical movement, as indicated in the
             # on_extra_axis_move docstring: up/right is positive
             shift = -(pos[1] - self._rdrag_init_pos[1])
@@ -1069,7 +1069,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         # overlay without it being rescaled afterwards
 
         # Create an image from the bitmap buffer
-        image = wx.ImageFromBitmap(self._bmp_buffer)
+        image = self._bmp_buffer.ConvertToImage()
         scaled_img = img.wxImageScaleKeepRatio(image, gui.VIEW_BTN_SIZE, wx.IMAGE_QUALITY_HIGH)
         ratio = min(gui.VIEW_BTN_SIZE[0] / image.Width,
                     gui.VIEW_BTN_SIZE[1] / image.Height)
@@ -1077,7 +1077,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
                  (gui.VIEW_BTN_SIZE[1] - self.ClientSize.y * ratio) / 2)
 
         dc = wx.MemoryDC()
-        bitmap = wx.BitmapFromImage(scaled_img)
+        bitmap = wx.Bitmap(scaled_img)
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
@@ -1086,7 +1086,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         # close the DC, to be sure the bitmap can be used safely
         del dc
 
-        scaled_img = wx.ImageFromBitmap(bitmap)
+        scaled_img = bitmap.ConvertToImage()
         self.microscope_view.thumbnail.value = scaled_img
 
 

@@ -253,9 +253,7 @@ class OdemisGUIApp(wx.App):
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_quit.GetId(),
-                        self.on_close_window)
+            self.main_frame.Bind(wx.EVT_MENU, self.on_close_window, id=self.main_frame.menu_item_quit.GetId())
 
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
 

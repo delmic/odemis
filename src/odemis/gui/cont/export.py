@@ -69,9 +69,8 @@ class ExportController(object):
 
         self._viewports = viewports.keys()
 
-        wx.EVT_MENU(self._main_frame,
-                    self._main_frame.menu_item_export_as.GetId(),
-                    self.on_export)
+        self._main_frame.Bind(wx.EVT_MENU, self.on_export, id=self._main_frame.menu_item_export_as.GetId())
+
         self._main_frame.menu_item_export_as.Enable(False)
 
         # subscribe to get notified about tab changes

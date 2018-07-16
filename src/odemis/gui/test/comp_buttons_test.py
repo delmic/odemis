@@ -64,20 +64,20 @@ class ButtonsTestCase(test.GuiTestCase):
             # Without explicit size
 
             btn = buttons.ImageButton(self.panel, height=h)
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
             for w in BTN_WIDTHS:
                 btn = buttons.ImageButton(self.panel, height=h, size=(w, -1))
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
             self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
 
         btn = buttons.ImageButton(self.panel, height=h)
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
         # With icon
@@ -90,21 +90,21 @@ class ButtonsTestCase(test.GuiTestCase):
 
             btn = buttons.ImageButton(self.panel, height=h,
                                       icon=img.getBitmap("icon/ico_chevron_down.png"))
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
             for w in BTN_WIDTHS:
                 btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
                                           icon=img.getBitmap("icon/ico_chevron_down.png"))
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
             self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
 
         btn = buttons.ImageButton(self.panel, height=h, icon=img.getBitmap("icon/ico_chevron_down.png"))
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
         # With icon, CENTER ALIGNED
@@ -117,7 +117,7 @@ class ButtonsTestCase(test.GuiTestCase):
 
             btn = buttons.ImageButton(self.panel, height=h,
                                       icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_CENTER)
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
             btn.SetIcon(img.getBitmap("icon/ico_chevron_down.png"))
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
@@ -125,7 +125,7 @@ class ButtonsTestCase(test.GuiTestCase):
             for w in BTN_WIDTHS:
                 btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
                                           icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_CENTER)
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
@@ -133,7 +133,7 @@ class ButtonsTestCase(test.GuiTestCase):
 
         btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
                                   icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_CENTER)
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
         # With icon, RIGHT ALIGNED
@@ -146,7 +146,7 @@ class ButtonsTestCase(test.GuiTestCase):
 
             btn = buttons.ImageButton(self.panel, height=h,
                                       icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_RIGHT)
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
             btn.SetIcon(img.getBitmap("icon/ico_chevron_down.png"))
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
@@ -154,7 +154,7 @@ class ButtonsTestCase(test.GuiTestCase):
             for w in BTN_WIDTHS:
                 btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
                                           icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_RIGHT)
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
@@ -162,7 +162,7 @@ class ButtonsTestCase(test.GuiTestCase):
 
         btn = buttons.ImageButton(self.panel, height=h,
                                   icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_RIGHT)
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
     def test_image_text_button(self):
@@ -178,20 +178,20 @@ class ButtonsTestCase(test.GuiTestCase):
             # Without explicit size
 
             btn = buttons.ImageTextButton(self.panel, label="Hoger", height=h)
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
             for w in BTN_WIDTHS:
                 btn = buttons.ImageTextButton(self.panel, label="Hoger", height=h, size=(w, -1))
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
             self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
 
         btn = buttons.ImageTextButton(self.panel, label="Hoger", height=h, size=(w, -1))
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
         # With icon
@@ -206,7 +206,7 @@ class ButtonsTestCase(test.GuiTestCase):
             btn = buttons.ImageTextButton(
                 self.panel, label="Hoger", height=h,
                 icon=img.getBitmap("icon/ico_chevron_down.png"))
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
@@ -214,7 +214,7 @@ class ButtonsTestCase(test.GuiTestCase):
                 btn = buttons.ImageTextButton(
                     self.panel, label="Hoger", height=h, size=(w, -1),
                     icon=img.getBitmap("icon/ico_chevron_down.png"))
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
@@ -223,7 +223,7 @@ class ButtonsTestCase(test.GuiTestCase):
         btn = buttons.ImageTextButton(
             self.panel, label="Hoger", height=h, size=(w, -1),
             icon=img.getBitmap("icon/ico_chevron_down.png"))
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
         # With icon, CENTER ALIGNED
@@ -239,7 +239,7 @@ class ButtonsTestCase(test.GuiTestCase):
             btn = buttons.ImageTextButton(
                 self.panel, label="Hoger", height=h,
                 icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_CENTER)
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
             btn.SetIcon(img.getBitmap("icon/ico_chevron_down.png"))
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
@@ -248,7 +248,7 @@ class ButtonsTestCase(test.GuiTestCase):
                 btn = buttons.ImageTextButton(
                     self.panel, label="Hoger", height=h, size=(w, -1),
                     icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_CENTER)
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
@@ -257,7 +257,7 @@ class ButtonsTestCase(test.GuiTestCase):
         btn = buttons.ImageTextButton(
             self.panel, label="Hoger", height=h, size=(w, -1),
             icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_CENTER)
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
         # With icon, RIGHT ALIGNED
@@ -273,7 +273,7 @@ class ButtonsTestCase(test.GuiTestCase):
             btn = buttons.ImageTextButton(
                 self.panel, label="Hoger", height=h,
                 icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_RIGHT)
-            btn.SetToolTipString("No width defined")
+            btn.SetToolTip("No width defined")
             btn.SetIcon(img.getBitmap("icon/ico_chevron_down.png"))
 
             row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
@@ -282,7 +282,7 @@ class ButtonsTestCase(test.GuiTestCase):
                 btn = buttons.ImageTextButton(
                     self.panel, label="Hoger", height=h, size=(w, -1),
                     icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_RIGHT)
-                btn.SetToolTipString("Width set to %d" % w)
+                btn.SetToolTip("Width set to %d" % w)
 
                 row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
 
@@ -291,7 +291,7 @@ class ButtonsTestCase(test.GuiTestCase):
         btn = buttons.ImageTextButton(
             self.panel, label="Hoger", height=h, size=(w, -1),
             icon=img.getBitmap("icon/ico_chevron_down.png"), style=wx.ALIGN_RIGHT)
-        btn.SetToolTipString("Expand")
+        btn.SetToolTip("Expand")
         self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
 
 

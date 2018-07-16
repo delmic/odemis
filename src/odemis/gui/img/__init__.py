@@ -37,7 +37,7 @@ def getImage(fn):
        "src/odemis/gui/img"
     return (wx.Image)
     """
-    return wx.ImageFromStream(getStream(fn))  # , wx.BITMAP_TYPE_PNG)
+    return wx.Image(getStream(fn))  # , wx.BITMAP_TYPE_PNG)
 
 
 def getBitmap(fn):
@@ -47,7 +47,7 @@ def getBitmap(fn):
        "src/odemis/gui/img"
     return (wx.Bitmap)
     """
-    return wx.BitmapFromImage(getImage(fn))
+    return wx.Bitmap(getImage(fn))
 
 
 def getIcon(fn):
@@ -57,4 +57,4 @@ def getIcon(fn):
        "src/odemis/gui/img"
     return (wx.Icon)
     """
-    return wx.IconFromBitmap(getBitmap(fn))
+    return wx.Icon(getBitmap(fn))
