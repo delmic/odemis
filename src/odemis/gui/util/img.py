@@ -713,7 +713,7 @@ def calculate_raw_ar(data, bg_data):
     else:
         dtype = None  # just let the function use the best one
 
-    size = (100, 400)  # TODO: increase if data is high def
+    size = (90, 360)  # TODO: increase if data is high def
 
     if bg_data is None:
         # Simple version: remove the background value
@@ -748,7 +748,7 @@ def ar_to_export_data(streams, raw=False):
 
     s = streams[0]
 
-    if raw:
+    if raw:  # csv
         pos = s.point.value
 
         # find positions of each acquisition
