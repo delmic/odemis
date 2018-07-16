@@ -31,7 +31,6 @@ from odemis import model
 from odemis.acq import path, leech
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
-from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
