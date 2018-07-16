@@ -82,7 +82,7 @@ class HardwareButtonController(object):
             return
         state = self.vac.vigilattr.value
         if state in self._tooltips:
-            self.btn.SetToolTipString(self._tooltips[state])
+            self.btn.SetToolTip(self._tooltips[state])
 
     def Enable(self, enabled=True):
         self.btn.Enable(enabled)
@@ -432,7 +432,7 @@ class SecomStateController(object):
             ):
                 self._tab_data.emState.value = STATE_OFF
                 self._sem_btn_ctrl.Enable(False)
-                self._tab_panel.btn_sem.SetToolTipString(u"Please insert a sample first")
+                self._tab_panel.btn_sem.SetToolTip(u"Please insert a sample first")
 
             if (
                 hasattr(self._tab_data, "opticalState") and
@@ -440,7 +440,7 @@ class SecomStateController(object):
             ):
                 self._tab_data.opticalState.value = STATE_OFF
                 self._opt_btn_ctrl.Enable(False)
-                self._tab_panel.btn_opt.SetToolTipString(u"Please insert a sample first")
+                self._tab_panel.btn_opt.SetToolTip(u"Please insert a sample first")
 
             self._stream_controller.enableStreams(False, self.cls_streams_involved)
 
@@ -696,11 +696,11 @@ class DelphiStateController(SecomStateController):
                 self._main_data.chamberState.value = CHAMBER_VENTING
 
         # Connect the Delphi recalibration to the menu item
-        wx.EVT_MENU(
-                self._main_frame,
-                self._main_frame.menu_item_recalibrate.GetId(),
-                self.request_holder_recalib
-            )
+        self._main_frame.Bind(
+            wx.EVT_MENU,
+            self.request_holder_recalib,
+            id=self._main_frame.menu_item_recalibrate.GetId()
+        )
 
         # Progress dialog for calibration
         self._dlg = None
@@ -847,7 +847,7 @@ class DelphiStateController(SecomStateController):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
         self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
         self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
-        self._tab_panel.pnl_stream_status.SetToolTipString(action)
+        self._tab_panel.pnl_stream_status.SetToolTip(action)
         self._tab_panel.pnl_hw_info.Layout()
 
     def _show_progress_indicators(self, show_load, show_status):
@@ -879,7 +879,7 @@ class DelphiStateController(SecomStateController):
                 # of "closed" -> "closed".
                 logging.info("Door closed (again?) while the chamber was not vented")
         else:
-            self._tab_panel.btn_press.SetToolTipString(u"Please insert a sample first")
+            self._tab_panel.btn_press.SetToolTip(u"Please insert a sample first")
 
     def _start_chamber_pumping(self):
         """

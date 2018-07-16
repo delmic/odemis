@@ -139,7 +139,7 @@ class Tab(object):
             self.tab_data_model.viewLayout.subscribe(set_22_menu_check, init=True)
             # Assigning an event handler to the menu item, overrides
             # any previously assigned ones.
-            wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_22view.GetId(), on_switch_22)
+            self.main_frame.Bind(wx.EVT_MENU, on_switch_22, id=self.main_frame.menu_item_22view.GetId())
             self.main_frame.menu_item_22view.Enable()
         else:
             self.main_frame.menu_item_22view.Enable(False)
@@ -177,8 +177,7 @@ class Tab(object):
             self.tab_data_model.focussedView.subscribe(set_interpolation_check, init=True)
             # Assigning an event handler to the menu item, overrides
             # any previously assigned ones.
-            wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_interpolation.GetId(),
-                        on_switch_interpolation)
+            self.main_frame.Bind(wx.EVT_MENU, on_switch_interpolation, id=self.main_frame.menu_item_interpolation.GetId())
             self.main_frame.menu_item_interpolation.Enable()
         else:
             # If the right elements are not found, simply disable the menu item
@@ -217,8 +216,7 @@ class Tab(object):
             self.tab_data_model.focussedView.subscribe(set_cross_check, init=True)
             # Assigning an event handler to the menu item, overrides
             # any previously assigned ones.
-            wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_cross.GetId(),
-                        on_switch_crosshair)
+            self.main_frame.Bind(wx.EVT_MENU, on_switch_crosshair, id=self.main_frame.menu_item_cross.GetId())
             self.main_frame.menu_item_cross.Enable()
         else:
             # If the right elements are not found, simply disable the menu item
@@ -3301,8 +3299,8 @@ class Sparc2AlignTab(Tab):
         # the "MoI" value bellow the streams
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
         tooltip_txt = "Moment of inertia at the center (smaller is better)"
-        lbl_moi.SetToolTipString(tooltip_txt)
-        txt_moi.SetToolTipString(tooltip_txt)
+        lbl_moi.SetToolTip(tooltip_txt)
+        txt_moi.SetToolTip(tooltip_txt)
         # Change font size and colour
         f = txt_moi.GetFont()
         f.PointSize = 12
@@ -3312,8 +3310,8 @@ class Sparc2AlignTab(Tab):
 
         lbl_ss, txt_ss = cont.add_text_field("Spot intensity", readonly=True)
         tooltip_txt = "Spot intensity at the center (bigger is better)"
-        lbl_ss.SetToolTipString(tooltip_txt)
-        txt_ss.SetToolTipString(tooltip_txt)
+        lbl_ss.SetToolTip(tooltip_txt)
+        txt_ss.SetToolTip(tooltip_txt)
         # Change font size and colour
         f = txt_ss.GetFont()
         f.PointSize = 12

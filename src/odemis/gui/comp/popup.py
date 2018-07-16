@@ -99,7 +99,7 @@ class Message(wx.PopupTransientWindow):
         self.Position(pos, (0, 0))
 
         self.Popup()
-        wx.FutureCall(timeout * 1000, self.Dismiss)
+        wx.CallLater(timeout * 1000, self.Dismiss)
 
         # The Yield call forces wxPython to take control and process any event (i.e. the preceding
         # Refresh call), making sure the Message is shown before the data loading begins.

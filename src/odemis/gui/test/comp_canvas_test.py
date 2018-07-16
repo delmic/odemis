@@ -48,12 +48,12 @@ def get_image_from_buffer(canvas):
     """
     Copy the current buffer into a wx.Image
     """
-    result_bmp = wx.EmptyBitmap(*canvas._bmp_buffer_size)
+    result_bmp = wx.Bitmap(*canvas._bmp_buffer_size)
     result_dc = wx.MemoryDC()
     result_dc.SelectObject(result_bmp)
-    result_dc.BlitPointSize((0, 0), canvas._bmp_buffer_size, canvas._dc_buffer, (0, 0))
+    result_dc.Blit(0, 0, canvas._bmp_buffer_size[0], canvas._bmp_buffer_size[1], canvas._dc_buffer, 0, 0)
     result_dc.SelectObject(wx.NullBitmap)
-    return wx.ImageFromBitmap(result_bmp)
+    return result_bmp.ConvertToImage()
 
 
 class TestDblMicroscopeCanvas(test.GuiTestCase):
@@ -662,7 +662,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.canvas.fit_view_to_content(recenter=True)
         # only .mpp changes, but the image keeps centered
         exp_mpp = (mpp * im2.shape[0]) / self.canvas.ClientSize[0]
-        self.assertAlmostEqual(exp_mpp, self.view.mpp.value)
+        self.assertAlmostEqual(exp_mpp, self.view.mpp.value, 6)
         numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
         test.gui_loop(0.5)
 

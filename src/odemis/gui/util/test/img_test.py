@@ -54,7 +54,7 @@ class TestWxImage2NDImage(unittest.TestCase):
 
     def test_simple(self):
         size = (32, 64)
-        wximage = wx.EmptyImage(*size) # black RGB
+        wximage = wx.Image(*size) # black RGB
         ndimage = wxImage2NDImage(wximage)
         self.assertEqual(ndimage.shape[0:2], size[-1:-3:-1])
         self.assertEqual(ndimage.shape[2], 3) # RGB

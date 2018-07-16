@@ -242,7 +242,7 @@ class ToolBar(wx.Panel):
         btn.bmpDisabled = bmpd
 
         if tooltip:
-            btn.SetToolTipString(tooltip)
+            btn.SetToolTip(tooltip)
 
         if self.orientation == wx.HORIZONTAL:
             f = wx.LEFT | wx.RIGHT | wx.TOP

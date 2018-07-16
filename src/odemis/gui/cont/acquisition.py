@@ -85,13 +85,9 @@ class SnapshotController(object):
         self._outputs = self.get_display_outputs()
 
         # Link snapshot menu to snapshot action
-        wx.EVT_MENU(self._main_frame,
-            self._main_frame.menu_item_snapshot.GetId(),
-            self.start_snapshot_viewport)
+        self._main_frame.Bind(wx.EVT_MENU, self.start_snapshot_viewport, id=self._main_frame.menu_item_snapshot.GetId())
 
-        wx.EVT_MENU(self._main_frame,
-            self._main_frame.menu_item_snapshot_as.GetId(),
-            self.start_snapshot_as_viewport)
+        self._main_frame.Bind(wx.EVT_MENU, self.start_snapshot_as_viewport, id=self._main_frame.menu_item_snapshot_as.GetId())
 
         self._prev_streams = None # To unsubscribe afterwards
         self._main_data_model.tab.subscribe(self.on_tab_change, init=True)
