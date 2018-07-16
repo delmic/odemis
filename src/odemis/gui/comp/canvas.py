@@ -153,6 +153,7 @@ import wx
 
 from odemis.gui import img
 import wx.lib.wxcairo as wxcairo
+from odemis.util import no_conflict
 
 
 # Special abilities that a canvas might possess
@@ -171,7 +172,7 @@ def ignore_if_disabled(f, self, *args, **kwargs):
 class BufferedCanvas(wx.Panel):
     """ Abstract base class for buffered canvasses that display graphical data """
 
-    __metaclass__ = ABCMeta
+    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     def __init__(self, *args, **kwargs):
         # Set default style
@@ -218,9 +219,9 @@ class BufferedCanvas(wx.Panel):
         # This is ugly, but there is no official "drag" cursor, and the best fitting
         # one depends on the OS.
         if sys.platform.startswith("linux"):
-            self._drag_cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+            self._drag_cursor = wx.Cursor(wx.CURSOR_SIZENESW)
         else:
-            self._drag_cursor = wx.StockCursor(wx.CURSOR_SIZING)
+            self._drag_cursor = wx.Cursor(wx.CURSOR_SIZING)
 
         # Event Biding
 
@@ -285,7 +286,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         if isinstance(cursor, int):
-            cursor = wx.StockCursor(cursor)
+            cursor = wx.Cursor(cursor)
 
         self.default_cursor = cursor
         self.SetCursor(self.default_cursor)
@@ -306,7 +307,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         if isinstance(cursor, int):
-            cursor = wx.StockCursor(cursor)
+            cursor = wx.Cursor(cursor)
 
         # FIXME: It does not seem possible to compare Cursor objects in a sensible way, so the
         # next comparison will always evaluate to True. (As in, we cannot detect what cursor an
@@ -471,11 +472,12 @@ class BufferedCanvas(wx.Panel):
         dc_view = wx.PaintDC(self)
 
         # Blit the appropriate area from the buffer to the view port
-        dc_view.BlitPointSize(
-            (0, 0),             # destination point
-            self.ClientSize,    # size of area to copy
-            self._dc_buffer,    # source
-            (0, 0)              # source point
+        dc_view.Blit(
+            0, 0,  # destination point
+            self.ClientSize[0],  # size of area to copy
+            self.ClientSize[1],  # size of area to copy
+            self._dc_buffer,  # source
+            0, 0  # source point
         )
 
         ctx = wxcairo.ContextFromDC(dc_view)
@@ -528,7 +530,7 @@ class BufferedCanvas(wx.Panel):
 
         logging.debug("Resizing buffer for %s to %s", id(self), size)
         # Make new off-screen bitmap
-        self._bmp_buffer = wx.EmptyBitmap(*size)
+        self._bmp_buffer = wx.Bitmap(*size)
         self._bmp_buffer_size = size
 
         # Create a new DC, needed on Windows
@@ -558,7 +560,7 @@ class BufferedCanvas(wx.Panel):
                 # running and then start the timer? Now there's always a delay before anything
                 # gets drawn, even if it's not necessary.
                 self.draw_timer.Start(delay * 1000.0, oneShot=True)
-        except wx.PyDeadObjectError:
+        except RuntimeError:
             # This only should happen when running test cases
             logging.warn("Drawing requested on dead canvas")
 
@@ -767,7 +769,7 @@ class BufferedCanvas(wx.Panel):
         # new bitmap to copy the DC
         # On Windows, the bitmap was made partly transparent because the depth was 32 bit by
         # default. This cause weird colours and parts of the thumbnail being completely transparent.
-        bitmap = wx.EmptyBitmap(*csize, depth=24)
+        bitmap = wx.Bitmap(*csize, depth=24)
         dc = wx.MemoryDC()
         dc.SelectObject(bitmap)
 
@@ -775,12 +777,12 @@ class BufferedCanvas(wx.Panel):
         margin = ((self._bmp_buffer_size[0] - csize[0]) // 2,
                   (self._bmp_buffer_size[1] - csize[1]) // 2)
 
-        dc.BlitPointSize((0, 0), csize, self._dc_buffer, margin)
+        dc.Blit(0, 0, csize[0], csize[1], self._dc_buffer, margin[0], margin[1])
 
         # close the DC, to be sure the bitmap can be used safely
         del dc
 
-        return wx.ImageFromBitmap(bitmap)
+        return bitmap.ConvertToImage()
 
 
 class BitmapCanvas(BufferedCanvas):
@@ -888,7 +890,7 @@ class BitmapCanvas(BufferedCanvas):
         """
 
         # Don't draw anything if the canvas is disabled, leave the current buffer intact.
-        if not self.IsEnabled() or 0 in self.GetClientSizeTuple():
+        if not self.IsEnabled() or 0 in self.GetClientSize():
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
@@ -1450,7 +1452,7 @@ class DraggableCanvas(BitmapCanvas):
             # Fixme: only go to drag mode if the mouse moves before a mouse up?
             self._ldragging = True
 
-            pos = evt.GetPositionTuple()
+            pos = evt.Position
             # There might be several drags before the buffer is updated
             # So take into account the current drag_shift to compensate
             self.drag_init_pos = (pos[0] - self.drag_shift[0],
@@ -1492,7 +1494,7 @@ class DraggableCanvas(BitmapCanvas):
         # Ignore the click if we're already dragging
         if CAN_FOCUS in self.abilities and not self.dragging:
             self._rdragging = True
-            self._rdrag_init_pos = evt.GetPositionTuple()
+            self._rdrag_init_pos = evt.Position
             self._rdrag_prev_value = [0, 0]
 
             logging.debug("Drag started at %s", self._rdrag_init_pos)
@@ -1516,7 +1518,7 @@ class DraggableCanvas(BitmapCanvas):
     def on_dbl_click(self, evt):
         """ Recenter the view around the point that was double clicked """
         if CAN_DRAG in self.abilities:
-            v_pos = evt.GetPositionTuple()
+            v_pos = evt.Position
             v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
             shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
 
@@ -1548,7 +1550,7 @@ class DraggableCanvas(BitmapCanvas):
         """
 
         if CAN_DRAG in self.abilities and self._ldragging:
-            v_pos = evt.GetPositionTuple()
+            v_pos = evt.Position
             drag_shift = (v_pos[0] - self.drag_init_pos[0],
                           v_pos[1] - self.drag_init_pos[1])
 
@@ -1633,11 +1635,14 @@ class DraggableCanvas(BitmapCanvas):
         src_pos = (self.margins[0] - self.drag_shift[0], self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
-        dc_view.BlitPointSize(
-            (0, 0),             # destination point
-            csize,  # size of area to copy
-            self._dc_buffer,    # source
-            src_pos             # source point
+        wx.DC.Blit(
+            dc_view,
+            0, 0,  # destination point
+            csize[0],  # size of area to copy
+            csize[1],  # size of area to copy
+            self._dc_buffer,  # source
+            src_pos[0],  # source point
+            src_pos[1]  # source point
         )
 
         # Remember that the device context of the view port is passed!

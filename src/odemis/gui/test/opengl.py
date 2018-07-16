@@ -205,7 +205,8 @@ class Canvas(glcanvas.GLCanvas):
             rgb = im.GetData()
 
             if im.HasAlpha():
-                alpha = im.GetAlphaData()
+                #todo: not tested yet
+                alpha = im.GetAlphaBuffer()[:].tobytes()
                 rgba = r""
                 d = 4
 

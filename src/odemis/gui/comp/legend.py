@@ -91,7 +91,7 @@ class InfoLegend(wx.Panel):
 
         self.merge_slider.SetBackgroundColour(parent.GetBackgroundColour())
         self.merge_slider.SetForegroundColour(FG_COLOUR_DIS) # "#4d4d4d"
-        self.merge_slider.SetToolTipString("Merge ratio")
+        self.merge_slider.SetToolTip("Merge ratio")
 
         self.bmp_slider_left = wx.StaticBitmap(self,
                                                wx.ID_ANY,
@@ -104,22 +104,22 @@ class InfoLegend(wx.Panel):
         self.hfw_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
         self.hfw_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.hfw_text.SetForegroundColour(parent.GetForegroundColour())
-        self.hfw_text.SetToolTipString("Horizontal Field Width")
+        self.hfw_text.SetToolTip("Horizontal Field Width")
 
         # Magnification text
         self.magnification_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
         self.magnification_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
-        self.magnification_text.SetToolTipString("Magnification")
+        self.magnification_text.SetToolTip("Magnification")
 
         # Scale window
         self.scale_win = ScaleWindow(self)
 
         # TODO more...
         # self.LegendWl = wx.StaticText(self.legend)
-        # self.LegendWl.SetToolTipString("Wavelength")
+        # self.LegendWl.SetToolTip("Wavelength")
         # self.LegendET = wx.StaticText(self.legend)
-        # self.LegendET.SetToolTipString("Exposure Time")
+        # self.LegendET.SetToolTip("Exposure Time")
 
         # self.LegendDwell = wx.StaticText(self.legend)
         # self.LegendSpot = wx.StaticText(self.legend)

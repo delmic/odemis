@@ -95,9 +95,10 @@ class GuiTestApp(wx.App):
         # gen_test_data()
         wx.App.__init__(self, redirect=False)
 
-    def FilterEvent(self, evt):
-        print evt
-        return -1
+    # In wxPython4, it seems to always be called, and that causes logging of all events received during the tests
+    # def FilterEvent(self, evt):
+    #     print evt
+    #     return -1
 
     def OnInit(self):
         self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)
@@ -114,12 +115,12 @@ class GuiTestApp(wx.App):
                         from wx.lib import inspection
                         inspection.InspectionTool().Show()
 
-                    wx.EVT_MENU(self.test_frame, item.GetId(), inspect)
+                    self.test_frame.Bind(wx.EVT_MENU, inspect, id=item.GetId())
                 elif item.Label == "Quit":
                     def close(event):
                         self.test_frame.Close()
 
-                    wx.EVT_MENU(self.test_frame, item.GetId(), close)
+                    self.test_frame.Bind(wx.EVT_MENU, close, id=item.GetId())
 
         import __main__
         self.module_name = os.path.basename(__main__.__file__)
@@ -172,7 +173,8 @@ class GuiTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if not MANUAL:
             cls.app.test_frame.Destroy()
-            wx.CallAfter(cls.app.Exit)
+            # see fixme in runall.py. Is this needed in Phoenix?
+            # wx.CallAfter(cls.app.Exit)
         elif INSPECT:
             from wx.lib import inspection
             inspection.InspectionTool().Show()
@@ -202,7 +204,7 @@ class GuiTestCase(unittest.TestCase):
 
     @classmethod
     def remove_all(cls):
-        cls.sizer.DeleteWindows()
+        cls.sizer.Clear(True)
         cls.sizer.Layout()
 
     def create_simple_tab_model(self):

@@ -293,7 +293,7 @@ class Plugin(object):
             except Exception:
                 logging.exception("Error when processing menu entry %s of plugin %s",
                                   path[-1], self)
-        wx.EVT_MENU(main_frame, menu_item.Id, menu_callback_wrapper)
+        main_frame.Bind(wx.EVT_MENU, menu_callback_wrapper, id=menu_item.Id)
 
     def showAcquisition(self, filename):
         """

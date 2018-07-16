@@ -68,7 +68,7 @@ class Histogram(wx.PyControl):
         self.Refresh()
 
     def OnSize(self, event=None):
-        self._content_buffer = wx.EmptyBitmap(*self.ClientSize)
+        self._content_buffer = wx.Bitmap(*self.ClientSize)
         self.UpdateContent()
 
     def OnPaint(self, event=None):

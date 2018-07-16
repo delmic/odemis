@@ -182,7 +182,7 @@ class WindowsUpdater:
             logging.exception("Failure to download")
             try:
                 pdlg.Destroy()
-            except (wx.PyDeadObjectError, AttributeError):
+            except (RuntimeError, AttributeError):
                 pass
 
     @staticmethod

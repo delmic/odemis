@@ -56,41 +56,33 @@ class MenuController(object):
 
         # /File
         # /File/Open...
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_open.GetId(),
-                    self._on_open)
+        main_frame.Bind(wx.EVT_MENU, self._on_open, id=main_frame.menu_item_open.GetId())
 
         # /File/Save (as), is handled by the snapshot controller
 
         menu_file = main_frame.GetMenuBar().GetMenu(0)
         # Assign 'Reset fine alignment' functionality (if the tab exists)
         if "secom_align" in main_data.tab.choices.values():
-            wx.EVT_MENU(main_frame,
-                        main_frame.menu_item_reset_finealign.GetId(),
-                        self._on_reset_align)
+            main_frame.Bind(wx.EVT_MENU, self._on_reset_align, id=main_frame.menu_item_reset_finealign.GetId())
         else:
-            menu_file.RemoveItem(main_frame.menu_item_reset_finealign)
+            menu_file.Remove(main_frame.menu_item_reset_finealign)
 
         # Assign 'Reset overview' functionality (if the tab exists)
         if main_data.role == "secom":
-            wx.EVT_MENU(main_frame,
-                        main_frame.menu_item_reset_overview.GetId(),
-                        self._on_reset_overview)
+            main_frame.Bind(wx.EVT_MENU, self._on_reset_overview, id=main_frame.menu_item_reset_overview.GetId())
             self._main_frame.menu_item_reset_overview.Enable(True)
         else:
-            menu_file.RemoveItem(main_frame.menu_item_reset_overview)
+            menu_file.Remove(main_frame.menu_item_reset_overview)
 
         if main_data.microscope:
-            wx.EVT_MENU(main_frame,
-                        main_frame.menu_item_halt.GetId(),
-                        self.on_stop_axes)
+            main_frame.Bind(wx.EVT_MENU, self.on_stop_axes, id=main_frame.menu_item_halt.GetId())
         else:
-            menu_file.RemoveItem(main_frame.menu_item_halt)
+            menu_file.Remove(main_frame.menu_item_halt)
 
         # /File/Recalibrate Sample Holder (only on Delphi)
         # The event is handled by the DelphiStateController
         if main_data.role != "delphi":
-            menu_file.RemoveItem(main_frame.menu_item_recalibrate)
+            menu_file.Remove(main_frame.menu_item_recalibrate)
 
         # /File/Quit is handled by main
 
@@ -104,9 +96,7 @@ class MenuController(object):
         self._prev_stream = None  # latest stream represented by the menu
 
         # /View/Play Stream
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_play_stream.GetId(),
-                    self._on_play_stream)
+        main_frame.Bind(wx.EVT_MENU, self._on_play_stream, id=main_frame.menu_item_play_stream.GetId())
 
         main_data.is_acquiring.subscribe(self._on_acquisition)
         main_data.chamberState.subscribe(self._on_chamber_state)
@@ -115,47 +105,33 @@ class MenuController(object):
         # Using wx.EVT_UPDATE_UI doesn't seem to help
 
         # View/Auto Brightness/Contrast
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_auto_cont.GetId(),
-                    self._on_auto_bc)
+        main_frame.Bind(wx.EVT_MENU, self._on_auto_bc, id=main_frame.menu_item_auto_cont.GetId())
 
         # View/Auto Focus
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_auto_focus.GetId(),
-                    self._on_auto_focus)
+        main_frame.Bind(wx.EVT_MENU, self._on_auto_focus, id=main_frame.menu_item_auto_focus.GetId())
 
         # View/fit to content
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_fit_content.GetId(),
-                    self._on_fit_content)
+        main_frame.Bind(wx.EVT_MENU, self._on_fit_content, id=main_frame.menu_item_fit_content.GetId())
         main_data.tab.subscribe(self._on_tab_change, init=True)
 
         # /Help
         gc = odemis.gui.conf.get_general_conf()
 
         # /Help/Manual
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_manual.GetId(),
-                    self._on_manual)
+        main_frame.Bind(wx.EVT_MENU, self._on_manual, id=main_frame.menu_item_manual.GetId())
         if gc.get_manual(main_data.role):
             main_frame.menu_item_manual.Enable(True)
 
         # /Help/Development/Manual
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_devmanual.GetId(),
-                    self._on_dev_manual)
+        main_frame.Bind(wx.EVT_MENU, self._on_dev_manual, id=main_frame.menu_item_devmanual.GetId())
         if gc.get_dev_manual():
             main_frame.menu_item_devmanual.Enable(True)
 
         # /Help/Development/Inspect GUI
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_inspect.GetId(),
-                    self._on_inspect)
+        main_frame.Bind(wx.EVT_MENU, self._on_inspect, id=main_frame.menu_item_inspect.GetId())
 
         # /Help/Development/Debug
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_debug.GetId(),
-                    self._on_debug_menu)
+        main_frame.Bind(wx.EVT_MENU, self._on_debug_menu, id=main_frame.menu_item_debug.GetId())
         main_data.debug.subscribe(self._on_debug_va, init=True)
 
         # TODO: make it work on Windows too
@@ -163,24 +139,18 @@ class MenuController(object):
         if sys.platform.startswith('win32'):
             main_frame.menu_item_bugreport.Enable(False)
         else:
-            wx.EVT_MENU(main_frame,
-                        main_frame.menu_item_bugreport.GetId(),
-                        self._on_bugreport)
+            main_frame.Bind(wx.EVT_MENU, self._on_bugreport, id=main_frame.menu_item_bugreport.GetId())
 
         # /Help/Check for update
         if os.name == 'nt' and getattr(sys, 'frozen', False):
-            wx.EVT_MENU(main_frame,
-                        main_frame.menu_item_update.GetId(),
-                        self._on_update)
+            main_frame.Bind(wx.EVT_MENU, self._on_update, id=main_frame.menu_item_update.GetId())
         else:
             menu = main_frame.menu_item_update.GetMenu()
-            menu.RemoveItem(main_frame.menu_item_update)
+            menu.Remove(main_frame.menu_item_update)
             main_frame.menu_item_update.Destroy()
 
         # /Help/About
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_about.GetId(),
-                    self._on_about)
+        main_frame.Bind(wx.EVT_MENU, self._on_about, id=main_frame.menu_item_about.GetId())
 
         tab = self._main_data.tab.value
         if hasattr(tab.tab_data_model, 'autofocus_active'):
@@ -414,7 +384,7 @@ class MenuController(object):
 
     def _on_about(self, evt):
 
-        info = wx.AboutDialogInfo()
+        info = wx.adv.AboutDialogInfo()
         info.SetIcon(gui.icon)
         info.Name = gui.name
         info.Version = odemis.__version__
@@ -447,7 +417,7 @@ class MenuController(object):
         except NotImplementedError:
             pass
 
-        wx.AboutBox(info)
+        wx.adv.AboutBox(info)
 
     def _on_manual(self, evt):
         gc = odemis.gui.conf.get_general_conf()
