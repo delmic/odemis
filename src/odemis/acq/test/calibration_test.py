@@ -24,7 +24,7 @@ from odemis.util import img
 import os
 import time
 import unittest
-
+from odemis.acq.stream._base import POL_6POS, POL_POSITIONS
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -117,6 +117,52 @@ class TestAR(unittest.TestCase):
                 os.remove(fn)
             except OSError:
                 logging.exception("Failed to delete the file %s", fn)
+
+    def test_load_simple_arpol(self):
+        # AR polarimetry background data
+
+        metadata = []
+        pol_positions = list(POL_POSITIONS)
+        qwp_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
+
+        # ARPOL metadata
+        for idx in range(len(pol_positions)):
+            metadata.append({model.MD_SW_VERSION: "1.0-test",
+                             model.MD_HW_NAME: "fake ccd",
+                             model.MD_DESCRIPTION: "ARPOL",
+                             model.MD_ACQ_DATE: time.time(),
+                             model.MD_BPP: 12,
+                             model.MD_BINNING: (1, 1),  # px, px
+                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+                             model.MD_POS: (1.2e-3, -30e-3),  # m
+                             model.MD_EXP_TIME: 1.2,  # s
+                             model.MD_AR_POLE: (253.1, 65.1),
+                             model.MD_LENS_MAG: 0.4,  # ratio
+                             model.MD_POL_MODE: pol_positions[idx],
+                             model.MD_POL_POS_LINPOL: qwp_positions[idx],  # rad
+                             model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
+                             })
+
+        bg_data = []  # list of background images
+        for idx in range(len(pol_positions)):
+            dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16) + idx  # different bg image for each pol
+            calib = model.DataArray(dcalib, metadata[idx])
+            bg_data.append(calib)
+
+        # Give one DA, the correct one, so expect to get it back
+        out = calibration.get_ar_data(bg_data)
+        numpy.testing.assert_equal(out, bg_data)  # all bg images should have same shape
+
+        # More DataArrays, just to make it slightly harder to find the data
+        data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16),
+                                metadata={model.MD_POS: (1.2e-3, -30e-3)})
+        data2 = model.DataArray(17 * numpy.ones((1, 1), dtype=numpy.uint16),
+                                metadata={model.MD_POS: (1.2e-3, -30e-3)})
+        bg_data_new = [data1, data2] + bg_data
+        out = calibration.get_ar_data(bg_data_new)
+        numpy.testing.assert_equal(out, bg_data)
 
 
 class TestSpectrum(unittest.TestCase):
