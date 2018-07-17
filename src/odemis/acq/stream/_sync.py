@@ -41,14 +41,14 @@ from odemis.acq.stream._live import LiveStream
 import random
 import Queue
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME
+    MD_DWELL_TIME, MD_POL_MODE
 
 from odemis.util import img, units, spot, executeAsyncTask
 import threading
 import time
 
 from odemis.model import hasVA
-from ._base import Stream, POL_6POS, POL_POSITIONS
+from ._base import Stream, POL_POSITIONS
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -149,6 +149,7 @@ class MultipleDetectorStream(Stream):
                 # get polarization analyzer and the VA with the requested position(s)
                 self._analyzer = s.analyzer
                 self._polarization = s.polarization
+                self._acquireAllPol = s.acquireAllPol
 
         # acquisition end event
         self._acq_done = threading.Event()
@@ -273,7 +274,7 @@ class MultipleDetectorStream(Stream):
         if hasattr(self, "_polarization"):
             # 5 s extra for moving the polarization analyzer
             total_time += 5
-            if self._polarization.value == POL_6POS:
+            if self._acquireAllPol.value:
                 total_time = total_time * 6
 
         return total_time
@@ -972,7 +973,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # check if polarization VA exists, overwrite list of polarization value
             if self._analyzer:
-                if self._polarization.value == POL_6POS:
+                if self._acquireAllPol.value:
                     pos_polarizations = POL_POSITIONS
                     logging.debug("Will acquire the following polarization positions: %s" % list(pos_polarizations))
                 else:
@@ -980,8 +981,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     logging.debug("Will acquire the following polarization position: %s" % pos_polarizations)
 
             for pol_pos in pos_polarizations:
-                logging.debug("Acquire with the following polarization position: %s" % pol_pos)
                 if pol_pos is not None:
+                    logging.debug("Acquire with the following polarization position: %s" % pol_pos)
                     # move polarization analyzer to position specified
                     f = self._analyzer.moveAbs({"pol": pol_pos})
                     f.result()
