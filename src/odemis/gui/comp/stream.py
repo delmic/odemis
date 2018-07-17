@@ -31,6 +31,7 @@ from odemis import acq
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_DIS
 from odemis.gui import img
+from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -504,6 +505,16 @@ class StreamPanel(wx.Panel):
 
         self.main_sizer.Add(self._panel, 0, wx.EXPAND)
 
+    @control_bookkeeper
+    def add_metadata_button(self):
+        """
+        Add a button that opens a dialog with all metadata (for static streams)
+        """
+        metadata_btn = ImageTextButton(self._panel, label="Metadata...", height=16, style=wx.ALIGN_CENTER)
+        self.gb_sizer.Add(metadata_btn, (self.num_rows, 2), span=(1, 1),
+                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        return metadata_btn
+
     @property
     def collapsed(self):
         return self._collapsed
@@ -633,6 +644,29 @@ class StreamPanel(wx.Panel):
         # generate EVT_STREAM_PEAK
         event = stream_peak_event(state=self._header.btn_peak.GetState())
         wx.PostEvent(self, event)
+
+    @staticmethod
+    def create_text_frame(heading, text):
+        """
+        Create text frame with cancel button (same style as log frame during backend startup)
+        heading (String): title of the text box
+        text (String): text to be displayed
+        """
+        frame = wx.Dialog(None, title=heading, size=(800, 800),
+                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        text = wx.TextCtrl(frame, value=text, style=wx.TE_MULTILINE | wx.TE_READONLY)
+
+        textsizer = wx.BoxSizer()
+        textsizer.Add(text, 1, flag=wx.ALL | wx.EXPAND)
+
+        btnsizer = frame.CreateButtonSizer(wx.CLOSE)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
+        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
+        frame.SetSizer(sizer)
+        frame.CenterOnScreen()
+        return frame
 
     # Manipulate expander buttons
 
