@@ -1,3 +1,16 @@
+odemis (2.8.1-1) precise; urgency=medium
+
+  * New version: 2.8.1
+  * Improvments:
+    - Clarify some log messages
+    - plugin quickcl: support also monochromator
+  * Main bugs fixed:
+    - A monochromator placed on an external spectrograph could miss some metadata
+    - plugin quickcl: failed to show window
+    - plugin tileacq: failure during acquisition was not displayed
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 17 Jul 2018 14:23:22 +0200
+
 odemis (2.8.0-1) precise; urgency=medium
 
   * New version: 2.8
