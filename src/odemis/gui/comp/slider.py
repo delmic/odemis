@@ -25,7 +25,7 @@ from __future__ import division
 from odemis.util.conversion import hex_to_frgba
 from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
-from abc import abstractmethod
+from abc import ABCMeta, abstractmethod
 from odemis.gui import img
 from odemis.gui.util import wxlimit_invocation
 import collections
@@ -43,7 +43,7 @@ class BaseSlider(wx.Control):
     the right interface. This interface closely resembles the interface of
     wx.Slider.
     """
-    __metaclass__ = no_conflict.classmaker()
+    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     # The abstract methods must be implemented by any class inheriting from
     # BaseSlider

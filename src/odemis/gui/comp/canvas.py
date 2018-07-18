@@ -172,7 +172,7 @@ def ignore_if_disabled(f, self, *args, **kwargs):
 class BufferedCanvas(wx.Panel):
     """ Abstract base class for buffered canvasses that display graphical data """
 
-    __metaclass__ = no_conflict.classmaker()
+    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     def __init__(self, *args, **kwargs):
         # Set default style

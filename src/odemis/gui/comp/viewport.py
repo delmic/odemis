@@ -795,7 +795,7 @@ class AngularResolvedViewport(ViewPort):
 
 class PlotViewport(ViewPort):
     """ Class for displaying plotted data """
-    __metaclass__ = no_conflict.classmaker()
+    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     # Default class
     canvas_class = miccanvas.BarPlotCanvas

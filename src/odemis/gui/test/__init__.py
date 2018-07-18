@@ -95,9 +95,10 @@ class GuiTestApp(wx.App):
         # gen_test_data()
         wx.App.__init__(self, redirect=False)
 
-    def FilterEvent(self, evt):
-        print evt
-        return -1
+    # In wxPython4, it seems to always be called, and that causes logging of all events received during the tests
+    # def FilterEvent(self, evt):
+    #     print evt
+    #     return -1
 
     def OnInit(self):
         self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)

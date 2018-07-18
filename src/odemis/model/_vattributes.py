@@ -294,7 +294,7 @@ class VigilantAttribute(VigilantAttributeBase):
         # add string to listeners if listener is string
         if isinstance(listener, basestring):
             self._remote_listeners.add(listener)
-            if init and self.pipe is not None:
+            if init:
                 self.pipe.send_pyobj(self.value)
         else:
             VigilantAttributeBase.subscribe(self, listener, init)

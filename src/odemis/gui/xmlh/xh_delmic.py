@@ -745,8 +745,8 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         self.AddStyle("wxCB_DROPDOWN", wx.CB_DROPDOWN)
         self.AddStyle("wxCB_READONLY", wx.CB_READONLY)
         self.AddStyle("wxCB_SORT", wx.CB_SORT)
-        self.AddStyle("wxODCB_STD_CONTROL_PAINT", wx._adv.ODCB_STD_CONTROL_PAINT)
-        self.AddStyle("wxODCB_DCLICK_CYCLES", wx._adv.ODCB_DCLICK_CYCLES)
+        self.AddStyle("wxODCB_STD_CONTROL_PAINT", wx.adv.ODCB_STD_CONTROL_PAINT)
+        self.AddStyle("wxODCB_DCLICK_CYCLES", wx.adv.ODCB_DCLICK_CYCLES)
         self.AddStyle("wxTE_PROCESS_ENTER", wx.TE_PROCESS_ENTER)
 
         self.AddWindowStyles()

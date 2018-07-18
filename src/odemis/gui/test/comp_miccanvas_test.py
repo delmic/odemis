@@ -183,6 +183,11 @@ class PlotCanvasTestCase(test.GuiTestCase):
         return deque(sine_list)
 
     # @unittest.skip("simple")
+    def test_buffered_canvas(self):
+        # BufferedCanvas is abstract and shoul not be instantiated
+        self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
+
+    # @unittest.skip("simple")
     def test_threaded_plot(self):
         test.goto_manual()
 

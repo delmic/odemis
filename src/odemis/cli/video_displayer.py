@@ -102,7 +102,6 @@ class ImageWindowApp(wx.App):
         self.frame.Bind(wx.EVT_KEY_DOWN, self.OnKey)
 
         self.img = wx.Image(*size, clear=True)
-        self.img = wx.Image(*size, clear=True)
         self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
 
         self.panel.SetFocus()
