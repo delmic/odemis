@@ -852,7 +852,7 @@ class ViewButton(GraphicRadioButton):
             scaled_img = wxImageScaleKeepRatio(image, self.thumbnail_size, wx.IMAGE_QUALITY_HIGH)
         else:
             # black image
-            scaled_img = wx.Bitmap(*self.thumbnail_size)
+            scaled_img = wx.Image(*self.thumbnail_size)
 
         self.thumbnail_bmp = wx.Bitmap(scaled_img)
         self.Refresh()
