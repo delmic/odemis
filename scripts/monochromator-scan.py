@@ -360,7 +360,7 @@ def main(args):
 class MonoScanPlugin(Plugin):
     name = "Monochromator Scan"
     __version__ = "1.1"
-    __author__ = "Éric Piel"
+    __author__ = u"Éric Piel"
     __license__ = "GNU General Public License 2"
 
     # Describe how the values should be displayed
