@@ -140,6 +140,7 @@ a = Analysis(
     datas=None,
     hiddenimports=[
         'cairo',
+        'Queue',
         'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
     ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports(),
     hookspath=[],
