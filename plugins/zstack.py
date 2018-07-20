@@ -35,6 +35,7 @@ from __future__ import division
 from collections import OrderedDict
 import logging
 import math
+import numpy as np
 from odemis import model, dataio, acq
 from odemis.acq import stream
 from odemis.util import driver
@@ -246,10 +247,24 @@ class ZStackPlugin(Plugin):
 
     def stepAcquisition(self, i):
         self.focus.moveRel({'z': self.zstep.value}).result()
+        
+    def exportAcquisition(self, images):
+        exporter = dataio.find_fittest_converter(self.filename.value)
+        exporter.export(self.filename.value, DataArray(images))
 
     def completeAcquisition(self):
         # Mvoe back to start
         self.focus.moveAbs(self.old_pos).result()
+        
+    def constructCube(self, images):
+        # images is a list of 5 dim data arrays.
+        ret = []
+        for image in images:
+            stack = np.dstack(image)
+            stack = np.swapaxes(stack, 0, 2)
+            ret.append(stack)
+            
+        return DataArray(ret)
 
     # ALL GENERIC
     def acquire(self, dlg):
@@ -259,8 +274,6 @@ class ZStackPlugin(Plugin):
 
         nb = self.numberofAcquisitions.value
         ss, last_ss = self._get_acq_streams()
-
-        fn = self.filename.value
 
         sacqt = acq.estimateTime(ss)
         speed = self.focus.speed.value['z']
@@ -288,7 +301,7 @@ class ZStackPlugin(Plugin):
             f.set_progress(end=startt + dur)
             das, e = acq.acquire(ss).result()
             if images is None:
-                images = [] * len(das)
+                images = [list([]) * len(das)]
             
             for im, da in zip(images, das):
                 im.append(da)
@@ -304,10 +317,11 @@ class ZStackPlugin(Plugin):
             self.stepAcquisition(i)
 
         f.set_result(None)  # Indicate it's over
+        
+        cubes = self.constructCube(images)
 
         # Export image
-        exporter = dataio.find_fittest_converter(fn)
-        exporter.export(fn, DataArray(images))
+        self.exportAcquisition(cubes)
 
         # Do completion actions
         self.completeAcquisition()
