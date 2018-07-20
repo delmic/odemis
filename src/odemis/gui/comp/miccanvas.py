@@ -26,18 +26,15 @@ from __future__ import division
 import cairo
 from decorator import decorator
 import logging
-import math
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection, \
-    OpticalStream, NON_SPATIAL_STREAMS
+from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray
-from odemis.model import VigilantAttributeBase
 from odemis.util import units
 import time
 import wx
@@ -49,7 +46,6 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
-from odemis.gui.win.acquisition import NON_SPATIAL_STREAMS
 
 
 @decorator
@@ -1004,45 +1000,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
-
-    def setView(self, microscope_view, tab_data):
-        """ Set the microscope_view that this canvas is displaying/representing
-
-        Should be called only once, at initialisation.
-
-        :param microscope_view:(model.MicroscopeView)
-        :param tab_data: (model.MicroscopyGUIData)
-
-        """
-
-        sem = tab_data.main.ebeam
-        if not sem:
-            raise AttributeError("No SEM on the microscope")
-
-        # Associate the ROI of the SEM concurrent stream to the region of acquisition
-        sem_stream = tab_data.semStream
-        if sem_stream is None:
-            raise KeyError("SEM concurrent stream not set, required for the SPARC acquisition")
-
-        super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
-
-        # Get the region of interest and link it to the ROA overlay
-
-        self._roa = sem_stream.roi
-        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
-                                                                 tab_data.fovComp)
-        self.add_world_overlay(self.roa_overlay)
-
-        # Link drift correction region
-
-        self._dc_region = tab_data.driftCorrector.roi
-        self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
-            self, self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
-        self.add_world_overlay(self.driftcor_overlay)
-
-        # Regions depend on the magnification (=field of view)
-        if model.hasVA(tab_data.fovComp, "pixelSize"):
-            tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
+    pass
 
 
 class SparcARCanvas(DblMicroscopeCanvas):
