@@ -83,7 +83,7 @@ class ZStackPlugin(Plugin):
         zrange = self.focus.axes['z'].range
         zunit = self.focus.axes['z'].unit
         self.old_pos = self.focus.position.value
-        self.zstart = model.FloatContinuous(0, range=zrange, unit=zunit)
+        self.zstart = model.FloatContinuous(self.old_pos, range=zrange, unit=zunit)
         self.zstep = model.FloatContinuous(1e-6, range=(-1e-5, 1e-5), unit=zunit)
         self.numberofAcquisitions = model.IntContinuous(3, (2, 999))
 
