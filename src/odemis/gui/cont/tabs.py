@@ -942,8 +942,8 @@ class SparcAcquisitionTab(Tab):
         self._stream_controller = streamcont.SparcStreamsController(
             tab_data,
             panel.pnl_sparc_streams,
-            self.view_controller,
-            ignore_view=True  # Show all stream panels, independent of any selected viewport
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
         )
 
         # The sem stream is always visible, so add it by default
