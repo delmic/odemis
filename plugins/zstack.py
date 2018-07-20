@@ -301,7 +301,7 @@ class ZStackPlugin(Plugin):
             f.set_progress(end=startt + dur)
             das, e = acq.acquire(ss).result()
             if images is None:
-                images = [list([]) * len(das)]
+                images = [[] for i in range(len(das))]
             
             for im, da in zip(images, das):
                 im.append(da)
@@ -318,10 +318,10 @@ class ZStackPlugin(Plugin):
 
         f.set_result(None)  # Indicate it's over
         
-        cubes = self.constructCube(images)
+        cubes = [self.constructCube(x) for x in images]
 
         # Export image
-        self.exportAcquisition(cubes)
+        self.exportAcquisition(DataArray(cubes[0]))
 
         # Do completion actions
         self.completeAcquisition()
