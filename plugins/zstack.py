@@ -262,13 +262,14 @@ class ZStackPlugin(Plugin):
         ret = []
         for image in images:
             stack = np.dstack(image)
-            #stack = np.swapaxes(stack, 0, 1)
-            ret.append(stack)
+            #stack = np.swapaxes(stack, 0, 2)
+            #stack = np.expand_dims(stack, 1)
+            ret.append(stack[0])
             
         # Add back metadata
         metadata3d = { model.MD_ACQ_DATE: time.time(),
                     model.MD_BINNING: (1, 1), # px, px
-                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, self.zstep), # m/px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, self.zstep.value), # m/px
                     }
         
         ret = DataArray(ret, metadata3d)
