@@ -216,23 +216,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             logging.info("Toolmode %s is not allowed and will be ignored", tool_mode)
             tool_mode = guimodel.TOOL_NONE
 
+        self.set_default_cursor(wx.STANDARD_CURSOR)
+
         self.current_mode = tool_mode
         self._set_tool_mode(tool_mode)
-
-        cursor = wx.STANDARD_CURSOR
-        if tool_mode == guimodel.TOOL_ROI:
-            # self.current_mode = guimodel.TOOL_ROI
-            # self.add_active_overlay(self.update_overlay)
-            # cursor = wx.CURSOR_CROSS
-            raise NotImplementedError()
-        elif tool_mode == guimodel.TOOL_ZOOM:
-            # self.current_mode = guimodel.TOOL_ZOOM
-            # self.add_active_overlay(self.zoom_overlay)
-            # cursor = wx.CURSOR_CROSS
-            raise NotImplementedError()
-
-        self.set_default_cursor(cursor)
-
         self.request_drawing_update()
 
     def _set_tool_mode(self, tool_mode):
