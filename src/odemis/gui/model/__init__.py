@@ -184,10 +184,10 @@ class MainGUIData(object):
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.laser_mirror = None  # the scanner on confocal SECOM
         self.photo_ds = []  # List of all the photo detectors on confocal SECOM
-        self.time_correlator = None # life-time measurement on SECOM or SPARC
-        self.tc_detector = None  # the raw detector of the time-correlator (for settings)
-        self.tc_detector_live = None  # Symphotime APD count live detector
-        self.tc_scanner = None  # copy of the scanner settings for FLIM
+        self.time_correlator = None  # life-time measurement on SECOM-FLIM or SPARC
+        self.tc_detector = None  # the raw detector of the time-correlator (for settings & rough 2D acquisition)
+        self.tc_detector_live = None  # APD count live detector, for better data in FLIM live (optional)
+        self.tc_scanner = None  # copy of the scanner settings for FLIM (optional)
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
@@ -464,20 +464,24 @@ class LiveViewGUIData(MicroscopyGUIData):
         tools = {TOOL_NONE,} # TOOL_ZOOM, TOOL_ROI}
         if main.time_correlator: # FLIM
             tools.add(TOOL_ROA)
-            if main.tc_detector:  # Can even show live settings
-                tools.add(TOOL_SPOT)
 
-                # The SpotConfocalstream, used to control spot mode.
-                # It is set at start-up by the tab controller.
-                self.spotStream = None
-              
-                # Component to which the (relative) ROIs and spot position refer to for
-                # the field-of-view.
-                self.fovComp = None
+            self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
+                                             range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                             cls=(int, long, float))
 
-                self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
-                                                 range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                                 cls=(int, long, float))
+            # Component to which the (relative) ROIs and spot position refer to for
+            # the field-of-view.
+            self.fovComp = None
+
+            # This requires tc_detector. For now we assume that if a
+            # time_correlator is present, the tc_detector is also present.
+            # (although it's technically not entirely true, as we could move
+            # the laser-mirror and do an acquisition without it, just no feedback)
+            tools.add(TOOL_SPOT)
+
+            # The SpotConfocalstream, used to control spot mode.
+            # It is set at start-up by the tab controller.
+            self.spotStream = None
 
         # Update the tool selection with the new tool list
         self.tool.choices = tools
