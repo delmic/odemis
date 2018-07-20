@@ -169,18 +169,19 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
-        # only create these overlays if they could be possibly used
-        # if guimodel.TOOL_ROA in tab_data.tool.choices:
-        # FIXME: need to find a better way to indicate we want to show the ROA
-        # without allowing to modify it. (cf SECOM acquisition window)
-        if hasattr(tab_data, "roa") and tab_data.roa:
+        # Only create the overlays which could possibly be used
+        tools_possible = set(tab_data.tool.choices)
+        if self.allowed_modes:
+            tools_possible &= self.allowed_modes
+
+        if guimodel.TOOL_ROA in tools_possible:
             # Get the region of interest and link it to the ROA overlay
             self._roa = tab_data.roa
             self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
                                                                      tab_data.fovComp)
             self.add_world_overlay(self.roa_overlay)
 
-        if guimodel.TOOL_RO_ANCHOR in tab_data.tool.choices:
+        if guimodel.TOOL_RO_ANCHOR in tools_possible:
             # Link drift correction region
             self._dc_region = tab_data.driftCorrector.roi
             self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(self,
@@ -192,11 +193,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if model.hasVA(tab_data.fovComp, "pixelSize"):
                 tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
 
-        if guimodel.TOOL_POINT in tab_data.tool.choices:
+        if guimodel.TOOL_POINT in tools_possible:
             self.points_overlay = world_overlay.PointsOverlay(self)
             self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
 
-        if guimodel.TOOL_LINE in tab_data.tool.choices:
+        if guimodel.TOOL_LINE in tools_possible:
             self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
 
         tab_data.tool.subscribe(self._on_tool, init=True)

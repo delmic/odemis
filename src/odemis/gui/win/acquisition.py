@@ -32,6 +32,7 @@ from odemis.acq import stream, path
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
+from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamBarController
@@ -41,12 +42,12 @@ from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
+from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
 import time
 import wx
 
 import odemis.gui.model as guimodel
-from odemis.util.filename import guess_pattern, create_filename, update_counter
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -151,6 +152,14 @@ class AcquisitionDialog(xrcfr_acq):
         # attach the view to the viewport
         self.pnl_view_acq.canvas.fit_view_to_next_image = False
         self.pnl_view_acq.setView(self._view, self._tab_data_model)
+
+        # The TOOL_ROA is not present because we don't allow the user to change
+        # the ROA), so we need to explicitly request the canvas to show the ROA.
+        if hasattr(self._tab_data_model, "roa") and self._tab_data_model.roa is not None:
+            cnvs = self.pnl_view_acq.canvas
+            self.roa_overlay = RepetitionSelectOverlay(cnvs, self._tab_data_model.roa,
+                                                             self._tab_data_model.fovComp)
+            cnvs.add_world_overlay(self.roa_overlay)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
