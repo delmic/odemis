@@ -542,9 +542,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
 
-        self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
-                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+        # Should be a TupleContinuous VA.
+        # It is set at start-up by the tab controller.
+        self.roa = None
 
         # The Spot SEM stream, used to control spot mode.
         # It is set at start-up by the tab controller.

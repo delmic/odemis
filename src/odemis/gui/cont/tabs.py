@@ -856,6 +856,9 @@ class SparcAcquisitionTab(Tab):
             main_data.ebeam
         )
         tab_data.semStream = semcl_stream
+        tab_data.roa = semcl_stream.roi
+        # Force the ROA to be defined by the user on first use
+        tab_data.roa.value = acqstream.UNDEFINED_ROI
 
         tab_data.driftCorrector = leech.AnchorDriftCorrector(semcl_stream.emitter,
                                                              semcl_stream.detector)
