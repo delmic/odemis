@@ -646,6 +646,10 @@ class ARSettingsStream(CCDSettingsStream):
             kwargs["acq_type"] = model.MD_AT_AR
 
         super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+
+        # Fuzzing doesn't make much sense as it would mostly blur the image
+        del self.fuzzing
+
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
         self.analyzer = analyzer
