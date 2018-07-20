@@ -35,6 +35,7 @@ from __future__ import division
 from collections import OrderedDict
 import logging
 import math
+import copy
 import numpy as np
 from odemis import model, dataio, acq
 from odemis.acq import stream
@@ -250,7 +251,7 @@ class ZStackPlugin(Plugin):
         
     def exportAcquisition(self, images):
         exporter = dataio.find_fittest_converter(self.filename.value)
-        exporter.export(self.filename.value, DataArray(images))
+        exporter.export(self.filename.value, images)
 
     def completeAcquisition(self):
         # Mvoe back to start
@@ -261,10 +262,18 @@ class ZStackPlugin(Plugin):
         ret = []
         for image in images:
             stack = np.dstack(image)
-            stack = np.swapaxes(stack, 0, 2)
+            #stack = np.swapaxes(stack, 0, 1)
             ret.append(stack)
             
-        return DataArray(ret)
+        # Add back metadata
+        metadata3d = { model.MD_ACQ_DATE: time.time(),
+                    model.MD_BINNING: (1, 1), # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, self.zstep), # m/px
+                    }
+        
+        ret = DataArray(ret, metadata3d)
+            
+        return ret
 
     # ALL GENERIC
     def acquire(self, dlg):
@@ -318,10 +327,11 @@ class ZStackPlugin(Plugin):
 
         f.set_result(None)  # Indicate it's over
         
-        cubes = [self.constructCube(x) for x in images]
+        # Construct a cube from each stream's image. 
+        cubes = [self.constructCube(im) for im in images]
 
         # Export image
-        self.exportAcquisition(DataArray(cubes[0]))
+        self.exportAcquisition(cubes)
 
         # Do completion actions
         self.completeAcquisition()
