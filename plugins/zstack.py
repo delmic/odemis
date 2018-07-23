@@ -80,21 +80,43 @@ class ZStackPlugin(Plugin):
             return
 
         self.focus = main_data.focus
-        zrange = self.focus.axes['z'].range
+        self._zrange = self.focus.axes['z'].range
         zunit = self.focus.axes['z'].unit
         self.old_pos = self.focus.position.value
-        self.zstart = model.FloatContinuous(self.old_pos['z'], range=zrange, unit=zunit)
-        self.zstep = model.FloatContinuous(1e-6, range=(-1e-5, 1e-5), unit=zunit)
-        self.numberofAcquisitions = model.IntContinuous(3, (2, 999))
+        self.zstart = model.FloatContinuous(self.old_pos['z'], range=self._zrange, unit=zunit)
+        self.zstep = model.FloatContinuous(1e-6, range=(-1e-5, 1e-5), unit=zunit, setter=self._setZStep)
+        self.numberofAcquisitions = model.IntContinuous(3, (2, 999), setter=self._setNumberOfAcquisitions)
 
         self.filename = model.StringVA("a.h5")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
         self.zstep.subscribe(self._update_exp_dur)
         self.numberofAcquisitions.subscribe(self._update_exp_dur)
+        
+        # Metadata for the acquisition
+        self._metadata = None
 
         self._dlg = None
         self.addMenu("Acquisition/ZStack...\tCtrl+T", self.start)
+        
+    def _acqRangeIsValid(self, acq_range):
+        return acq_range <= self._zrange[1] and acq_range >= self._zrange[0]
+
+    def _setZStep(self, zstep):
+        # Check if the acquisition will be within the range of the actuator
+        acq_range = self.zstart.value + zstep * self.numberofAcquisitions.value
+        if self._acqRangeIsValid(acq_range):
+            return zstep
+        else:
+            return self.zstep.value  # Old value
+        
+    def _setNumberOfAcquisitions(self, n_acq):
+        # Check if the acquisition will be within the range of the actuator
+        acq_range = self.zstart.value + self.zstep.value * n_acq
+        if self._acqRangeIsValid(acq_range):
+            return n_acq
+        else:
+            return self.numberofAcquisitions.value  # Old value
 
     def _get_new_filename(self):
         conf = get_acqui_conf()
@@ -203,9 +225,7 @@ class ZStackPlugin(Plugin):
 
         self.filename.value = self._get_new_filename()
         dlg = AcquisitionDialog(self, "Z Stack acquisition",
-                                "The same streams will be acquired multiple times \
-                                at different Z positions, defined starting from Z start, \
-                                with a step size.\n")
+                                "The same streams will be acquired multiple times at different Z positions, defined starting from Z start, with a step size.\n")
         self._dlg = dlg
         dlg.addSettings(self, self.vaconf)
         ss = self._get_live_streams(tab.tab_data_model)
@@ -243,6 +263,7 @@ class ZStackPlugin(Plugin):
 
     def initAcquisition(self):
         # Move the focus to the start z position
+        logging.debug("Preparing Z Stack acquisition. Moving focus to start position")
         self.old_pos = self.focus.position.value
         self.focus.moveAbs({'z': self.zstart.value}).result()
 
@@ -250,11 +271,13 @@ class ZStackPlugin(Plugin):
         self.focus.moveRel({'z': self.zstep.value}).result()
         
     def exportAcquisition(self, images):
+        logging.debug("Exporting Z Stack to HDF5")
         exporter = dataio.find_fittest_converter(self.filename.value)
         exporter.export(self.filename.value, images)
 
     def completeAcquisition(self):
         # Mvoe back to start
+        logging.debug("Z Stack acquisition complete. Returning focus to start position")
         self.focus.moveAbs(self.old_pos).result()
         
     def constructCube(self, images):
@@ -267,10 +290,11 @@ class ZStackPlugin(Plugin):
             ret.append(stack[0])
             
         # Add back metadata
-        metadata3d = { model.MD_ACQ_DATE: time.time(),
-                    model.MD_BINNING: (1, 1), # px, px
-                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, self.zstep.value), # m/px
-                    }
+        metadata3d = copy.copy(self._metadata)
+        # Extend pixel size to 3D
+        ps_x, ps_y = metadata3d[model.MD_PIXEL_SIZE]
+        ps_z = self.zstep.value
+        metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
         
         ret = DataArray(ret, metadata3d)
             
@@ -289,6 +313,8 @@ class ZStackPlugin(Plugin):
         speed = self.focus.speed.value['z']
         step_time = driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
 
+        logging.debug("Z stack acquisition started with %d levels.", nb)
+
         # Specific plugin init
         self.initAcquisition()
 
@@ -303,6 +329,9 @@ class ZStackPlugin(Plugin):
         for i in range(nb):
             left = nb - i
             dur = sacqt * left + step_time * (left - 1)
+            
+            logging.debug("Z Stack Acquisition %d of %d", i, nb)
+            
             if left == 1 and last_ss:
                 ss += last_ss
                 dur += acq.estimateTime(ss) - sacqt
@@ -311,6 +340,8 @@ class ZStackPlugin(Plugin):
             f.set_progress(end=startt + dur)
             das, e = acq.acquire(ss).result()
             if images is None:
+                # Copy metadata from the first acquisition
+                self._metadata = copy.copy(das[0].metadata)
                 images = [[] for i in range(len(das))]
             
             for im, da in zip(images, das):
@@ -319,11 +350,7 @@ class ZStackPlugin(Plugin):
             if f.cancelled():
                 return
 
-            #da[C, T, Z, Y ,X]
-            #da.metadata[MD_DIMS] = "CTZYX"
-            #da[Y, X]
-            #da[Z, Y, X]
-            # Execute an action to prepare the next acquisition
+            # Execute an action to prepare the next acquisition for the ith acquisition
             self.stepAcquisition(i)
 
         f.set_result(None)  # Indicate it's over
