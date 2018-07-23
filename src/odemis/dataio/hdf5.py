@@ -407,15 +407,19 @@ def _read_image_info(group):
 
     # Scale pixel size
     try:
-        pxs = [None, None]
+        px_x, px_y, px_z = (None, None, None)
         for dim in dataset.dims:
             if dim.label == "X" and dim:
-                pxs[0] = float(dim[0][()])
+                px_x = float(dim[0][()])
             if dim.label == "Y" and dim:
-                pxs[1] = float(dim[0][()])
+                px_y = float(dim[0][()])
             if dim.label == "Z" and dim:
-                pxs[2] = float(dim[0][()])
+                px_z = float(dim[0][()])
         # TODO: add scale for Z ??
+        if px_z is None:
+            pxs = [px_x, px_y]
+        else:
+            pxs = [px_x, px_y, px_z]
 
         if pxs == [None, None]:
             logging.debug("No pixel size metadata provided")
