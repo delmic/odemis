@@ -164,11 +164,10 @@ class TestARExport(unittest.TestCase):
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 1),  # px, px
             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_PIXEL_SIZE: (5.2e-5, 5.2e-5),  # m/px
             model.MD_POS: (1.2e-3, -30e-3),  # m
             model.MD_EXP_TIME: 1.2,  # s
-            model.MD_AR_POLE: (253.1, 65.1),
-            model.MD_LENS_MAG: 0.4,  # ratio
+            model.MD_AR_POLE: (283, 259),
         }
 
         md0 = dict(md)
@@ -200,7 +199,7 @@ class TestARExport(unittest.TestCase):
         # There should be some non-white data
         self.assertTrue(numpy.any(exdata != 255))
 
-        # Save into a CSV file
+        # Save into a PNG file
         exporter = dataio.get_converter("PNG")
         exporter.export(self.FILENAME_PR, exdata)
         st = os.stat(self.FILENAME_PR)  # this test also that the file is created
@@ -232,11 +231,10 @@ class TestARExport(unittest.TestCase):
             model.MD_BPP: 12,
             model.MD_BINNING: (1, 1),  # px, px
             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
-            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_PIXEL_SIZE: (4e-5, 4e-5),  # m/px
             model.MD_POS: (1.2e-3, -30e-3),  # m
             model.MD_EXP_TIME: 1.2,  # s
-            model.MD_AR_POLE: (253.1, 65.1),
-            model.MD_LENS_MAG: 0.4,  # ratio
+            model.MD_AR_POLE: (500, 500),
         }
 
         md0 = dict(md)
@@ -264,7 +262,7 @@ class TestARExport(unittest.TestCase):
         # There should be some non-white data
         self.assertTrue(numpy.any(exdata != 255))
 
-        # Save into a CSV file
+        # Save into a PNG file
         exporter = dataio.get_converter("PNG")
         exporter.export(self.FILENAME_PR, exdata)
         st = os.stat(self.FILENAME_PR)  # this test also that the file is created
