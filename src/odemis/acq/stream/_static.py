@@ -123,6 +123,15 @@ class Static2DStream(StaticStream):
             TODO remove this function when all the streams become projectionless
         '''
         pass
+    
+class Static3DStream(Static2DStream):
+    """
+    Stream containing one static image which has a depth component
+    For testing and static images.
+    """
+
+    def __init__(self, name, raw, *args, **kwargs):
+        super(Static3DStream, self).__init__(name, raw, *args, **kwargs)
 
 
 class StaticSEMStream(Static2DStream):
