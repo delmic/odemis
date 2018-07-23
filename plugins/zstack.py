@@ -298,6 +298,7 @@ class ZStackPlugin(Plugin):
         ps_x, ps_y = metadata3d[model.MD_PIXEL_SIZE]
         ps_z = self.zstep.value
         metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
+        metadata3d[model.MD_DIMS] = "ZYX"
         
         ret = DataArray(ret, metadata3d)
             
