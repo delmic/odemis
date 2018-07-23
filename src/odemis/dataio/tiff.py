@@ -573,6 +573,12 @@ def _updateMDFromOME(root, das):
             pass
 
         try:
+            psz = float(pxe.attrib["PhysicalSizeZ"]) * 1e-6  # µm -> m
+            md[model.MD_PIXEL_SIZE] = (psx, psy, psz)
+        except (KeyError, ValueError):
+            pass
+
+        try:
             md[model.MD_BPP] = int(pxe.attrib["SignificantBits"])
         except (KeyError, ValueError):
             pass
@@ -1232,6 +1238,8 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
+        if len(pxs) == 3:
+            pixels.attrib["PhysicalSizeZ"] = "%.15f" % (pxs[2] * 1e6)
 
     # Note: TimeIncrement can be used to replace DeltaT if the duration is always
     # the same (which it is), but it also means it starts at 0, which is not
