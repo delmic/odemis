@@ -95,6 +95,8 @@ class ZStackPlugin(Plugin):
         
         # Metadata for the acquisition
         self._metadata = None
+        
+        self._acq_streams = None
 
         self._dlg = None
         self.addMenu("Acquisition/ZStack...\tCtrl+T", self.start)
@@ -195,7 +197,8 @@ class ZStackPlugin(Plugin):
             ss = live_st
 
         last_ss = []
-        return ss, last_ss
+        self._acq_streams = acq.foldStreams(ss, self._acq_streams)
+        return self._acq_streams, last_ss
 
     def start(self):
         # Fail if the live tab is not selected
@@ -313,7 +316,7 @@ class ZStackPlugin(Plugin):
         speed = self.focus.speed.value['z']
         step_time = driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
 
-        logging.debug("Z stack acquisition started with %d levels.", nb)
+        logging.info("Z stack acquisition started with %d levels with streams %s", nb, ss)
 
         # Specific plugin init
         self.initAcquisition()
