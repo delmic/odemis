@@ -297,12 +297,13 @@ class ZStackPlugin(Plugin):
             ret.append(stack[0])
             
         # Add back metadata
-        metadata3d = copy.copy(self._metadata)
+        metadata3d = copy.copy(images[0].metadata)
         # Extend pixel size to 3D
         ps_x, ps_y = metadata3d[model.MD_PIXEL_SIZE]
         ps_z = self.zstep.value
         metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
         metadata3d[model.MD_DIMS] = "ZYX"
+        self._metadata = copy.copy(metadata3d)
         
         ret = DataArray(ret, metadata3d)
             

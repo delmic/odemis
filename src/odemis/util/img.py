@@ -607,7 +607,10 @@ def mergeMetadata(current, correction=None):
     if model.MD_PIXEL_SIZE in current:
         pxs = current[model.MD_PIXEL_SIZE]
         pxs_cor = current.get(model.MD_PIXEL_SIZE_COR, (1, 1))
-        current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+        # only modify the pixel size if it is 2D. Keep it the same if it is a voxel.
+        if len(pxs) == 2:
+            current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+
     elif model.MD_PIXEL_SIZE_COR in current:
         logging.info("Cannot correct pixel size of data with unknown pixel size")
 

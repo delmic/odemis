@@ -272,12 +272,14 @@ def _add_image_info(group, dataset, image):
             # Huygens seems to consider it's in m
             xpos = dims.index("X")
             ypos = dims.index("Y")
+
             pxs = image.metadata[model.MD_PIXEL_SIZE]
             group["DimensionScaleX"] = pxs[0]
             group["DimensionScaleX"].attrs["UNIT"] = "m"  # our extension
             _h5svi_set_state(group["DimensionScaleX"], ST_REPORTED)
             group["DimensionScaleY"] = pxs[1]
             group["DimensionScaleY"].attrs["UNIT"] = "m"
+
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
             # Attach the scales to each dimensions (referenced by their label)
             dataset.dims.create_scale(group["DimensionScaleX"], "X")
@@ -290,7 +292,11 @@ def _add_image_info(group, dataset, image):
             zpos = dims.index("Z")
             group["ZOffset"] = 0.0
             _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
-            group["DimensionScaleZ"] = 1e-3  # m
+            try:
+                group["DimensionScaleZ"] = pxs[2]  # m
+            except IndexError:
+                group["DimensionScaleZ"] = 1e-3  # m hack if the z must be faked
+
             group["DimensionScaleZ"].attrs["UNIT"] = "m"
             dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
             _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
@@ -407,6 +413,8 @@ def _read_image_info(group):
                 pxs[0] = float(dim[0][()])
             if dim.label == "Y" and dim:
                 pxs[1] = float(dim[0][()])
+            if dim.label == "Z" and dim:
+                pxs[2] = float(dim[0][()])
         # TODO: add scale for Z ??
 
         if pxs == [None, None]:
