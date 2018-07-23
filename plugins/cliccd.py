@@ -146,7 +146,6 @@ class CLiCCDPlugin(Plugin):
 
         stctrl = self._tab.streambar_controller
         return stctrl._addRepStream(ar_stream, sem_cl_stream,
-                                  vas=("repetition", "pixelSize", "fuzzing"),
                                   axes={"band": main_data.light_filter}
                                   )
 
