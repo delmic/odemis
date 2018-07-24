@@ -38,8 +38,7 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.conf.util import create_setting_entry, create_axis_entry
-from odemis.gui.cont.settings import SettingEntry
+from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
@@ -815,7 +814,7 @@ class StreamController(object):
 
         if not readonly:
 
-            choices = sorted(self.stream.emission.choices, key=get_one_center)
+            choices = sorted(self.stream.emission.choices, key=fluo.get_one_center)
             for b in choices:
                 value_ctrl.Append(to_readable_band(b), b)
 
