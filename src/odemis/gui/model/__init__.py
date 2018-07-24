@@ -1100,6 +1100,7 @@ class StreamView(View):
         """
         Focuser thread
         """
+        
         time_last_move = 0
         try:
             axis = focuser.axes["z"]
@@ -1188,16 +1189,29 @@ class StreamView(View):
         """
         # FIXME: "stop all axes" should also clear the queue
 
+                # Check if the stream is static and update zlevel
+        for s in self.getStreams():
+            if model.hasVA(s, "zlevel"):
+                k = 1
+                val = int(k * shift)
+
+                # Check if it is within the range.
+                try:
+                    s.zlevel.value = s.zlevel.value + val
+                except IndexError:
+                    pass
+
         # TODO: optimise by only updating focuser when the stream tree changes
         for s in self.getStreams():
             if s.should_update.value:
                 focuser = s.focuser
                 curr_s = s
                 break
+            
         else:
             logging.info("Trying to change focus while no stream is playing")
             return 0
-
+            
         # TODO: optimise with the focuser
         # Find the depth of field (~ the size of one "focus step")
         for c in (curr_s.detector, curr_s.emitter):
@@ -1246,7 +1260,7 @@ class StreamView(View):
 
         # Only pass the "update" keyword if the actuator accepts it for sure
         # It should increase latency in case of slow moves (ex: closed-loop
-        # stage that vibrate a bit when reaching target position).
+        # stage tss.zlevel.value = 2hat vibrate a bit when reaching target position).
         kwargs = {}
         if self._stage.axes["x"].canUpdate and self._stage.axes["y"].canUpdate:
             kwargs["update"] = True

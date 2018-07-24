@@ -404,7 +404,7 @@ def ensure2DImage(data, zlevel=0):
     elif len(d.shape) > 2:
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         if pxs is not None and len(pxs) == 3:
-            d = d[zlevel]  # Remove z
+            d = d[zlevel - 1]  # Remove z
         else:
             d.shape = d.shape[-2:] # raise ValueError if it will not work
 

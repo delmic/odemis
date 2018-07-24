@@ -276,6 +276,7 @@ class MicroscopeViewport(ViewPort):
 
         # By default, cannot focus, unless the child class allows it
         self.canvas.abilities.discard(CAN_FOCUS)
+        tab_data.streams.subscribe(self._on_stream_change)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
@@ -617,6 +618,10 @@ class MicroscopeViewport(ViewPort):
         if not self.stage_limit_overlay:
             self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
         self.stage_limit_overlay.set_dimensions(roi)
+        
+    def _on_stream_change(self, streams):
+        if any(model.hasVA(s, "zlevel") for s in streams):
+            self.canvas.abilities.add(CAN_FOCUS)
 
 
 class OverviewViewport(MicroscopeViewport):
