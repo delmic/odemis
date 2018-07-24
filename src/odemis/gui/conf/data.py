@@ -668,6 +668,9 @@ HW_SETTINGS_CONFIG_PER_ROLE["sparc-simplex"] = HW_SETTINGS_CONFIG_PER_ROLE["spar
 STREAM_SETTINGS_CONFIG = {
     stream.SEMStream:
         OrderedDict((
+            # HACK: They are not real VAs from the SEMStream. They are VAs, which
+            # are sometimes displayed on the SEM stream panel, because that's
+            # where they make more sense, and they would be too lonely alone.
             ("dcPeriod", {
                 "label": "Drift corr. period",
                 "tooltip": u"Maximum time between anchor region acquisitions",
@@ -701,17 +704,6 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.SpectrumSettingsStream:
         OrderedDict((
-            ("repetition", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            }),
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_FLT,
-            }),
-            ("fuzzing", {
-                "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
-            }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
@@ -725,14 +717,6 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.MonochromatorSettingsStream:
         OrderedDict((
-            ("repetition", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            }),
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_FLT,
-            }),
             ("wavelength", {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
@@ -750,28 +734,12 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.ARSettingsStream:
         OrderedDict((
-            ("repetition", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            }),
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_FLT,
-            }),
             ("band", {  # from filter
                 "label": "Filter",
             }),
         )),
     stream.CLSettingsStream:
         OrderedDict((
-            ("repetition", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            }),
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_FLT,
-            }),
             ("band", {  # from filter or cl-filter
                 "label": "Filter",
             }),
@@ -781,14 +749,6 @@ STREAM_SETTINGS_CONFIG = {
             ("dwellTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
-            }),
-            ("repetition", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            }),
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_FLT,
             }),
         )),
     stream.ScannerSettingsStream:

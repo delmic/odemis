@@ -26,18 +26,15 @@ from __future__ import division
 import cairo
 from decorator import decorator
 import logging
-import math
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI, EMStream, DataProjection, \
-    OpticalStream, NON_SPATIAL_STREAMS
+from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray
-from odemis.model import VigilantAttributeBase
 from odemis.util import units
 import time
 import wx
@@ -49,7 +46,6 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
-from odemis.gui.win.acquisition import NON_SPATIAL_STREAMS
 
 
 @decorator
@@ -173,18 +169,19 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
-        # only create these overlays if they could be possibly used
-        # if guimodel.TOOL_ROA in tab_data.tool.choices:
-        # FIXME: need to find a better way to indicate we want to show the ROA
-        # without allowing to modify it. (cf SECOM acquisition window)
-        if hasattr(tab_data, "roa") and tab_data.roa:
+        # Only create the overlays which could possibly be used
+        tools_possible = set(tab_data.tool.choices)
+        if self.allowed_modes:
+            tools_possible &= self.allowed_modes
+
+        if guimodel.TOOL_ROA in tools_possible:
             # Get the region of interest and link it to the ROA overlay
             self._roa = tab_data.roa
             self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
                                                                      tab_data.fovComp)
             self.add_world_overlay(self.roa_overlay)
 
-        if guimodel.TOOL_RO_ANCHOR in tab_data.tool.choices:
+        if guimodel.TOOL_RO_ANCHOR in tools_possible:
             # Link drift correction region
             self._dc_region = tab_data.driftCorrector.roi
             self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(self,
@@ -196,11 +193,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if model.hasVA(tab_data.fovComp, "pixelSize"):
                 tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
 
-        if guimodel.TOOL_POINT in tab_data.tool.choices:
+        if guimodel.TOOL_POINT in tools_possible:
             self.points_overlay = world_overlay.PointsOverlay(self)
             self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
 
-        if guimodel.TOOL_LINE in tab_data.tool.choices:
+        if guimodel.TOOL_LINE in tools_possible:
             self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
 
         tab_data.tool.subscribe(self._on_tool, init=True)
@@ -220,23 +217,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             logging.info("Toolmode %s is not allowed and will be ignored", tool_mode)
             tool_mode = guimodel.TOOL_NONE
 
+        self.set_default_cursor(wx.STANDARD_CURSOR)
+
         self.current_mode = tool_mode
         self._set_tool_mode(tool_mode)
-
-        cursor = wx.STANDARD_CURSOR
-        if tool_mode == guimodel.TOOL_ROI:
-            # self.current_mode = guimodel.TOOL_ROI
-            # self.add_active_overlay(self.update_overlay)
-            # cursor = wx.CURSOR_CROSS
-            raise NotImplementedError()
-        elif tool_mode == guimodel.TOOL_ZOOM:
-            # self.current_mode = guimodel.TOOL_ZOOM
-            # self.add_active_overlay(self.zoom_overlay)
-            # cursor = wx.CURSOR_CROSS
-            raise NotImplementedError()
-
-        self.set_default_cursor(cursor)
-
         self.request_drawing_update()
 
     def _set_tool_mode(self, tool_mode):
@@ -1004,45 +988,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
-
-    def setView(self, microscope_view, tab_data):
-        """ Set the microscope_view that this canvas is displaying/representing
-
-        Should be called only once, at initialisation.
-
-        :param microscope_view:(model.MicroscopeView)
-        :param tab_data: (model.MicroscopyGUIData)
-
-        """
-
-        sem = tab_data.main.ebeam
-        if not sem:
-            raise AttributeError("No SEM on the microscope")
-
-        # Associate the ROI of the SEM concurrent stream to the region of acquisition
-        sem_stream = tab_data.semStream
-        if sem_stream is None:
-            raise KeyError("SEM concurrent stream not set, required for the SPARC acquisition")
-
-        super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
-
-        # Get the region of interest and link it to the ROA overlay
-
-        self._roa = sem_stream.roi
-        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
-                                                                 tab_data.fovComp)
-        self.add_world_overlay(self.roa_overlay)
-
-        # Link drift correction region
-
-        self._dc_region = tab_data.driftCorrector.roi
-        self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
-            self, self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
-        self.add_world_overlay(self.driftcor_overlay)
-
-        # Regions depend on the magnification (=field of view)
-        if model.hasVA(tab_data.fovComp, "pixelSize"):
-            tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
+    pass
 
 
 class SparcARCanvas(DblMicroscopeCanvas):

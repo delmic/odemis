@@ -29,10 +29,9 @@ import functools
 import gc
 import logging
 import numpy
-import time
 from odemis import model, util
-from odemis.acq.stream import StaticStream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
+    CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
@@ -42,12 +41,12 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
-from odemis.gui.util import call_in_wx_main
-from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
 from odemis.util.units import readable_str
+import time
 import wx
 from wx.lib.pubsub import pub
 
@@ -75,17 +74,19 @@ class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
     def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, view=None,
-                 viewctrl=None):
+                 sb_ctrl=None):
         """
         view (MicroscopeView or None): Link stream to a view. If view is None, the stream
         will be linked to the focused view. Passing a view to the controller ensures 
         that the visibility button functions correctly when multiple views are present.
+        sb_ctrl (StreamBarController or None): the StreamBarController which (typically)
+          created this StreamController. Only needed for ROA repetition display.
         """
 
         self.stream = stream
         self.stream_bar = stream_bar
         self.view = view
-        self._view_controller = viewctrl
+        self._sb_ctrl = sb_ctrl
 
         self._stream_config = data.get_stream_settings_config()
 
@@ -115,7 +116,6 @@ class StreamController(object):
 
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
         # wavelength colour
-        # FIXME: Move all dye related code to a separate subclass of StreamController?
         self._dye_xwl = None
         self._dye_ewl = None
         self._dye_prev_ewl_center = None  # ewl when tint was last changed
@@ -127,7 +127,7 @@ class StreamController(object):
         self._lbl_em_peak = None
 
         # Metadata display in analysis tab (static streams)
-        if isinstance(self.stream, StaticStream):
+        if isinstance(self.stream, acqstream.StaticStream):
             self._display_metadata()
 
         # TODO: make it a list, as the dict keys are not used right now, and
@@ -144,6 +144,8 @@ class StreamController(object):
         # In that case, we might be able to drop resolution from the local VA
         # completely, and only display as an information based on binning and ROI.
 
+        self._add_stream_setting_controls()
+
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
             self._add_dye_ctrl()
@@ -153,7 +155,7 @@ class StreamController(object):
             self._add_emission_ctrl()
 
         # Add metadata button to show dialog with full list of metadata
-        if isinstance(self.stream, StaticStream):
+        if isinstance(self.stream, acqstream.StaticStream):
             metadata_btn = self.stream_panel.add_metadata_button()
             metadata_btn.Bind(wx.EVT_BUTTON, self._on_metadata_btn)
 
@@ -166,43 +168,9 @@ class StreamController(object):
             self._add_wl_ctrls()
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
-                
-        if hasattr(self.tab_data_model, "roa"):
-            self.tab_data_model.roa.subscribe(self._onROA)
-
-            # for storing the ROI listeners of the repetition streams
-            self.roi_listeners = {}  # RepetitionStream -> callable
-
-            if hasattr(stream, "repetition"):
-                # Repetition visualisation
-                self.hover_stream = None  # stream for which the repetition must be displayed
-                self.rep_listeners = {}  # RepetitionStream -> callable
-                self.rep_ctrl = {}  # wx Control -> RepetitionStream
-
-                # Repetition Combobox updater
-                self.repct_listeners = {}  # RepetitionStream -> callable
-
-        # Add entries from the stream config based on the dictionary
-        stream_config = self._stream_config.get(type(self.stream), {})
-        # present. (and get the controls via stream_cont.entries[vaname])
-        # Add VAs (in same order as config)
-        vas = stream_config.keys()
-        vactrls = []
-        for vaname in vas:
-            try:
-                va = getattr(self.stream, vaname)
-            except AttributeError:
-                logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
-                continue
-            conf = stream_config.get(vaname)
-            ent = self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
-            vactrls.append(ent.value_ctrl)
-
-            if vaname == "repetition":
-                self.connectRepContent(self.stream, ent.value_ctrl)
 
         if hasattr(stream, "repetition"):
-            self.connectRepOverlay(self.stream, vactrls)
+            self._add_repetition_ctrl()
 
         # Set the visibility button on the stream panel
         if view:
@@ -338,6 +306,20 @@ class StreamController(object):
         if add_divider:  # TODO: only do so, if some other controls are displayed
             self.stream_panel.add_divider()
 
+    def _add_stream_setting_controls(self):
+        """ Add control for the VAs of the stream
+        Note: only the VAs which are defined in the stream_config are shown.
+        """
+        stream_config = self._stream_config.get(type(self.stream), {})
+        for vaname, conf in stream_config.items():
+            try:
+                va = getattr(self.stream, vaname)
+            except AttributeError:
+                logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
+                continue
+            conf = stream_config.get(vaname)
+            self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
+
     def add_setting_entry(self, name, va, hw_comp, conf=None):
         """ Add a name/value pair to the settings panel.
 
@@ -405,11 +387,10 @@ class StreamController(object):
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
-
-        TODO: Make stream panel creation and destruction cleaner by having the StreamBarController
-        being the main class responsible for it.
-
         """
+        # TODO: Make stream panel creation and destruction cleaner by having the
+        # StreamBarController being the main class responsible for it.
+
         logging.debug("Stream panel %s destroyed", self.stream.name.value)
 
         # Destroy references to this controller in even handlers
@@ -418,6 +399,11 @@ class StreamController(object):
         self.stream_panel.header_change_callback = None
         self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
         self.stream_panel.Unbind(EVT_STREAM_PEAK)
+
+        self._unlink_resolution()
+        self._disconnectRepOverlay()
+        if hasattr(self.stream, "repetition"):
+            self.stream.repetition.unsubscribe(self._onStreamRep)
 
         self.entries = OrderedDict()
 
@@ -550,6 +536,12 @@ class StreamController(object):
 
         self._binva.subscribe(self._update_resolution)
         self._resva.subscribe(self._on_resolution)
+
+    def _unlink_resolution(self):
+        if self._binva:
+            self._binva.unsubscribe(self._update_resolution)
+        if self._resva:
+            self._resva.subscribe(self._on_resolution)
 
     def _update_resolution(self, scale, crop=1.0):
         """
@@ -1003,6 +995,44 @@ class StreamController(object):
                           va_2_ctrl=_on_histogram, ctrl_2_va=lambda x: x)
         self.entries[se.name] = se
 
+    def _add_repetition_ctrl(self):
+        """
+        Add the repetition/pixelSize/fuzzing settings for the RepetitionStreams
+        """
+        va_config = OrderedDict((
+            ("repetition", {
+                "control_type": CONTROL_COMBO,
+                "choices": set((1, 1)),  # Actually, it's immediately replaced by _onStreamRep()
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": CONTROL_FLT,
+            }),
+            ("fuzzing", {
+                "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
+            }),
+        ))
+
+        roa_ctrls = []
+        for vaname, conf in va_config.items():
+            try:
+                va = getattr(self.stream, vaname)
+            except AttributeError:
+                logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
+                continue
+            ent = self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
+
+            if vaname == "repetition":
+                self._rep_ctrl = ent.value_ctrl
+                # Update the combo box choices based on the current repetition value
+                self.stream.repetition.subscribe(self._onStreamRep, init=True)
+
+            if vaname in ("repetition", "pixelSize"):
+                roa_ctrls.append(ent.value_ctrl)
+
+        if hasattr(self.tab_data_model, "roa") and self._sb_ctrl:
+            self._connectRepOverlay(roa_ctrls)
+
     # END Control addition
 
     @staticmethod
@@ -1049,75 +1079,6 @@ class StreamController(object):
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
             lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
-    # ROA synchronisation methods
-    # Updating the ROI requires a bit of care, because the streams might
-    # update back their ROI with a modified value. To avoid loops, we disable
-    # and re-enable before and after each (direct) change.
-
-    def connectROI(self, stream):
-        """
-        Connect the .roi of the (repetition) stream to the global ROA
-        """
-        # First, start with the same ROI as the global ROA
-        stream.roi.value = self.tab_data_model.roa.value
-
-        listener = functools.partial(self._onStreamROI, stream)
-        stream.roi.subscribe(listener)
-        self.roi_listeners[stream] = listener
-
-    def _disableROISub(self):
-        self.tab_data_model.roa.unsubscribe(self._onROA)
-        for s, listener in self.roi_listeners.items():
-            s.roi.unsubscribe(listener)
-
-    def _enableROISub(self):
-        self.tab_data_model.roa.subscribe(self._onROA)
-        for s, listener in self.roi_listeners.items():
-            s.roi.subscribe(listener)
-
-    def _onStreamROI(self, stream, roi):
-        """
-        Called when the ROI of a stream is changed.
-        Used to update the global ROA.
-        stream (Stream): the stream which is changed
-        roi (4 floats): roi
-        """
-        self._disableROISub()
-        try:
-            # Set the global ROA to the new ROI (defined by the user)
-            logging.debug("setting roa from %s to %s", stream.name.value, roi)
-            self.tab_data_model.roa.value = roi
-
-            # Update all the other streams to (almost) the same ROI too
-            for s in self.roi_listeners:
-                if s is not stream:
-                    logging.debug("setting roi of %s to %s", s.name.value, roi)
-                    s.roi.value = roi
-        finally:
-            self._enableROISub()
-
-    def _onROA(self, roi):
-        """
-        called when the SEM concurrent roi (region of acquisition) is changed
-        To synchronise global ROA -> streams ROI
-        """
-        self._disableROISub()
-        try:
-            # Set all the streams to the requested ROA
-            for s in self.roi_listeners:
-                logging.debug("setting roi of %s to %s", s.name.value, roi)
-                s.roi.value = roi
-
-            # Read back the ROA from the "main" stream (= latest played)
-            for s in self.tab_data_model.streams.value:  # in LRU order
-                if s in self.roi_listeners:
-                    logging.debug("setting roa back from %s to %s",
-                                  s.name.value, s.roi.value)
-                    self.tab_data_model.roa.value = s.roi.value
-                    break
-        finally:
-            self._enableROISub()
-
     # Repetition visualisation on focus/hover methods
     # The global rule (in order):
     # * if mouse is hovering an entry (repetition or pixel size) => display
@@ -1125,23 +1086,24 @@ class StreamController(object):
     # * if an entry of stream has focus => display repetition for this stream
     # * don't display repetition
 
-    def connectRepOverlay(self, stream, controls):
+    def _connectRepOverlay(self, controls):
         """
         Connects the stream VAs and controls to display the repetition overlay
           when needed.
+        Warning: must be called from the main GUI thread.
         stream (RepetitionStream)
         controls (list of wx.Controls): controls that are used to change the
           repetition/pixel size info
         """
+        self._roa_ctrls = set()  # all wx Controls which should activate visualisation
+        self._hover_rep = False  # True if current mouse is hovering a control
 
-        listener = functools.partial(self._onRepStreamVA, stream)
         # repetition VA not needed: if it changes, either roi or pxs also change
-        stream.roi.subscribe(listener)
-        stream.pixelSize.subscribe(listener)
-        self.repct_listeners[stream] = listener
+        self.stream.roi.subscribe(self._onRepStreamVA)
+        self.stream.pixelSize.subscribe(self._onRepStreamVA)
 
         for c in controls:
-            self.rep_ctrl[c] = stream
+            self._roa_ctrls.add(c)
             c.Bind(wx.EVT_SET_FOCUS, self._onRepFocus)
             c.Bind(wx.EVT_KILL_FOCUS, self._onRepFocus)
             c.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
@@ -1150,42 +1112,34 @@ class StreamController(object):
             # mouse goes into the text ctrl child of the combobox.
             if hasattr(c, "TextCtrl"):
                 tc = c.TextCtrl
-                self.rep_ctrl[tc] = stream
+                self._roa_ctrls.add(tc)
                 tc.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
+
+    def _disconnectRepOverlay(self):
+        if hasattr(self.stream, "roi"):
+            self.stream.roi.unsubscribe(self._onRepStreamVA)
+        if hasattr(self.stream, "pixelSize"):
+            self.stream.pixelSize.unsubscribe(self._onRepStreamVA)
 
     @wxlimit_invocation(0.1)
     def _updateRepOverlay(self):
         """
         Ensure the repetition overlay is displaying the right thing
         """
-
-        if self._view_controller is None:
-            return
-
-        if self.hover_stream:
-            stream = self.hover_stream
-        else:
-            # TODO: save _focused_stream on enter/leave and avoid call to FindFocus?
-            focused = wx.Window.FindFocus()
-            stream = self.rep_ctrl.get(focused)  # 'None' if not an interesting control
-
-        # Convert stream to right display (for each spatial/SEM/Optical view)
-        views = self.tab_data_model.visible_views.value
-        em_views = [v for v in views if (issubclass(acqstream.EMStream, v.stream_classes) or
-                                         issubclass(acqstream.OpticalStream, v.stream_classes))]
-        em_cvs = [vp.canvas for vp in self._view_controller.views_to_viewports(em_views)]
-        for cvs in em_cvs:
-            if stream is None:
-                cvs.show_repetition(None)
+        # Show iff: the mouse is hovering a roa_ctrls, or one roa_ctrl has the focus
+        focused = wx.Window.FindFocus()
+        show_rep = self._hover_rep or (focused in self._roa_ctrls)
+        if show_rep:
+            rep = self.stream.repetition.value
+            if isinstance(self.stream, acqstream.ARStream):
+                style = RepetitionSelectOverlay.FILL_POINT
             else:
-                rep = stream.repetition.value
-                if isinstance(stream, acqstream.ARStream):
-                    style = RepetitionSelectOverlay.FILL_POINT
-                else:
-                    style = RepetitionSelectOverlay.FILL_GRID
-                cvs.show_repetition(rep, style)
+                style = RepetitionSelectOverlay.FILL_GRID
+            self._sb_ctrl.show_roa_repetition(self.stream, rep, style)
+        else:
+            self._sb_ctrl.show_roa_repetition(self.stream, None)
 
-    def _onRepStreamVA(self, stream, val):
+    def _onRepStreamVA(self, _):
         """
         Called when one of the repetition VAs of a RepetitionStream is modified
         stream (RepetitionStream)
@@ -1202,31 +1156,17 @@ class StreamController(object):
 
     def _onRepHover(self, evt):
         if evt.Entering():
-            stream = self.rep_ctrl[evt.EventObject]
+            self._hover_rep = True
         elif evt.Leaving():
-            stream = None
+            self._hover_rep = False
         else:
             logging.warning("neither leaving nor entering")
-        # logging.debug("Event hover on stream %s", stream)
-        self.hover_stream = stream
         self._updateRepOverlay()
         evt.Skip()
 
     # Repetition combobox content updater
 
-    def connectRepContent(self, stream, control):
-        """
-        Connects the stream repetition VA to ensure the combobox choices are
-        always up-to-date
-        stream (RepetitionStream)
-        control (Combobox)
-        """
-
-        listener = functools.partial(self._onStreamRep, stream.repetition, control)
-        stream.repetition.subscribe(listener, init=True)
-        self.rep_listeners[stream] = listener
-
-    def _onStreamRep(self, va, control, rep):
+    def _onStreamRep(self, rep):
         """
         Called when the repetition VAs of a RepetitionStream is modified.
         Recalculate the repetition presets according to the repetition ratio
@@ -1243,29 +1183,37 @@ class StreamController(object):
             choices.append((x, y))
 
         # remove non-possible ones
+        rng = self.stream.repetition.range
         def is_compatible(c):
             # TODO: it's actually further restricted by the current size of
             # the ROI (and the minimum size of the pixelSize), so some of the
             # big repetitions might actually not be valid. It's not a big
             # problem as the VA setter will silently limit the repetition
-            return (va.range[0][0] <= c[0] <= va.range[1][0] and
-                    va.range[0][1] <= c[1] <= va.range[1][1])
+            return (rng[0][0] <= c[0] <= rng[1][0] and
+                    rng[0][1] <= c[1] <= rng[1][1])
 
-        choices = [choice for choice in choices if is_compatible(choice)]
-
-        # remove duplicates and sort
-        choices = sorted(set(choices))
+        choices = set(choice for choice in choices if is_compatible(choice))
+        choices = sorted(choices)
 
         # replace the old list with this new version
-        control.Clear()
+        self._rep_ctrl.Clear()
         for choice in choices:
-            control.Append(u"%s x %s px" % choice, choice)
+            self._rep_ctrl.Append(u"%s x %s px" % choice, choice)
 
 
 class StreamBarController(object):
-    """  Manages the streams and their corresponding stream panels in the stream bar """
+    """
+    Manages the streams and their corresponding stream panels in the stream bar.
+    In particular it takes care of:
+      * Defining the menu entries for adding streams
+      * Play/pause the streams, via a "scheduler"
+      * Play/pause the spot stream in spot mode
+      * Connects the ROA to the .roi of RepetitionStream
+      * Shows the repetition overlay when the repetition setting is focused
+    """
 
-    def __init__(self, tab_data, stream_bar, static=False, locked=False, ignore_view=False, view_ctrl=None):
+    def __init__(self, tab_data, stream_bar, static=False, locked=False, ignore_view=False,
+                 view_ctrl=None):
         """
         :param tab_data: (MicroscopyGUIData) the representation of the microscope Model
         :param stream_bar: (StreamBar) an empty stream bar
@@ -1275,6 +1223,8 @@ class StreamBarController(object):
            view change. If False and not locked, it will show the panels
            compatible with the focussed view. If False and locked, it will show
            the panels which are seen in the focussed view.
+        :param view_ctrl (ViewPortController or None): Only required to show
+           repetition and on the SPARC ensure the right view is shown.
         """
 
         self._tab_data_model = tab_data
@@ -1298,6 +1248,8 @@ class StreamBarController(object):
         self._view_controller = view_ctrl
 
         self.stream_controllers = []
+        self._roi_listeners = {}  # (Repetition)Stream -> callable
+        self._show_reps = {}  # Stream -> (rep, style)
 
         # This attribute indicates whether live data is processed by the streams
         # in the controller, or that they just display static data.
@@ -1581,21 +1533,9 @@ class StreamBarController(object):
 
         stream_cont = self._add_stream(s, add_to_view=True, **kwargs)
 
-        # Connect the ROI to the stream.
-        stream_cont.connectROI(s)
+        # TODO: should we really not show this visible button? Left-over from SPARC.
+        # Currently, as it can only be seen on its own view, it actually makes sense.
         stream_cont.stream_panel.show_visible_btn(False)
-
-        # list of VA's that trigger update of the Rep overlay
-        vactrls = []
-        for vaname, ent in stream_cont.entries.iteritems():
-            if vaname == "repetition":
-                stream_cont.connectRepContent(s, ent.value_ctrl)
-                vactrls.append(ent.value_ctrl)
-
-            if vaname == "pixelSize":
-                vactrls.append(ent.value_ctrl)
-
-        stream_cont.connectRepOverlay(s, vactrls)
 
         return stream_cont
 
@@ -1741,7 +1681,7 @@ class StreamBarController(object):
         """
 
         stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
-                                       show_panel, view, self._view_controller)
+                                       show_panel, view, sb_ctrl=self)
 
         if locked:
             stream_cont.to_locked_mode()
@@ -1749,6 +1689,10 @@ class StreamBarController(object):
             stream_cont.to_static_mode()
 
         self.stream_controllers.append(stream_cont)
+
+        # Only connect the .roi of RepetitionStreams (ie, has .repetition)
+        if hasattr(stream, "repetition") and hasattr(self._tab_data_model, "roa"):
+            self._connectROI(stream)
 
         return stream_cont
 
@@ -2019,6 +1963,7 @@ class StreamBarController(object):
 
         # don't schedule any more
         self._unscheduleStream(stream)
+        self._disconnectROI(stream)
 
         # Remove from the views
         for v in self._tab_data_model.views.value:
@@ -2042,6 +1987,11 @@ class StreamBarController(object):
         else:
             logging.info("Stream controller of %s not found", stream)
 
+        # Explicitly collect garbage, because for some reason not all stream controllers were
+        # collected immediately, which would keep a reference to the Stream object, which in turn
+        # would prevent the Stream render thread from terminating.
+        gc.collect()
+
     def clear(self):
         """
         Remove all the streams (from the model and the GUI)
@@ -2057,6 +2007,7 @@ class StreamBarController(object):
         while self._tab_data_model.streams.value:
             stream = self._tab_data_model.streams.value.pop()
             self._unscheduleStream(stream)
+            self._disconnectROI(stream)
 
             # Remove from the views
             for v in self._tab_data_model.views.value:
@@ -2066,9 +2017,6 @@ class StreamBarController(object):
         # Clear the stream controller
         self.stream_controllers = []
 
-        # Explicitly collect garbage, because for some reason not all stream controllers were
-        # collected immediately, which would keep a reference to the Stream object, which in turn
-        # would prevent the Stream render thread from terminating.
         gc.collect()
 
         if self._has_streams() or self._has_visible_streams():
@@ -2079,6 +2027,138 @@ class StreamBarController(object):
 
     def _has_visible_streams(self):
         return any(s.IsShown() for s in self._stream_bar.stream_panels)
+
+    # ROA synchronisation methods
+    # When the ROA is updated:
+    # 1. The ROA is copied to the "main" stream
+    # 2. The ROI of the main stream is copied back to the ROA (to give feedback)
+    # 3. The ROA is copied to the other streams
+    #
+    # When a ROI of a stream is changed (but not due to ROA change):
+    # 1. It's copied to the ROA
+    # 2. It's copied to the other streams
+    #
+    # Updating the ROI requires a bit of care, because the streams might
+    # update back their ROI with a modified value. To avoid loops, we disable
+    # and re-enable before and after each (direct) change.
+
+    def _connectROI(self, stream):
+        """
+        Connect the .roi of the (repetition) stream to the global ROA
+        """
+        # First, start with the same ROI as the global ROA
+        stream.roi.value = self._tab_data_model.roa.value
+        self._tab_data_model.roa.subscribe(self._onROA)
+
+        listener = functools.partial(self._onStreamROI, stream)
+        stream.roi.subscribe(listener)
+        self._roi_listeners[stream] = listener
+
+
+    def _disconnectROI(self, stream):
+        """
+        Remove ROI subscriptions for the stream.
+        It's fine to call for a stream which is not connected to ROI.
+        stream (Stream): the stream being removed
+        """
+        if stream in self._roi_listeners:
+            logging.debug("Removing %s from ROI subscriptions", stream)
+            # Removing the callable from the roi_listeners should be sufficient,
+            # as the callable should be unreferenced and free'd, which should drop
+            # it from the subscriber... but let's make everything explicit.
+            stream.roi.unsubscribe(self._roi_listeners[stream])
+            del self._roi_listeners[stream]
+
+    def _disableROISub(self):
+        self._tab_data_model.roa.unsubscribe(self._onROA)
+        for s, listener in self._roi_listeners.items():
+            s.roi.unsubscribe(listener)
+
+    def _enableROISub(self):
+        self._tab_data_model.roa.subscribe(self._onROA)
+        for s, listener in self._roi_listeners.items():
+            s.roi.subscribe(listener)
+
+    def _onStreamROI(self, stream, roi):
+        """
+        Called when the ROI of a stream is changed.
+        Used to update the global ROA.
+        stream (Stream): the stream which is changed
+        roi (4 floats): roi
+        """
+        self._disableROISub()
+        try:
+            # Set the global ROA to the new ROI (defined by the user)
+            logging.debug("Setting ROA from %s to %s", stream.name.value, roi)
+            self._tab_data_model.roa.value = roi
+
+            # Update all the other streams to (almost) the same ROI too
+            for s in self._roi_listeners:
+                if s is not stream:
+                    logging.debug("Setting ROI of %s to %s", s.name.value, roi)
+                    s.roi.value = roi
+        finally:
+            self._enableROISub()
+
+    def _onROA(self, roa):
+        """
+        Called when the ROA is changed
+        To synchronise global ROA -> streams ROI
+        """
+        self._disableROISub()
+        try:
+            # ROI-related streams, in LRU order => the first one is the "main" stream
+            roi_ss = [s for s in self._tab_data_model.streams.value
+                      if s in self._roi_listeners]
+
+            for i, s in enumerate(roi_ss):
+                logging.debug("Setting ROI of %s to %s", s.name.value, roa)
+                s.roi.value = roa
+                if i == 0:
+                    # Read back the ROA from the "main" stream (= latest played)
+                    logging.debug("Setting ROA back from %s to %s",
+                                  s.name.value, s.roi.value)
+                    roa = s.roi.value
+                    self._tab_data_model.roa.value = roa
+
+        finally:
+            self._enableROISub()
+
+    def show_roa_repetition(self, stream, rep, style=None):
+        """
+        Request the views to show (or not) the repetition for the given stream
+        Depending on requests from other streams, it might or not be actually done
+        stream (Stream): stream for which the display is requested
+        rep (None or tuple of 2 ints): if None, repetition is hidden
+        style (overlay.FILL_*): type of repetition display
+        """
+        # Update the list of streams that want to show their repetition
+        if rep:
+            self._show_reps[stream] = (rep, style)
+        else:
+            self._show_reps.pop(stream, None)  # remove iff present
+
+        # Pick the best repetition: use the latest stream which has something to show
+        rep, style = None, None  # default is "no show"
+        for s in self._tab_data_model.streams.value:
+            if s in self._show_reps:
+                rep, style = self._show_reps[s]
+                break
+
+        if not self._view_controller:
+            # Too bad, but this can happen if the GUI has no viewport controller
+            # (ie, the AcquisitionDialog
+            logging.info("Can not show repetition, as view controller is unknown")
+            return
+
+        # Update all the views which care (ie, spatial/SEM/Optical view)
+        # TODO: instead, look at each canvas which has a allowed_modes TOOL_ROA?
+        views = self._tab_data_model.visible_views.value
+        em_views = [v for v in views if (issubclass(acqstream.EMStream, v.stream_classes) or
+                                         issubclass(acqstream.OpticalStream, v.stream_classes))]
+        for em_view in em_views:
+            vp = self._view_controller.get_viewport_by_view(em_view)
+            vp.canvas.show_repetition(rep, style)
 
 
 class SecomStreamsController(StreamBarController):
@@ -2178,6 +2258,7 @@ class SecomStreamsController(StreamBarController):
             self.add_action("FLIM", self.addScannedTCSettings, flim_capable)
 
     def _onStreamUpdate(self, stream, updated):
+        # When a stream starts playing, ensure it's visible in at least one view
         if updated:
             fv = self._tab_data_model.focussedView.value
             if stream not in fv.stream_tree.flat.value and stream is not self._spot_stream:
@@ -2225,23 +2306,17 @@ class SecomStreamsController(StreamBarController):
 
 class SparcStreamsController(StreamBarController):
     """
-    Controlls the streams for the SPARC acquisition view
+    Controls the streams for the SPARC acquisition tab
     In addition to the standard controller it:
+     * Knows how to create the special RepeptionStreams
      * Updates the .acquisitionStreams when a stream is added/removed
-     * Connects the ROA (.roi of each settings streams) to semStream
-     * Shows the repetition overlay when the repetition setting is focused
-     * Play/pause the spot stream in spot mode
+     * Connects tab_data.useScanStage to the streams
 
-    Note: tab_data.spotStream should be part of the streams
+    Note: tab_data.spotStream should be in tab_data.streams
     """
-    def __init__(self, tab_data, stream_bar, view_ctrl, **kwargs):
-        super(SparcStreamsController, self).__init__(tab_data, stream_bar, view_ctrl=view_ctrl, ** kwargs)
 
-        # self._stream_config = data.get_stream_settings_config()
-
-        # Force the ROA to be defined by the user on first use
-        # semStream is semcl_stream set in tabs.py
-        tab_data.roa = tab_data.semStream.roi
+    def __init__(self, tab_data, *args, **kwargs):
+        super(SparcStreamsController, self).__init__(tab_data, *args, **kwargs)
 
         # Each stream will be created both as a SettingsStream and a MDStream
         # When the SettingsStream is deleted, automatically remove the MDStream
@@ -2312,38 +2387,6 @@ class SparcStreamsController(StreamBarController):
                         self._tab_data_model.acquisitionStreams.discard(acqs)
                         break
 
-        for stream_cont in self.stream_controllers:
-        # clean up the ROI listeners
-            if hasattr(stream_cont, "roi_listeners"):
-                for s in stream_cont.roi_listeners.keys():
-                    if s not in streams:
-                        logging.debug("Removing %s from ROI subscriptions", s)
-                        del stream_cont.roi_listeners[s]  # automatically unsubscribed
-
-            if hasattr(stream_cont, "rep_listeners"):
-                # clean up the repetition listeners
-                for s in stream_cont.rep_listeners.keys():
-                    if s not in streams:
-                        logging.debug("Removing %s from repetition subscriptions", s)
-                        del stream_cont.rep_listeners[s]  # automatically unsubscribed
-
-                        for c, cs in stream_cont.rep_ctrl.items():
-                            if cs is s:
-                                del stream_cont.rep_ctrl[c]
-                                # TODO: need to unbind events even if the control is destroyed anyway?
-                                # c.Unbind()
-
-                        if stream_cont.hover_stream is s:
-                            stream_cont.hover_stream = None
-
-                # clean up the repetition content updater listeners
-                for s in stream_cont.repct_listeners.keys():
-                    if s not in streams:
-                        logging.debug("Removing %s from repetition content subscriptions", s)
-                        del stream_cont.repct_listeners[s]  # automatically unsubscribed
-
-        gc.collect()  # To help reclaiming some memory
-
     def _getAffectingSpectrograph(self, comp):
         """
         Find which spectrograph matters for the given component (ex, spectrometer)
@@ -2412,7 +2455,6 @@ class SparcStreamsController(StreamBarController):
             stream.useScanStage.value = self._tab_data_model.useScanStage.value
 
         stream_cont = self._add_stream(stream, add_to_view=True, **kwargs)
-        stream_cont.connectROI(stream)
         stream_cont.stream_panel.show_visible_btn(False)
 
         # add the acquisition stream to the acquisition set
@@ -2507,8 +2549,9 @@ class SparcStreamsController(StreamBarController):
 
         # With CLi, often the user wants to get the whole area, same as the survey.
         # But it's not very easy to select all of it, so do it automatically.
-        if sem_stream.roi.value == acqstream.UNDEFINED_ROI:
-            sem_stream.roi.value = (0, 0, 1, 1)
+        # (after the controller creation, to automatically set the ROA too)
+        if cli_stream.roi.value == acqstream.UNDEFINED_ROI:
+            cli_stream.roi.value = (0, 0, 1, 1)
         return ret
 
     def addSpectrum(self, name=None, detector=None):
@@ -2605,15 +2648,17 @@ class SparcStreamsController(StreamBarController):
 
     def _onStreamUpdate(self, stream, updated):
 
-        fv = self._tab_data_model.focussedView.value
-        if (isinstance(stream, fv.stream_classes) and  # view is compatible
-            stream not in fv.stream_tree):
-            # Add to the view
-            fv.addStream(stream)
-            # Update the graphical display
-            for e in self._stream_bar.stream_panels:
-                if e.stream is stream:
-                    e.set_visible(True)
+        # Make sure that the stream is visible in every (compatible) view
+        if updated:
+            fv = self._tab_data_model.focussedView.value
+            if (isinstance(stream, fv.stream_classes) and  # view is compatible
+                stream not in fv.stream_tree):
+                # Add to the view
+                fv.addStream(stream)
+                # Update the graphical display
+                for e in self._stream_bar.stream_panels:
+                    if e.stream is stream:
+                        e.set_visible(True)
 
         super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
 

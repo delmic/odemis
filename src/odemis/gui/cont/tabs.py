@@ -856,6 +856,9 @@ class SparcAcquisitionTab(Tab):
             main_data.ebeam
         )
         tab_data.semStream = semcl_stream
+        tab_data.roa = semcl_stream.roi
+        # Force the ROA to be defined by the user on first use
+        tab_data.roa.value = acqstream.UNDEFINED_ROI
 
         tab_data.driftCorrector = leech.AnchorDriftCorrector(semcl_stream.emitter,
                                                              semcl_stream.detector)
@@ -939,8 +942,8 @@ class SparcAcquisitionTab(Tab):
         self._stream_controller = streamcont.SparcStreamsController(
             tab_data,
             panel.pnl_sparc_streams,
-            self.view_controller,
-            ignore_view=True  # Show all stream panels, independent of any selected viewport
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=self.view_controller,
         )
 
         # The sem stream is always visible, so add it by default
