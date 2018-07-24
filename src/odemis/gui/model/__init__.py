@@ -1189,7 +1189,7 @@ class StreamView(View):
         """
         # FIXME: "stop all axes" should also clear the queue
 
-                # Check if the stream is static and update zlevel
+        # Check if the stream is static and update zlevel if possible
         for s in self.getStreams():
             if model.hasVA(s, "zlevel"):
                 k = 1
@@ -1207,10 +1207,10 @@ class StreamView(View):
                 focuser = s.focuser
                 curr_s = s
                 break
-            
-        else:
-            logging.info("Trying to change focus while no stream is playing")
-            return 0
+            else:
+                if not model.hasVA(s, "zlevel"):
+                    logging.info("Trying to change focus while no stream is playing")
+                return 0
             
         # TODO: optimise with the focuser
         # Find the depth of field (~ the size of one "focus step")
