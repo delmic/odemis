@@ -386,12 +386,15 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     return rgb
 
 
-def ensure2DImage(data):
+def ensure2DImage(data, zlevel=0):
     """
     Reshape data to make sure it's 2D by trimming all the low dimensions (=1).
     Odemis' convention is to have data organized as CTZYX. If CTZ=111, then it's
     a 2D image, but it has too many dimensions for functions which want only 2D.
+    If it has a 3D pixel size (voxels) then it must be ZYX, so this should be handled.
     data (DataArray): the data to reshape
+    zlevel: If the image is in fact 3D (a z stack), then select a plane of the stack at the
+        index "zlevel"
     return DataArray: view to the same data but with 2D shape
     raise ValueError: if the data is not 2D (CTZ != 111)
     """
@@ -399,7 +402,11 @@ def ensure2DImage(data):
     if len(d.shape) < 2:
         d.shape = (1,) * (2 - len(d.shape)) + d.shape
     elif len(d.shape) > 2:
-        d.shape = d.shape[-2:] # raise ValueError if it will not work
+        pxs = d.metadata.get(model.MD_PIXEL_SIZE)
+        if pxs is not None and len(pxs) == 3:
+            d = d[zlevel]  # Remove z
+        else:
+            d.shape = d.shape[-2:] # raise ValueError if it will not work
 
     return d
 

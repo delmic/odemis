@@ -99,10 +99,6 @@ def data_to_static_streams(data):
             # AR data
             ar_data.append(d)
             continue
-        elif pxs is not None and len(pxs) == 3:
-            # Voxels detected, so must be a z-stack
-            name = d.metadata.get(model.MD_DESCRIPTION, "Z-Stack")
-            klass = stream.Static3DStream
         elif ((model.MD_IN_WL in d.metadata and model.MD_OUT_WL in d.metadata) or
               model.MD_USER_TINT in d.metadata
              ):
@@ -146,15 +142,18 @@ def data_to_static_streams(data):
 
         if issubclass(klass, stream.Static2DStream):
             # FIXME: doesn't work currently if d is a DAS
-            if numpy.prod(d.shape[:-2]) != 1:
+            if pxs is not None and len(pxs) == 3 and dims not in ("YX"):
+                # Voxels detected, so must be a z-stack
+                name = d.metadata.get(model.MD_DESCRIPTION)
+                logging.debug("3D Z-stack %s", dims)
+                logging.warning("Dropping dimensions from the data %s of shape %s",
+                            name, d.shape)
+                d = numpy.squeeze(d)
+
+            elif numpy.prod(d.shape[:-2]) != 1:
                 logging.warning("Dropping dimensions from the data %s of shape %s",
                                 name, d.shape)
                 d = d[-2, -1]
-
-        if issubclass(klass, stream.Static3DStream):
-            logging.warning("Dropping dimensions from the data %s of shape %s",
-                            name, d.shape)
-            d = numpy.squeeze(d)
 
         stream_instance = klass(name, d)
         result_streams.append(stream_instance)

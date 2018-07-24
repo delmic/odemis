@@ -111,6 +111,11 @@ class Static2DStream(StaticStream):
             raw = [raw.getData()]
         else:
             raw = [raw]
+
+        logging.debug("%s shape: %s", name, raw[0].shape)
+
+        self._zstack = (len(raw[0].shape) == 3)
+        self.zlevel = model.IntContinuous(0, [0, raw[0].shape[0]])
         super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
 
     def _init_projection_vas(self):
@@ -124,20 +129,6 @@ class Static2DStream(StaticStream):
         '''
         pass
 
-    
-class Static3DStream(StaticStream):
-    """
-    Stream containing one static image which has a depth component
-    For testing and static images.
-    """
-
-    def __init__(self, name, raw, *args, **kwargs):
-        if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
-            raw = [raw.getData()]
-        else:
-            raw = [raw]
-        super(Static3DStream, self).__init__(name, raw, *args, **kwargs)
-        
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
         """
@@ -157,28 +148,28 @@ class Static3DStream(StaticStream):
                         logging.info("Failed to subtract background data: %s", ex)
 
                 dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-                zi = dims.find("Z")  # -1 if not found
+                ci = dims.find("C")  # -1 if not found
                 # is RGB
-                """
                 if dims in ("CYX", "YXC") and data.shape[ci] in (3, 4):
                     try:
                         rgbim = img.ensureYXC(data)
                         rgbim.flags.writeable = False
                         # merge and ensures all the needed metadata is there
                         rgbim.metadata = self._find_metadata(rgbim.metadata)
-                        rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
+                        rgbim.metadata[model.MD_DIMS] = "YXC"  # RGB format
                         self.image.value = rgbim
                     except Exception:
                         logging.exception("Updating %s image", self.__class__.__name__)
-                else: # is grayscale
+                else:  # is grayscale
                     if data.ndim != 2:
-                        data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
+                        data = img.ensure2DImage(data, self.zlevel.value)  # Remove extra dimensions (of length 1)
                     self.image.value = self._projectXY2RGB(data, self.tint.value)
             else:
                 raise AttributeError(".raw must be a list of DA/DAS")
-"""
+
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
 
 
 class StaticSEMStream(Static2DStream):
