@@ -33,6 +33,7 @@ import logging
 from odemis import model, util
 import odemis.dataio
 from odemis.gui import img
+from odemis.gui.comp import hist
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
@@ -41,14 +42,12 @@ from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry
     create_axis_entry
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
-from odemis.gui.util import call_in_wx_main
-import odemis.gui.util
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
 import time
 import wx
 
-import odemis.gui.comp.hist as hist
 import odemis.gui.conf as guiconf
 
 
@@ -558,7 +557,7 @@ class AnalysisSettingsController(SettingsBarController):
             "AR background",
             tooltip="Angle-resolved background acquisition file",
             clear="None").value_ctrl
-        wildcards, _ = odemis.gui.util.formats_to_wildcards(odemis.dataio.get_available_formats(),
+        wildcards, _ = formats_to_wildcards(odemis.dataio.get_available_formats(),
                                                             include_all=True)
         self._arfile_ctrl.SetWildcard(wildcards)
         self._pnl_arfile.hide_panel()
