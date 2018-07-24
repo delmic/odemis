@@ -292,7 +292,7 @@ class ZStackPlugin(Plugin):
         ret = []
         for image in images:
             stack = np.dstack(image)
-            #stack = np.swapaxes(stack, 0, 2)
+            stack = np.swapaxes(stack, 1, 2)
             #stack = np.expand_dims(stack, 1)
             ret.append(stack[0])
             
