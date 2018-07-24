@@ -42,8 +42,6 @@ UNDEFINED_ROI = (0, 0, 0, 0)
 # use hardcode list of polarization positions necessary for polarimetry analysis
 POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
                  MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC)
-# constant used to acquire all 6 polarization positions
-POL_6POS = "6Pol"
 
 
 class Stream(object):

@@ -40,7 +40,7 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-from odemis.acq.stream._base import POL_6POS, POL_POSITIONS
+from odemis.acq.stream._base import POL_POSITIONS
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -2281,8 +2281,18 @@ class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
 
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
-        list_positions = ars.polarization.choices
+        list_positions = list(ars.polarization.choices) + ["acquireAllPol"]
+
+        # to test each polarization position acquired sequentially in a single acq
+        ars.acquireAllPol.value = False
+
         for pos in list_positions:
+            if pos == "acquireAllPol":
+                # to test all polarization position acquired in one acquisition
+                ars.acquireAllPol.value = True
+                # set pos to random pol pos from list as "acquireAllPol" is not a valid choice
+                pos = "vertical"
+
             ars.polarization.value = pos
 
             # Short acquisition (< 0.1s)
@@ -2319,13 +2329,13 @@ class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
             # check that number of angle resolved images is same as the total number of ebeam positions
             # include if multiple polarization images are required per ebeam position
             ar_das = sas.raw[1:]  # angle resolved data arrays
-            if hasattr(sas, "_polarization") and sas._polarization.value == POL_6POS:
+            if ars.acquireAllPol.value:
                 self.assertEqual(len(ar_das), num_ar*6)
             else:
                 self.assertEqual(len(ar_das), num_ar)
 
             # check if metadata is correctly stored
-            if pos == POL_6POS:
+            if ars.acquireAllPol.value:
                 # check for each of the 6 polarization positions
                 for i in range(6):
                     for d in ar_das[num_ar*i: num_ar*(i+1)]:
@@ -2359,6 +2369,7 @@ class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.polarization.value = "vertical"
+        ars.acquireAllPol.value = False
         ars.roi.value = (0, 0.2, 0.3, 0.6)
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1  # s
@@ -2403,10 +2414,8 @@ class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
         # check that number of angle resolved images is same as the total number of ebeam positions
         # include if multiple polarization images are required per ebeam position
         ar_das = sas.raw[1:-1]  # angle resolved data arrays
-        if sas._polarization.value == POL_6POS:
-            self.assertEqual(len(ar_das), num_ar * 6)
-        else:
-            self.assertEqual(len(ar_das), num_ar)
+
+        self.assertEqual(len(ar_das), num_ar)
 
         # check last image in .raw has a time axis greater than 1
         ar_drift = sas.raw[-1]  # angle resolved data arrays
