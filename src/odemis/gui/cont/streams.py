@@ -167,6 +167,47 @@ class StreamController(object):
             self._add_wl_ctrls()
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
+                
+        if hasattr(self.tab_data_model, "roa"):
+            self.tab_data_model.roa.subscribe(self._onROA)
+
+            # for storing the ROI listeners of the repetition streams
+            self.roi_listeners = {}  # RepetitionStream -> callable
+
+            if hasattr(stream, "repetition"):
+                # Repetition visualisation
+                self.hover_stream = None  # stream for which the repetition must be displayed
+                self.rep_listeners = {}  # RepetitionStream -> callable
+                self.rep_ctrl = {}  # wx Control -> RepetitionStream
+
+                # Repetition Combobox updater
+                self.repct_listeners = {}  # RepetitionStream -> callable
+
+        # Add entries from the stream config based on the dictionary
+        stream_config = self._stream_config.get(type(self.stream), {})
+        # present. (and get the controls via stream_cont.entries[vaname])
+        # Add VAs (in same order as config)
+        vas = stream_config.keys()
+        vactrls = []
+
+        if hasattr(stream, "zlevel") and hasattr(self.tab_data_model, "zpos"):
+            self.tab_data_model.zpos.subscribe(self._on_z_pos)
+        else:
+            if "zlevel" in vas:
+                vas.remove("zlevel")
+
+        for vaname in vas:
+            try:
+                va = getattr(self.stream, vaname)
+            except AttributeError:
+                logging.debug("Skipping non existent VA %s on %s", vaname, self.stream)
+                continue
+            conf = stream_config.get(vaname)
+            ent = self.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
+            vactrls.append(ent.value_ctrl)
+
+            if vaname == "repetition":
+                self.connectRepContent(self.stream, ent.value_ctrl)
 
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
@@ -431,6 +472,9 @@ class StreamController(object):
                 break
         else:
             logging.error("No peak method corresponding to state %s", evt.state)
+
+    def _on_z_pos(self, zpos):
+        self.stream.setZLevelPosition(zpos)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

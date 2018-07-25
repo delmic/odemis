@@ -29,6 +29,7 @@ import collections
 import logging
 import math
 import numpy
+import copy
 from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, MD_PIXEL_SIZE, VigilantAttribute
@@ -106,6 +107,9 @@ class Static2DStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray or DataArrayShadow): The data to display.
         """
+
+        metadata = copy.copy(raw.metadata)
+
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
             raw = [raw.getData()]
@@ -114,9 +118,26 @@ class Static2DStream(StaticStream):
 
         logging.debug("%s shape: %s", name, raw[0].shape)
 
-        self._zstack = (len(raw[0].shape) == 3)
-        self.zlevel = model.IntContinuous(0, [0, raw[0].shape[0]])
+        if len(raw[0].shape) == 3:
+            
+            try:
+                pxs = metadata[model.MD_PIXEL_SIZE]
+                if len(pxs) == 3:
+                    self.zlevel = model.IntContinuous(0, [0, raw[0].shape[0] - 1])
+                    self.zstep = model.FloatVA(pxs[2], readonly=True)
+                    self.zstart = model.FloatVA(0, readonly=True)
+            except KeyError:
+                pass
         super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
+
+    def setZLevelPosition(self, pos):
+        # Given an absolute physical position in z pos, set the zlevel index
+        # based on physical parameters
+        # Returns the actual value set.
+        val = int(round((pos - self.zstart.value) / self.zstep.value, 0))
+
+        self.zlevel.value = self.zlevel.clip(val)
+        return self.zlevel.value
 
     def _init_projection_vas(self):
         ''' On Static2DStream, the projection is done on RGBSpatialProjection

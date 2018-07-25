@@ -612,6 +612,31 @@ class AnalysisGUIData(MicroscopyGUIData):
         self.spec_bck_cal.subscribe(self._on_spec_bck_cal)
         self.spec_cal.subscribe(self._on_spec_cal)
 
+        self.zrange = model.TupleVA((0, 0))
+        self.zpos = model.FloatContinuous(0, range=self.zrange.value)
+        self.static_zdisplay = model.BooleanVA(False)
+
+        self.streams.subscribe(self._on_stream_change)
+
+    def _updateZParams(self):
+        self._updateZRange()
+        self.zpos.range = self.zrange.value
+        self.static_zdisplay.value = any(model.hasVA(s, "zlevel") for s in self.streams.value)
+
+    def _updateZRange(self):
+        lo, hi = 0, 0
+        for s in self.streams.value:
+            if model.hasVA(s, "zlevel"):
+                new_lo = s.zstart.value
+                if new_lo < lo:
+                    lo = new_lo
+
+                new_hi = s.zstart.value + s.zstep.value * s.zlevel.range[1]
+                if new_hi > hi:
+                    hi = new_hi
+
+        self.zrange.value = (lo, hi)
+
     def _on_ar_cal(self, fn):
         self._conf.set("calibration", "ar_file", fn)
 
@@ -620,6 +645,9 @@ class AnalysisGUIData(MicroscopyGUIData):
 
     def _on_spec_cal(self, fn):
         self._conf.set("calibration", "spec_file", fn)
+
+    def _on_stream_change(self, streams):
+        self._updateZParams()
 
 
 class ActuatorGUIData(MicroscopyGUIData):
@@ -965,7 +993,7 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, zpos=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -1046,6 +1074,9 @@ class StreamView(View):
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
         self.interpolate_content = model.BooleanVA(False)
+
+        if zpos is not None:
+            self.zpos = zpos
 
     def _onFovBuffer(self, fov):
         self._updateStreamsViewParams()
@@ -1165,6 +1196,7 @@ class StreamView(View):
                                      shift * 1e6)
 
                 time_last_move = time.time()
+
                 try:
                     if axis.canUpdate:
                         # Update the target position on the fly
@@ -1189,17 +1221,20 @@ class StreamView(View):
         """
         # FIXME: "stop all axes" should also clear the queue
 
-        # Check if the stream is static and update zlevel if possible
-        for s in self.getStreams():
-            if model.hasVA(s, "zlevel"):
-                k = 1
-                val = int(k * shift)
-
-                # Check if it is within the range.
-                try:
-                    s.zlevel.value = s.zlevel.value + val
-                except IndexError:
-                    pass
+        # If streams have a z-level, we calculate the shfit differently.
+        
+        if hasattr(self, "zpos"):
+        
+            k = 1e-6
+            val = k * shift
+            
+            try:
+                self.zpos.value = self.zpos.value + val
+                logging.debug("Moving zpos to %f", self.zpos.value)
+            except IndexError:
+                val = 0
+            
+            return val
 
         # TODO: optimise by only updating focuser when the stream tree changes
         for s in self.getStreams():
@@ -1230,6 +1265,7 @@ class StreamView(View):
         assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
         q = self._getFocuserQueue(focuser)
         q.put(val)
+        logging.debug(val)
         return val
 
     def moveStageBy(self, shift):

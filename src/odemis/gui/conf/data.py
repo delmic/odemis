@@ -778,6 +778,13 @@ STREAM_SETTINGS_CONFIG = {
             ("polarization", {
             }),
         )),
+    stream.StaticFluoStream:
+        OrderedDict((
+            ("zlevel", {
+                "label": "Z Level",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            }),
+        )),
 }
 
 

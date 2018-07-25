@@ -740,11 +740,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).on_right_down(event)
 
-    def set_focus_shift(self, range):
-        # range: a tuple
-        if self._focus_overlay:
-            self._focus_overlay.shift
-
     def on_right_up(self, event):
         """ Process right mouse button release event
 

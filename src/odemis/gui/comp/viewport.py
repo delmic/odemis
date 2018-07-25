@@ -622,6 +622,8 @@ class MicroscopeViewport(ViewPort):
     def _on_stream_change(self, streams):
         if any(model.hasVA(s, "zlevel") for s in streams):
             self.canvas.abilities.add(CAN_FOCUS)
+        else:
+            self.canvas.abilities.discard(CAN_FOCUS)
 
 
 class OverviewViewport(MicroscopeViewport):
