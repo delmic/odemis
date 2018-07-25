@@ -293,7 +293,6 @@ class ZStackPlugin(Plugin):
         for image in images:
             stack = np.dstack(image)
             stack = np.swapaxes(stack, 1, 2)
-            #stack = np.expand_dims(stack, 1)
             ret.append(stack[0])
             
         # Add back metadata
@@ -309,7 +308,7 @@ class ZStackPlugin(Plugin):
 
         # For a negative pixel size, convert to a positive and flip the z axis
         if ps_z < 0:
-            ret = mp.flip(ret, 0)
+            ret = np.flipud(ret)
             ps_z = -ps_z
 
         metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)

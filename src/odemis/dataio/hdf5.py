@@ -206,6 +206,10 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["YOffset"], ST_REPORTED)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
 
+#         if len(pos) == 3:
+#             _h5svi_set_state(group["ZOffset"], ST_REPORTED)
+#             group["ZOffset"].attrs["UNIT"] = "m"  # our extension
+
     # If ids.CLASS is set and the wrong padding type attach_scale() fails.
     # As a workaround, we temporarily remove it
     # It's caused by the way attach_scale check whether the ids is
@@ -382,7 +386,7 @@ def _read_image_info(group):
     md = {}
     # Offset
     try:
-        pos = (float(group["XOffset"][()]), float(group["YOffset"][()]))
+        pos = (float(group["XOffset"][()]), float(group["YOffset"][()]), float(group["ZOffset"][()]))
         md[model.MD_POS] = pos
     except KeyError:
         pass
