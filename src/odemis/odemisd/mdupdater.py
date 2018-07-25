@@ -105,7 +105,7 @@ class MetadataUpdater(model.Component):
                 elif a.role == "light":
                     # update the emitted light wavelength
                     self.observeLight(a, d)
-                elif a.role.startswith("spectrograph"):
+                elif a.role and a.role.startswith("spectrograph"):
                     # update the output wavelength range
                     self.observeSpectrograph(a, d)
                 elif a.role in ("cl-filter", "filter"):
