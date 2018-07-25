@@ -507,7 +507,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # FIXME: it shouldn't need to ignore deads, as the subscription should go
     # away as soon as it's destroyed. However, after SECOM acquisition, something
-    # seems to keep reference to the SecomCanvas, which prevents it from being
+    # seems to keep reference to the Canvas, which prevents it from being
     # fully destroyed.
     @ignore_dead
     def _on_view_image_update(self, t):
@@ -981,14 +981,6 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         scaled_img = wx.ImageFromBitmap(bitmap)
         self.microscope_view.thumbnail.value = scaled_img
-
-
-class SecomCanvas(DblMicroscopeCanvas):
-    pass
-
-
-class SparcAcquiCanvas(DblMicroscopeCanvas):
-    pass
 
 
 class SparcARCanvas(DblMicroscopeCanvas):

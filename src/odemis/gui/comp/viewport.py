@@ -722,15 +722,6 @@ class LiveViewport(MicroscopeViewport):
             self.canvas.abilities.discard(CAN_FOCUS)
 
 
-# TODO: remove once SparcAcquiCanvas is just a normal canvas
-class SparcLiveViewport(LiveViewport):
-    """
-    LiveViewport which support additional modes for the SPARC
-    """
-
-    canvas_class = miccanvas.SparcAcquiCanvas
-
-
 class ARLiveViewport(LiveViewport):
     """
     LiveViewport dedicated to show AR images.

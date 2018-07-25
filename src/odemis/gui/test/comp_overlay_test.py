@@ -326,7 +326,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop(0.5)
 
     def test_dichotomy_overlay(self):
-        cnvs = miccanvas.SecomCanvas(self.panel)
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         lva = model.ListVA()
