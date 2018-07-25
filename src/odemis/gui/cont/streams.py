@@ -125,13 +125,13 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
-        # Metadata display in analysis tab (static streams)
-        if isinstance(self.stream, acqstream.StaticStream):
-            self._display_metadata()
-
         # TODO: make it a list, as the dict keys are not used right now, and
         # they could be just looked up via the SettingEntry.name anyway
         self.entries = OrderedDict()  # name -> SettingEntry
+
+        # Metadata display in analysis tab (static streams)
+        if isinstance(self.stream, acqstream.StaticStream):
+            self._display_metadata()
 
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
@@ -191,22 +191,20 @@ class StreamController(object):
         Display metadata for integration time, ebeam voltage, probe current and
         emission/excitation wavelength
         """
-
-        if not self.stream.raw:
-            return
-
-        if isinstance(self.stream.raw[0], tuple):
-            # Show metadata for first element of raw in case of AR acquisitions or
-            # stitched images
-            md = self.stream.raw[0][0].metadata
-        else:
+        if hasattr(self.stream, "_das"):
+            # For tiled stream => use the DataArrayShadow (which is the only reliable one)
+            md = self.stream._das.metadata
+        elif self.stream.raw:
             md = self.stream.raw[0].metadata
+        else:
+            logging.warning("No raw data in stream")
+            return
 
         # Use "integration time" instead of "exposure time" since, in some cases, the dwell
         # time is stored in MD_EXP_TIME
         if model.MD_EXP_TIME in md:
-            self.add_metadata("Integration Time", md[model.MD_EXP_TIME], 's')
-        elif model.MD_DWELL_TIME in md.keys():
+            self.add_metadata("Integration time", md[model.MD_EXP_TIME], 's')
+        elif model.MD_DWELL_TIME in md:
             self.add_metadata(model.MD_DWELL_TIME, md[model.MD_DWELL_TIME], 's')
 
         if model.MD_EBEAM_VOLTAGE in md:
@@ -214,7 +212,6 @@ class StreamController(object):
 
         if model.MD_EBEAM_CURRENT in md:
             self.add_metadata(model.MD_EBEAM_CURRENT, md[model.MD_EBEAM_CURRENT], 'A')
-
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
@@ -468,29 +465,33 @@ class StreamController(object):
                                    self._dye_ewl, self.stream.emission.value)
 
     def _on_metadata_btn(self, evt):
-        if not self.stream.raw:
-            # Show empty window if no metadata are present
-            md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, "")
-            md_frame.ShowModal()
-            return
-
-        if isinstance(self.stream.raw[0], tuple):
-            # Show metadata for first element of raw in case of AR acquisitions or
-            # stitched images
-            md = self.stream.raw[0][0].metadata
-        else:
-            md = self.stream.raw[0].metadata
-
         text = ""
-        for key in sorted(md):
-            if key == model.MD_ACQ_DATE:  # display date in readable format
-                text += ("%s: %s\n" % (key, time.strftime(u"%c", time.localtime(md[key]))))
+        # Show empty window if no image present
+        if hasattr(self.stream, '_das'):
+            # For tiled streams
+            r = self.stream._das
+        else:
+            if self.stream.raw:
+                r = self.stream.raw[0]
             else:
-                text += ("%s: %s\n" % (key, md[key]))
+                r = None
+
+        if r is not None:
+            shape = r.shape
+            dtype = r.dtype
+            md = r.metadata
+
+            text += "Shape: %s\n" % (" x ".join(str(s) for s in shape),)
+            text += "Data type: %s\n" % (dtype,)
+            for key in sorted(md):
+                if key == model.MD_ACQ_DATE:  # display date in readable format
+                    text += "%s: %s\n" % (key, time.strftime(u"%c", time.localtime(md[key])))
+                else:
+                    text += "%s: %s\n" % (key, md[key])
 
         md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
-    
+
     # Panel state methods
 
     def to_locked_mode(self):
