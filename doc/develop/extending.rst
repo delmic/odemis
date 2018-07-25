@@ -596,6 +596,17 @@ In console panel (PyCrust) of the inspection window, type:
 
 From now on, all log messages are displayed and recorded in the log file.
 
+In the same way, if you need to test some python code inside the GUI, you can
+access the main objects of the GUI via commands like this:
+
+.. code-block:: python
+
+    import wx
+    app = wx.GetApp()
+    main_data = app.main_data  # the main GUI data model
+    ta = main_data.getTabByName("analysis")  # the tab controller
+    ta.tab_data_model.streams.value  # the tab data model and the streams
+
 
 An other important detail to take into account when modifying the GUI is that
 the wxPython framework has a limitation: any change to the GUI widgets must
