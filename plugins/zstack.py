@@ -288,7 +288,7 @@ class ZStackPlugin(Plugin):
         return cubes
 
     def constructCube(self, images):
-        # images is a list of 5 dim data arrays.
+        # images is a list of 3 dim data arrays.
         ret = []
         for image in images:
             stack = np.dstack(image)
@@ -301,6 +301,17 @@ class ZStackPlugin(Plugin):
         # Extend pixel size to 3D
         ps_x, ps_y = metadata3d[model.MD_PIXEL_SIZE]
         ps_z = self.zstep.value
+
+        # Computer cube centre
+        c_x, c_y = metadata3d[model.MD_POS]
+        c_z = self.zstart.value + (self.zstep.value * self.numberofAcquisitions.value) / 2
+        metadata3d[model.MD_POS] = (c_x, c_y, c_z)
+
+        # For a negative pixel size, convert to a positive and flip the z axis
+        if ps_z < 0:
+            ret = mp.flip(ret, 0)
+            ps_z = -ps_z
+
         metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
         metadata3d[model.MD_DIMS] = "ZYX"
         self._metadata = copy.copy(metadata3d)

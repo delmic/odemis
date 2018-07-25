@@ -108,13 +108,13 @@ class Static2DStream(StaticStream):
         raw (DataArray or DataArrayShadow): The data to display.
         """
 
-        metadata = copy.copy(raw.metadata)
-
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
             raw = [raw.getData()]
         else:
             raw = [raw]
+
+        metadata = copy.copy(raw[0].metadata)
 
         logging.debug("%s shape: %s", name, raw[0].shape)
 
