@@ -1,3 +1,12 @@
+odemis (2.8.2-1) precise; urgency=medium
+
+  * New version: 2.8.2
+  * Main bugs fixed:
+    - Windows viewer didn't build properly
+    - Fix metadata update from component with None role (DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 25 Jul 2018 09:46:51 +0200
+
 odemis (2.8.1-1) precise; urgency=medium
 
   * New version: 2.8.1
