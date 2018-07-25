@@ -102,7 +102,7 @@ class ZStackPlugin(Plugin):
         self.addMenu("Acquisition/ZStack...\tCtrl+T", self.start)
         
     def _acqRangeIsValid(self, acq_range):
-        return acq_range <= self._zrange[1] and acq_range >= self._zrange[0]
+        return self._zrange[0] <= acq_range <= self._zrange[1]
 
     def _setZStep(self, zstep):
         # Check if the acquisition will be within the range of the actuator
@@ -283,6 +283,10 @@ class ZStackPlugin(Plugin):
         logging.debug("Z Stack acquisition complete. Returning focus to start position")
         self.focus.moveAbs(self.old_pos).result()
         
+    def postProcessing(self, images):
+        cubes = [self.constructCube(im) for im in images]
+        return cubes
+
     def constructCube(self, images):
         # images is a list of 5 dim data arrays.
         ret = []
@@ -360,10 +364,10 @@ class ZStackPlugin(Plugin):
         f.set_result(None)  # Indicate it's over
         
         # Construct a cube from each stream's image. 
-        cubes = [self.constructCube(im) for im in images]
+        images = self.postProcessing(images)
 
         # Export image
-        self.exportAcquisition(cubes)
+        self.exportAcquisition(images)
 
         # Do completion actions
         self.completeAcquisition()
