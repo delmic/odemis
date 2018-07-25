@@ -1199,7 +1199,7 @@ class StreamView(View):
         # TODO: optimise with the focuser
         # Find the depth of field (~ the size of one "focus step")
         for c in (curr_s.detector, curr_s.emitter):
-            if hasattr(c, "depthOfField") and isinstance(c.depthOfField, model.VigilantAttributeBase):
+            if model.hasVA(c, "depthOfField"):
                 dof = c.depthOfField.value
                 break
         else:
