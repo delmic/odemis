@@ -148,6 +148,7 @@ class TestPolarConversion(unittest.TestCase):
         data = self.data
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
+
         result = polar.AngleResolved2Polar(data[0], 201)
 
         desired_output = hdf5.read_data("desired201x201image.h5")
@@ -279,13 +280,9 @@ class TestPolarConversion(unittest.TestCase):
         result = polar.AngleResolved2Polar(white_data_2500, 2000, dtype=numpy.float16)
 
         desired_output = hdf5.read_data("desired_white_2500.h5")
+
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
-
-#         diff = result - desired_output
-#         del result.metadata[model.MD_AR_POLE]
-#         hdf5.export("actual_white_2500.h5", [result, diff])
-        # FIXME: doesn't seem to pass on 64 bits ?! floating point computation differences?
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
