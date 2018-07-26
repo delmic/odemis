@@ -105,6 +105,7 @@ SPARC2_MODES = {
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # there is also the cl-filter, but that's just up to the user
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spectral': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
@@ -118,6 +119,7 @@ SPARC2_MODES = {
                  # spectrometer (eg, with a spectrograph-dedicated)
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spectral-integrated': ("spectrometer-integrated",
                 {'lens-switch': {'x': 'off'},
@@ -129,6 +131,7 @@ SPARC2_MODES = {
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
@@ -140,11 +143,13 @@ SPARC2_MODES = {
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'time-correlator': ("time-correlator",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
@@ -156,6 +161,7 @@ SPARC2_MODES = {
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
@@ -168,6 +174,7 @@ SPARC2_MODES = {
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spec-focus': ("ccd",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
@@ -179,6 +186,7 @@ SPARC2_MODES = {
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': 'off'},
@@ -189,6 +197,7 @@ SPARC2_MODES = {
                  # current values so we can restore them
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
             'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
                 {'lens-switch': {'x': 'off'},
@@ -198,6 +207,7 @@ SPARC2_MODES = {
                  # can be after the fiber, so no need to check for spectrograph
                  'spectrograph-dedicated': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
                 }),
          }
 
@@ -584,11 +594,13 @@ class OpticalPathManager(object):
                             if value == pos:
                                 pos = key
                                 break
+                    # write actuator axis and position in dict
                     mv[axis] = pos
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
             try:
+                # move actuator
                 fmoves.append(comp.moveAbs(mv))
             except AttributeError:
                 logging.debug("%s not an actuator", comp_role)
