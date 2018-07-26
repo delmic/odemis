@@ -259,10 +259,13 @@ class StaticARStream(StaticStream):
         # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
         self._pos = {}
         self._sempos = {}
+        polpos = set()
         for d in data:
             try:
                 self._pos[d.metadata[MD_POS] + (d.metadata.get(MD_POL_MODE, None),)] = img.ensure2DImage(d)
                 self._sempos[d.metadata[MD_POS]] = img.ensure2DImage(d)
+                if MD_POL_MODE in d.metadata:
+                    polpos.add(d.metadata.get(MD_POL_MODE))
             except KeyError:
                 logging.info("Skipping DataArray without known position")
 
@@ -292,14 +295,14 @@ class StaticARStream(StaticStream):
         self.point.subscribe(self._onPoint)
 
         # polarization VA
-        # check if any polarization analyzer hardware, (None) == no analyzer hardware (pol)
+        # check if any polarization analyzer data, (None) == no analyzer data (pol)
         if self._pos.keys()[0][-1]:
             # use first entry in acquisition to populate VA (acq could have 1 or 6 pol pos)
-            self.polarizationStatic = model.VAEnumerated(self._pos.keys()[0][-1],
-                                choices=frozenset(list(POL_POSITIONS)))
+            self.polarization = model.VAEnumerated(self._pos.keys()[0][-1],
+                                choices=polpos)
 
         if self._pos.keys()[0][-1]:
-            self.polarizationStatic.subscribe(self._onPolarization)
+            self.polarization.subscribe(self._onPolarization)
 
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_AR
@@ -409,7 +412,7 @@ class StaticARStream(StaticStream):
                 self.image.value = None
             else:
                 if self._pos.keys()[0][-1]:
-                    pol = self.polarizationStatic.value
+                    pol = self.polarization.value
                 else:
                     pol = None
                 polard = self._project2Polar(pos + (pol,))
