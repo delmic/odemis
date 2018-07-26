@@ -621,8 +621,7 @@ class Stream(object):
                 # True, all the HwVAs are already synchronised, and this avoids
                 # the VA setter to catch again the change
                 self._linkHwVAs()
-
-                # TODO: merge _onActive here?
+                # TODO: create generic fct linkHWAxes and call here
             else:
                 self._unlinkHwVAs()
         return active
