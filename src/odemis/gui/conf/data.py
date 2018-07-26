@@ -773,6 +773,11 @@ STREAM_SETTINGS_CONFIG = {
                 "scale": "log",
             }),
         )),
+    stream.StaticARStream:
+        OrderedDict((
+            ("polarization", {
+            }),
+        )),
 }
 
 

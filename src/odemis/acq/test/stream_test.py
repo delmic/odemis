@@ -30,7 +30,6 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
-from odemis.acq.stream import Stream
 from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.util import test, conversion, img
@@ -41,6 +40,7 @@ import unittest
 from unittest.case import skip
 import weakref
 from odemis.acq.stream._base import POL_POSITIONS
+from odemis.model import MD_POL_NONE
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -2903,9 +2903,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         """Test StaticARPOLStream"""
 
         metadata = []
-        pol_positions = list(POL_POSITIONS)
-        qwp_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
-        linpol_positions = [0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
+        pol_positions = [MD_POL_NONE] + list(POL_POSITIONS)
+        qwp_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
 
         # ARPOL metadata
         for idx in range(len(pol_positions)):
@@ -2954,9 +2954,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         logging.info("changing polarization position")
         e.clear()
         # change position once
-        for p in ars.polarizationStatic.choices:
-            if p != (None, None) and p != ars.polarizationStatic.value:
-                ars.polarizationStatic.value = p
+        for p in ars.polarization.choices:
+            if p != (None, None) and p != ars.polarization.value:
+                ars.polarization.value = p
                 break
         else:
             self.fail("Failed to find another polarization position in ARPOL")
