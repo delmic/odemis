@@ -140,7 +140,7 @@ class ESP(model.Actuator):
             # initialize each motor
             self.MotorOn(axis_num)
 
-            ad = model.Axis(canAbs=False, unit=axis_unit, range=axis_range)
+            ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
