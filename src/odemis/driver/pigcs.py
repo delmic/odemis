@@ -3048,12 +3048,10 @@ class Bus(model.Actuator):
                     controller.prepareAxisForMove(channel)
 
             end = 0  # expected end
-            old_pos = self.position.value
             moving_axes = set()
             try:
                 for an, v in shift.items():
                     moving_axes.add(an)
-                    logging.debug("Expecting axis %s to reach %f", an, old_pos[an] + v)
                     controller, channel = self._axis_to_cc[an]
                     dist = controller.moveRel(channel, v)
                     # compute expected end
@@ -3101,6 +3099,7 @@ class Bus(model.Actuator):
                     dur = driver.estimateMoveDuration(abs(dist),
                                                       controller.getSpeed(channel),
                                                       controller.getAccel(channel))
+                    logging.debug("Expecting to move %g m = %g s", dist, dur)
                     end = max(time.time() + dur, end)
             except PIGCSError:
                 # If one axis failed, better be safe than sorry: stop the other
