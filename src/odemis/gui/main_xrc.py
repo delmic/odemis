@@ -3879,7 +3879,7 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_sparc_grid">
-          <object class="SparcLiveViewport" name="vp_sparc_tl">
+          <object class="LiveViewport" name="vp_sparc_tl">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

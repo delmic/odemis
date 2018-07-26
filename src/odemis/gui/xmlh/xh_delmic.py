@@ -40,7 +40,6 @@ import odemis.gui.cont.tools as tools
 from odemis.gui import img
 import wx
 import wx.combo
-import wx.lib.buttons
 import wx.xrc as xrc
 
 
@@ -512,15 +511,6 @@ class LiveViewportXmlHandler(MicroscopeViewportXmlHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "LiveViewport")
 HANDLER_CLASS_LIST.append(LiveViewportXmlHandler)
-
-
-class SparcLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.SparcLiveViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcLiveViewport")
-HANDLER_CLASS_LIST.append(SparcLiveViewportXmlHandler)
 
 
 class ARAcquiViewportXmlHandler(MicroscopeViewportXmlHandler):

@@ -31,7 +31,6 @@ from odemis import model
 from odemis.acq import path, leech
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
-from odemis.driver.actuator import ConvertStage
 from odemis.gui.conf import get_general_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
@@ -1200,7 +1199,7 @@ class StreamView(View):
         # TODO: optimise with the focuser
         # Find the depth of field (~ the size of one "focus step")
         for c in (curr_s.detector, curr_s.emitter):
-            if hasattr(c, "depthOfField") and isinstance(c.depthOfField, model.VigilantAttributeBase):
+            if model.hasVA(c, "depthOfField"):
                 dof = c.depthOfField.value
                 break
         else:

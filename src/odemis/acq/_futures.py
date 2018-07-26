@@ -135,7 +135,10 @@ class SimpleStreamFuture(futures.Future):
         called when a new image is generated, indicating end of acquisition
         """
         # Very unlikely, but make really sure we didn't get an image from a
-        # previous subscription (with wrong HW settings)
+        # previous subscription (with wrong HW settings).
+        # This can happen if multiple acquisitions are run in a row. The
+        # histogram from the first acquisition is recomputed after the image,
+        # which causes a second update of the image for the same data.
         try:
             if self._startt > image.metadata[model.MD_ACQ_DATE]:
                 logging.warning("Re-acquiring an image, as the one received appears %f s too early",

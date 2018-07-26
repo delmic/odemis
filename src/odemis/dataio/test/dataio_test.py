@@ -38,7 +38,7 @@ class TestDataIO(unittest.TestCase):
 
         # including lossy formats
         all_fmts = get_available_formats(os.O_RDWR, allowlossy=True)
-        self.assertEqual(len(dataio.__all__), len(all_fmts))
+        self.assertEqual(len(dataio.__all__), len(all_fmts) + 3)
 
     def test_get_converter(self):
         fmts = get_available_formats()
