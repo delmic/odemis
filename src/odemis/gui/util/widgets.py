@@ -62,7 +62,6 @@ class VigilantAttributeConnector(object):
         """
         self.vigilattr = va
         self.value_ctrl = value_ctrl
-
         self.paused = False
 
         va_2_ctrl = va_2_ctrl or value_ctrl.SetValue
@@ -187,7 +186,7 @@ class AxisConnector(object):
                 return
 
             value = self.ctrl_2_pos()
-            logging.debug("Requesting axis %s to move to %g", self.axis, value)
+            logging.debug("Requesting axis %s to move to %s", self.axis, value)
 
             # expect absolute move works
             move = {self.axis: value}
@@ -224,7 +223,7 @@ class AxisConnector(object):
     def _on_pos_change(self, positions):
         """ Process a position change """
         position = positions[self.axis]
-        logging.debug("Axis has moved to position %g", position)
+        logging.debug("Axis has moved to position %s", position)
         self.pos_2_ctrl(position)
 
     def pause(self):

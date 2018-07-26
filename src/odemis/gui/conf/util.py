@@ -529,7 +529,7 @@ def format_axis_choices(name, axis_def):
 
             def to_readable_band(v):
                 if (isinstance(v, (tuple, list)) and len(v) > 1 and
-                    all(isinstance(c, numbers.Real) for c in v)):
+                        all(isinstance(c, numbers.Real) for c in v)):
                     return fluo.to_readable_band(v)
                 else:
                     return v
@@ -561,8 +561,8 @@ def format_axis_choices(name, axis_def):
 
 def choice_to_str(choice):
     """ Return a list of choices, where iterable choices are joined by an `x` """
-    if not isinstance(choice, collections.Iterable):
-        choice = [unicode(choice)]
+    if isinstance(choice, basestring) or not isinstance(choice, collections.Iterable):
+        return unicode(choice)
     return u" x ".join(unicode(c) for c in choice)
 
 
@@ -996,7 +996,7 @@ def create_axis_entry(container, name, comp, conf=None):
         def cb_set(value, ctrl=value_ctrl, unit=unit):
             for i in range(ctrl.Count):
                 if ((isinstance(value, float) and util.almost_equal(ctrl.GetClientData(i), value)) or
-                    ctrl.GetClientData(i) == value):
+                        ctrl.GetClientData(i) == value):
                     logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
                     ctrl.SetSelection(i)
                     break

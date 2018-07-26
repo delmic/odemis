@@ -734,6 +734,14 @@ STREAM_SETTINGS_CONFIG = {
         )),
     stream.ARSettingsStream:
         OrderedDict((
+            ("polarization", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+            }),
+            ("acquireAllPol", {
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "label": "All polarizations",
+                "tooltip": u"Record all possible polarization positions sequentially in one acquisition."
+            }),
             ("band", {  # from filter
                 "label": "Filter",
             }),

@@ -161,6 +161,7 @@ class MainGUIData(object):
         "e-beam": "ebeam",
         "chamber-light": "chamber_light",
         "overview-light": "overview_light",
+        "pol-analyzer": "pol_analyzer"
     }
 
     def __init__(self, microscope):
@@ -218,6 +219,7 @@ class MainGUIData(object):
         self.overview_ccd = None  # global view from above the sample
         self.overview_focus = None  # focus of the overview CCD
         self.overview_light = None  # light of the overview CCD
+        self.pol_analyzer = None  # polarization analyzer
 
         self.ebeamControlsMag = None
 

@@ -2487,6 +2487,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
+            main_data.pol_analyzer,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             # TODO: add a focuser for the SPARCv2?
