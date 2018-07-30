@@ -1091,7 +1091,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
 
-# TODO testcases for SECOM both don't pass
 class SecomPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SECOM
@@ -1224,7 +1223,6 @@ class SecomFlimPathTestCase(unittest.TestCase):
         cls.microscope = model.getComponent(role="secom")
         # Find CCD & SEM components
         cls.sft = model.getComponent(role="time-correlator")
-        cls.tc_scanner = model.getComponent(role="tc-scanner")
         cls.ex_light = model.getComponent(role="light")
         cls.lscanner = model.getComponent(role="laser-mirror")
         cls.apd = model.getComponent(role="tc-detector")
@@ -1247,17 +1245,18 @@ class SecomFlimPathTestCase(unittest.TestCase):
 
     def test_set_path_stream(self):
         self.optmngr.setPath("confocal").result()
+        assert_pos_almost_equal(self.detsel.position.value, {"rx": 0}, atol=1e-3)
 
         self.optmngr.setPath("flim").result()
         assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
 
         self.optmngr.setPath("flim-setup").result()
-        assert_pos_almost_equal(self.detsel.position.value, {"rx": 0}, atol=1e-3)
+        assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
 
     def test_guess_mode(self):
         # test guess mode for ar
-        helper = stream.ScannedTCSettingsStream('Stream', self.det0, self.ex_light, self.lscanner,
-                                                self.sft, self.apd, self.tc_scanner)
+        helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
+                                                self.sft)
 
         remote = stream.ScannedRemoteTCStream("remote", helper)
 

@@ -1,10 +1,12 @@
+# Simulated SECOM confocal with FLIM acquisition.
+# The time-correlator would be manually operated.
 "SECOM-FLIM Sim": {
     class: Microscope,
     role: secom,
     children: ["Extended Light", "Optical Objective",
                "SEM E-beam", "SEM Detector", "Switch Sensor", "Fiber Selector",
                "Galvano Mirror", "PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Pinhole",
-               "Symphotime Controller", "SPT Scanner", "SPT Detector Live",
+               "Time Correlator",
                "Sample Stage", "Objective Stage", "Optical Focus"]
 }
 
@@ -40,7 +42,7 @@ Light: {
         "light": "Light",
         "clock": "Rigol Wave Generator",
     },
-    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Symphotime Controller"],
+    affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP", "APD", "Time Correlator"],
 }
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
@@ -96,23 +98,10 @@ Light: {
     },
 }
 
-# Symphotime Server Test Simulator (must run the simulator app for this to work)
-# To run the simulator, use wine to run SymPhoTime_Remote_Interface/PQ_ServerSimulator/Win32/Server_LSM_SymPhoTime.exe
-"Symphotime Controller": {
-    class: symphotime.Controller,
+# Fake time correlator that stands in for a Symphotime Simulator
+"Time Correlator": {
+    class: static.TimeCorrelator,
     role: "time-correlator",
-    children: {"scanner": "SPT Scanner", "detector-live": "SPT Detector Live"},
-    init: {
-        host: "localhost",
-    },
-}
-
-"SPT Scanner":  {
-    role: "tc-scanner",
-}
-
-"SPT Detector Live":  {
-    role: "tc-detector-live",
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -152,7 +141,7 @@ Light: {
 
 "PMT1 @ 447/60": {
     # Internal child of Nikon C2, so no class
-    role: photo-detector1,
+    role: photo-detector0,
     init: {
         channel: 0,
     },
@@ -163,7 +152,7 @@ Light: {
 
 "PMT2 @ 525/50": {
     # Internal child of Nikon C2, so no class
-    role: photo-detector0,
+    role: photo-detector1,
     init: {
         channel: 1,
     },
@@ -246,11 +235,11 @@ Light: {
         axis_name: "rx",
         positions: {
             0: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP"],
-            3.14: ["APD", "Symphotime Controller", "SPT Detector Live"], # rad, +180° to switch
+            3.14: ["APD", "Time Correlator"], # rad, +180° to switch
         },
     },
     affects: ["PMT1 @ 447/60", "PMT2 @ 525/50", "PMT3 @ 561LP",
-              "APD", "Symphotime Controller", "SPT Detector Live"],
+              "APD", "Time Correlator"],
 }
 
 # Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
@@ -273,7 +262,7 @@ Light: {
 "Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
-    affects: ["Galvano Mirror", "SPT Scanner", "SPT Detector Live"],
+    affects: ["Galvano Mirror", "Time Correlator"],
     children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
@@ -285,7 +274,7 @@ Light: {
 "Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
-    affects: ["Galvano Mirror", "SPT Scanner", "SPT Detector Live"],
+    affects: ["Galvano Mirror", "Time Correlator"],
     children: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}

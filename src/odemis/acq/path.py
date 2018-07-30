@@ -222,28 +222,29 @@ SPARC2_MODES = {
 
 # TODO: for confocal, detect fluo mode for _any_ photo-detector
 # TODO: handle time-correlator and det-selector (using axis choice pos -> detectors)
-SECOM_MODES = {'fluo': ("ccd",
+SECOM_MODES = {
+            'fluo': ("ccd",
                 {'ccd': {'fanSpeed': 1},
                 }),
-               'confocal': ("photo-detector(\d*)",
+            'confocal': (r"photo-detector(\d*)",
                 {
                 }),
-               'overlay': ("ccd",
+            'overlay': ("ccd",
                 {'ccd': {'fanSpeed': 1},
                 }),
-               'sed': ("se-detector",
+            'sed': ("se-detector",
                 {'ccd': {'fanSpeed': 0}, # To avoid vibrations
                 }),
-               'bsd': ("bs-detector",
+            'bsd': ("bs-detector",
                 {'ccd': {'fanSpeed': 0}, # To avoid vibrations
                 }),
-               'flim': ("time-correlator",
+            'flim': ("time-correlator",
                 {
                 }),
-               'flim-setup': ("tc-detector",
+            'flim-setup': ("tc-detector",
                 {
                 }),
-              }
+            }
 
 ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus', 'spec-fiber-focus'}
 

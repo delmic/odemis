@@ -1094,7 +1094,7 @@ class OverlayStream(Stream):
 class ScannedTCSettingsStream(RepetitionStream):
 
     def __init__(self, name, detector, emitter, scanner, time_correlator,
-                 scanner_extra, tc_detector_live=None, **kwargs):
+                 scanner_extra=None, tc_detector_live=None, **kwargs):
         """
         A helper stream used to define FLIM acquisition settings and run a live setting stream
         that gets a time-series from an APD (tc_detector)
