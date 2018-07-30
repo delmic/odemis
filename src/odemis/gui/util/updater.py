@@ -165,7 +165,7 @@ class WindowsUpdater:
                 "The new %s installer is being downloaded." % VIEWER_NAME,
                 maximum=web_size,
                 parent=wx.GetApp().main_frame,
-                style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME)
+                style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_REMAINING_TIME)
 
             keep_going = True
             count = 0
