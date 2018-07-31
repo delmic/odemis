@@ -2668,6 +2668,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
     def _on_image(self, im):
         self._image = im
 
+
 # @skip("faster")
 class SettingsStreamsTestCasePolAnalyzer(unittest.TestCase):
     """
@@ -2678,15 +2679,15 @@ class SettingsStreamsTestCasePolAnalyzer(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # try:
-        #     test.start_backend(SPARC_CONFIG)
-        # except LookupError:
-        #     logging.info("A running backend is already found, skipping tests")
-        #     cls.backend_was_running = True
-        #     return
-        # except IOError as exp:
-        #     logging.error(str(exp))
-        #     raise
+        try:
+            test.start_backend(SPARC_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
@@ -2703,7 +2704,7 @@ class SettingsStreamsTestCasePolAnalyzer(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # test.stop_backend()
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -2715,8 +2716,6 @@ class SettingsStreamsTestCasePolAnalyzer(unittest.TestCase):
         ars = stream.ARSettingsStream("test",
                       self.ccd, self.ccd.data, self.ebeam, self.analyzer,
                       detvas={"exposureTime", "readoutRate", "binning", "resolution"})
-        self._image = None
-        ars.image.subscribe(self._on_image)
 
         # shouldn't affect
         ars.roi.value = (0.15, 0.6, 0.8, 0.8)
@@ -2724,41 +2723,36 @@ class SettingsStreamsTestCasePolAnalyzer(unittest.TestCase):
         ars.detExposureTime.value = 0.3  # s
 
         # set analyzer to position different from polarization VA connected to GUI
-        ars.polarization._set_value("lhc")
-        self.analyzer.moveAbs({"pol": "rhc"})
+        f = self.analyzer.moveAbs({"pol": "rhc"})
+        f.result()
+        ars.polarization.value = "lhc"
         # while stream is not active, HW should not move, therefore
         # check polarization VA connected to GUI did not trigger position VA listening to HW
-        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value.values()[0])
+        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
         # Start acquisition
-        ars.should_update.value = True  # TODO needed for?
-        # activate stream
+        ars.should_update.value = True
+        # activate stream, optical path should be corrected immediately (no need to wait)
         ars.is_active.value = True
-        time.sleep(2)
 
         # stream got active, HW should move now
         # check polarization VA connected to GUI shows same value as position VA listening to HW
-        self.assertEqual(ars.polarization.value, self.analyzer.position.value.values()[0])
+        self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
         # change VA --> polarization analyzer should move as stream active
-        ars.polarization._set_value("vertical")
+        ars.polarization.value = "vertical"
         time.sleep(2)
         # check polarization VA connected to GUI shows same value as position VA listening to HW
-        self.assertEqual(ars.polarization.value, self.analyzer.position.value.values()[0])
+        self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
         # deactivate stream
         ars.is_active.value = False
 
         # change VA --> polarization analyzer should move as stream not active
-        ars.polarization._set_value("horizontal")
+        ars.polarization.value = "horizontal"
         time.sleep(2)
         # check polarization VA connected to GUI did not trigger position VA listening to HW
-        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value.values()[0])
-
-        ars.image.unsubscribe(self._on_image)
-
-    def _on_image(self, im):
-        self._image = im
+        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
 
 FILENAME = u"test" + tiff.EXTENSIONS[0]

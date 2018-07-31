@@ -669,9 +669,8 @@ class ARSettingsStream(CCDSettingsStream):
 
     # onActive & projection: same as the standard LiveStream
 
-    # overwrite fct _is_active_setter in _base.py
+    # Override Stream._is_active_setter() in _base.py
     def _is_active_setter(self, active):
-        # call fct _is_active_setter in _base.py
         active = super(ARSettingsStream, self)._is_active_setter(active)
         if active:
             self._linkHwAxes()
@@ -680,21 +679,30 @@ class ARSettingsStream(CCDSettingsStream):
         return active
 
     def _linkHwAxes(self):
-        """"subscribe polarization VA: link VA to hardware axis"""
-        try:
-            logging.debug("Moving polarization analyzer to position %s.", self.polarization.value)
-            f = self.analyzer.moveAbs({"pol": self.polarization.value})
-            f.result()
-        except Exception:
-            logging.exception("Failed to move polarization analyzer.")
-        self.polarization.subscribe(self._onPolarization)
+        """"
+        Subscribe polarization VA: link VA to hardware axis.
+        Synchronized with stream. Waits until movement is completed.
+        """
+        if self.analyzer:
+            try:
+                logging.debug("Moving polarization analyzer to position %s.", self.polarization.value)
+                f = self.analyzer.moveAbs({"pol": self.polarization.value})
+                f.result()
+            except Exception:
+                logging.exception("Failed to move polarization analyzer.")
+            self.polarization.subscribe(self._onPolarization)
+            # TODO: ideally it would also listen to the analyzer.position VA
+            # and update the polarization VA whenever the axis has moved
 
     def _unlinkHwAxes(self):
         """"unsubscribe polarization VA: unlink VA from hardware axis"""
         self.polarization.unsubscribe(self._onPolarization)
 
     def _onPolarization(self, pol):
-        """move actuator axis for polarization analyzer"""
+        """
+        Move actuator axis for polarization analyzer.
+        Not synchronized with stream as stream is already active.
+        """
         f = self.analyzer.moveAbs({"pol": pol})
         f.add_done_callback(self._onPolarizationMove)
 
