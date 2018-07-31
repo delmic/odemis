@@ -49,17 +49,6 @@ class WindowsUpdater:
             logging.info("Considering the app as a standard Odemis", exc_info=True)
 
     @staticmethod
-    def get_local_version():
-        """ Get the local version of Odemis
-        return (str): version of the form #.#.##
-         """
-
-        ver_str = odemis._get_version()
-        if '-' in ver_str:
-            ver_str = '.'.join(ver_str.split('-')[:2])
-        return ver_str
-
-    @staticmethod
     def _open_remote_file(fn):
         """
         Opens a remote file, trying different locations
@@ -113,7 +102,7 @@ class WindowsUpdater:
 
         logging.info("Found remote version %s", web_version)
 
-        lv = pkg_resources.parse_version(self.get_local_version())
+        lv = pkg_resources.parse_version(odemis.get_version_simplified())
         rv = pkg_resources.parse_version(web_version)
         if rv <= lv:
             wx.MessageBox(

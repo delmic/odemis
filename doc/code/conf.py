@@ -12,7 +12,7 @@
 # serve to show the default.
 
 import sys, os
-from odemis import __version__, get_major_version
+from odemis import __version__
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -59,8 +59,6 @@ copyright = u'2012-%s, Delmic' % datetime.datetime.now().year
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-# The short X.Y version.
-version = get_major_version()
 # The full version, including alpha/beta/rc tags.
 release = __version__
 
