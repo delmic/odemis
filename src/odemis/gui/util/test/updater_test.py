@@ -39,11 +39,10 @@ class TestWindowsUpdater(unittest.TestCase):
         # Should be #.#.### or #.#.#.###
         self.assertIn(len(lv.split('.')), (3, 4))
 
-        rv, rsize = u.get_remote_version()
+        rv = u.get_remote_version()
         # Note: if no internet access, it would be acceptable to get None
 
         self.assertIn(len(rv.split('.')), (3, 4))
-        self.assertGreater(rsize, 1000)
 
         # u.check_for_update()
 
