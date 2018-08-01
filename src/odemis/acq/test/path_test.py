@@ -688,15 +688,15 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # try:
-        #     test.start_backend(SPARC2_POLARIZATIONANALYZER_CONFIG)
-        # except LookupError:
-        #     logging.info("A running backend is already found, skipping tests")
-        #     cls.backend_was_running = True
-        #     return
-        # except IOError as exp:
-        #     logging.error(str(exp))
-        #     raise
+        try:
+            test.start_backend(SPARC2_POLARIZATIONANALYZER_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc2")
@@ -721,7 +721,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        # test.stop_backend()
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
