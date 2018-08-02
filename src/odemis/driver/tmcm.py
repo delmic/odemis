@@ -226,6 +226,9 @@ class TMCLController(model.Actuator):
         self._target = ra  # same as address, but always the actual one
         self._port = port  # or self._serial.name ?
 
+        # For ensuring only one updatePosition() at the same time
+        self._pos_lock = threading.Lock()
+
         # Check that the device support that many axes
         try:
             self.GetAxisParam(max(self._name_to_axis.values()), 1) # current pos
@@ -1227,8 +1230,7 @@ class TMCLController(model.Actuator):
           updated
         """
         # uses the current values (converted to internal representation)
-        pos = self._applyInversion(self.position.value)
-
+        pos = {}
         for n, i in self._name_to_axis.items():
             if axes is None or n in axes:
                 if self._abs_encoder[n]:
@@ -1243,11 +1245,16 @@ class TMCLController(model.Actuator):
 
         pos = self._applyInversion(pos)
 
-        logging.debug("Updated position to %s", pos)
-
-        # it's read-only, so we change it via _value
-        self.position._value = pos
-        self.position.notify(self.position.value)
+        # Need a lock to ensure that no other thread is updating the position
+        # about another axis simultaneously. If this happened, our update would
+        # be lost.
+        with self._pos_lock:
+            if axes is not None:
+                pos_full = dict(self.position.value)
+                pos_full.update(pos)
+                pos = pos_full
+            logging.debug("Updated position to %s", pos)
+            self.position._set_value(pos, force_write=True)
 
     def _updateSpeed(self):
         """
