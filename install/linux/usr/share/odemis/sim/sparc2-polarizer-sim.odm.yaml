@@ -338,6 +338,9 @@ SPARC2: {
     init: {
         axis_name: "linear",
     },
+    metadata: {
+        POS_COR: 7.e-3,  # rad
+    },
     affects: ["Camera", "Spectral Camera"]
 }
 
