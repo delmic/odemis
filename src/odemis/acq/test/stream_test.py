@@ -2202,7 +2202,7 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertGreater(len(pcmd), 500 / 10)
 
 
-class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
+class SPARC2PolAnalyzerTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARCv2
     """
@@ -2420,6 +2420,50 @@ class SPARC2PolarizationAnalyzerTestCase(unittest.TestCase):
         # check last image in .raw has a time axis greater than 1
         ar_drift = sas.raw[-1]  # angle resolved data arrays
         self.assertGreaterEqual(ar_drift.shape[-4], 2)
+
+    def test_arpol_ss(self):
+        """ Test ARSettingsStream """
+        # Create the stream
+        ars = stream.ARSettingsStream("test",
+                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+
+        # shouldn't affect
+        ars.roi.value = (0.15, 0.6, 0.8, 0.8)
+        ars.repetition.value = (5, 6)
+        ars.detExposureTime.value = 0.3  # s
+
+        # set analyzer to position different from polarization VA connected to GUI
+        f = self.analyzer.moveAbs({"pol": "rhc"})
+        f.result()
+        ars.polarization.value = "lhc"
+        # while stream is not active, HW should not move, therefore
+        # check polarization VA connected to GUI did not trigger position VA listening to HW
+        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
+
+        # Start acquisition
+        ars.should_update.value = True
+        # activate stream, optical path should be corrected immediately (no need to wait)
+        ars.is_active.value = True
+
+        # stream got active, HW should move now
+        # check polarization VA connected to GUI shows same value as position VA listening to HW
+        self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
+
+        # change VA --> polarization analyzer should move as stream active
+        ars.polarization.value = "vertical"
+        time.sleep(2)
+        # check polarization VA connected to GUI shows same value as position VA listening to HW
+        self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
+
+        # deactivate stream
+        ars.is_active.value = False
+
+        # change VA --> polarization analyzer should move as stream not active
+        ars.polarization.value = "horizontal"
+        time.sleep(2)
+        # check polarization VA connected to GUI did not trigger position VA listening to HW
+        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
 
 # @skip("faster")
@@ -2667,92 +2711,6 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
     def _on_image(self, im):
         self._image = im
-
-
-# @skip("faster")
-class SettingsStreamsTestCasePolAnalyzer(unittest.TestCase):
-    """
-    Tests of the *SettingsStreams, to be run with a (simulated) SPARC including polarization
-    analyzer hardware. Testing for live view.
-    """
-    backend_was_running = False
-
-    @classmethod
-    def setUpClass(cls):
-        try:
-            test.start_backend(SPARC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
-
-        # Find CCD & SEM components
-        cls.ccd = model.getComponent(role="ccd")
-        cls.spec = model.getComponent(role="spectrometer")
-        cls.spgp = model.getComponent(role="spectrograph")
-        cls.ebeam = model.getComponent(role="e-beam")
-        cls.sed = model.getComponent(role="se-detector")
-        cls.analyzer = model.getComponent(role="pol-analyzer")
-
-        mic = model.getMicroscope()
-        cls.optmngr = path.OpticalPathManager(mic)
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
-    def test_arpol_ss(self):
-        """ Test ARSettingsStream """
-        # Create the stream
-        ars = stream.ARSettingsStream("test",
-                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
-                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
-
-        # shouldn't affect
-        ars.roi.value = (0.15, 0.6, 0.8, 0.8)
-        ars.repetition.value = (5, 6)
-        ars.detExposureTime.value = 0.3  # s
-
-        # set analyzer to position different from polarization VA connected to GUI
-        f = self.analyzer.moveAbs({"pol": "rhc"})
-        f.result()
-        ars.polarization.value = "lhc"
-        # while stream is not active, HW should not move, therefore
-        # check polarization VA connected to GUI did not trigger position VA listening to HW
-        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
-
-        # Start acquisition
-        ars.should_update.value = True
-        # activate stream, optical path should be corrected immediately (no need to wait)
-        ars.is_active.value = True
-
-        # stream got active, HW should move now
-        # check polarization VA connected to GUI shows same value as position VA listening to HW
-        self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
-
-        # change VA --> polarization analyzer should move as stream active
-        ars.polarization.value = "vertical"
-        time.sleep(2)
-        # check polarization VA connected to GUI shows same value as position VA listening to HW
-        self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
-
-        # deactivate stream
-        ars.is_active.value = False
-
-        # change VA --> polarization analyzer should move as stream not active
-        ars.polarization.value = "horizontal"
-        time.sleep(2)
-        # check polarization VA connected to GUI did not trigger position VA listening to HW
-        self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
 
 FILENAME = u"test" + tiff.EXTENSIONS[0]
