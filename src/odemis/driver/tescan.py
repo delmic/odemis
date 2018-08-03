@@ -107,15 +107,6 @@ class SEM(model.HwComponent):
                                                       self._device.TcpGetVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
-        # create the scanner child
-        try:
-            kwargs = children["scanner"]
-        except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'scanner' child")
-
-        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._scanner)
-
         # create the detector children
         self._detectors = {}
         for name, ckwargs in children.items():
@@ -124,6 +115,15 @@ class SEM(model.HwComponent):
                 self.children.value.add(self._detectors[name])
         if not self._detectors:
             logging.info("TescanSEM was not given a 'detector' child")
+
+        # create the scanner child
+        try:
+            kwargs = children["scanner"]
+        except (KeyError, TypeError):
+            raise KeyError("TescanSEM was not given a 'scanner' child")
+
+        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+        self.children.value.add(self._scanner)
 
         # create the stage child
         try:
@@ -146,7 +146,7 @@ class SEM(model.HwComponent):
         try:
             kwargs = children["camera"]
         except (KeyError, TypeError):
-            logging.info("Not initialising the chamber camera")
+            logging.info("TescanSEM was not given a 'camera' child")
         else:
             self._camera = ChamberView(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._camera)
@@ -333,7 +333,7 @@ class SEM(model.HwComponent):
                           "Check that the ip address is correct and TESCAN server "
                           "connected to the network." % (self._host,))
         self._device.ScStopScan()
-        for name, det in self._detectors.iteritems():
+        for name, det in self._detectors.items():
             self._device.DtSelect(det._channel, det._detector)
             self._device.DtEnable(det._channel, 1, 16)
 
@@ -477,22 +477,31 @@ class SEM(model.HwComponent):
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterwards.
         """
+        if not self._device:
+            return
+
+        # stop the acquisition thread
+        with self._acquisition_mng_lock:
+            self._acquisitions.clear()
+            self._acq_cmd_q.put(ACQ_CMD_TERM)
+            self._req_stop_acquisition()
+        self._acquisition_thread.join(10)
+
         # Terminate components
+        self._scanner.terminate()
+        for d in self._detectors.values():
+            d.terminate()
         self._stage.terminate()
         self._focus.terminate()
         if hasattr(self, "_camera"):
             self._camera.terminate()
-        self._pressure.terminate()
-        # finish
-        if self._device:
-            # stop the acquisition thread
-            with self._acquisition_mng_lock:
-                self._acquisitions.clear()
-                self._acq_cmd_q.put(ACQ_CMD_TERM)
-                self._req_stop_acquisition()
-            self._acquisition_thread.join(10)
-            self._device.Disconnect()
-            self._device = None
+        if hasattr(self, "_pressure"):
+            self._pressure.terminate()
+        if hasattr(self, "_light"):
+            self._light.terminate()
+
+        self._device.Disconnect()
+        self._device = None
 
 
 class Scanner(model.Emitter):
@@ -594,11 +603,22 @@ class Scanner(model.Emitter):
         self.power = model.IntEnumerated(power, {0, 1}, unit="",
                                          setter=self._setPower)
 
-        # None implies that there is a blanker but it is set automatically.
-        # Mostly used in order to know if the module supports beam blanking
-        # when accessing it from outside.
-        # TODO: support True/False choices to force active/inactive blanker
-        self.blanker = model.VAEnumerated(None, choices={None})
+        if self.parent._detectors:
+            # None implies that there is a blanker but it is set automatically.
+            # Mostly used in order to know if the module supports beam blanking
+            # when accessing it from outside.
+            # TODO: also support True/False choices with detectors
+            self.blanker = model.VAEnumerated(None, choices={None})
+        else:
+            bmode = self.parent._device.ScGetBlanker(1)
+            blanked = (bmode != 0)
+            self.blanker = model.BooleanVA(blanked, setter=self._setBlanker)
+
+        # To select "external" scan, which is used to control the scan via the
+        # analog interface. So mostly useful when this driver is used only for
+        # controlling the e-beam settings, and a DAQ board is used for scanning.
+        emode = self.parent._device.ScGetExternal()
+        self.external = model.BooleanVA(bool(emode), setter=self._setExternal)
 
         # Timer polling VAs so we keep up to date with changes made via Tescan UI
         self._va_poll = util.RepeatingTimer(5, self._pollVAs, "VAs polling")
@@ -641,7 +661,8 @@ class Scanner(model.Emitter):
         self.magnification._set_value(mag, force_write=True)
 
     def _setVoltage(self, volt):
-        self.parent._device.HVSetVoltage(volt)
+        with self.parent._acq_progress_lock:
+            self.parent._device.HVSetVoltage(volt)
         # Adjust brightness and contrast
         # TODO: should be part of the detector (and up to the client)
         # with self.parent._acq_progress_lock:
@@ -696,6 +717,26 @@ class Scanner(model.Emitter):
             # picoamps to amps
             currents.append(float(i[1]) * 1e-12)
         return currents
+
+    def _setBlanker(self, blanked):
+        # Index:
+        # 0 = electrostatic blanker
+        # 1 = magnetic gun blanker
+        # Mode:
+        # 0 = Blanker off (beam active)
+        # 1 = Blanker always on (beam inactive)
+        # 2 = Auto: blanker on when no scanning and during fly-back of the ebeam
+        # Note: the documentation states that mode 1 is not possible because the
+        # magnetic gun is too slow. So it might be that 1 & 2 are inverted
+        mode = 2 if blanked else 0
+        with self.parent._acq_progress_lock:
+            self.parent._device.ScSetBlanker(1, mode)
+        return blanked
+
+    def _setExternal(self, external):
+        # 1 if external, 0 if not
+        self.parent._device.ScSetExternal(int(external))
+        return external
 
     def _onScale(self, s):
         self._updatePixelSize()
@@ -793,6 +834,7 @@ class Scanner(model.Emitter):
             with self.parent._acquisition_init_lock:
                 logging.debug("Updating FoV, voltage and current")
                 self._updateHorizontalFOV()
+                # TODO: update power
                 with self.parent._acq_progress_lock:
                     prev_volt = self.accelVoltage._value
                     new_volt = self.parent._device.HVGetVoltage()
@@ -806,6 +848,17 @@ class Scanner(model.Emitter):
                     if prev_pc != new_pc:
                         self.probeCurrent._value = new_pc
                         self.probeCurrent.notify(new_pc)
+
+                    bmode = self.parent._device.ScGetBlanker(1)
+                    blanked = (bmode != 0)
+                    if blanked != self.blanker._value:
+                        self.blanker._value = blanked
+                        self.blanker.notify(blanked)
+
+                    new_ext = bool(self.parent._device.ScGetExternal())
+                    if new_ext != self.external._value:
+                        self.external._value = new_ext
+                        self.external.notify(new_ext)
         except Exception:
             logging.exception("Unexpected failure during VAs polling")
 
@@ -968,6 +1021,7 @@ class Stage(model.Actuator):
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
         axes_def["z"] = model.Axis(unit="m", range=rng)
+        # TODO: support all the 5 axes (also rz and rx)
 
         # Demand calibrated stage
         if parent._device.StgIsCalibrated() != 1:
@@ -998,6 +1052,7 @@ class Stage(model.Actuator):
             with self.parent._acquisition_init_lock:
                 with self.parent._acq_progress_lock:
                     self._updatePosition()
+                    logging.debug("Updated stage position to %s", self.position.value)
         except Exception:
             logging.exception("Unexpected failure during XYZ polling")
 
@@ -1195,7 +1250,7 @@ class ChamberView(model.DigitalCamera):
         self.parent._device.CameraDisable()
         resolution = (height, width)
         self._shape = resolution + (2 ** 8,)
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), (2048, 2048)],
+        self.resolution = model.ResolutionVA(resolution, [resolution, resolution],
                                              readonly=True)
 
         self.acquisition_lock = threading.Lock()
