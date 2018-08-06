@@ -78,9 +78,14 @@ def _get_version():
             logging.warning("Unable to find the actual version")
             return "Unknown"
 
-def get_major_version():
-    """ This function returns a short version string of the form "vX.X" """
-    return _get_version().split("-")[0]
+
+def get_version_simplified():
+    """
+    This function returns a version string of the form "M.N.PP(.QQQ)", where
+    QQQ is the commit number in case of unstable release.
+    """
+    return ".".join(_get_version().split("-")[:2])
+
 
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"

@@ -78,7 +78,7 @@ def get_version():
     import odemis
 
     with open('dist/version.txt', 'w') as f:
-        long_version = '.'.join(odemis._get_version().split('-')[:2])
+        long_version = odemis.get_version_simplified()
         f.write(long_version + '\n')
     return [('version.txt', 'dist/version.txt', 'DATA')]
 

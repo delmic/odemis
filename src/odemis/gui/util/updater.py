@@ -49,17 +49,6 @@ class WindowsUpdater:
             logging.info("Considering the app as a standard Odemis", exc_info=True)
 
     @staticmethod
-    def get_local_version():
-        """ Get the local version of Odemis
-        return (str): version of the form #.#.##
-         """
-
-        ver_str = odemis._get_version()
-        if '-' in ver_str:
-            ver_str = '.'.join(ver_str.split('-')[:2])
-        return ver_str
-
-    @staticmethod
     def _open_remote_file(fn):
         """
         Opens a remote file, trying different locations
@@ -85,30 +74,27 @@ class WindowsUpdater:
     def get_remote_version():
         """ Get the remote version of Odemis as a string
 
-        return (None or str, int): version of the form #.#.##, size of the installer to install (in
-        bytes)
-
+        return (None or str): version of the form #.#.##, or None if file is
+          unreachable (eg, no internet connection).
         """
 
         web_version = None
-        web_size = 0
 
         try:
             web_version_file = WindowsUpdater._open_remote_file(VERSION_FILE)
             web_version = web_version_file.readline().strip()
-            web_size = int(web_version_file.readline().strip())
             web_version_file.close()
         except IOError as err:
-            logging.warn("Error on remote version check (%s)" % err)
+            logging.warn("Error on remote version check (%s)", err)
 
-        return web_version, web_size
+        return web_version
 
     def check_for_update(self):
         """ Check if a newer version is available online and offer to update """
         # TODO: just return True or False, and let the caller call show_update_dialog()
         logging.info("Retrieving version info...")
 
-        web_version, web_size = self.get_remote_version()
+        web_version = self.get_remote_version()
 
         if web_version is None:
             logging.info("Could not retrieve remote version, will not update")
@@ -116,7 +102,7 @@ class WindowsUpdater:
 
         logging.info("Found remote version %s", web_version)
 
-        lv = pkg_resources.parse_version(self.get_local_version())
+        lv = pkg_resources.parse_version(odemis.get_version_simplified())
         rv = pkg_resources.parse_version(web_version)
         if rv <= lv:
             wx.MessageBox(
@@ -128,14 +114,13 @@ class WindowsUpdater:
 
         logging.info("Newer version found, suggesting update...")
 
-        self.show_update_dialog(web_version, web_size)
+        self.show_update_dialog(web_version)
 
-    def show_update_dialog(self, web_version, web_size):
+    def show_update_dialog(self, web_version):
         """ Show update dialog
 
         Args:
             web_version: (str) Version of the installer on the website
-            web_size: (str) The byte size of the installer
         """
 
         answer = wx.MessageBox(
@@ -144,9 +129,9 @@ class WindowsUpdater:
         )
 
         if answer == wx.YES:
-            self.download_installer(web_version, web_size)
+            self.download_installer(web_version)
 
-    def download_installer(self, remote_version, web_size):
+    def download_installer(self, remote_version):
 
         pdlg = None
 
@@ -155,29 +140,35 @@ class WindowsUpdater:
 
             installer_file = INSTALLER_FILE % remote_version
             web_file = self._open_remote_file(installer_file)
+            meta = web_file.info()
+            file_size = int(meta.getheaders("Content-Length")[0])
             local_path = os.path.join(dest_dir, installer_file)
             local_file = open(local_path, 'wb')
 
-            logging.info("Downloading from %s to %s...", web_file.url, local_path)
+            logging.info("Downloading from %s (%d bytes) to %s...", web_file.url, file_size, local_path)
 
             pdlg = wx.ProgressDialog(
                 "Downloading update...",
                 "The new %s installer is being downloaded." % VIEWER_NAME,
-                maximum=web_size,
+                maximum=file_size,
                 parent=wx.GetApp().main_frame,
-                style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME)
+                style=wx.PD_CAN_ABORT | wx.PD_AUTO_HIDE | wx.PD_APP_MODAL | wx.PD_REMAINING_TIME)
 
             keep_going = True
             count = 0
-
-            while keep_going and count < web_size:
-                grabbed = web_file.read(4096)
+            chunk_size = 100 * 1024  # Too small chunks slows down the download
+            while keep_going and count < file_size:
+                grabbed = web_file.read(chunk_size)
                 local_file.write(grabbed)
-                if grabbed == "":
-                    count = web_size
+                if grabbed:
+                    count += len(grabbed)
                 else:
-                    count += 4096
-                (keep_going, skip) = pdlg.Update(count)
+                    logging.warning("Received no more data, will assume the file is only %d bytes", count)
+                    break
+                if count > file_size:
+                    logging.warning("Received too much data (%d bytes), will stop", count)
+                    break
+                keep_going, skip = pdlg.Update(count)
 
             pdlg.Destroy()
 
