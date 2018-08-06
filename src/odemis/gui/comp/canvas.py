@@ -472,8 +472,7 @@ class BufferedCanvas(wx.Panel):
         dc_view = wx.PaintDC(self)
 
         # Blit the appropriate area from the buffer to the view port
-        wx.DC.Blit(
-            dc_view,
+        dc_view.Blit(
             0, 0,  # destination point
             self.ClientSize[0],  # size of area to copy
             self.ClientSize[1],  # size of area to copy
@@ -777,7 +776,7 @@ class BufferedCanvas(wx.Panel):
         margin = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
                   (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
 
-        wx.DC.Blit(dc, 0, 0, self.ClientSize[0], self.ClientSize[1], self._dc_buffer, margin[0], margin[1])
+        dc.Blit(0, 0, self.ClientSize[0], self.ClientSize[1], self._dc_buffer, margin[0], margin[1])
 
         # close the DC, to be sure the bitmap can be used safely
         del dc
@@ -890,7 +889,7 @@ class BitmapCanvas(BufferedCanvas):
         """
 
         # Don't draw anything if the canvas is disabled, leave the current buffer intact.
-        if not self.IsEnabled() or 0 in wx.Window.GetClientSize(self):
+        if not self.IsEnabled() or 0 in self.GetClientSize():
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)

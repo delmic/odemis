@@ -51,7 +51,7 @@ def get_image_from_buffer(canvas):
     result_bmp = wx.Bitmap(*canvas._bmp_buffer_size)
     result_dc = wx.MemoryDC()
     result_dc.SelectObject(result_bmp)
-    wx.DC.Blit(result_dc, 0, 0, canvas._bmp_buffer_size[0], canvas._bmp_buffer_size[1], canvas._dc_buffer, 0, 0)
+    result_dc.Blit(0, 0, canvas._bmp_buffer_size[0], canvas._bmp_buffer_size[1], canvas._dc_buffer, 0, 0)
     result_dc.SelectObject(wx.NullBitmap)
     return result_bmp.ConvertToImage()
 

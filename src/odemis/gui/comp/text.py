@@ -328,8 +328,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         """
         if show:
             size = self.dropdown.GetSize()
-            width, height = wx.Window.GetSize(self)
-            x, y = wx.Window.ClientToScreen(self, 0, height)
+            width, height = self.GetSize()
+            x, y = self.ClientToScreen(0, height)
             if size.GetWidth() != width:
                 size.SetWidth(width)
                 self.dropdown.SetSize(size)

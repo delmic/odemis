@@ -3749,7 +3749,7 @@ class TabBarController(object):
             tab.button.Bind(wx.EVT_BUTTON, self.on_click)
 
         # When setting a value for an Enumerated VA, the value must be part of its choices, and
-        # when setting it's choices its current value mtab_list[0].panel.Shownust be one of them. Therefore, we first set
+        # when setting it's choices its current value must be one of them. Therefore, we first set
         # the current tab using the `._value` attribute, so that the check will not occur. We can
         # then set the `choices` normally.
         # Note: One of the created Tab controllers might have concluded that it should be default

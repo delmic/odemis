@@ -414,8 +414,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._bmp.SetMaskColour(wx.BLACK)
                 self._bmp_bpos = cl_pos
 
-            wx.DC.DrawBitmap(self.cnvs.dc_buffer,
-                self._bmp,
+            self.cnvs.dc_buffer.DrawBitmap(self._bmp,
                 wx.Point(int(start_x), int(start_y)),
                 useMask=True
             )

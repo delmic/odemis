@@ -315,7 +315,7 @@ class CaptionBar(wx.Window):
 
         # draw simple rectangle
         dc.SetBrush(wx.Brush(self.Parent.GetBackgroundColour(), wx.BRUSHSTYLE_SOLID))
-        wx.DC.DrawRectangle(dc, win_rect)
+        dc.DrawRectangle(win_rect)
 
         self._draw_gradient(dc, win_rect)
 

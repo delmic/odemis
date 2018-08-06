@@ -114,7 +114,7 @@ class BufferedWindow(wx.Control):
 
         :param `event`: a `wx.SizeEvent` event to be processed.
         """
-        Width, Height = wx.Window.GetClientSize(self)
+        Width, Height = self.GetClientSize()
         Width = max(Width, 1)
         Height = max(Height, 1)
 
