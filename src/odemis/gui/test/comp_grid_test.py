@@ -3,7 +3,7 @@
 """
 .. codeauthor:: Rinze de Laat <delaat@delmic.com>
 
-Copyright © 2014 Rinze de Laat, Delmic
+Copyright © 2014-2018 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -27,6 +27,7 @@ import unittest
 
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
+from odemis.gui.model import StreamView
 
 
 test.goto_manual()
@@ -36,6 +37,16 @@ class GridPanelTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrcgrid_frame
     # test.set_log_level(logging.DEBUG)
+
+    @classmethod
+    def setUpClass(cls):
+        super(GridPanelTestCase, cls).setUpClass()
+
+        # Make the Panels look like ViewPorts
+        v = StreamView("everything")
+        f = cls.frame
+        for vp in (f.red, f.blue, f.purple, f.brown, f.yellow, f.green):
+            vp.microscope_view = v
 
     def test_grid_view(self):
 
@@ -145,26 +156,21 @@ class GridPanelTestCase(test.GuiTestCase):
         gp = self.frame.grid_panel
         gui_loop(0.2)
 
-        self.assertRaises(ValueError, gp.swap_viewports, self.frame.red, self.frame.yellow)
-        gp.swap_viewports(self.frame.red, self.frame.yellow)
-
-        gp.hide_viewport(self.frame.red)
-        gp.swap_viewports(self.frame.red, self.frame.yellow)
-        gp.show_viewport(self.frame.yellow)
-
+        f = self.frame
+        gp.set_visible_viewports([f.yellow, f.blue, f.purple, f.brown])
         gui_loop(0.2)
-        self.assertEqual(self.frame.yellow.Position, (0, 0))
+        self.assertEqual(f.yellow.Position, (0, 0))
 
-        gp.hide_viewport(self.frame.yellow)
-        gp.swap_viewports(self.frame.red, self.frame.yellow)
-        gp.show_viewport(self.frame.red)
-
+        gp.set_visible_viewports([f.purple, f.blue, f.brown, f.red])
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Position, (0, 0))
+        self.assertEqual(f.purple.Position, (0, 0))
+
+        gp.set_visible_viewports([f.red, f.blue, f.purple, f.brown])
+        gui_loop(0.2)
+        self.assertEqual(f.red.Position, (0, 0))
 
     def test_grid_resize(self):
 
-        gp = self.frame.grid_panel
         gui_loop(0.2)
 
         self.frame.SetSize((600, 600))

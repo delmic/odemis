@@ -99,16 +99,22 @@ class ViewportGrid(wx.Panel):
 
     def get_4_viewports(self):
         """
-        Gets the first 4 valid viewports to display in the 2 x 2 grid and returns them.
-        Does not show them - this is handled by other existing functions.
+        Gets the first 4 valid viewports to display in the 2 x 2 grid (ie,
+          viewports connected to a view)
+        return ([ViewPort])
         """
-        counter = 0
         viewports = []
         for v in self.viewports:
-            if counter >= 4: break
-            if v._microscope_view is not None:
+            try:
+                if v.microscope_view is not None:
+                    viewports.append(v)
+            except AttributeError:
+                # Should never happen, unless it's not really a ViewPort.
+                # If so, let's not go completely bad
+                logging.exception("View has no microscope_view")
                 viewports.append(v)
-                counter += 1
+            if len(viewports) >= 4:
+                break
 
         return viewports
 
@@ -284,14 +290,13 @@ class ViewportGrid(wx.Panel):
                 br.SetSize(self.hidden_size)
 
     def _swap_viewports(self, vpa, vpb):
+        """
+        Switch the position of two viewports.
+        """
         if vpa is vpb:
             return
         a, b = self.viewports.index(vpa), self.viewports.index(vpb)
         self.viewports[a], self.viewports[b] = self.viewports[b], self.viewports[a]
-
-    def swap_viewports(self, vpa, vpb):
-        self._swap_viewports(vpa, vpb)
-        self._layout_viewports()
 
     def set_visible_viewports(self, vis_viewports):
         """ Set the viewports to be shown

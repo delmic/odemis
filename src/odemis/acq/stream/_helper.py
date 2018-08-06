@@ -696,7 +696,8 @@ class ARSettingsStream(CCDSettingsStream):
 
     def _unlinkHwAxes(self):
         """"unsubscribe polarization VA: unlink VA from hardware axis"""
-        self.polarization.unsubscribe(self._onPolarization)
+        if self.analyzer:
+            self.polarization.unsubscribe(self._onPolarization)
 
     def _onPolarization(self, pol):
         """
