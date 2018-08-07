@@ -168,7 +168,7 @@ class TimelapsePlugin(Plugin):
         if not self._dlg:
             return []
 
-        live_st = (self._dlg.microscope_view.getStreams() +
+        live_st = (self._dlg.view.getStreams() +
                    self._dlg.hidden_view.getStreams())
         logging.debug("View has %d streams", len(live_st))
 
@@ -245,7 +245,7 @@ class TimelapsePlugin(Plugin):
         self.period.value = self.period.value
 
         # Update acq time when streams are added/removed
-        dlg.microscope_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
+        dlg.view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         dlg.hidden_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         # TODO: update the acquisition time whenever a setting changes
 

@@ -175,7 +175,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             # Label
             if (self.selection_mode in (SEL_MODE_EDIT, SEL_MODE_CREATE) and
-                    self.cnvs.microscope_view):
+                    self.cnvs.view):
                 w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
                 w = units.readable_str(w, 'm', sig=2)
                 h = units.readable_str(h, 'm', sig=2)
@@ -1329,9 +1329,9 @@ class PointsOverlay(WorldOverlay):
         if self.point:
             self.point.subscribe(self._on_point_selected)
             self._calc_choices()
-            self.cnvs.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+            self.cnvs.view.mpp.subscribe(self._on_mpp, init=True)
         else:
-            self.cnvs.microscope_view.mpp.unsubscribe(self._on_mpp)
+            self.cnvs.view.mpp.unsubscribe(self._on_mpp)
 
     def _on_point_selected(self, _):
         """ Update the overlay when a point has been selected """

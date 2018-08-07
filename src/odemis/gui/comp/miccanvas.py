@@ -49,9 +49,9 @@ import wx.lib.wxcairo as wxcairo
 
 
 @decorator
-def microscope_view_check(f, self, *args, **kwargs):
-    """ This method decorator check if the microscope_view attribute is set """
-    if self.microscope_view:
+def view_check(f, self, *args, **kwargs):
+    """ This method decorator check if the view attribute is set """
+    if self.view:
         return f(self, *args, **kwargs)
 
 
@@ -78,7 +78,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
 
-        self.microscope_view = None
+        self.view = None
         self._tab_data_model = None
 
         self.abilities |= {CAN_ZOOM, CAN_FOCUS}
@@ -136,36 +136,36 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # END Ability manipulation
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         """
-        Set the microscope_view that this canvas is displaying/representing
+        Set the view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
-        :param microscope_view:(model.MicroscopeView)
+        :param view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
 
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
-        assert(self.microscope_view is None)
+        assert(self.view is None)
 
-        self.microscope_view = microscope_view
+        self.view = view
         self._tab_data_model = tab_data
 
-        self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
-        self.microscope_view.view_pos.subscribe(self._onViewPos)
+        self.view.mpp.subscribe(self._on_view_mpp, init=True)
+        self.view.view_pos.subscribe(self._onViewPos)
         # Update new position immediately, so that fit_to_content() directly
         # gets the correct center
-        phys_pos = self.microscope_view.view_pos.value
+        phys_pos = self.view.view_pos.value
         self._calc_bg_offset(phys_pos)
         self.requested_phys_pos = phys_pos
 
         # any image changes
-        self.microscope_view.lastUpdate.subscribe(self._on_view_image_update, init=True)
+        self.view.lastUpdate.subscribe(self._on_view_image_update, init=True)
 
         # handle cross hair
-        self.microscope_view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
+        self.view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
 
-        self.microscope_view.interpolate_content.subscribe(self._on_interpolate_content, init=True)
+        self.view.interpolate_content.subscribe(self._on_interpolate_content, init=True)
 
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
@@ -295,7 +295,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._spotmode_ol.deactivate()
 
         if self._spotmode_ol:
-            self.microscope_view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
+            self.view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
 
     def _set_dichotomy_mode(self, tool_mode):
         """ Activate the dichotomy overlay if needed """
@@ -325,7 +325,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Otherwise, when going from no stream to one stream, nothing
             # happens until tool is changed and changed back.
 
-            stream_tree = self.microscope_view.stream_tree
+            stream_tree = self.view.stream_tree
             tab_streams = self._tab_data_model.streams.value
             if not len(stream_tree):
                 return
@@ -352,7 +352,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if tool_mode == guimodel.TOOL_LINE:
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
-            stream_tree = self.microscope_view.stream_tree
+            stream_tree = self.view.stream_tree
             if stream_tree.get_streams_by_type(stream.SpectrumStream):
                 self.line_overlay.activate()
                 self.add_world_overlay(self.line_overlay)
@@ -384,7 +384,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # The merge ratio actually corresponds to the opacity of the last image drawn
 
         # Use the stream tree, to get the DataProjection if there is one
-        streams = self.microscope_view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getStreams()
         images_opt = []
         images_spc = []
         images_std = []
@@ -503,7 +503,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         #     logging.debug("Updated canvas list %g s after acquisition",
         #                   time.time() - self._lastest_datetime)
 
-        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
+        self.merge_ratio = self.view.stream_tree.kwargs.get("merge", 0.5)
 
     # FIXME: it shouldn't need to ignore deads, as the subscription should go
     # away as soon as it's destroyed. However, after SECOM acquisition, something
@@ -528,7 +528,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).update_drawing()
 
-        if self.microscope_view:
+        if self.view:
             self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
@@ -536,7 +536,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.IsEnabled():
             img = self._get_img_from_buffer()
             if img is not None:
-                self.microscope_view.thumbnail.value = img
+                self.view.thumbnail.value = img
 
     def _onViewPos(self, phys_pos):
         """
@@ -554,11 +554,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # in case we are not attached to a view yet (shouldn't happen)
         super(DblMicroscopeCanvas, self).recenter_buffer(phys_pos)
-        if self.microscope_view:
+        if self.view:
             # This will call _onViewPos() -> recenter_buffer(), but as
             # recenter_buffer() has already been called with this position,
             # nothing will happen
-            self.microscope_view.view_pos.value = phys_pos
+            self.view.view_pos.value = phys_pos
 
     def on_center_position_changed(self, shift):
         """
@@ -566,8 +566,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         shift (float, float): offset moved in physical coordinates
         """
-        if self.microscope_view:
-            self.microscope_view.moveStageBy(shift)
+        if self.view:
+            self.view.moveStageBy(shift)
 
     def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP and center to fit to the current content
@@ -580,23 +580,23 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # and mpp according to the streams (and stage)
         if recenter is None:
             # recenter only if there is no stage attached
-            recenter = not self.microscope_view.has_stage()
+            recenter = not self.view.has_stage()
 
         self.fit_to_content(recenter=recenter)
 
         # this will indirectly call _on_view_mpp(), but not have any additional effect
-        if self.microscope_view:
+        if self.view:
             new_mpp = 1 / self.scale
-            self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
+            self.view.mpp.value = self.view.mpp.clip(new_mpp)
             if recenter:
-                self.microscope_view.view_pos.value = self.requested_phys_pos
+                self.view.view_pos.value = self.requested_phys_pos
 
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
         self.scale = 1 / mpp
         wx.CallAfter(self.request_drawing_update)
 
-    @microscope_view_check
+    @view_check
     def Zoom(self, inc, block_on_zero=False):
         """ Zoom by the given factor
 
@@ -608,13 +608,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
 
         scale = 2.0 ** inc
-        prev_mpp = self.microscope_view.mpp.value
+        prev_mpp = self.view.mpp.value
         # Clip within the range
         mpp = prev_mpp / scale
 
         if block_on_zero:
             # Check for every image
-            for im, _ in self.microscope_view.stream_tree.getImages():
+            for im, _ in self.view.stream_tree.getImages():
                 try:
                     if isinstance(im, tuple):
                         # gets the metadata of the first tile
@@ -629,7 +629,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 except KeyError:
                     pass
 
-        self.microscope_view.mpp.value = self.microscope_view.mpp.clip(mpp)  # this will call _on_view_mpp()
+        self.view.mpp.value = self.view.mpp.clip(mpp)  # this will call _on_view_mpp()
 
     def on_knob_rotate(self, evt):
         """ Powermate knob rotation processor """
@@ -673,10 +673,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             change *= 0.2  # softer
 
         if evt.CmdDown():  # = Ctrl on Linux/Win or Cmd on Mac
-            ratio = self.microscope_view.merge_ratio.value + (change * 0.1)
+            ratio = self.view.merge_ratio.value + (change * 0.1)
             # clamp
-            ratio = sorted(self.microscope_view.merge_ratio.range + (ratio,))[1]
-            self.microscope_view.merge_ratio.value = ratio
+            ratio = sorted(self.view.merge_ratio.range + (ratio,))[1]
+            self.view.merge_ratio.value = ratio
         else:
             if CAN_ZOOM in self.abilities:
                 self.Zoom(change, block_on_zero=evt.ShiftDown())
@@ -703,7 +703,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).on_char(evt)
 
-    @microscope_view_check
+    @view_check
     def on_extra_axis_move(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
@@ -717,10 +717,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             actual number of pixels that were moved by the mouse.
         """
         if axis == 1:
-            phy_shift = self.microscope_view.moveFocusRel(shift)
+            phy_shift = self.view.moveFocusRel(shift)
             self._focus_overlay.add_shift(phy_shift, axis)
 
-    @microscope_view_check
+    @view_check
     def on_right_down(self, event):
         """ Process right mouse button down event
 
@@ -788,7 +788,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         """
 
-        interpolate_data = False if self.microscope_view is None else self.microscope_view.interpolate_content.value
+        interpolate_data = False if self.view is None else self.view.interpolate_content.value
         if self._fps_ol:
             if self._last_frame_update is None:
                 self._last_frame_update = time.time()
@@ -818,8 +818,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Find bounding box of all the content
         bbox = [None, None, None, None]  # ltrb in m
-        if self.microscope_view is not None:
-            streams = self.microscope_view.stream_tree.getStreams()
+        if self.view is not None:
+            streams = self.view.stream_tree.getStreams()
             for s in streams:
                 try:
                     s_bbox = s.getBoundingBox()
@@ -946,8 +946,8 @@ class OverviewCanvas(DblMicroscopeCanvas):
         DblMicroscopeCanvas._on_view_mpp(self, mpp)
         self.fit_view_to_content(True)
 
-    def setView(self, microscope_view, tab_data):
-        super(OverviewCanvas, self).setView(microscope_view, tab_data)
+    def setView(self, view, tab_data):
+        super(OverviewCanvas, self).setView(view, tab_data)
         self.history_overlay = HistoryOverlay(self, tab_data.stage_history)
         self.add_view_overlay(self.history_overlay)
 
@@ -980,7 +980,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         del dc
 
         scaled_img = wx.ImageFromBitmap(bitmap)
-        self.microscope_view.thumbnail.value = scaled_img
+        self.view.thumbnail.value = scaled_img
 
 
 class SparcARCanvas(DblMicroscopeCanvas):
@@ -1007,7 +1007,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
-        streams = self.microscope_view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getStreams()
         ims = []
 
         # order and display the images
@@ -1037,7 +1037,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         self.set_images(ims)
 
         # set merge_ratio
-        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
+        self.merge_ratio = self.view.stream_tree.kwargs.get("merge", 1)
 
         # always refit to image (for the rare case it has changed size)
         self.fit_view_to_content(recenter=True)
@@ -1059,9 +1059,9 @@ class BarPlotCanvas(canvas.PlotCanvas):
     def __init__(self, *args, **kwargs):
 
         # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
-        # would also require renaming the `microscope_view` attributes of the
+        # would also require renaming the `view` attributes of the
         # other Canvas classes.
-        self.microscope_view = None
+        self.view = None
         self._tab_data_model = None
 
         super(BarPlotCanvas, self).__init__(*args, **kwargs)
@@ -1099,33 +1099,33 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.markline_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
 
-    def setView(self, microscope_view, tab_data):
-        """ Set the microscope_view that this canvas is displaying/representing
+    def setView(self, view, tab_data):
+        """ Set the view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
-        :param microscope_view:(model.MicroscopeView)
+        :param view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
-        assert(self.microscope_view is None)
+        assert(self.view is None)
 
-        self.microscope_view = microscope_view
+        self.view = view
         self._tab_data_model = tab_data
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
         if self.IsEnabled():
             if self._data is None:
-                self.microscope_view.thumbnail.value = None
+                self.view.thumbnail.value = None
             else:
                 img = self._get_img_from_buffer()
                 if img is not None:
-                    self.microscope_view.thumbnail.value = img
+                    self.view.thumbnail.value = img
 
     def update_drawing(self):
         super(BarPlotCanvas, self).update_drawing()
 
-        if self.microscope_view:
+        if self.view:
             self.update_thumbnail()
 
 
@@ -1142,7 +1142,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.SetBackgroundColour(stepColour(self.Parent.BackgroundColour, 50))
         self.SetForegroundColour(self.Parent.ForegroundColour)
 
-        self.microscope_view = None
+        self.view = None
         self._tab_data_model = None
 
         self.unit_x = None
@@ -1197,7 +1197,7 @@ class TwoDPlotCanvas(BitmapCanvas):
     def update_drawing(self):
         """ Update the drawing and thumbnail """
         super(TwoDPlotCanvas, self).update_drawing()
-        if self.microscope_view:
+        if self.view:
             self.update_thumbnail()
 
     def clear(self):
@@ -1206,17 +1206,17 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.markline_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
 
-    def setView(self, microscope_view, tab_data):
-        """ Set the microscope_view that this canvas is displaying/representing
+    def setView(self, view, tab_data):
+        """ Set the view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
-        :param microscope_view:(model.MicroscopeView)
+        :param view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
         # This is a kind of kludge, see viewport.MicroscopeViewport for details
-        assert(self.microscope_view is None)
+        assert(self.view is None)
 
-        self.microscope_view = microscope_view
+        self.view = view
         self._tab_data_model = tab_data
 
     def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None):
@@ -1237,11 +1237,11 @@ class TwoDPlotCanvas(BitmapCanvas):
     def update_thumbnail(self):
         if self.IsEnabled():
             if all(i is None for i in self.images):
-                self.microscope_view.thumbnail.value = None
+                self.view.thumbnail.value = None
             else:
                 image = self._get_img_from_buffer()
                 if image is not None:
-                    self.microscope_view.thumbnail.value = image
+                    self.view.thumbnail.value = image
 
     def val_to_pos(self, val):
         """ Translate a value tuple to a pixel position tuple
@@ -1301,7 +1301,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.default_margin = 0
         self.margins = (self.default_margin, self.default_margin)
 
-        self.microscope_view = None
+        self.view = None
         self._tab_data_model = None
         self.abilities -= {CAN_DRAG, CAN_FOCUS}
 
@@ -1320,21 +1320,21 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.fit_to_content()
         super(AngularResolvedCanvas, self).on_size(evt)
 
-    def setView(self, microscope_view, tab_data):
-        """Set the microscope_view that this canvas is displaying/representing
+    def setView(self, view, tab_data):
+        """Set the view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
-        :param microscope_view:(model.MicroscopeView)
+        :param view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
         # This is a kind of kludge, see viewport.MicroscopeViewport for details
-        assert(self.microscope_view is None)
+        assert(self.view is None)
 
-        self.microscope_view = microscope_view
+        self.view = view
         self._tab_data_model = tab_data
 
         # any image changes
-        self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        self.view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
         self.polar_overlay.activate()
 
@@ -1344,7 +1344,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         """
 
         # Normally the view.streamtree should have only one image anyway
-        streams = self.microscope_view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getStreams()
 
         # add the images in order
         ims = []
@@ -1362,7 +1362,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def update_drawing(self):
         super(AngularResolvedCanvas, self).update_drawing()
-        if self.microscope_view:
+        if self.view:
             self.update_thumbnail()
 
     # TODO: just return best scale and center? And let the caller do what it wants?
@@ -1415,4 +1415,4 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         if self.IsEnabled():
             img = self._get_img_from_buffer()
             if img is not None:
-                self.microscope_view.thumbnail.value = img
+                self.view.thumbnail.value = img

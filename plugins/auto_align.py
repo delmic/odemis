@@ -70,9 +70,9 @@ class AlignmentAcquisitionDialog(AcquisitionDialog):
 
         if stream:
             if index == 0:
-                self.microscope_view.addStream(stream)
+                self.view.addStream(stream)
             else:
-                self.microscope_view_r.addStream(stream)
+                self.view_r.addStream(stream)
 
 class AlignmentProjection(stream.RGBSpatialProjection):
 
@@ -311,9 +311,9 @@ class AutomaticOverlayPlugin(Plugin):
         Called when a new stream is selected for the reference image
         """
         # remove "all" streams from the left view (actually there is only one)
-        for s in self._dlg.microscope_view.getStreams():
+        for s in self._dlg.view.getStreams():
             logging.info("removing stream %s", s)
-            self._dlg.microscope_view.removeStream(s)
+            self._dlg.view.removeStream(s)
 
         # Create a new projection and put it in the canvas
         self._dlg.viewport_l.canvas.fit_view_to_next_image = True

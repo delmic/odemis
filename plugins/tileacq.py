@@ -130,7 +130,7 @@ class TileAcqPlugin(Plugin):
         """
         if not self._dlg:
             return []
-        ss = self._dlg.microscope_view.getStreams() + self._dlg.hidden_view.getStreams()
+        ss = self._dlg.view.getStreams() + self._dlg.hidden_view.getStreams()
         logging.debug("View has %d streams", len(ss))
         return ss
 
@@ -289,9 +289,9 @@ class TileAcqPlugin(Plugin):
 
         # Update acq time and area when streams are added/removed. Add stream settings
         # to subscribed vas.
-        dlg.microscope_view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
-        dlg.microscope_view.stream_tree.flat.subscribe(self._update_total_area, init=True)
-        dlg.microscope_view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
+        dlg.view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
+        dlg.view.stream_tree.flat.subscribe(self._update_total_area, init=True)
+        dlg.view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
 
         self._check_range()
         self._memory_check()

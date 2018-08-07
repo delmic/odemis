@@ -244,7 +244,7 @@ class ExportController(object):
         """ Return the ViewPort associated with the given view """
 
         for vp in self._viewports:
-            if vp.microscope_view == view:
+            if vp.view == view:
                 return vp
         raise LookupError("No ViewPort found for view %s" % view)
 

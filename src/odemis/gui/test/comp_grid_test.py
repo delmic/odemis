@@ -46,7 +46,7 @@ class GridPanelTestCase(test.GuiTestCase):
         v = StreamView("everything")
         f = cls.frame
         for vp in (f.red, f.blue, f.purple, f.brown, f.yellow, f.green):
-            vp.microscope_view = v
+            vp.view = v
 
     def test_grid_view(self):
 

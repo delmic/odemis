@@ -106,12 +106,12 @@ class ViewportGrid(wx.Panel):
         viewports = []
         for v in self.viewports:
             try:
-                if v.microscope_view is not None:
+                if v.view is not None:
                     viewports.append(v)
             except AttributeError:
                 # Should never happen, unless it's not really a ViewPort.
                 # If so, let's not go completely bad
-                logging.exception("View has no microscope_view")
+                logging.exception("View has no view")
                 viewports.append(v)
             if len(viewports) >= 4:
                 break

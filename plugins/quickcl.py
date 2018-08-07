@@ -83,10 +83,10 @@ class ContentAcquisitionDialog(AcquisitionDialog):
         # Create a minimal model for use in the streambar controller
 
         self._dmodel = MicroscopyGUIData(plugin.main_app.main_data)
-        self.microscope_view = ContentView("Plugin View left", stage=stage, fov_hw=fov_hw)
-        self.viewport_l.setView(self.microscope_view, self._dmodel)
-        self._dmodel.focussedView.value = self.microscope_view
-        self._dmodel.views.value = [self.microscope_view]
+        self.view = ContentView("Plugin View left", stage=stage, fov_hw=fov_hw)
+        self.viewport_l.setView(self.view, self._dmodel)
+        self._dmodel.focussedView.value = self.view
+        self._dmodel.views.value = [self.view]
         self._viewports = (self.viewport_l,)
 
         self.streambar_controller = StreamBarController(
@@ -382,14 +382,14 @@ class QuickCLPlugin(Plugin):
             if evt.ShiftDown():  # softer
                 move = tuple(s / 8 for s in move)
 
-            if self._dlg.microscope_view.fov_hw:
-                fov_x = self._dlg.microscope_view.fov_hw.horizontalFoV.value
-                shape = self._dlg.microscope_view.fov_hw.shape
+            if self._dlg.view.fov_hw:
+                fov_x = self._dlg.view.fov_hw.horizontalFoV.value
+                shape = self._dlg.view.fov_hw.shape
                 fov = (fov_x, fov_x * shape[1] / shape[0])
             else:
-                fov = self._dlg.microscope_view.fov.value
+                fov = self._dlg.view.fov.value
             shift = [m * f for m, f in zip(move, fov)]
-            self._dlg.microscope_view.moveStageBy(shift)
+            self._dlg.view.moveStageBy(shift)
 
             # We "eat" the event, so the canvas will never react to it
         else:

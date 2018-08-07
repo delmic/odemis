@@ -64,7 +64,7 @@ class ViewPort(wx.Panel):
 
         wx.Panel.__init__(self, *args, **kwargs)
 
-        self._microscope_view = None  # model.MicroscopeView
+        self._view = None  # model.MicroscopeView
         self._tab_data_model = None  # model.MicroscopyGUIData
 
         # Keep track of this panel's pseudo focus
@@ -137,14 +137,14 @@ class ViewPort(wx.Panel):
     def __str__(self):
         return "{0} {2} {1}".format(
             self.__class__.__name__,
-            self._microscope_view.name.value if self._microscope_view else "",
+            self._view.name.value if self._view else "",
             id(self))
 
     __repr__ = __str__
 
     @property
-    def microscope_view(self):
-        return self._microscope_view
+    def view(self):
+        return self._view
 
     def clear(self):
         self.canvas.clear()
@@ -154,7 +154,7 @@ class ViewPort(wx.Panel):
             self.left_legend.clear()
         self.Refresh()
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         raise NotImplementedError
 
     ################################################
@@ -189,11 +189,11 @@ class ViewPort(wx.Panel):
 
     def OnChildFocus(self, evt):
         """ Give the focus to the view if one of the child widgets is clicked """
-        if self._microscope_view and self._tab_data_model:
+        if self._view and self._tab_data_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
             # only fire if the values changes.
-            self._tab_data_model.focussedView.value = self._microscope_view
+            self._tab_data_model.focussedView.value = self._view
 
         evt.Skip()
 
@@ -248,50 +248,50 @@ class MicroscopeViewport(ViewPort):
         self._previous_size = self.canvas.ClientSize
         self.canvas.Bind(wx.EVT_SIZE, self.OnCanvasSize)
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        :param microscope_view:(model.MicroscopeView)
+        :param view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
         # created after the microscope view, but they are created independently
         # via XRC.
-        assert(self._microscope_view is None)
+        assert(self._view is None)
 
         # import traceback
         # traceback.print_stack()
 
-        self._microscope_view = microscope_view
+        self._view = view
         self._tab_data_model = tab_data
 
         # TODO: Center to current view position, with current mpp
-        microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
+        view.mpp.subscribe(self._on_view_mpp, init=True)
 
         # set/subscribe merge ratio
-        microscope_view.merge_ratio.subscribe(self._onMergeRatio, init=True)
+        view.merge_ratio.subscribe(self._onMergeRatio, init=True)
 
         # subscribe to image, to update legend on stream tree/image change
-        microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
+        view.lastUpdate.subscribe(self._onImageUpdate, init=True)
 
         # By default, cannot focus, unless the child class allows it
         self.canvas.abilities.discard(CAN_FOCUS)
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, tab_data)
+        self.canvas.setView(view, tab_data)
 
         # Immediately sets the view FoV based on the current canvas size
         self._set_fov_from_mpp()
 
-        if microscope_view.fov_hw:
+        if view.fov_hw:
             logging.info("Tracking mpp on %s" % self)
             # The view FoV changes either when the mpp changes or on resize,  but resize typically
             # causes an update of the mpp (to keep the FoV) so no need to listen to resize.
-            self.microscope_view.mpp.subscribe(self._on_view_mpp_change)
-            microscope_view.fov_hw.horizontalFoV.subscribe(self._on_hw_fov_change, init=True)
+            self.view.mpp.subscribe(self._on_view_mpp_change)
+            view.fov_hw.horizontalFoV.subscribe(self._on_hw_fov_change, init=True)
 
     ################################################
     #  Panel control
@@ -306,21 +306,21 @@ class MicroscopeViewport(ViewPort):
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
-        if not self._microscope_view or not self.bottom_legend:
+        if not self._view or not self.bottom_legend:
             return
-        hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
+        hfw = self._view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
         label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
         self.bottom_legend.set_hfw_label(label)
 
     def UpdateMagnification(self):
         # Total magnification
-        mag = self._mpp_screen / self._microscope_view.mpp.value
+        mag = self._mpp_screen / self._view.mpp.value
         label = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
 
         # Gather all different image mpp values
         mpps = set()
-        for im, stream in self._microscope_view.stream_tree.getImages():
+        for im, stream in self._view.stream_tree.getImages():
             try:
                 if hasattr(stream, 'mpp'): # im is a tuple of tuple of tiles
                     mpps.add(stream.mpp.min)
@@ -335,7 +335,7 @@ class MicroscopeViewport(ViewPort):
         if len(mpps) == 1:
             mpp_im = mpps.pop()
             # mag_im = self._mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
-            mag_dig = mpp_im / self._microscope_view.mpp.value
+            mag_dig = mpp_im / self._view.mpp.value
             label += u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
 
         if self.bottom_legend:
@@ -356,10 +356,10 @@ class MicroscopeViewport(ViewPort):
     def _on_view_mpp(self, mpp):
         fov = self.get_fov_from_mpp()
         if fov:
-            self.microscope_view.fov.value = fov
+            self.view.fov.value = fov
         buf_fov = self.get_buffer_fov_from_mpp()
         if buf_fov:
-            self.microscope_view.fov_buffer.value = buf_fov
+            self.view.fov_buffer.value = buf_fov
 
         if self.bottom_legend:
             self.bottom_legend.scale_win.SetMPP(mpp)
@@ -379,10 +379,10 @@ class MicroscopeViewport(ViewPort):
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
         if (
-                "merge" in self._microscope_view.stream_tree.kwargs and
-                len(self._microscope_view.stream_tree) >= 2
+                "merge" in self._view.stream_tree.kwargs and
+                len(self._view.stream_tree) >= 2
         ):
-            streams = self._microscope_view.getStreams()
+            streams = self._view.getStreams()
             all_opt = all(isinstance(s, (FluoStream, StaticFluoStream)) for s in streams)
 
             # If all images are optical, assume they are merged using screen blending and no
@@ -441,22 +441,22 @@ class MicroscopeViewport(ViewPort):
         """
         Merge ratio slider
         """
-        if self._microscope_view is None or not self.bottom_legend:
+        if self._view is None or not self.bottom_legend:
             return
 
         val = self.bottom_legend.merge_slider.GetValue() / 100
-        self._microscope_view.merge_ratio.value = val
+        self._view.merge_ratio.value = val
         evt.Skip()
 
     def OnCanvasSize(self, evt):
         new_size = evt.Size
 
         # Update the mpp, so that _about_ the same data will be displayed.
-        if self.microscope_view and self._previous_size != new_size:
-            if self.microscope_view.fov_hw:
+        if self.view and self._previous_size != new_size:
+            if self.view.fov_hw:
                 # Connected to the HW FoV => ensure that the HW FoV stays constant
-                hfov = self.microscope_view.fov_hw.horizontalFoV.value
-                shape = self.microscope_view.fov_hw.shape
+                hfov = self.view.fov_hw.horizontalFoV.value
+                shape = self.view.fov_hw.shape
                 fov = (hfov, hfov * shape[1] / shape[0])
                 self.set_mpp_from_fov(fov)
             else:
@@ -465,11 +465,11 @@ class MicroscopeViewport(ViewPort):
                 new_area = new_size[0] * new_size[1]
                 if prev_area > 0 and new_area > 0:
                     ratio = math.sqrt(prev_area) / math.sqrt(new_area)
-                    mpp = ratio * self.microscope_view.mpp.value
-                    mpp = self.microscope_view.mpp.clip(mpp)
+                    mpp = ratio * self.view.mpp.value
+                    mpp = self.view.mpp.clip(mpp)
                     logging.debug("Updating mpp to %g due to canvas resize from %s to %s, to keep area",
                                   mpp, self._previous_size, new_size)
-                    self.microscope_view.mpp.value = mpp
+                    self.view.mpp.value = mpp
         self._previous_size = new_size
 
         self._set_fov_from_mpp()
@@ -480,7 +480,7 @@ class MicroscopeViewport(ViewPort):
         evt.Skip()  # processed also by the parent
 
     def OnSliderIconClick(self, evt):
-        if not self._microscope_view or not self.bottom_legend:
+        if not self._view or not self.bottom_legend:
             return
 
         if evt.GetEventObject() == self.bottom_legend.bmp_slider_left:
@@ -489,7 +489,7 @@ class MicroscopeViewport(ViewPort):
             self.bottom_legend.merge_slider.set_to_max_val()
 
         val = self.bottom_legend.merge_slider.GetValue() / 100
-        self._microscope_view.merge_ratio.value = val
+        self._view.merge_ratio.value = val
         evt.Skip()
 
     # END Event handling
@@ -497,7 +497,7 @@ class MicroscopeViewport(ViewPort):
     def _on_hw_fov_change(self, hfov):
         """ Set the microscope view's mpp value when the hardware's FoV changes """
         # Vertical FoV is proportional to the horizontal one, based on the shape
-        shape = self.microscope_view.fov_hw.shape
+        shape = self.view.fov_hw.shape
         fov = (hfov, hfov * shape[1] / shape[0])
         logging.debug("FoV VA changed to %s on %s", fov, self)
         self.set_mpp_from_fov(fov)
@@ -517,8 +517,8 @@ class MicroscopeViewport(ViewPort):
             if fov is None:
                 return
 
-            fov_va = self.microscope_view.fov_hw.horizontalFoV
-            shape = self.microscope_view.fov_hw.shape
+            fov_va = self.view.fov_hw.horizontalFoV
+            shape = self.view.fov_hw.shape
             # Compute the hfov, so that the whole HW FoV just fully fit
             hfov = min(fov[0], fov[1] * shape[0] / shape[1])
 
@@ -545,8 +545,8 @@ class MicroscopeViewport(ViewPort):
         # Trick: we actually return the smallest of the FoV dimensions, so
         # that we are sure the microscope image will fit fully (if it's square)
 
-        if self.microscope_view and all(v > 0 for v in view_size_px):
-            mpp = self.microscope_view.mpp.value
+        if self.view and all(v > 0 for v in view_size_px):
+            mpp = self.view.mpp.value
             fov = (mpp * view_size_px[0], mpp * view_size_px[1])
             logging.debug("Computed FoV (%g x %s px) = %s on %s",
                           mpp, view_size_px, fov, self)
@@ -579,14 +579,14 @@ class MicroscopeViewport(ViewPort):
         """
         view_size_px = self.canvas.ClientSize
 
-        if self.microscope_view and all(v > 0 for v in view_size_px):
+        if self.view and all(v > 0 for v in view_size_px):
             mpp = max(phy / px for phy, px in zip(fov, view_size_px))
-            mpp = self.microscope_view.mpp.clip(mpp)
+            mpp = self.view.mpp.clip(mpp)
             logging.debug("Setting view mpp to %s using given fov %s for %s", mpp, fov, self)
             # Disable temporarily setting the HFW from the mpp to avoid loops.
-            self.microscope_view.mpp.unsubscribe(self._on_view_mpp_change)
-            self.microscope_view.mpp.value = mpp
-            self.microscope_view.mpp.subscribe(self._on_view_mpp_change)
+            self.view.mpp.unsubscribe(self._on_view_mpp_change)
+            self.view.mpp.value = mpp
+            self.view.mpp.subscribe(self._on_view_mpp_change)
 
     def _set_fov_from_mpp(self):
         """
@@ -596,9 +596,9 @@ class MicroscopeViewport(ViewPort):
         return (tuple of float): the FoV set
         """
         fov = self.get_fov_from_mpp()
-        if fov is not None and self.microscope_view:
-            self.microscope_view.fov.value = fov
-            self.microscope_view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+        if fov is not None and self.view:
+            self.view.fov.value = fov
+            self.view.fov_buffer.value = self.get_buffer_fov_from_mpp()
 
         return fov
 
@@ -636,10 +636,10 @@ class OverviewViewport(MicroscopeViewport):
         super(OverviewViewport, self).OnSize(evt)
         self.canvas.fit_view_to_content(True)
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         """ Attach the MicroscopeView associated with the overview """
 
-        super(OverviewViewport, self).setView(microscope_view, tab_data)
+        super(OverviewViewport, self).setView(view, tab_data)
 
         self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
         # Only allow moving when chamber is under vacuum
@@ -652,7 +652,7 @@ class OverviewViewport(MicroscopeViewport):
         # we have to allow (and in the worst case the user will be able to move
         # while the chamber is opened)
         if (chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN} and
-                self._microscope_view.has_stage()):
+                self._view.has_stage()):
             self.canvas.point_select_overlay.activate()
         else:
             self.canvas.point_select_overlay.deactivate()
@@ -661,8 +661,8 @@ class OverviewViewport(MicroscopeViewport):
         """ Set the physical view position
         """
         if self._tab_data_model:
-            if self._microscope_view.has_stage():
-                self._microscope_view.moveStageTo(p_pos)
+            if self._view.has_stage():
+                self._view.moveStageTo(p_pos)
 
 
 class LiveViewport(MicroscopeViewport):
@@ -676,12 +676,12 @@ class LiveViewport(MicroscopeViewport):
         super(LiveViewport, self).__init__(*args, **kwargs)
         self._orig_abilities = set()
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         # Must be before calling the super, as the super drops CAN_FOCUS automatically
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
-        super(LiveViewport, self).setView(microscope_view, tab_data)
+        super(LiveViewport, self).setView(view, tab_data)
         tab_data.streams.subscribe(self._on_stream_change)
-        microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
+        view.stream_tree.should_update.subscribe(self._on_stream_play,
                                                             init=True)
 
     def _on_stream_play(self, is_playing):
@@ -690,7 +690,7 @@ class LiveViewport(MicroscopeViewport):
         Used to update the drag/focus capabilities
         """
         self.canvas.play_overlay.hide_pause(is_playing)
-        if CAN_DRAG in self._orig_abilities and self._microscope_view.has_stage():
+        if CAN_DRAG in self._orig_abilities and self._view.has_stage():
             # disable/enable move
             if is_playing:
                 self.canvas.abilities.add(CAN_DRAG)
@@ -707,7 +707,7 @@ class LiveViewport(MicroscopeViewport):
         if CAN_FOCUS not in self._orig_abilities:
             return
         # find out the current playing stream in the view
-        for s in self._microscope_view.getStreams():
+        for s in self._view.getStreams():
             if s.should_update.value:
                 can_focus = s.focuser is not None
                 logging.debug("current stream can focus: %s", can_focus)
@@ -737,13 +737,13 @@ class ARLiveViewport(LiveViewport):
         if self.bottom_legend:
             self.bottom_legend.bmp_slider_right.SetBitmap(getBitmap("icon/ico_blending_goal.png"))
 
-    def setView(self, microscope_view, tab_data):
-        super(ARLiveViewport, self).setView(microscope_view, tab_data)
-        microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
+    def setView(self, view, tab_data):
+        super(ARLiveViewport, self).setView(view, tab_data)
+        view.lastUpdate.subscribe(self._on_stream_update, init=True)
 
     def _on_stream_update(self, _):
         """ Hide the play icon overlay if no stream are present """
-        show = len(self._microscope_view.stream_tree) > 0
+        show = len(self._view.stream_tree) > 0
         self.canvas.play_overlay.show = show
 
     def SetFlip(self, orientation):
@@ -783,14 +783,14 @@ class AngularResolvedViewport(ViewPort):
     canvas_class = miccanvas.AngularResolvedCanvas
     bottom_legend_class = None
 
-    def setView(self, microscope_view, tab_data):
-        assert(self._microscope_view is None)
+    def setView(self, view, tab_data):
+        assert(self._view is None)
 
-        self._microscope_view = microscope_view
+        self._view = view
         self._tab_data_model = tab_data
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, tab_data)
+        self.canvas.setView(view, tab_data)
 
 
 class PlotViewport(ViewPort):
@@ -817,24 +817,23 @@ class PlotViewport(ViewPort):
         :param view:(model.View)
         :param tab_data: (model.MicroscopyGUIData)
         """
-        # TODO: rename `microscope_view`, since this parameter is a regular view
 
         # This is a kind of a kludge, as it'd be best to have the viewport
         # created after the microscope view, but they are created independently
         # via XRC.
-        assert(self._microscope_view is None)
+        assert(self._view is None)
 
         # import traceback
         # traceback.print_stack()
 
-        self._microscope_view = view
+        self._view = view
         self._tab_data_model = tab_data
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
+        # view.stream_tree.should_update.subscribe(self.connect_stream)
         # FIXME: it shouldn't listen to should_update, but to modifications of
         # the stream tree itself... it just there is nothing to do that.
         view.lastUpdate.subscribe(self.connect_stream)
@@ -846,7 +845,7 @@ class PlotViewport(ViewPort):
         """
         Hide the play icon overlay if no stream are present (or they are all static)
         """
-        ss = self._microscope_view.getStreams()
+        ss = self._view.getStreams()
         if len(ss) > 0:
             # Any stream not static?
             show = any(not isinstance(s, StaticStream) for s in ss)
@@ -875,10 +874,10 @@ class PlotViewport(ViewPort):
 
         """
 
-        ss = self._microscope_view.getStreams()
+        ss = self._view.getStreams()
         # Most of the time, there is only one stream, but in some cases, there might be more.
         # TODO: filter based on the type of stream?
-        # ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
+        # ss = self.view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
 
         if not ss:
             stream = None
@@ -1159,35 +1158,34 @@ class SpatialSpectrumViewport(ViewPort):
         # super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
         wx.CallAfter(self.canvas.update_drawing)
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        :param microscope_view:(model.View)
+        :param view:(model.View)
         :param tab_data: (model.MicroscopyGUIData)
         """
-        # TODO: rename `microscope_view`, since this parameter is a regular view
 
         # This is a kind of a kludge, as it'd be best to have the viewport
         # created after the microscope view, but they are created independently
         # via XRC.
-        assert(self._microscope_view is None)
+        assert(self._view is None)
 
         # import traceback
         # traceback.print_stack()
 
-        self._microscope_view = microscope_view
+        self._view = view
         self._tab_data_model = tab_data
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, tab_data)
+        self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
+        # view.stream_tree.should_update.subscribe(self.connect_stream)
         # FIXME: it shouldn't listen to should_update, but to modifications of
         # the stream tree itself... it just there is nothing to do that.
-        microscope_view.lastUpdate.subscribe(self.connect_stream)
+        view.lastUpdate.subscribe(self.connect_stream)
 
         wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTipString, "Distance from origin")
@@ -1196,7 +1194,7 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        ss = self.microscope_view.stream_tree.get_streams_by_type(SpectrumStream)
+        ss = self.view.stream_tree.get_streams_by_type(SpectrumStream)
         if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
