@@ -114,7 +114,7 @@ class ViewPortController(object):
         """ Return the ViewPort associated with the given view """
 
         for vp in self._viewports:
-            if vp.microscope_view == view:
+            if vp.view == view:
                 return vp
         raise IndexError("No ViewPort found for view %s" % view)
 
@@ -123,7 +123,7 @@ class ViewPortController(object):
         viewports = []
         for view in views:
             for viewport in self._viewports:
-                if viewport.microscope_view == view:
+                if viewport.view == view:
                     viewports.append(viewport)
                     break
         return viewports
@@ -179,7 +179,7 @@ class ViewPortController(object):
         logging.debug("Changing focus to view %s", view.name.value)
 
         for vp in self._viewports:
-            if vp.microscope_view is view:
+            if vp.view is view:
                 viewport = vp
                 vp.canvas.Bind(EVT_KNOB_PRESS, self._on_knob_press)
                 break
@@ -209,11 +209,11 @@ class ViewPortController(object):
         grid_vis = self._grid_panel.visible_viewports
 
         for i, vp in enumerate(grid_vis):
-            if vp.microscope_view == fv and vp in grid_vis:
+            if vp.view == fv and vp in grid_vis:
                 try:
-                    self._data_model.focussedView.value = grid_vis[i + 1].microscope_view
+                    self._data_model.focussedView.value = grid_vis[i + 1].view
                 except IndexError:
-                    self._data_model.focussedView.value = grid_vis[0].microscope_view
+                    self._data_model.focussedView.value = grid_vis[0].view
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -226,7 +226,7 @@ class ViewPortController(object):
         if layout == model.VIEW_LAYOUT_ONE:
             logging.debug("Displaying single viewport")
             for viewport in self._viewports:
-                if viewport.microscope_view == self._data_model.focussedView.value:
+                if viewport.view == self._data_model.focussedView.value:
                     self._grid_panel.set_shown_viewports(viewport)
                     break
             else:
@@ -542,18 +542,18 @@ class ViewButtonController(object):
                 # traceback.print_stack()
                 b.set_overlay_image(im)
 
-            vp.microscope_view.thumbnail.subscribe(on_thumbnail, init=True)
+            vp.view.thumbnail.subscribe(on_thumbnail, init=True)
             # keep ref of the functions so that they are not dropped
             self._subscriptions[btn] = {"thumb": on_thumbnail}
 
             # also subscribe for updating the 2x2 button
-            vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail, init=True)
+            vp.view.thumbnail.subscribe(self._update_22_thumbnail, init=True)
 
             def on_name(name, label_ctrl=lbl_ctrl):  # save lbl in scope
                 label_ctrl.SetLabel(name)
 
             btn.Freeze()
-            vp.microscope_view.name.subscribe(on_name, init=True)
+            vp.view.name.subscribe(on_name, init=True)
             btn.Parent.Layout()
             btn.Thaw()
 
@@ -567,29 +567,29 @@ class ViewButtonController(object):
         for btn, subs in self._subscriptions.items():
             vp, lbl = self.buttons[btn]
             if vp is not None:
-                vp.microscope_view.thumbnail.unsubscribe(subs["thumb"])
-                vp.microscope_view.name.unsubscribe(subs["label"])
+                vp.view.thumbnail.unsubscribe(subs["thumb"])
+                vp.view.name.unsubscribe(subs["label"])
 
         self._subscriptions = {}
 
-    def toggle_btn_for_view(self, microscope_view):
+    def toggle_btn_for_view(self, view):
         """
         Toggle the button which represents the view and untoggle the other ones
-        microscope_view (MicroscopeView or None): the view, or None if the first
+        view (MicroscopeView or None): the view, or None if the first
                                     button (2x2) is to be toggled
         Note: it does _not_ change the view
         """
         for b, (vp, _) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
             if (
-                    (vp is None and microscope_view is None) or
-                    (vp and vp.microscope_view == microscope_view)
+                    (vp is None and view is None) or
+                    (vp and vp.view == view)
             ):
                 b.SetToggle(True)
             else:
                 if vp:
                     logging.debug("untoggling button of view %s",
-                                  vp.microscope_view.name.value)
+                                  vp.view.name.value)
                 else:
                     logging.debug("untoggling button of view All")
                 b.SetToggle(False)
@@ -621,7 +621,7 @@ class ViewButtonController(object):
             if vp is None:  # 2x2 layout
                 continue
 
-            im = vp.microscope_view.thumbnail.value
+            im = vp.view.thumbnail.value
 
             if im:
                 sim = img.wxImageScaleKeepRatio(im, size_sub, wx.IMAGE_QUALITY_HIGH)
@@ -654,7 +654,7 @@ class ViewButtonController(object):
         vis_viewports = []
         for view in visible_views:
             for vp in self.viewports:
-                if vp.microscope_view == view:
+                if vp.view == view:
                     vis_viewports.append(vp)
 
         vp_buttons = [(b, (vp, l)) for b, (vp, l) in self.buttons.items() if vp is not None]
@@ -703,5 +703,5 @@ class ViewButtonController(object):
             # if the layout was 2x2 with another view focused, it doesn't first
             # display one big view, and immediately after changes to another
             # view.
-            self._data_model.focussedView.value = viewport.microscope_view
+            self._data_model.focussedView.value = viewport.view
             self._data_model.viewLayout.value = model.VIEW_LAYOUT_ONE

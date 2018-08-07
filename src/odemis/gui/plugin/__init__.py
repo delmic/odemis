@@ -338,14 +338,14 @@ class AcquisitionDialog(xrcfr_plugin):
 
         self._dmodel = MicroscopyGUIData(plugin.main_app.main_data)
         self.hidden_view = StreamView("Plugin View Hidden")
-        self.microscope_view = MicroscopeView("Plugin View left")
-        self.viewport_l.setView(self.microscope_view, self._dmodel)
-        self.microscope_view_r = MicroscopeView("Plugin View right")
-        self.viewport_r.setView(self.microscope_view_r, self._dmodel)
+        self.view = MicroscopeView("Plugin View left")
+        self.viewport_l.setView(self.view, self._dmodel)
+        self.view_r = MicroscopeView("Plugin View right")
+        self.viewport_r.setView(self.view_r, self._dmodel)
         self.spectrum_view = MicroscopeView("Plugin View spectrum")
         self.spectrum_viewport.setView(self.spectrum_view, self._dmodel)
-        self._dmodel.focussedView.value = self.microscope_view
-        self._dmodel.views.value = [self.microscope_view, self.microscope_view_r,
+        self._dmodel.focussedView.value = self.view
+        self._dmodel.views.value = [self.view, self.view_r,
                                     self.spectrum_view]
         self._viewports = (self.viewport_l, self.viewport_r, self.spectrum_viewport)
 
@@ -448,7 +448,7 @@ class AcquisitionDialog(xrcfr_plugin):
         else:
             viewport = self._viewports[index]
             v = self._dmodel.views.value[index]
-            assert viewport.microscope_view is v
+            assert viewport.view is v
 
             if not viewport.IsShown():
                 viewport.Show()

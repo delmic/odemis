@@ -362,7 +362,7 @@ class SecomStreamsTab(Tab):
         # Special overview button selection
         self.overview_controller = viewcont.OverviewController(main_data, tab_data,
                                                                panel.vp_overview_sem.canvas,
-                                                               self.panel.vp_overview_sem.microscope_view,
+                                                               self.panel.vp_overview_sem.view,
                                                                )
 
         # Connect the view selection buttons
@@ -1825,8 +1825,8 @@ class AnalysisTab(Tab):
             # ########### Combined views and spectrum view visible
 
             new_visible_views[0:2] = self._def_views[2:4]  # Combined
-            new_visible_views[2] = self.panel.vp_spatialspec.microscope_view
-            new_visible_views[3] = self.panel.vp_inspection_plot.microscope_view
+            new_visible_views[2] = self.panel.vp_spatialspec.view
+            new_visible_views[3] = self.panel.vp_inspection_plot.view
 
             # ########### Update tool menu
 
@@ -1849,7 +1849,7 @@ class AnalysisTab(Tab):
 
             new_visible_views[0] = self._def_views[1] # SEM only
             new_visible_views[1] = self._def_views[2] # Combined 1
-            new_visible_views[2] = self.panel.vp_angular.microscope_view
+            new_visible_views[2] = self.panel.vp_angular.view
             new_visible_views[3] = self._def_views[3] # Combined 2
 
             # ########### Update tool menu
@@ -2025,7 +2025,7 @@ class AnalysisTab(Tab):
         """ Bring the angular viewport to the front when a point is selected in the 1x1 view """
         # TODO: should we just switch to 2x2 as with the pixel and line selection?
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            self.tab_data_model.focussedView.value = self.panel.vp_angular.microscope_view
+            self.tab_data_model.focussedView.value = self.panel.vp_angular.view
 
     def _on_pixel_select(self, _):
         """ Switch the the 2x2 view when a pixel is selected """
@@ -2165,7 +2165,7 @@ class SecomAlignTab(Tab):
         self._opt_stream = opt_stream
         # To ensure F6 (play/pause) works: very simple stream scheduler
         opt_stream.should_update.subscribe(self._on_ccd_should_update)
-        self._ccd_view = panel.vp_align_ccd.microscope_view
+        self._ccd_view = panel.vp_align_ccd.view
         self._ccd_view.addStream(opt_stream)
         # create CCD stream panel entry
         ccd_spe = StreamController(panel.pnl_opt_streams, opt_stream, self.tab_data_model)
@@ -2186,7 +2186,7 @@ class SecomAlignTab(Tab):
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
         self._sem_stream = sem_stream
-        self._sem_view = panel.vp_align_sem.microscope_view
+        self._sem_view = panel.vp_align_sem.view
         self._sem_view.addStream(sem_stream)
 
         sem_spe = StreamController(self.panel.pnl_sem_streams, sem_stream, self.tab_data_model)
@@ -2938,8 +2938,8 @@ class Sparc2AlignTab(Tab):
         ))
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
-        self.panel.vp_align_center.microscope_view.show_crosshair.value = False
+        self.panel.vp_align_lens.view.show_crosshair.value = False
+        self.panel.vp_align_center.view.show_crosshair.value = False
 
         # The streams:
         # * Alignment/AR CCD (ccd): Used to show CL spot during the alignment
@@ -2989,7 +2989,7 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream = ccd_stream
 
             ccd_spe = self._stream_controller.addStream(ccd_stream,
-                                add_to_view=self.panel.vp_align_lens.microscope_view)
+                                add_to_view=self.panel.vp_align_lens.view)
             ccd_spe.stream_panel.flatten()
 
             # To activate the SEM spot when the CCD plays
@@ -3042,7 +3042,7 @@ class Sparc2AlignTab(Tab):
             # because both streams are optical)
             # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
             self._stream_controller.addStream(speclines, visible=False,
-                                add_to_view=self.panel.vp_align_lens.microscope_view)
+                                add_to_view=self.panel.vp_align_lens.view)
 
             # Focus position axis -> AxisConnector
             z = main_data.focus.axes["z"]
@@ -3096,7 +3096,7 @@ class Sparc2AlignTab(Tab):
             self._moi_stream = mois
 
             mois_spe = self._stream_controller.addStream(mois,
-                             add_to_view=self.panel.vp_moi.microscope_view)
+                             add_to_view=self.panel.vp_moi.view)
             mois_spe.stream_panel.flatten()  # No need for the stream name
 
             self._addMoIEntries(mois_spe.stream_panel)
@@ -3129,7 +3129,7 @@ class Sparc2AlignTab(Tab):
             self._moi_stream = mois
 
             mois_spe = self._stream_controller.addStream(mois,
-                                add_to_view=self.panel.vp_moi.microscope_view)
+                                add_to_view=self.panel.vp_moi.view)
             mois_spe.stream_panel.flatten()
 
             # To activate the SEM spot when the CCD plays
@@ -3147,7 +3147,7 @@ class Sparc2AlignTab(Tab):
 
         if "center-align" in tab_data.align_mode.choices:
             # The center align view share the same CCD stream (and settings)
-            self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
+            self.panel.vp_align_center.view.addStream(ccd_stream)
 
             # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
             mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
@@ -3202,7 +3202,7 @@ class Sparc2AlignTab(Tab):
                                        detvas=get_local_vas(fbdet, main_data.hw_settings_config),
                                        )
                 speccnt_spe = self._stream_controller.addStream(speccnts,
-                                    add_to_view=self.panel.vp_align_fiber.microscope_view)
+                                    add_to_view=self.panel.vp_align_fiber.view)
                 speccnt_spe.stream_panel.flatten()
                 self._speccnt_stream = speccnts
                 speccnts.should_update.subscribe(self._on_ccd_stream_play)
@@ -3390,7 +3390,7 @@ class Sparc2AlignTab(Tab):
         # as the scheduler automatically adds the stream to the current view.
         # The scheduler also automatically pause all the other streams.
         if mode == "lens-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
+            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.pnl_lens_mover.Enable(True)
@@ -3402,7 +3402,7 @@ class Sparc2AlignTab(Tab):
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
         elif mode == "mirror-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
+            self.tab_data_model.focussedView.value = self.panel.vp_moi.view
             if self._moi_stream:
                 self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
@@ -3411,7 +3411,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(True)
             self.panel.pnl_fibaligner.Enable(False)
         elif mode == "center-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
+            self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
@@ -3419,7 +3419,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
         elif mode == "fiber-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
+            self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.view
             if self._speccnt_stream:
                 self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)

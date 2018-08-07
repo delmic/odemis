@@ -194,7 +194,7 @@ The Plugin class provides a few helper functions:
        (list of wx.Button): The buttons which were added.
        It allows enabling/disabling buttons and change label.
 
-    .. py:attribute:: microscope_view
+    .. py:attribute:: view
 
        (MicroscopeView): The view that shows the streams. It allows adding overlays,
        and modifying the field of view.

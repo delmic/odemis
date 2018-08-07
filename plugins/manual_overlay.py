@@ -136,7 +136,7 @@ class ManualOverlayPlugin(Plugin):
         Force updating the projection of the given stream
         """
         # Update in the view of the window, and also the current tab
-        views = [self._dlg.microscope_view]
+        views = [self._dlg.view]
         views.extend(self.main_app.main_data.tab.value.tab_data_model.views.value)
 
         for v in views:
