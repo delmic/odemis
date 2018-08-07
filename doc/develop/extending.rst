@@ -331,14 +331,14 @@ To read an acquisition file you can use code such as:
 
 
 Starting odemis from the terminal/console
-=================================================
+=========================================
 
 After setting up the development environment it is possible to start odemis via the terminal.
 It is also possible to specify a specific configuration (*.yaml) file used for staring odemis.
 
 
 Starting Odemis
------------------------
+---------------
 
 Odemis can be started from the terminal by typing the following command in the terminal::
 
@@ -348,7 +348,7 @@ The default microscope file (*.yaml) is defined in the configuration file, which
 ``/etc/odemis.conf``.
 
 Starting Odemis with configuration file
-----------------------------------------
+---------------------------------------
 
 Odemis can be started using different hardware microscope files (*.yaml).
 There are various examples, hardware tests and simulators available in
@@ -360,7 +360,7 @@ Launch Odemis with a microscope file by typing the following command in the term
 
 
 Starting Odemis with no GUI
-----------------------------------------
+---------------------------
 
 The Odemis backend can be started without launching the GUI by using the following command::
 
@@ -369,7 +369,7 @@ The Odemis backend can be started without launching the GUI by using the followi
 
 
 Starting the Odemis-Viewer
-----------------------------------------
+--------------------------
 
 The Odemis Viewer runs without a microscope file specified and is a useful tool to load and perform some basic
 analysis on previously acquired data sets. The Odemis viewer can be started by using the following command::
@@ -617,6 +617,30 @@ are two simple ways. The simplest way is to decorate the function with the speci
 ``@call_in_wx_main`` decorator. This decorator ensures that the function is
 always run from within the main GUI thread. Another way is to call every GUI
 related function using the special ``wx.CallAfter()`` function.
+
+
+Running test cases
+==================
+The source code comes with a large set of unit tests and some integration tests.
+They allow checking the behaviour of the different parts of Odemis.
+After changes are made to the source, the tests should be rerun in order to validate
+these changes. To run the test cases, it is recommended to first create an
+empty directory next to the odemis directory, and name it ``odemis-testing``.
+Optionally, you may also have another directory ``mic-odm-yaml``, which contains
+extra microscopes files to be used during integration testing (the file names
+should end with ``-sim.odm.yaml``).
+It is then possible to run all the test cases by running from the ``odemis-testing``
+directory this command::
+
+   ../odemis/util/runtests.sh 2>&1 | tee test-$(date +%Y%m%d).log
+
+The summary of the test results will be stored in ``test-DATE.log``, and the
+complete log will be stored in separate files.
+
+Please note that before running the test cases, you might need to run once
+``odemis-start`` in order to set-up some directories with the correct access
+rights. Also, running all the test cases may take up to a couple of hours, during
+which windows will pop-up and automatically close from time to time.
 
 
 Speed optimization
