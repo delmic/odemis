@@ -187,6 +187,9 @@ def convert_to_object(s):
             fixed = "{" + fixed + "}"
         elif re.match(r"[-.a-zA-Z0-9_]+(\s*,\s*[-.a-zA-Z0-9_]+)+$", fixed):  # a list?
             fixed = "[" + fixed + "]"
+        # We could also use ast.literal_eval() to accept Python syntax instead,
+        # but as the microscope file is in YAML, it might be easier for the user
+        # that this follows the same syntax.
         return yaml.safe_load(fixed)
     except yaml.YAMLError as exc:
         logging.error("Syntax error: %s", exc)
