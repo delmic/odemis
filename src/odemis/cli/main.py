@@ -479,7 +479,9 @@ def move(comp_name, moves, check_distance=True):
 
         if ad.unit == "m":
             try:
-                distance = float(str_distance) * 1e-6 # µm -> m
+                # Use convert_to_object() to allow typing negative values with e:
+                # -1e-6 => '!!float -1.0e-6'. It's not very nice, but does work.
+                distance = float(convert_to_object(str_distance)) * 1e-6  # µm -> m
             except ValueError:
                 raise ValueError("Distance '%s' cannot be converted to a number" %
                                  str_distance)
@@ -540,7 +542,7 @@ def move_abs(comp_name, moves, check_distance=True):
         if position is None:
             if ad.unit == "m":
                 try:
-                    position = float(str_position)
+                    position = float(convert_to_object(str_position))
                 except ValueError:
                     raise ValueError("Position '%s' cannot be converted to a number" % str_position)
 
