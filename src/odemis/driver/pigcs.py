@@ -2026,9 +2026,8 @@ class CLRelController(Controller):
                 # on the axis.
                 # Note: we could try to also check whether the controller is ready
                 # with self.IsReady(), and stop sooner if it's possible).
-                # But that could lead to
-                # orders/queries to several controllers to be intertwined, which
-                # causes sometimes the "garbage" bug.
+                # But that could lead to orders/queries to several controllers
+                # to be intertwined, which causes sometimes the "garbage" bug.
                 time.sleep(4 * self._slew_rate[axis])
 
             # The controller is normally ready, as it should be taken cared by
@@ -2092,10 +2091,40 @@ class CLRelController(Controller):
             # was an error, the servo might have been disabled => need to put
             # it back on now.
             with self.busacc.ser_access:  # To avoid garbage when using IP com
+                try:
+                    self.checkError()
+                except PIGCSError as ex:
+                    logging.warning("Axis %s/%s reported while suspended: %s",
+                                    self.address, axis, ex)
+
                 if not self.GetServo(axis):
                     logging.info("Servo of axis %s/%s was off, need to restart it",
                                  self.address, axis)
                     self._startServo(axis)
+                else:
+                    # Since it's suspended, some drift (or encoder error) might
+                    # have caused the current position to be away from the
+                    # target position. As we don't restart the servo, which
+                    # resets the target position to the current pos, turning on
+                    # the PID again would cause immediately a move (back) to the
+                    # target position, which is not useful and even potentially
+                    # dangerous.
+                    # => With PID=0, we request a "move" to the current position.
+                    # It resets the target position, and as it's already there,
+                    # it's very fast.
+                    pos = self.GetPosition(axis)
+                    tpos = self.GetTargetPosition(axis)
+                    if not self.IsOnTarget(axis, check=False):
+                        logging.warning("Axis %s/%s is at %g, far from target %g",
+                                        self.address, axis, pos, tpos)
+                    distance = pos - tpos
+                    self.MoveRel(axis, distance)
+
+                try:
+                    self.checkError()
+                except PIGCSError as ex:
+                    logging.error("Axis %s/%s failed during resume: %s",
+                                    self.address, axis, ex)
 
                 # Put back PID values
                 P, I, D = self._pid
