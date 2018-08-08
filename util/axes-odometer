@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# A utility to compute the distance travelled by axes out of log messages that
+# look like:
+# Updated position to {'s': 0.0029690275, 'l': 0.0505179063}
+# To test:
+# ./util/axes-odometer summary-booo.log
+#
+################################################################################
+# Created on 6 Aug 2018
+#
+# @author: Éric Piel
+#
+# Copyright © 2018 Éric Piel, Delmic
+#
+# axes-odometer is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License version 2 as published by the Free Software
+# Foundation.
+#
+# axes-odometer is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# axes-odometer. If not, see http://www.gnu.org/licenses/.
+################################################################################
+
+from __future__ import division, absolute_import, print_function
+
+import argparse
+from collections import OrderedDict
+import logging
+import os
+import re
+import sys
+import gzip
+import ast
+import numbers
+
+# logging.getLogger().setLevel(logging.DEBUG)
+
+
+def open_file(fn, mode="rb"):
+    """
+    Open a file, which can be compressed
+    fn (string): filename. If it ends with .gz, it will be decompressed on the fly
+    mode (string): cf open()
+    return (File): a file stream
+    """
+    if fn.endswith(".gz"):
+        return gzip.open(fn, mode)
+    elif fn == "-":
+        return sys.stdin
+    else:
+        return open(fn, mode)
+
+
+RE_UPD_POS = re.compile(r"Updated position to (\{[^}]*\})")
+def read_pos(line):
+    """
+    Read a position update in a line
+    return (dict str-> float): axes -> position.
+      If nothing found, return {}
+    """
+    # Look for line of the style:
+    # .*Updated position to {'s': 0.0029690275, 'l': 0.0505179063}
+    m = RE_UPD_POS.search(line)
+    if m:
+        # Convert to a dict
+        return ast.literal_eval(m.group(1))
+    else:
+        logging.debug("Failed to find position in: %s", line)
+        return {}
+
+
+def add_distances(f):
+    prev_pos = {}
+    tot_dist = {}
+    for l in f.readlines():
+        try:
+            pos = read_pos(l)
+            # Compute the delta with the previous position and add it to the total
+            for ax, p in pos.items():
+                if not isinstance(p, numbers.Real):
+                    logging.debug("Skipping axis %s which doesn't have a numerical value: %s", ax, p)
+                    continue
+                if ax in tot_dist:
+                    tot_dist[ax] += abs(prev_pos[ax] - p)
+                else:
+                    # First time
+                    tot_dist[ax] = 0
+
+            prev_pos.update(pos)
+        except Exception:
+            logging.exception("Failed to parse %s", l)
+
+    return tot_dist
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(description="Computes the distances travelled by each axis from a log file")
+
+    parser.add_argument('input', default="-",
+                        help='Input file name (default: -, which means stdin)')
+
+    options = parser.parse_args(args[1:])
+
+    try:
+        inf = open_file(options.input)
+        try:
+            odo = add_distances(inf)
+        finally:
+            inf.close()
+
+        # sorted_odo = OrderedDict(sorted(odo.items()))
+        print("Distance: %s" % (odo,))
+
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+    except KeyboardInterrupt:
+        return 1
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

@@ -1,0 +1,262 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# A grep-like utility which is timestamp aware and output no-yet present lines.
+# It looks in (log) files for the given pattern, and output the matching lines
+# sorted in time (given that the lines start with a timestamp).
+# If it output to a file already existing, it will also only output the lines
+# timed after the last line already present in the file.
+# Each file is expected to be time sorted already.
+# Timestamp is expected to be in the format "2018-02-09 16:12:57,674"
+'''
+Created on 6 Aug 2018
+
+@author: Éric Piel
+
+Copyright © 2018 Éric Piel, Delmic
+
+grupdate is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+grupdate is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+grupdate. If not, see http://www.gnu.org/licenses/.
+'''
+# To test:
+# ./util/grupdate -E "boooo" -o summary-booo.log flooboo*.log
+
+from __future__ import division, absolute_import, print_function
+
+import argparse
+from datetime import datetime
+import logging
+import os
+import re
+import sys
+import gzip
+
+# logging.getLogger().setLevel(logging.DEBUG)
+
+
+def open_file(fn, mode="rb"):
+    """
+    Open a file, which can be compressed
+    fn (string): filename. If it ends with .gz, it will be decompressed on the fly
+    mode (string): cf open()
+    return (File): a file stream
+    """
+    if fn.endswith(".gz"):
+        return gzip.open(fn, mode)
+    elif fn == "-":
+        return sys.stdin
+    else:
+        return open(fn, mode)
+
+
+def to_timestamp(dt):
+    """
+    Converts a datetime to a timestamp
+    return (float)
+    """
+    epoch = datetime(1970, 1, 1)
+    return (dt - epoch).total_seconds()
+
+
+def read_timestamp(line):
+    """
+    Reads the timestamp of a line
+    return (datetime, string): timestamp, and left over of the string
+    raise ValueError: if no timestamp can be found
+    """
+    lts, lrest = line[:23], line[23:]
+    try:
+        ts = datetime.strptime(lts, "%Y-%m-%d %H:%M:%S,%f")
+    except ValueError:
+        raise
+    except Exception as ex:
+        # TypeError can happen if there is a null-byte (\0)
+        raise ValueError("Failed to parse timestamp: %s" % (ex,))
+    return ts, lrest
+
+
+def grep(inf, outf, regex, min_time):
+    """
+    inf (file): the input file (already opened)
+    outf (file): the output file (already opened for writing)
+    regex (string): the matching pattern
+    min_time (float): minimum time from which the lines will be output 
+    Return (float): latest timestamp output
+    """
+    min_dt = datetime.fromtimestamp(min_time)
+    regexc = re.compile(regex)
+    ts = None
+    for l in inf.readlines():
+        # read the timestamp of the line
+        try:
+            ts, lrest = read_timestamp(l)
+        except ValueError:
+            logging.debug("Skipping line without timestamp: %s", l)
+            # TODO: consider it part of the previous line?
+            continue
+
+        if ts <= min_dt:
+            continue  # Too old
+        
+        # Check whether the regex matches (not including timestamp)
+        if regexc.search(lrest):
+            outf.write(l)
+
+    if ts is None:
+        return 0
+    else:
+        return to_timestamp(ts)
+
+
+def read_last_line(fn):
+    """
+    return (string): last line or "" if file is empty
+    """
+    with open(fn, "rb") as f:
+        first = f.readline()
+        try:
+            # Start at the end, and go up until finding an EOL
+            f.seek(-2, os.SEEK_END)
+            while f.read(1) != b"\n":
+                f.seek(-2, os.SEEK_CUR)
+                # TODO: handle files with only 1 line
+            return f.readline()
+        except IOError:
+            # Probably only 0 or 1 lines
+            return first
+
+
+def read_last_time(fn):
+    """
+    return (float): the timestamp corresponding to the last line. 
+       0 if no timestamp found (eg, no file, or file empty, or no timestamp)
+    """
+    try:
+        ll = read_last_line(fn)
+    except Exception:
+        # Most probably: no file => just consider it a loong time ago
+        logging.info("Failed to find last line in %s", fn)
+        return 0
+
+    logging.debug("Last line is %s", ll)
+    try:
+        ts = read_timestamp(ll)[0]
+    except ValueError:
+        logging.warning("Failed to find a timestamp in: %s", ll)
+        # TODO: try previous lines
+        return 0
+
+    return to_timestamp(ts)
+
+
+def sort_by_time(fns):
+    """
+    Sort the given file by the first timestamp
+    return [string]: list of filenames, sorted
+    """
+    fn_ts = {} # str -> float: filename -> timestamp
+    for fn in fns:
+        # Get the first timestamp
+        try:
+            f = open_file(fn)
+        except Exception:
+            logging.exception("Failed to open file %s", fn)
+            continue
+
+        # Keep reading a line until we find a valid timestamp
+        for l in f.readlines():
+            try:
+                fn_ts[fn] = read_timestamp(l)[0]
+                break
+            except ValueError:
+                logging.debug("Failed to parse timestamp in: %s", l)
+        f.close()
+
+    sorted_fn = sorted(fn_ts, key=lambda k: fn_ts[k])
+    return sorted_fn
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(description="Match a pattern and output sorted by timestamp")
+
+    parser.add_argument("--regexp", "-e", dest="regex", required=True,
+                        help="The pattern to match the line (timestamp not included)")
+    parser.add_argument("--output", "-o", dest="output", default="-",
+                        help="Output file name (use - for stdout)")
+    parser.add_argument('inputs', nargs='*',
+                        help='Input file names (default: use stdin)')
+
+    options = parser.parse_args(args[1:])
+
+    try:
+        logging.debug("Looking for regexp \"%s\"", options.regex)
+
+        # Check the time of the last line of the output (no output => time= 0)
+        if options.output == "-":
+            outf = sys.stdout
+            latest_ts = 0
+        else:
+            latest_ts = read_last_time(options.output)
+            outf = open(options.output, "a+")
+
+        logging.debug("Found latest timestamp = %s", latest_ts)
+
+        # (Optimization) discard input files which are older than the latest time
+        fresh_inp = []
+        for inp in options.inputs:
+            # Note: if the file doesn't exist, it will fail, and all will stop (early)
+            mtime = os.path.getmtime(inp)
+            if mtime > latest_ts:
+                fresh_inp.append(inp)
+            else:
+                logging.debug("File is too old to be worthy: %s", inp)
+
+        # sort input files by date of the first line
+        sorted_inp = sort_by_time(fresh_inp)
+        if not options.inputs:
+            sorted_inp = ["-"]
+
+        logging.debug("Detected order to be: %s", sorted_inp)
+
+        # Grep for the input files in order, and only output if the timestamp > latest time
+        for infn in sorted_inp:
+            inf = open_file(infn)
+            try:
+                latest_ts = grep(inf, outf, options.regex, latest_ts)
+            finally:
+                inf.close()
+
+        outf.close()
+
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+    except KeyboardInterrupt:
+        return 1
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
