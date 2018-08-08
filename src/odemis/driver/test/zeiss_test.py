@@ -110,7 +110,7 @@ class TestSEM(unittest.TestCase):
         ebeam.horizontalFoV.value = orig_fov
         self.assertAlmostEqual(orig_fov, ebeam.horizontalFoV.value)
 
-    @skip("skip")
+#    @skip("skip")
     def test_probe_current(self):
         ebeam = self.scanner
 
@@ -128,9 +128,9 @@ class TestSEM(unittest.TestCase):
         ebeam = self.scanner
 
         orig_vol = ebeam.accelVoltage.value
-        ebeam.accelVoltage.value = 20
+        ebeam.accelVoltage.value = 5000
         time.sleep(6)  # Wait for value refresh
-        self.assertAlmostEqual(20, ebeam.accelVoltage.value)
+        self.assertAlmostEqual(5000, ebeam.accelVoltage.value)
 
         # Reset
         ebeam.accelVoltage.value = orig_vol

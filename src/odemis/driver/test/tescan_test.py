@@ -34,27 +34,42 @@ from odemis.dataio import hdf5
 from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-# Note: there is a simulator, but it must be run in a (Windows) virtual machine
+# Note: there is a simulator, but it must be run in Windows (on a virtual machine)
+# However, not everything behaves exactly as on the real hardware, so beware
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": 0}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_STG = {"name": "stg", "role": "stage"}
-CONFIG_CM = {"name": "camera", "role": "camera"}
+CONFIG_CM = {"name": "camera", "role": "chamber-ccd"}
 CONFIG_FOCUS = {"name": "focus", "role": "focus", "axes": ["z"]}
 CONFIG_PRESSURE = {"name": "pressure", "role": "pressure"}
+CONFIG_LIGHT = {"name": "light", "role": "chamber-light"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam",
                   "fov_range": [196.e-9, 25586.e-6]}
 CONFIG_SEM = {"name": "sem", "role": "sem",
-              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
-                           "stage": CONFIG_STG, "focus": CONFIG_FOCUS,
-                           "camera": CONFIG_CM, "pressure": CONFIG_PRESSURE},
-              "host": "192.168.92.91"
+              "children": {"detector0": CONFIG_SED,
+                           "scanner": CONFIG_SCANNER,
+                           "stage": CONFIG_STG,
+                           "focus": CONFIG_FOCUS,
+                           # "camera": CONFIG_CM,
+                           "pressure": CONFIG_PRESSURE},
+              "host": "192.168.1.208"
+              }
+
+# This one works with the Mira Simulator
+CONFIG_SEM_NO_DET = {"name": "sem", "role": "sem",
+              "children": {"scanner": CONFIG_SCANNER,
+                           "stage": CONFIG_STG,
+                           "focus": CONFIG_FOCUS,
+                           "light": CONFIG_LIGHT},
+              "host": "192.168.1.208"
               }
 
 
@@ -118,16 +133,13 @@ class TestSEMStatic(unittest.TestCase):
         sem.terminate()
         daemon.shutdown()
 
-# @skip("skip")
-class TestSEM(unittest.TestCase):
-    """
-    Tests which can share one SEM device
-    """
+class TestSEMBase(object):
+
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             return
-        cls.sem = tescan.SEM(**CONFIG_SEM)
+        cls.sem = tescan.SEM(**cls.CONFIG_HW)
 
         for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
@@ -138,10 +150,13 @@ class TestSEM(unittest.TestCase):
                 cls.stage = child
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
+            # Doesn't seem to work with the simulator
             elif child.name == CONFIG_CM["name"]:
                 cls.camera = child
             elif child.name == CONFIG_PRESSURE["name"]:
                 cls.pressure = child
+            elif child.name == CONFIG_LIGHT["name"]:
+                cls.light = child
 
     @classmethod
     def tearDownClass(cls):
@@ -155,14 +170,6 @@ class TestSEM(unittest.TestCase):
         if TEST_NOHW:
             self.skipTest("No hardware present")
 
-        # reset resolution and dwellTime
-        self.scanner.scale.value = (1, 1)
-        self.scanner.resolution.value = (512, 256)
-        self.size = self.scanner.resolution.value
-        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
-        self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
-        self.acq_done = threading.Event()
-
     def tearDown(self):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
@@ -175,11 +182,126 @@ class TestSEM(unittest.TestCase):
         for f, s in zip(first, second):
             self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
 
+    def test_probe_current(self):
+        ebeam = self.scanner
+
+        orig_probe_current = ebeam.probeCurrent.value
+        pc_choices = sorted(ebeam.probeCurrent.choices)
+        ebeam.probeCurrent.value = pc_choices[0]
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(pc_choices[0], ebeam.probeCurrent.value)
+
+        # Reset
+        ebeam.probeCurrent.value = orig_probe_current
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(orig_probe_current, ebeam.probeCurrent.value)
+
+    def test_acceleration_voltage(self):
+        ebeam = self.scanner
+
+        orig_vol = ebeam.accelVoltage.value
+        new_vol = 5000
+        if orig_vol == new_vol:
+            new_vol = 10000
+        ebeam.accelVoltage.value = new_vol
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(new_vol, ebeam.accelVoltage.value)
+
+        # Reset
+        ebeam.accelVoltage.value = orig_vol
+        time.sleep(6)  # Wait for value refresh
+        self.assertAlmostEqual(orig_vol, ebeam.accelVoltage.value)
+
+    def test_blanker(self):
+        """
+        Check it's possible to blank/unblank
+        """
+        ebeam = self.scanner
+        orig_blanked = ebeam.blanker.value
+        new_blanked = not orig_blanked
+        ebeam.blanker.value = new_blanked
+
+        # self.assertEqual(new_blanked, ebeam.blanker.value)
+        time.sleep(6)  # Wait for value refresh
+        self.assertEqual(new_blanked, ebeam.blanker.value)
+
+        # Reset
+        ebeam.blanker.value = orig_blanked
+        time.sleep(6)  # Wait for value refresh
+        self.assertEqual(orig_blanked, ebeam.blanker.value)
+
+    def test_external(self):
+        """
+        Test if it's possible to change external
+        """
+        ebeam = self.scanner
+        orig_ext = ebeam.external.value
+        new_ext = not orig_ext
+        ebeam.external.value = new_ext
+
+        # self.assertEqual(new_blanked, ebeam.blanker.value)
+        time.sleep(6)  # Wait for value refresh
+        self.assertEqual(new_ext, ebeam.external.value)
+
+        # Reset
+        ebeam.external.value = orig_ext
+        time.sleep(6)  # Wait for value refresh
+        self.assertEqual(orig_ext, ebeam.external.value)
+
+    # TODO: test move
+
+
+class TestSEMNoDet(TestSEMBase, unittest.TestCase):
+    """
+    Tests when connected for only controlling the settings, but no acquisition
+    """
+    CONFIG_HW = CONFIG_SEM_NO_DET
+
+    def setUp(self):
+        super(TestSEMNoDet, self).setUp()
+
+    def test_light(self):
+        """
+        Test if it's possible to change chamber light
+        """
+        light = self.light
+        orig_pwr = light.power.value
+        new_pwr = int(not orig_pwr)  # 0 or 1
+        light.power.value = new_pwr
+        light.emissions.value = [1]
+
+        time.sleep(1)
+        # Reset
+        light.power.value = orig_pwr
+
+
+# @skip("skip")
+class TestSEM(TestSEMBase, unittest.TestCase):
+    """
+    Tests which can share one SEM device
+    """
+    CONFIG_HW = CONFIG_SEM
+
+    def setUp(self):
+        super(TestSEM, self).setUp()
+
+        # reset resolution and dwellTime
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = (512, 256)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
+        self.acq_done = threading.Event()
+
     def compute_expected_duration(self):
         dwell = self.scanner.dwellTime.value
         settle = 5.e-6
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
+
+    def test_blanker(self):
+        # TODO: for now, with detectors it cannot be changed
+        pass
 
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6  # s
