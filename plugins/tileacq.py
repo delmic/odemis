@@ -35,7 +35,7 @@ from odemis import model, acq, dataio, util
 from odemis.acq import stitching
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
-    FluoStream, MultipleDetectorStream, MonochromatorSettingsStream
+    FluoStream, MultipleDetectorStream, MonochromatorSettingsStream, CLStream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -597,8 +597,16 @@ class TileAcqPlugin(Plugin):
         return (int): the number of pixels the stream will generate during an
           acquisition
         """
+        px = 0
         if isinstance(s, MultipleDetectorStream):
-            px = sum(self._estimateStreamPixels(st) for st in s.streams)
+            for st in s.streams:
+                # For the EMStream of a SPARC MDStream, it's just one pixel per
+                # repetition (excepted in case  of fuzzing, but let's be optimistic)
+                if isinstance(st, (EMStream, CLStream)):
+                    px += 1
+                else:
+                    px += self._estimateStreamPixels(st)
+
             if hasattr(s, 'repetition'):
                 px *= s.repetition.value[0] * s.repetition.value[1]
 
@@ -611,17 +619,19 @@ class TileAcqPlugin(Plugin):
             px = numpy.prod(s.emtResolution.value)
         elif hasattr(s, 'detResolution'):
             px = numpy.prod(s.detResolution.value)
+        elif model.hasVA(s.detector, "resolution"):
+            px = numpy.prod(s.detector.resolution.value)
+        elif model.hasVA(s.emitter, "resolution"):
+            px = numpy.prod(s.emitter.resolution.value)
         else:
-            # This can happen if there is no local setting. Be "optimistic" by
-            # assuming it'll only acquire one pixel.
-            # For SEM streams in MDStreams, it's actually correct, as it will
-            # be multiplied by the repetition.
+            # This shouldn't happen, but let's "optimistic" by assuming it'll
+            # only acquire one pixel.
             logging.info("Resolution of stream %s cannot be determined.", s)
             px = 1
 
         return px
 
-    MEMPP = 2e-8  # memory per pixel in GB, found empirically
+    MEMPP = 22  # bytes per pixel, found empirically
     @call_in_wx_main
     def _memory_check(self, _=None):
         """
@@ -636,10 +646,11 @@ class TileAcqPlugin(Plugin):
 
             # Memory calculation
             mem_est = pxs * self.MEMPP
-            mem_computer = psutil.virtual_memory().total / 1024 ** 3  # in GB
-            logging.debug("Estimating %g GB needed, while %g GB available", mem_est, mem_computer)
+            mem_computer = psutil.virtual_memory().total
+            logging.debug("Estimating %g GB needed, while %g GB available",
+                          mem_est / 1024 ** 3, mem_computer / 1024 ** 3)
             # Assume computer is using 2 GB RAM for odemis and other programs
-            mem_sufficient = mem_est < mem_computer - 2
+            mem_sufficient = mem_est < mem_computer - (2 * 1024 ** 3)
         else:
             mem_sufficient = True
 
@@ -647,8 +658,9 @@ class TileAcqPlugin(Plugin):
         if mem_sufficient:
             self._dlg.setAcquisitionInfo(None)
         else:
-            txt = "Stitching this area requires %.1f GB of memory.\n" % (mem_est) + \
-                "Running the acquisition might cause your computer to crash."
+            txt = ("Stitching this area requires %.1f GB of memory.\n"
+                   "Running the acquisition might cause your computer to crash." %
+                   (mem_est / 1024 ** 3,))
             self._dlg.setAcquisitionInfo(txt, lvl=logging.ERROR)
 
     def acquire(self, dlg):
