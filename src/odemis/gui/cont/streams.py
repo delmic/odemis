@@ -200,18 +200,18 @@ class StreamController(object):
             logging.warning("No raw data in stream")
             return
 
-        # Use "integration time" instead of "exposure time" since, in some cases, the dwell
-        # time is stored in MD_EXP_TIME
+        # Use "integration time" instead of "exposure time" since, in some cases,
+        # the dwell time is stored in MD_EXP_TIME.
         if model.MD_EXP_TIME in md:
             self.add_metadata("Integration time", md[model.MD_EXP_TIME], 's')
         elif model.MD_DWELL_TIME in md:
             self.add_metadata(model.MD_DWELL_TIME, md[model.MD_DWELL_TIME], 's')
 
         if model.MD_EBEAM_VOLTAGE in md:
-            self.add_metadata(model.MD_EBEAM_VOLTAGE, md[model.MD_EBEAM_VOLTAGE], 'V')
+            self.add_metadata("Acceleration voltage", md[model.MD_EBEAM_VOLTAGE], 'V')
 
         if model.MD_EBEAM_CURRENT in md:
-            self.add_metadata(model.MD_EBEAM_CURRENT, md[model.MD_EBEAM_CURRENT], 'A')
+            self.add_metadata("Emission current", md[model.MD_EBEAM_CURRENT], 'A')
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
