@@ -2202,6 +2202,10 @@ class ScannedRemoteTCStream(LiveStream):
         self._data_queue = Queue.Queue()
         self._current_future = None
 
+    @property
+    def streams(self):
+        return [self._stream]
+
     def acquire(self):
         # Make sure every stream is prepared, not really necessary to check _prepared
         f = self.prepare()
