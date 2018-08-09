@@ -89,6 +89,7 @@ class TileAcqPlugin(Plugin):
         super(TileAcqPlugin, self).__init__(microscope, main_app)
 
         self._dlg = None
+        self._tab = None  # the acquisition tab
         self.ft = model.InstantaneousFuture()  # acquisition future
 
         # Can only be used with a microscope
@@ -99,6 +100,9 @@ class TileAcqPlugin(Plugin):
             main_data = self.main_app.main_data
             if main_data.stage:
                 self.addMenu("Acquisition/Tile...\tCtrl+G", self.show_dlg)
+            else:
+                logging.info("Tile acquisition not available as no stage present")
+                return
 
         self.nx = model.IntContinuous(5, (1, 1000))
         self.ny = model.IntContinuous(5, (1, 1000))
@@ -142,8 +146,7 @@ class TileAcqPlugin(Plugin):
         )
 
     def _on_streams_change(self, _=None):
-        tab = self.main_app.main_data.tab.value
-        ss = self._get_live_streams(tab.tab_data_model)
+        ss = self._get_live_streams()
 
         # Subscribe to all relevant setting changes
         for s in ss:
@@ -152,8 +155,7 @@ class TileAcqPlugin(Plugin):
                 va.subscribe(self._memory_check)
 
     def _unsubscribe_vas(self):
-        tab = self.main_app.main_data.tab.value
-        ss = self._get_live_streams(tab.tab_data_model)
+        ss = self._get_live_streams()
 
         # Unsubscribe from all relevant setting changes
         for s in ss:
@@ -229,7 +231,7 @@ class TileAcqPlugin(Plugin):
           Note: they are not necessarily from the same FoV.
         raise ValueError: If no stream selected
         """
-        ss = self._get_live_streams(self.main_app.main_data.tab.value.tab_data_model)
+        ss = self._get_live_streams()
         for s in ss:
             if isinstance(s, StaticStream):
                 ss.remove(s)
@@ -244,8 +246,8 @@ class TileAcqPlugin(Plugin):
         # TODO: if there is a chamber, only allow if there is vacuum
 
         # Fail if the live tab is not selected
-        tab = self.main_app.main_data.tab.value
-        if tab.name not in ("secom_live", "sparc_acqui"):
+        self._tab = self.main_app.main_data.tab.value
+        if self._tab.name not in ("secom_live", "sparc_acqui"):
             box = wx.MessageDialog(self.main_app.main_frame,
                        "Tiled acquisition must be done from the acquisition stream.",
                        "Tiled acquisition not possible", wx.OK | wx.ICON_STOP)
@@ -253,20 +255,20 @@ class TileAcqPlugin(Plugin):
             box.Destroy()
             return
 
-        tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pauseStreams()
 
         # If no ROI is selected, select entire area
         try:
-            if tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
-                tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
+            if self._tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
+                self._tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
         except AttributeError:
             pass  # Not a SPARC
 
         # Disable drift correction (on SPARC)
-        if hasattr(tab.tab_data_model, "driftCorrector"):
-            tab.tab_data_model.driftCorrector.roi.value = UNDEFINED_ROI
+        if hasattr(self._tab.tab_data_model, "driftCorrector"):
+            self._tab.tab_data_model.driftCorrector.roi.value = UNDEFINED_ROI
 
-        ss = self._get_live_streams(tab.tab_data_model)
+        ss = self._get_live_streams()
         self.filename.value = self._get_new_filename()
 
         dlg = AcquisitionDialog(self, "Tiled acquisition",
@@ -331,10 +333,11 @@ class TileAcqPlugin(Plugin):
                 vas.add(va)
         return vas
 
-    def _get_live_streams(self, tab_data):
+    def _get_live_streams(self):
         """
         Return all the live streams for tiled acquisition present in the given tab
         """
+        tab_data = self._tab.tab_data_model
         ss = list(tab_data.streams.value)
 
         # On the SPARC, there is a Spot stream, which we don't need for live
@@ -356,7 +359,7 @@ class TileAcqPlugin(Plugin):
         # On the SPARC, the acquisition streams are not the same as the live
         # streams. On the SECOM/DELPHI, they are the same (for now)
         live_st = self._get_streams()
-        tab_data = self.main_app.main_data.tab.value.tab_data_model
+        tab_data = self._tab.tab_data_model
         if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
         else:
@@ -653,7 +656,7 @@ class TileAcqPlugin(Plugin):
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
-        str_ctrl = main_data.tab.value.streambar_controller
+        str_ctrl = self._tab.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
         self._unsubscribe_vas()
 
@@ -763,9 +766,7 @@ class TileAcqPlugin(Plugin):
 
             # Open analysis tab
             if st_data:
-                tab = main_data.getTabByName('analysis')
-                main_data.tab.value = tab
-                tab.load_data(fn)
+                self.showAcquisition(fn)
 
             # TODO: also export a full image (based on reported position, or based
             # on alignment detection)
