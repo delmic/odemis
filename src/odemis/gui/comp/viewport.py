@@ -59,9 +59,6 @@ class ViewPort(wx.Panel):
         has been called.
         """
 
-        hide_bottom_legend = kwargs.pop('hide_bottom_legend', False)
-        hide_left_legend = kwargs.pop('hide_left_legend', False)
-
         wx.Panel.__init__(self, *args, **kwargs)
 
         self._view = None  # model.MicroscopeView
@@ -87,8 +84,7 @@ class ViewPort(wx.Panel):
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         if (
-                self.bottom_legend_class and not hide_bottom_legend and
-                self.left_legend_class and not hide_left_legend
+                self.bottom_legend_class and self.left_legend_class
         ):
             self.bottom_legend = self.bottom_legend_class(self)
             self.left_legend = self.left_legend_class(self, orientation=wx.VERTICAL)
@@ -111,7 +107,7 @@ class ViewPort(wx.Panel):
             self.left_legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
             main_sizer.Add(grid_sizer, 1, border=2, flag=wx.EXPAND | wx.ALL)
-        elif self.bottom_legend_class and not hide_bottom_legend:
+        elif self.bottom_legend_class:
             main_sizer.Add(self.canvas, proportion=1, border=2,
                            flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
             # It's made of multiple controls positioned via sizers
