@@ -36,7 +36,7 @@ from odemis.acq.stream import EMStream, SpectrumStream, \
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.comp.legend import InfoLegend, AxisLegend
+from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
@@ -781,16 +781,99 @@ class AngularResolvedViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.AngularResolvedCanvas
-    bottom_legend_class = None
+    bottom_legend_class = RadioLegend
+
+    def __init__(self, *args, **kwargs):
+        super(AngularResolvedViewport, self).__init__(*args, **kwargs)
 
     def setView(self, view, tab_data):
+        """
+        Set the microscope view that this viewport is displaying/representing
+        *Important*: Should be called only once, at initialisation.
+
+        :param view:(model.View)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
         assert(self._view is None)
 
         self._view = view
         self._tab_data_model = tab_data
+        # current stream displayed (or None)
+        self.stream = None
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
+
+        view.stream_tree.flat.subscribe(self.connect_stream)
+
+        self.bottom_legend.set_pol_callback(self.on_legend_pol_change)
+
+    def connect_stream(self, streams):
+        """ Find the most appropriate stream in the view to be displayed, and make sure the display
+        is updated when the stream is updated.
+
+        """
+        if not streams:
+            stream = None
+        elif len(streams) > 1:
+            logging.warning("Found %d streams, will pick one randomly", len(streams))
+            if self.stream in streams:
+                stream = self.stream  # don't change
+            else:
+                stream = streams[0]
+        else:
+            stream = streams[0]
+
+        if self.stream is stream:
+            logging.debug("Not reconnecting to stream as it's already connected")
+            return
+
+        # Disconnect from the old VAs
+        if self.stream:
+            if hasattr(self.stream, 'polarization'):
+                logging.debug("Disconnecting %s from polarization VA", stream)
+                self.stream.polarization.unsubscribe(self.on_va_pol_change)
+
+        # Connect to the new VA
+        self.stream = stream
+
+        # get polarization positions and set callback function
+        if hasattr(self.stream, "polarization"):
+            logging.debug("Connecting %s to polarization VA", stream)
+            self.update_legend_pol_choices()
+            self.stream.polarization.subscribe(self.on_va_pol_change)
+            self.bottom_legend.Show(True)
+        # if no polarization VA or if no stream (= None)
+        else:
+            # clear legend and also automatically drop callback
+            self.bottom_legend.clear()
+            self.bottom_legend.Show(False)
+        self.Layout()
+
+    def on_legend_pol_change(self, pol):
+        """
+        Called when the user changes the polarization in the legend.
+        Changes the polarization VA.
+        """
+        self.stream.polarization.value = pol
+
+    def on_va_pol_change(self, pol):
+        """
+        Called when the .polarization VA value has changed.
+        Sets the correct polarization in the legend if the polarization VA was
+        changed via the dropdown menu within the stream settings.
+        """
+        self.bottom_legend.set_pol_value(pol)
+
+    def update_legend_pol_choices(self):
+        """
+        Get the choices of the polarization VA.
+        Set the callback function in the legend, which should be called when a different
+        polarization position is requested.
+        """
+        choices = self.stream.polarization.choices
+        default = self.stream.polarization.value
+        self.bottom_legend.set_pol_entries(choices, default)
 
 
 class PlotViewport(ViewPort):
