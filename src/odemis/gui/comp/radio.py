@@ -49,7 +49,7 @@ class GraphicalRadioButtonControl(wx.Panel):
             btn = GraphicRadioButton(self, value=choice, style=wx.ALIGN_CENTER, label=label,
                                       height=16)
 
-            btn.SetForegroundColour("#111111")
+            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
 
             self.buttons.append(btn)
 
@@ -73,6 +73,14 @@ class GraphicalRadioButtonControl(wx.Panel):
         logging.debug("Set radio button control to %s", value)
         for btn in self.buttons:
             btn.SetToggle(btn.value == value)
+            self.SetColor(btn, value)
+
+    def SetColor(self, btn, value):
+        """Set text of active button"""
+        if btn.value == value:
+            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_ACTIVE)
+        else:
+            btn.SetForegroundColour(gui.FG_COLOUR_RADIO_INACTIVE)
 
     def GetValue(self):
         for btn in self.buttons:
