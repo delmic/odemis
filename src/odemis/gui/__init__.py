@@ -36,12 +36,14 @@ FG_COLOUR_MAIN = "#DDDDDD"       # Default foreground colour
 FG_COLOUR_DIS = "#777777"        # Disabled foreground colour
 FG_COLOUR_LEGEND = "#BBBBBB"     # Default foreground colour for the legend
 FG_COLOUR_EDIT = "#2FA7D4"       # Edit colour
-FG_COLOUR_CURVE = "#FFDAB9"  # Default single peak curve colour
-FG_COLOUR_PEAK = "#FF0000"  # Default peak wavelength text colour
+FG_COLOUR_CURVE = "#FFDAB9"      # Default single peak curve colour
+FG_COLOUR_PEAK = "#FF0000"       # Default peak wavelength text colour
 FG_COLOUR_2ND = "#53D8AD"        # Secondary edit colour
 FG_COLOUR_HIGHLIGHT = "#FFA300"  # Highlight colour
 FG_COLOUR_WARNING = "#FFA300"    # Warning text colour (TODO: "#C87000" is better?)
 FG_COLOUR_ERROR = "#DD3939"      # Error text colour
+FG_COLOUR_RADIO_INACTIVE = "#111111"      # Text colour on radio button when inactive
+FG_COLOUR_RADIO_ACTIVE = "#106090"        # Text colour on radio button when active (same as BORDER_COLOUR_FOCUS)
 
 # Border colours for the viewports
 BORDER_COLOUR_FOCUS = "#127BA6"
