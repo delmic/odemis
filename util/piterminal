@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Allows to connect and type commands to Physik Instrumente controller.
+'''
+Created on 13 Aug 2018
+
+@author: Éric Piel
+
+Copyright © 2018 Éric Piel, Delmic
+
+piterminal is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+piterminal is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+piterminal. If not, see http://www.gnu.org/licenses/.
+'''
+# To test:
+# ./util/piterminal --log-level 2 --port /dev/fake
+
+from __future__ import division, absolute_import, print_function
+
+import argparse
+import logging
+from odemis.driver import pigcs
+from odemis.model import HwError
+import readline  # Magically improves the interactive input editing
+import sys
+
+
+def repl(acc):
+    print("Type Ctrl+C to quit")
+    try:
+        while True:
+            inp = raw_input("> ")
+            try:
+                res = acc.sendQueryCommand(None, inp + "\n")
+            except HwError:
+                # Probably just timed out because it's an order command, which
+                # doesn't return anything => fine
+                logging.debug("Command didn't return any result")
+                continue
+
+            if isinstance(res, list):
+                print("\n".join(res))
+            else:
+                print(res)
+    except KeyboardInterrupt:
+        print("")
+        return
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="piterminal",
+                                     description="Read/write commands to PI controller")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+
+    parser.add_argument('--port', dest="port", required=True,
+                        help="Port name (ex: /dev/ttyUSB0, autoip, or 192.168.95.5)")
+    # TODO: special option to check for error after every command?
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        kwargs = {}
+        # Never try to connect to the master
+        kwargs["master"] = None
+
+        if options.port == "/dev/fake":
+            kwargs["_addresses"] = {1: False}
+            acc = pigcs.FakeBus._openPort(options.port, **kwargs)
+        else:
+            acc = pigcs.Bus._openPort(options.port, **kwargs)
+
+        repl(acc)
+        acc.terminate()
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
