@@ -35,7 +35,7 @@ from odemis import model, acq, dataio, util
 from odemis.acq import stitching
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
-    FluoStream, MultipleDetectorStream, MonochromatorSettingsStream
+    FluoStream, MultipleDetectorStream, MonochromatorSettingsStream, CLStream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -89,6 +89,7 @@ class TileAcqPlugin(Plugin):
         super(TileAcqPlugin, self).__init__(microscope, main_app)
 
         self._dlg = None
+        self._tab = None  # the acquisition tab
         self.ft = model.InstantaneousFuture()  # acquisition future
 
         # Can only be used with a microscope
@@ -99,6 +100,9 @@ class TileAcqPlugin(Plugin):
             main_data = self.main_app.main_data
             if main_data.stage:
                 self.addMenu("Acquisition/Tile...\tCtrl+G", self.show_dlg)
+            else:
+                logging.info("Tile acquisition not available as no stage present")
+                return
 
         self.nx = model.IntContinuous(5, (1, 1000))
         self.ny = model.IntContinuous(5, (1, 1000))
@@ -142,8 +146,7 @@ class TileAcqPlugin(Plugin):
         )
 
     def _on_streams_change(self, _=None):
-        tab = self.main_app.main_data.tab.value
-        ss = self._get_live_streams(tab.tab_data_model)
+        ss = self._get_live_streams()
 
         # Subscribe to all relevant setting changes
         for s in ss:
@@ -152,8 +155,7 @@ class TileAcqPlugin(Plugin):
                 va.subscribe(self._memory_check)
 
     def _unsubscribe_vas(self):
-        tab = self.main_app.main_data.tab.value
-        ss = self._get_live_streams(tab.tab_data_model)
+        ss = self._get_live_streams()
 
         # Unsubscribe from all relevant setting changes
         for s in ss:
@@ -229,7 +231,7 @@ class TileAcqPlugin(Plugin):
           Note: they are not necessarily from the same FoV.
         raise ValueError: If no stream selected
         """
-        ss = self._get_live_streams(self.main_app.main_data.tab.value.tab_data_model)
+        ss = self._get_live_streams()
         for s in ss:
             if isinstance(s, StaticStream):
                 ss.remove(s)
@@ -244,8 +246,8 @@ class TileAcqPlugin(Plugin):
         # TODO: if there is a chamber, only allow if there is vacuum
 
         # Fail if the live tab is not selected
-        tab = self.main_app.main_data.tab.value
-        if tab.name not in ("secom_live", "sparc_acqui"):
+        self._tab = self.main_app.main_data.tab.value
+        if self._tab.name not in ("secom_live", "sparc_acqui"):
             box = wx.MessageDialog(self.main_app.main_frame,
                        "Tiled acquisition must be done from the acquisition stream.",
                        "Tiled acquisition not possible", wx.OK | wx.ICON_STOP)
@@ -253,20 +255,20 @@ class TileAcqPlugin(Plugin):
             box.Destroy()
             return
 
-        tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pauseStreams()
 
         # If no ROI is selected, select entire area
         try:
-            if tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
-                tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
+            if self._tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
+                self._tab.tab_data_model.semStream.roi.value = (0, 0, 1, 1)
         except AttributeError:
             pass  # Not a SPARC
 
         # Disable drift correction (on SPARC)
-        if hasattr(tab.tab_data_model, "driftCorrector"):
-            tab.tab_data_model.driftCorrector.roi.value = UNDEFINED_ROI
+        if hasattr(self._tab.tab_data_model, "driftCorrector"):
+            self._tab.tab_data_model.driftCorrector.roi.value = UNDEFINED_ROI
 
-        ss = self._get_live_streams(tab.tab_data_model)
+        ss = self._get_live_streams()
         self.filename.value = self._get_new_filename()
 
         dlg = AcquisitionDialog(self, "Tiled acquisition",
@@ -331,10 +333,11 @@ class TileAcqPlugin(Plugin):
                 vas.add(va)
         return vas
 
-    def _get_live_streams(self, tab_data):
+    def _get_live_streams(self):
         """
         Return all the live streams for tiled acquisition present in the given tab
         """
+        tab_data = self._tab.tab_data_model
         ss = list(tab_data.streams.value)
 
         # On the SPARC, there is a Spot stream, which we don't need for live
@@ -356,7 +359,7 @@ class TileAcqPlugin(Plugin):
         # On the SPARC, the acquisition streams are not the same as the live
         # streams. On the SECOM/DELPHI, they are the same (for now)
         live_st = self._get_streams()
-        tab_data = self.main_app.main_data.tab.value.tab_data_model
+        tab_data = self._tab.tab_data_model
         if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
         else:
@@ -597,8 +600,16 @@ class TileAcqPlugin(Plugin):
         return (int): the number of pixels the stream will generate during an
           acquisition
         """
+        px = 0
         if isinstance(s, MultipleDetectorStream):
-            px = sum(self._estimateStreamPixels(st) for st in s.streams)
+            for st in s.streams:
+                # For the EMStream of a SPARC MDStream, it's just one pixel per
+                # repetition (excepted in case  of fuzzing, but let's be optimistic)
+                if isinstance(st, (EMStream, CLStream)):
+                    px += 1
+                else:
+                    px += self._estimateStreamPixels(st)
+
             if hasattr(s, 'repetition'):
                 px *= s.repetition.value[0] * s.repetition.value[1]
 
@@ -611,17 +622,19 @@ class TileAcqPlugin(Plugin):
             px = numpy.prod(s.emtResolution.value)
         elif hasattr(s, 'detResolution'):
             px = numpy.prod(s.detResolution.value)
+        elif model.hasVA(s.detector, "resolution"):
+            px = numpy.prod(s.detector.resolution.value)
+        elif model.hasVA(s.emitter, "resolution"):
+            px = numpy.prod(s.emitter.resolution.value)
         else:
-            # This can happen if there is no local setting. Be "optimistic" by
-            # assuming it'll only acquire one pixel.
-            # For SEM streams in MDStreams, it's actually correct, as it will
-            # be multiplied by the repetition.
+            # This shouldn't happen, but let's "optimistic" by assuming it'll
+            # only acquire one pixel.
             logging.info("Resolution of stream %s cannot be determined.", s)
             px = 1
 
         return px
 
-    MEMPP = 2e-8  # memory per pixel in GB, found empirically
+    MEMPP = 22  # bytes per pixel, found empirically
     @call_in_wx_main
     def _memory_check(self, _=None):
         """
@@ -636,10 +649,11 @@ class TileAcqPlugin(Plugin):
 
             # Memory calculation
             mem_est = pxs * self.MEMPP
-            mem_computer = psutil.virtual_memory().total / 1024 ** 3  # in GB
-            logging.debug("Estimating %g GB needed, while %g GB available", mem_est, mem_computer)
+            mem_computer = psutil.virtual_memory().total
+            logging.debug("Estimating %g GB needed, while %g GB available",
+                          mem_est / 1024 ** 3, mem_computer / 1024 ** 3)
             # Assume computer is using 2 GB RAM for odemis and other programs
-            mem_sufficient = mem_est < mem_computer - 2
+            mem_sufficient = mem_est < mem_computer - (2 * 1024 ** 3)
         else:
             mem_sufficient = True
 
@@ -647,13 +661,14 @@ class TileAcqPlugin(Plugin):
         if mem_sufficient:
             self._dlg.setAcquisitionInfo(None)
         else:
-            txt = "Stitching this area requires %.1f GB of memory.\n" % (mem_est) + \
-                "Running the acquisition might cause your computer to crash."
+            txt = ("Stitching this area requires %.1f GB of memory.\n"
+                   "Running the acquisition might cause your computer to crash." %
+                   (mem_est / 1023 ** 3,))
             self._dlg.setAcquisitionInfo(txt, lvl=logging.ERROR)
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
-        str_ctrl = main_data.tab.value.streambar_controller
+        str_ctrl = self._tab.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
         self._unsubscribe_vas()
 
@@ -763,9 +778,7 @@ class TileAcqPlugin(Plugin):
 
             # Open analysis tab
             if st_data:
-                tab = main_data.getTabByName('analysis')
-                main_data.tab.value = tab
-                tab.load_data(fn)
+                self.showAcquisition(fn)
 
             # TODO: also export a full image (based on reported position, or based
             # on alignment detection)
