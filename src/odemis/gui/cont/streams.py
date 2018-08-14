@@ -231,7 +231,10 @@ class StreamController(object):
         if isinstance(self.stream.raw[0], tuple):
             # Show metadata for first element of raw in case of AR acquisitions or
             # stitched images
-            md = self.stream.raw[0][0].metadata
+            if self.stream.raw[0] == ():
+                md = {}
+            else:
+                md = self.stream.raw[0][0].metadata
         else:
             md = self.stream.raw[0].metadata
 
