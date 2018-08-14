@@ -24,6 +24,10 @@ from odemis.driver import simcam
 import time
 import unittest
 from unittest.case import skip
+import h5py as h5
+import numpy
+from PIL import Image, ImageDraw, ImageFont
+from odemis.dataio import hdf5 as h5
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -32,8 +36,11 @@ CLASS = simcam.Camera
 CONFIG_FOCUS = {"name": "focus", "role": "overview-focus"}
 KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5",
               children={"focus": CONFIG_FOCUS})
+KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h5",
+              children={"focus": CONFIG_FOCUS})
 
 # TODO focus
+
 
 class TestSimCam(unittest.TestCase):
 
@@ -76,6 +83,7 @@ class TestSimCam(unittest.TestCase):
         """
         for f, s in zip(first, second):
             self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
+
 #     @unittest.skip("simple")
     def test_roi(self):
         """
@@ -269,7 +277,6 @@ class TestSimCam(unittest.TestCase):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
 
-
     def receive_image2(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
@@ -281,6 +288,7 @@ class TestSimCam(unittest.TestCase):
         self.left2 -= 1
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
+
 #     @unittest.skip("simple")
     def test_focus(self):
         """
@@ -301,6 +309,62 @@ class TestSimCam(unittest.TestCase):
         f = self.focus.moveAbs(pos)
         f.result()
         self.assertEqual(self.focus.position.value, pos)
+
+
+class TestSimCamWithPolarization(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.camera = CLASS(**KWARGS_POL)
+        for child in cls.camera.children.value:
+            if child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.camera.terminate()
+
+    def setUp(self):
+        size = self.camera.shape[:-1]
+        self.is_rgb = (len(size) >= 3 and size[-1] in {3, 4})
+        # image shape is inverted order of size
+        if self.is_rgb:
+            self.imshp = size[-2::-1] + size[-1:] # RGB dim at the end
+        else:
+            self.imshp = size[::-1]
+        self.camera.resolution.value = self.camera.resolution.range[1]
+        self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
+
+    def tearDown(self):
+        pass
+
+    def _ensureExp(self, exp):
+        """
+        Ensure the camera has picked up the new exposure time
+        """
+        old_exp = self.camera.exposureTime.value
+        self.camera.exposureTime.value = exp
+        time.sleep(old_exp) # wait for the last frame (worst case)
+
+    #     @unittest.skip("simple")
+    def test_acquire_ar_pol(self):
+        """
+        Acquire image with text of current polarization position written on top.
+        """
+        self.assertGreaterEqual(len(self.camera.shape), 3)
+        exposure = 0.1
+        self._ensureExp(exposure)
+
+        self.camera.updateMetadata({model.MD_POL_MODE: "lhc"})
+        # get image from camera
+        im_lhc = self.camera.data.get()
+
+        self.camera.updateMetadata({model.MD_POL_MODE: "rhc"})
+        # get image from camera
+        im_rhc = self.camera.data.get()
+
+        # test the two images are different from each other (different txt was written on top)
+        self.assertFalse(numpy.all(im_lhc == im_rhc))
 
 if __name__ == '__main__':
     unittest.main()
