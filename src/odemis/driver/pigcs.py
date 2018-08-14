@@ -1874,6 +1874,7 @@ class CLRelController(Controller):
             # To be taken when reading position or affecting encoder reading
             self._pos_lock[a] = threading.RLock()
 
+            # TODO: allow to force servo_suspend off on E861 with encoder off support
             # We have two modes for auto_suspend:
             #  * Servo and encoder off: used when encoders can be turned off.
             #    That typically happens with the C-867. It allows to reduce heat
@@ -1901,7 +1902,7 @@ class CLRelController(Controller):
 
             try:  # Only exists on E-861 (and only used when _servo_suspend == True)
                 # slew rate is stored in ms
-                self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) * self._upm[a]
+                self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) / 1000
             except ValueError:  # param doesn't exist => no problem
                 pass
 
@@ -2004,7 +2005,7 @@ class CLRelController(Controller):
         axis (1<=int<=16): the axis
         """
         with self._pos_lock[axis]:
-            # Param 0x56 is only for C-867 and allows to control encoder power
+            # Param 0x56 is only for C-867 and newer E-861 and allows to control encoder power
             # Param 0x7000002 is only for E-861 and indicates time to start servo
             if 0x56 in self._avail_params:
                 pos = self.GetPosition(axis)
