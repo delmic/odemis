@@ -37,7 +37,7 @@ from odemis.util import dataio as io
 import os
 import sys
 
-from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE
+from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
@@ -297,7 +297,7 @@ def main(args):
     parser.add_argument("--weaver", "-w", dest="weaver",
             help="name of weaver to be used during stitching. Options: 'mean': MeanWeaver " 
             "(blend overlapping regions of adjacent tiles), 'collage': CollageWeaver "
-            "(paste tiles as-is at calculated position)", choices=("mean", "collage"),
+            "(paste tiles as-is at calculated position)", choices=("mean", "collage", "collage_reverse"),
             default='mean')
 
     # TODO: --export (spatial) image that defaults to a HFW corresponding to the
@@ -331,7 +331,8 @@ def main(args):
                      len(data), ngettext("image", "images", len(data)),
                      len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
     elif tifns:
-        method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN}[options.weaver]
+        method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN,
+                  "collage_reverse": WEAVER_COLLAGE_REVERSE}[options.weaver]
         data = stitch(tifns, method)
         thumbs = []
         logging.info("File contains %d %s",
