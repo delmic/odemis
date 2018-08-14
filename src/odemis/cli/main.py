@@ -564,8 +564,11 @@ def move_abs(comp_name, moves, check_distance=True):
                     position = closest
 
         act_mv[axis_name] = position
-        logging.info(u"Will move %s.%s to %s", comp_name, axis_name,
-                     units.readable_str(position, ad.unit, sig=3))
+        if isinstance(position, numbers.Real):
+            pos_pretty = units.readable_str(position, ad.unit, sig=3)
+        else:
+            pos_pretty = "%s" % (position,)
+        logging.info(u"Will move %s.%s to %s", comp_name, axis_name, pos_pretty)
 
     try:
         m = component.moveAbs(act_mv)
