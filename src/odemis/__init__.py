@@ -92,7 +92,7 @@ __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
 __copyright__ = u"Copyright © 2012-2018 Delmic"
 __authors__ = [u"Éric Piel", u"Rinze de Laat", u"Kimon Tsitsikas",
-               u"Philip Winkler", u"Anders Muskens"]
+               u"Philip Winkler", u"Anders Muskens", u"Sabrina Rossberger"]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
 """Odemis is free software: you can redistribute it and/or modify it under the terms
