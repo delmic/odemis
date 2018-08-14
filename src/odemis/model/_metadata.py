@@ -143,3 +143,5 @@ MD_FAV_POS_DEACTIVE = "Favourite position deactive"  # dict of str -> float repr
 # specific known positions for the actuators.
 MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set of str
 MD_FAV_POS_DEACTIVE_DEST = "Favourite position deactive destination"  # list or set of str
+
+MD_AXES_ORDER_REF = "Axes order for referencing"  # list of str

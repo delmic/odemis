@@ -1352,19 +1352,24 @@ class ChamberTab(Tab):
         # Note: s axis can only be moved when near engaged pos. So:
         #  * when parking/referencing => move s first, then l
         #  * when engaging => move l first, then s
+        # Some systems are special, default is overridden with MD_AXES_ORDER_REF
         mirror = self.tab_data_model.main.mirror
+        axes_order = mirror.getMetadata().get(model.MD_AXES_ORDER_REF, ("s", "l"))
+        if set(axes_order) != {"s", "l"}:
+            logging.warning("Axes order of mirror is %s, while should have s and l axes",
+                            axes_order)
         mstate = self._get_mirror_state(mirror)
+
+        moves = []
         if mstate == MIRROR_PARKED:
             # => Engage
-            f1 = (mirror.moveAbs, {"l": self._pos_engaged["l"]})
-            f2 = (mirror.moveAbs, {"s": self._pos_engaged["s"]})
-            moves = (f1, f2)
+            for a in reversed(axes_order):
+                moves.append((mirror.moveAbs, {a: self._pos_engaged[a]}))
             btn_text = "ENGAGING MIRROR"
         elif mstate == MIRROR_NOT_REFD:
             # => Reference
-            f1 = (mirror.reference, {"s"})
-            f2 = (mirror.reference, {"l"})
-            moves = (f1, f2)
+            for a in axes_order:
+                moves.append((mirror.reference, {a}))
             btn_text = "PARKING MIRROR"
             # position doesn't update during referencing, so just pulse
             self._pulse_timer.Start(250.0)  # 4 Hz
@@ -1373,13 +1378,12 @@ class ChamberTab(Tab):
             # Use standard move to show the progress of the mirror position, but
             # finish by (normally fast) referencing to be sure it really moved
             # to the parking position.
-            f1 = (mirror.moveAbs, {"s": MIRROR_POS_PARKED["s"]})
-            f2 = (mirror.moveAbs, {"l": MIRROR_POS_PARKED["l"]})
-            f3 = (mirror.reference, {"s"})
-            f4 = (mirror.reference, {"l"})
-            moves = (f1, f2, f3, f4)
+            for a in axes_order:
+                moves.append((mirror.moveAbs, {a: MIRROR_POS_PARKED[a]}))
+                moves.append((mirror.reference, {a}))
             btn_text = "PARKING MIRROR"
 
+        logging.debug("Will do the following moves: %s", moves)
         self._next_moves.extend(moves)
         c, a = self._next_moves.popleft()
         self._move_future = c(a)
