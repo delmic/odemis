@@ -128,6 +128,104 @@ class CollageWeaver(object):
         return model.DataArray(im, md)
 
 
+class CollageWeaverReverse(object):
+    """
+    Similar to CollageWeaver, but only fills parts of the global image with the new tile that
+    are still empty. This is desirable if the quality of the overlap regions is much better the first
+    time a region is imaged due to bleaching effects. The result is equivalent to a collage that starts 
+    with the last tile and pastes the older tiles in reverse order of acquisition.
+    """
+
+    def __init__(self):
+        self.tiles = []
+
+    def addTile(self, tile):
+        # Merge the correction metadata inside each image (to keep the rest of the
+        # code simple)
+        tile = model.DataArray(tile, tile.metadata.copy())
+        img.mergeMetadata(tile.metadata)
+        self.tiles.append(tile)
+
+    def getFullImage(self):
+        """
+        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
+        """
+        tiles = self.tiles
+
+        # Compute the bounding box of each tile and the global bounding box
+
+        # Get a fixed pixel size by using the first one
+        # TODO: use the mean, in case they are all slightly different due to
+        # correction?
+        pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
+
+        tbbx_phy = []  # tuples of ltrb in physical coordinates
+        for t in tiles:
+            c = t.metadata[model.MD_POS]
+            w = t.shape[-1], t.shape[-2]
+            if not util.almost_equal(pxs[0], t.metadata[model.MD_PIXEL_SIZE][0], rtol=0.01):
+                logging.warning("Tile @ %s has a unexpected pixel size (%g vs %g)",
+                                c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
+            bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
+                   c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
+
+            tbbx_phy.append(bbx)
+
+        gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
+                    max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
+
+        # Compute the bounding-boxes in pixel coordinates
+        tbbx_px = []
+
+        # that's the origin (Y is max as Y is inverted)
+        glt = gbbx_phy[0], gbbx_phy[3]
+        for bp, t in zip(tbbx_phy, tiles):
+            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
+                  int(round(-(bp[3] - glt[1]) / pxs[1])))
+            w = t.shape[-1], t.shape[-2]
+            bbx = (lt[0], lt[1],
+                   lt[0] + w[0], lt[1] + w[1])
+            tbbx_px.append(bbx)
+
+        gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
+                   max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
+
+        assert gbbx_px[0] == gbbx_px[1] == 0
+        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
+            # Overlap > 50% or missing tiles
+            logging.warning("Global area much bigger than sum of tile areas")
+
+        # Paste each tile
+        logging.debug("Generating global image of size %dx%d px",
+                      gbbx_px[-2], gbbx_px[-1])
+        im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
+        # Use minimum of the values in the tiles for background
+        im[:] = numpy.amin(tiles)
+
+        # The mask is multiplied with the tile, thereby creating a tile with a gradient
+        mask = numpy.zeros((gbbx_px[-1], gbbx_px[-2]), dtype=numpy.bool)
+
+        for b, t in zip(tbbx_px, tiles):
+            # Part of image overlapping with tile
+            roi = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
+            moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
+
+            # Insert image at positions that are still empty
+            roi[~moi] = t[~moi]
+
+            # Update mask
+            mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = True
+
+        # Update metadata
+        # TODO: check this is also correct based on lt + half shape * pxs
+        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2,
+                 (gbbx_phy[1] + gbbx_phy[3]) / 2)
+        md = tiles[0].metadata.copy()
+        md[model.MD_POS] = c_phy
+
+        return model.DataArray(im, md)
+
+
 class MeanWeaver(object):
     """
     Pixels of the final image which are corresponding to several tiles are computed as an 

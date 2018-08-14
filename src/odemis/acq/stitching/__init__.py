@@ -26,6 +26,7 @@ REGISTER_IDENTITY = 0
 REGISTER_SHIFT = 1
 WEAVER_MEAN = 0
 WEAVER_COLLAGE = 1
+WEAVER_COLLAGE_REVERSE = 2
 
 
 def register(tiles, method=REGISTER_SHIFT):
@@ -103,6 +104,8 @@ def weave(tiles, method=WEAVER_MEAN):
         weaver = MeanWeaver()
     elif method == WEAVER_COLLAGE:
         weaver = CollageWeaver()
+    elif method == WEAVER_COLLAGE_REVERSE:
+        weaver = CollageWeaverReverse()
     else:
         raise ValueError("Invalid weaver %s" % (method,))
 
