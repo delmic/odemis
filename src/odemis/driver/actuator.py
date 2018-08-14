@@ -1391,7 +1391,7 @@ class CombinedFixedPositionActuator(model.Actuator):
     """
 
     def __init__(self, name, role, children, caxes_map, axis_name, positions, fallback,
-                 atol=(0.0, 0.0), inverted=None, **kwargs):
+                 atol=None, cycle=None, inverted=None, **kwargs):
         """
         name (string)
         role (string)
@@ -1404,7 +1404,9 @@ class CombinedFixedPositionActuator(model.Actuator):
                         positions. Fallback position can be equal to one of the positions allowed. If fallback is not
                         equal to one of the positions allowed, it is not possible to request moving to this fallback
                         position.
-        atol: absolute tolerance in the position of each child
+        atol (list of (float or None)): absolute tolerance in the position of each child. If None, set to 0.
+        cycle (list of (float or None)): for each axis, the length of a full rotation until it reaches position 0 again.
+                                        None is "infinity" (= no modulo)
         """
         if inverted:
             raise ValueError("Axes shouldn't be inverted")
@@ -1424,6 +1426,19 @@ class CombinedFixedPositionActuator(model.Actuator):
         self._positions = positions
         self._atol = atol
         self._fallback = fallback
+        self._cycle = cycle
+
+        if cycle is None:
+            self._cycle = (None,) * len(children)
+        if atol is None:
+            self._atol = (0,) * len(children)
+
+        if len(self._cycle) != len(children):
+            raise ValueError("CombinedFixedPositionActuator has %s children, so "
+                             "need cycle being a list of same length." % len(children))
+        if len(atol) != len(children):
+            raise ValueError("CombinedFixedPositionActuator has %s children, so "
+                             "need atol being a list of same length." % len(children))
 
         self._children = [children[r] for r in sorted(children.keys())]
         self._children_futures = None
@@ -1477,12 +1492,20 @@ class CombinedFixedPositionActuator(model.Actuator):
         check if the children axes positions correspond to any allowed combined axis position
         :return: position key in position dict for child axis
         """
+        # get current children positions
         pos_children_cur = [c.position.value[ca] for c, ca in zip(self._children, self._caxes_map)]
 
-        # check whether children positions are in consistency with positions allowed
+        # check whether current children positions are in consistency with children positions allowed
         for pos_key, pos_children in self._positions.items():
-            for ap, cp, atol in zip(pos_children_cur, pos_children, self._atol):
-                if isinstance(cp, numbers.Real) and not util.almost_equal(ap, cp, atol=atol, rtol=0):
+            # cp: current children position, tp: target children position
+            for cp, tp, atol, cyl in zip(pos_children_cur, pos_children, self._atol, self._cycle):
+                # handle positions close to cycle and thus also close to zero
+                # and within tolerance so util.almost_equal compare the correct values
+                if cyl is None:
+                    dist = abs(cp - tp)
+                else:
+                    dist = min((cp - tp) % cyl, (tp - cp) % cyl)
+                if dist > atol:
                     break
             else:  # Never found a position _not_ different from actual children axes positions => it's a match!
                 return pos_key
