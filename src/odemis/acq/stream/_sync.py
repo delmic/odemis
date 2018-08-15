@@ -1197,9 +1197,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             ccd_data = self._acq_data[self._ccd_idx][-1]
             ccd_data.metadata[MD_POS] = cor_pos
 
-            if self._analyzer:
-                ccd_data.metadata[MD_POL_MODE] = pol_pos
-
             self._acq_data[-1][-1] = self._preprocessData(len(self._streams) - 1, ccd_data, px_idx)
             logging.debug("Processed CCD data %d = %s", n, px_idx)
 
