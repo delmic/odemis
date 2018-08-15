@@ -37,7 +37,8 @@ from odemis.util import dataio as io
 import os
 import sys
 
-from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
+from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE, \
+                                REGISTER_SHIFT, REGISTER_IDENTITY
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
@@ -211,7 +212,7 @@ def add_acq_type_md(das):
     return das
 
 
-def stitch(infns, method):
+def stitch(infns, registration_method, weaving_method):
     """
     Stitches a set of tiles.
     infns: file names of tiles
@@ -250,7 +251,7 @@ def stitch(infns, method):
         das = sorted(das, key=leader_quality, reverse=True)
         da_streams.append(tuple(das))
 
-    das_registered = stitching.register(da_streams)
+    das_registered = stitching.register(da_streams, registration_method)
 
     # Weave every stream
     st_data = []
@@ -258,7 +259,7 @@ def stitch(infns, method):
         streams = []
         for da in das_registered:
             streams.append(da[s])
-        da = stitching.weave(streams, method)
+        da = stitching.weave(streams, weaving_method)
         da.metadata[model.MD_DIMS] = "YX"
         st_data.append(da)
 
@@ -299,6 +300,11 @@ def main(args):
             "(blend overlapping regions of adjacent tiles), 'collage': CollageWeaver "
             "(paste tiles as-is at calculated position)", choices=("mean", "collage", "collage_reverse"),
             default='mean')
+    parser.add_argument("--registrar", "-r", dest="registrar",
+            help="name of registrar to be used during stitching. Options: 'identity': IdentityRegistrar "
+            "(place tiles at original position), 'shift': ShiftRegistrar (use cross-correlation "
+            "algorithm to correct for suboptimal stage movement)", choices=("identity", "shift"),
+            default="shift")
 
     # TODO: --export (spatial) image that defaults to a HFW corresponding to the
     # smallest image, and can be overridden by --hfw xxx (in µm).
@@ -331,9 +337,10 @@ def main(args):
                      len(data), ngettext("image", "images", len(data)),
                      len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
     elif tifns:
-        method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN,
+        registration_method = {"identity": REGISTER_IDENTITY, "shift": REGISTER_SHIFT}[options.registrar]
+        weaving_method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN,
                   "collage_reverse": WEAVER_COLLAGE_REVERSE}[options.weaver]
-        data = stitch(tifns, method)
+        data = stitch(tifns, registration_method, weaving_method)
         thumbs = []
         logging.info("File contains %d %s",
                      len(data), ngettext("stream", "streams", len(data)))
