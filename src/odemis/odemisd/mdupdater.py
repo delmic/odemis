@@ -116,6 +116,9 @@ class MetadataUpdater(model.Component):
                 elif a.role == "lin-pol":
                     # update the position of the linear polarizer in the polarization analyzer
                     observed = self.observeLinPol(a, d)
+                elif a.role == "pol-analyzer":
+                    # update the position of the polarization analyzer
+                    observed = self.observePolAnalyzer(a, d)
                 else:
                     observed = False
 
@@ -341,6 +344,19 @@ class MetadataUpdater(model.Component):
 
             linpol.position.subscribe(updatePosition, init=True)
             self._onTerminate.append((linpol.position.unsubscribe, (updatePosition,)))
+
+        return True
+
+    def observePolAnalyzer(self, analyzer, comp_affected):
+
+        if model.hasVA(analyzer, "position"):
+            def updatePosition(unused, analyzer=analyzer, comp_affected=comp_affected):
+                pos = analyzer.position.value["pol"]
+                md = {model.MD_POL_MODE: pos}
+                comp_affected.updateMetadata(md)
+
+            analyzer.position.subscribe(updatePosition, init=True)
+            self._onTerminate.append((analyzer.position.unsubscribe, (updatePosition,)))
 
         return True
 
