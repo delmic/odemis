@@ -29,6 +29,7 @@ from odemis.model import isasync, oneway
 import os
 from scipy import ndimage
 import time
+from PIL import Image, ImageDraw, ImageFont
 
 
 class Camera(model.DigitalCamera):
@@ -211,14 +212,20 @@ class Camera(model.DigitalCamera):
             # If sync event, we need to simulate period after event (not efficient, but works)
             time.sleep(self.exposureTime.value)
 
-        metadata = gen_img.metadata.copy()
-        metadata.update(self._metadata)
+        metadata = gen_img.metadata.copy()  # MD of image
+        metadata.update(self._metadata)  # MD of camera
+
+        # write text with polarization position on image
+        if model.MD_POL_MODE in self._metadata:
+            txt = self._metadata[model.MD_POL_MODE]
+            gen_img = self._write_txt_image(gen_img, txt)
 
         # update fake output metadata
         exp = timer.period
         metadata[model.MD_ACQ_DATE] = time.time() - exp
         metadata[model.MD_EXP_TIME] = exp
         logging.debug("Generating new fake image of shape %s", gen_img.shape)
+
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
@@ -234,6 +241,29 @@ class Camera(model.DigitalCamera):
 
         # simulate exposure time
         timer.period = self.exposureTime.value
+
+    def _write_txt_image(self, image, txt):
+        """write polarization position as text into image for simulation
+        :return: image with polarization pos text"""
+
+        # TODO: if chamber view image is flipped, txt is flipped as well
+
+        if image.dtype != numpy.uint8:
+            image = image / float(image.max()) * 255  # normalize the data to 0 - 255
+            image = image.astype(numpy.uint8)
+
+        # reads only uint8
+        im = Image.fromarray(image)
+        fnt = ImageFont.truetype('/Library/Fonts/Arial.ttf', 100)
+        # create txt image for overlay
+        im_txt = Image.new('F', im.size, 0)
+        d = ImageDraw.Draw(im_txt)
+        pol_pos = txt
+        d.text((300, 400), pol_pos, font=fnt, fill=255)
+        txt_array = numpy.asarray(im_txt)
+        image[txt_array == 255] = image.max()
+
+        return image
 
     def _simulate(self):
         """
