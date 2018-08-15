@@ -52,14 +52,25 @@ def read_param(cont, f):
     params_desc = cont.GetAvailableParameters()
     ap = cont.GetParameters()
 
+    params_seen = set()
     for a, p in sorted(ap.keys()):
-        # v = cont.GetParameter(a, p)
-        v = ap[(a, p)]
+        params_seen.add(p)
+        # v = ap[(a, p)]
+        # Some E-861's (rev 01.001/ fw 00.012) do not report the proper values
+        # via GetParameters(), but GetParameter() works fine.
+        v = cont.GetParameter(a, p)
+        if v != ap[(a, p)]:
+            logging.warning("Parameter A%d/%d has different value than globally (%s)",
+                            a, p, ap[(a, p)])
         try:
             desc = params_desc[p]
             f.write("A%d\t0x%x\t%s\t# %s\n" % (a, p, v, desc))
         except KeyError:
             f.write("A%d\t0x%x\t%s\n" % (a, p, v))
+
+    params_notseen = set(params_desc.keys()) - params_seen
+    if params_notseen:
+        logging.warning("These parameters were not reported: %s", params_notseen)
 
     f.close()
 
