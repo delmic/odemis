@@ -742,7 +742,8 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
         self.axis2 = "linear"
         self.axis_name = "pol"
         self.atol = [3.392e-5, 3.392e-5]
-        self.fallback = "unspecified position"
+        self.cycle = None
+        self.fallback = "unspecified"
         self.positions = {
                          # [qwp, linear]
                          # pos (str) -> list(pos (float), pos (float))
@@ -770,6 +771,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
                                                  caxes_map=[self.axis1, self.axis2],
                                                  positions=self.positions,
                                                  atol=self.atol,
+                                                 cycle=self.cycle,
                                                  fallback=self.fallback)
 
     def test_moveAbs(self):
@@ -908,9 +910,74 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
         self.assertTrue(self.dev.referenced.value[axis_name])
 
     def tearDown(self):
-        axis_name = self.dev.axes.keys()[0]
         self.dev.terminate()
         super(TestCombinedFixedPositionActuator, self).tearDown()
+
+
+class TestCombinedFixedPositionActuatorCycle(unittest.TestCase):
+    """Test position at [0.0, 0.0] to test a complete rotation (cycle)
+    is handled correctly. Positions close to 2pi need to be identified
+    close to zero position."""
+
+    def setUp(self):
+        self.axis1 = "qwp"
+        self.axis2 = "linear"
+        self.axis_name = "pol"
+        self.atol = [3.392e-5, 3.392e-5]
+        self.cycle = [math.pi * 2, math.pi * 2]
+        self.fallback = "unspecified"
+        self.positions = {
+                         # [qwp, linear]
+                         # pos (str) -> list(pos (float), pos (float))
+                         "horizontal": [0.0, 0.0],
+                         "vertical": [1.570796, 1.570796],  # (pi/2, pi/2)
+                         "posdiag": [0.785398, 0.785398],  # (pi/4, pi/4)
+                         "negdiag": [2.356194, 2.356194],  # (3pi/4, 3pi/4)
+                         "rhc": [0.0, 0.785398],  # (0, pi/4)
+                         "lhc": [0.0, 2.356194],  # (0, 3pi/4)
+                         "pass-through": [1.6, 1.6],  # 91.67 degree: choose something close to vertical
+                                                      # as it will fit most real samples best
+                        }
+
+        # create one child
+        self.child1 = tmcm.TMCLController("rotstage1", "test", port="/dev/fake6",
+                                          axes=[self.axis1, self.axis2], ustepsize=[3.392e-5, 3.392e-5],
+                                          unit=["rad", "rad"],
+                                          refproc="Standard")
+
+        self.dev = CombinedFixedPositionActuator("combinedstage", "stage",
+                                                 children={"axis1": self.child1, "axis2": self.child1},
+                                                 axis_name=self.axis_name,
+                                                 caxes_map=[self.axis1, self.axis2],
+                                                 positions=self.positions,
+                                                 atol=self.atol,
+                                                 cycle=self.cycle,
+                                                 fallback=self.fallback)
+
+    def test_moveAbs(self):
+        """test position close to 2pi and therefore
+        also close to zero"""
+
+        pos = "vertical"
+        f = self.dev.moveAbs({self.axis_name: pos})
+        f.result()
+
+        axis_name = self.dev.axes.keys()[0]
+
+        # move one axis to a position close to 2pi (6.283168347179586)
+        # which is also close to zero and within tolerance
+        f = self.child1.moveAbs({"linear": math.pi * 2 - 3.392e-5/2.})
+        f.result()
+        f = self.child1.moveAbs({"qwp": 0.0})
+        f.result()
+
+        # pos should be recognized as horizontal as it is close to zero and within tolerance
+        pos = "horizontal"
+        self.assertEqual(self.dev.position.value[axis_name], pos)
+
+    def tearDown(self):
+        self.dev.terminate()
+        super(TestCombinedFixedPositionActuatorCycle, self).tearDown()
 
 
 class TestRotationActuator(unittest.TestCase):
