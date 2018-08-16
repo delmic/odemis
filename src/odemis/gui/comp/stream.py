@@ -125,7 +125,7 @@ class StreamPanelHeader(wx.Control):
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
         # The spacer is responsible for creating padding on the right side of the header panel
-        self._sz.AddSpacer(64)#todo: 16 left in vertical
+        self._sz.AddSpacer(64)
 
         # Set the sizer of the Control
         self.SetSizerAndFit(self._sz)
