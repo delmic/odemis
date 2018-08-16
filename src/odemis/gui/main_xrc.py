@@ -14,7 +14,7 @@ def get_resources():
 
 class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
-    def PreCreate(self):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
@@ -22,10 +22,17 @@ class xrcfr_main(wx.Frame):
         pass
 #!XRCED:end-block:xrcfr_main.PreCreate
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        wx.Frame.__init__(self)
-        self.PreCreate()
-        get_resources().LoadFrame(self, parent, "fr_main")
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreFrame()
+            self.PreCreate(pre)
+            get_resources().LoadOnFrame(pre, parent, "fr_main")
+            self.PostCreate(pre)
+        else:
+            wx.Frame.__init__(self)
+            self.PreCreate()
+            get_resources().LoadFrame(self, parent, "fr_main")
+
         # Define variables for the controls, bind event handlers
         self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
         self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))

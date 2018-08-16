@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+from odemis.gui.util import wx_adapter
+
 import logging
 import numpy
 from odemis.gui.model import MainGUIData
