@@ -62,11 +62,11 @@ else:
 
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 #KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC, "vmin":{"x": 2.4}}
-KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL}
+KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL, "auto_suspend": {"x": 1}}
 
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL,
-                 "auto_suspend": {"y": 5, "x": False}}
+                 "auto_suspend": {"x": False, "y": 1}}
 
 KWARGS_IP = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_BUS_BASIC}
 KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CONFIG_BUS_TWO}
@@ -484,6 +484,27 @@ class TestActuator(unittest.TestCase):
         f.result()
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
+
+        stage.terminate()
+
+    def test_suspend(self):
+        """
+        Just do nothing for a while, to check the suspend/resume code
+        """
+        stage = CLASS(**self.kwargs)
+        move = {'x': 0.01e-6}
+        orig_pos = stage.position.value["x"]
+        f = stage.moveRel(move)
+        f.result()  # wait for the move to finish
+
+        self.assertAlmostEqual(orig_pos + move["x"], stage.position.value["x"])
+
+        time.sleep(3)
+
+        move = {'x':-0.01e-6}
+        f = stage.moveRel(move)
+        f.result()
+        self.assertAlmostEqual(orig_pos, stage.position.value["x"])
 
         stage.terminate()
 
