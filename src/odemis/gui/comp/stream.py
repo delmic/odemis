@@ -545,7 +545,7 @@ class StreamPanel(wx.Panel):
             # move & resize the container window
             yoffset = self.main_sizer.GetSize().GetHeight()
             if oursz.y - yoffset > 0:
-                wx.Window.SetSize(self._panel, 0, yoffset, oursz.x, oursz.y - yoffset)
+                self._panel.SetSize(0, yoffset, oursz.x, oursz.y - yoffset)
                 # this is very important to make the pane window layout show
                 # correctly
                 self._panel.Show()
