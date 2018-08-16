@@ -67,22 +67,13 @@ def darken_image(image, mltp=0.5):
     The image is darkened (in place) to a grayed-out version, appropriate for a 'disabled'
     appearance.
 
+    mltp (0<=float<=1): the smaller the darker. Values above 1 are possible, but
+      if the result becomes > 255, it will overflow and appear dark instead of
+      bright white.
     """
-
-    # We need to store the alpha channel, because setting new data automatically
-    # deletes the current alpha data.
-    if image.HasAlpha():
-        alpha = image.GetAlpha()
-    else:
-        alpha = None
-
+    # Update data in-place
     data = numpy.asarray(image.GetDataBuffer())
     numpy.multiply(data, mltp, out=data, casting="unsafe")
-    image.SetData(data.tostring())
-
-    if alpha:
-        image.InitAlpha()
-        image.SetAlpha(alpha)
 
 
 class BtnMixin(object):
