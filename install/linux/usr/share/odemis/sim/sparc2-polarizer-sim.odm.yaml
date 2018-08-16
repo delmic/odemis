@@ -93,11 +93,10 @@ SPARC2: {
 # In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer
 "Camera": {
-    class: andorcam2.AndorCam2,
+    class: simcam.Camera,
     role: "ccd",
     power_supplier: "Power Control Unit",
     init: {
-       device: "fake",
        image: "sparc-ar-mirror-align.h5", # only for simulator
     },
 }
@@ -312,6 +311,7 @@ SPARC2: {
         axis_name: "pol",
         caxes_map: ["rz", "rz"],
         atol: [3.392e-5, 3.392e-5], # rad (~the step size of the motor)
+        cycle: [6.283185307179586, 6.283185307179586],  # rad (equals one rotation of motor)
         fallback: "unspecified",
         # It supports 7 positions
         # position names are hardcoded in odemis, so do not change!
@@ -328,7 +328,7 @@ SPARC2: {
                                                 # as it will fit most real samples best
         },
     },
-    affects: ["Lens1 Mover"],
+    affects: ["Lens1 Mover", "Camera", "Spectral Camera"],
 }
 
 "Linear Polarizer": {
