@@ -21,6 +21,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from odemis.gui.util import wx_adapter
 import Pyro4
 import Pyro4.errors
 import argparse
