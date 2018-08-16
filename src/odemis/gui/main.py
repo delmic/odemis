@@ -471,16 +471,14 @@ def main(args):
         # Set WM_CLASS on linux, needed to get connected to the right icon.
         # wxPython doesn't do it, see http://trac.wxwidgets.org/ticket/12778
         try:
-            # Also possible via Xlib, but more complicated
-            import gtk
-            # Without it, it will crash cf. See:
-            # https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
-            gtk.remove_log_handlers()
+            import gi
+            from gi.repository import GLib
+
             # Must be done before the first window is displayed
             name = odemis.__shortname__
             if options.standalone:
                 name += "-standalone"
-            gtk.gdk.set_program_class(name)
+            GLib.set_prgname(name)
         except Exception:
             logging.info("Failed to set WM_CLASS")
 
