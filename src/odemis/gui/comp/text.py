@@ -316,7 +316,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
                           for x in xrange(dd.GetColumnCount())]
                 self._select_callback(values)
             self.SetValue(itemtext)
-            self.SetToolTip(wx.ToolTip(itemtext))
+            self.SetToolTip(itemtext)
             self.SetInsertionPointEnd()
             self.SetSelection(-1, -1)
             self._showDropDown(False)
@@ -377,7 +377,13 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdown.SetClientSize(self.popupsize)
 
 
-class _NumberValidator(wx.Validator):
+if wx.MAJOR_VERSION <= 3:
+    ValidatorClass = wx.PyValidator
+else:
+    ValidatorClass = wx.Validator
+
+
+class _NumberValidator(ValidatorClass):
 
     def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
         """ Constructor """

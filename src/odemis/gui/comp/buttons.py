@@ -591,7 +591,7 @@ class ImageStateButton(ImageToggleButton):
             return
         if event.LeftIsDown() and self.HasCapture():
             x, y = event.Position
-            w, h = wx.Window.GetClientSize(self)
+            w, h = self.ClientSize
             if 0 <= x < w and 0 <= y < h:
                 if self.state != self.nextState:
                     self.state = self.nextState

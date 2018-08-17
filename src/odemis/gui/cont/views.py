@@ -613,7 +613,7 @@ class ViewButtonController(object):
         # starts with an empty image with the border colour everywhere
         im_22 = wx.Image(*size, clear=False)
         im_22.SetRGB(wx.Rect(0, 0, *size),
-                     *(btn_all.GetBackgroundColour().Get()[:-1]))
+                     *(btn_all.GetBackgroundColour().Get(includeAlpha=False)))
 
         i = 0
 

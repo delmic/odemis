@@ -125,8 +125,8 @@ class StreamPanelHeader(wx.Control):
         self.btn_show = self._add_visibility_btn() if self.Parent.options & OPT_BTN_SHOW else None
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
-        # The spacer is responsible for creating padding on the right side of the header panel
-        self._sz.AddSpacer(64)
+        # Add spacer for creating padding on the right side of the header panel
+        self._sz.Add((64, 1), 0)
 
         # Set the sizer of the Control
         self.SetSizerAndFit(self._sz)
