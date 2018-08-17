@@ -662,7 +662,8 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.canvas.fit_view_to_content(recenter=True)
         # only .mpp changes, but the image keeps centered
         exp_mpp = (mpp * im2.shape[0]) / self.canvas.ClientSize[0]
-        self.assertAlmostEqual(exp_mpp, self.view.mpp.value, 6)
+        # TODO: check the precision
+        self.assertAlmostEqual(exp_mpp, self.view.mpp.value)  # ,6
         numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
         test.gui_loop(0.5)
 
