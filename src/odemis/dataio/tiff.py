@@ -114,6 +114,7 @@ def _convertToTiffTag(metadata):
             try:
                 tiffmd[T.TIFFTAG_XRESOLUTION] = (1 / val[0]) / 100
                 tiffmd[T.TIFFTAG_YRESOLUTION] = (1 / val[1]) / 100
+
             except ZeroDivisionError:
                 logging.debug("Pixel size tag is incorrect: %r", val)
         elif key == model.MD_POS:
@@ -124,6 +125,7 @@ def _convertToTiffTag(metadata):
             # correct relatively to each other (for a given sample).
             tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
             tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
+
 #         elif key == model.MD_ROTATION:
             # TODO: should use the coarse grain rotation to update Orientation
             # and update rotation information to -45< rot < 45 -> maybe GeoTIFF's ModelTransformationTag?
@@ -187,6 +189,7 @@ def _readTiffTag(tfile):
 
     xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
     yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
+
     if xres is not None and yres is not None:
         try:
             md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
@@ -565,15 +568,17 @@ def _updateMDFromOME(root, das):
                 pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
+
         try:
-            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6 # µm -> m
+            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6  # µm -> m
             psy = float(pxe.attrib["PhysicalSizeY"]) * 1e-6
             md[model.MD_PIXEL_SIZE] = (psx, psy)
         except (KeyError, ValueError):
             pass
 
+        # Try 3d pixel size
         try:
-            psz = float(pxe.attrib["PhysicalSizeZ"]) * 1e-6  # µm -> m
+            psz = float(pxe.attrib["PhysicalSizeZ"]) * 1e-6
             md[model.MD_PIXEL_SIZE] = (psx, psy, psz)
         except (KeyError, ValueError):
             pass
@@ -783,6 +788,13 @@ def _updateMDFromOME(root, das):
                 psx = float(ple.attrib["PositionX"])
                 psy = float(ple.attrib["PositionY"])
                 mdp[model.MD_POS] = (psx, psy)
+            except (KeyError, ValueError):
+                pass
+
+            try:
+                # We assume it's in meters, as we write it (but there is no official unit)
+                psz = float(ple.attrib["PositionZ"])
+                mdp[model.MD_POS] = (psx, psy, psz)
             except (KeyError, ValueError):
                 pass
 
@@ -1443,6 +1455,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             pos = da.metadata[model.MD_POS]
             plane.attrib["PositionX"] = "%.15f" % pos[0] # any unit is allowed => m
             plane.attrib["PositionY"] = "%.15f" % pos[1]
+
+            if len(pos) == 3:
+                plane.attrib["PositionZ"] = "%.15f" % pos[2]
 
         subid += 1
 

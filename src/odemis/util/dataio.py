@@ -28,6 +28,7 @@ from odemis import model
 from odemis.acq import stream
 from odemis import dataio
 import os
+from odemis.dataio.tiff import DataArrayShadowTIFF
 
 
 def data_to_static_streams(data):
@@ -139,21 +140,19 @@ def data_to_static_streams(data):
 
             name = d.metadata.get(model.MD_DESCRIPTION, "Electrons")
             klass = stream.StaticSEMStream
-
+            
         if issubclass(klass, stream.Static2DStream):
             # FIXME: doesn't work currently if d is a DAS
             if pxs is not None and len(pxs) == 3 and dims not in ("YX"):
                 # Voxels detected, so must be a z-stack
                 name = d.metadata.get(model.MD_DESCRIPTION)
                 logging.debug("3D Z-stack %s", dims)
-                logging.warning("Dropping dimensions from the data %s of shape %s",
-                            name, d.shape)
-                d = numpy.squeeze(d)
-
-            elif numpy.prod(d.shape[:-2]) != 1:
-                logging.warning("Dropping dimensions from the data %s of shape %s",
+                if numpy.prod(d.shape[:-3]) != 1:
+                    logging.warning("Dropping dimensions from the data %s of shape %s",
                                 name, d.shape)
-                d = d[-2, -1]
+                    #      T  Z  X  Y
+                    #     d[0,0] -> d[0,0,:,:]
+                    d = d[(0,) * (d.ndim - 2)]
 
         stream_instance = klass(name, d)
         result_streams.append(stream_instance)

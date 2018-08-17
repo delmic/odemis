@@ -115,11 +115,13 @@ class Static2DStream(StaticStream):
             raw = [raw]
 
         metadata = copy.copy(raw[0].metadata)
-
         logging.debug("%s shape: %s", name, raw[0].shape)
 
+        # If there are 5 dims in CTZYX, eliminate CT and only take spatial dimensions
+        if len(raw[0].shape) == 5:
+            raw[0] = raw[0][0, 0]
+
         if len(raw[0].shape) == 3:
-            
             try:
                 pxs = metadata[model.MD_PIXEL_SIZE]
                 if len(pxs) == 3:
