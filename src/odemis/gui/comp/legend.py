@@ -27,16 +27,15 @@ from __future__ import division
 import cairo
 import logging
 import math
-from odemis.acq import stream
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui import img
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.util import wxlimit_invocation
+from odemis.gui.comp.radio import GraphicalRadioButtonControl
+from odemis.gui.util import wxlimit_invocation, call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks
-from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute, \
-                         MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
+from odemis.model import MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
                          MD_AT_CL, MD_AT_OVV_FULL, MD_AT_OVV_TILES, \
                          MD_AT_EM, MD_AT_HISTORY
 import wx
@@ -156,7 +155,7 @@ class InfoLegend(wx.Panel):
                           flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 
-        # legend_panel_sizer is needed to add a border around the legend
+        # border_sizer is needed to add a border around the legend
         border_sizer = wx.BoxSizer(wx.VERTICAL)
         border_sizer.Add(control_sizer, border=6, flag=wx.ALL | wx.EXPAND)
 
@@ -365,3 +364,97 @@ class AxisLegend(wx.Panel):
             self._max_tick_width = max_width
             self.SetMinSize((self._max_tick_width + 14, -1))
             self.Parent.GetSizer().Layout()
+
+
+class RadioLegend(wx.Panel):
+    """
+    This class describes a legend containing radio buttons,
+    where each button represents a possible selection of a VA.
+    """
+
+    def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize, style=wx.NO_BORDER):
+        wx.Panel.__init__(self, parent, wid, pos, size, style)
+
+        # Store the colours now, as we'll need them whenever the radio button choices change, and by that time the
+        # parent (ARViewport) might be focused, which causes it to have a different background colour.
+        self.bg_color = parent.GetBackgroundColour()
+        self.fg_color = parent.GetForegroundColour()
+
+        self.SetBackgroundColour(self.bg_color)
+        self.SetForegroundColour(self.fg_color)
+
+        # descriptive VA text
+        self.text = wx.TextCtrl(self, value="Polarization", style=wx.NO_BORDER | wx.CB_READONLY)
+        self.text.SetBackgroundColour(self.bg_color)
+        self.text.SetForegroundColour(self.fg_color)
+        self.text.SetToolTipString("Polarization direction currently displayed")
+
+        # current polarization displayed in the legend (or None)
+        # can be radio buttons or text only depending on the number of polarization directions
+        self.pol_display = None
+        self.control_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # border_sizer is needed to add a border around the legend
+        self.border_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.border_sizer.Add(self.control_sizer, border=8, flag=wx.ALL | wx.EXPAND)
+
+        self.SetSizer(self.border_sizer)
+
+    def clear(self):
+        """Remove the display widget, to not show anything.
+        It will be added again next time the polarization entries are set."""
+        self.control_sizer.Clear()
+        # destroy the old widgets (otherwise they are still displayed in the GUI)
+        if self.pol_display:
+            self.pol_display.Destroy()
+        self.Refresh()
+
+    @wxlimit_invocation(0.2)
+    def Refresh(self):
+        """
+        Refresh, which can be called safely from other threads
+        """
+        wx.Panel.Refresh(self)
+
+    def OnPolarizationButton(self, event):
+        """
+        In the case of an event (select a button), the radio button selection is
+        requested and the callback function, which changes the position is called.
+        The _callback function can be overwritten by the viewport.
+        """
+        pol = self.pol_display.GetValue()
+        self._callback(pol)
+
+    def set_pol_callback(self, func):
+        self._callback = func
+
+    def set_pol_value(self, pol):
+        self.pol_display.SetValue(pol)
+
+    @call_in_wx_main
+    def set_pol_entries(self, choices, default):
+        """
+        Create radio buttons to switch between pol positions within legend.
+        If only one pol pos present in data, display pol pos as static text.
+        :param choices: polarization positions found in data
+        """
+        self.clear()
+
+        if len(choices) > 1:
+            # if we have multiple choices -> select between choices with radio button
+            self.pol_display = GraphicalRadioButtonControl(self, choices=choices, labels=choices)
+            self.pol_display.SetToolTipString("Select a polarization direction for display.")
+            self.pol_display.Bind(wx.EVT_BUTTON, self.OnPolarizationButton)
+            self.pol_display.SetValue(default)
+        else:
+            self.pol_display = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
+            self.pol_display.SetBackgroundColour(self.bg_color)
+            self.pol_display.SetForegroundColour(self.fg_color)
+            # if only one choice -> only text displayed
+            self.pol_display.SetValue(iter(choices).next())
+
+        self.control_sizer.Add(self.text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+        self.control_sizer.Add(self.pol_display, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+
+        # refresh layout
+        self.border_sizer.Layout()
