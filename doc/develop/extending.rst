@@ -557,12 +557,17 @@ different files. Also, as the GUI relies on the wxPython and cairo libraries to
 display widgets, it is also recommended to have a basic knowledge of these
 libraries.
 
-To edit the interface, you should use XRCed.
+To edit the interface, you could use XRCed (but it only works with wxPython3).
 Launch it by typing this (from ``~/development/odemis``)::
 
     PYTHONPATH=./src/ ./util/launch_xrced.py src/odemis/gui/main.xrc
 
 When saving the file, main_xrc.py will automatically be updated too.
+Alternatively, you can just regenerate the ``.py`` file from a ``.xrc`` file with
+this command::
+
+   ./util/generate_xrc.py src/odemis/gui/main.xrc
+
 
 If you add/modify an image (used as a GUI element, not a microscope acquisition), 
 it should be done in ``src/odemis/gui/img``. After the modifications, you should
