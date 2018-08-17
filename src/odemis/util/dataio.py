@@ -129,7 +129,7 @@ def data_to_static_streams(data):
         else:
             # Now, either it's a flat greyscale image and we decide it's a SEM image,
             # or it's gone too weird and we try again on flat images
-            if numpy.prod(d.shape[:-2]) != 1:
+            if numpy.prod(d.shape[:-2]) != 1 and len(pxs) != 3:
                 # FIXME: doesn't work currently if d is a DAS
                 subdas = _split_planes(d)
                 logging.info("Reprocessing data of shape %s into %d sub-data",

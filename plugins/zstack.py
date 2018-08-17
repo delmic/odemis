@@ -66,6 +66,7 @@ class ZStackPlugin(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
+
         }),
         ("expectedDuration", {
         }),
