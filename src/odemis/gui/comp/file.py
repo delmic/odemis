@@ -111,9 +111,7 @@ class FileBrowser(wx.Panel):
         self.SetAutoLayout(True)
         self.SetSizer(box)
         self.Layout()
-        if isinstance(size, tuple):
-            size = wx.Size(size)
-        self.SetSize(-1, -1, size.width, size.height, wx.SIZE_USE_EXISTING)
+        self.SetSize(size)
 
     def on_changed(self, evt):
         evt.SetEventObject(self)
