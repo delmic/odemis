@@ -30,12 +30,11 @@ import threading
 import time
 import copy
 import re
-from Pyro4.core import isasync
 from odemis import model
 from odemis.util import driver
-from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecutor
+from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecutor, isasync
 
-# Unit definitions 
+# Unit definitions
 UNIT_DEF = {
     'mm': 2,
     'um': 3,
@@ -52,10 +51,13 @@ class ESPError(model.HwError):
 
 class ESP(model.Actuator):
 
-    def __init__(self, name, role, port, axes=None, inverted=None, **kwargs):
+    def __init__(self, name, role, port, axes=None, **kwargs):
         """
-        A driver for a Newport ESP 301 Stage Actuator. This driver supports a serial or USB
-        connection to a Unix host.
+        A driver for a Newport ESP 301 Stage Actuator.
+        This driver supports a serial connection. Note that as of the Linux
+        kernel 4.13, the USB connection is known to _not_ work, as the TI 3410
+        chipset apparently behind is not handled properly. Use a of the
+        RS-232 port is required (via a USB adapter if necessary).
 
         name: (str)
         role: (str)
@@ -64,18 +66,17 @@ class ESP(model.Actuator):
           Use /dev/fake for a simulator
         axes: dict str (axis name) -> dict (axis parameters)
             axis parameters: {
-                number: (int) either 1,2,3
-                range: [float, float]
-                unit: (str) the external unit of the axis (internal is mm) which the conv_factor
-                    should convert to. Typically metres by default.
-                conv_factor (float): a conversion factor that converts to the devices internal unit (mm)
-                    By default, the position VA is displayed as metres, so this value takes 1000.
+                number (1 <= int <= 3): axis number on the hardware
+                range: [float, float], default is -1 -> 1
+                unit (str): the external unit of the axis (internal is mm),
+                   default is "m".
+                conv_factor (float): a conversion factor that converts to the
+                   device internal unit (mm), default is 1000.
             }
 
         inverted: (bool) defines if the axes are inverted
 
         The offset can be specified by setting MD_POS_COR as a coordinate dictionary
-
         """
 
         if len(axes) == 0:
@@ -118,9 +119,6 @@ class ESP(model.Actuator):
             except KeyError:
                 logging.info("Axis %s has no unit. Assuming m", axis_name)
                 axis_unit = "m"
-
-            if axis_unit not in ('m', 's'):
-                raise ValueError("Invalid axis unit. Should be m or s.")
 
             try:
                 conv_factor = float(axis_par['conv_factor'])
@@ -181,20 +179,17 @@ class ESP(model.Actuator):
             return
 
         if not isinstance(value, dict):
-            raise ValueError("Invalid metadata value. Should be a coordinate dictionary.")
+            raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (value,))
                 
         # update all axes
-        for n, i in self._axis_map.items():
-            if n in value.keys():
+        for n in self._axis_map.keys():
+            if n in value:
                 self._offset[n] = value[n]
-        logging.debug("reporting metadata entry %s with value %s.", value, model.MD_POS_COR)
+        logging.debug("Updating offset to %s.", value)
         self._updatePosition()
 
-    """
-    Low level serial commands.
+    # Connection methods
 
-    * note: These all convert to internal units of the controller
-    """
     @staticmethod
     def _openSerialPort(port, baudrate):
         """
@@ -291,10 +286,9 @@ class ESP(model.Actuator):
             logging.debug("Sending command %s", cmd.encode('string_escape'))
             self._serial.write(cmd.encode('ascii'))
 
-    def _sendQuery(self, cmd, timeout=1):
+    def _sendQuery(self, cmd):
         """
         cmd (str): command to be sent to device (without the CR, but with the ?)
-        timeout (int): maximum time to receive the answer
         returns (str): answer received from the device (without \n or \r)
         raise:
             IOError if no answer is returned in time
@@ -315,6 +309,9 @@ class ESP(model.Actuator):
             logging.debug("Received answer %s", ans.encode('string_escape'))
 
             return ans.strip()
+
+    # Low level serial commands.
+    # Note: These all convert to internal units of the controller
 
     def GetErrorCode(self):
         # Checks the device error register
@@ -340,7 +337,7 @@ class ESP(model.Actuator):
     def SetAxisUnit(self, axis_num, unit):
         # Set the internal unit used by the controller
         if not unit in UNIT_DEF:
-            raise ValueError("Unknown unit name %s", unit)
+            raise ValueError("Unknown unit name %s" % (unit,))
         self._sendOrder("%d SN %d" % (axis_num, UNIT_DEF[unit]))
 
     def MoveAbsPos(self, axis_num, pos):
@@ -422,22 +419,8 @@ class ESP(model.Actuator):
         """
         self._sendOrder("SM")
 
-    def GetRealPosition(self):
-        """
-        Gets the real position from the controller itself. (no offset, but with a conversion factor)
-        retruns:
-            dict of axis name str -> float
-        """
-        real_pos = {}
-
-        for ax_n, i in self._axis_map.items():
-            if ax_n in self._offset.keys():
-                real_pos[ax_n] = self.GetPosition(i) / self._axis_conv_factor[i]
-
-        return real_pos
-
     """
-    High level commands
+    High level commands (ie, Odemis Actuator API)
     """
 
     def _applyOffset(self, pos):
@@ -491,7 +474,6 @@ class ESP(model.Actuator):
             CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
-
             end = 0  # expected end
             moving_axes = set()
             for an, v in pos.items():
@@ -775,37 +757,37 @@ class ESPSimulator(object):
                 self._sendAnswer(0)  # no error
 
         # Query the axis ID number
-        elif re.match('\dID\?', msg):
+        elif re.match(r'\dID\?', msg):
             self._sendAnswer("12345")
 
         # Query absolute position
-        elif re.match('\dTP\?', msg):
+        elif re.match(r'\dTP\?', msg):
             axis = int(msg[0])
             self._updateCurrentPosition()
-            self._sendAnswer(str(self._pos[axis]))
+            self._sendAnswer(str(self._pos[axis - 1]))
 
         # Query current target
-        elif re.match('\dDP\?', msg):
+        elif re.match(r'\dDP\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._target_pos[axis]))
+            self._sendAnswer(str(self._target_pos[axis - 1]))
 
         # Query current speed
-        elif re.match('\dVA\?', msg):
+        elif re.match(r'\dVA\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._speed[axis]))
+            self._sendAnswer(str(self._speed[axis - 1]))
 
         # Query current accel
-        elif re.match('\dAC\?', msg):
+        elif re.match(r'\dAC\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._accel[axis]))
+            self._sendAnswer(str(self._accel[axis - 1]))
 
         # Query current decel
-        elif re.match('\dAG\?', msg):
+        elif re.match(r'\dAG\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._decel[axis]))
+            self._sendAnswer(str(self._decel[axis - 1]))
 
         # Query motion done
-        elif re.match('\dMD\?', msg):
+        elif re.match(r'\dMD\?', msg):
             self._updateCurrentPosition()
 
             if self._isMoving():
@@ -814,26 +796,26 @@ class ESPSimulator(object):
                 self._sendAnswer(1)
 
         # Move to an absolute position
-        elif re.match('\dPA', msg):
+        elif re.match(r'\dPA', msg):
             axis = int(msg[0])
             new_pos = float(msg[3:])
-            self._doMove(axis, new_pos)
+            self._doMove(axis - 1, new_pos)
 
         # Move to a relative position
-        elif re.match('\dPR', msg):
+        elif re.match(r'\dPR', msg):
             axis = int(msg[0])
             shift = float(msg[3:])
-            new_pos = self._pos[axis] + shift
-            self._doMove(axis, new_pos)
+            new_pos = self._pos[axis - 1] + shift
+            self._doMove(axis - 1, new_pos)
 
         # Set speed
-        elif re.match('\dVA', msg):
+        elif re.match(r'\dVA', msg):
             axis = int(msg[0])
             speed = float(msg[3:])
-            self._speed[axis] = speed
+            self._speed[axis - 1] = speed
 
         # Set unit
-        elif re.match('\dSN', msg):
+        elif re.match(r'\dSN', msg):
             # we don't need to do anything here
             pass
 

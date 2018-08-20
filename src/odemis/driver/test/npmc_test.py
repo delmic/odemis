@@ -38,8 +38,6 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-C = 2.99792458e11  # speed of light in mm/s
-
 # arguments used for the creation of basic components
 CONFIG = {"name": "Delay Stage",
           "role": "delay-stage",
@@ -52,7 +50,14 @@ CONFIG = {"name": "Delay Stage",
                     'unit': 'm',
                     'conv_factor': 1000,  # from internal unit mm to unit m
                 },
+                'z': {
+                    'number': 3,
+                    'range': [0, 3.14],
+                    'unit': 'rad',
+                    'conv_factor': 10000,  # from internal unit mm to unit rad
+                },
            },
+          "inverted": ["z"],
 }
 
 COMP_ARGS = {
@@ -73,10 +78,9 @@ def add_coord(pos1, pos2):
     Returns ret
         dict (axis name str) -> (float)
     """
-    ret = {}
-    for an, v in pos1.items():
-        if an in pos2.keys():
-            ret[an] = v + pos2[an]
+    ret = pos1.copy()
+    for an, v in pos2.items():
+        ret[an] += v
 
     return ret
 
@@ -89,10 +93,9 @@ def subtract_coord(pos1, pos2):
     Returns ret
         dict (axis name str) -> (float)
     """
-    ret = {}
-    for an, v in pos1.items():
-        if an in pos2.keys():
-            ret[an] = v - pos2[an]
+    ret = pos1.copy()
+    for an, v in pos2.items():
+        ret[an] -= v
 
     return ret
 
@@ -117,12 +120,13 @@ class TestNPMC(unittest.TestCase):
         """
         Test moving to an absolute position.
         """
-
+        exp_pos = self.dev.position.value.copy()
         for pos in (0, 0.1, 0.15, -0.1, 0):
             new_pos = {'x': pos}
             f = self.dev.moveAbs(new_pos)
             f.result()
-            test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+            exp_pos["x"] = pos
+            test.assert_pos_almost_equal(self.dev.position.value, exp_pos, **COMP_ARGS)
 
     def test_position_rel(self):
         """
@@ -140,9 +144,24 @@ class TestNPMC(unittest.TestCase):
             f.result()
             test.assert_pos_almost_equal(add_coord(old_pos, new_shift), self.dev.position.value, **COMP_ARGS)
 
+    def _getRealPosition(self):
+        """
+        Gets the real position from the controller itself. (no offset, but with a conversion factor)
+        returns:
+            dict of axis name str -> float
+        """
+        real_pos = {}
+        dev = self.dev
+
+        for ax_n, i in dev._axis_map.items():
+            real_pos[ax_n] = dev.GetPosition(i) / dev._axis_conv_factor[i]
+
+        return real_pos
+
     def test_offset(self):
-        # Start at the origin to prevent hitting the ends
-        self.dev.moveAbs({'x': 0}).result()
+        # Start near the origin
+        self.dev.moveAbs({'x': 0.01}).result()
+        logging.info("POSITION = %s", self.dev.position.value)
 
         # Bad offset
         with self.assertRaises(ValueError):
@@ -155,16 +174,22 @@ class TestNPMC(unittest.TestCase):
         test.assert_pos_almost_equal(subtract_coord(old_pos, offset_1), self.dev.position.value, **COMP_ARGS)
 
         # Test offset #2
-        old_pos = self.dev.GetRealPosition()
+        old_pos = self._getRealPosition()
         offset_2 = {'x':-0.05}
         self.dev.updateMetadata({model.MD_POS_COR: offset_2})
-        test.assert_pos_almost_equal(subtract_coord(old_pos, offset_2), self.dev.position.value, **COMP_ARGS)
+        exp_pos = subtract_coord(old_pos, offset_2)
+        test.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
 
         # now move to the origin
         new_pos = {'x': 0}
         f = self.dev.moveAbs(new_pos)
         f.result()
-        test.assert_pos_almost_equal(offset_2, self.dev.GetRealPosition(), **COMP_ARGS)
+        exp_pos = self.dev.position.value.copy()
+        exp_pos["x"] = 0
+        test.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
+        exp_real = self.dev.position.value.copy()
+        exp_real.update(offset_2)
+        test.assert_pos_almost_equal(exp_real, self._getRealPosition(), **COMP_ARGS)
 
         # Remove the offset
         self.dev.updateMetadata({model.MD_POS_COR: {'x': 0}})
@@ -190,7 +215,7 @@ class TestNPMC(unittest.TestCase):
             time.sleep(0.02)
             f.cancel()
 
-            # make sure the posiiton is not the new position
+            # make sure the position is not the new position
             difference = new_pos['x'] - self.dev.position.value['x']
             self.assertNotEqual(round(difference, 4), 0)
 
@@ -201,13 +226,14 @@ class TestNPMC(unittest.TestCase):
 
         # start at origin
         self.dev.moveAbs({'x': 0}).result()
+        orig_pos = self.dev.position.value
 
         f1 = self.dev.moveRel({'x': 0.15})
         time.sleep(0.02)
         f2 = self.dev.moveRel({'x':-0.15})
 
         f2.result()
-        test.assert_pos_almost_equal({'x': 0}, self.dev.position.value, **COMP_ARGS)
+        test.assert_pos_almost_equal(orig_pos, self.dev.position.value, **COMP_ARGS)
 
 
 if __name__ == "__main__":
