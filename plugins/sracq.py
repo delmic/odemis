@@ -90,6 +90,9 @@ class SRAcqPlugin(Plugin):
         ("filename", {
             "tooltip": "Each acquisition will be saved with the name and the number appended.",
             "control_type": gui.CONTROL_SAVE_FILE,
+            "wildcard":
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "HDF5 Files (*.h5)|*.h5",
         }),
         ("expectedDuration", {
         }),

@@ -73,6 +73,9 @@ class TileAcqPlugin(Plugin):
         ("filename", {
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
+            "wildcard":
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "HDF5 Files (*.h5)|*.h5",
         }),
         ("stitch", {
             "tooltip": "Use all the tiles to create a large-scale image at the end of the acquisition",

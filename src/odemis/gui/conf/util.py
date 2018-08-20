@@ -696,13 +696,12 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             dialog_style = wx.FD_OPEN
 
         clearlabel = conf.get('clearlabel')  # Text to show when no filename (+ allow to clear the filename)
+        wildcard = conf.get('wildcard', "*.*")  # File extension wildcard string
         lbl_ctrl, value_ctrl = container.add_file_button(label_text,
                                                          val,
                                                          clearlabel,
+                                                         wildcard=wildcard,
                                                          dialog_style=dialog_style)
-
-        # TODO: allow to change the wildcard via a conf key?
-        # value_ctrl.SetWildcard(wildcards)
 
         # Add the corresponding setting entry
         setting_entry = SettingEntry(name=label_text, va=va, hw_comp=hw_comp,

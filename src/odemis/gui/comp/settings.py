@@ -328,7 +328,7 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN):
+    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
 
         # Create label
         lbl_ctrl = self._add_side_label(label_text)
@@ -339,6 +339,7 @@ class SettingsPanel(wx.Panel):
                                  clear_label=clearlabel,
                                  clear_btn=clearlabel is not None,
                                  file_path=value,
+                                 wildcard=wildcard,
                                  default_dir=None)
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
