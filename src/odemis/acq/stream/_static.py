@@ -120,6 +120,8 @@ class Static2DStream(StaticStream):
         # If there are 5 dims in CTZYX, eliminate CT and only take spatial dimensions
         if len(raw[0].shape) == 5:
             raw[0] = raw[0][0, 0]
+        elif len(raw[0].shape) == 4:
+            raw[0] = raw[0][0]
 
         if len(raw[0].shape) == 3:
             try:
