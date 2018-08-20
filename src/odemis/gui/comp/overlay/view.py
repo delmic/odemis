@@ -198,7 +198,6 @@ class FocusOverlay(base.ViewOverlay):
         self.line_width = 16
         self.shifts = [None, None]  # None or float (m)
         self.ppm = (5e6, 5e6)  # px/m, conversion ratio m -> px
-        self.zlevel_display = False
 
         self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
 

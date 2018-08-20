@@ -33,6 +33,7 @@ other dealings in the software.
 from __future__ import division
 
 from collections import OrderedDict
+from concurrent.futures import CancelledError
 import logging
 import math
 import copy
@@ -66,9 +67,15 @@ class ZStackPlugin(Plugin):
         }),
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
-
         }),
-        ("expectedDuration", {
+        ("zstep", {
+            "control_type": odemis.gui.CONTROL_FLT,
+        }),
+        ("zstart", {
+            "control_type": odemis.gui.CONTROL_FLT,
+        }),
+        ("zstop", {
+            "control_type": odemis.gui.CONTROL_FLT,
         }),
     ))
 
@@ -214,7 +221,7 @@ class ZStackPlugin(Plugin):
 
         # On SPARC, fail if no ROI selected
         try:
-            if tab.tab_data_model.semStream.roi.value == UNDEFINED_ROI:
+            if not hasattr(tab.tab_data_model, "roa"):
                 box = wx.MessageDialog(self.main_app.main_frame,
                            "You need to select a region of acquisition.",
                            "Z stack acquisition not possible", wx.OK | wx.ICON_STOP)
@@ -265,29 +272,6 @@ class ZStackPlugin(Plugin):
         if dlg:  # If dlg hasn't been destroyed yet
             dlg.Destroy()
 
-    def initAcquisition(self):
-        # Move the focus to the start z position
-        logging.debug("Preparing Z Stack acquisition. Moving focus to start position")
-        self.old_pos = self.focus.position.value
-        self.focus.moveAbs({'z': self.zstart.value}).result()
-
-    def stepAcquisition(self, i):
-        self.focus.moveRel({'z': self.zstep.value}).result()
-        
-    def exportAcquisition(self, images):
-        logging.debug("Exporting Z Stack to HDF5")
-        exporter = dataio.find_fittest_converter(self.filename.value)
-        exporter.export(self.filename.value, images)
-
-    def completeAcquisition(self):
-        # Mvoe back to start
-        logging.debug("Z Stack acquisition complete. Returning focus to start position")
-        self.focus.moveAbs(self.old_pos).result()
-        
-    def postProcessing(self, images):
-        cubes = [self.constructCube(im) for im in images]
-        return cubes
-
     def constructCube(self, images):
         # images is a list of 3 dim data arrays.
         ret = []
@@ -295,7 +279,7 @@ class ZStackPlugin(Plugin):
             stack = np.dstack(image)
             stack = np.swapaxes(stack, 1, 2)
             ret.append(stack[0])
-            
+
         # Add back metadata
         metadata3d = copy.copy(images[0].metadata)
         # Extend pixel size to 3D
@@ -315,12 +299,49 @@ class ZStackPlugin(Plugin):
         metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, ps_z)
         metadata3d[model.MD_DIMS] = "ZYX"
         self._metadata = copy.copy(metadata3d)
-        
+
         ret = DataArray(ret, metadata3d)
-            
+
         return ret
 
-    # ALL GENERIC
+    """
+    The acquire function API is generic.
+    Special functionality is added in the functions:
+
+    initAcquisition(): Called before acquisition begins.
+        Returns: (float) estimate of time per step
+    stepAcquisition(i): An action that executes for the ith step of the acquisition
+    postProcessing(images): Post-process the images after the acquisition is done.
+        Returns: (list) images
+    completeAcquisition(completed): Run actions that clean up after the acquisition occurs.
+        completed: True if completed without trouble
+
+    """
+
+    def initAcquisition(self):
+        logging.info("Z stack acquisition started with %d levels", self.numberofAcquisitions.value)
+
+        # Move the focus to the start z position
+        logging.debug("Preparing Z Stack acquisition. Moving focus to start position")
+        self.old_pos = self.focus.position.value
+        self.focus.moveAbs({'z': self.zstart.value}).result()
+        speed = self.focus.speed.value['z']
+        return driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
+
+    def stepAcquisition(self, i, images):
+        self.focus.moveRel({'z': self.zstep.value}).result()
+        
+    def completeAcquisition(self, completed):
+        # Mvoe back to start
+        if completed:
+            logging.info("Z Stack acquisiition complete.")
+        logging.debug("Returning focus to start position %s", self.old_pos)
+        self.focus.moveAbs(self.old_pos).result()
+        
+    def postProcessing(self, images):
+        cubes = [self.constructCube(im) for im in images]
+        return cubes
+
     def acquire(self, dlg):
         main_data = self.main_app.main_data
         str_ctrl = main_data.tab.value.streambar_controller
@@ -330,59 +351,68 @@ class ZStackPlugin(Plugin):
         ss, last_ss = self._get_acq_streams()
 
         sacqt = acq.estimateTime(ss)
-        speed = self.focus.speed.value['z']
-        step_time = driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
-
-        logging.info("Z stack acquisition started with %d levels with streams %s", nb, ss)
-
-        # Specific plugin init
-        self.initAcquisition()
-
-        # TODO: if drift correction, use it over all the time
-        f = model.ProgressiveFuture()
-        f.task_canceller = lambda l: True  # To allow cancelling while it's running
-        f.set_running_or_notify_cancel()  # Indicate the work is starting now
-        dlg.showProgress(f)
         
-        images = None
+        completed = False
 
-        for i in range(nb):
-            left = nb - i
-            dur = sacqt * left + step_time * (left - 1)
-            
-            logging.debug("Z Stack Acquisition %d of %d", i, nb)
-            
-            if left == 1 and last_ss:
-                ss += last_ss
-                dur += acq.estimateTime(ss) - sacqt
+        try:
+            step_time = self.initAcquisition()
+            logging.debug("Acquisition streams: %s", ss)
 
-            startt = time.time()
-            f.set_progress(end=startt + dur)
-            das, e = acq.acquire(ss).result()
-            if images is None:
-                # Copy metadata from the first acquisition
-                self._metadata = copy.copy(das[0].metadata)
-                images = [[] for i in range(len(das))]
-            
-            for im, da in zip(images, das):
-                im.append(da)
+            # TODO: if drift correction, use it over all the time
+            f = model.ProgressiveFuture()
+            f.task_canceller = lambda l: True  # To allow cancelling while it's running
+            f.set_running_or_notify_cancel()  # Indicate the work is starting now
+            dlg.showProgress(f)
 
-            if f.cancelled():
-                return
-
-            # Execute an action to prepare the next acquisition for the ith acquisition
-            self.stepAcquisition(i)
-
-        f.set_result(None)  # Indicate it's over
+            images = None
         
-        # Construct a cube from each stream's image. 
-        images = self.postProcessing(images)
+            for i in range(nb):
+                left = nb - i
+                dur = sacqt * left + step_time * (left - 1)
 
-        # Export image
-        self.exportAcquisition(images)
+                logging.debug("Acquisition %d of %d", i, nb)
 
-        # Do completion actions
-        self.completeAcquisition()
+                if left == 1 and last_ss:
+                    ss += last_ss
+                    dur += acq.estimateTime(ss) - sacqt
+
+                startt = time.time()
+                f.set_progress(end=startt + dur)
+                das, e = acq.acquire(ss).result()
+                if images is None:
+                    # Copy metadata from the first acquisition
+                    self._metadata = copy.copy(das[0].metadata)
+                    images = [[] for i in range(len(das))]
+
+                for im, da in zip(images, das):
+                    im.append(da)
+
+                if f.cancelled():
+                    raise CancelledError()
+
+                # Execute an action to prepare the next acquisition for the ith acquisition
+                self.stepAcquisition(i, images)
+
+            f.set_result(None)  # Indicate it's over
+            
+            # Construct a cube from each stream's image.
+            images = self.postProcessing(images)
+
+            # Export image
+            logging.debug("Exporting Z Stack to HDF5")
+            exporter = dataio.find_fittest_converter(self.filename.value)
+            exporter.export(self.filename.value, images)
+            completed = True
+            
+        except CancelledError:
+            logging.debug("Acquisition cancelled.")
+
+        except e:
+            logging.exception(e)
+
+        finally:
+            # Do completion actions
+            self.completeAcquisition(completed)
 
         # self.showAcquisition(self.filename.value)
         dlg.Destroy()

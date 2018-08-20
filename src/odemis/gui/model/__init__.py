@@ -619,22 +619,30 @@ class AnalysisGUIData(MicroscopyGUIData):
         self.streams.subscribe(self._on_stream_change)
 
     def _updateZParams(self):
+        self.static_zdisplay.value = any(model.hasVA(s, "zlevel") for s in self.streams.value)
         self._updateZRange()
         self.zpos.range = self.zrange.value
-        self.static_zdisplay.value = any(model.hasVA(s, "zlevel") for s in self.streams.value)
 
     def _updateZRange(self):
+        if not self.static_zdisplay:
+            return
+
         lo, hi = 0, 0
         for s in self.streams.value:
             if model.hasVA(s, "zlevel"):
-                new_lo = s.zstart.value
+                new_lo = min([
+                    s.zstart.value, s.zstart.value + s.zstep.value * s.zlevel.range[1]])
+
+                new_hi = max([
+                    s.zstart.value, s.zstart.value + s.zstep.value * s.zlevel.range[1]])
+
                 if new_lo < lo:
                     lo = new_lo
 
-                new_hi = s.zstart.value + s.zstep.value * s.zlevel.range[1]
                 if new_hi > hi:
                     hi = new_hi
 
+        logging.debug("Z stack range updated to %d - %d", lo, hi)
         self.zrange.value = (lo, hi)
 
     def _on_ar_cal(self, fn):
@@ -1225,7 +1233,7 @@ class StreamView(View):
         
         if hasattr(self, "zpos"):
         
-            k = 1e-6
+            k = 5e-7
             val = k * shift
             
             try:
@@ -1296,7 +1304,7 @@ class StreamView(View):
 
         # Only pass the "update" keyword if the actuator accepts it for sure
         # It should increase latency in case of slow moves (ex: closed-loop
-        # stage tss.zlevel.value = 2hat vibrate a bit when reaching target position).
+        # stage that vibrate a bit when reaching target position).
         kwargs = {}
         if self._stage.axes["x"].canUpdate and self._stage.axes["y"].canUpdate:
             kwargs["update"] = True
