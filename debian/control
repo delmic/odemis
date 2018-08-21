@@ -54,6 +54,8 @@ Depends: python (>= 2.7.1),
          python-zmq (>= 2.1),
          python-pyro4-delmic,
          cgroup-bin,
+# On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
+         python-gi,
 # just to take screenshots during bug report
          graphicsmagick,
          odemis-doc,
