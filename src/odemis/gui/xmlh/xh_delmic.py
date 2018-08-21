@@ -39,8 +39,8 @@ import odemis.gui.comp.text as txt
 import odemis.gui.cont.tools as tools
 from odemis.gui import img
 import wx
-import wx.combo
 import wx.xrc as xrc
+import wx.adv
 
 
 HANDLER_CLASS_LIST = []
@@ -734,8 +734,8 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         self.AddStyle("wxCB_DROPDOWN", wx.CB_DROPDOWN)
         self.AddStyle("wxCB_READONLY", wx.CB_READONLY)
         self.AddStyle("wxCB_SORT", wx.CB_SORT)
-        self.AddStyle("wxODCB_STD_CONTROL_PAINT", wx.combo.ODCB_STD_CONTROL_PAINT)
-        self.AddStyle("wxODCB_DCLICK_CYCLES", wx.combo.ODCB_DCLICK_CYCLES)
+        self.AddStyle("wxODCB_STD_CONTROL_PAINT", wx.adv.ODCB_STD_CONTROL_PAINT)
+        self.AddStyle("wxODCB_DCLICK_CYCLES", wx.adv.ODCB_DCLICK_CYCLES)
         self.AddStyle("wxTE_PROCESS_ENTER", wx.TE_PROCESS_ENTER)
 
         self.AddWindowStyles()
@@ -748,7 +748,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         assert self.GetInstance() is None
 
         # Now create the object
-        new_ctrl = wx.combo.OwnerDrawnComboBox(self.GetParentAsWindow(),
+        new_ctrl = wx.adv.OwnerDrawnComboBox(self.GetParentAsWindow(),
                                             id=self.GetID(),
                                             pos=self.GetPosition(),
                                             size=self.GetSize(),

@@ -67,21 +67,13 @@ def darken_image(image, mltp=0.5):
     The image is darkened (in place) to a grayed-out version, appropriate for a 'disabled'
     appearance.
 
+    mltp (0<=float<=1): the smaller the darker. Values above 1 are possible, but
+      if the result becomes > 255, it will overflow and appear dark instead of
+      bright white.
     """
-
-    # We need to store the alpha channel, because setting new data automatically
-    # deletes the current alpha data.
-    if image.HasAlpha():
-        alpha = image.GetAlphaData()
-    else:
-        alpha = None
-
-    data = numpy.frombuffer(image.GetDataBuffer(), dtype='uint8')
+    # Update data in-place
+    data = numpy.asarray(image.GetDataBuffer())
     numpy.multiply(data, mltp, out=data, casting="unsafe")
-    image.SetData(data.tostring())
-
-    if alpha:
-        image.SetAlphaData(alpha)
 
 
 class BtnMixin(object):
@@ -200,10 +192,8 @@ class BtnMixin(object):
         self.bg_colour_set = True
 
     def GetBackgroundColour(self):
-        if self.bg_colour_set:
-            return super(BtnMixin, self).GetBackgroundColour()
-        else:
-            return self.Parent.GetBackgroundColour()
+        # when self.bg_colour_set is true super(BtnMixin, self).GetBackgroundColour() returns the wrong colour (240, 240, 240 ,255)
+        return self.Parent.GetBackgroundColour()
 
     def SetIcon(self, icon):
         icon_set = self.icon is not None
@@ -292,11 +282,19 @@ class BtnMixin(object):
         src_dc = wx.MemoryDC()
         src_dc.SelectObjectAsSource(bmp)
 
-        dst_bmp = wx.EmptyBitmap(btn_width, btn_height)
+        dst_bmp = wx.Bitmap(btn_width, btn_height)
         dst_dc = wx.MemoryDC()
         dst_dc.SelectObject(dst_bmp)
-        dst_dc.SetBackground(wx.Brush(bg_color))
-        dst_dc.Clear()
+        dst_dc.SetBrush(wx.Brush(bg_color))
+        # Transparency issue (caused by the bitmap dst_bmp only accepting black or white as background)
+        # There are 2 other solutions for fixing the transparency issue, but they only work on windows
+        # the reason for -1, -1 and +2 on width and height is not known but it can be easily determined by:
+        # 0,0,btn_width,btn_height is missing a pixel all around the rectangle
+        # and -1,-1,btn_width,btn_height misses 2 bottom pixel rows and two right column rows
+        # The other two ways (that work only on windows):
+        # 1. using an wx.Image with alpha (initAlpha + transparent mask) for bg
+        # 2. using fillcolour (on black)
+        dst_dc.DrawRectangle(-1, -1, btn_width + 2, btn_height + 2)
 
         dst_dc.DrawBitmap(l, 0, 0, True)
         dst_dc.DrawBitmap(m, section_width, 0, True)
@@ -322,7 +320,7 @@ class BtnMixin(object):
         return img.getImage(fn)
 
     def _getBtnBitmap(self, colour, height, state):
-        return wx.BitmapFromImage(self._getBtnImage(colour, height, state))
+        return wx.Bitmap(self._getBtnImage(colour, height, state))
 
     def _create_main_bitmap(self):
         return self._create_bitmap(
@@ -339,7 +337,7 @@ class BtnMixin(object):
         image = self._getBtnImage(self.face_colour, self.height, 'off')
         darken_image(image, 1.1)
         return self._create_bitmap(
-            wx.BitmapFromImage(image),
+            wx.Bitmap(image),
             (self.Size.x, self.height),
             self.GetBackgroundColour()
         )
@@ -351,7 +349,7 @@ class BtnMixin(object):
         image = self._getBtnImage(self.face_colour, self.height, 'off')
         darken_image(image, 0.8)
         return self._create_bitmap(
-            wx.BitmapFromImage(image),
+            wx.Bitmap(image),
             (self.Size.x, self.height or self.Size.y),
             self.GetBackgroundColour()
         )
@@ -592,8 +590,8 @@ class ImageStateButton(ImageToggleButton):
         if not self.IsEnabled():
             return
         if event.LeftIsDown() and self.HasCapture():
-            x, y = event.GetPositionTuple()
-            w, h = self.GetClientSizeTuple()
+            x, y = event.Position
+            w, h = self.ClientSize
             if 0 <= x < w and 0 <= y < h:
                 if self.state != self.nextState:
                     self.state = self.nextState
@@ -743,7 +741,7 @@ class ColourButton(ImageButton):
         brush = wx.Brush(self.colour)
         pen = wx.Pen(self.colour)
 
-        bmp = wx.EmptyBitmap(*self.Size)
+        bmp = wx.Bitmap(*self.Size)
         mdc = wx.MemoryDC()
         mdc.SelectObject(bmp)
 
@@ -769,7 +767,7 @@ class ColourButton(ImageButton):
         self.bmpLabel = self.bmpSelected = self.bmpDisabled = self._create_colour_bitmap()
 
         if self.use_hover:
-            bmp = wx.EmptyBitmap(*self.Size)
+            bmp = wx.Bitmap(*self.Size)
             mdc = wx.MemoryDC()
             mdc.SelectObject(bmp)
 
@@ -845,9 +843,9 @@ class ViewButton(GraphicRadioButton):
             scaled_img = wxImageScaleKeepRatio(image, self.thumbnail_size, wx.IMAGE_QUALITY_HIGH)
         else:
             # black image
-            scaled_img = wx.EmptyImage(*self.thumbnail_size)
+            scaled_img = wx.Image(*self.thumbnail_size)
 
-        self.thumbnail_bmp = wx.BitmapFromImage(scaled_img)
+        self.thumbnail_bmp = wx.Bitmap(scaled_img)
         self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
@@ -858,6 +856,7 @@ class ViewButton(GraphicRadioButton):
 
         # Draw the overlay image
         if self.thumbnail_bmp is not None:
+
             # logging.debug("Painting overlay")
             dc.DrawBitmap(self.thumbnail_bmp,
                           self.thumbnail_border,
@@ -882,7 +881,7 @@ class PopupImageButton(ImageTextButton):
         self.bmpHover = img.getBitmap("stream_add_h.png")
         btn_img = img.getImage("stream_add.png")
         darken_image(btn_img, 0.8)
-        self.bmpDisabled = wx.BitmapFromImage(btn_img)
+        self.bmpDisabled = wx.Bitmap(btn_img)
 
         self.choices = {}
         self.menu = wx.Menu()
@@ -916,13 +915,13 @@ class PopupImageButton(ImageTextButton):
         menu_item = wx.MenuItem(self.menu, menu_id, label)
         self.menu.Bind(wx.EVT_MENU, self.on_action_select, id=menu_id)
         self.choices[label] = (menu_item, callback, check_enabled)
-        self.menu.AppendItem(menu_item)
+        self.menu.Append(menu_item)
         self.Enable()
 
     def remove_choice(self, label):
         """ Remove the choice associated with the name `1abel` """
         menu_item, cb, ce = self.choices.pop(label)
-        self.menu.RemoveItem(menu_item)
+        self.menu.Remove(menu_item)
 
         if not self.choices:
             self.Disable()

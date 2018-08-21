@@ -31,10 +31,10 @@ import logging
 from odemis.gui import img
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, darken_image
-import wx.combo
+import wx.adv
 
 
-class ComboBox(wx.combo.OwnerDrawnComboBox):
+class ComboBox(wx.adv.OwnerDrawnComboBox):
     """ A simple sub class of OwnerDrawnComboBox that prevents a white border
     from showing around the combobox and allows for left/right caret
     navigation with the arrow keys.
@@ -56,7 +56,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         labels = kwargs.pop('labels', [])
         choices = kwargs.pop('choices', [])
 
-        wx.combo.OwnerDrawnComboBox.__init__(self, *args, **kwargs)
+        super(ComboBox, self).__init__(*args, **kwargs)
         # SetMargins allow the left margin to be set to 0, but the top
         # margin won't move and stays at the default -1.
         self.SetMargins(0, 0)

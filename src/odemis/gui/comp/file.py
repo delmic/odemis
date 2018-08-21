@@ -98,7 +98,7 @@ class FileBrowser(wx.Panel):
                                           pos=(10, 8))
             self._btn_clear.bmpHover = img.getBitmap("icon/ico_clear_h.png")
 
-            self._btn_clear.SetToolTipString("Clear calibration")  # FIXME: do not hard code
+            self._btn_clear.SetToolTip("Clear calibration")  # FIXME: do not hard code
             self._btn_clear.Hide()
             self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
             box.Add(self._btn_clear, 0, wx.LEFT, 10)
@@ -111,9 +111,7 @@ class FileBrowser(wx.Panel):
         self.SetAutoLayout(True)
         self.SetSizer(box)
         self.Layout()
-        if isinstance(size, tuple):
-            size = wx.Size(size)
-        self.SetDimensions(-1, -1, size.width, size.height, wx.SIZE_USE_EXISTING)
+        self.SetSize(size)
 
     def on_changed(self, evt):
         evt.SetEventObject(self)
@@ -133,7 +131,7 @@ class FileBrowser(wx.Panel):
 
             self.text_ctrl.SetValue(self.file_path)
 
-            self.text_ctrl.SetToolTipString(self.file_path)
+            self.text_ctrl.SetToolTip(self.file_path)
             self.text_ctrl.SetInsertionPointEnd()
 
             if self._btn_clear:
@@ -146,7 +144,7 @@ class FileBrowser(wx.Panel):
 
             self.text_ctrl.SetValue(self.label)
 
-            self.text_ctrl.SetToolTipString("")
+            self.text_ctrl.SetToolTip("")
             if self._btn_clear:
                 self._btn_clear.Hide()
 

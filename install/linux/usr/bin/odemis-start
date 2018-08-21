@@ -142,12 +142,20 @@ class BackendStarter(object):
 
         self._nogui = nogui
 
-        # Warning: wx will crash if Pynotify has been loaded before creating the wx.App (probably
-        # due to bad interaction with GTK). That's why we only import it here.
-        logging.debug("Starting pynotify")
-        import pynotify
-        pynotify.init("Odemis")
-        self._notif = pynotify.Notification("")
+        try:
+            # Uses Gobject, which works with both GTK2 or GTK3
+            import notify2
+            notify2.init("Odemis")
+            self._notif = notify2.Notification("")
+        except ImportError:
+            # Warning: wx will crash if Pynotify has been loaded before creating
+            # the wx.App (probably due to bad interaction with GTK).
+            # That's why we only import it here. It only works if wxPython uses
+            # GTK2. If GTK3 is used, chaos will ensue, without explanations.
+            logging.debug("Cannot use notify2, falling back to pynotify")
+            import pynotify
+            pynotify.init("Odemis")
+            self._notif = pynotify.Notification("")
 
         # For listening to component states
         self._mic = None

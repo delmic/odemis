@@ -277,9 +277,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._updateDataList(self._choices)
         self.dropdownlistbox.InsertColumn(0, "")
         for num, colVal in enumerate(self._choices):
-            index = self.dropdownlistbox.InsertImageStringItem(sys.maxint,
-                                                               colVal, -1)
-            self.dropdownlistbox.SetStringItem(index, 0, colVal)
+            index = self.dropdownlistbox.InsertItem(sys.maxint, colVal, -1)
+            self.dropdownlistbox.SetItem(index, 0, colVal)
             self.dropdownlistbox.SetItemData(index, num)
         self._setListSize()
         # there is only one choice for both search and fetch if setting a
@@ -317,7 +316,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
                           for x in xrange(dd.GetColumnCount())]
                 self._select_callback(values)
             self.SetValue(itemtext)
-            self.SetToolTip(wx.ToolTip(itemtext))
+            self.SetToolTip(itemtext)
             self.SetInsertionPointEnd()
             self.SetSelection(-1, -1)
             self._showDropDown(False)
@@ -329,8 +328,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         """
         if show:
             size = self.dropdown.GetSize()
-            width, height = self . GetSizeTuple()
-            x, y = self.ClientToScreenXY(0, height)
+            width, height = self.GetSize()
+            x, y = self.ClientToScreen(0, height)
             if size.GetWidth() != width:
                 size.SetWidth(width)
                 self.dropdown.SetSize(size)
@@ -378,18 +377,13 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdown.SetClientSize(self.popupsize)
 
 
-class _NumberValidator(wx.PyValidator):
-    """ Base class used for number validation
+if wx.MAJOR_VERSION <= 3:
+    ValidatorClass = wx.PyValidator
+else:
+    ValidatorClass = wx.Validator
 
-    Note::
-        In wxPython 3.0 Phoenix, wx.PyValidator will be replaced with wx. Validator. When you try
-        and replace wx.PyValidator with wx.Validator in wxPython 3.0 Classic, however, validators
-        will not be assigned correctly to TextCtrls (most notably the one in the Slider class)
 
-        No clear reason was found for this and no attempt to change the super class should be made
-        as long as Odemis uses the Classic version of wxPython.
-
-    """
+class _NumberValidator(ValidatorClass):
 
     def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
         """ Constructor """

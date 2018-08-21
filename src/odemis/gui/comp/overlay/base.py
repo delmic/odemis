@@ -426,31 +426,31 @@ class DragMixin(object):
     def _on_left_down(self, evt):
         """ Start a left drag if no right drag is in progress """
         if not self.right_dragging:
-            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.GetPositionTuple())
+            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.Position)
             self._left_dragging = True
 
     def _on_left_up(self, evt):
         """ End a left drag if no right drag is in progress """
         if not self.right_dragging:
             self._left_dragging = False
-            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
+            self.drag_v_end_pos = Vec(evt.Position)
 
     def _on_right_down(self, evt):
         """ Start a right drag if no left drag is in progress """
         if not self.left_dragging:
-            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.GetPositionTuple())
+            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.Position)
             self._right_dragging = True
 
     def _on_right_up(self, evt):
         """ End a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = False
-            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
+            self.drag_v_end_pos = Vec(evt.Position)
 
     def _on_motion(self, evt):
         """ Update the drag end position if a drag movement is in progress """
         if self.dragging:
-            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
+            self.drag_v_end_pos = Vec(evt.Position)
 
     def _on_focus_lost(self, evt):
         """ Cancel any drag when the parent canvas loses focus """
@@ -944,7 +944,7 @@ class SelectionMixin(DragMixin):
 
         DragMixin._on_motion(self, evt)
 
-        self.hover = self.get_hover(evt.GetPositionTuple())
+        self.hover = self.get_hover(evt.Position)
 
         if self.selection_mode:
             if self.selection_mode == SEL_MODE_CREATE:
@@ -1011,7 +1011,7 @@ class PixelDataMixin(object):
         return None not in (self._data_resolution, self._pixel_data_p_rect, self._data_mpp)
 
     def _on_motion(self, evt):
-        self._mouse_vpos = Vec(evt.GetPositionTuple())
+        self._mouse_vpos = Vec(evt.Position)
 
     def is_over_pixel_data(self, v_pos=None):
         """ Check if the mouse cursor is over an area containing pixel data """

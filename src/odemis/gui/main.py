@@ -21,6 +21,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from odemis.gui.util import wx_adapter
 import Pyro4
 import Pyro4.errors
 import argparse
@@ -253,9 +254,7 @@ class OdemisGUIApp(wx.App):
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_quit.GetId(),
-                        self.on_close_window)
+            self.main_frame.Bind(wx.EVT_MENU, self.on_close_window, id=self.main_frame.menu_item_quit.GetId())
 
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
 
@@ -473,16 +472,14 @@ def main(args):
         # Set WM_CLASS on linux, needed to get connected to the right icon.
         # wxPython doesn't do it, see http://trac.wxwidgets.org/ticket/12778
         try:
-            # Also possible via Xlib, but more complicated
-            import gtk
-            # Without it, it will crash cf. See:
-            # https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
-            gtk.remove_log_handlers()
+            import gi
+            from gi.repository import GLib
+
             # Must be done before the first window is displayed
             name = odemis.__shortname__
             if options.standalone:
                 name += "-standalone"
-            gtk.gdk.set_program_class(name)
+            GLib.set_prgname(name)
         except Exception:
             logging.info("Failed to set WM_CLASS")
 

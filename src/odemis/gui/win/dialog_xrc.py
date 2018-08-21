@@ -18,22 +18,27 @@ def get_resources():
 
 class xrcprogress_dialog(wx.Dialog):
 #!XRCED:begin-block:xrcprogress_dialog.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcprogress_dialog.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreDialog()
-        self.PreCreate(pre)
-        get_resources().LoadOnDialog(pre, parent, "progress_dialog")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "progress_dialog")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "progress_dialog")
 
         # Define variables for the controls, bind event handlers
         self.info_txt = xrc.XRCCTRL(self, "info_txt")
@@ -49,7 +54,7 @@ class xrcprogress_dialog(wx.Dialog):
 
 def __init_resources():
     global __res
-    __res = xrc.EmptyXmlResource()
+    __res = xrc.XmlResource()
 
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
@@ -183,7 +188,7 @@ nmn\x00tst\x00\xb7v^\x00wvw\x00\xb7w_\x00zzz\x00|{|\x00~~~\x00\x85\x85\x85\
 \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
 \x00\x00\x00\x00\x00'''
 
-    wx.MemoryFSHandler.AddFile('XRC/dialog/dialog_xrc', dialog_xrc)
-    wx.MemoryFSHandler.AddFile('XRC/dialog/___img_odemis_ico', ___img_odemis_ico)
+    wx.MemoryFSHandler.AddFile('XRC/dialog/dialog_xrc', bytearray(dialog_xrc))
+    wx.MemoryFSHandler.AddFile('XRC/dialog/___img_odemis_ico', bytearray(___img_odemis_ico))
     __res.Load('memory:XRC/dialog/dialog_xrc')
 

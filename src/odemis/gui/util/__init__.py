@@ -59,7 +59,7 @@ def ignore_dead(f, self, *args, **kwargs):
     """
     try:
         return f(self, *args, **kwargs)
-    except (wx.PyDeadObjectError, RuntimeError):
+    except RuntimeError:
         logging.warn("Dead object ignored in %s", f.__name__)
 
 
@@ -115,15 +115,21 @@ def dead_object_wrapper(f):
             app = wx.GetApp()
             if app:
                 return f(*args, **kwargs)
-        except (wx.PyDeadObjectError, RuntimeError):
+        except RuntimeError:
             logging.warning("Dead object ignored in %s", f.__name__)
-        except TypeError:
-            # If a wx.Window is destroyed and then passed as a parameter, a TypeError might reulst
-            # instead of a PyDeadObjectError.
-            if all([isinstance(a, wx._core._wxPyDeadObject) for a in args]):
-                logging.warning("Dead object parameter ignored in %s", f.__name__)
-            else:
-                raise
+        # TODO: Investigate if this needs fixing
+        # It used to check for objects which are dead, and now it check for object which are an Exception.
+        # Probably the initial code is not correct, as it looks like it should use any instead of all.
+        # It also doesn't check in kwargs.
+        # I don't know how to check for dead objects now,
+        # and I don't know if a TypeError would happen in such case anyway.
+        # except TypeError:
+        #     # If a wx.Window is destroyed and then passed as a parameter, a TypeError might reulst
+        #     # instead of a PyDeadObjectError.
+        #     if all([isinstance(a, RuntimeError) for a in args]):
+        #         logging.warning("Dead object parameter ignored in %s", f.__name__)
+        #     else:
+        #         raise
 
     return dead_object_wrapzor
 

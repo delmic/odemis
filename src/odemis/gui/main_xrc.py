@@ -18,22 +18,27 @@ def get_resources():
 
 class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
-        self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "fr_main")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreFrame()
+            self.PreCreate(pre)
+            get_resources().LoadOnFrame(pre, parent, "fr_main")
+            self.PostCreate(pre)
+        else:
+            wx.Frame.__init__(self)
+            self.PreCreate()
+            get_resources().LoadFrame(self, parent, "fr_main")
 
         # Define variables for the controls, bind event handlers
         self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
@@ -45,6 +50,11 @@ class xrcfr_main(wx.Frame):
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_recalibrate = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_recalibrate"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        idx = self.GetMenuBar().FindMenu("View")
+        if idx != wx.NOT_FOUND:
+            self.menu_view = self.GetMenuBar().GetMenu(idx)
+        else:
+            self.menu_view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_view")).GetSubMenu()
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
         self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
         self.menu_item_fit_content = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_fit_content"))
@@ -59,6 +69,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
+        self.pnl_tabbuttons = xrc.XRCCTRL(self, "pnl_tabbuttons")
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
@@ -75,31 +86,44 @@ class xrcfr_main(wx.Frame):
 
 class xrcpnl_tab_secom_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_align.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_align.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_secom_align")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_secom_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_secom_align")
 
         # Define variables for the controls, bind event handlers
         self.lens_align_slider_aligner = xrc.XRCCTRL(self, "lens_align_slider_aligner")
         self.pnl_ab_align = xrc.XRCCTRL(self, "pnl_ab_align")
+        self.lbl_mb = xrc.XRCCTRL(self, "lbl_mb")
+        self.lbl_pa = xrc.XRCCTRL(self, "lbl_pa")
+        self.lbl_ma = xrc.XRCCTRL(self, "lbl_ma")
+        self.lbl_pb = xrc.XRCCTRL(self, "lbl_pb")
         self.lens_align_btn_m_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_b")
         self.lens_align_btn_p_aligner_a = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_a")
         self.lens_align_btn_m_aligner_a = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_a")
         self.lens_align_btn_p_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_b")
         self.pnl_xy_align = xrc.XRCCTRL(self, "pnl_xy_align")
+        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
+        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
+        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
+        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
         self.lens_align_btn_p_aligner_y = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_y")
         self.lens_align_btn_m_aligner_y = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_y")
         self.lens_align_btn_m_aligner_x = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_x")
@@ -117,6 +141,7 @@ class xrcpnl_tab_secom_align(wx.Panel):
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
+        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
@@ -131,22 +156,27 @@ class xrcpnl_tab_secom_align(wx.Panel):
 
 class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_align")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_align")
 
         # Define variables for the controls, bind event handlers
         self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
@@ -156,18 +186,30 @@ class xrcpnl_tab_sparc_align(wx.Panel):
         self.pnl_sparc_trans = xrc.XRCCTRL(self, "pnl_sparc_trans")
         self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
         self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
+        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
+        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
+        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
+        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
         self.mirror_align_btn_p_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_y")
         self.mirror_align_btn_m_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_y")
         self.mirror_align_btn_p_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_x")
         self.mirror_align_btn_m_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_x")
         self.pnl_sparc_rot = xrc.XRCCTRL(self, "pnl_sparc_rot")
         self.mirror_align_slider_mirror_r = xrc.XRCCTRL(self, "mirror_align_slider_mirror_r")
+        self.lbl_pry = xrc.XRCCTRL(self, "lbl_pry")
+        self.lbl_mry = xrc.XRCCTRL(self, "lbl_mry")
+        self.lbl_prz = xrc.XRCCTRL(self, "lbl_prz")
+        self.lbl_mrz = xrc.XRCCTRL(self, "lbl_mrz")
         self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
         self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
         self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
         self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
         self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
         self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
+        self.lbl_pfy = xrc.XRCCTRL(self, "lbl_pfy")
+        self.lbl_mfy = xrc.XRCCTRL(self, "lbl_mfy")
+        self.lbl_pfx = xrc.XRCCTRL(self, "lbl_pfx")
+        self.lbl_mfx = xrc.XRCCTRL(self, "lbl_mfx")
         self.mirror_align_btn_p_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_y")
         self.mirror_align_btn_m_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_y")
         self.mirror_align_btn_m_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_x")
@@ -183,22 +225,27 @@ class xrcpnl_tab_sparc_align(wx.Panel):
 
 class xrcpnl_tab_sparc2_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc2_align.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc2_align.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc2_align")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc2_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc2_align")
 
         # Define variables for the controls, bind event handlers
         self.pnl_mode_btns = xrc.XRCCTRL(self, "pnl_mode_btns")
@@ -212,16 +259,26 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
         self.pnl_lens_mover = xrc.XRCCTRL(self, "pnl_lens_mover")
         self.slider_lens_mover = xrc.XRCCTRL(self, "slider_lens_mover")
+        self.lbl_p_lens = xrc.XRCCTRL(self, "lbl_p_lens")
+        self.lbl_m_lens = xrc.XRCCTRL(self, "lbl_m_lens")
         self.btn_m_lens_mover_x = xrc.XRCCTRL(self, "btn_m_lens_mover_x")
         self.btn_p_lens_mover_x = xrc.XRCCTRL(self, "btn_p_lens_mover_x")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
         self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
+        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
+        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
+        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
+        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
         self.btn_p_mirror_xy_y = xrc.XRCCTRL(self, "btn_p_mirror_xy_y")
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
         self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
         self.slider_fibaligner = xrc.XRCCTRL(self, "slider_fibaligner")
+        self.lbl_pfy = xrc.XRCCTRL(self, "lbl_pfy")
+        self.lbl_mfy = xrc.XRCCTRL(self, "lbl_mfy")
+        self.lbl_pfx = xrc.XRCCTRL(self, "lbl_pfx")
+        self.lbl_mfx = xrc.XRCCTRL(self, "lbl_mfx")
         self.btn_p_fibaligner_y = xrc.XRCCTRL(self, "btn_p_fibaligner_y")
         self.btn_m_fibaligner_y = xrc.XRCCTRL(self, "btn_m_fibaligner_y")
         self.btn_m_fibaligner_x = xrc.XRCCTRL(self, "btn_m_fibaligner_x")
@@ -245,22 +302,27 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
 
 class xrcpnl_tab_sparc_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_chamber")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_chamber")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_chamber")
 
         # Define variables for the controls, bind event handlers
         self.btn_switch_mirror = xrc.XRCCTRL(self, "btn_switch_mirror")
@@ -278,24 +340,30 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
 
 class xrcpnl_tab_sparc_acqui(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_acqui")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_acqui")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_acqui")
 
         # Define variables for the controls, bind event handlers
+        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
         self.lbl_sparc_view_all = xrc.XRCCTRL(self, "lbl_sparc_view_all")
         self.btn_sparc_view_all = xrc.XRCCTRL(self, "btn_sparc_view_all")
@@ -330,22 +398,27 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
 
 class xrcpnl_tab_inspection(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_inspection")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_inspection")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_inspection")
 
         # Define variables for the controls, bind event handlers
         self.btn_open_image = xrc.XRCCTRL(self, "btn_open_image")
@@ -369,6 +442,7 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
         self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
         self.vp_spatialspec = xrc.XRCCTRL(self, "vp_spatialspec")
+        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
@@ -379,22 +453,27 @@ class xrcpnl_tab_inspection(wx.Panel):
 
 class xrcpnl_tab_secom_streams(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_streams.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_streams.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PrePanel()
-        self.PreCreate(pre)
-        get_resources().LoadOnPanel(pre, parent, "pnl_tab_secom_streams")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_secom_streams")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_secom_streams")
 
         # Define variables for the controls, bind event handlers
         self.lbl_secom_overview = xrc.XRCCTRL(self, "lbl_secom_overview")
@@ -418,6 +497,7 @@ class xrcpnl_tab_secom_streams(wx.Panel):
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
         self.vp_flim_chronograph = xrc.XRCCTRL(self, "vp_flim_chronograph")
         self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
+        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.btn_press = xrc.XRCCTRL(self, "btn_press")
         self.btn_opt = xrc.XRCCTRL(self, "btn_opt")
         self.btn_sem = xrc.XRCCTRL(self, "btn_sem")
@@ -442,25 +522,31 @@ class xrcpnl_tab_secom_streams(wx.Panel):
 
 class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreDialog()
-        self.PreCreate(pre)
-        get_resources().LoadOnDialog(pre, parent, "fr_acq")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "fr_acq")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "fr_acq")
 
         # Define variables for the controls, bind event handlers
         self.pnl_view_acq = xrc.XRCCTRL(self, "pnl_view_acq")
+        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.cmb_presets = xrc.XRCCTRL(self, "cmb_presets")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_change_file = xrc.XRCCTRL(self, "btn_change_file")
@@ -480,22 +566,27 @@ class xrcfr_acq(wx.Dialog):
 
 class xrcfr_plugin(wx.Dialog):
 #!XRCED:begin-block:xrcfr_plugin.PreCreate
-    def PreCreate(self, pre):
+    def PreCreate(self, *args):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_plugin.PreCreate
 
     def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreDialog()
-        self.PreCreate(pre)
-        get_resources().LoadOnDialog(pre, parent, "fr_plugin")
-        self.PostCreate(pre)
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "fr_plugin")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "fr_plugin")
 
         # Define variables for the controls, bind event handlers
         self.pnl_desc = xrc.XRCCTRL(self, "pnl_desc")
@@ -521,7 +612,7 @@ class xrcfr_plugin(wx.Dialog):
 
 def __init_resources():
     global __res
-    __res = xrc.EmptyXmlResource()
+    __res = xrc.XmlResource()
 
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
@@ -6545,31 +6636,31 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
 \xfb\xcf_V\x8cj~\xe1f5\xbf\xb3S\x11\x9d<\xea\xdd;\x00dk\xb5<\x90\xe7\x1f\
 \xf4\x13\x033\x01\xae{\xd0\xa9\xd4\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_down_png', img_icon_ico_chevron_down_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_up_png', img_icon_ico_chevron_up_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_png', img_icon_ico_sem_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', img_icon_ico_sem_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_png', img_icon_ico_optical_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_green_png', img_icon_ico_optical_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_cam_png', img_icon_ico_cam_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_cam_green_png', img_icon_ico_cam_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_png', img_icon_ico_ang_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_green_png', img_icon_ico_ang_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_png', img_icon_ico_fib_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_green_png', img_icon_ico_fib_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_png', img_icon_ico_lens_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_green_png', img_icon_ico_lens_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_mirror_png', img_icon_ico_mirror_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_mirror_green_png', img_icon_ico_mirror_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', img_icon_ico_eject_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', img_icon_ico_eject_orange_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', img_icon_dialog_info_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', img_icon_ico_acqui_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_export_png', img_icon_ico_export_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', img_icon_ico_press_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', img_icon_dialog_error_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', bytearray(main_xrc))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', bytearray(img_logo_h30_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_down_png', bytearray(img_icon_ico_chevron_down_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_up_png', bytearray(img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_png', bytearray(img_icon_ico_sem_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', bytearray(img_icon_ico_sem_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_png', bytearray(img_icon_ico_optical_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_green_png', bytearray(img_icon_ico_optical_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_cam_png', bytearray(img_icon_ico_cam_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_cam_green_png', bytearray(img_icon_ico_cam_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_png', bytearray(img_icon_ico_ang_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_green_png', bytearray(img_icon_ico_ang_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_png', bytearray(img_icon_ico_fib_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_green_png', bytearray(img_icon_ico_fib_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_png', bytearray(img_icon_ico_lens_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_green_png', bytearray(img_icon_ico_lens_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_mirror_png', bytearray(img_icon_ico_mirror_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_mirror_green_png', bytearray(img_icon_ico_mirror_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', bytearray(img_icon_ico_eject_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', bytearray(img_icon_ico_eject_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', bytearray(img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', bytearray(img_icon_dialog_info_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', bytearray(img_icon_ico_acqui_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_export_png', bytearray(img_icon_ico_export_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', bytearray(img_icon_ico_press_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', bytearray(img_icon_dialog_error_png))
     __res.Load('memory:XRC/main/main_xrc')
 

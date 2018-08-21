@@ -39,9 +39,10 @@ Depends: python (>= 2.7.1),
          python-xdg,
 # suds is only needed for phenom driver
          python-suds,
+# matplotlib is only used for pituner
          python-matplotlib,
          python-opencv (>= 2.4),
-         python-notify,
+         python-notify2,
 # psutil is not required, if not present, less debug information will be available
          python-psutil,
 # comedi is only needed for semcomedi driver
@@ -53,6 +54,8 @@ Depends: python (>= 2.7.1),
          python-zmq (>= 2.1),
          python-pyro4-delmic,
          cgroup-bin,
+# On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
+         python-gi,
 # just to take screenshots during bug report
          graphicsmagick,
          odemis-doc,

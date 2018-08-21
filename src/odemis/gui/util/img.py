@@ -2057,7 +2057,7 @@ def NDImage2wxBitmap(image):
     assert(len(image.shape) == 3)
     size = image.shape[1::-1]
     if image.shape[2] == 3: # RGB
-        bim = wx.EmptyBitmap(size[0], size[1], 24)
+        bim = wx.Bitmap(size[0], size[1], 24)
         bim.CopyFromBuffer(image, wx.BitmapBufferFormat_RGB)
         # bim = wx.BitmapFromBuffer(size[0], size[1], image)
     elif image.shape[2] == 4: # RGBA
@@ -2082,7 +2082,7 @@ def wxImage2NDImage(image, keep_alpha=True):
     else:
         shape = image.Height, image.Width, 3
 
-    return numpy.ndarray(buffer=image.DataBuffer, shape=shape, dtype=numpy.uint8)
+    return numpy.ndarray(buffer=image.GetData(), shape=shape, dtype=numpy.uint8)
 
 
 def wxImageScaleKeepRatio(im, size, quality=wx.IMAGE_QUALITY_NORMAL):

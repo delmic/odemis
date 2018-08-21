@@ -101,8 +101,8 @@ class ImageWindowApp(wx.App):
         # (but it seems in Linux (GTK) frames don't receive key events anyway
         self.frame.Bind(wx.EVT_KEY_DOWN, self.OnKey)
 
-        self.img = wx.EmptyImage(*size, clear=True)
-        self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.BitmapFromImage(self.img))
+        self.img = wx.Image(*size, clear=True)
+        self.imageCtrl = wx.StaticBitmap(self.panel, wx.ID_ANY, wx.Bitmap(self.img))
 
         self.panel.SetFocus()
         self.frame.Show()
@@ -110,7 +110,7 @@ class ImageWindowApp(wx.App):
     def update_view(self):
         logging.debug("Received a new image of %d x %d", *self.img.GetSize())
         self.frame.ClientSize = self.img.GetSize()
-        self.imageCtrl.SetBitmap(wx.BitmapFromImage(self.img))
+        self.imageCtrl.SetBitmap(wx.Bitmap(self.img))
 
     def OnKey(self, event):
         key = event.GetKeyCode()
