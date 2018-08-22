@@ -110,7 +110,7 @@ else:
 dist = setup(name='Odemis',
              version=VERSION,
              description='Open Delmic Microscope Software',
-             author=u'Éric Piel, Rinze de Laat, Kimon Tsitsikas, Philip Winkler, Anders Muskens, Sabrina Rossberger'
+             author=u'Éric Piel, Rinze de Laat, Kimon Tsitsikas, Philip Winkler, Anders Muskens, Sabrina Rossberger',
              author_email='piel@delmic.com, laat@delmic.com, tsitsikas@delmic.com, winkler@delmic.com, muskens@delmic.com, rossberger@delmic.com',
              url='https://github.com/delmic/odemis',
              classifiers=["License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
