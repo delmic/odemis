@@ -129,18 +129,19 @@ class SEM(model.HwComponent):
         try:
             kwargs = children["stage"]
         except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'stage' child")
-
-        self._stage = Stage(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._stage)
+            logging.info("TescanSEM was not given a 'stage' child")
+        else:
+            self._stage = Stage(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._stage)
 
         # create the focus child
         try:
             kwargs = children["focus"]
         except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'focus' child")
-        self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._focus)
+            logging.info("TescanSEM was not given a 'focus' child")
+        else:
+            self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._focus)
 
         # create the camera child
         try:
@@ -491,8 +492,10 @@ class SEM(model.HwComponent):
         self._scanner.terminate()
         for d in self._detectors.values():
             d.terminate()
-        self._stage.terminate()
-        self._focus.terminate()
+        if hasattr(self, "_stage"):
+            self._stage.terminate()
+        if hasattr(self, "_focus"):
+            self._focus.terminate()
         if hasattr(self, "_camera"):
             self._camera.terminate()
         if hasattr(self, "_pressure"):
