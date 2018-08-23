@@ -386,12 +386,15 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     return rgb
 
 
-def ensure2DImage(data):
+def ensure2DImage(data, zlevel=0):
     """
     Reshape data to make sure it's 2D by trimming all the low dimensions (=1).
     Odemis' convention is to have data organized as CTZYX. If CTZ=111, then it's
     a 2D image, but it has too many dimensions for functions which want only 2D.
+    If it has a 3D pixel size (voxels) then it must be ZYX, so this should be handled.
     data (DataArray): the data to reshape
+    zlevel: If the image is in fact 3D (a z stack), then select a plane of the stack at the
+        index "zlevel"
     return DataArray: view to the same data but with 2D shape
     raise ValueError: if the data is not 2D (CTZ != 111)
     """
@@ -399,7 +402,11 @@ def ensure2DImage(data):
     if len(d.shape) < 2:
         d.shape = (1,) * (2 - len(d.shape)) + d.shape
     elif len(d.shape) > 2:
-        d.shape = d.shape[-2:] # raise ValueError if it will not work
+        pxs = d.metadata.get(model.MD_PIXEL_SIZE)
+        if pxs is not None and len(pxs) == 3:
+            d = d[zlevel - 1]  # Remove z
+        else:
+            d.shape = d.shape[-2:] # raise ValueError if it will not work
 
     return d
 
@@ -607,7 +614,10 @@ def mergeMetadata(current, correction=None):
     if model.MD_PIXEL_SIZE in current:
         pxs = current[model.MD_PIXEL_SIZE]
         pxs_cor = current.get(model.MD_PIXEL_SIZE_COR, (1, 1))
-        current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+        # only modify the pixel size if it is 2D. Keep it the same if it is a voxel.
+        if len(pxs) == 2:
+            current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+
     elif model.MD_PIXEL_SIZE_COR in current:
         logging.info("Cannot correct pixel size of data with unknown pixel size")
 

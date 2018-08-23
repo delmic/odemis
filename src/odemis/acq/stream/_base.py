@@ -640,8 +640,8 @@ class Stream(object):
         # to handle all the cases.
 
         if data is None:
-            if self.raw:
-                if isinstance(self.raw, list):
+            if len(self.raw) > 0:
+                if isinstance(self.raw, list) or isinstance(self.raw, model.DataArray):
                     data = self.raw[0]
                 elif isinstance(self.raw, tuple):
                     # if the image is pyramidal, use the smaller image

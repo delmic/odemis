@@ -267,6 +267,7 @@ class FocusOverlay(base.ViewOverlay):
             self.shifts[axis] = shift
         else:
             self.shifts[axis] += shift
+
         self.cnvs.Refresh()
 
     def clear_shift(self):

@@ -29,6 +29,7 @@ import collections
 import logging
 import math
 import numpy
+import copy
 from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, MD_PIXEL_SIZE, VigilantAttribute
@@ -106,12 +107,41 @@ class Static2DStream(StaticStream):
         Note: parameters are different from the base class.
         raw (DataArray or DataArrayShadow): The data to display.
         """
+
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
             raw = [raw.getData()]
         else:
             raw = [raw]
+
+        metadata = copy.copy(raw[0].metadata)
+        logging.debug("%s shape: %s", name, raw[0].shape)
+
+        # If there are 5 dims in CTZYX, eliminate CT and only take spatial dimensions
+        if len(raw[0].shape) == 5:
+            raw[0] = raw[0][0, 0]
+        elif len(raw[0].shape) == 4:
+            raw[0] = raw[0][0]
+
+        if len(raw[0].shape) == 3:
+            try:
+                pxs = metadata[model.MD_PIXEL_SIZE]
+                if len(pxs) == 3:
+                    self.zlevel = model.IntContinuous(0, [0, raw[0].shape[0] - 1])
+                    self.zstep = model.FloatVA(pxs[2], readonly=True)
+                    self.zstart = model.FloatVA(0, readonly=True)
+            except KeyError:
+                pass
         super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
+
+    def setZLevelPosition(self, pos):
+        # Given an absolute physical position in z pos, set the zlevel index
+        # based on physical parameters
+        # Returns the actual value set.
+        val = int(round((pos - self.zstart.value) / self.zstep.value, 0))
+
+        self.zlevel.value = self.zlevel.clip(val)
+        return self.zlevel.value
 
     def _init_projection_vas(self):
         ''' On Static2DStream, the projection is done on RGBSpatialProjection
@@ -123,6 +153,48 @@ class Static2DStream(StaticStream):
             TODO remove this function when all the streams become projectionless
         '''
         pass
+
+    def _updateImage(self):
+        """ Recomputes the image with all the raw data available
+        """
+        # logging.debug("Updating image")
+        if not self.raw and isinstance(self.raw, list):
+            return
+
+        try:
+            # if .raw is a list of DataArray, .image is a complete image
+            if isinstance(self.raw, list):
+                data = self.raw[0]
+                bkg = self.background.value
+                if bkg is not None:
+                    try:
+                        data = img.Subtract(data, bkg)
+                    except Exception as ex:
+                        logging.info("Failed to subtract background data: %s", ex)
+
+                dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+                ci = dims.find("C")  # -1 if not found
+                # is RGB
+                if dims in ("CYX", "YXC") and data.shape[ci] in (3, 4):
+                    try:
+                        rgbim = img.ensureYXC(data)
+                        rgbim.flags.writeable = False
+                        # merge and ensures all the needed metadata is there
+                        rgbim.metadata = self._find_metadata(rgbim.metadata)
+                        rgbim.metadata[model.MD_DIMS] = "YXC"  # RGB format
+                        self.image.value = rgbim
+                    except Exception:
+                        logging.exception("Updating %s image", self.__class__.__name__)
+                else:  # is grayscale
+                    if data.ndim != 2:
+                        data = img.ensure2DImage(data, self.zlevel.value)  # Remove extra dimensions (of length 1)
+                    self.image.value = self._projectXY2RGB(data, self.tint.value)
+            else:
+                raise AttributeError(".raw must be a list of DA/DAS")
+
+        except Exception:
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
 
 
 class StaticSEMStream(Static2DStream):
