@@ -26,7 +26,7 @@ This module contains tests for checking that Odemis will launch correctly for ea
 hardware configuration file in this repository. This includes both the back-end and the GUI.
 
 """
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 import glob
@@ -283,7 +283,18 @@ def main(args):
 
         # Create a test and add it to the test case for each configuration found
         for sim_conf in sim_conf_files:
-            passed = test_config(sim_conf, proot, options.logpath)
+            logging.info("Testing %s", sim_conf)
+            try:
+                passed = test_config(sim_conf, proot, options.logpath)
+                if passed:
+                    print("OK", file=sys.stderr)
+                else:
+                    print("FAILED", file=sys.stderr)
+            except Exception:
+                logging.exception("Failure in testing %s", sim_conf)
+                print("ERROR", file=sys.stderr)
+                passed = False
+
             all_passed = all_passed and passed
 
     except ValueError as exp:

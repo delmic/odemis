@@ -14,7 +14,7 @@ clean_run_dir () {
         # try only if there is something worthy to delete (ie, dir is not empty)
         if ! find "$RUN_DIR" -maxdepth 0 -empty | read v; then
             echo "Cleaning $RUN_DIR"
-            sudo rm -rf "$RUN_DIR"/*
+            rm -rf "$RUN_DIR"/*
         fi
     fi
 }
@@ -56,7 +56,7 @@ if [ -n "$OLD_BE_PIDS" ]; then
     #echo "Left = $LEFT_BE_PIDS"
     if [ -n "$LEFT_BE_PIDS" ]; then
         echo "Back-end still running ($LEFT_BE_PIDS processes), killing it..."
-        # TODO: only use sudo if the backend is running as root
+        # TODO: don't use sudo and fail if the backend is running as root and not this script
         sudo /bin/kill $LEFT_BE_PIDS
 #        sudo /bin/kill $BEP_PID
 

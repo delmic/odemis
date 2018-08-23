@@ -97,6 +97,8 @@ for f in $testfiles; do
         status=$?
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
+    # TODO: don't show this if the file hasn't grown, it means the test didn't
+    # output anything and we are going to display again the previous test's result
     grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
     if [ "$status" -gt 0 ]; then
         # TODO: failures can increase even if the test reported OK, if it was killed
@@ -104,6 +106,9 @@ for f in $testfiles; do
         failures=$(( $failures + 1 ))
     fi
     echo Failures so far: $failures
+
+    # Stops the back-end, just in case it happens to still be running
+    sudo odemis-stop
 done
 
 if [ $failures -gt 0 ]; then
