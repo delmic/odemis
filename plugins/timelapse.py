@@ -269,6 +269,7 @@ class TimelapsePlugin(Plugin):
         main_data = self.main_app.main_data
         str_ctrl = main_data.tab.value.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
+        dlg.pauseSettings()
 
         nb = self.numberOfAcquisitions.value
         p = self.period.value
@@ -305,6 +306,7 @@ class TimelapsePlugin(Plugin):
             f.set_progress(end=startt + dur)
             das, e = acq.acquire(ss).result()
             if f.cancelled():
+                dlg.resumeSettings()
                 return
 
             exporter.export(fn_pat % (i,), das)

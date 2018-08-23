@@ -481,7 +481,8 @@ class TileAcqPlugin(Plugin):
             future.running_subf.cancel()
             logging.debug("Acquisition cancelled.")
 
-        return True
+        if ft._task_state == CANCELLED:
+            raise CancelledError("Acquisition cancelled")
 
     STITCH_SPEED = 1e-8  # s/px
     MOVE_SPEED = 1e3  # s/m
@@ -670,6 +671,7 @@ class TileAcqPlugin(Plugin):
         main_data = self.main_app.main_data
         str_ctrl = self._tab.streambar_controller
         stream_paused = str_ctrl.pauseStreams()
+        dlg.pauseSettings()
         self._unsubscribe_vas()
 
         orig_pos = main_data.stage.position.value
@@ -713,8 +715,7 @@ class TileAcqPlugin(Plugin):
                                     ix, iy, e)
 
                 if ft._task_state == CANCELLED:
-                    logging.debug("Acquisition cancelled")
-                    return
+                    raise CancelledError()
 
                 # TODO: do in a separate thread
                 fn_tile = "%s-%.5dx%.5d%s" % (fn_bs, ix, iy, fn_ext)
@@ -722,8 +723,7 @@ class TileAcqPlugin(Plugin):
                 exporter.export(fn_tile, das)
 
                 if ft._task_state == CANCELLED:
-                    logging.debug("Acquisition cancelled")
-                    return
+                    raise CancelledError()
 
                 if self.stitch.value:
                     # Sort tiles (largest sem on first position)
@@ -773,8 +773,9 @@ class TileAcqPlugin(Plugin):
             ft.set_result(None)  # Indicate it's over
 
             # End of the (completed) acquisition
-            if ft._task_state != CANCELLED:
-                dlg.Destroy()
+            if ft._task_state == CANCELLED:
+                raise CancelledError()
+            dlg.Destroy()
 
             # Open analysis tab
             if st_data:
@@ -784,6 +785,7 @@ class TileAcqPlugin(Plugin):
             # on alignment detection)
         except CancelledError:
             logging.debug("Acquisition cancelled")
+            dlg.resumeSettings()
         except Exception as ex:
             logging.exception("Acquisition failed.")
             ft.running_subf.cancel()

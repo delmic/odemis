@@ -171,6 +171,16 @@ The Plugin class provides a few helper functions:
        :type text: str or None
        :param lvl: log level, which selects the display colour.
        :type lvl: int, from logging.*
+       
+    .. py:method:: pauseSettings(self)
+
+       Freezes the settings and stream controls in the window to prevent user changes.
+       Typically done while acquiring.
+       
+    .. py:method:: resumeSettings(self)
+
+       Unfreezes the settings and stream controls in the window to allow user changes.
+       Typically done when acquiring is cancelled.   
 
     .. py:method:: ShowModal()
 
@@ -278,6 +288,7 @@ When that entry is selected, it shows an acquisition window and then acquire
             ccd = self.main_data.ccd
             exp = self.exposureTime.value
             ccd.exposureTime.value = exp
+            dlg.pauseSettings()	# Freezes the setting and stream controls in window
 
             f = model.ProgressiveFuture()
             f.task_canceller = lambda l: True  # To allow cancelling while it's running
@@ -290,6 +301,8 @@ When that entry is selected, it shows an acquisition window and then acquire
                 f.set_progress(end=time.time() + left)
                 d.append(ccd.data.get())
                 if f.cancelled():
+                    # Unfreezes the setting and stream controls in window
+                    dlg.resumeSettings() 
                     return
 
             f.set_result(None)  # Indicate it's over

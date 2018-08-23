@@ -86,6 +86,7 @@ class SimplePlugin(Plugin):
     def acquire(self, dlg):
         # ccd = self.main_data.ccd
         exp = self.exposureTime.value
+        dlg.pauseSettings()
         # ccd.exposureTime.value = exp
 
         f = model.ProgressiveFuture()
@@ -100,6 +101,7 @@ class SimplePlugin(Plugin):
             # d.append(ccd.data.get())
             time.sleep(exp)
             if f.cancelled():
+                dlg.resumeSettings()
                 return
 
         f.set_result(None)  # Indicate it's over

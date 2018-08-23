@@ -559,6 +559,22 @@ class AcquisitionDialog(xrcfr_plugin):
         self.streambar_controller.clear()
         self.EndModal(btnid)
 
+    def pauseSettings(self):
+        """ Pause the settings widgets. They will be disabled and the value frozen even when the VAs are changed """
+        self.setting_controller.pause()
+        self.setting_controller.enable(False)
+
+        self.streambar_controller.pause()
+        self.streambar_controller.enable(False)
+
+    def resumeSettings(self):
+        """ unpause the settings widgets. They will be re-enabled and the value unfrozen """
+        self.setting_controller.enable(True)
+        self.setting_controller.resume()
+
+        self.streambar_controller.enable(True)
+        self.streambar_controller.resume()
+
     @call_in_wx_main
     def Destroy(self, *args, **kwargs):
         self.streambar_controller.clear()
