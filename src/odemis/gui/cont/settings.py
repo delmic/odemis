@@ -98,12 +98,13 @@ class SettingsController(object):
         for entry in [e for e in self.entries if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
-    def add_file_btn(self, label, value=None, tooltip=None, clear=None, style=wx.FD_OPEN):
+    def add_file_button(self, label, value=None, tooltip=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
         config = guiconf.get_acqui_conf()
         lbl_ctrl, value_ctrl = self.panel.add_file_button(label,
                                                           value or config.last_path,
-                                                          clear,
-                                                          style)
+                                                          clearlabel,
+                                                          dialog_style,
+                                                          wildcard)
 
         if tooltip is not None:
             lbl_ctrl.SetToolTip(tooltip)
@@ -549,17 +550,15 @@ class AnalysisSettingsController(SettingsBarController):
 
         # Panel containing information about the acquisition file
         self._pnl_acqfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "No file loaded")
-
+        wildcards, _ = formats_to_wildcards(odemis.dataio.get_available_formats(),
+                                                            include_all=True)
         # Panel with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
         self._pnl_arfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._arfile_ctrl = self._pnl_arfile.add_file_btn(
+        self._arfile_ctrl = self._pnl_arfile.add_file_button(
             "AR background",
             tooltip="Angle-resolved background acquisition file",
-            clear="None").value_ctrl
-        wildcards, _ = formats_to_wildcards(odemis.dataio.get_available_formats(),
-                                                            include_all=True)
-        self._arfile_ctrl.SetWildcard(wildcards)
+            clearlabel="None", wildcard=wildcards).value_ctrl
         self._pnl_arfile.hide_panel()
         self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
@@ -567,19 +566,17 @@ class AnalysisSettingsController(SettingsBarController):
         # Panel with spectrum background + efficiency compensation file information
         # They are displayed only if there are Spectrum streams
         self._pnl_specfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
-        self._spec_bckfile_ctrl = self._pnl_specfile.add_file_btn(
+        self._spec_bckfile_ctrl = self._pnl_specfile.add_file_button(
             "Spec. background",
             tooltip="Spectrum background correction file",
-            clear="None").value_ctrl
-        self._spec_bckfile_ctrl.SetWildcard(wildcards)
+            clearlabel="None", wildcard=wildcards).value_ctrl
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
-        self._specfile_ctrl = self._pnl_specfile.add_file_btn(
+        self._specfile_ctrl = self._pnl_specfile.add_file_button(
             "Spec. correction",
             tooltip="Spectrum efficiency correction file",
-            clear="None").value_ctrl
-        self._specfile_ctrl.SetWildcard(wildcards)
+            clearlabel="None", wildcard=wildcards).value_ctrl
         self._pnl_specfile.hide_panel()
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
