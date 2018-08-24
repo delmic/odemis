@@ -1,3 +1,18 @@
+odemis (2.8.3-1) precise; urgency=medium
+
+  * New version: 2.8.3
+  * Minor improvements:
+    - Tescan driver supports .external and .blanker (only manual)
+    - odemis-cli --position accepts negative floats and string as positions
+    - Way to override the order of the axes during SPARCv2 mirror parking: AXES_ORDER_REF
+  * Main bugs fixed:
+    - Tescan driver doesn't require a stage
+    - Fix file association for OME-TIFF on Linux
+    - PI controllers in closed-loop could have large unexpected movements if not moved for a long time
+    - Tile acquisition plugin was overly optimistic on memory usage on the SECOM/DELPHI
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 24 Aug 2018 16:48:19 +0200
+
 odemis (2.8.2-1) precise; urgency=medium
 
   * New version: 2.8.2
