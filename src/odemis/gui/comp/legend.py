@@ -387,7 +387,7 @@ class RadioLegend(wx.Panel):
         self.text = wx.TextCtrl(self, value="Polarization", style=wx.NO_BORDER | wx.CB_READONLY)
         self.text.SetBackgroundColour(self.bg_color)
         self.text.SetForegroundColour(self.fg_color)
-        self.text.SetToolTipString("Polarization direction currently displayed")
+        self.text.SetToolTip("Polarization direction currently displayed")
 
         # current polarization displayed in the legend (or None)
         # can be radio buttons or text only depending on the number of polarization directions
@@ -443,7 +443,7 @@ class RadioLegend(wx.Panel):
         if len(choices) > 1:
             # if we have multiple choices -> select between choices with radio button
             self.pol_display = GraphicalRadioButtonControl(self, choices=choices, labels=choices)
-            self.pol_display.SetToolTipString("Select a polarization direction for display.")
+            self.pol_display.SetToolTip("Select a polarization direction for display.")
             self.pol_display.Bind(wx.EVT_BUTTON, self.OnPolarizationButton)
             self.pol_display.SetValue(default)
         else:
