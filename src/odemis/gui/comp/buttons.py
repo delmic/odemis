@@ -155,10 +155,13 @@ class BtnMixin(object):
         self.icon_on = kwargs.pop('icon_on', None)
 
         self.fg_colour_set = False
-        self.bg_colour_set = False
 
         # Call the super class constructor
         super(BtnMixin, self).__init__(*args, **kwargs)
+
+        # Must be after the super, as GenButton set background to the default
+        # system background
+        self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
         # Clear the hovering attributes
         self.bmpHover = None
@@ -181,19 +184,11 @@ class BtnMixin(object):
             self._reset_bitmaps()
             self.Refresh()
         else:
-            raise ValueError("Uknown button colour")
+            raise ValueError("Unknown button colour")
 
     def SetForegroundColour(self, color):
         super(BtnMixin, self).SetForegroundColour(color)
         self.fg_colour_set = True
-
-    def SetBackgroundColour(self, color):
-        super(BtnMixin, self).SetBackgroundColour(color)
-        self.bg_colour_set = True
-
-    def GetBackgroundColour(self):
-        # when self.bg_colour_set is true super(BtnMixin, self).GetBackgroundColour() returns the wrong colour (240, 240, 240 ,255)
-        return self.Parent.GetBackgroundColour()
 
     def SetIcon(self, icon):
         icon_set = self.icon is not None
