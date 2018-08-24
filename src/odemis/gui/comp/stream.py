@@ -441,12 +441,10 @@ class StreamPanel(wx.Panel):
         self._btn_emission = None
 
         # Appearance
-        # self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
         self.SetBackgroundColour(BG_COLOUR_STREAM)
         self.SetForegroundColour(FG_COLOUR_MAIN)
 
         # State
-
         self._collapsed = collapsed
 
         # Child widgets
@@ -501,7 +499,8 @@ class StreamPanel(wx.Panel):
         self._panel.SetForegroundColour(FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
-        self.collapse()
+        # Simplified version of .collapse()
+        self._panel.Show(not self._collapsed)
 
         self.main_sizer.Add(self._panel, 0, wx.EXPAND)
 
@@ -610,10 +609,10 @@ class StreamPanel(wx.Panel):
         """
         self._header.btn_peak.SetState(state)
 
-    def collapse(self, collapse=None):
+    def collapse(self, collapse):
         """ Collapses or expands the pane window """
 
-        if collapse is not None and self._collapsed == collapse:
+        if self._collapsed == collapse:
             return
 
         self.Freeze()
@@ -1334,7 +1333,7 @@ class StreamBar(wx.Panel):
         # event. In such a case, it's not worthy re-fitting the streams, and
         # especially it can fail because some other objects have already been
         # destroyed.
-        if self.IsBeingDeleted():
+        if not self or self.IsBeingDeleted():
             logging.debug("Stream panelbar is being deleted, not refitting")
             return
 
