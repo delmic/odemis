@@ -90,6 +90,7 @@ for f in $testfiles; do
         echo "WARNING: test $f seems to not be runnable"
     fi
     echo "Running $f:" >> "$TESTLOG"
+    prev_size=$(stat -c '%s' "$TESTLOG")
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
         # Automatically kill after MAXTIME, then try harder after 30 s
@@ -97,9 +98,13 @@ for f in $testfiles; do
         status=$?
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
-    # TODO: don't show this if the file hasn't grown, it means the test didn't
-    # output anything and we are going to display again the previous test's result
-    grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
+    # Don't show test output if the file hasn't grown, as it'd be the previous test output
+    new_size=$(stat -c '%s' "$TESTLOG")
+    if [[ "$new_size" == "$prev_size" ]]; then
+        echo "NOT RUN"
+    else
+        grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
+    fi
     if [ "$status" -gt 0 ]; then
         # TODO: failures can increase even if the test reported OK, if it was killed
         # => synchronise it with FAILED
