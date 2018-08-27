@@ -45,6 +45,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"  # 4x4
 
+TEST_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "..", "align", "test")
+
 
 class TestAlignment(unittest.TestCase):
     """
@@ -92,7 +94,7 @@ class TestAlignment(unittest.TestCase):
             self.skipTest("Running backend found")
 
         # image for FakeCCD
-        self.data = hdf5.read_data("../align/test/one_spot.h5")
+        self.data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "one_spot.h5"))
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.fake_img = self.data[0]
@@ -193,6 +195,8 @@ class TestAlignment(unittest.TestCase):
         md = self.sed.getMetadata()
         self.assertNotEqual(bad_cor, md[model.MD_POS_COR],
                             "metadata hasn't been updated while it should have")
+
+        ccd.terminate()
 
 
 class FakeCCD(model.HwComponent):
