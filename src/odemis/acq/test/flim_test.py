@@ -113,7 +113,9 @@ class TestFlim(unittest.TestCase):
 
         helper = stream.ScannedTCSettingsStream("FLIM settings", self.apd, self.ex_light, self.lscanner,
                                                 self.sft, self.tc_scanner)
-
+        # FIXME: for now, the ROI computation is very picky, and we need to
+        # hard-code the pixel size to be sure that the ROI is as expected.
+        helper.pixelSize.value = 3.90625e-07  # m
         remote = stream.ScannedRemoteTCStream("Remote", helper)
         # Configure values and test acquisition for several short dwell times.
         for dwellTime in (2e-5, 10e-5, 2e-3, 8e-3, 100e-3):
