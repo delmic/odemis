@@ -21,7 +21,7 @@
 """
 from __future__ import division
 import os
-from odemis.gui import img
+from odemis.gui import img, BG_COLOUR_MAIN
 from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb
 import wx
 
@@ -257,10 +257,11 @@ class CaptionBar(wx.Window):
         wx.Window.__init__(self, parent, wx.ID_ANY, pos=(0, 0),
                            size=CAPTION_BAR_SIZE, style=wx.NO_BORDER)
 
-        if os.name == "nt":
-            # Avoids flickering on windows, but prevents black background on Linux...
-            # Confirmed: If this statement is not present, there is flickering on MS Windows
-            self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        # FIXME: on wx4 with GTK2, the background is always redrawn anyway,
+        # which causes flickering, especially as the default background colour is
+        # white. As a workaround, we set a less white background.
+        self.SetBackgroundColour(BG_COLOUR_MAIN)
 
         self._collapsed = collapsed  # The current state of the CaptionBar
         self._caption = caption
@@ -308,14 +309,7 @@ class CaptionBar(wx.Window):
         """ Handle the ``wx.EVT_PAINT`` event for L{CaptionBar} """
 
         dc = wx.PaintDC(self)
-
         win_rect = self.GetRect()
-
-        dc.SetPen(wx.TRANSPARENT_PEN)
-
-        # draw simple rectangle
-        dc.SetBrush(wx.Brush(self.Parent.GetBackgroundColour(), wx.BRUSHSTYLE_SOLID))
-        dc.DrawRectangle(win_rect)
 
         self._draw_gradient(dc, win_rect)
 
@@ -326,7 +320,6 @@ class CaptionBar(wx.Window):
             dc.SetTextForeground(self.Parent.GetForegroundColour())
         else:
             dc.SetTextForeground(self.GetForegroundColour())
-        # dc.SetTextForeground("#000000")
 
         y_pos = (win_rect.GetHeight() - abs(caption_font.GetPixelSize().GetHeight())) // 2
 
