@@ -551,7 +551,7 @@ class TMCLController(model.Actuator):
         """
         # Read header (and check it makes sense)
         h = self.GetGlobalParam(2, 0)
-        sh = struct.pack(">I", h)
+        sh = struct.pack(">i", h)
         chks, fv, l = struct.unpack(">HBB", sh)
         if fv != UC_FORMAT:
             raise TypeError("User config format claim to be unsupported v%d" % fv)
