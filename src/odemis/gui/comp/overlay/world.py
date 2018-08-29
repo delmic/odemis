@@ -418,7 +418,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def _draw_points(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
-        # top left op the buffer
+        # top left of the buffer
         offset = self.cnvs.get_half_buffer_size()
 
         # The start and end position, in buffer coordinates. The return
@@ -460,6 +460,25 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             ctx.fill()
             ctx.stroke()
         else:
+            # This cairo-way would work, but it's a little slow
+#             r, g, b, _ = self.colour
+#             ctx.set_source_rgba(r, g, b, 0.9)
+#             ctx.set_line_width(1)
+#
+#             # The number of repetitions that fits into the buffer clipped
+#             # selection
+#             buf_rep_x = int((end_x - start_x) / step_x)
+#             buf_rep_y = int((end_y - start_y) / step_y)
+#             buf_shift_x = (b_pos[0] - start_x) % step_x + step_x / 2  # - 3 / 2
+#             buf_shift_y = (b_pos[1] - start_y) % step_y + step_y / 2  # - 3 / 2
+#
+#             for i in range(buf_rep_x):
+#                 for j in range(buf_rep_y):
+#                     ctx.arc(start_x + buf_shift_x + i * step_x,
+#                             start_y + buf_shift_y + j * step_y,
+#                             2, 0, 2 * math.pi)
+#                     ctx.stroke()
+
             # check whether the cache is still valid
             cl_pos = (start_x, start_y, end_x, end_y)
             if not self._bmp or self._bmp_bpos != cl_pos:
@@ -472,7 +491,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 buf_rep_x = int((end_x - start_x) / step_x)
                 buf_rep_y = int((end_y - start_y) / step_y)
 
-                # TODO: need to take into account shift, like drawGrid
                 logging.debug("Rendering %sx%s points", buf_rep_x, buf_rep_y)
 
                 point = img.getBitmap("dot.png")
@@ -506,7 +524,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._bmp_bpos = cl_pos
 
             self.cnvs.dc_buffer.DrawBitmap(self._bmp,
-                wx.Point(int(start_x), int(start_y)),
+                int(start_x + (b_pos[0] - start_x) % step_x),
+                int(start_y + (b_pos[1] - start_y) % step_y),
                 useMask=True
             )
 
@@ -558,14 +577,14 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
             # The number of repetitions that fits into the buffer clipped
             # selection
-            buf_rep_x = int(round((end_x - start_x) / step_x))
-            buf_rep_y = int(round((end_y - start_y) / step_y))
+            buf_rep_x = int((end_x - start_x) / step_x)
+            buf_rep_y = int((end_y - start_y) / step_y)
             buf_shift_x = (b_pos[0] - start_x) % step_x
             buf_shift_y = (b_pos[1] - start_y) % step_y
 
             for i in range(1, buf_rep_x):
-                ctx.move_to(start_x - buf_shift_x + i * step_x, start_y)
-                ctx.line_to(start_x - buf_shift_x + i * step_x, end_y)
+                ctx.move_to(start_x + buf_shift_x + i * step_x, start_y)
+                ctx.line_to(start_x + buf_shift_x + i * step_x, end_y)
 
             for i in range(1, buf_rep_y):
                 ctx.move_to(start_x, start_y - buf_shift_y + i * step_y)
