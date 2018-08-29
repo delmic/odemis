@@ -667,7 +667,7 @@ class TileAcqPlugin(Plugin):
         else:
             txt = ("Stitching this area requires %.1f GB of memory.\n"
                    "Running the acquisition might cause your computer to crash." %
-                   (mem_est / 1023 ** 3,))
+                   (mem_est / 1024 ** 3,))
             self._dlg.setAcquisitionInfo(txt, lvl=logging.ERROR)
 
     def acquire(self, dlg):
