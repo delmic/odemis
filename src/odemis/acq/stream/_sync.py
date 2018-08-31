@@ -1783,9 +1783,15 @@ class SEMARMDStream(SEMCCDMDStream):
         for d in raw_das:
             d.metadata[MD_DESCRIPTION] = sname
 
-        if len(raw_das) != numpy.prod(self.repetition.value):
+        # expected number of images per ebeam pos
+        exp_num_image = numpy.prod(self.repetition.value)
+        # if polarization analyzer HW: can be multiple images per ebeam pos
+        if self._analyzer and self._acquireAllPol.value:
+            exp_num_image *= len(POL_POSITIONS)
+
+        if len(raw_das) != exp_num_image:
             logging.error("Only got %d AR acquisitions while expected %d",
-                          len(raw_das), numpy.prod(self.repetition.value))
+                          len(raw_das), exp_num_image)
 
         # self._raw: first entry is sem-array, second onwards is ar-arrays
         self._raw.extend(raw_das)  # append ar arrays
