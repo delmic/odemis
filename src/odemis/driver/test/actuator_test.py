@@ -997,8 +997,10 @@ class TestRotationActuator(unittest.TestCase):
                                           refproc="Standard",
                                           )
 
-        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.child1}, self.axis)
+        self.dev_cycle = RotationActuator("stage", "stage", {self.axis_name: self.child1}, self.axis, ref_start=1)
 
+        # TODO write test case for args ref_start=... monitor child position -> pass zero?
+        
     def test_unsupported_position(self):
         """
         test if unsupported position is handled correctly

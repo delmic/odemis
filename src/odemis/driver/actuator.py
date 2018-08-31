@@ -1721,13 +1721,17 @@ class RotationActuator(model.Actuator):
     0 -> cycle. It also supports to pass an offset to the position conversion, via the MD_POS_COR metadata.
     """
 
-    def __init__(self, name, role, children, axis_name, cycle=2*math.pi, inverted=None, **kwargs):
+    def __init__(self, name, role, children, axis_name, cycle=2*math.pi,
+                 ref_start=None, inverted=None, **kwargs):
         """
         name (string)
         role (string)
         children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
         axis_name (str): axis name in the child actuator
         cycle (float): 0 < float. Default value = 2pi.
+        ref_start (float or None): Value usually chosen close to reference switch from where to start referencing.
+                                    Used to optimize runtime for referencing.
+                                    If None, value will be 5% of value of cycle.
         """
         if inverted:
             raise ValueError("Axes shouldn't be inverted")
@@ -1747,6 +1751,11 @@ class RotationActuator(model.Actuator):
         self._child_future = None
         self._caxis = axis_name
 
+        # just an offset to reference switch position using the shortest move
+        if ref_start is None:
+            ref_start = cycle * 0.05
+        self._ref_start = ref_start
+
         # Executor used to reference and move to nearest position
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1756,10 +1765,9 @@ class RotationActuator(model.Actuator):
             raise ValueError("Child %s is not an actuator." % child.name)
         if not self._cycle >= 0:
             raise ValueError("Cycle needs to be a positive number. Got value %s." % self._cycle)
-
-        # just an offset to reference switch position
-        # 5% of cycle value should be sufficient to take care of the accumulated rotation error
-        self._offset = self._cycle*0.05
+        if not 0 <= self._ref_start <= self._cycle:
+            raise ValueError("Reference start needs to be a positive number within range of cycle. "
+                             "Got value %s." % self._ref_start)
 
         ac = child.axes[axis_name]
         # dict {axis_name --> driver}
@@ -1851,7 +1859,7 @@ class RotationActuator(model.Actuator):
         """
         shift dict(string-> float): name of the axis and shift
         """
-        cur_pos = self._child.position.value[self._caxis]
+        cur_pos = self._child.position.value[self._caxis] - self._metadata[model.MD_POS_COR]
         pos = cur_pos + shift[self._axis]
         self._doMoveAbs({self._axis: pos})
 
@@ -1877,37 +1885,38 @@ class RotationActuator(model.Actuator):
         """
         pos dict(string-> float): name of the axis and position
         """
-        position = pos[self._axis]
+        target_pos = pos[self._axis]
         # correct distance for physical offset due to mounting
-        position = position + self._metadata[model.MD_POS_COR]
-        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, position)
-
-        # do referencing after i=5 moves or when actuator has accumulated 2pi steps
-        # --> do correct for accumulated errors
-        if self._move_num_total == 5 or abs(self._move_sum) >= self._cycle:
-            # to get rid of accumulated error
-
-            self._child.moveRel({self._caxis: self._offset}).result()
-            self._child.reference({self._caxis}).result()
-
-            self._move_sum = 0
-            self._move_num_total = 0
-
-        # Optimize by moving through the closest way
-        cur_pos = self._child.position.value[self._caxis]
-        vector = position - cur_pos
-        # mod1 and mod2 should be always positive as self._cycle should be positive
-        mod1 = vector % self._cycle
-        mod2 = -vector % self._cycle
+        target_pos += self._metadata[model.MD_POS_COR]
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, target_pos)
 
         self._move_num_total += 1
 
-        if mod1 < mod2:
-            move = mod1
-        else:
-            move = -mod2
+        # calc move needed to reach requested pos
+        move, cur_pos = self._findShortestMove(target_pos)
 
-        self._move_sum += abs(move)
+        # Check that the move passes by the reference switch by detecting whether
+        # the current and final position are not in the same multiple of cycle.
+        # "Linear" view of the axis (c = cycle)
+        #    -2c       -1c        0         c         2c        3c
+        # ----|---------|---------|---------|---------|---------|---
+        #         -2            -1      0        1        2
+        final_pos = cur_pos + move
+        pass_ref = (cur_pos // self._cycle) != (final_pos // self._cycle)
+
+        # do referencing after i=5 moves or when actuator has accumulated 2pi steps
+        if pass_ref or self._move_num_total >= 5:
+            # Move to pos close to ref switch
+            move, cur_pos = self._findShortestMove(target_pos)
+                
+            self._child.moveRel({self._caxis: move}).result()
+            self._child.reference({self._caxis}).result()
+
+            # now calc how to move to the actual position requested
+            move, cur_pos = self._findShortestMove(target_pos)
+                
+            self._move_num_total = 0
+
         _child_future = self._child.moveRel({self._caxis: move})
         _child_future.result()
 
@@ -1915,6 +1924,20 @@ class RotationActuator(model.Actuator):
         # self._child_future = self._child.moveRel({self._caxis: move})
         # self._child_future.result()
         # self._child_future = None
+
+    def _findShortestMove(self, target_pos):
+        """Find the closest way to move through in order to optimize for runtime."""
+
+        cur_pos = self._child.position.value[self._caxis]
+        vector = target_pos - cur_pos
+        # mod1 and mod2 should be always positive as self._cycle should be positive
+        mod1 = vector % self._cycle
+        mod2 = -vector % self._cycle
+
+        if mod1 < mod2:
+            return mod1, cur_pos
+        else:
+            return -mod2, cur_pos
 
     # TODO: need a proper implementation
     # def _cancelMovement(self, future):
