@@ -371,7 +371,7 @@ class CorrelatorScanStream(stream.Stream):
         md[model.MD_POS] = self._get_center_pxs(resolution, roi, cordata[0])
         md[model.MD_DESCRIPTION] = "Time correlator"
         #force exposure time metadata to be full time on the pixel rather than dwelltime/nDC
-        md[model.MD_EXP_TIME] = self.dwellTime.value
+        md[model.MD_DWELL_TIME] = self.dwellTime.value
         logging.debug("Assembling correlator data")
         full_cordata = model.DataArray(cordata, metadata=md)
         # reshaping matrix. This is probably a silly way but it works
@@ -394,7 +394,7 @@ class CorrelatorScanStream(stream.Stream):
         mdescan[model.MD_POS] = self._get_center_pxs(resolution, roi, sedata[0])
         mdescan[model.MD_DESCRIPTION] = "Secondary electrons"
         #force exposure time metadata to be full time on the pixel rather than dwelltime/nDC
-        mdescan[model.MD_EXP_TIME] = self.dwellTime.value
+        mdescan[model.MD_DWELL_TIME] = self.dwellTime.value
         # possibly merge the metadata for escan and sed.
         logging.debug("Assembling SEM data")
         full_sedata = model.DataArray(sedata, metadata=mdescan)
@@ -669,7 +669,7 @@ class CorrelatorScanStream(stream.Stream):
 # the plugin itself
 class Correlator2D(Plugin):
     name = "CL time correlator acquisition"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = "Toon Coenen"
     __license__ = "GNU General Public License 2"
 
