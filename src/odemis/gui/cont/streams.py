@@ -484,10 +484,19 @@ class StreamController(object):
             text += "Shape: %s\n" % (" x ".join(str(s) for s in shape),)
             text += "Data type: %s\n" % (dtype,)
             for key in sorted(md):
+                v = md[key]
                 if key == model.MD_ACQ_DATE:  # display date in readable format
-                    text += "%s: %s\n" % (key, time.strftime(u"%c", time.localtime(md[key])))
+                    text += "%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
                 else:
-                    text += "%s: %s\n" % (key, md[key])
+                    if isinstance(v, numpy.ndarray):
+                        # Avoid ellipses (eg, [1, ..., 100 ])as we want _all_
+                        # the data (unless it'd get really crazy).
+                        # TODO: from numpy v1.14, the "threshold" argument can
+                        # be directly used in array2string().
+                        numpy.set_printoptions(threshold=100000)
+                        v = numpy.array2string(v, max_line_width=100, separator=", ")
+                        numpy.set_printoptions(threshold=1000)
+                    text += "%s: %s\n" % (key, v)
 
         md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
