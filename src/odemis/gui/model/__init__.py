@@ -324,18 +324,32 @@ class MainGUIData(object):
         if self.microscope is None:
             return
 
+        ts = []
         for c in self.microscope.children.value:
             # Actuators have an .axes roattribute
             if not isinstance(c.axes, collections.Mapping):
                 continue
-            try:
-                # TODO: run each of them in a separate thread, to call the stop
-                # ASAP? (or all but the last one?)
-                c.stop()
-            except Exception:
-                logging.exception("Failed to stop %s actuator", c.name)
+            # Run each of them in a separate thread, to ensure we stop all ASAP
+            t = threading.Thread(target=self._stopActuator, name=c.name, args=(c,))
+            t.start()
+            ts.append(t)
 
+        # Wait for all the threads to be finished
+        for t in ts:
+            t.join(5)
+            if t.isAlive():
+                logging.warning("Actuator %s still not done stopping after 5s", t.name)
         logging.info("Stopped motion on every axes")
+
+    def _stopActuator(self, actuator):
+        """
+        Calls stop actuator.
+        A separate function, so that it can be called in a thread (ie, non-blocking)
+        """
+        try:
+            actuator.stop()
+        except Exception:
+            logging.exception("Failed to stop %s actuator", actuator.name)
 
     def getTabByName(self, name):
         """
