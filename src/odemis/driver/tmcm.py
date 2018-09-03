@@ -1758,7 +1758,8 @@ class TMCLController(model.Actuator):
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=0.1 # s
+                timeout=0.1,  # s
+                write_timeout=1,  # s (should never be needed... excepted that sometimes write() blocks)
             )
         except IOError:
             raise HwError("Failed to find a TMCM controller on port '%s'. "
