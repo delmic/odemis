@@ -36,6 +36,7 @@ from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray
 from odemis.util import units
+import scipy.ndimage
 import time
 import wx
 from wx.lib.imageutils import stepColour
@@ -1165,9 +1166,16 @@ class TwoDPlotCanvas(BitmapCanvas):
 
             if im_data is not None:
                 im_format = cairo.FORMAT_RGB24
-                height, width, _ = im_data.shape
+                height, width, depth = im_data.shape
+                csize = self.ClientSize
 
-                # stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
+                # Resize images too big for Cairo
+                if height > 4096 or width > 4096:
+                    small_shape = min(height, csize[1]), min(width, csize[0]), depth
+                    scale = tuple(n / o for o, n in zip(im_data.shape, small_shape))
+                    im_data = scipy.ndimage.interpolation.zoom(im_data, zoom=scale,
+                                       output=im_data.dtype, order=1, prefilter=False)
+                    height, width, depth = im_data.shape
 
                 # In Cairo a surface is a target that it can render to. Here we're going
                 # to use it as the source for a pattern
@@ -1184,7 +1192,7 @@ class TwoDPlotCanvas(BitmapCanvas):
 
                 # Scale the width and height separately in such a way that the image data fill the
                 # entire canvas
-                ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
+                ctx.scale(csize[0] / width, csize[1] / height)
                 ctx.set_source(surfpat)
                 ctx.paint()
 
