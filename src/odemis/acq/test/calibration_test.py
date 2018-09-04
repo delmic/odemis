@@ -24,7 +24,7 @@ from odemis.util import img
 import os
 import time
 import unittest
-from odemis.acq.stream._base import POL_6POS, POL_POSITIONS
+from odemis.acq.stream import POL_POSITIONS
 
 logging.getLogger().setLevel(logging.DEBUG)
 

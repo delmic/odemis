@@ -39,9 +39,7 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-from odemis.acq.stream._base import POL_POSITIONS
-from odemis.model import MD_POL_NONE
-
+from odemis.acq.stream import POL_POSITIONS
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -2947,7 +2945,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         """Test StaticARPOLStream"""
 
         metadata = []
-        pol_positions = [MD_POL_NONE] + list(POL_POSITIONS)
+        pol_positions = [model.MD_POL_NONE] + list(POL_POSITIONS)
         qwp_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
         linpol_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
 
