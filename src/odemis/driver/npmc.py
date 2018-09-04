@@ -263,9 +263,8 @@ class ESP(model.Actuator):
                 except ESPError as e:
                     # Can happen if the device has received some weird characters
                     # => try again (now that it's flushed)
-                    logging.info("Device answered by an error %d, will try again", e.msg)
+                    logging.info("Device answered by an error %s, will try again", e)
                     ve = self.GetVersion()
-                    continue
                 return n, ve
             except (IOError, ESPError) as e:
                 logging.debug(e)

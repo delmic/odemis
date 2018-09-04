@@ -575,8 +575,7 @@ class PH300(model.Detector):
         self.SetBinning(bs)
 
         # Update metadata
-        b = 2 ** bs
-        pxd = tresbase * b
+        # pxd = tresbase * (2 ** bs)
         pxd = self.GetResolution() * 1e-12  # ps -> s
         self._metadata[model.MD_PIXEL_DUR] = pxd
 

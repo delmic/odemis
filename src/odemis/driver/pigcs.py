@@ -409,7 +409,6 @@ class Controller(object):
         self._channels = self.GetAxes() # available channels (=axes)
         self._avail_cmds = self.GetAvailableCommands()
         self._avail_params = self.GetAvailableParameters()
-        # FIXME: only if the command is supported
         # dict axis -> boolean
         try:
             self._hasLimitSwitches = {a: self.HasLimitSwitches(a) for a in self._channels}
@@ -607,7 +606,7 @@ class Controller(object):
                         except ValueError:
                             logging.info("Unexpected command %s", cmd)
 
-                    cmds[cd[0]] = cd[1]
+                    cmds[cmd] = cd[1]
         return cmds
 
     def GetAvailableParameters(self):

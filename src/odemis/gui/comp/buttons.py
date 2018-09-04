@@ -509,7 +509,7 @@ class ImageStateButton(ImageToggleButton):
     0 to the number of images - 1 in bmpSelected.
     """
     def __init__(self, *args, **kwargs):
-        super(ImageToggleButton, self).__init__(*args, **kwargs)
+        super(ImageStateButton, self).__init__(*args, **kwargs)
         self.state = None
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
