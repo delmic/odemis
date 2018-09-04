@@ -29,22 +29,19 @@ odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
 
 from __future__ import division
 
+import argparse
 import logging
+import math
 import numpy
 from odemis import model
+from odemis.acq.align import coordinates, transform, spot
+from odemis.acq.align.find_overlay import GridScanner
 from odemis.dataio import hdf5
-from odemis.model import MD_PIXEL_SIZE, MD_POS
-from odemis.acq.align import images, coordinates, transform
-import sys
-import threading
-import time
-import operator
-import argparse
-import math
-import Image
-from scipy import ndimage
-from scipy import misc
 from odemis.util import img
+import operator
+from scipy import misc
+import sys
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -90,10 +87,10 @@ def main(args):
             raise KeyError("Not all components found")
     
         # ccd.data.get()
-        future_scan = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
+        gscanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
 
         # Wait for ScanGrid to finish
-        optical_image, electron_coordinates, electron_scale = future_scan.result()
+        optical_image, electron_coordinates, electron_scale = gscanner.DoAcquisition()
         hdf5.export("scanned_image.h5", optical_image)
         logging.debug("electron coord = %s", electron_coordinates)
 
@@ -105,12 +102,14 @@ def main(args):
         #####################################################
     
         logging.debug("Isolating spots...")
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
+        opxs = optical_image.metadata[model.MD_PIXEL_SIZE]
+        optical_dist = escan.pixelSize.value[0] * electron_scale[0] / opxs[0]
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
         logging.debug("Number of spots found: %d", len(subimages))
 
         hdf5.export("spot_found.h5", subimages,thumbnail=None)
         logging.debug("Finding spot centers...")
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        spot_coordinates = spot.FindCenterCoordinates(subimages)
         logging.debug("center coord = %s", spot_coordinates)
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
         logging.debug(optical_coordinates)
@@ -134,7 +133,7 @@ def main(args):
         max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
 
         logging.debug("Matching coordinates...")
-        known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
+        known_electron_coordinates, known_optical_coordinates, max_diff = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
     
         logging.debug("Calculating transformation...")
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
