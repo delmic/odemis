@@ -211,20 +211,20 @@ class AveragePlugin(Plugin):
                 dets[0].softwareTrigger.notify()
 
                 # Wait for the acquisition
-                for i, ev in enumerate(self._events):
+                for n, ev in enumerate(self._events):
                     if not ev.wait(dur * 3 + 5):
                         raise IOError("Timeout while waiting for frame")
                     ev.clear()
 
                     # Add the latest frame to the sum
                     # TODO: do this while waiting for the next frame (to save time)
-                    da = self._das[i]
-                    if sumdas[i] is None:
+                    da = self._das[n]
+                    if sumdas[n] is None:
                         # Convert to float, to handle very large numbers
-                        sumdas[i] = da.astype(numpy.float64)
-                        md[i] = da.metadata
+                        sumdas[n] = da.astype(numpy.float64)
+                        md[n] = da.metadata
                     else:
-                        sumdas[i] += da
+                        sumdas[n] += da
 
                 logging.info("Acquired frame %d", i + 1)
 
