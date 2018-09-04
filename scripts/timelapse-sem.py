@@ -89,7 +89,7 @@ def main(args):
     options = parser.parse_args(args[1:])
 
     try:
-        n = acquire_timelapse(options.num, options.period, options.filename)
+        acquire_timelapse(options.num, options.period, options.filename)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127

@@ -1052,11 +1052,7 @@ class BitmapCanvas(BufferedCanvas):
         apply_flip(ctx, flip, b_im_rect)
 
         scale_x, scale_y = im_scale
-        total_scale = total_scale_x, total_scale_y = (scale_x * self.scale, scale_y * self.scale)
-
-        # in case of small floating errors
-        if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
-            total_scale = (1.0, 1.0)
+        total_scale_x, total_scale_y = (scale_x * self.scale, scale_y * self.scale)
 
         if ftmd.get('dc_keepalpha', True):
             im_format = cairo.FORMAT_ARGB32

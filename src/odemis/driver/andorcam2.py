@@ -2354,7 +2354,6 @@ class AndorCam2(model.DigitalCamera):
         except TypeError:
             raise ValueError("Serial number must be just a number but got %s" % (sn,))
 
-        serial = c_int32()
         for n in range(self.GetAvailableCameras()):
             handle = self.GetCameraHandle(n)
             self.atcore.SetCurrentCamera(handle)
@@ -2597,7 +2596,7 @@ class FakeAndorV2DLL(object):
 
     def GetCameraHandle(self, device, p_handle):
         if device.value != 0:
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
         handle = _deref(p_handle, c_int32)
         handle.value = 1
 
@@ -2607,7 +2606,7 @@ class FakeAndorV2DLL(object):
 
     def SetCurrentCamera(self, handle):
         if _val(handle) != 1:
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
 
     # info and capabilities
     def GetStatus(self, p_status):
@@ -2643,7 +2642,7 @@ class FakeAndorV2DLL(object):
         elif vertype == AndorV2DLL.AT_DeviceDriverVersion:
             ver_str.value = "2.2"
         else:
-            raise AndorV2Error()
+            raise AndorV2Error(20066, "Argument out of bounds")
 
     def GetHeadModel(self, model_str):
         model_str.value = "FAKECDD 1024"

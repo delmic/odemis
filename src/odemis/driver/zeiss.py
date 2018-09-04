@@ -171,7 +171,6 @@ class SEM(model.HwComponent):
                     # => try again (now that it's flushed)
                     logging.info("Device answered by an error, will try again")
                     idn = self.GetVersion()
-                    continue
                 return n, idn
             except (IOError, RemconError):
                 logging.info("Skipping device on port %s, which didn't seem to be compatible", n)

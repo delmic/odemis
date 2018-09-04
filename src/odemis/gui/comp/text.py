@@ -438,8 +438,9 @@ class _NumberValidator(ValidatorClass):
         """ Validate all the choice values, if choice values are defined """
 
         if self.choices:
-            if not all([self._is_valid_value(c) for c in self.choices]):
-                raise ValueError("Illegal value (%s) found in choices" % c)
+            for c in self.choices:
+                if not self._is_valid_value(c):
+                    raise ValueError("Illegal value (%s) found in choices" % c)
 
     def _is_valid_value(self, val):
         """ Validate the given value
