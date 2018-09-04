@@ -72,7 +72,11 @@ def darken_image(image, mltp=0.5):
       bright white.
     """
     # Update data in-place
-    data = numpy.asarray(image.GetDataBuffer())
+    # data = numpy.asarray(image.GetDataBuffer())
+    # TODO: on numpy 1.6 (Ubuntu 12.04), asarray() doesn't pick the buffer
+    # correctly. Once this is not supported anymore, use the cleaner asarray().
+    # Note that both functions allow to directly access and modify the data.
+    data = numpy.frombuffer(image.GetDataBuffer(), dtype=numpy.uint8)
     numpy.multiply(data, mltp, out=data, casting="unsafe")
 
 
