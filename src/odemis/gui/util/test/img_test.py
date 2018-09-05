@@ -152,6 +152,14 @@ class TestARExport(unittest.TestCase):
         self.assertGreater(raw_polar.shape[0], 50)
         self.assertGreater(raw_polar.shape[1], 50)
 
+    def test_ar_raw_rect(self):
+        data = model.DataArray(numpy.zeros((256, 512)), metadata={model.MD_AR_POLE: (100, 250),
+                                                                  model.MD_PIXEL_SIZE: (1e-03, 1e-03)})
+        raw_polar = img.calculate_raw_ar(data, data)
+        # shape = raw data + theta/phi axes values
+        self.assertGreater(raw_polar.shape[0], 50)
+        self.assertGreater(raw_polar.shape[1], 50)
+
     def test_ar_export(self):
 
         # Create AR data

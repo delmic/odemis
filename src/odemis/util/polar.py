@@ -419,7 +419,7 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     hole_diameter = data.metadata.get(model.MD_AR_HOLE_DIAMETER, AR_HOLE_DIAMETER)
     focus_distance = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
     parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
-    X, Y = data.shape
+    Y, X = data.shape
     pole_x, pole_y = pole_pos
 
     # Calculate the coordinates of the cutoff of half circle
@@ -430,7 +430,7 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     # Compute the dilated radius
     # use dilated mask to handle edge effects for triangulation code (offset_radius)
     r = (2 * math.sqrt(xmax * parabola_f)) / pixel_size[1] + offset_radius
-    y, x = numpy.ogrid[-center_y:X - center_y, -center_x:Y - center_x]
+    y, x = numpy.ogrid[-center_y:Y - center_y, -center_x:X - center_x]
     circle_mask = x * x + y * y <= r * r
 
     # Create half circle mask
@@ -442,7 +442,7 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     # For delaunay triangulation hole=False: to avoid edge effects
     if hole:
         r_hole = (hole_diameter / 2) / pixel_size[1]
-        y, x = numpy.ogrid[-pole_y:X - pole_y, -pole_x:Y - pole_x]
+        y, x = numpy.ogrid[-pole_y:Y - pole_y, -pole_x:X - pole_x]
         circle_mask_hole = x * x + y * y <= r_hole * r_hole
         circle_mask = numpy.where(circle_mask_hole, 0, circle_mask)
 
