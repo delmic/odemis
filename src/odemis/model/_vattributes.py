@@ -28,12 +28,12 @@ import inspect
 import logging
 import numbers
 import numpy
+from odemis.util.weak import WeakMethod, WeakRefLostError
+import os
 import threading
 from types import NoneType
-import zmq
 import types
-
-from odemis.util.weak import WeakMethod, WeakRefLostError
+import zmq
 
 from . import _core
 
@@ -294,10 +294,12 @@ class VigilantAttribute(VigilantAttributeBase):
         # add string to listeners if listener is string
         if isinstance(listener, basestring):
             self._remote_listeners.add(listener)
-            if init:
-                self.pipe.send_pyobj(self.value)
         else:
             VigilantAttributeBase.subscribe(self, listener, init)
+
+        if self.debug:
+            logging.debug("Now with local subscribers %s, and remote subscribers %s",
+                          self._listeners, self._remote_listeners)
 
     @oneway
     def unsubscribe(self, listener):
@@ -337,6 +339,8 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         Pyro4.Proxy.__init__(self, uri)
         self._global_name = uri.sockname + "@" + uri.object
+        # Should be unique among all the subscribers of the real VA
+        self._proxy_name = "%x/%x" % (os.getpid(), id(self))
         VigilantAttributeBase.__init__(self) # TODO setting value=None might not always be valid
         self.max_discard = 100
         self.readonly = False # will be updated in __setstate__
@@ -398,6 +402,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         _core.load_roattributes(self, roattributes)
 
         self._global_name = self._pyroUri.sockname + "@" + self._pyroUri.object
+        self._proxy_name = "%x/%x" % (os.getpid(), id(self))
 
         self._ctx = None
         self._commands = None
@@ -431,7 +436,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
 
         # send subscription to the actual VA
         # a bit tricky because the underlying method gets created on the fly
-        Pyro4.Proxy.__getattr__(self, "subscribe")(self._global_name)
+        Pyro4.Proxy.__getattr__(self, "subscribe")(self._proxy_name)
 
     def unsubscribe(self, listener):
         VigilantAttributeBase.unsubscribe(self, listener)
@@ -442,7 +447,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         stop the remote subscription
         """
-        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
+        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
         if self._commands:
             self._commands.send("UNSUB")
 
@@ -455,7 +460,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
                         logging.warning("Stopping subscription while there are still subscribers "
                                         "because VA '%s' is going out of context",
                                         self._global_name)
-                        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
+                        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
                     self._commands.send("STOP")
                     self._thread.join(1)
                 self._commands.close()
