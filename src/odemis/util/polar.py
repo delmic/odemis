@@ -22,7 +22,7 @@ from scipy.interpolate import LinearNDInterpolator
 from numpy import ma
 import numpy
 from odemis import model
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 # Functions to convert/manipulate Angle resolved image to polar projection
@@ -78,7 +78,6 @@ def _extractAngleInformation(data, hole, dtype=None):
 
     # Crop the input image to half circle (set values outside of half circle zero)
 
-    # TODO cropped image wrong
     cropped_image = _CropHalfCircle(data, pixel_size, pol_pos, hole=hole)
 
     # return dilated circle_mask to crop input data
