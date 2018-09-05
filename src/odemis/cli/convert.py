@@ -251,6 +251,11 @@ def stitch(infns, registration_method, weaving_method):
         das = sorted(das, key=leader_quality, reverse=True)
         da_streams.append(tuple(das))
 
+    def get_acq_time(das):
+        return das[0].metadata.get(model.MD_ACQ_DATE, 0)
+
+    da_streams = sorted(da_streams, key=get_acq_time)
+
     das_registered = stitching.register(da_streams, registration_method)
 
     # Weave every stream
