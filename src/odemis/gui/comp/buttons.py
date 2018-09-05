@@ -72,11 +72,16 @@ def darken_image(image, mltp=0.5):
       bright white.
     """
     # Update data in-place
-    # data = numpy.asarray(image.GetDataBuffer())
-    # TODO: on numpy 1.6 (Ubuntu 12.04), asarray() doesn't pick the buffer
-    # correctly. Once this is not supported anymore, use the cleaner asarray().
-    # Note that both functions allow to directly access and modify the data.
-    data = numpy.frombuffer(image.GetDataBuffer(), dtype=numpy.uint8)
+    if wx.MAJOR_VERSION <= 3:
+        # On numpy 1.6 (Ubuntu 12.04), asarray() doesn't pick the buffer
+        # correctly. However, with wxPython 4, GetDataBuffer() returns a
+        # memoryview instead of a buffer, which is not accepted by frombuffer().
+        # Luckily, on systems with wxPython 4, we can expect also a newer numpy.
+        # TODO: Once this is not supported anymore, use the cleaner asarray().
+        # Note that both functions allow to directly access and modify the data.
+        data = numpy.frombuffer(image.GetDataBuffer(), dtype=numpy.uint8)
+    else:
+        data = numpy.asarray(image.GetDataBuffer())
     numpy.multiply(data, mltp, out=data, casting="unsafe")
 
 
