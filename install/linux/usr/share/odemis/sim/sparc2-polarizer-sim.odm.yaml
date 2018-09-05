@@ -194,7 +194,7 @@ SPARC2: {
     role: "lens",
     # Standard mirror config
     init: {
-       mag: 0.31, # ratio
+       mag: 0.4, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
@@ -220,8 +220,8 @@ SPARC2: {
         # These values are adapted to make the simulator roughly the same speed
         ustepsize: [3.392e-5, 3.392e-5, 25.1e-9, 25.1e-9, 5.e-9], # [rad/µstep, rad/µstep, m/µstep, m/µstep, m/µstep]
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0},
-        inverted: ["l2"],
+        refswitch: {"qwp": 0, "linear": 0, "l1": 4, "l2": 4},
+        inverted: ["l2", "linear"],
     },
 }
 
@@ -337,6 +337,7 @@ SPARC2: {
     children: {"rz": "Optical Actuators"},
     init: {
         axis_name: "linear",
+        ref_start: 6.1,  # if axis inverted (see Optical Actuators) use ref_start close to 2pi
     },
     metadata: {
         POS_COR: 7.e-3,  # rad
