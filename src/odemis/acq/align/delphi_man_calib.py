@@ -32,7 +32,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
 
 
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 import collections
@@ -72,6 +72,38 @@ def getch():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
+
+
+ANSI_BLACK = "30"
+ANSI_RED = "31"
+ANSI_GREEN = "32"
+ANSI_YELLOW = "33"
+ANSI_BLUE = "34"
+ANSI_MAGENTA = "35"
+ANSI_CYAN = "36"
+ANSI_WHITE = "37"
+
+def print_col(colour, s, *args, **kwargs):
+    """
+    Print with a given colour
+    colour (string): A ANSI terminal compatible colour code
+    s (string): message to print
+    *args, **kwargs: same as print()
+    """
+    coloured_s = "\033[1;%sm%s\033[1;m" % (colour, s)
+    print(coloured_s, *args, **kwargs)
+
+
+def input_col(colour, s):
+    """
+    Print with a given colour, and read an input string from the terminal.
+    IOW, raw_input() with colours.
+    colour (string): A ANSI terminal compatible colour code
+    s (string): message to print
+    return (string): the input from the user
+    """
+    coloured_s = "\033[1;%sm%s\033[1;m" % (colour, s)
+    return raw_input(coloured_s)
 
 
 def _discard_data(df, data):
@@ -204,35 +236,36 @@ def man_calib(logpath):
             rotation = irot = ishear = 0
             hole_focus = aligndelphi.SEM_KNOWN_FOCUS
             opt_focus = aligndelphi.OPTICAL_KNOWN_FOCUS
-            print "\033[1;31mCalibration values missing! All the steps will be performed anyway...\033[1;m"
+            print_col(ANSI_RED, "Calibration values missing! All the steps will be performed anyway...")
             force_calib = True
         else:
             first_hole, second_hole, hole_focus, opt_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, scaleshift = calib_values
             force_calib = False
-        print "\033[1;36m"
-        print "**Delphi Manual Calibration steps**"
-        print "1.Sample holder hole detection"
-        print "    Current values: 1st hole: " + str(first_hole)
-        print "                    2st hole: " + str(second_hole)
-        print "                    hole focus: " + str(hole_focus)
-        print "2.SEM image calibration"
-        print "    Current values: resolution-a: " + str(resa)
-        print "                    resolution-b: " + str(resb)
-        print "                    hfw-a: " + str(hfwa)
-        print "                    spot shift: " + str(scaleshift)
-        print "3.Twin stage calibration"
-        print "    Current values: offset: " + str(offset)
-        print "                    scaling: " + str(scaling)
-        print "                    rotation: " + str(rotation)
-        print "                    optical focus: " + str(opt_focus)
-        print "4.Fine alignment"
-        print "    Current values: scale: " + str(iscale)
-        print "                    rotation: " + str(irot)
-        print "                    scale-xy: " + str(iscale_xy)
-        print "                    shear: " + str(ishear)
-        print '\033[1;m'
-        print "\033[1;33mNote that you should not perform any stage move during the process. \nInstead, you may zoom in/out while focusing.\033[1;m"
-        print "\033[1;30mNow initializing, please wait...\033[1;m"
+        print_col(ANSI_CYAN,
+                  "**Delphi Manual Calibration steps**\n"
+                  "1.Sample holder hole detection\n"
+                  "    Current values: 1st hole: " + str(first_hole) + "\n"
+                  "                    2st hole: " + str(second_hole) + "\n"
+                  "                    hole focus: " + str(hole_focus) + "\n"
+                  "2.SEM image calibration\n"
+                  "    Current values: resolution-a: " + str(resa) + "\n"
+                  "                    resolution-b: " + str(resb) + "\n"
+                  "                    hfw-a: " + str(hfwa) + "\n"
+                  "                    spot shift: " + str(scaleshift) + "\n"
+                  "3.Twin stage calibration\n"
+                  "    Current values: offset: " + str(offset) + "\n"
+                  "                    scaling: " + str(scaling) + "\n"
+                  "                    rotation: " + str(rotation) + "\n"
+                  "                    optical focus: " + str(opt_focus) + "\n"
+                  "4.Fine alignment\n"
+                  "    Current values: scale: " + str(iscale) + "\n"
+                  "                    rotation: " + str(irot) + "\n"
+                  "                    scale-xy: " + str(iscale_xy) + "\n"
+                  "                    shear: " + str(ishear))
+        print_col(ANSI_YELLOW,
+                  "Note that you should not perform any stage move during the process.\n"
+                  "Instead, you may zoom in/out while focusing.")
+        print_col(ANSI_BLACK, "Now initializing, please wait...")
 
         # Move to the overview position first
         f = chamber.moveAbs({"pressure": overview_pressure})
@@ -283,46 +316,46 @@ def man_calib(logpath):
         while True:
             ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
-                msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
-                ans = raw_input(msg)
+                ans = input_col(ANSI_MAGENTA,
+                                "Do you want to execute the sample holder hole detection? [Y/n]")
             if ans in YES_CHARS:
                 # Move Phenom sample stage next to expected hole position
                 sem_stage.moveAbsSync(aligndelphi.SHIFT_DETECTION)
                 ebeam_focus.moveAbsSync({"z": hole_focus})
                 # Set the FoV to almost 2mm
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
-                msg = "\033[1;34mPlease turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ...\033[1;m"
-                raw_input(msg)
-                print "\033[1;30mTrying to detect the holes/markers, please wait...\033[1;m"
+                input_col(ANSI_BLUE,
+                          "Please turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter...")
+                print_col(ANSI_BLACK,"Trying to detect the holes/markers, please wait...")
                 try:
                     hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
                                                                 ebeam_focus, manual=True, logpath=logpath)
                     new_first_hole, new_second_hole, new_hole_focus = hole_detectionf.result()
-                    print '\033[1;36m'
-                    print "Values computed: 1st hole: " + str(new_first_hole)
-                    print "                 2st hole: " + str(new_second_hole)
-                    print "                 hole focus: " + str(new_hole_focus)
-                    print '\033[1;m'
+                    print_col(ANSI_CYAN,
+                              "Values computed: 1st hole: " + str(new_first_hole) + "\n"
+                              "                 2st hole: " + str(new_second_hole) + "\n"
+                              "                 hole focus: " + str(new_hole_focus))
                     ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
-                        msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
-                        ans = raw_input(msg)
+                        ans = input_col(ANSI_MAGENTA,
+                                        "Do you want to update the calibration file with these values? [Y/n]")
                     if ans in YES_CHARS:
                         first_hole, second_hole, hole_focus = new_first_hole, new_second_hole, new_hole_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, scaleshift)
+                        print_col(ANSI_BLACK, "Calibration file is updated.")
                     break
                 except IOError:
-                    print "\033[1;31mSample holder hole detection failed.\033[1;m"
+                    print_col(ANSI_RED, "Sample holder hole detection failed.")
             else:
                 break
 
         while True:
             ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
-                msg = "\033[1;35mDo you want to execute the SEM image calibration? [Y/n]\033[1;m"
-                ans = raw_input(msg)
+                ans = input_col(ANSI_MAGENTA,
+                                "Do you want to execute the SEM image calibration? [Y/n]")
             if ans in YES_CHARS:
                 # Resetting shift parameters, to not take them into account during calib
                 blank_md = dict.fromkeys(aligndelphi.MD_CALIB_SEM, (0, 0))
@@ -336,38 +369,38 @@ def man_calib(logpath):
                 ebeam_focus.moveAbsSync({"z": hole_focus})
                 try:
                     # Compute spot shift percentage
-                    print "\033[1;30mSpot shift measurement in progress, please wait...\033[1;m"
+                    print_col(ANSI_BLACK, "Spot shift measurement in progress, please wait...")
                     f = aligndelphi.ScaleShiftFactor(detector, escan, logpath)
                     new_scaleshift = f.result()
 
                     # Compute resolution-related values.
-                    print "\033[1;30mCalculating resolution shift, please wait...\033[1;m"
+                    print_col(ANSI_BLACK, "Calculating resolution shift, please wait...")
                     resolution_shiftf = aligndelphi.ResolutionShiftFactor(detector, escan, logpath)
                     new_resa, new_resb = resolution_shiftf.result()
 
                     # Compute HFW-related values
-                    print "\033[1;30mCalculating HFW shift, please wait...\033[1;m"
+                    print_col(ANSI_BLACK, "Calculating HFW shift, please wait...")
                     hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, logpath)
                     new_hfwa = hfw_shiftf.result()
 
-                    print '\033[1;36m'
-                    print "Values computed: resolution-a: " + str(new_resa)
-                    print "                 resolution-b: " + str(new_resb)
-                    print "                 hfw-a: " + str(new_hfwa)
-                    print "                 spot shift: " + str(new_scaleshift)
-                    print '\033[1;m'
+                    print_col(ANSI_CYAN,
+                              "Values computed: resolution-a: " + str(new_resa) + "\n"
+                              "                 resolution-b: " + str(new_resb) + "\n"
+                              "                 hfw-a: " + str(new_hfwa) + "\n"
+                              "                 spot shift: " + str(new_scaleshift))
                     ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
-                        msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
-                        ans = raw_input(msg)
+                        ans = input_col(ANSI_MAGENTA,
+                                        "Do you want to update the calibration file with these values? [Y/n]")
                     if ans in YES_CHARS:
                         resa, resb, hfwa, scaleshift = new_resa, new_resb, new_hfwa, new_scaleshift
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, scaleshift)
+                        print_col(ANSI_BLACK, "Calibration file is updated.")
                     break
                 except IOError:
-                    print "\033[1;31mSEM image calibration failed.\033[1;m"
+                    print_col(ANSI_RED, "SEM image calibration failed.")
             else:
                 break
 
@@ -404,8 +437,8 @@ def man_calib(logpath):
         while True:
             ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
-                msg = "\033[1;35mDo you want to execute the twin stage calibration? [Y/n]\033[1;m"
-                ans = raw_input(msg)
+                ans = input_col(ANSI_MAGENTA,
+                                "Do you want to execute the twin stage calibration? [Y/n]")
             if ans in YES_CHARS:
                 # Configure CCD and e-beam to write CL spots
                 ccd.binning.value = ccd.binning.clip((4, 4))
@@ -419,18 +452,25 @@ def man_calib(logpath):
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
-                print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
-                print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
+                print_col(ANSI_BLUE,
+                          "Please turn on the Optical stream, set Power to 0 Watt "
+                          "and focus the image so you have a clearly visible spot.\n"
+                          "Use the up and down arrows or the mouse to move the "
+                          "optical focus and right and left arrows to move the SEM focus. "
+                          "Then turn off the stream and press Enter...")
                 if not force_calib:
-                    print("\033[1;33mIf you cannot see the whole source background (bright circle) you may try to move to the already known offset position. \n"
-                          "To do this press the R key at any moment and use I to go back to the initial position.\033[1;m")
+                    print_col(ANSI_YELLOW,
+                              "If you cannot see the whole source background (bright circle) "
+                              "you may try to move to the already known offset position. \n"
+                              "To do this press the R key at any moment and use I to go back "
+                              "to the initial position.")
                     rollback_pos = (offset[0] * scaling[0], offset[1] * scaling[1])
                 else:
                     rollback_pos = None
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, 10e-6)
                 ar.focusByArrow(rollback_pos)
                 detector.data.unsubscribe(_discard_data)
-                print "\033[1;30mTwin stage calibration starting, please wait...\033[1;m"
+                print_col(ANSI_BLACK, "Twin stage calibration starting, please wait...")
                 try:
                     # TODO: the first point (at 0,0) isn't different from the next 4 points,
                     # excepted it might be a little harder to focus.
@@ -442,17 +482,17 @@ def man_calib(logpath):
 
                     def ask_user_to_focus(n):
                         detector.data.subscribe(_discard_data)
-                        msg = ("\033[1;34mAbout to calculate rotation and scaling (%d/4). "
-                               "Please turn on the Optical stream, "
-                               "set Power to 0 Watt and focus the image using the mouse "
-                               "so you have a clearly visible spot. \n"
-                               "If you do not see a spot nor the source background, "
-                               "move the sem-stage from the command line by steps of 200um "
-                               "in x and y until you can see the source background at the center. \n"
-                               "Then turn off the stream and press Enter ...\033[1;m" %
-                               (n + 1,))
-                        raw_input(msg)  # TODO: use ArrowFocus() too?
-                        print "\033[1;30mCalculating rotation and scaling (%d/4), please wait...\033[1;m" % (n + 1,)
+                        input_col(ANSI_BLUE,
+                                  "About to calculate rotation and scaling (%d/4). " % (n + 1,) +
+                                  "Please turn on the Optical stream, "
+                                  "set Power to 0 Watt and focus the image using the mouse "
+                                  "so you have a clearly visible spot. \n"
+                                  "If you do not see a spot nor the source background, "
+                                  "move the sem-stage from the command line by steps of 200um "
+                                  "in x and y until you can see the source background at the center. \n"
+                                  "Then turn off the stream and press Enter...")
+                        # TODO: use ArrowFocus() too?
+                        print_col(ANSI_BLACK, "Calculating rotation and scaling (%d/4), please wait..." % (n + 1,))
                         detector.data.unsubscribe(_discard_data)
 
                     f = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
@@ -465,32 +505,32 @@ def man_calib(logpath):
                     pure_offset = acc_offset
                     new_offset = ((acc_offset[0] / new_scaling[0]), (acc_offset[1] / new_scaling[1]))
 
-                    print '\033[1;36m'
-                    print "Values computed: offset: " + str(new_offset)
-                    print "                 scaling: " + str(new_scaling)
-                    print "                 rotation: " + str(new_rotation)
-                    print "                 optical focus: " + str(new_opt_focus)
-                    print '\033[1;m'
+                    print_col(ANSI_CYAN,
+                              "Values computed: offset: " + str(new_offset) + "\n"
+                              "                 scaling: " + str(new_scaling) + "\n"
+                              "                 rotation: " + str(new_rotation) + "\n"
+                              "                 optical focus: " + str(new_opt_focus))
                     ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
-                        msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
-                        ans = raw_input(msg)
+                        ans = input_col(ANSI_MAGENTA,
+                                        "Do you want to update the calibration file with these values? [Y/n]")
                     if ans in YES_CHARS:
                         offset, scaling, rotation, opt_focus = new_offset, new_scaling, new_rotation, new_opt_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, scaleshift)
+                        print_col(ANSI_BLACK, "Calibration file is updated.")
                     break
                 except IOError:
-                    print "\033[1;31mTwin stage calibration failed.\033[1;m"
+                    print_col(ANSI_RED, "Twin stage calibration failed.")
             else:
                 break
 
         while True:
             ans = "Y" if force_calib else None
             while ans not in YES_NO_CHARS:
-                msg = "\033[1;35mDo you want to execute the fine alignment? [Y/n]\033[1;m"
-                ans = raw_input(msg)
+                ans = input_col(ANSI_MAGENTA,
+                                "Do you want to execute the fine alignment? [Y/n]")
             if ans in YES_CHARS:
                 # Return to the center so fine alignment can be executed just after calibration
                 f = opt_stage.moveAbs({"x": 0, "y": 0})
@@ -522,11 +562,17 @@ def man_calib(logpath):
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
-                print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
-                print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
+                print_col(ANSI_BLUE,
+                          "Please turn on the Optical stream, set Power to 0 Watt "
+                          "and focus the image so you have a clearly visible spot.\n"
+                          "Use the up and down arrows or the mouse to move the "
+                          "optical focus and right and left arrows to move the SEM focus. "
+                          "Then turn off the stream and press Enter...")
                 ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, 10e-6)
                 ar.focusByArrow()
                 detector.data.unsubscribe(_discard_data)
+
+                print_col(ANSI_BLACK, "Fine alignment in progress, please wait...")
 
                 # restore CCD settings (as the GUI/user might have changed them)
                 ccd.binning.value = (1, 1)
@@ -538,7 +584,6 @@ def man_calib(logpath):
                 if dist is None:
                     logging.warning("Failed to find a spot, twin stage calibration might have failed")
 
-                print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 try:
                     escan.horizontalFoV.value = 80e-06
                     f = align.FindOverlay((4, 4),
@@ -555,43 +600,42 @@ def man_calib(logpath):
                     new_irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
                     new_ishear = skew_md[model.MD_SHEAR_COR]
                     new_iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
-                    print '\033[1;36m'
-                    print "Values computed: scale: " + str(new_iscale)
-                    print "                 rotation: " + str(new_irot)
-                    print "                 scale-xy: " + str(new_iscale_xy)
-                    print "                 shear: " + str(new_ishear)
-                    print '\033[1;m'
+                    print_col(ANSI_CYAN,
+                              "Values computed: scale: " + str(new_iscale) + "\n"
+                              "                 rotation: " + str(new_irot) + "\n"
+                              "                 scale-xy: " + str(new_iscale_xy) + "\n"
+                              "                 shear: " + str(new_ishear))
                     ans = "Y" if force_calib else None
                     while ans not in YES_NO_CHARS:
-                        msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
-                        ans = raw_input(msg)
+                        ans = input_col(ANSI_MAGENTA,
+                                        "Do you want to update the calibration file with these values? [Y/n]")
                     if ans in YES_CHARS:
                         iscale, irot, iscale_xy, ishear = new_iscale, new_irot, new_iscale_xy, new_ishear
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, opt_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, scaleshift)
+                        print_col(ANSI_BLACK, "Calibration file is updated.")
                     break
                 except ValueError:
-                    print "\033[1;31mFine alignment failed.\033[1;m"
+                    print_col(ANSI_RED, "Fine alignment failed.")
             else:
                 break
-
-        # Update calibration file
-        print "\033[1;30mUpdating calibration file is done\033[1;m"
-
+    except Exception:
+        logging.exception("Unexpected failure during calibration")
     finally:
-        print "\033[1;30mCalibration ended, now ejecting sample, please wait...\033[1;m"
+        print_col(ANSI_BLACK, "Calibration ended, now ejecting sample, please wait...")
         # Eject the sample holder
         f = chamber.moveAbs({"pressure": vented_pressure})
 
         aligndelphi.restore_hw_settings(escan, ccd, hw_settings)
 
-        # Store the final version of the calibration file
+        # Store the final version of the calibration file in the log folder
         try:
             shutil.copy(calibconf.file_path, logpath)
         except Exception:
             logging.info("Failed to log calibration file", exc_info=True)
 
+        ans = input_col(ANSI_MAGENTA, "Press Enter to close")
         f.result()
 
 
