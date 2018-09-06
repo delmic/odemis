@@ -27,10 +27,11 @@ from __future__ import division
 
 from decorator import decorator
 import logging
-from odemis import acq
+from odemis import acq, gui
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_DIS
 from odemis.gui import img
+from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
@@ -40,11 +41,9 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, 
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 import wx
+
 import wx.lib.newevent
 from wx.lib.pubsub import pub
-
-import odemis.gui as gui
-import odemis.gui.comp.buttons as buttons
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()

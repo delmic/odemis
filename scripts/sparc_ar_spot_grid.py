@@ -32,7 +32,6 @@ from odemis import dataio, model
 import argparse
 import logging
 import numpy
-import odemis
 import os.path
 import sys
 import time

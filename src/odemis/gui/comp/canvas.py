@@ -140,20 +140,19 @@ from decorator import decorator
 import logging
 from odemis import util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
+from odemis.gui import img
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
-from odemis.gui.util.conversion import wxcol_to_frgb
-from odemis import model
+from odemis.util import no_conflict
 import os
 import sys
 import wx
 
-from odemis.gui import img
-import wx.lib.wxcairo as wxcairo
-from odemis.util import no_conflict
+from wx.lib import wxcairo
 
 
 # Special abilities that a canvas might possess
@@ -1080,7 +1079,6 @@ class BitmapCanvas(BufferedCanvas):
             # save the transformation matrix to return to the top of the column
             ctx.save()
             for tile in tile_col:
-                tmd = tile.metadata
                 height, width, _ = tile.shape
 
                 # Note: Stride calculation is done automatically when no stride parameter is provided.

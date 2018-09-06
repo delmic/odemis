@@ -35,7 +35,7 @@ from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, MD_PIXEL_SIZE, Vigila
 from odemis.util import img, conversion, polar, spectrum
 from scipy import ndimage
 
-from ._base import Stream, POL_POSITIONS
+from ._base import Stream
 
 
 class StaticStream(Stream):

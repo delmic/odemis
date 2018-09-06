@@ -24,7 +24,6 @@ from __future__ import division
 
 import collections
 from concurrent import futures
-from concurrent.futures._base import CancelledError
 import copy
 import logging
 import math
