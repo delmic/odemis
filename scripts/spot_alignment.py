@@ -19,15 +19,9 @@ odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
 from __future__ import division
 
 import logging
-import numpy
 from odemis import model
-from odemis.dataio import hdf5
 from odemis.acq import align
-from odemis.acq.align import autofocus
 import sys
-import threading
-import time
-import operator
 import argparse
 
 logging.getLogger().setLevel(logging.DEBUG)

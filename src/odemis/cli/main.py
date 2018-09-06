@@ -27,7 +27,6 @@ from __future__ import division, print_function
 import argparse
 import codecs
 import collections
-import gc
 import importlib
 import inspect
 import logging

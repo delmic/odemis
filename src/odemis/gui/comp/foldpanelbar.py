@@ -20,7 +20,6 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
-import os
 from odemis.gui import img, BG_COLOUR_MAIN
 from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb
 import wx
