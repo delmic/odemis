@@ -1151,7 +1151,7 @@ class EbeamFocus(model.Actuator):
         # The maximum, obviously, is not 1 meter. We do not actually care
         # about the range since Tescan API will adjust the value set if the
         # required one is out of limits.
-        rng = [0, 1]
+        rng = ranges.get(a, (0, 1))
         axes_def[a] = model.Axis(unit="m", range=rng)
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
@@ -1327,7 +1327,7 @@ class ChamberView(model.DigitalCamera):
 
                 callback(self._transposeDAToUser(array))
 
-        except:
+        except Exception:
             logging.exception("Failure during acquisition")
         finally:
             self.acquisition_lock.release()
