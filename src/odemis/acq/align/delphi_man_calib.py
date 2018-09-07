@@ -480,6 +480,32 @@ def man_calib(logpath):
                     align_offset = align_offsetf.result()
                     new_opt_focus = focus.position.value.get('z')
 
+                    # If the offset is large, it can prevent the SEM stage to follow
+                    # the optical stage. If it's really large (eg > 1mm) it will
+                    # even prevent from going to the calibration locations.
+                    # So warn about this, as soon as we detect it. It could be
+                    # caused either due to a mistake in the offset detection, or
+                    # because the reference switch of the optical axis is not
+                    # centered (enough) on the axis. In such case, a technician
+                    # should open the sample holder and move the reference switch.
+                    # Alternatively, we could try to be more clever and support
+                    # the range of the tmcm axes to be defined per sample
+                    # holder, and set some asymmetric range (to reflect the fact
+                    # that 0 is not at the center).
+                    for a, trans in zip(("x", "y"), align_offset):
+                        # SEM pos = Opt pos + offset
+                        rng_sem = sem_stage.axes[a].range
+                        rng_opt = opt_stage.axes[a].range
+                        if (rng_opt[0] + trans < rng_sem[0] or
+                            rng_opt[1] + trans > rng_sem[1]):
+                            logging.info("Stage align offset = %s, which could cause "
+                                         "moves on the SEM stage out of range (on axis %s)",
+                                         align_offset, a)
+                            input_col(ANSI_RED,
+                                      "Twin stage offset on axis %s is %g mm, which could cause moves out of range.\n"
+                                      "Check that the reference switch in the sample holder is properly at the center." %
+                                      (a, trans * 1e3))
+
                     def ask_user_to_focus(n):
                         detector.data.subscribe(_discard_data)
                         input_col(ANSI_BLUE,
