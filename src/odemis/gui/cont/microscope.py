@@ -1227,13 +1227,13 @@ class DelphiStateController(SecomStateController):
 
     # Rough approximation of the times of each loading action:
     # * 5 sec to load to NavCam (will be much longer if Phenom is in stand-by)
-    # * 2 s for moving to the stage center
     # * 1 s for loading the calibration value
     # * 5 s for referencing the optical stage
+    # * 2 s for moving to the stage center
     # * 1 s for focusing the overview
     # * 2 s for overview acquisition
     # * 65 sec from NavCam to SEM
-    DELPHI_LOADING_TIMES = (5, 2, 1, 5, 1, 2, 65)  # s
+    DELPHI_LOADING_TIMES = (5, 1, 5, 2, 1, 2, 65)  # s
 
     def DelphiLoading(self):
         """
@@ -1294,10 +1294,18 @@ class DelphiStateController(SecomStateController):
             if future._delphi_load_state == CANCELLED:
                 return
 
+            # Load calibration values
+            future._actions_time.pop(0)
+            self._load_holder_calib()
+
+            if future._delphi_load_state == CANCELLED:
+                return
+
             # Reference the (optical) stages
             future._actions_time.pop(0)
             f = self._main_data.stage.reference({"x", "y"})
             future._delphi_load_state = f
+            f.add_update_callback(self._update_load_time)
             f.result()
 
             if self.good_optical_focus is not None:
@@ -1309,13 +1317,8 @@ class DelphiStateController(SecomStateController):
                     # It's annoying (and it's a sign of an issue with the hardware),
                     # but we can deal with the focus not being referenced
                     logging.error("Focus referencing failed: %s. Optical focus will need to be done manually.", ex)
-
-            if future._delphi_load_state == CANCELLED:
-                return
-            # Load calibration values (and move the slave stage to wherever
-            # the master stage is :-/ )
-            future._actions_time.pop(0)
-            self._load_holder_calib()
+            else:
+                logging.warning("Optical focus undefined, a new sample holder calibration is recommended")
 
             if future._delphi_load_state == CANCELLED:
                 return
