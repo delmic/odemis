@@ -299,6 +299,9 @@ class AcquisitionDialog(xrcfr_acq):
 
     @wxlimit_invocation(0.1)
     def update_setting_display(self):
+        if not self:
+            return
+
         # if gauge was left over from an error => now hide it
         if self.acquiring:
             self.gauge_acq.Show()

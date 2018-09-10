@@ -36,31 +36,75 @@ import time
 import weakref
 import wx
 
+# Decorators & Wrappers
+# They are almost the same but the decorators assume that they are decorating
+# a method of a wx.Object (ie, it has a "self" argument)
 
-# ============== Decorators
+
 @decorator
 def call_in_wx_main(f, self, *args, **kwargs):
     """ This method decorator makes sure the method is called from the main
     (GUI) thread.
+    The function may be run asynchronously, so the function return value cannot
+    be returned. So it's typically an error if a decorated function returns
+    something useful.
     """
     # TODO: with Python 3, update that line to:
     # if threading.current_thread() == threading.main_thread()
     if isinstance(threading.current_thread(), threading._MainThread):
-        return f(self, *args, **kwargs)
-    return wx.CallAfter(f, self, *args, **kwargs)
+        f(self, *args, **kwargs)
+        return
+
+    wx.CallAfter(f, self, *args, **kwargs)
+
+
+def call_in_wx_main_wrapper(f):
+
+    @wraps(f)
+    def call_after_wrapzor(*args, **kwargs):
+        if isinstance(threading.current_thread(), threading._MainThread):
+            f(*args, **kwargs)
+            return
+
+        app = wx.GetApp()
+        if app:
+            wx.CallAfter(f, *args, **kwargs)
+
+    return call_after_wrapzor
 
 
 @decorator
 def ignore_dead(f, self, *args, **kwargs):
     """
+    Suppresses errors caused code trying to access
+    wxPython widgets that have already been destroyed
+
     If used on a function also decorated with call_in_wx_main, it should be
     the closest to the real function. IOW, always put this decorator at the
     bottom of the decorators.
     """
+    if not self:
+        logging.info("Skipping call to %s() as object is already dead", f.__name__)
+        return
+
     try:
         return f(self, *args, **kwargs)
     except RuntimeError:
-        logging.warn("Dead object ignored in %s", f.__name__)
+        logging.warn("Dead object %s ignored in %s", self, f.__name__)
+
+
+def dead_object_wrapper(f):
+
+    @wraps(f)
+    def dead_object_wrapzor(*args, **kwargs):
+        try:
+            app = wx.GetApp()
+            if app:
+                return f(*args, **kwargs)
+        except RuntimeError:
+            logging.warning("Dead object ignored in %s", f.__name__)
+
+    return dead_object_wrapzor
 
 
 def wxlimit_invocation(delay_s):
@@ -90,50 +134,6 @@ def wxlimit_invocation(delay_s):
         wf = call_in_wx_main_wrapper(wf)
         return liwrapper(wf)
     return wxwrapper
-
-# ============== END Decorators
-
-
-# ============== Wrappers
-
-def call_in_wx_main_wrapper(f):
-    @wraps(f)
-    def call_after_wrapzor(*args, **kwargs):
-        app = wx.GetApp()
-        if app:
-            wx.CallAfter(f, *args, **kwargs)
-    return call_after_wrapzor
-
-
-def dead_object_wrapper(f):
-    """ This simple wrapper suppresses errors caused code trying to access
-    wxPython widgets that have already been destroyed
-    """
-    @wraps(f)
-    def dead_object_wrapzor(*args, **kwargs):
-        try:
-            app = wx.GetApp()
-            if app:
-                return f(*args, **kwargs)
-        except RuntimeError:
-            logging.warning("Dead object ignored in %s", f.__name__)
-        # TODO: Investigate if this needs fixing
-        # It used to check for objects which are dead, and now it check for object which are an Exception.
-        # Probably the initial code is not correct, as it looks like it should use any instead of all.
-        # It also doesn't check in kwargs.
-        # I don't know how to check for dead objects now,
-        # and I don't know if a TypeError would happen in such case anyway.
-        # except TypeError:
-        #     # If a wx.Window is destroyed and then passed as a parameter, a TypeError might reulst
-        #     # instead of a PyDeadObjectError.
-        #     if all([isinstance(a, RuntimeError) for a in args]):
-        #         logging.warning("Dead object parameter ignored in %s", f.__name__)
-        #     else:
-        #         raise
-
-    return dead_object_wrapzor
-
-# ============== ENDWrappers
 
 
 # Path functions

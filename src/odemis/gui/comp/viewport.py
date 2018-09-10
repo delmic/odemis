@@ -130,6 +130,12 @@ class ViewPort(wx.Panel):
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+
+    def _on_destroy(self, evt):
+        # Drop references
+        self._view = None
+        self._tab_data_model = None
 
     def __str__(self):
         return "{0} {2} {1}".format(

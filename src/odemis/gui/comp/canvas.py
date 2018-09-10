@@ -502,6 +502,8 @@ class BufferedCanvas(wx.Panel):
         """ Update the drawing when the on draw timer fires """
         # thread_name = threading.current_thread().name
         # logging.debug("Drawing timer in thread %s", thread_name)
+        if not self:
+            return
         self.update_drawing()
 
     # ########### END Event Handlers ############
@@ -889,7 +891,7 @@ class BitmapCanvas(BufferedCanvas):
         """
 
         # Don't draw anything if the canvas is disabled, leave the current buffer intact.
-        if not self.IsEnabled() or 0 in self.GetClientSize():
+        if not self or not self.IsEnabled() or 0 in self.GetClientSize():  # or not self
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
@@ -1993,7 +1995,7 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        if not self.IsEnabled():
+        if not self or not self.IsEnabled():
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
