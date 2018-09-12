@@ -76,7 +76,7 @@ ret="$?"
 
 # wait for zip to be done
 echo "Waiting for zip to be done..."
-wait
+wait | zenity --progress --pulsate --no-cancel --auto-close --text="Waiting for zip to be done..."
 
 if [ "$ret" -eq 1 ]; then # cancelled
     rm $fn
@@ -113,20 +113,23 @@ for d in ~/.config/odemis/ $LAST_OVERLAY_REP $LAST_DELPHI_CALIB_REP; do
     zip -r $fn $(basename $d)
 done
 popd
-file-roller --add "$descfn" $hwfn $scfn  --add-to "$fn"
+
+zip -j $fn "$descfn" $hwfn $scfn
 
 
-# TODO: any way to automatically send the file?
-# See https://github.com/predat/wetransferpy
+# Detect if there is an internet connection
+if ping -q -w 1 -c 1 support.delmic.com > /dev/null ; then
+    #zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
+    zenity --info --text "Please finish the report by filling up the form on https://support.delmic.com \nand attaching the report file <tt>$bn</tt> on the Desktop.\n\nAfter closing this window, the form will automatically open in your web browser." --title "Problem report ready" --no-wrap
+    if [ $? == 0 ]; then # User pressed OK (and not closed the window)
+        # Open wetransfer
+        # Encode the (first 30 lines of) description into URL encoding for passing it also as message
+        #msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
+    #    firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
 
-zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
-if [ $? == 0 ]; then # User pressed OK (and not closed the window)
-    # Open wetransfer
-
-    # Encode the (first 30 lines of) description into URL encoding for passing it also as message
-    msgu=$(head -n 30 "$descfn" | python2 -c "import sys, urllib; print urllib.quote_plus(sys.stdin.read())")
-
-    firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com&msg=$msgu"
+        firefox "https://support.delmic.com/open.php"
+    fi
+else
+    zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to Delmic.\n\nYou can use https://support.delmic.com or send it by email to <tt>bugreport@delmic.com</tt>." --title "Problem report ready" --no-wrap
 fi
-
 
