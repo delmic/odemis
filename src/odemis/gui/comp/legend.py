@@ -300,7 +300,8 @@ class AxisLegend(wx.Panel):
         """
         Refresh, which can be called safely from other threads
         """
-        wx.Panel.Refresh(self)
+        if self:
+            wx.Panel.Refresh(self)
 
     def on_paint(self, _):
         if self._value_range is None:
@@ -414,7 +415,8 @@ class RadioLegend(wx.Panel):
         """
         Refresh, which can be called safely from other threads
         """
-        wx.Panel.Refresh(self)
+        if self:
+            wx.Panel.Refresh(self)
 
     def OnPolarizationButton(self, event):
         """

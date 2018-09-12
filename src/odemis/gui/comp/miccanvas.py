@@ -127,6 +127,23 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._dc_region = None  # The ROI VA of the drift correction
         self.driftcor_overlay = None
 
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+
+    def _on_destroy(self, evt):
+        # FIXME: it seems like this object stays in memory even after being destroyed.
+        # => need to make sure that the object is garbage collected
+        # (= no more references) once it's not used.
+        if self.view:
+            # Drop references
+            self.view = None
+
+            # As the tab data model may stay longer, we need to make sure it
+            # doesn't update the canvas anymore
+            tab_data = self._tab_data_model
+            tab_data.tool.unsubscribe(self._on_tool)
+            tab_data.main.debug.unsubscribe(self._on_debug)
+            self._tab_data_model = None
+
     # Ability manipulation
 
     def disable_zoom(self):
@@ -252,9 +269,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Activate or deactivate interpolation"""
         self.request_drawing_update()
 
-    # FIXME: seems like it might still be called while the Canvas has been destroyed
-    # => need to make sure that the object is garbage collected (= no more references) once it's
-    # not used. (Or explicitly unsubscribe??)
     @ignore_dead
     def _on_debug(self, activated):
         """ Called when GUI debug mode changes => display FPS overlay """
@@ -534,7 +548,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
-        if self.IsEnabled():
+        if self and self.IsEnabled():
             img = self._get_img_from_buffer()
             if img is not None:
                 self.view.thumbnail.value = img
@@ -955,7 +969,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
 
-        if not self.IsEnabled() or self.ClientSize.x * self.ClientSize.y <= 0:
+        if not self or not self.IsEnabled() or 0 in self.ClientSize:
             return  # nothing to update
 
         # We need to scale the thumbnail ourselves, instead of letting the
@@ -1115,7 +1129,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
-        if self.IsEnabled():
+        if self and self.IsEnabled():
             if self._data is None:
                 self.view.thumbnail.value = None
             else:
@@ -1243,7 +1257,7 @@ class TwoDPlotCanvas(BitmapCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
-        if self.IsEnabled():
+        if self and self.IsEnabled():
             if all(i is None for i in self.images):
                 self.view.thumbnail.value = None
             else:
@@ -1420,7 +1434,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
-        if self.IsEnabled():
+        if self and self.IsEnabled():
             img = self._get_img_from_buffer()
             if img is not None:
                 self.view.thumbnail.value = img

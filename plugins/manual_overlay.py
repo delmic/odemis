@@ -37,9 +37,9 @@ import functools
 import logging
 import math
 from odemis import model
-from odemis.gui.plugin import Plugin, AcquisitionDialog
-
 from odemis.acq.stream import DataProjection
+from odemis.gui.plugin import Plugin, AcquisitionDialog
+import wx
 
 
 class VAHolder(object):
@@ -48,13 +48,13 @@ class VAHolder(object):
 
 class ManualOverlayPlugin(Plugin):
     name = "Manual Overlay"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = "Lennard Voortman"
     __license__ = "Public domain"
 
     def __init__(self, microscope, main_app):
         super(ManualOverlayPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Overlay/Manual corrections", self.start)
+        self.addMenu("Overlay/Manual corrections...", self.start)
         self._dlg = None
 
     def start(self):
@@ -70,6 +70,14 @@ class ManualOverlayPlugin(Plugin):
         vaconf = OrderedDict()
 
         tab_data = self.main_app.main_data.tab.value.tab_data_model
+        if not tab_data.streams.value:
+            box = wx.MessageDialog(self.main_app.main_frame,
+                       "No stream is present, so it's not possible to modify the alignment.",
+                       "No stream", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
+
         for i, stream in enumerate(tab_data.streams.value):
             dlg.addStream(stream)
 

@@ -40,7 +40,7 @@ from odemis.gui.conf import data
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
@@ -677,12 +677,15 @@ class StreamController(object):
                           ctrl_2_va=_get_bandwidth)
         self.entries[se.name] = se
 
-        # TODO: should the stream have a way to know when the raw data has changed? => just a
-        # spectrum VA, like histogram VA
+        # TODO: should the stream have a way to know when the raw data has changed?
+        # => just a spectrum VA, like histogram VA
         self.stream.image.subscribe(self._on_new_spec_data, init=True)
 
     @wxlimit_invocation(0.2)
     def _on_new_spec_data(self, _):
+        if not self or not self._sld_spec:
+            return  # already deleted
+
         logging.debug("New spec data")
         # Display the global spectrum in the visual range slider
         gspec = self.stream.getMeanSpectrum()
@@ -705,8 +708,7 @@ class StreamController(object):
             coef = 1
 
         gspec = (gspec - mins) * coef
-        # TODO: use decorator for this (call_in_wx_main_wrapper), once this code is stable
-        wx.CallAfter(dead_object_wrapper(self._sld_spec.SetContent), gspec.tolist())
+        self._sld_spec.SetContent(gspec.tolist())
 
     def _add_dye_ctrl(self):
         """
