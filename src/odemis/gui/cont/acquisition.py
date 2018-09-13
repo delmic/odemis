@@ -500,8 +500,13 @@ class SparcAcquiController(object):
         self.gauge_acq.Hide()
         self._tab_panel.Parent.Layout()
 
+        # Animator for messages containing ellipsis character
+        self._ellipsis_animator = None
+
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
+
+        self._roa = tab_data.semStream.roi
 
         # Listen to change of streams to update the acquisition time
         self._prev_streams = set() # set of streams already listened to
@@ -514,11 +519,8 @@ class SparcAcquiController(object):
         # TODO: should also listen to the VAs of the leeches on semStream
         tab_data.useScanStage.subscribe(self._onAnyVA)
 
-        self._roa = tab_data.semStream.roi
         self._roa.subscribe(self._onROA, init=True)
 
-        # Animator for messages containing ellipsis character
-        self._ellipsis_animator = None
         # Listen to preparation state
         self._main_data_model.is_preparing.subscribe(self.on_preparation)
 

@@ -64,9 +64,10 @@ class HardwareButtonController(object):
         tooltips (None or dict value -> str): Tooltip string for each state.
         """
         self.btn = btn_ctrl
+        self.va = va
+        self._tooltips = tooltips or {}
         self.vac = VigilantAttributeConnector(va, btn_ctrl, self._va_to_btn, self._btn_to_va,
                                               events=wx.EVT_BUTTON)
-        self._tooltips = tooltips or {}
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state """
@@ -80,7 +81,7 @@ class HardwareButtonController(object):
     def _update_tooltip(self):
         if not self.btn.Enabled:
             return
-        state = self.vac.vigilattr.value
+        state = self.va.value
         if state in self._tooltips:
             self.btn.SetToolTip(self._tooltips[state])
 
