@@ -83,7 +83,7 @@ class OpticalLens(model.HwComponent):
 
         if pole_pos is not None:
             if (not isinstance(pole_pos, collections.Iterable) or
-                len(pole_pos) != 2 or any(v < 0 for v in pole_pos)):
+                len(pole_pos) != 2 or any(not 0 < v < 1e6 for v in pole_pos)):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
             self.polePosition = model.ResolutionVA(tuple(pole_pos),
                                                    rng=((0, 0), (1e6, 1e6)),
