@@ -1784,8 +1784,12 @@ class SEMComedi(model.HwComponent):
         # get the scan values (automatically updated to the latest needs)
         (scan, period, shape, margin,
          wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(len(detectors))
-        # TODO: immediately write the first position to give the beam a bit more
+        # Immediately write the first position to give the beam a bit more
         # settling time while we are preparing the whole scan.
+        for p, c, r in zip(scan[0, 0], wchannels, wranges):
+            comedi.data_write(self._device, self._ao_subdevice, c, r,
+                              comedi.AREF_GROUND, int(p))
+        logging.debug("Set to starting position at %s", scan[0, 0])
 
         # Scanner metadata (note: MD_POS is expected to be on the base/e-beam metadata)
         metadata = {
@@ -1865,6 +1869,12 @@ class SEMComedi(model.HwComponent):
          wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(0)
         if osr != 1:
             logging.warning("osr = %d, while using counting detector", osr)
+        # Immediately write the first position to give the beam a bit more
+        # settling time while we are preparing the whole scan.
+        for p, c, r in zip(scan[0, 0], wchannels, wranges):
+            comedi.data_write(self._device, self._ao_subdevice, c, r,
+                              comedi.AREF_GROUND, int(p))
+        logging.debug("Set to starting position at %s", scan[0, 0])
 
         # Scanner metadata (note: MD_POS is expected to be on the base/e-beam metadata)
         metadata = {
