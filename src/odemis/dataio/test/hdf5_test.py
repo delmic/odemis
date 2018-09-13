@@ -307,7 +307,7 @@ class TestHDF5IO(unittest.TestCase):
         dtype = numpy.dtype("uint16")
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake hw",
-                    model.MD_DESCRIPTION: "test",
+                    model.MD_DESCRIPTION: u"tÉst",  # non ascii character
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -348,7 +348,7 @@ class TestHDF5IO(unittest.TestCase):
 
         # Check physical metadata
         desc = f["Acquisition0/PhysicalData/Title"][()]
-        self.assertAlmostEqual(metadata[model.MD_DESCRIPTION], desc)
+        self.assertEqual(metadata[model.MD_DESCRIPTION], desc)
 
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
@@ -356,6 +356,19 @@ class TestHDF5IO(unittest.TestCase):
 
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
+
+        f.close()
+
+        # Try reading the metadata using the hdf5 module
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), 1)
+
+        for im in rdata:
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], metadata[model.MD_DESCRIPTION])
+            self.assertEqual(im.metadata[model.MD_POS], metadata[model.MD_POS])
+            self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], metadata[model.MD_PIXEL_SIZE])
+            self.assertEqual(im.metadata[model.MD_ACQ_DATE], metadata[model.MD_ACQ_DATE])
+            self.assertEqual(im.metadata[model.MD_EXP_TIME], metadata[model.MD_EXP_TIME])
 
     def testExportRead(self):
         """

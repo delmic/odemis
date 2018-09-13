@@ -524,13 +524,13 @@ def _parse_physical_data(pdgroup, da):
         md = d.metadata
         try:
             cd = pdgroup["ChannelDescription"][i]
-            md[model.MD_DESCRIPTION] = unicode(cd)
-        except (KeyError, IndexError):
+            md[model.MD_DESCRIPTION] = cd.decode("utf-8", "replace")
+        except (KeyError, IndexError, UnicodeDecodeError):
             # maybe Title is more informative... but it's not per channel
             try:
                 title = pdgroup["Title"][()]
-                md[model.MD_DESCRIPTION] = unicode(title)
-            except (KeyError, IndexError):
+                md[model.MD_DESCRIPTION] = title.decode("utf-8", "replace")
+            except (KeyError, IndexError, UnicodeDecodeError):
                 pass
 
         # MicroscopeMode helps us to find out the bandwidth of the wavelength
