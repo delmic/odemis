@@ -66,9 +66,11 @@ def call_in_wx_main_wrapper(f):
             f(*args, **kwargs)
             return
 
-        app = wx.GetApp()
-        if app:
-            wx.CallAfter(f, *args, **kwargs)
+        if not wx.GetApp():
+            logging.info("Skipping call to %s() as wxApp is already ended", f.__name__)
+            return
+
+        wx.CallAfter(f, *args, **kwargs)
 
     return call_after_wrapzor
 
@@ -76,8 +78,8 @@ def call_in_wx_main_wrapper(f):
 @decorator
 def ignore_dead(f, self, *args, **kwargs):
     """
-    Suppresses errors caused code trying to access
-    wxPython widgets that have already been destroyed
+    Suppresses errors caused by code trying to access wxPython widgets that have
+    already been destroyed.
 
     If used on a function also decorated with call_in_wx_main, it should be
     the closest to the real function. IOW, always put this decorator at the
@@ -97,10 +99,12 @@ def dead_object_wrapper(f):
 
     @wraps(f)
     def dead_object_wrapzor(*args, **kwargs):
+        if not wx.GetApp():
+            logging.info("Skipping call to %s() as wxApp is already ended", f.__name__)
+            return
+
         try:
-            app = wx.GetApp()
-            if app:
-                return f(*args, **kwargs)
+            return f(*args, **kwargs)
         except RuntimeError:
             logging.warning("Dead object ignored in %s", f.__name__)
 
