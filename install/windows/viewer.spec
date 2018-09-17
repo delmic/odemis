@@ -9,13 +9,15 @@ def get_lib_tiff():
     """ Help PyInstaller find all the lib-tiff files it needs """
     import os
 
+    print("Looking for libtiff")
     import libtiff
     tiff_path = os.path.dirname(libtiff.__file__)
 
-    if os.path.exists(tiff_path):
+    if os.path.isfile(os.path.join(tiff_path, 'libtiff.dll')) and \
+    		os.path.isfile(os.path.join(tiff_path, 'tiff.h')):
         return [
-            ('libtiff\\libtiff.dll', os.path.join(tiff_path, 'libtiff.dll'), 'DATA'),
-            ('libtiff\\tiff.h', os.path.join(tiff_path, 'tiff.h'), 'DATA')
+            ('libtiff.dll', os.path.join(tiff_path, 'libtiff.dll'), 'DATA'),
+            ('tiff.h', os.path.join(tiff_path, 'tiff.h'), 'DATA')
         ]
 
     raise ImportError("Could not find Libtiff files!")
@@ -173,6 +175,10 @@ exe = EXE(
     console=False,  # True
     icon='odemis-viewer.ico'
 )
+
+# This a hack because for "some understood" reason the ctypes hook picks libtiff.dll
+# (which is not needed) and reports its name in absolute path, which breaks COLLECT.
+a.binaries = [b for b in a.binaries if not b[0].endswith("libtiff.dll")]
 
 coll = COLLECT(
     exe,
