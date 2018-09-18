@@ -1902,16 +1902,6 @@ class AnalysisTab(Tab):
 
         gc.collect()
 
-    def _connect_stream_to_pixeloverlay(self, spec_stream, viewports):
-        for viewport in viewports:
-            print viewport.stream_tree
-                # ol = viewport.canvas.pixel_overlay
-                # ol.set_data_properties(pixel_width, center_position, (width, height))
-                # ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
-
-        # Adjust the viewport layout (if needed) when a pixel or line is selected
-        # spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-
     def set_ar_background(self, fn):
         """
         Load the data from the AR background file and apply to streams
