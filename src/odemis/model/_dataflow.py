@@ -18,13 +18,12 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-
-Provides data-flow: an object that can contain a large array of data regularly
-updated. Typically it is used to transmit video (sequence of images). It does it
-losslessly and with metadata attached (see _metadata for the conventional ones).
 '''
+# Provides data-flow: an object that can contain a large array of data regularly
+# updated. Typically it is used to transmit video (sequence of images). It does it
+# losslessly and with metadata attached (see _metadata for the conventional ones).
 
-from __future__ import division
+from __future__ import division, print_function
 
 import Pyro4
 import inspect
@@ -586,18 +585,19 @@ class SubscribeProxyThread(threading.Thread):
                         self.w_notifier(darray)
                     except WeakRefLostError:
                         return  # It's a sign there is nothing left to do
-        except:
+        except Exception:
             if logging:
                 logging.exception("Ending ZMQ thread due to exception")
         finally:
             try:
                 self._commands.close()
-            except:
-                print "Exception closing ZMQ commands connection"
+            except Exception:
+                print("Exception closing ZMQ commands connection")
             try:
                 self._data.close()
-            except:
-                print "Exception closing ZMQ data connection"
+            except Exception:
+                print("Exception closing ZMQ data connection")
+
 
 def unregister_dataflows(self):
     # Only for the "DataFlow"s, the real objects, not the proxys
@@ -759,4 +759,3 @@ def EventSerializer(self):
 
 Pyro4.Daemon.serializers[Event] = EventSerializer
 
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

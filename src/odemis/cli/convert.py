@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # Example usage:
 # convert --input file-as.hdf5 --output file-as.ome.tiff
 
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 from gettext import ngettext
@@ -320,9 +320,9 @@ def main(args):
 
     # Cannot use the internal feature, because it doesn't support multi-line
     if options.version:
-        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
-               odemis.__copyright__ + "\n" +
-               "Licensed under the " + odemis.__license__)
+        print(odemis.__fullname__ + " " + odemis.__version__ + "\n" +
+              odemis.__copyright__ + "\n" +
+              "Licensed under the " + odemis.__license__)
         return 0
 
     infn = options.input
