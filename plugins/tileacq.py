@@ -388,16 +388,16 @@ class TileAcqPlugin(Plugin):
         return (generator of tuple(int, int)): x/y positions, starting from 0,0
         """
         # For now we do forward/backward on X (fast), and Y (slowly)
-        dir = 1
+        direction = 1
         for iy in range(rep[1]):
-            if dir == 1:
+            if direction == 1:
                 for ix in range(rep[0]):
                     yield (ix, iy)
             else:
                 for ix in range(rep[0] - 1, -1, -1):
                     yield (ix, iy)
 
-            dir *= -1
+            direction *= -1
 
     def _move_to_tile(self, idx, orig_pos, tile_size, prev_idx):
         # Go left/down, with every second line backward:
@@ -485,7 +485,7 @@ class TileAcqPlugin(Plugin):
             future.running_subf.cancel()
             logging.debug("Acquisition cancelled.")
 
-        if ft._task_state == CANCELLED:
+        if future._task_state == CANCELLED:
             raise CancelledError("Acquisition cancelled")
 
     STITCH_SPEED = 1e-8  # s/px
@@ -674,7 +674,7 @@ class TileAcqPlugin(Plugin):
     def acquire(self, dlg):
         main_data = self.main_app.main_data
         str_ctrl = self._tab.streambar_controller
-        stream_paused = str_ctrl.pauseStreams()
+        str_ctrl.pauseStreams()
         dlg.pauseSettings()
         self._unsubscribe_vas()
 
@@ -754,18 +754,19 @@ class TileAcqPlugin(Plugin):
                 das_registered = stitching.register(da_list)
 
                 # Select weaving method
-                # On a Delphi and Secom system the mean weaver gives the best result since it
+                # On a Sparc system the mean weaver gives the best result since it
                 # smoothes the transitions between tiles. However, using this weaver on the
-                # Sparc generates an image with dark stripes in the overlap regions which are
-                # the result of carbon decomposition effects. To mediate this, we use the
+                # Secom/Delphi generates an image with dark stripes in the overlap regions which are
+                # the result of carbon decomposition effects that typically occur in samples imaged
+                # by these systems. To mediate this, we use the
                 # collage_reverse weaver that only shows the overlap region of the tile that
                 # was imaged first.
                 if self.microscope.role in ("secom", "delphi"):
-                    weaving_method = WEAVER_MEAN
-                    logging.info("Using weaving method WEAVER_MEAN.")
-                else:
                     weaving_method = WEAVER_COLLAGE_REVERSE
                     logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
+                else:
+                    weaving_method = WEAVER_MEAN
+                    logging.info("Using weaving method WEAVER_MEAN.")
 
                 # Weave every stream
                 if isinstance(das_registered[0], tuple):
