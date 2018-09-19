@@ -47,6 +47,7 @@ import psutil
 import threading
 import time
 import wx
+from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 
 
 class TileAcqPlugin(Plugin):
@@ -94,7 +95,7 @@ class TileAcqPlugin(Plugin):
         self._dlg = None
         self._tab = None  # the acquisition tab
         self.ft = model.InstantaneousFuture()  # acquisition future
-
+        self.microscope = microscope
         # Can only be used with a microscope
         if not microscope:
             return
@@ -752,17 +753,31 @@ class TileAcqPlugin(Plugin):
                 logging.info("Computing big image out of %d images", len(da_list))
                 das_registered = stitching.register(da_list)
 
+                # Select weaving method
+                # On a Delphi and Secom system the mean weaver gives the best result since it
+                # smoothes the transitions between tiles. However, using this weaver on the
+                # Sparc generates an image with dark stripes in the overlap regions which are
+                # the result of carbon decomposition effects. To mediate this, we use the
+                # collage_reverse weaver that only shows the overlap region of the tile that
+                # was imaged first.
+                if self.microscope.role in ("secom", "delphi"):
+                    weaving_method = WEAVER_MEAN
+                    logging.info("Using weaving method WEAVER_MEAN.")
+                else:
+                    weaving_method = WEAVER_COLLAGE_REVERSE
+                    logging.info("Using weaving method WEAVER_COLLAGE_REVERSE.")
+
                 # Weave every stream
                 if isinstance(das_registered[0], tuple):
                     for s in range(len(das_registered[0])):
                         streams = []
                         for da in das_registered:
                             streams.append(da[s])
-                        da = stitching.weave(streams)
+                        da = stitching.weave(streams, weaving_method)
                         da.metadata[model.MD_DIMS] = "YX"  # TODO: do it in the weaver
                         st_data.append(da)
                 else:
-                    da = stitching.weave(das_registered)
+                    da = stitching.weave(das_registered, weaving_method)
                     st_data.append(da)
 
                 # Save
