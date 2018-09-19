@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 import odemis
-
+import traceback
 
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "--clean", "-y", "viewer.spec"]
@@ -18,15 +18,15 @@ if 'TCL_LIBRARY' not in os.environ or 'TK_LIBRARY' not in os.environ:
 
 
 def run_command(cmd, flavor=None):
-
     if flavor is not None:
         os.environ['FLAVOR'] = str(flavor)
-
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    print "\n\n"
-    for line in iter(p.stdout.readline, b''):
-        print line.rstrip()
-    return p.wait()
+    try:
+        subprocess.check_call(cmd)
+    except Exception as ex:
+        # Don't close terminal after raising Exception
+        traceback.print_exc(ex)
+        raw_input("Press any key to exit.")
+        sys.exit(-1)
 
 
 def add_size_to_version():
@@ -82,7 +82,10 @@ while True:
     [5] Both Executables
     [6] Both Installers
 
-    [7] Build everything
+    [7] OdemisViewer Executable and Installer
+    [8] DelphiViewer Executable and Installer
+
+    [9] Build everything
 
 > """)
 
@@ -109,6 +112,14 @@ while True:
         build_delphiviewer_inst()
         add_size_to_version()
     elif i == 7:
+        build_odemisviewer_exe()
+        build_odemisviewer_inst()
+        add_size_to_version()
+    elif i == 8:
+        build_delphiviewer_exe()
+        build_delphiviewer_inst()
+        add_size_to_version()
+    elif i == 9:
         build_odemisviewer_exe()
         build_delphiviewer_exe()
         build_odemisviewer_inst()
