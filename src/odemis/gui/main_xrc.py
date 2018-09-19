@@ -5518,7 +5518,6 @@ def __init_resources():
                           <style>normal</style>
                           <weight>normal</weight>
                           <underlined>0</underlined>
-                          <family>default</family>
                           <face>Ubuntu</face>
                           <encoding>UTF-8</encoding>
                         </font>
