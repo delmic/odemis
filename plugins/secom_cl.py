@@ -593,8 +593,7 @@ class CLAcqPlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
 
     def _acquire(self, dlg):
         acquirer = GridAcquirer((self.xres.value, self.yres.value))
@@ -613,7 +612,7 @@ class CLAcqPlugin(Plugin):
         finally:
             f.set_result(None)  # Indicate it's over
 
-        dlg.Destroy()
+        dlg.Close()
 
 
 def main(args):

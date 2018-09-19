@@ -470,8 +470,7 @@ class QuickCLPlugin(Plugin):
 
         # Make sure the streams are not playing anymore
         dlg.streambar_controller.pauseStreams()
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
         self._dlg = None
 
         # Update filename in main window

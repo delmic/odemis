@@ -530,6 +530,22 @@ class AcquisitionDialog(xrcfr_plugin):
 
         self.Layout()
 
+    def pauseSettings(self):
+        """ Pause the settings widgets. They will be disabled and the value frozen even when the VAs are changed """
+        self.setting_controller.pause()
+        self.setting_controller.enable(False)
+
+        self.streambar_controller.pause()
+        self.streambar_controller.enable(False)
+
+    def resumeSettings(self):
+        """ unpause the settings widgets. They will be re-enabled and the value unfrozen """
+        self.setting_controller.enable(True)
+        self.setting_controller.resume()
+
+        self.streambar_controller.enable(True)
+        self.streambar_controller.resume()
+
     @call_in_wx_main
     def enable_buttons(self, enable):
         """ Enable or disable all the buttons in the button panel """
@@ -559,29 +575,38 @@ class AcquisitionDialog(xrcfr_plugin):
         self.streambar_controller.clear()
         self.EndModal(btnid)
 
-    def pauseSettings(self):
-        """ Pause the settings widgets. They will be disabled and the value frozen even when the VAs are changed """
-        self.setting_controller.pause()
-        self.setting_controller.enable(False)
+    @call_in_wx_main
+    def Close(self, *args, **kwargs):
+        """
+        Request to close the window.
+        Make sure to call .Destroy() when not using the dialog anymore.
+        """
+        # save the return code, as Close() automatically sets it to wx.ID_CANCEL
+        # but we want to keep the value potentially set by the button.
+        rc = self.ReturnCode
+        logging.debug("Closing acquisition dialog")
+        super(AcquisitionDialog, self).Close(*args, **kwargs)
+        self.ReturnCode = rc
+        logging.debug("Dialog closed")
 
-        self.streambar_controller.pause()
-        self.streambar_controller.enable(False)
-
-    def resumeSettings(self):
-        """ unpause the settings widgets. They will be re-enabled and the value unfrozen """
-        self.setting_controller.enable(True)
-        self.setting_controller.resume()
-
-        self.streambar_controller.enable(True)
-        self.streambar_controller.resume()
+    @call_in_wx_main
+    def EndModal(self, retCode):
+        """
+        Request to close the window, and pass a specific return code.
+        Make sure to call .Destroy() when not using the dialog anymore.
+        retCode (int)
+        """
+        super(AcquisitionDialog, self).EndModal(retCode)
 
     @call_in_wx_main
     def Destroy(self, *args, **kwargs):
+        """
+        Discards entirely the dialog. It's free'd from the memory.
+        Note: in most cases, if it's still opened, it get closed, but it seems
+        that with some version of wxPython, it causes a crash, so better call
+        Close() first.
+        """
         self.streambar_controller.clear()
-        # save the return code, as Destroy() automatically sets it to wx.ID_CANCEL
-        # but we want to keep the value potentially set by the button.
-        rc = self.ReturnCode
         logging.debug("Destroying acquisition dialog")
         super(AcquisitionDialog, self).Destroy(*args, **kwargs)
-        self.ReturnCode = rc
         logging.debug("Dialog destroyed")
