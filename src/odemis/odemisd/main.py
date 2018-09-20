@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 import grp
@@ -546,9 +546,9 @@ def main(args):
 
     # Cannot use the internal feature, because it doesn't support multiline
     if options.version:
-        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
-               odemis.__copyright__ + "\n" +
-               "Licensed under the " + odemis.__license__)
+        print(odemis.__fullname__ + " " + odemis.__version__ + "\n" +
+              odemis.__copyright__ + "\n" +
+              "Licensed under the " + odemis.__license__)
         return 0
 
     # Set up logging before everything else

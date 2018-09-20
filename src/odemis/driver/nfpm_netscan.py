@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import division
+from __future__ import division, print_function
 import logging
 import socket
 
@@ -53,7 +53,7 @@ def scan():
                         # Look for the hostname (default is like "8742-15433\x00")
                         end_hn = data.index("\x00", 19)
                         hn = data[19:end_hn]
-                        print "%s\t%s\t%d" % (hn, addr, p)
+                        print("%s\t%s\t%d" % (hn, addr, p))
                     except Exception:
                         logging.exception("Failed to decode packet %r from %s", data, addr)
                 else:
