@@ -609,6 +609,8 @@ class ConvertStage(model.Actuator):
             translation = (0, 0)
 
         # TODO: range of axes could at least be updated with scale + translation
+        # and (when there is rotation) canUpdate would only be True if both axes
+        # canUpdate.
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
@@ -676,7 +678,10 @@ class ConvertStage(model.Actuator):
         self._updatePosition(self._child.position.value)
 
     @isasync
-    def moveRel(self, shift):
+    def moveRel(self, shift, **kwargs):
+        """
+        **kwargs: Mostly there to support "update" argument
+        """
         # shift is a vector, so relative conversion
         vshift = shift.get("x", 0), shift.get("y", 0)
         vshift_child = self._convertPosToChild(vshift, absolute=False)
@@ -684,11 +689,14 @@ class ConvertStage(model.Actuator):
         shift_child = {self._axes_child["x"]: vshift_child[0],
                        self._axes_child["y"]: vshift_child[1]}
         logging.debug("converted relative move from %s to %s", shift, shift_child)
-        f = self._child.moveRel(shift_child)
+        f = self._child.moveRel(shift_child, **kwargs)
         return f
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos, **kwargs):
+        """
+        **kwargs: Mostly there to support "update" argument
+        """
         # pos is a position, so absolute conversion
         cpos = self.position.value
         vpos = pos.get("x", cpos["x"]), pos.get("y", cpos["y"])
@@ -697,7 +705,7 @@ class ConvertStage(model.Actuator):
         pos_child = {self._axes_child["x"]: vpos_child[0],
                      self._axes_child["y"]: vpos_child[1]}
         logging.debug("converted absolute move from %s to %s", pos, pos_child)
-        f = self._child.moveAbs(pos_child)
+        f = self._child.moveAbs(pos_child, **kwargs)
         return f
 
     def stop(self, axes=None):
