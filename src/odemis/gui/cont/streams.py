@@ -1036,6 +1036,9 @@ class StreamController(object):
             if vaname == "repetition":
                 self._rep_ctrl = ent.value_ctrl
                 # Update the combo box choices based on the current repetition value
+                # (an alternative would be to override our own va_2_ctrl to the
+                # SettingEntry, but currently create_setting_entry() doesn't
+                # allow to change it)
                 self.stream.repetition.subscribe(self._onStreamRep, init=True)
 
             if vaname in ("repetition", "pixelSize"):
@@ -1176,7 +1179,7 @@ class StreamController(object):
         evt.Skip()
 
     # Repetition combobox content updater
-
+    @call_in_wx_main
     def _onStreamRep(self, rep):
         """
         Called when the repetition VAs of a RepetitionStream is modified.
@@ -1185,10 +1188,10 @@ class StreamController(object):
         ratio = rep[1] / rep[0]
 
         # Create the entries:
-        choices = [(1, 1)]  # 1 x 1 should always be there
+        choices = [(1, 1), rep]  # 1 x 1 should always be there
 
         # Add a couple values below/above the current repetition
-        for m in (1 / 4, 1 / 2, 1, 2, 4, 10):
+        for m in (1 / 4, 1 / 2, 2, 4, 10):
             x = int(round(rep[0] * m))
             y = int(round(x * ratio))
             choices.append((x, y))
@@ -1210,6 +1213,9 @@ class StreamController(object):
         self._rep_ctrl.Clear()
         for choice in choices:
             self._rep_ctrl.Append(u"%s x %s px" % choice, choice)
+
+        # Make sure the current value is selected
+        self._rep_ctrl.SetSelection(choices.index(rep))
 
 
 class StreamBarController(object):
