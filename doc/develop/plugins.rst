@@ -162,7 +162,7 @@ The Plugin class provides a few helper functions:
        As long as progress is active, the buttons are disabled. 
        If future is cancellable, show a cancel button next to the progress bar.
 
-    .. py:method:: setAcquisitionInfo(self, text=None, lvl=logging.INFO)
+    .. py:method:: setAcquisitionInfo(text=None, lvl=logging.INFO)
 
        Displays information label above progress bar.
 
@@ -172,12 +172,12 @@ The Plugin class provides a few helper functions:
        :param lvl: log level, which selects the display colour.
        :type lvl: int, from logging.*
        
-    .. py:method:: pauseSettings(self)
+    .. py:method:: pauseSettings()
 
        Freezes the settings and stream controls in the window to prevent user changes.
        Typically done while acquiring.
        
-    .. py:method:: resumeSettings(self)
+    .. py:method:: resumeSettings()
 
        Unfreezes the settings and stream controls in the window to allow user changes.
        Typically done when acquiring is cancelled.   
@@ -186,6 +186,20 @@ The Plugin class provides a few helper functions:
 
        Inherited from the standard wx.Dialog. It shows the window and prevents from
        accessing the rest of the GUI until the window is closed.
+
+    .. py:method:: EndModal(retCode)
+
+       Request to close the window, and pass a specific return code.
+       Inherited from the standard wx.Dialog.
+       Make sure to call .Destroy() when not using the dialog anymore.
+       :param retCode: the return code
+       :type retCode: int
+
+    .. py:method:: Close()
+
+       Request to close the window.
+       Inherited from the standard wx.Dialog.
+       Make sure to call .Destroy() when not using the dialog anymore.
 
     .. py:method:: Destroy()
 
@@ -281,8 +295,7 @@ When that entry is selected, it shows an acquisition window and then acquire
             if ans == 1:
                 self.showAcquisition(self.filename.value)
 
-            if dlg: # If dlg hasn't been destroyed yet
-                dlg.Destroy()
+            dlg.Destroy()
 
         def acquire(self, dlg):
             ccd = self.main_data.ccd
@@ -310,5 +323,5 @@ When that entry is selected, it shows an acquisition window and then acquire
             if d:
                 dataio.hdf5.export(self.filename.value, d)
 
-            dlg.Destroy()
+            dlg.Close()
 
