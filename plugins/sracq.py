@@ -251,8 +251,7 @@ class SRAcqPlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
 
     def acquire(self, dlg):
         # Make sure the stream is not playing
@@ -334,7 +333,7 @@ class SRAcqPlugin(Plugin):
         fps = nb / (time.time() - self._startt)
         logging.info("Finished with average %g fps", fps)
 
-        dlg.Destroy()
+        dlg.Close()
 
     def _on_image(self, df, data):
         """

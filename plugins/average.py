@@ -152,8 +152,7 @@ class AveragePlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
 
     def _update_exp_dur(self, _=None):
         """
@@ -246,7 +245,7 @@ class AveragePlugin(Plugin):
 
         # Display the file
         self.showAcquisition(self.filename.value)
-        dlg.Destroy()
+        dlg.Close()
 
     def _prepare_acq(self, dets):
         # We could synchronize all the detectors, but doing just one will force

@@ -314,8 +314,7 @@ class TileAcqPlugin(Plugin):
 
         # Don't hold references
         self._unsubscribe_vas()
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
         self._dlg = None
 
     # black list of VAs name which are known to not affect the acquisition time
@@ -778,7 +777,7 @@ class TileAcqPlugin(Plugin):
             # End of the (completed) acquisition
             if ft._task_state == CANCELLED:
                 raise CancelledError()
-            dlg.Destroy()
+            dlg.Close()
 
             # Open analysis tab
             if st_data:

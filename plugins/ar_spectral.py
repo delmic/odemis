@@ -972,8 +972,7 @@ class ARspectral(Plugin):
         else:
             logging.debug("Unknown return code %d", ans)
 
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
 
     def acquire(self, dlg):
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
@@ -1008,5 +1007,5 @@ class ARspectral(Plugin):
             logging.debug("Going to export data: %s", das)
             exporter.export(fn, das)
 
-        dlg.Destroy()
+        dlg.Close()
 

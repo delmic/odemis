@@ -265,8 +265,7 @@ class TimelapsePlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
 
     def acquire(self, dlg):
         main_data = self.main_app.main_data
@@ -325,4 +324,4 @@ class TimelapsePlugin(Plugin):
         f.set_result(None)  # Indicate it's over
 
         # self.showAcquisition(self.filename.value)
-        dlg.Destroy()
+        dlg.Close()

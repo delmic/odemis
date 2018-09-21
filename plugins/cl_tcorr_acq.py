@@ -838,7 +838,6 @@ class Correlator2D(Plugin):
 
         # For ROI:
         roi = self._acqui_tab.semStream.roi.value
-        logging.debug("ROA = %s", roi)
         if roi == UNDEFINED_ROI:
             roi = (0, 0, 1, 1)
         self.roi.value = roi
@@ -869,8 +868,7 @@ class Correlator2D(Plugin):
         else:
             logging.debug("Unknown return code %d", ans)
 
-        if dlg: # If dlg hasn't been destroyed yet
-            dlg.Destroy()
+        dlg.Destroy()
 
     def crop_time_dim(self, das):
         """
@@ -928,5 +926,5 @@ class Correlator2D(Plugin):
             exporter.export(cfn, self.crop_time_dim(das))
             self.showAcquisition(cfn)
 
-        dlg.Destroy()
-
+        if not f.cancelled():
+            dlg.Close()
