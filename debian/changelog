@@ -1,3 +1,18 @@
+odemis (2.8.4-1) precise; urgency=medium
+
+  * New version: 2.8.4
+  - Minor improvements:
+    - Use support.delmic.com website instead of wetranfer.com
+  * Main bugs fixed:
+    - Ensure the ebeam is positionned properly before acquiring a CCD image (SPARC)
+    - AR pole position was not immediately updated after the alignment (SPARC)
+    - Fix reading extra parameters of the TMCM in some cases (SPARC)
+    - On the first load after starting odemis, the optical focus wasn't set (DELPHI)
+    - ConvertStage wrapping a stage with canUpdate would fail if using the canUpdate feature
+    - On Windows, the new libtiff couldn't be loaded
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 21 Sep 2018 09:26:28 +0200
+
 odemis (2.8.3-1) precise; urgency=medium
 
   * New version: 2.8.3
