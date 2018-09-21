@@ -915,7 +915,25 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                         s._dataflow.subscribe(sub)
-                    time.sleep(0)  # give more chances spot has been already processed
+
+                    # TODO: in theory (aka in a perfect world), the ebeam would immediately
+                    # be at the requested position after the subscription starts. However,
+                    # that's not exactly the case due to:
+                    # * physics limits the speed of voltage change in the ebeam column,
+                    #   so it takes the "settle time" before the beam is at the right
+                    #   place (in the order of 10 µs).
+                    # * the (odemis) driver is asynchronous, and between the moment it
+                    #   receives the request to start and the actual moment it asks the
+                    #   hardware to change voltages, several ms might have passed.
+                    # One thing that would help is to not park the e-beam between each
+                    # spot. This way, the ebeam would reach the position much quicker,
+                    # and if it's not yet at the right place, it's still not that far.
+                    # The driver could also request the ebeam to the first spot position
+                    # as soon as the subscription is received.
+                    # In the meantime, waiting a tiny bit ensures the CCD receives the
+                    # right data.
+                    time.sleep(10e-3)  # give more chances spot has been already processed
+
                     self._trigger.notify()
 
                     # A big timeout in the wait can cause up to 50 ms latency.
@@ -1178,7 +1196,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                         s._dataflow.subscribe(sub)
-                    time.sleep(0)  # give more chances spot has been already processed
+                    time.sleep(10e-3)  # give more chances spot has been already processed
                     self._trigger.notify()
 
                     # A big timeout in the wait can cause up to 50 ms latency.
