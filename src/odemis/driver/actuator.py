@@ -1904,10 +1904,10 @@ class RotationActuator(model.Actuator):
         final_pos = cur_pos + move
         pass_ref = (cur_pos // self._cycle) != (final_pos // self._cycle)
 
-        # do referencing after i=5 moves or when actuator has accumulated 2pi steps
+        # do referencing after i=5 moves or when passing the reference switch anyways
         if pass_ref or self._move_num_total >= 5:
             # Move to pos close to ref switch
-            move, cur_pos = self._findShortestMove(target_pos)
+            move, cur_pos = self._findShortestMove(self._ref_start)
                 
             self._child.moveRel({self._caxis: move}).result()
             self._child.reference({self._caxis}).result()
