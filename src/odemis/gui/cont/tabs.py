@@ -524,7 +524,7 @@ class SecomStreamsTab(Tab):
         elif main_data.ebeam and not main_data.light:
             logging.info("Creating SEM only viewport layout")
             vpv = collections.OrderedDict()
-            for i, viewport in enumerate(viewports):
+            for i, viewport in enumerate(viewports[:4]):
                 vpv[viewport] = {"name": "SEM %d" % (i + 1),
                                  "stage": main_data.stage,
                                  "stream_classes": EMStream,
@@ -534,16 +534,16 @@ class SecomStreamsTab(Tab):
         elif not main_data.ebeam and main_data.light:
             logging.info("Creating Optical only viewport layout")
             vpv = collections.OrderedDict()
-            for i, viewport in enumerate(viewports):
+            for i, viewport in enumerate(viewports[:4]):
                 vpv[viewport] = {"name": "Optical %d" % (i + 1),
                                  "stage": main_data.stage,
                                  "stream_classes": OpticalStream,
                                  }
         else:
-            logging.warning("No known microscope configuration, creating %d "
-                            "generic views", len(viewports))
+            logging.warning("No known microscope configuration, creating 4 "
+                            "generic views")
             vpv = collections.OrderedDict()
-            for i, viewport in enumerate(viewports):
+            for i, viewport in enumerate(viewports[:4]):
                 vpv[viewport] = {
                     "name": "View %d" % (i + 1),
                     "stage": main_data.stage,
