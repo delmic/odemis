@@ -27,12 +27,8 @@ import math
 from odemis import model
 import logging
 
-# 0.2 / 0.5 gives better result on image with carbon decomposition
-# 0.8 / 0.9 works better for Phenom images
-MIN_MATCH = 0.8  # if match of shift is lower MIN_MATCH use fallback
 GOOD_MATCH = 0.9  # consider all registrations with match > GOOD_MATCH
 
-# direction in pos_to_left_right function
 LEFT_TO_RIGHT = 1
 RIGHT_TO_LEFT = -1
 
@@ -82,8 +78,6 @@ class ShiftRegistrar(object):
         # initialize grid to 1x1. The size will increase as new tiles are
         # added.
         self.nx = 1  # (int) total number of cols
-        self.shifts_ver = [[None]]  # (None or tuple of 2 floats) shifts wrt vertical neighbour
-        self.shifts_hor = [[None]]  # (None or tuple of 2 floats) shifts wrt horizontal neighbour
         self.registered_positions = [[None]]  # (None or tuple of 2 floats) list of calculated positions
         self.tiles = [[None]]  # (None or DataArray) list of tiles
 
@@ -239,13 +233,9 @@ class ShiftRegistrar(object):
             self.nx += 1
             for i in range(len(self.tiles)):
                 self.tiles[i].append(None)
-                self.shifts_ver[i].append(None)
-                self.shifts_hor[i].append(None)
                 self.registered_positions[i].append(None)
         else:
             self.tiles.append([None] * self.nx)
-            self.shifts_ver.append([None] * self.nx)
-            self.shifts_hor.append([None] * self.nx)
             self.registered_positions.append([None] * self.nx)
 
     def _estimateROI(self, shift):
@@ -293,7 +283,7 @@ class ShiftRegistrar(object):
         exp_shift_x = int((imageB.metadata[model.MD_POS][0] - imageA.metadata[model.MD_POS][0]) / px_size[0])
         exp_shift_y = -int((imageB.metadata[model.MD_POS][1] - imageA.metadata[model.MD_POS][1]) / px_size[1])
         if max(abs(exp_shift_x - shift[0]), abs(exp_shift_y - shift[1])) > max(numpy.multiply(self.size, self.ovrlp)):
-            logging.info("Calculated shift is larger than the overlap size, using expected position" +
+            logging.info("Calculated shift is larger than the overlap size, using expected position "
                          "instead.")
             return 0
 
@@ -332,7 +322,7 @@ class ShiftRegistrar(object):
         b = tile[t2:b2, l2:r2]
         [x, y] = MeasureShift(b, a)
         return x, y
-        
+
     def _register_horizontally(self, row, col, xdir):
         """
         Apply the registration algorithm to the neighbouring tile on the right or left.
@@ -360,36 +350,6 @@ class ShiftRegistrar(object):
 
         # If the quality of the cross-correlation is low, use fallback shift
         match = self._estimateMatch(prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
-        if match < MIN_MATCH:
-            logging.debug('Horizontal registration results in bad match. Using fallback position.')
-            # Use mean shift of all previously registered tiles in horizontal direction. If none are
-            # available, fall back to expected position (i.e. zero shift)
-            known_shifts_x = filter(None, self.shifts_hor[row])
-            if known_shifts_x:
-                mean_x = numpy.mean(filter(None, self.shifts_hor[row]), axis=0)[0]
-            else:
-                mean_x = 0
-            if filter(None, [s[1] for s in self.shifts_hor]):
-                mean_y = numpy.mean(filter(None, [s[1] for s in self.shifts_hor]), axis=0)[1]
-            else:
-                mean_y = 0
-            # Keep new shift if quality of registration is better
-            match_mean = self._estimateMatch(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
-            if match_mean > match:
-                x, y = mean_x, mean_y
-                match = match_mean
-            # Try get_shift function with mean-shifted position as expected value
-            if (mean_x, mean_y) != (0, 0):
-                drift = self._get_shift(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
-                mean_x += drift[0]
-                mean_y += drift[1]
-                match_new = self._estimateMatch(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
-                if match_new > match:
-                    x, y = mean_x, mean_y
-                    match = match_new
-
-        if match >= MIN_MATCH:
-            self.shifts_hor[row][col] = x, y
 
         # Add shift to expected position
         exp_pos = numpy.add(exp_shift, prev_pos)
@@ -412,39 +372,6 @@ class ShiftRegistrar(object):
         prev_tile = self.tiles[row - 1][col]
         x, y = self._get_shift(prev_tile, tile, exp_shift)
         match = self._estimateMatch(prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
-        if match < MIN_MATCH and (row > 1 or col > 1):
-            # If the quality of the cross-correlation is low, use fallback shift
-            match = self._estimateMatch(prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
-            if match < MIN_MATCH and (row > 1 or col > 1):
-                logging.debug('Vertical registration results in bad match. Using fallback position.')
-                # Use mean shift of all previously registered tiles in horizontal direction. If none are
-                # available, fall back to expected position (i.e. zero shift)
-                known_shifts_x = filter(None, self.shifts_ver[row])
-                if known_shifts_x:
-                    mean_x = numpy.mean(filter(None, self.shifts_ver[row]), axis=0)[0]
-                else:
-                    mean_x = 0
-                if filter(None, [s[1] for s in self.shifts_ver]):
-                    mean_y = numpy.mean(filter(None, [s[1] for s in self.shifts_ver]), axis=0)[1]
-                else:
-                    mean_y = 0
-                # Keep new shift if quality of registration is better
-                match_mean = self._estimateMatch(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
-                if match_mean > match:
-                    x, y = mean_x, mean_y
-                    match = match_mean
-                # Try get_shift function with mean-shifted position as expected value
-                if (mean_x, mean_y) != (0, 0):
-                    drift = self._get_shift(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
-                    mean_x += drift[0]
-                    mean_y += drift[1]
-                    match_new = self._estimateMatch(prev_tile, tile, (exp_shift[0] - mean_x, exp_shift[1] - mean_y))
-                    if match_new > match:
-                        x, y = mean_x, mean_y
-                        match = match_new
-
-        if match >= MIN_MATCH:
-            self.shifts_ver[row][col] = x, y
 
         # Add shift to expected position
         exp_pos = numpy.add(exp_shift, prev_pos)
