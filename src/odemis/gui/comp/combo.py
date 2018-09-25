@@ -62,15 +62,19 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
         self.SetMargins(0, 0)
 
         self.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        # Even those this colour sets the right
-        self.SetBackgroundColour(self.Parent.GetBackgroundColour())
+        # Use the same colour as the parent (by default)
+        # HACK: there seems to be a bug in wxWidgets (v3.0.2), where
+        # OwnerDrawnComboBox.GetBackgroundColour() always returns the same fixed
+        # colour (in init?). So we cannot rely on it.
+        bckcol = self.Parent.GetBackgroundColour()
+        self.SetBackgroundColour(bckcol)
 
         icon = img.getBitmap("icon/arr_down_s.png")
         icon_x = 16 // 2 - icon.GetWidth() // 2
         icon_y = 16 // 2 - icon.GetHeight() // 2 - 1
 
-        bmpLabel = ImageButton._create_bitmap(img.getBitmap("button/btn_def_16.png"), (16, 16),
-                                              self.GetBackgroundColour())
+        bmpLabel = ImageButton._create_bitmap(img.getImage("button/btn_def_16.png"),
+                                              (16, 16), bckcol)
         dc = wx.MemoryDC()
         dc.SelectObject(bmpLabel)
         dc.DrawBitmap(icon, icon_x, icon_y)
@@ -79,12 +83,15 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
         hover_image = bmpLabel.ConvertToImage()
         darken_image(hover_image, 1.1)
 
-        dis_iamge = bmpLabel.ConvertToImage()
-        darken_image(dis_iamge, 0.8)
+        dis_image = bmpLabel.ConvertToImage()
+        darken_image(dis_image, 0.8)
 
-        self.SetButtonBitmaps(bmpLabel,
+        orig_image = bmpLabel.ConvertToImage()
+        darken_image(orig_image, 1.0)
+
+        self.SetButtonBitmaps(orig_image.ConvertToBitmap(),
                               bmpHover=hover_image.ConvertToBitmap(),
-                              bmpDisabled=dis_iamge.ConvertToBitmap(),
+                              bmpDisabled=dis_image.ConvertToBitmap(),
                               pushButtonBg=False)
 
         # Convert losing the focus into accepting the new value typed in
