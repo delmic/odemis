@@ -1754,17 +1754,9 @@ class AnalysisTab(Tab):
             # Create a new file info model object
             fi = guimod.FileInfo(filename)
 
-            # Force the canvases to fit to the content
-            for vp in [self.panel.vp_inspection_tl,
-                       self.panel.vp_inspection_tr,
-                       self.panel.vp_inspection_bl,
-                       self.panel.vp_inspection_br]:
-                vp.canvas.fit_view_to_next_image = True
-
-            md_list = [d.metadata for d in data]
-
             # Update the acquisition date to the newest image present (so that if
             # several acquisitions share one old image, the date is still different)
+            md_list = [d.metadata for d in data]
             acq_dates = [md[model.MD_ACQ_DATE] for md in md_list if model.MD_ACQ_DATE in md]
             if acq_dates:
                 fi.metadata[model.MD_ACQ_DATE] = max(acq_dates)
@@ -1899,6 +1891,14 @@ class AnalysisTab(Tab):
         self.tab_data_model.visible_views.value = new_visible_views
         # TODO: if all the views are either empty or contain the same streams,
         # display in full screen by default (with the first view which has streams)
+
+        if not extend:
+            # Force the canvases to fit to the content
+            for vp in [self.panel.vp_inspection_tl,
+                       self.panel.vp_inspection_tr,
+                       self.panel.vp_inspection_bl,
+                       self.panel.vp_inspection_br]:
+                vp.canvas.fit_view_to_content()
 
         gc.collect()
 
