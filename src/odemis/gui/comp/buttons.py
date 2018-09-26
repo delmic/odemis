@@ -249,42 +249,38 @@ class BtnMixin(object):
         return width, height, True if label else False
 
     @staticmethod
-    def _create_bitmap(bmp, size, bg_color):
+    def _create_bitmap(img, size, bg_color):
         """ Create a full sized button from the provided button face
 
-        The base buttons should have a width of 3 * 'section_width' (in pixels). The first
-        'section_width' pixels determine the left edage, the 'section_width' last pixels the
-        right edge, and the 'section_width' pixels in the middle are stretched to fill the button.
-
-        :Note:
-            Blit and StretchBlit were attempted first, but efforts to make them work with alpha
-            channels in the base images were unsuccessful.
-
+        img (wx.Image): the base image. It should have a width of 3 *
+        'section_width' (in pixels). The first 'section_width' pixels determine
+        the left edge, the 'section_width' last pixels the right edge, and the
+        'section_width' pixels in the middle are stretched to fill the button.
         """
+        # Note: Blit and StretchBlit were attempted first, but efforts to make
+        # them work with alpha channels in the base images were unsuccessful.
+
+        # TODO: just rely on transparency, and do not use the bg_color?
+        # In such case, it should be fine to use numpy to concatenate the image
 
         section_width = 4
         # Base button face should have a width of 3 * 'section_width'
         btn_width, btn_height = size
 
-        new_img = bmp.ConvertToImage()
-
-        l = new_img.GetSubImage(
+        l = img.GetSubImage(
             (0, 0, section_width, btn_height)
         ).ConvertToBitmap()
 
-        m = new_img.GetSubImage(
+        m = img.GetSubImage(
             (section_width, 0, section_width, btn_height)
         ).Rescale(
             max(btn_width - section_width * 2, 1),
             btn_height
         ).ConvertToBitmap()
 
-        r = new_img.GetSubImage(
+        r = img.GetSubImage(
             (section_width * 2, 0, section_width, btn_height)
         ).ConvertToBitmap()
-
-        src_dc = wx.MemoryDC()
-        src_dc.SelectObjectAsSource(bmp)
 
         dst_bmp = wx.Bitmap(btn_width, btn_height)
         dst_dc = wx.MemoryDC()
@@ -302,7 +298,7 @@ class BtnMixin(object):
 
         dst_dc.DrawBitmap(l, 0, 0, True)
         dst_dc.DrawBitmap(m, section_width, 0, True)
-        dst_dc.DrawBitmap(r, btn_width - section_width, 0)
+        dst_dc.DrawBitmap(r, btn_width - section_width, 0, True)
 
         return dst_bmp
 
@@ -328,7 +324,7 @@ class BtnMixin(object):
 
     def _create_main_bitmap(self):
         return self._create_bitmap(
-            self._getBtnBitmap(self.face_colour, self.height, 'off'),
+            self._getBtnImage(self.face_colour, self.height, 'off'),
             (self.Size.x, self.height),
             self.GetBackgroundColour()
         )
@@ -341,7 +337,7 @@ class BtnMixin(object):
         image = self._getBtnImage(self.face_colour, self.height, 'off')
         darken_image(image, 1.1)
         return self._create_bitmap(
-            wx.Bitmap(image),
+            image,
             (self.Size.x, self.height),
             self.GetBackgroundColour()
         )
@@ -353,7 +349,7 @@ class BtnMixin(object):
         image = self._getBtnImage(self.face_colour, self.height, 'off')
         darken_image(image, 0.8)
         return self._create_bitmap(
-            wx.Bitmap(image),
+            image,
             (self.Size.x, self.height or self.Size.y),
             self.GetBackgroundColour()
         )
@@ -364,7 +360,7 @@ class BtnMixin(object):
             return self.bmpLabel
 
         return self._create_bitmap(
-           self._getBtnBitmap(self.face_colour, self.height, 'on'),
+           self._getBtnImage(self.face_colour, self.height, 'on'),
             (self.Size.x, self.height),
             self.GetBackgroundColour()
         )
