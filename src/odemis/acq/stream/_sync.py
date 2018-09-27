@@ -48,7 +48,7 @@ import threading
 import time
 
 from odemis.model import hasVA
-from ._base import Stream, POL_POSITIONS
+from ._base import Stream, POL_POSITIONS, POL_MOVE_TIME
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -228,10 +228,18 @@ class MultipleDetectorStream(Stream):
         rep = self.repetition.value
         npixels = numpy.prod(rep)
         dt = total_time / npixels
+        pol_pos = [None]
+
+        # Estimate the time spent to rotate polarization analyzer
+        if self._analyzer:
+            total_time += POL_MOVE_TIME
+            if self._acquireAllPol.value:
+                total_time *= len(POL_POSITIONS)
+                pol_pos = POL_POSITIONS
 
         # Estimate time spent for the leeches
         for l in self.leeches:
-            l_time = l.estimateAcquisitionTime(dt, (rep[1], rep[0]))
+            l_time = l.estimateAcquisitionTime(dt, (len(pol_pos), rep[1], rep[0]))
             total_time += l_time
             logging.debug("Estimated overhead time for leech %s: %g s / %g s",
                           type(l), l_time, total_time)
@@ -271,11 +279,7 @@ class MultipleDetectorStream(Stream):
                 logging.warning("Estimated time cannot take into account scan stage, "
                                 "as no scan stage was provided.")
 
-        if hasattr(self, "_polarization"):
-            # 5 s extra for moving the polarization analyzer
-            total_time += 5
-            if self._acquireAllPol.value:
-                total_time = total_time * 6
+            logging.debug("Total time estimated is %s", total_time)
 
         return total_time
 
@@ -341,6 +345,7 @@ class MultipleDetectorStream(Stream):
         time_assemble = 0.001 * tot  # very rough approximation
         # add some overhead for the end of the acquisition
         tot_left = left + time_assemble + bonus + 0.1
+        logging.debug("Estimating another %g s left for the total acquisition.", tot_left)
         future.set_progress(end=time.time() + tot_left)
 
     def _cancelAcquisition(self, future):
@@ -498,7 +503,6 @@ class MultipleDetectorStream(Stream):
         """
 
         logging.debug("Stream %d data received", n)
-        s = self._streams[n]
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
             # position while Rep data is acquiring
@@ -699,15 +703,16 @@ class MultipleDetectorStream(Stream):
         md[MD_AD_LIST] = tuple(d.metadata[MD_ACQ_DATE] for d in data_list)
         return model.DataArray(anchor_data, metadata=md)
 
-    def _startLeeches(self, px_time, rep, tot_num):
+    def _startLeeches(self, px_time, shape):
         """
         A leech can be drift correction (dc) and/or probe/sample current (pca).
         During the leech time the drift correction and/or the probe current measurements are conducted.
         Start a counter np (= next pixel) until a leech is called.
         Leech is called after a well specified number of acquired pixel positions.
         :param px_time (0<float): estimated time spend for one pixel
-        :param rep (int, int): 2D grid of pixel positions to be acquired
-        :param tot_num (int): total number of e-beam positions
+        :param shape (tuple of int): last and second last dimension are the number of pixel positions to be acquired.
+                                    Other dimensions can be multiple images that are acquired per pixel position
+                                    (e.g. for polarimetry).
         :return:
             leech_np (list of 0<int or None): for each leech, number of pixels before the leech should be
                                               executed again. It's automatically updated inside the list.
@@ -719,14 +724,15 @@ class MultipleDetectorStream(Stream):
         leech_time = 0  # how much time leeches will cost
         for l in self.leeches:
             try:
-                leech_time += l.estimateAcquisitionTime(px_time, (rep[1], rep[0]))
-                np = l.start(px_time, (rep[1], rep[0]))  # np = next pixel = counter until execution
+                leech_time += l.estimateAcquisitionTime(px_time, shape)
+                np = l.start(px_time, shape)  # np = next pixel = counter until execution
             except Exception:
                 logging.exception("Leech %s failed to start, will be disabled for this acquisition", l)
                 np = None
             leech_np.append(np)
 
-        # extra time needed on average for a single pixel for all leches (s)
+        # extra time needed on average for a single pixel (ebeam pos) for all leches (s)
+        tot_num = numpy.prod(shape)
         leech_time_ppx = leech_time / tot_num  # s/px
 
         return leech_np, leech_time_ppx
@@ -893,6 +899,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
 
         if hasattr(self, "useScanStage") and self.useScanStage.value:
+            # TODO does not support polarimetry so far
             return self._runAcquisitionScanStage(future)
         else:
             return self._runAcquisitionEbeam(future)
@@ -917,7 +924,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Generating %dx%d spots for %g (dt=%g) s",
                           spot_pos.shape[1], spot_pos.shape[0], px_time, dwell_time)
             rep = self.repetition.value  # (int, int): number of pixels in the ROI (X, Y)
-            tot_num = numpy.prod(rep)  # total number of pixels
+            tot_num = numpy.prod(rep)  # total number of images to acquire
             sub_pxs = self._emitter.pixelSize.value  # sub-pixel size
 
             self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
@@ -925,9 +932,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._anchor_raw = []
             logging.debug("Starting repetition stream acquisition with components %s",
                           ", ".join(s._detector.name for s in self._streams))
-
-            # initialize leeches
-            leech_np, leech_time_ppx = self._startLeeches(px_time, rep, tot_num)
 
             # The acquisition works the following way:
             # * The CCD is set to synchronised acquisition, and for every e-beam
@@ -970,15 +974,27 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # if no polarimetry hardware present
             pos_polarizations = [None]
+            time_move_pol_left = 0  # sec extra time needed to move HW
 
             # check if polarization VA exists, overwrite list of polarization value
             if self._analyzer:
                 if self._acquireAllPol.value:
                     pos_polarizations = POL_POSITIONS
                     logging.debug("Will acquire the following polarization positions: %s" % list(pos_polarizations))
+                    tot_num *= len(pos_polarizations)  # tot num of images to acquire by num of images per ebeam pos
                 else:
                     pos_polarizations = [self._polarization.value]
                     logging.debug("Will acquire the following polarization position: %s" % pos_polarizations)
+                # extra time to move pol analyzer for each pos requested (value is very approximate)
+                time_move_pol_once = POL_MOVE_TIME  # s
+                logging.debug("Add %s extra sec to move polarization analyzer for all positions requested."
+                              % time_move_pol_left)
+                time_move_pol_left = time_move_pol_once * len(pos_polarizations)
+
+            # initialize leeches
+            leech_np, leech_time_ppx = self._startLeeches(px_time, (len(pos_polarizations), rep[1], rep[0]))
+
+            n = 0  # number of images acquired so far
 
             for pol_pos in pos_polarizations:
                 if pol_pos is not None:
@@ -986,8 +1002,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # move polarization analyzer to position specified
                     f = self._analyzer.moveAbs({"pol": pol_pos})
                     f.result()
-
-                n = 0  # number of points (ebeam positions) acquired so far
+                    time_move_pol_left -= time_move_pol_once
 
                 # iterate over pixel positions for scanning
                 for px_idx in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
@@ -1012,10 +1027,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                   self._emitter.resolution.value,
                                   self._emitter.scale.value)
 
+                    # time left for leeches
+                    leech_time_left = (tot_num - n + 1) * leech_time_ppx
+                    # extra time needed taking leeches into account and moving polarizer HW if present
+                    extra_time = leech_time_left + time_move_pol_left
+
                     # acquire
-                    self._acquireImage(n, pol_pos, px_idx, px_time, sem_time, sub_pxs,
-                                       tot_num, leech_time_ppx, leech_np, future)
+                    self._acquireImage(n, px_idx, px_time, sem_time, sub_pxs,
+                                       tot_num, leech_np, extra_time, future)
                     n += 1
+
+                    logging.debug("Done acquiring image number %s out of %s." % (n, tot_num))
 
             # acquisition done!
             for s, sub in zip(self._streams, self._subscribers):
@@ -1084,21 +1106,20 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         return timedout
 
-    def _acquireImage(self, n, pol_pos, px_idx, px_time, sem_time, sub_pxs,
-                      tot_num, leech_time_ppx, leech_np, future):
+    def _acquireImage(self, n, px_idx, px_time, sem_time, sub_pxs,
+                      tot_num, leech_np, extra_time, future):
         """
         acquires image from detector
         :param n (int): number of points (pixel positions) acquired so far
-        :param pol_pos (str): polarization position (None if no polarization hardware)
         :param px_idx (int, int): current scanning position of ebeam
         :param px_time (0<float): expected time spend for one pixel
         :param sem_time (0<float): expected time spend for all sub-pixel
                (=px_time if not fuzzing, and < px_time if fuzzing)
         :param sub_pxs (float, float): sub-pixel size when acquiring in fuzzy-mode
-        :param tot_num (int): total number of e-beam positions
-        :param leech_time_ppx (float): extra time needed on average for a single pixel for all leches (s)
+        :param tot_num (int): total number of images
         :param leech_np (list of 0<int or None): for each leech, number of pixels before the leech should be
-           executed again. It's automatically updated inside the list. (np = next pixels)
+                executed again. It's automatically updated inside the list. (np = next pixels)
+        :param extra_time (float): # extra time needed taking leeches into account and moving polarizer HW if present
         :param future: current future running for the whole acquisition
         """
 
@@ -1200,8 +1221,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._acq_data[-1][-1] = self._preprocessData(len(self._streams) - 1, ccd_data, px_idx)
             logging.debug("Processed CCD data %d = %s", n, px_idx)
 
-            leech_time_left = (tot_num - n + 1) * leech_time_ppx
-            self._updateProgress(future, time.time() - start, n + 1, tot_num, leech_time_left)
+            self._updateProgress(future, time.time() - start, n + 1, tot_num, extra_time)
 
             # Check if it's time to run a leech
             for li, l in enumerate(self.leeches):
@@ -1253,6 +1273,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         #  * Repeat until all the points have been scanned
         #  * Move back the stage to center
 
+        # TODO does not support polarimetry so far
+        if self._analyzer is not None:
+            raise NotImplementedError("Scan Stage is not yet supported with polarimetry hardware.")
+
         sstage = self._sstage
         try:
             if not sstage:
@@ -1284,7 +1308,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
 
             # initialize leeches
-            leech_np, leech_time_ppx = self._startLeeches(px_time, rep, tot_num)
+            leech_np, leech_time_ppx = self._startLeeches(px_time, (rep[1], rep[0]))
 
             # Synchronise the CCD on a software trigger
             self._ccd_df.synchronizedOn(self._trigger)
@@ -1575,7 +1599,7 @@ class SEMMDStream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
 
             # initialize leeches
-            leech_np, leech_time_ppx = self._startLeeches(px_time, rep, tot_num)
+            leech_np, leech_time_ppx = self._startLeeches(px_time, (rep[1], rep[0]))
 
             # number of spots scanned so far
             spots_sum = 0
