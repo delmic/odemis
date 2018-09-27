@@ -254,7 +254,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         # number of times the anchor will be acquired * anchor acquisition time
         dce = drift.AnchoredEstimator(self._scanner, self._detector,
                                       self.roi.value, self.dwellTime.value)
-        period = dce.estimateCorrectionPeriod(self.period.value, dt, shape)
+        period = dce.estimateCorrectionPeriod(self.period.value, dt, shape[-2:])
         npixels = numpy.prod(shape)
         n_anchor = 1 + npixels // period.next()
         return n_anchor * dce.estimateAcquisitionTime()
