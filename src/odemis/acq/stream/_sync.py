@@ -41,7 +41,7 @@ from odemis.acq.stream._live import LiveStream
 import random
 import Queue
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME
+    MD_DWELL_TIME, HwError
 
 from odemis.util import img, units, spot, executeAsyncTask
 import threading
@@ -899,6 +899,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
 
         if hasattr(self, "useScanStage") and self.useScanStage.value:
+            # TODO does not support polarimetry so far
             return self._runAcquisitionScanStage(future)
         else:
             return self._runAcquisitionEbeam(future)
@@ -1116,9 +1117,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                (=px_time if not fuzzing, and < px_time if fuzzing)
         :param sub_pxs (float, float): sub-pixel size when acquiring in fuzzy-mode
         :param tot_num (int): total number of images
-        :param extra_time (float): # extra time needed taking leeches into account and moving polarizer HW if present
         :param leech_np (list of 0<int or None): for each leech, number of pixels before the leech should be
-           executed again. It's automatically updated inside the list. (np = next pixels)
+                executed again. It's automatically updated inside the list. (np = next pixels)
+        :param extra_time (float): # extra time needed taking leeches into account and moving polarizer HW if present
         :param future: current future running for the whole acquisition
         """
 
@@ -1273,6 +1274,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         #  * Wait for the CCD/SED data
         #  * Repeat until all the points have been scanned
         #  * Move back the stage to center
+
+        # TODO does not support polarimetry so far
+        if self._analyzer is not None:
+            raise HwError("Scan Stage is not yet supported with polarimetry hardware.")
 
         sstage = self._sstage
         try:
