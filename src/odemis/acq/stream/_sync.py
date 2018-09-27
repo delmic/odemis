@@ -41,7 +41,7 @@ from odemis.acq.stream._live import LiveStream
 import random
 import Queue
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME, HwError
+    MD_DWELL_TIME
 
 from odemis.util import img, units, spot, executeAsyncTask
 import threading
@@ -1221,8 +1221,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._acq_data[-1][-1] = self._preprocessData(len(self._streams) - 1, ccd_data, px_idx)
             logging.debug("Processed CCD data %d = %s", n, px_idx)
 
-            # leech_time_left = (tot_num - n + 1) * leech_time_ppx
-            # self._updateProgress(future, time.time() - start, n + 1, tot_num, leech_time_left)
             self._updateProgress(future, time.time() - start, n + 1, tot_num, extra_time)
 
             # Check if it's time to run a leech
@@ -1277,7 +1275,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         # TODO does not support polarimetry so far
         if self._analyzer is not None:
-            raise HwError("Scan Stage is not yet supported with polarimetry hardware.")
+            raise NotImplementedError("Scan Stage is not yet supported with polarimetry hardware.")
 
         sstage = self._sstage
         try:
