@@ -1148,11 +1148,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # One thing that would help is to not park the e-beam between each
             # spot. This way, the ebeam would reach the position much quicker,
             # and if it's not yet at the right place, it's still not that far.
-            # The driver could also request the ebeam to the first spot position
-            # as soon as the subscription is received.
             # In the meantime, waiting a tiny bit ensures the CCD receives the
             # right data.
-            time.sleep(10e-3)  # give more chances spot has been already processed
+            time.sleep(5e-3)  # give more chances spot has been already processed
 
             # send event to detector to acquire one image
             self._trigger.notify()
@@ -1361,7 +1359,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     for s, sub in zip(self._streams[:-1], self._subscribers[:-1]):
                         s._dataflow.subscribe(sub)
 
-                    time.sleep(0)  # give more chances spot has been already processed
+                    time.sleep(5e-3)  # give more chances spot has been already processed
                     self._trigger.notify()
 
                     # wait for detector to acquire image
