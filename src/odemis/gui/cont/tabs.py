@@ -826,6 +826,23 @@ class SparcAcquisitionTab(Tab):
             detvas=get_local_vas(main_data.sed, main_data.hw_settings_config)
         )
 
+        # Check the settings are proper for a survey stream (as they could be
+        # left over from spot mode)
+        # => full FoV + not too low scale + not too long dwell time
+        if hasattr(sem_stream, "emtDwellTime"):
+            if sem_stream.emtDwellTime.value > 100e-6:
+                sem_stream.emtDwellTime.value = sem_stream.emtDwellTime.clip(10e-6)
+        if hasattr(sem_stream, "emtScale"):
+            if any(s > 16  for s in sem_stream.emtScale.value):
+                sem_stream.emtScale.value = sem_stream.emtScale.clip((16, 16))
+            sem_scale = sem_stream.emtScale.value
+        else:
+            sem_scale = 1, 1
+        if hasattr(sem_stream, "emtResolution"):
+            max_res = sem_stream.emtResolution.range[1]
+            res = max_res[0] // sem_scale[0], max_res[1] // sem_scale[1]
+            sem_stream.emtResolution.value = sem_stream.emtResolution.clip(res)
+
         tab_data.acquisitionStreams.add(sem_stream)  # it should also be saved
 
         tab_data.fovComp = main_data.ebeam
@@ -2975,9 +2992,7 @@ class Sparc2AlignTab(Tab):
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                          model.MD_ROTATION: 0}  # Force the CCD as-is
                                 )
-            # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
-            if hasattr(ccd_stream, "detBinning"):
-                ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
+            self._setFullFoV(ccd_stream, (2, 2))
             self._ccd_stream = ccd_stream
 
             ccd_spe = self._stream_controller.addStream(ccd_stream,
@@ -3016,14 +3031,7 @@ class Sparc2AlignTab(Tab):
             speclines.tint.value = (0, 64, 255)  # colour it blue
             # Fixed values, known to work well for autofocus
             speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
-            if hasattr(speclines, "detBinning"):
-                speclines.detBinning.value = speclines.detBinning.clip((2, 2))
-                b = speclines.detBinning.value
-            else:
-                b = (1, 1)
-            max_res = speclines.detResolution.range[1]
-            res = max_res[0] // b[0], max_res[1] // b[1]
-            speclines.detResolution.value = speclines.detResolution.clip(res)
+            self._setFullFoV(speclines, (2, 2))
             if model.hasVA(speclines, "detReadoutRate"):
                 try:
                     speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
@@ -3083,8 +3091,7 @@ class Sparc2AlignTab(Tab):
                                          model.MD_ROTATION: 0}  # Force the CCD as-is
                                 )
             # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
-            if hasattr(mois, "detBinning"):
-                mois.detBinning.value = mois.detBinning.clip((2, 2))
+            self._setFullFoV(mois, (2, 2))
             self._moi_stream = mois
 
             mois_spe = self._stream_controller.addStream(mois,
@@ -3116,8 +3123,7 @@ class Sparc2AlignTab(Tab):
                                          model.MD_ROTATION: 0}  # Force the CCD as-is
                                 )
             # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
-            if hasattr(mois, "detBinning"):
-                mois.detBinning.value = mois.detBinning.clip((2, 2))
+            self._setFullFoV(mois, (2, 2))
             self._moi_stream = mois
 
             mois_spe = self._stream_controller.addStream(mois,
@@ -3279,6 +3285,21 @@ class Sparc2AlignTab(Tab):
         for i, btn in enumerate(btns):
             pos = (i // width, i % width)
             gb_sizer.SetItemPosition(btn, pos)
+
+    def _setFullFoV(self, stream, binning=(1, 1)):
+        """
+        Change the settings of the stream to ensure it acquires a full image (FoV)
+        stream (CameraStream): CCD stream (with .detResolution)
+        binning (int, int): the binning to use (if the camera supports it)
+        """
+        if hasattr(stream, "detBinning"):
+            stream.detBinning.value = stream.detBinning.clip(binning)
+            b = stream.detBinning.value
+        else:
+            b = (1, 1)
+        max_res = stream.detResolution.range[1]
+        res = max_res[0] // b[0], max_res[1] // b[1]
+        stream.detResolution.value = stream.detResolution.clip(res)
 
     def _addMoIEntries(self, cont):
         """
