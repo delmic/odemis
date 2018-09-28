@@ -308,16 +308,16 @@ def determine_control_type(hw_comp, va, choices_formatted, conf):
     if control_type == odemis.gui.CONTROL_RADIO:
         if len(choices_formatted) <= 1:  # only one choice => force label
             control_type = odemis.gui.CONTROL_READONLY
-            logging.warn("Radio control changed to read only because of lack of choices!")
+            logging.info("Radio control changed to read only because of lack of choices!")
         elif len(choices_formatted) > 10:  # too many choices => combo
             control_type = odemis.gui.CONTROL_COMBO
-            logging.warn("Radio control changed to combo box because of number of choices!")
+            logging.info("Radio control changed to combo box because of number of choices!")
         else:
             # choices names too long => combo
             max_len = max(len(f) for _, f in choices_formatted)
             if max_len > 6:
                 control_type = odemis.gui.CONTROL_COMBO
-                logging.warn("Radio control changed to combo box because of max value length!")
+                logging.info("Radio control changed to combo box because of max value length!")
 
     # read-only takes precedence (unless it was requested to hide it)
     if va.readonly and control_type != odemis.gui.CONTROL_NONE:
