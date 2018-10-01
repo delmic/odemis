@@ -366,6 +366,19 @@ class TestSimCamWithPolarization(unittest.TestCase):
         # test the two images are different from each other (different txt was written on top)
         self.assertFalse(numpy.all(im_lhc == im_rhc))
 
+        # change binning
+        self.camera.binning.value = (2, 2)
+        self.camera.updateMetadata({model.MD_POL_MODE: "horizontal"})
+        # get image from camera
+        im_horizontal = self.camera.data.get()
+
+        self.camera.updateMetadata({model.MD_POL_MODE: "vertical"})
+        # get image from camera
+        im_vertical = self.camera.data.get()
+
+        # test the two images are different from each other (different txt was written on top)
+        self.assertFalse(numpy.all(im_horizontal == im_vertical))
+
 if __name__ == '__main__':
     unittest.main()
 
