@@ -81,7 +81,9 @@ REFPROC_STD = "Standard"  # Use the standard reference search built in the contr
 REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't support referencing
 
 # Model number (int) of devices tested
-KNOWN_MODELS = {1140, 3110, 6110}
+KNOWN_MODELS = {1140, 3110, 6110, 3214}
+# These models report the velocity/accel in internal units of the TMC429
+USE_INTERNAL_UNIT_429 = {1110, 1140, 3110, 6110}
 
 # Info for storing config data that is not directly recordable in EEPROM
 UC_FORMAT = 1  # Version number
@@ -102,6 +104,39 @@ UC_APARAM = OrderedDict((
 # Bank/add -> size of value (in bits)
 UC_OUT = OrderedDict((
     ((0, 0), 2),  # Pull-ups for limit switches
+))
+
+UC_APARAM_3214 = OrderedDict((
+    (4, 23),  # Maximum positioning speed
+    (5, 23),  # Maximum acceleration
+    (6, 8),  # Absolute max current
+    (7, 8),  # Standby current
+    (12, 1),  # Right limit switch disable
+    (13, 1),  # Left limit switch disable
+#    (24, 1),  # Right limit switch polarity
+#    (25, 1),  # Left limit switch polarity
+#    (26, 1),  # Soft stop enable
+    (31, 4),  # Power down ramp (0.16384s)
+    (140, 3),  # Microstep resolution
+
+    # Chopper (for each axis)
+    (162, 2),  # Chopper blank time (1 = for low current applications, 2 is default)
+    (163, 1),  # Chopper mode (0 is default)
+    (167, 4),  # Chopper off time (2 = minimum)
+
+    # Stallguard
+    (173, 1),  # stallGuard2 filter
+    (174, -7),  # stallGuard2 threshold
+    (181, 23),  # Stop on stall
+
+    (193, 3),  # Reference search mode
+    (194, 23),  # Reference search speed
+    (195, 23),  # Reference switch speed (pps)
+    (204, 2),  # Free wheeling mode
+    # 210, 16 ?
+    (212, 16), # Maximum encoder deviation (encoder steps)
+    (214, 9),  # Power down delay (in 10ms)
+    (251, 1),  # Reverse shaft
 ))
 
 # Addresses and shift (for each axis) for the 2xFF referencing routines
@@ -229,23 +264,23 @@ class TMCLController(model.Actuator):
         # For ensuring only one updatePosition() at the same time
         self._pos_lock = threading.Lock()
 
+        self._modl, vmaj, vmin = self.GetVersion()
+        if self._modl not in KNOWN_MODELS:
+            logging.warning("Controller TMCM-%d is not supported, will try anyway",
+                            self._modl)
+
+        if self._modl == 3110 and (vmaj + vmin / 100) < 1.09:
+            # NTS told us the older version had some issues (wrt referencing?)
+            raise ValueError("Firmware of TMCM controller %s is version %d.%02d, "
+                             "while version 1.09 or later is needed" %
+                             (name, vmaj, vmin))
+
         # Check that the device support that many axes
         try:
             self.GetAxisParam(max(self._name_to_axis.values()), 1) # current pos
         except TMCLError:
             raise ValueError("Device %s doesn't support %d axes (got %s)" %
                              (name, max(self._name_to_axis.values()) + 1, axes))
-
-        modl, vmaj, vmin = self.GetVersion()
-        if modl not in KNOWN_MODELS:
-            logging.warning("Controller TMCM-%d is not supported, will try anyway",
-                            modl)
-
-        if modl == 3110 and (vmaj + vmin / 100) < 1.09:
-            # NTS told us the older version had some issues (wrt referencing?)
-            raise ValueError("Firmware of TMCM controller %s is version %d.%02d, "
-                             "while version 1.09 or later is needed" %
-                             (name, vmaj, vmin))
 
         if name is None and role is None: # For scan only
             return
@@ -286,7 +321,7 @@ class TMCLController(model.Actuator):
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        self._hwVersion = "TMCM-%d (firmware %d.%02d)" % (modl, vmaj, vmin)
+        self._hwVersion = "TMCM-%d (firmware %d.%02d)" % (self._modl, vmaj, vmin)
 
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
@@ -301,7 +336,7 @@ class TMCLController(model.Actuator):
         for n, i in self._name_to_axis.items():
             self._accel[n] = self._readAccel(i)
             if self._accel[n] == 0:
-                logging.warning("Accelration of axis %s is null, most probably due to a bad hardware configuration", n)
+                logging.warning("Acceleration of axis %s is null, most probably due to a bad hardware configuration", n)
 
         if refproc is None:
             # Only the axes which are "absolute"
@@ -512,6 +547,10 @@ class TMCLController(model.Actuator):
         """
         naxes = max(ax for ax, ad in axis_params.keys()) + 1
 
+        # TODO: special format for storing _all_ the axes param (for the 3214)
+        # or, alternatively, store it as a program, which writes the param at
+        # init.
+
         # Pack IO, then axes
         sd = struct.pack("B", io_config[(0, 0)])
         for i in range(naxes):
@@ -624,8 +663,8 @@ class TMCLController(model.Actuator):
         n (0<=int<=255): instruction ID
         typ (0<=int<=255): instruction type
         mot (0<=int<=255): motor/bank number
-        val (0<=int<2**32): value to send
-        return (0<=int<2**32): value of the reply (if status is good)
+        val (-2**31<=int<2**31-1): value to send
+        return (-2**31<=int<2**31-1): value of the reply (if status is good)
         raises:
             IOError: if problem with sending/receiving data over the serial port
             TMCLError: if status if bad
@@ -1274,30 +1313,38 @@ class TMCLController(model.Actuator):
         """
         return (float): the speed of the axis in m/s
         """
-        # As described in section 3.4.1:
-        #       fCLK * velocity
-        # usf = ------------------------
-        #       2**pulse_div * 2048 * 32
         velocity = self.GetAxisParam(a, 4)
-        pulse_div = self.GetAxisParam(a, 154)
-        # fCLK = 16 MHz
-        usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
-        return usf * self._ustepsize[a]  # m/s
+        if self._modl in USE_INTERNAL_UNIT_429:
+            # As described in section 6.1.1:
+            #       fCLK * velocity
+            # usf = ------------------------
+            #       2**pulse_div * 2048 * 32
+            pulse_div = self.GetAxisParam(a, 154)
+            # fCLK = 16 MHz
+            usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
+            return usf * self._ustepsize[a]  # m/s
+        else:
+            # Velocity is directly in µstep/s (aka pps)
+            return velocity * self._ustepsize[a]  # m/s
 
     def _readAccel(self, a):
         """
-        return (float): the acceleration of the axis in m²/s
+        return (float): the acceleration of the axis in m/s²
         """
-        # Described in section 3.4.2:
-        #       fCLK ** 2 * Amax
-        # a = -------------------------------
-        #       2**(pulse_div +ramp_div + 29)
-        amax = self.GetAxisParam(a, 5)
-        pulse_div = self.GetAxisParam(a, 154)
-        ramp_div = self.GetAxisParam(a, 153)
-        # fCLK = 16 MHz
-        usa = (16e6 ** 2 * amax) / 2 ** (pulse_div + ramp_div + 29)
-        return usa * self._ustepsize[a]  # m²/s
+        accel = self.GetAxisParam(a, 5)
+        if self._modl in USE_INTERNAL_UNIT_429:
+            # Described in section 6.1.2:
+            #       fCLK ** 2 * Accel_max
+            # a = -------------------------------
+            #       2**(pulse_div +ramp_div + 29)
+            pulse_div = self.GetAxisParam(a, 154)
+            ramp_div = self.GetAxisParam(a, 153)
+            # fCLK = 16 MHz
+            usa = (16e6 ** 2 * accel) / 2 ** (pulse_div + ramp_div + 29)
+            return usa * self._ustepsize[a]  # m/s²
+        else:
+            # Acceleration is directly in µstep/s² (aka pps²)
+            return accel * self._ustepsize[a]  # m/s²
 
     def _updateTemperatureVA(self):
         """
