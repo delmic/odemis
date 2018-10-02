@@ -254,12 +254,14 @@ class Camera(model.DigitalCamera):
 
         # reads only uint8
         im = Image.fromarray(image)
-        fnt = ImageFont.truetype('/Library/Fonts/Arial.ttf', 100)
+        binning = self.binning.value
+        fnt_size = int(80/binning[0])
+        fnt = ImageFont.truetype('/Library/Fonts/Arial.ttf', fnt_size)
         # create txt image for overlay
         im_txt = Image.new('F', im.size, 0)
         d = ImageDraw.Draw(im_txt)
         pol_pos = txt
-        d.text((300, 400), pol_pos, font=fnt, fill=255)
+        d.text((int(im.size[0]/3), int(im.size[1]/2)), pol_pos, font=fnt, fill=255)
         txt_array = numpy.asarray(im_txt)
         image[txt_array == 255] = image.max()
 
