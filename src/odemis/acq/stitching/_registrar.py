@@ -1,24 +1,32 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 19 Jul 2017
 
 @author: Éric Piel, Philip Winkler
 
-Copyright © 2017 Éric Piel, Delmic
+Copyright © 2017 Éric Piel, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 
-# This is a series of classes which use different methods to compute the "best
-# location" of an image set based on their metadata and content. IOW, it does
-# "image registration".
 
+### Purpose ###
+
+This is a series of classes which use different methods to compute the best
+location of a set of tiles in a tiled acquisition based on their metadata and 
+content, in other words performing "image registration".
+
+"""
 
 from __future__ import division
 from odemis.acq.drift import MeasureShift
@@ -26,9 +34,11 @@ import numpy
 import math
 from odemis import model
 import logging
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import minimum_spanning_tree
+from collections import deque
 
 GOOD_MATCH = 0.9  # consider all registrations with match > GOOD_MATCH
-
 LEFT_TO_RIGHT = 1
 RIGHT_TO_LEFT = -1
 
@@ -427,3 +437,312 @@ class ShiftRegistrar(object):
         # store the position of the tile
         self.registered_positions[row][col] = registered_pos
         self.acqOrder.append([row, col])
+
+
+class GlobalShiftRegistrar(object):
+    """
+    Uses the cross-correlation algorithm to find the optimal shift for each tile with all of its
+    neighbours and performs a global optimization to find the best path connecting the tiles.
+    """
+
+    def __init__(self):
+        # Store all the tiles. Each cell contains either None or a DataArray
+        self.tiles = [[None]]
+
+        # Store the shifts in a data structure with shape num_rows x (num_cols - 1) x 2 for the
+        # horizontal shifts and (num_cols - 1) x num_rows x 2 for the vertical shifts. The data
+        # structure contains the shift on all edges in the tile grid from top left to bottom right.
+        # Each cell contains a tuple (x, y shift) and a float (error value).
+        # The main advantage of using this data structure over an adjacency matrix is
+        # that it can be extended in the same way as the self.tiles attribute is extended
+        # when a new tile is added.
+        self.shifts_hor = [[None]]
+        self.shifts_ver = [[None]]
+
+        # List of 2D indices for grid positions in order of acquisition
+        self.acq_order = []
+
+        # Shift between main tile and dependent tiles, shape: number of tiles x number of dep_tiles.
+        self.offsets_dep_tiles = []
+
+    def addTile(self, tile, dependent_tiles=None):
+        """
+        Extends grid by one tile. The first tile is added at the top left position. Any following
+        tile must have a neighbour (on either side left, right, top, bottom) that has previously
+        been added.
+
+        :param tile: (DataArray of shape YX) tile with MD_POS and MD_PIXEL_SIZE metadata.
+        :param dependent_tiles: (list of K numpy.arrays or None): dependent tiles with fixed position
+        relative to main tile. Their content and metadata are not used for the computation of the final position.
+        """
+        row, col = self._insert_tile_to_grid(tile)
+        self._compute_registration(row, col)
+
+        if dependent_tiles is not None:
+            offsets = []
+            for dt in dependent_tiles:
+                offsets.append(numpy.subtract(dt.metadata[model.MD_POS], tile.metadata[model.MD_POS]))
+            self.offsets_dep_tiles.append(offsets)
+
+    def getPositions(self):
+        """
+        Returns the registered positions.
+
+        :returns tile_positions: (list of N tuples) the adjusted position in X/Y for each tile, in the
+        order they were added
+        :returns dep_tile_positions: (list of N tuples of K tuples of 2 floats) for each tile, it returns
+        the adjusted position of all dependent tile (in the order they were passed)
+        """
+        px_size = self.tiles[0][0].metadata[model.MD_PIXEL_SIZE]
+        firstPosition = numpy.divide(self.tiles[0][0].metadata[model.MD_POS], px_size)
+        tile_positions = []
+        dep_tile_positions = []
+
+        registered_positions = self._assemble_mosaic()
+        for ti in self.acq_order:
+            shift = registered_positions[ti[0]][ti[1]]
+            tile_positions.append(((shift[0] + firstPosition[0]) * px_size[0],
+                                   (firstPosition[1] - shift[1]) * px_size[1]))
+
+        # Return positions for dependent tiles
+        for t, sdts in zip(tile_positions, self.offsets_dep_tiles):
+            dts = []  # dependent tiles for tile
+            for sdt in sdts:
+                dts.append((t[0] + sdt[0], t[1] + sdt[1]))
+            dep_tile_positions.append(dts)
+
+        return tile_positions, dep_tile_positions
+
+    def _insert_tile_to_grid(self, tile):
+        """
+        Stores the tile at the proper place in the grid. If necessary, the grid is
+        extended to accommodate the new tile.
+
+        :param tile: (DataArray) tile to be inserted
+        :returns: (int, int) row, col grid position of the tile
+        :updates self.tiles, self.shifts, self.acq_order:
+        """
+        if self.tiles[0][0] is None:
+            self.tiles[0][0] = tile
+            self.acq_order.append([0, 0])
+            return 0, 0
+
+        if tile.shape != self.tiles[0][0].shape:
+            raise ValueError("Tile shape differs from first tile shape %s != %s" %
+                             (tile.shape, self.tiles[0][0].shape))
+
+        num_cols = len(self.tiles[0])
+        num_rows = len(self.tiles)
+
+        # Find the registered tile that is closest to the new tile.
+        minDist = float("inf")
+        for i in range(num_rows):
+            for j in range(num_cols):
+                if self.tiles[i][j] is not None:
+                    dist = math.hypot(*numpy.subtract(tile.metadata[model.MD_POS],
+                                                     self.tiles[i][j].metadata[model.MD_POS]))
+                    if dist < minDist:
+                        minDist = dist
+                        prev_row, prev_col = (i, j)
+
+        # Insert new tile either to the right or to the bottom of the closest tile.
+        ver_diff = tile.metadata[model.MD_POS][1] - self.tiles[prev_row][prev_col].metadata[model.MD_POS][1]
+        hor_diff = tile.metadata[model.MD_POS][0] - self.tiles[prev_row][prev_col].metadata[model.MD_POS][0]
+        if abs(ver_diff) > abs(hor_diff) and ver_diff < 0:
+            # new tile below previous tile
+            row = prev_row + 1
+            col = prev_col
+            # extend grid in y direction if necessary
+            if num_rows <= row:
+                self.tiles.append([None] * num_cols)
+                self.shifts_hor.append([None] * (num_cols - 1))
+                self.shifts_ver.append([None] * (num_cols))
+        elif abs(ver_diff) > abs(hor_diff) and ver_diff > 0:
+            # new tile on top of previous tile
+            row = prev_row - 1
+            col = prev_col
+        elif abs(ver_diff) < abs(hor_diff) and hor_diff < 0:
+            # new tile to the left of previous tile
+            row = prev_row
+            col = prev_col - 1
+        elif abs(ver_diff) < abs(hor_diff) and hor_diff > 0:
+            # new tile to the right of previous tile
+            row = prev_row
+            col = prev_col + 1
+            # extend grid in x direction if necessary
+            if num_cols <= col:
+                for i in range(len(self.tiles)):
+                    self.tiles[i].append(None)
+                    self.shifts_hor[i].append(None)
+                    self.shifts_ver[i].append(None)
+        else:
+            raise ValueError("Cannot insert multiple tiles at the same position.")
+
+        self.tiles[row][col] = tile
+        self.acq_order.append([row, col])
+        return row, col
+
+    def _get_shift(self, prev_tile, tile):
+        """
+        Calculates the shift  between the two tiles. It also returns an error metric based on the
+        normalized cross-correlation (ncc).
+
+        :param prev_tile: (DataArray) static tile to which other tile is compared
+        :param tile: (DataArray) shifted tile
+        :returns: ((int, int), float) x shift, y shift, normalized cross correlation (-1 <= ncc <= 1, higher
+        is better)
+        """
+        px_size = tile.metadata[model.MD_PIXEL_SIZE]
+        # The y-axis of the reference coordinate system used here is inverted compared to
+        # the metadata position.
+        exp_shift = ((tile.metadata[model.MD_POS][0] - prev_tile.metadata[model.MD_POS][0]) / px_size[0],
+                     (-tile.metadata[model.MD_POS][1] + prev_tile.metadata[model.MD_POS][1]) / px_size[1])
+
+        # Get the region of interest
+        if abs(exp_shift[0]) >= tile.shape[1] or abs(exp_shift[1]) >= tile.shape[0]:
+            raise ValueError("There is no overlap between tiles for the shift given %s" % exp_shift)
+        if exp_shift[0] < 0:
+            l1, r1 = 0, tile.shape[1] + int(exp_shift[0])
+            l2, r2 = -int(exp_shift[0]), tile.shape[1]
+        else:
+            l1, r1 = int(exp_shift[0]), tile.shape[1]
+            l2, r2 = 0, tile.shape[1] - int(exp_shift[0])
+
+        if exp_shift[1] < 0:
+            t1, b1 = 0, tile.shape[0] + int(exp_shift[1])
+            t2, b2 = -int(exp_shift[1]), tile.shape[0]
+        else:
+            t1, b1 = int(exp_shift[1]), tile.shape[0]
+            t2, b2 = 0, tile.shape[0] - int(exp_shift[1])
+        prev_tile_roi = numpy.array(prev_tile)[t1:b1, l1:r1]
+        tile_roi = numpy.array(tile)[t2:b2, l2:r2]
+
+        # Calculate the shift
+        shift = MeasureShift(tile_roi, prev_tile_roi)
+        shift_total = numpy.subtract(exp_shift, shift)
+
+        # Measure accuracy (ncc value)
+        avg = numpy.average(prev_tile), numpy.average(tile)
+        dist = prev_tile_roi - avg[0], tile_roi - avg[1]
+        covar = numpy.sum(dist[0] * dist[1]) / prev_tile_roi.size
+        var = numpy.sum(dist[0] ** 2) / prev_tile_roi.size, numpy.sum(dist[1] ** 2) / tile_roi.size
+        stDev = (numpy.sqrt(var[0]), numpy.sqrt(var[1]))
+        if stDev[0] == 0 or stDev[1] == 0:
+            return exp_shift, 0
+        # Normalized cross correlation (values between -1 and 1)
+        ncc = (covar / (stDev[0] * stDev[1]))
+
+        overlap = min(numpy.abs(numpy.subtract(tile.shape, numpy.abs(exp_shift))))
+        if max(numpy.abs(shift)) > overlap:
+            logging.info("Calculated shift is larger than the overlap size, using expected position "
+                         "instead.")
+            return exp_shift, 0
+
+        return shift_total, ncc
+
+    def _compute_registration(self, row, col):
+        """
+        Performs registration of the tile at grid position row, col with respect to every
+        available neighbour. The computed shifts and the respective cross-correlation values
+        are stored in self.shifts.
+
+        :param row: (int) row index
+        :param col: (int) col index
+        :updates self.shifts:
+        """
+        tile = self.tiles[row][col]
+        num_cols = len(self.tiles[0])
+        num_rows = len(self.tiles)
+
+        # Neighbouring tiles and shifts
+        nbr_left = self.tiles[row][col - 1] if col > 0 else None
+        nbr_right = self.tiles[row][col + 1] if col < num_cols - 2 else None
+        nbr_top = self.tiles[row - 1][col] if row > 0 else None
+        nbr_bottom = self.tiles[row + 1][col] if row < num_rows - 2 else None
+
+        shift_left = self.shifts_hor[row][col - 1] if col > 0 else None
+        shift_right = self.shifts_hor[row][col] if col < num_cols - 2 else None
+        shift_top = self.shifts_ver[row - 1][col] if row > 0 else None
+        shift_bottom = self.shifts_ver[row][col] if row < num_rows - 2 else None
+
+        # Calculate the shifts to all adjacent tiles that have not been calculated yet
+        if nbr_left is not None and not shift_left:
+            self.shifts_hor[row][col - 1] = self._get_shift(nbr_left, tile)
+        if nbr_right is not None and not shift_right:
+            self.shifts_hor[row][col] = self._get_shift(tile, nbr_right)
+        if nbr_top is not None and not shift_top:
+            self.shifts_ver[row - 1][col] = self._get_shift(nbr_top, tile)
+        if nbr_bottom is not None and not shift_bottom:
+            self.shifts_ver[row][col] = self._get_shift(tile, nbr_bottom)
+            
+    def _assemble_mosaic(self):
+        """
+        Performs a global optimization to find the best path through the tile grid using 
+        a minimum spanning tree.
+
+        :returns: (DataArray with shape num_rows x num_cols x 2) registered positions
+        """
+        # Transform shifts and errors to adjacency matrices
+        # The normalized cross correlation value needs to be transformed, so it can be
+        # used in the minimum spanning tree. Lower values are better and the value should
+        # never be 0 --> convert to error between [100, 200]
+        num_cols = len(self.tiles[0])
+        num_rows = len(self.tiles)
+        errors = numpy.zeros((num_rows * num_cols, num_rows * num_cols))
+        shifts = numpy.zeros((num_rows * num_cols, num_rows * num_cols, 2))
+        for row in range(num_rows):
+            for col in range(num_cols - 1):
+                idx = row * num_cols + col
+                if self.shifts_hor[row][col]:
+                    ncc = self.shifts_hor[row][col][1]
+                    errors[idx, idx + 1] = 200 - (ncc + 1) * 50
+                    shifts[idx, idx + 1] = self.shifts_hor[row][col][0]
+
+        for row in range(num_rows - 1):
+            for col in range(num_cols):
+                idx = row * num_cols + col
+                if self.shifts_ver[row][col]:
+                    ncc = self.shifts_ver[row][col][1]
+                    errors[idx, idx + num_cols] = 200 - (ncc + 1) * 50
+                    shifts[idx, idx + num_cols] = self.shifts_ver[row][col][0]
+
+        # Build the minimum spanning tree
+        tree = minimum_spanning_tree(csr_matrix(errors))
+        tree = tree.toarray().astype(int)
+
+        # Follow the path through the tree and update positions with the corresponding shifts.
+        # The minimum spanning tree is converted to an adjacency list that contains for every
+        # tile a list of all tiles that should be updated based on the current tile.
+        # The children of the newly updated tile will be placed in a queue waiting to be
+        # updated themselves.
+        adj_list = {}
+        for i in range(len(tree)):
+            adj = []
+            for j in range(len(tree[0])):
+                if tree[i][j] != 0:
+                    adj.append([j, shifts[i][j]])
+                if tree[j][i] != 0:
+                    adj.append([j, shifts[j][i]])
+            adj_list[i] = adj
+
+        positions = {0: (0, 0)}
+        idx_queue = deque([0])  # start with index 0
+        while idx_queue:
+            key = idx_queue.popleft()
+            for next_idx, shift in adj_list[key]:
+                if not next_idx in positions.keys():
+                    if next_idx > key:
+                        positions[next_idx] = numpy.add(positions[key], shift)
+                    else:
+                        positions[next_idx] = numpy.subtract(positions[key], shift)
+
+                    if next_idx not in idx_queue:
+                        idx_queue.append(next_idx)
+
+        # If there are any tiles missing in the grid, add position None, so we can still
+        # reshape the array and get an output
+        for i in range(num_rows * num_cols):
+            if i not in positions:
+                positions[i] = [None, None]
+
+        return numpy.array(positions.values()).reshape([num_rows, num_cols, 2])
