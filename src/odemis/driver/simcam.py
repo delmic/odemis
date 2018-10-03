@@ -246,22 +246,15 @@ class Camera(model.DigitalCamera):
         """write polarization position as text into image for simulation
         :return: image with polarization pos text"""
 
-        # TODO: if chamber view image is flipped, txt is flipped as well
-
-        if image.dtype != numpy.uint8:
-            image = image / float(image.max()) * 255  # normalize the data to 0 - 255
-            image = image.astype(numpy.uint8)
-
-        # reads only uint8
-        im = Image.fromarray(image)
+        shape = image.shape
         binning = self.binning.value
         fnt_size = int(80/binning[0])
         fnt = ImageFont.truetype('/Library/Fonts/Arial.ttf', fnt_size)
         # create txt image for overlay
-        im_txt = Image.new('F', im.size, 0)
+        im_txt = Image.new('F', shape[::-1], 0)
         d = ImageDraw.Draw(im_txt)
         pol_pos = txt
-        d.text((int(im.size[0]/3), int(im.size[1]/2)), pol_pos, font=fnt, fill=255)
+        d.text((shape[1] // 3, shape[0] // 2), pol_pos, font=fnt, fill=255)
         txt_array = numpy.asarray(im_txt)
         image[txt_array == 255] = image.max()
 
