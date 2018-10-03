@@ -20,15 +20,16 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model
-from odemis.model import ComponentBase, DataFlowBase
+
 import logging
 import math
+import numpy
+from odemis import model
+from odemis.model import ComponentBase, DataFlowBase
 
 # This is a class that represents a spectrometer (ie, a detector to acquire
 # a spectrum) by wrapping a DigitalCamera and a spectrograph (ie, actuator which
 # offers a wavelength dimension).
-
 NON_SPEC_MD = {model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE, model.MD_AR_PARABOLA_F,
                model.MD_AR_XMAX, model.MD_AR_HOLE_DIAMETER, model.MD_ROTATION,
                model.MD_ROTATION_COR, model.MD_SHEAR, model.MD_SHEAR_COR}
@@ -104,30 +105,25 @@ class CompositedSpectrometer(model.Detector):
 
         # The resolution and binning are derived from the detector, but with
         # settings set so that there is only one horizontal line.
-
-        # TODO: give a init parameter or VA to specify a smaller window height
-        # than the entire CCD (some spectrometers have only noise on the top and
-        # bottom)
-        if dt.binning.range[1][1] < dt.resolution.range[1][1]:
-            # without software binning, we are stuck to the max binning
-            # TODO: support software binning by rolling up our own dataflow that
-            # does data merging
-            logging.info("Spectrometer %s will only use a %d px band of the %d "
-                         "px of the sensor", name, dt.binning.range[1][1],
-                         dt.resolution.range[1][1])
-
+        # So max vertical resolution is always 1.
         assert dt.resolution.range[0][1] == 1
         resolution = (dt.resolution.range[1][0], 1)  # max,1
         min_res = (dt.resolution.range[0][0], 1)
         max_res = (dt.resolution.range[1][0], 1)
         self.resolution = model.ResolutionVA(resolution, (min_res, max_res),
                                              setter=self._setResolution)
-        # 2D binning is like a "small resolution"
-        # Initial binning is minimum binning horizontally, and maximum vertically
-        self._binning = (1, min(dt.binning.range[1][1], dt.resolution.range[1][1]))
-        self.binning = model.ResolutionVA(self._binning, dt.binning.range,
-                                          setter=self._setBinning)
 
+        # The vertical binning is linked to the detector resolution, as it
+        # represents how many pixels are used (and binned). So the maximum
+        # binning is the maximum *resolution* (and it's converted either to
+        # detector binning, or binned later in software).
+        min_bin = (dt.binning.range[0][0], dt.binning.range[0][1])
+        max_bin = (dt.binning.range[1][0], dt.resolution.range[1][1])
+        # Initial binning is minimum binning horizontally, and maximum vertically
+        self._binning = (1, dt.resolution.range[1][1])
+        self._max_det_vbin = dt.binning.range[1][1]
+        self.binning = model.ResolutionVA(self._binning, (min_bin, max_bin),
+                                          setter=self._setBinning)
         self._setBinning(self._binning) # will also update the resolution
 
         # TODO: also wrap translation, if it exists?
@@ -173,20 +169,26 @@ class CompositedSpectrometer(model.Detector):
         md = {model.MD_WL_LIST: wll}
         self.updateMetadata(md)
 
-    def _setBinning(self, value):
+    def _setBinning(self, binning):
         """
         Called when "binning" VA is modified. It also updates the resolution so
-        that the horizontal AOI is approximately the same. The vertical size
-        stays 1.
-        value (int): how many pixels horizontally and vertically
+        that the horizontal ROI is approximately the same. (The vertical
+        resolution is fixed to 1)
+        binning (int, int): how many pixels horizontally and vertically
           are combined to create "super pixels"
         """
-        # Everything accepted by the VA should be acceptable
+        # We do not immediatly apply the binning on the hardware, as it might
+        # currently be used with other settings. The binning (and resolution)
+        # are only applied when the DataFlow is active.
         prev_binning = self._binning
-        self._binning = tuple(value) # duplicate
 
-        if self.data.active:
-            self._applyBinning(value)
+        # If the detector doesn't support full vertical binning, ensure the
+        # vertical binning is a multiple of the max detector binning.
+        # For the rest, we hope that any value will be accepted by the hardware.
+        # If not, it will be delt with as well as possible when applying it.
+        dbv = min(self._max_det_vbin, binning[1])
+        binning = binning[0], dbv * (binning[1] // dbv)
+        self._binning = binning
 
         # adapt horizontal resolution so that the AOI stays the same
         changeh = prev_binning[0] / self._binning[0]
@@ -196,11 +198,9 @@ class CompositedSpectrometer(model.Detector):
         new_resh = max(min(new_resh, self.resolution.range[1][0]), self.resolution.range[0][0])
         new_resolution = (new_resh, 1)
 
-        # setting resolution and binning is slightly tricky, because binning
-        # will change resolution to keep the same area. So first set binning, then
-        # resolution
+        # Will apply binning (and resolution) if data is active
         self.resolution.value = new_resolution
-        return value
+        return binning
 
     def _setResolution(self, value):
         """
@@ -215,22 +215,31 @@ class CompositedSpectrometer(model.Detector):
         size = (max(min(value[0], max_size), min_size), 1)
 
         if self.data.active:
-            self._applyResolution(size)
+            self._applyResBin(size, self._binning)
 
         return size
 
-    def _applyBinning(self, b):
-        self._detector.binning.value = b
-        if self._detector.binning.value != b:
-            logging.error("Hw binning didn't follow requested binning %s", b)
+    def _applyResBin(self, res, binning):
+        # Setting detector resolution and binning is slightly tricky, because binning
+        # will change resolution to keep the same area. So first set binning, then
+        # resolution.
 
-    def _applyResolution(self, res):
-        self._detector.resolution.value = res
-        assert self._detector.resolution.value[1] == 1
+        # Ensure we don't ask a vertical binning bigger than the hardware accepts
+        dbin = binning[0], min(self._max_det_vbin, binning[1])
+        self._detector.binning.value = dbin
+        act_dbin = self._detector.binning.value
+        if act_dbin != dbin:
+            logging.error("Hw binning %s didn't follow requested binning %s",
+                          act_dbin, dbin)
+
+        # The vertical resolution is so that: detector binning * resolution = binning
+        dres = (res[0], binning[1] // act_dbin[1])
+        self._detector.resolution.value = dres
+        if self._detector.resolution.value != dres:
+            logging.error("Hw resolution didn't follow requested resolution %s", dres)
 
     def _applyCCDSettings(self):
-        self._applyBinning(self.binning.value)
-        self._applyResolution(self.resolution.value)
+        self._applyResBin(self.resolution.value, self._binning)
 
     def selfTest(self):
         return self._detector.selfTest() and self._spectrograph.selfTest()
@@ -272,9 +281,26 @@ class SpecDataFlow(model.DataFlow):
         """
         Get the new frame from the detector
         """
-        if data.shape[0] != 1:
-            logging.warning("Shape of spectrometer data is %s, while first dim should be 1", data.shape)
-            # TODO: do software binning (= sum/mean over the first axis)
+        if data.shape[0] != 1:  # Shape is YX, so shape[0] is *vertical*
+            logging.debug("Shape of spectrometer data is %s, binning vertical dim", data.shape)
+            orig_dtype = data.dtype
+            orig_shape = data.shape
+            data = numpy.sum(data, axis=0)  # uint64 (if data.dtype is int)
+            data.shape = (1,) + data.shape
+            orig_bin = data.metadata.get(model.MD_BINNING, (1, 1))
+            data.metadata[model.MD_BINNING] = orig_bin[0], orig_bin[1] * orig_shape[0]
+
+            # Subtract baseline (aka black level) to avoid it from being multiplied
+            try:
+                baseline = data.metadata[model.MD_BASELINE]
+                data -= (orig_shape[1] - 1) * baseline
+            except KeyError:
+                pass
+
+            # If int, revert to original type, with data clipped (not overflowing)
+            if orig_dtype.kind in "biu":
+                idtype = numpy.iinfo(orig_dtype)
+                data = data.clip(idtype.min, idtype.max).astype(orig_dtype)
 
         # Check the metadata seems correct, and if not, recompute it on-the-fly
         md = self._beg_metadata
