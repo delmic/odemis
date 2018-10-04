@@ -255,6 +255,64 @@ class TestHDF5IO(unittest.TestCase):
         subim = im[0, 0, 0] # just one channel
         self.assertEqual(subim.shape, size[-1::-1])
 
+    def testExportSpatialCube(self):
+        """
+        Check it's possible to export 3D spatial data
+        """
+        dtype = numpy.uint16
+        size3d = (512, 256, 100)  # X, Y, Z
+        size = (512, 256)
+        metadata3d = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "fake spec",
+                    model.MD_DESCRIPTION: "test3d",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, 2e-5),  # m/px
+                    model.MD_WL_POLYNOMIAL: [500e-9, 1e-9],  # m, m/px: wl polynomial
+                    model.MD_POS: (1e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+        metadata = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "",  # check empty unicode strings
+                    model.MD_DESCRIPTION: "test",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, 2e-5),  # m/px
+                    model.MD_POS: (1e-3, -30e-3),  # m
+                    model.MD_DWELL_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+        ldata = []
+        # 3D data generation (+ metadata): gradient along the wavelength
+        data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
+        end = 2 ** metadata3d[model.MD_BPP]
+        step = end // size3d[2]
+        lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
+        lin.shape = (size3d[2], 1, 1)  # to be able to copy it on the first dim
+        data3d[:] = lin
+        # introduce Time and Z dimension to state the 3rd dim is channel
+        data3d = data3d[numpy.newaxis, numpy.newaxis, :, :, :]
+        ldata.append(model.DataArray(data3d, metadata3d))
+
+        # an additional 2D data, for the sake of it
+        ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
+
+        # export
+        hdf5.export(FILENAME, ldata)
+
+        # check data by reading it back
+        rdata = hdf5.read_data(FILENAME)
+
+        imr = rdata[0]
+
+        self.assertEqual(imr.metadata[model.MD_DESCRIPTION], metadata3d[model.MD_DESCRIPTION])
+        self.assertEqual(imr.metadata[model.MD_POS], metadata3d[model.MD_POS])
+        self.assertEqual(imr.metadata[model.MD_PIXEL_SIZE], metadata3d[model.MD_PIXEL_SIZE])
+        self.assertEqual(imr.metadata[model.MD_ACQ_DATE], metadata3d[model.MD_ACQ_DATE])
+
     def testExportRGB(self):
         """
         Check it's possible to export a 3D data (typically: 2D area with full

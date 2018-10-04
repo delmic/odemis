@@ -626,6 +626,28 @@ class AnalysisGUIData(MicroscopyGUIData):
         self.spec_bck_cal.subscribe(self._on_spec_bck_cal)
         self.spec_cal.subscribe(self._on_spec_cal)
 
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+        self.streams.subscribe(self._on_stream_change, init=True)
+
+    def _updateZParams(self):
+        # Calculate the new range of z pos
+        limits = []
+
+        for s in self.streams.value:
+            if model.hasVA(s, "zIndex"):
+                metadata = s.getRawMetadata()[0]  # take only the first
+                zcentre = metadata[model.MD_POS][2]
+                zstep = metadata[model.MD_PIXEL_SIZE][2]
+                limits.append(zcentre - (s.zIndex.range[1] + 1) * zstep / 2)
+                limits.append(zcentre + (s.zIndex.range[1] + 1) * zstep / 2)
+
+        if len(limits) > 1:
+            self.zPos.range = (min(limits), max(limits))
+            logging.debug("Z stack range updated to %f - %f, ZPos: %f", self.zPos.range[0], self.zPos.range[1], self.zPos.value)
+        else:
+            self.zPos.range = (0, 0)
+
     def _on_ar_cal(self, fn):
         self._conf.set("calibration", "ar_file", fn)
 
@@ -634,6 +656,9 @@ class AnalysisGUIData(MicroscopyGUIData):
 
     def _on_spec_cal(self, fn):
         self._conf.set("calibration", "spec_file", fn)
+
+    def _on_stream_change(self, streams):
+        self._updateZParams()
 
 
 class ActuatorGUIData(MicroscopyGUIData):
@@ -979,7 +1004,7 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, zPos=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -987,6 +1012,8 @@ class StreamView(View):
           streams in this view is allowed to show.
         :param fov_hw (None or Component): Component with a .horizontalFoV VA and
           a .shape. If not None, the view mpp (=mag) will be linked to that FoV.
+        :param zPos (None or Float VA): Global position in Z coordinate for the view.
+          Used when a stream supports Z stack display, which is controlled by the focuser.
         """
 
         super(StreamView, self).__init__(name)
@@ -1060,6 +1087,9 @@ class StreamView(View):
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
         self.interpolate_content = model.BooleanVA(False)
+
+        if zPos is not None:
+            self.zPos = zPos
 
     def _onFovBuffer(self, fov):
         self._updateStreamsViewParams()
@@ -1178,6 +1208,7 @@ class StreamView(View):
                                      shift * 1e6)
 
                 time_last_move = time.time()
+
                 try:
                     if axis.canUpdate:
                         # Update the target position on the fly
@@ -1201,6 +1232,21 @@ class StreamView(View):
         return (float): actual distance moved by the focus in meter
         """
         # FIXME: "stop all axes" should also clear the queue
+
+        # If streams have a z-level, we calculate the shift differently.
+        
+        if hasattr(self, "zPos"):
+
+            # Multiplier found by testing based on the range of zPos
+            # Moving the mouse 400 px moves through the whole range.
+            k = abs(self.zPos.range[1] - self.zPos.range[0]) / 400
+            val = k * shift
+
+            old_pos = self.zPos.value
+            new_pos = self.zPos.clip(self.zPos.value + val)
+            self.zPos.value = new_pos
+            logging.debug("Moving zPos to %f in range %s", self.zPos.value, self.zPos.range)
+            return new_pos - old_pos
 
         # TODO: optimise by only updating focuser when the stream tree changes
         for s in self.getStreams():

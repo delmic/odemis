@@ -114,6 +114,11 @@ class RGBSpatialProjection(DataProjection):
         self.stream.auto_bc.subscribe(self._onAutoBC)
         self.stream.auto_bc_outliers.subscribe(self._onOutliers)
 
+        # handle z stack
+        if model.hasVA(stream, "zIndex"):
+            self.zIndex = stream.zIndex
+            self.zIndex.subscribe(self._onZIndex)
+
         if hasattr(stream, '_das'):
             raw = stream._das
             md = raw.metadata
@@ -219,6 +224,9 @@ class RGBSpatialProjection(DataProjection):
         md = self.stream._find_metadata(data.metadata)
         md[model.MD_DIMS] = "YXC" # RGB format
         return model.DataArray(rgbim, md)
+
+    def _onZIndex(self, value):
+        self._shouldUpdateImage()
 
     def _shouldUpdateImage(self):
         """
@@ -345,10 +353,14 @@ class RGBSpatialProjection(DataProjection):
             tile.metadata = self.stream._find_metadata(tile.metadata)
             tile.metadata[model.MD_DIMS] = "YXC" # RGB format
             return tile
+        elif dims in ("ZYX",):
+            if tile.ndim != 2 and model.hasVA(self, "zIndex"):
+                tile = img.getYXFromZYX(tile, self.zIndex.value)  # Remove extra dimensions (of length 1)
+                tile.metadata[model.MD_DIMS] = "ZYX"
         else:
-            if tile.ndim != 2:
-                tile = img.ensure2DImage(tile)  # Remove extra dimensions (of length 1)
-            return self._projectXY2RGB(tile, self.stream.tint.value)
+            tile = img.ensure2DImage(tile)
+
+        return self._projectXY2RGB(tile, self.stream.tint.value)
 
     def _getTilesFromSelectedArea(self):
         """

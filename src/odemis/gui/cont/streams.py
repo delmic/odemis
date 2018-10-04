@@ -167,6 +167,10 @@ class StreamController(object):
             self._add_wl_ctrls()
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
+                
+        if hasattr(stream, "zIndex") and hasattr(self.tab_data_model, "zPos"):
+            self.stream.zIndex.subscribe(self._on_z_index)
+            self.tab_data_model.zPos.subscribe(self._on_z_pos, init=True)
 
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
@@ -195,7 +199,7 @@ class StreamController(object):
             # For tiled stream => use the DataArrayShadow (which is the only reliable one)
             md = self.stream._das.metadata
         elif self.stream.raw:
-            md = self.stream.raw[0].metadata
+            md = self.stream.getRawMetadata()[0]
         else:
             logging.warning("No raw data in stream")
             return
@@ -431,6 +435,34 @@ class StreamController(object):
                 break
         else:
             logging.error("No peak method corresponding to state %s", evt.state)
+
+    def _on_z_index(self, zIndex):
+        
+        self.tab_data_model.zPos.unsubscribe(self._on_z_pos)
+
+        metadata = self.stream.getRawMetadata()[0]  # take the first only
+        zcentre = metadata[model.MD_POS][2]
+        zstep = metadata[model.MD_PIXEL_SIZE][2]
+        zstart = zcentre - (self.stream.zIndex.range[1] + 1) * zstep / 2
+        self.tab_data_model.zPos.value = zstart + zstep * zIndex
+
+        self.tab_data_model.zPos.subscribe(self._on_z_pos)
+
+    def _on_z_pos(self, zPos):
+        # Given an absolute physical position in z pos, set the z index for a stream
+        # based on physical parameters
+
+        self.stream.zIndex.unsubscribe(self._on_z_index)
+
+        metadata = self.stream.getRawMetadata()[0]  # take the first only
+        zcentre = metadata[model.MD_POS][2]
+        zstep = metadata[model.MD_PIXEL_SIZE][2]
+        zstart = zcentre - (self.stream.zIndex.range[1] + 1) * zstep / 2
+        val = int(round((zPos - zstart) / zstep))
+
+        self.stream.zIndex.value = self.stream.zIndex.clip(val)
+
+        self.stream.zIndex.subscribe(self._on_z_index)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

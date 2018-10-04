@@ -558,7 +558,7 @@ def calc_img_buffer_rect(im_data, im_scale, p_im_center, buffer_center, buffer_s
 
     # Scale the image
     im_h, im_w = im_data.shape[:2]
-    scale_x, scale_y = im_scale
+    scale_x, scale_y = im_scale[:2]
     scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
     # Calculate the top left (in buffer coordinates, so bottom left in phys)
@@ -1574,6 +1574,10 @@ def _get_stream_legend_text(md):
             captions.append(units.readable_str(md[model.MD_EBEAM_CURRENT], "A", sig=3))
         if model.MD_IN_WL in md:
             captions.append(u"Excitation: %s" % units.readable_str(numpy.average(md[model.MD_IN_WL]), "m", sig=3))
+        if model.MD_POS in md:
+            pos = md[model.MD_POS]
+            if len(pos) == 3:   # 3D Z stack data
+                captions.append(u"Z Position: %s" % units.readable_str(pos[2], "m", sig=3))
         if model.MD_OUT_WL in md:
             out_wl = md[model.MD_OUT_WL]
             if isinstance(out_wl, basestring):
@@ -1617,6 +1621,9 @@ def get_ordered_images(streams, raw=False):
             else:
                 data_raw = s.raw[0]
 
+            if model.hasVA(s, "zIndex"):
+                data_raw = img.getYXFromZYX(s.raw[0], s.zIndex.value)
+
             # Pretend to be RGB for the drawing by cairo
             if numpy.can_cast(im_min_type, min_type(data_raw)):
                 im_min_type = min_type(data_raw)
@@ -1635,7 +1642,10 @@ def get_ordered_images(streams, raw=False):
         if isinstance(s.raw, tuple):  # s.raw has tiles
             md = s.raw[0][0].metadata.copy()
         else:
-            md = s.raw[0].metadata.copy()
+            if not model.hasVA(s, "zIndex") and not raw:  # Otherwise we will overwrite teh correct MD_POS
+                md = s.raw[0].metadata.copy()
+            else:
+                md = data.metadata
 
         ostream = s.stream if isinstance(s, DataProjection) else s
 

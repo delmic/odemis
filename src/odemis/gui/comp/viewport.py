@@ -282,6 +282,10 @@ class MicroscopeViewport(ViewPort):
 
         # By default, cannot focus, unless the child class allows it
         self.canvas.abilities.discard(CAN_FOCUS)
+        # TODO:Listen instead to the StreamTree so that only visible streams affect display.
+        tab_data.streams.subscribe(self._on_stream_change, init=True)
+        if model.hasVA(tab_data, "zPos"):
+            tab_data.zPos.subscribe(self._on_zPos_change, init=True)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
@@ -315,6 +319,15 @@ class MicroscopeViewport(ViewPort):
         hfw = units.round_significant(hfw, 4)
         label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
         self.bottom_legend.set_hfw_label(label)
+
+    def UpdateZposLabel(self):
+        # Check if z position should be displayed
+        if not self._tab_data_model.zPos.range == (0, 0):
+            label = u"Z Pos.: %s" % units.readable_str(self._tab_data_model.zPos.value, unit=self._tab_data_model.zPos.unit, sig=3)
+        else:
+            label = u""
+        if self.bottom_legend:
+            self.bottom_legend.set_zPos_label(label)
 
     def UpdateMagnification(self):
         # Total magnification
@@ -369,6 +382,9 @@ class MicroscopeViewport(ViewPort):
             self.UpdateHFWLabel()
             self.UpdateMagnification()
             # the MicroscopeView will send an event that the view has to be redrawn
+
+    def _on_zPos_change(self, val):
+        self.UpdateZposLabel()
 
     def _checkMergeSliderDisplay(self):
         """
@@ -623,6 +639,16 @@ class MicroscopeViewport(ViewPort):
         if not self.stage_limit_overlay:
             self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
         self.stage_limit_overlay.set_dimensions(roi)
+        
+    def _on_stream_change(self, streams):
+        """
+        When the streams are changed, check if z-index is supported. If so,
+        add the focus tool to the canvas abilities. Otherwise, remove it.
+        """
+        if any(model.hasVA(s, "zIndex") for s in streams):
+            self.canvas.abilities.add(CAN_FOCUS)
+        else:
+            self.canvas.abilities.discard(CAN_FOCUS)
 
 
 class OverviewViewport(MicroscopeViewport):

@@ -1168,7 +1168,7 @@ class BitmapCanvas(BufferedCanvas):
 
         # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
-        scale_x, scale_y = im_scale
+        scale_x, scale_y = im_scale[:2]
         total_scale = total_scale_x, total_scale_y = (scale_x * self.scale, scale_y * self.scale)
 
         # in case of small floating errors
@@ -1255,8 +1255,8 @@ class BitmapCanvas(BufferedCanvas):
         # * the scale of the buffer (dependent on how much the user zoomed in)
 
         # Scale the image
-        im_h, im_w = im_shape
-        scale_x, scale_y = im_scale
+        im_h, im_w = im_shape[:2]
+        scale_x, scale_y = im_scale[:2]
         scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
         # Calculate the top left (in buffer coordinates, so bottom left in phys)
