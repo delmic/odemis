@@ -57,6 +57,7 @@ def data_to_static_streams(data):
             continue
 
         dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
         if (((model.MD_WL_LIST in d.metadata or
@@ -127,7 +128,7 @@ def data_to_static_streams(data):
         else:
             # Now, either it's a flat greyscale image and we decide it's a SEM image,
             # or it's gone too weird and we try again on flat images
-            if numpy.prod(d.shape[:-2]) != 1:
+            if numpy.prod(d.shape[:-2]) != 1 and pxs is not None and len(pxs) != 3:
                 # FIXME: doesn't work currently if d is a DAS
                 subdas = _split_planes(d)
                 logging.info("Reprocessing data of shape %s into %d sub-data",
@@ -135,16 +136,17 @@ def data_to_static_streams(data):
                 if len(subdas) > 1:
                     result_streams.extend(data_to_static_streams(subdas))
                     continue
-
             name = d.metadata.get(model.MD_DESCRIPTION, "Electrons")
             klass = stream.StaticSEMStream
-
         if issubclass(klass, stream.Static2DStream):
             # FIXME: doesn't work currently if d is a DAS
-            if numpy.prod(d.shape[:-2]) != 1:
+            name = d.metadata.get(model.MD_DESCRIPTION)
+            if numpy.prod(d.shape[:-3]) != 1:
                 logging.warning("Dropping dimensions from the data %s of shape %s",
-                                name, d.shape)
-                d = d[-2, -1]
+                            name, d.shape)
+                #      T  Z  X  Y
+                #     d[0,0] -> d[0,0,:,:]
+                d = d[(0,) * (d.ndim - 2)]
 
         stream_instance = klass(name, d)
         result_streams.append(stream_instance)

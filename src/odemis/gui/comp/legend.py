@@ -111,6 +111,12 @@ class InfoLegend(wx.Panel):
         self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
         self.magnification_text.SetToolTip("Magnification")
 
+        # Z position text
+        self.zPos_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
+        self.zPos_text.SetBackgroundColour(parent.GetBackgroundColour())
+        self.zPos_text.SetForegroundColour(parent.GetForegroundColour())
+        self.zPos_text.SetToolTip("Z Position")
+
         # Scale window
         self.scale_win = ScaleWindow(self)
 
@@ -154,7 +160,8 @@ class InfoLegend(wx.Panel):
         control_sizer.Add(self.scale_win, 3, border=10,
                           flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
-
+        control_sizer.Add(self.zPos_text, 2, border=10,
+                          flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         # border_sizer is needed to add a border around the legend
         border_sizer = wx.BoxSizer(wx.VERTICAL)
         border_sizer.Add(control_sizer, border=6, flag=wx.ALL | wx.EXPAND)
@@ -201,6 +208,13 @@ class InfoLegend(wx.Panel):
         approx_width = len(label) * 7
         self.magnification_text.SetMinSize((approx_width, -1))
         self.magnification_text.SetValue(label)
+        self.Layout()
+
+    def set_zPos_label(self, label):
+        # TODO: compute the real size needed (using GetTextExtent())
+        approx_width = len(label) * 7
+        self.zPos_text.SetMinSize((approx_width, -1))
+        self.zPos_text.SetValue(label)
         self.Layout()
 
     def set_stream_type(self, side, acq_type):

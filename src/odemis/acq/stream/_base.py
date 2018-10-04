@@ -1051,3 +1051,13 @@ class Stream(object):
         c = md[model.MD_POS]
         w, h = shape[1] * pxs[0], shape[0] * pxs[1]
         return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+
+    def getRawMetadata(self):
+        """
+        Gets the raw metadata structure from the stream.
+        A list of metadata dicts is returned.
+        """
+        if hasattr(self, '_das'):
+            return [self._das.metadata]
+        else:
+            return [None if data is None else data.metadata for data in self.raw]

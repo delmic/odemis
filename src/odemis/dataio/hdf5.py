@@ -206,6 +206,16 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["YOffset"], ST_REPORTED)
         group["YOffset"].attrs["UNIT"] = "m" # our extension
 
+        try:
+            group["ZOffset"] = pos[2]
+            _h5svi_set_state(group["ZOffset"], ST_REPORTED)
+
+        except IndexError:
+            group["ZOffset"] = 0
+            _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
+
+    group["ZOffset"].attrs["UNIT"] = "m"  # our extension
+
     # If ids.CLASS is set and the wrong padding type attach_scale() fails.
     # As a workaround, we temporarily remove it
     # It's caused by the way attach_scale check whether the ids is
@@ -272,6 +282,7 @@ def _add_image_info(group, dataset, image):
             # Huygens seems to consider it's in m
             xpos = dims.index("X")
             ypos = dims.index("Y")
+
             pxs = image.metadata[model.MD_PIXEL_SIZE]
             group["DimensionScaleX"] = pxs[0]
             group["DimensionScaleX"].attrs["UNIT"] = "m"  # our extension
@@ -279,23 +290,28 @@ def _add_image_info(group, dataset, image):
             group["DimensionScaleY"] = pxs[1]
             group["DimensionScaleY"].attrs["UNIT"] = "m"
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
+
+            try:
+                zPos = dims.index("Z")
+                group["DimensionScaleZ"] = pxs[2]  # m
+                _h5svi_set_state(group["DimensionScaleZ"], ST_REPORTED)
+
+            except (ValueError, IndexError):
+                group["DimensionScaleZ"] = 0  # m
+                _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
+
+            group["DimensionScaleZ"].attrs["UNIT"] = "m"
+
             # Attach the scales to each dimensions (referenced by their label)
             dataset.dims.create_scale(group["DimensionScaleX"], "X")
             dataset.dims.create_scale(group["DimensionScaleY"], "Y")
+            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
             dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
             dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
+            dataset.dims[zPos].attach_scale(group["DimensionScaleZ"])
 
         # Unknown data, but SVI needs them to take the scales into consideration
         if "Z" in dims:
-            zpos = dims.index("Z")
-            group["ZOffset"] = 0.0
-            _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
-            group["DimensionScaleZ"] = 1e-3  # m
-            group["DimensionScaleZ"].attrs["UNIT"] = "m"
-            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
-            _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-            dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
-
             # Put here to please Huygens
             # Seems to be the coverslip position, ie, the lower and upper glass of
             # the sample. Not clear what's the relation with ZOffset.
@@ -376,7 +392,17 @@ def _read_image_info(group):
     md = {}
     # Offset
     try:
+        # Try 2D
         pos = (float(group["XOffset"][()]), float(group["YOffset"][()]))
+        # Try 3D
+        try:
+            state = _h5svi_get_state(group["ZOffset"])
+
+            if state == ST_REPORTED:
+                pos = (pos[0], pos[1], float(group["ZOffset"][()]))
+
+        except KeyError:
+            pass
         md[model.MD_POS] = pos
     except KeyError:
         pass
@@ -401,13 +427,21 @@ def _read_image_info(group):
 
     # Scale pixel size
     try:
-        pxs = [None, None]
+        px_x, px_y, px_z = None, None, None
         for dim in dataset.dims:
             if dim.label == "X" and dim:
-                pxs[0] = float(dim[0][()])
+                px_x = float(dim[0][()])
             if dim.label == "Y" and dim:
-                pxs[1] = float(dim[0][()])
-        # TODO: add scale for Z ??
+                px_y = float(dim[0][()])
+            if dim.label == "Z" and dim:
+                state = _h5svi_get_state(dim[0])
+                if state == ST_REPORTED:
+                    px_z = float(dim[0][()])
+
+        if px_z is None:
+            pxs = [px_x, px_y]
+        else:
+            pxs = [px_x, px_y, px_z]
 
         if pxs == [None, None]:
             logging.debug("No pixel size metadata provided")

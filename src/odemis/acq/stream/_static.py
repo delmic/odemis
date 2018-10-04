@@ -27,13 +27,16 @@ from __future__ import division
 
 import collections
 import logging
+import gc
 import math
 import numpy
+import copy
 from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, MD_PIXEL_SIZE, VigilantAttribute
 from odemis.util import img, conversion, polar, spectrum
 from scipy import ndimage
+import threading, weakref, time
 
 from ._base import Stream
 
@@ -50,6 +53,65 @@ class StaticStream(Stream):
         raw (DataArray, DataArrayShadow or list of DataArray): The data to display.
         """
         super(StaticStream, self).__init__(name, None, None, None, raw=raw, *args, **kwargs)
+
+        self._ht_needs_recompute = threading.Event()
+        self._hthread = None
+
+    def _shouldUpdateHistogram(self):
+        """
+        Ensures that the histogram VA will be updated in the "near future".
+        """
+        # If the previous request is still being processed, the event
+        # synchronization allows to delay it (without accumulation).
+        if self._hthread is None:
+            self._hthread = threading.Thread(target=self._histogram_thread,
+                                         args=(weakref.ref(self),),
+                                         name="Histogram computation")
+            self._hthread.daemon = True
+            self._hthread.start()
+        self._ht_needs_recompute.set()
+
+    @staticmethod
+    def _histogram_thread(wstream):
+        """
+        Called as a separate thread, and recomputes the histogram whenever
+        it receives an event asking for it.
+        wself (Weakref to a stream): the stream to follow
+        """
+        try:
+            stream = wstream()
+            name = stream.name.value
+            ht_needs_recompute = stream._ht_needs_recompute
+            # Only hold a weakref to allow the stream to be garbage collected
+            # On GC, trigger im_needs_recompute so that the thread can end too
+            wstream = weakref.ref(stream, lambda o: ht_needs_recompute.set())
+
+            while True:
+                del stream
+                ht_needs_recompute.wait()  # wait until a new image is available
+                stream = wstream()
+                if stream is None:
+                    logging.debug("Stream %s disappeared so ending histogram update thread", name)
+                    break
+
+                tstart = time.time()
+                ht_needs_recompute.clear()
+                stream._updateHistogram()
+                tend = time.time()
+
+                # sleep as much, to ensure we are not using too much CPU
+                tsleep = max(0.25, tend - tstart)  # max 4 Hz
+                time.sleep(tsleep)
+
+                # If still nothing to do, update the RGB image with the new B/C.
+                if not ht_needs_recompute.is_set() and stream.auto_bc.value:
+                    # Note that this can cause the .image to be updated even after the
+                    # stream is not active (but that can happen even without this).
+                    stream._shouldUpdateImage()
+        except Exception:
+            logging.exception("histogram update thread failed")
+
+        gc.collect()
 
 
 class RGBStream(StaticStream):
@@ -99,8 +161,8 @@ class Static2DStream(StaticStream):
     """
     Stream containing one static image.
     For testing and static images.
+    The static image could be 2D or a 3D stack of images with a z-index
     """
-
     def __init__(self, name, raw, *args, **kwargs):
         """
         Note: parameters are different from the base class.
@@ -111,6 +173,51 @@ class Static2DStream(StaticStream):
             raw = [raw.getData()]
         else:
             raw = [raw]
+
+        metadata = copy.copy(raw[0].metadata)
+
+        # If there are 5 dims in CTZYX, eliminate CT and only take spatial dimensions
+        if raw[0].ndim > 3:
+            dims = metadata.get(model.MD_DIMS, "ZYX")
+            if dims[-3:] != "ZYX":
+                logging.warning("Metadata has %s dimensions, which may be invalid.", dims)
+            if len(raw[0].shape) == 5:
+                if any(x > 1 for x in raw[0].shape[:2]):
+                    logging.error("Higher dimensional data is being discarded.")
+                raw[0] = raw[0][0, 0]
+            elif len(raw[0].shape) == 4:
+                if any(x > 1 for x in raw[0].shape[:1]):
+                    logging.error("Higher dimensional data is being discarded.")
+                raw[0] = raw[0][0]
+            metadata[model.MD_DIMS] = "ZYX"
+
+        logging.debug("%s shape: %s", name, raw[0].shape)
+
+        if len(raw[0].shape) == 3 and metadata[model.MD_DIMS] == "ZYX":
+            try:
+                pxs = metadata[model.MD_PIXEL_SIZE]
+                pos = metadata[model.MD_POS]
+                if len(pxs) < 3:
+                    assert len(pxs) == 2
+                    logging.warning("Metadata for 3D data invalid. Using default pixel size 1e-6 m")
+                    pxs = (pxs[0], pxs[1], 1e-6)
+                    metadata[model.MD_PIXEL_SIZE] = pxs
+
+                if len(pos) < 3:
+                    assert len(pos) == 2
+                    pos = (pos[0], pos[1], 0)
+                    metadata[model.MD_POS] = pos
+                    logging.warning("Metadata for 3D data invalid. Using default centre position 0")
+
+            except KeyError:
+                raise ValueError("Pixel size or position are missing from metadata")
+            # Define a z-index
+            self.zIndex = model.IntContinuous(0, [0, raw[0].shape[0] - 1])
+            self.zIndex.subscribe(self._on_zIndex)
+
+        # Copy back the metadata
+        raw[0].metadata = copy.copy(metadata)
+
         super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
 
     def _init_projection_vas(self):
@@ -123,6 +230,17 @@ class Static2DStream(StaticStream):
             TODO remove this function when all the streams become projectionless
         '''
         pass
+
+    def _on_zIndex(self, val):
+        self._shouldUpdateHistogram()
+
+    def _updateHistogram(self, data=None):
+        if data is None and model.hasVA(self, "zIndex"):
+            data = self.raw[0]
+            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+            if dims == "ZYX" and data.ndim == 3:
+                data = img.getYXFromZYX(data, self.zIndex.value)  # Remove extra dimensions (of length 1)
+        super(Static2DStream, self)._updateHistogram(data)
 
 
 class StaticSEMStream(Static2DStream):

@@ -386,11 +386,47 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     return rgb
 
 
+def getYXFromZYX(data, zIndex=0):
+    """
+    Extracts an XY plane from a ZYX image at the index given by zIndex (int)
+    Returns the data array, which is now 2D. The metadata of teh resulting 2D
+    image is updated such that MD_POS reflects the position of the 3D slice.
+
+    data: an image DataArray typically with 3 dimensions
+    zIndex: the index of the XY plane to extract from the image.
+    returns: 2D image DataArray
+
+    """
+
+    d = data.view()
+    if len(d.shape) < 2:
+        d.shape = (1,) * (2 - len(d.shape)) + d.shape
+
+    elif len(d.shape) > 2:
+
+        d.shape = d.shape[-3:]  # raise ValueError if it will not work
+        d = d[zIndex]  # Remove z
+
+        # Handle updating metadata
+        pxs = d.metadata.get(model.MD_PIXEL_SIZE)
+        pos = d.metadata.get(model.MD_POS)
+        if pxs is not None and pos is not None and len(pxs) == 3:
+            height = d.shape[0] * pxs[2]  # ZYX order
+            if len(pos) == 3:
+                d.metadata[model.MD_POS] = (pos[0], pos[1], pos[2] - height / 2 + zIndex * pxs[2])
+            else:
+                logging.warning("Centre Position metadata missing third dimension. Assuming 0.")
+                d.metadata[model.MD_POS] = (pos[0], pos[1], -height / 2 + zIndex * pxs[2])
+
+    return d
+
+
 def ensure2DImage(data):
     """
     Reshape data to make sure it's 2D by trimming all the low dimensions (=1).
     Odemis' convention is to have data organized as CTZYX. If CTZ=111, then it's
     a 2D image, but it has too many dimensions for functions which want only 2D.
+    If it has a 3D pixel size (voxels) then it must be ZYX, so this should be handled.
     data (DataArray): the data to reshape
     return DataArray: view to the same data but with 2D shape
     raise ValueError: if the data is not 2D (CTZ != 111)
@@ -399,7 +435,7 @@ def ensure2DImage(data):
     if len(d.shape) < 2:
         d.shape = (1,) * (2 - len(d.shape)) + d.shape
     elif len(d.shape) > 2:
-        d.shape = d.shape[-2:] # raise ValueError if it will not work
+        d.shape = d.shape[-2:]  # raise ValueError if it will not work
 
     return d
 
@@ -606,8 +642,10 @@ def mergeMetadata(current, correction=None):
     # be used as a fallback)
     if model.MD_PIXEL_SIZE in current:
         pxs = current[model.MD_PIXEL_SIZE]
-        pxs_cor = current.get(model.MD_PIXEL_SIZE_COR, (1, 1))
-        current[model.MD_PIXEL_SIZE] = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+        # Do the correction for 2D and 3D
+        pxs_cor = current.get(model.MD_PIXEL_SIZE_COR, (1,) * len(pxs))
+        current[model.MD_PIXEL_SIZE] = tuple(p * pc for p, pc in zip(pxs, pxs_cor))
+
     elif model.MD_PIXEL_SIZE_COR in current:
         logging.info("Cannot correct pixel size of data with unknown pixel size")
 

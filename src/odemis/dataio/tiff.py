@@ -124,6 +124,7 @@ def _convertToTiffTag(metadata):
             # correct relatively to each other (for a given sample).
             tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
             tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
+
 #         elif key == model.MD_ROTATION:
             # TODO: should use the coarse grain rotation to update Orientation
             # and update rotation information to -45< rot < 45 -> maybe GeoTIFF's ModelTransformationTag?
@@ -187,6 +188,7 @@ def _readTiffTag(tfile):
 
     xres = tfile.GetField(T.TIFFTAG_XRESOLUTION)
     yres = tfile.GetField(T.TIFFTAG_YRESOLUTION)
+
     if xres is not None and yres is not None:
         try:
             md[model.MD_PIXEL_SIZE] = (factor / xres, factor / yres)
@@ -565,10 +567,16 @@ def _updateMDFromOME(root, das):
                 pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
+
         try:
-            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6 # µm -> m
+            psx = float(pxe.attrib["PhysicalSizeX"]) * 1e-6  # µm -> m
             psy = float(pxe.attrib["PhysicalSizeY"]) * 1e-6
             md[model.MD_PIXEL_SIZE] = (psx, psy)
+            # PIXEL_SIZE has already been updated. If the PhysicalSizeZ is not present
+            # the code will stop the metadata will be 2D, and if it's present,
+            # the metadata will be changed to 3D.
+            psz = float(pxe.attrib["PhysicalSizeZ"]) * 1e-6
+            md[model.MD_PIXEL_SIZE] = (psx, psy, psz)
         except (KeyError, ValueError):
             pass
 
@@ -777,6 +785,10 @@ def _updateMDFromOME(root, das):
                 psx = float(ple.attrib["PositionX"])
                 psy = float(ple.attrib["PositionY"])
                 mdp[model.MD_POS] = (psx, psy)
+                # MD_POS is already updated, but if a Z position is also present,
+                # we should add it as well. If not, this part will trigger a KeyError
+                psz = float(ple.attrib["PositionZ"])
+                mdp[model.MD_POS] = (psx, psy, psz)
             except (KeyError, ValueError):
                 pass
 
@@ -1232,6 +1244,8 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
+        if len(pxs) == 3:
+            pixels.attrib["PhysicalSizeZ"] = "%.15f" % (pxs[2] * 1e6)
 
     # Note: TimeIncrement can be used to replace DeltaT if the duration is always
     # the same (which it is), but it also means it starts at 0, which is not
@@ -1435,6 +1449,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             pos = da.metadata[model.MD_POS]
             plane.attrib["PositionX"] = "%.15f" % pos[0] # any unit is allowed => m
             plane.attrib["PositionY"] = "%.15f" % pos[1]
+
+            if len(pos) == 3:
+                plane.attrib["PositionZ"] = "%.15f" % pos[2]
 
         subid += 1
 

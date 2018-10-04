@@ -254,6 +254,92 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel((1, 1)), 0)
 
+    def testExportSpatialCube(self):
+        """
+        Check it's possible to export a 3D data (typically: 2D area with full
+         spectrum for each point)
+        """
+        dtype = numpy.dtype("uint16")
+        size3d = (512, 256, 220)  # X, Y, Z
+        size = (512, 256)
+        metadata3d = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "fake spec",
+                    model.MD_DIMS: "ZYX",
+                    model.MD_HW_VERSION: "1.23",
+                    model.MD_SW_VERSION: "aa 4.56",
+                    model.MD_DESCRIPTION: "test3dspatial",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5, 3e-4),  # m/px
+                    model.MD_WL_POLYNOMIAL: [500e-9, 1e-9],  # m, m/px: wl polynomial
+                    model.MD_POS: (1e-3, -30e-3, -5e-3),  # m
+                    model.MD_EXP_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+        metadata = {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "",  # check empty unicode strings
+                    model.MD_DIMS: "ZYX",
+                    model.MD_DESCRIPTION: "test",  # tiff doesn't support É (but XML does)
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2),  # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                    model.MD_POS: (1e-3, -30e-3),  # m
+                    model.MD_EXP_TIME: 1.2,  # s
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+        ldata = []
+        # 3D data generation (+ metadata): gradient along the wavelength
+        data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
+        end = 2 ** metadata3d[model.MD_BPP]
+        step = end // size3d[2]
+        lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
+        lin.shape = (size3d[2], 1, 1)  # to be able to copy it on the first dim
+        data3d[:] = lin
+        # introduce Time and Z dimension to state the 3rd dim is channel
+        data3d = data3d[:, numpy.newaxis, numpy.newaxis, :, :]
+        ldata.append(model.DataArray(data3d, metadata3d))
+
+        # an additional 2D data, for the sake of it
+        ldata.append(model.DataArray(numpy.zeros(size[-1::-1], dtype), metadata))
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+       # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+        im = Image.open(FILENAME)
+        self.assertEqual(im.format, "TIFF")
+
+        # check the 3D data (one image per channel)
+        for i in range(size3d[2]):
+            im.seek(i)
+            self.assertEqual(im.size, size3d[0:2])
+            self.assertEqual(im.getpixel((1, 1)), i * step)
+
+        # check the 2D data
+        im.seek(i + 1)
+        self.assertEqual(im.size, size)
+        self.assertEqual(im.getpixel((1, 1)), 0)
+
+        # Check the metadata
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        im = rdata[0]
+        self.assertEqual(im.metadata[model.MD_DESCRIPTION], metadata3d[model.MD_DESCRIPTION])
+        numpy.testing.assert_allclose(im.metadata[model.MD_POS], metadata3d[model.MD_POS], rtol=1e-4)
+        numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], metadata3d[model.MD_PIXEL_SIZE])
+        self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], metadata3d[model.MD_ACQ_DATE], delta=1)
+
+        im = rdata[1]
+        self.assertEqual(im.metadata[model.MD_DESCRIPTION], metadata[model.MD_DESCRIPTION])
+        numpy.testing.assert_allclose(im.metadata[model.MD_POS], metadata[model.MD_POS], rtol=1e-4)
+        numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], metadata[model.MD_PIXEL_SIZE])
+        self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], metadata[model.MD_ACQ_DATE], delta=1)
+
     def testExportNoWL(self):
         """
         Check it's possible to export/import a spectrum with missing wavelength
