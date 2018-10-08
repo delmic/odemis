@@ -607,6 +607,10 @@ class AnalysisSettingsController(SettingsBarController):
             for key, value in file_info.metadata.items():
                 self._pnl_acqfile.add_metadata(key, value)
 
+            # Change default dir for the calibration files
+            for file_ctrl in (self._arfile_ctrl, self._spec_bckfile_ctrl, self._specfile_ctrl):
+                file_ctrl.default_dir = file_info.file_path
+
         self._pnl_acqfile.Refresh()
 
     # TODO: refactor into widgets.FileConnector
