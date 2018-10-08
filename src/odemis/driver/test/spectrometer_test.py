@@ -226,11 +226,17 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test vertical binning (use less than the whole detector)
         """
-        if (self.spectrometer.binning.range[1][1] == 1):
-            self.skipTest("Spectrometer doesn't support vertical binning")
+        if (self.detector.resolution.range[1][1] == 1):
+            self.skipTest("Detector doesn't support vertical binning")
 
-        # normally vertical binning is by default the maximum, so it's not going
-        # to change much
+        # Check using the maximum vertical binning (which is the default, so
+        # it's not going to change much)
+        # Things we check:
+        # -> vertical resolution stays 1
+        # -> the generated image is the same as the spectrometer resolution (inverted)
+        # -> new binning is updated in the metadata
+        # -> detector horizontal binning is: horizontal binning
+        # -> detector vertical binning * detector vertical resolution = vertical binning
         binning = [self.spectrometer.binning.value[0],    # as-is
                    self.spectrometer.binning.range[1][1]] # max
         self.spectrometer.binning.value = binning
@@ -239,11 +245,35 @@ class TestCompositedSpectrometer(unittest.TestCase):
 
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        self.assertEqual(self.detector.binning.value[0], binning[0])
+        self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                         binning[1])
         md = data.metadata
         self.assertEqual(md[model.MD_BINNING], tuple(binning))
 
-        # reduce the binning (v resolution stays 1)
+        # Reduce the binning
         binning[1] //= 2
+        self.spectrometer.binning.value = binning
+        self.assertEqual(self.spectrometer.resolution.value[1], 1)
+
+        data = self.spectrometer.data.get()
+        self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        md = data.metadata
+        self.assertEqual(md[model.MD_BINNING], tuple(binning))
+
+        # reduce the binning to just the CCD max binning
+        binning[1] = self.detector.binning.range[1][1]
+        self.spectrometer.binning.value = binning
+        self.assertEqual(self.spectrometer.resolution.value[1], 1)
+
+        data = self.spectrometer.data.get()
+        self.assertEqual(self.detector.binning.value, tuple(binning))
+        self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        md = data.metadata
+        self.assertEqual(md[model.MD_BINNING], tuple(binning))
+
+        # reduce the binning to just 1
+        binning[1] = 1
         self.spectrometer.binning.value = binning
         self.assertEqual(self.spectrometer.resolution.value[1], 1)
 
@@ -436,7 +466,9 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.assertEqual(data.shape[1], self.spectrometer.resolution.value[0])
 
         self.assertEqual(self.spectrometer.binning.value, binning)
-        self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+        self.assertEqual(self.detector.binning.value[0], binning[0])
+        self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                         binning[1])
 
     def test_live_change(self):
         """
@@ -456,7 +488,10 @@ class TestCompositedSpectrometer(unittest.TestCase):
             binning[0] *= 2
             self.spectrometer.binning.value = binning
             self.assertEqual(self.spectrometer.binning.value, tuple(binning))
-            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            self.assertEqual(self.detector.binning.value[0], binning[0])
+            self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                             binning[1])
+
             new_res = self.spectrometer.resolution.value
             self.assertEqual(orig_res[0] / 2, new_res[0])
             time.sleep(1)
@@ -473,7 +508,10 @@ class TestCompositedSpectrometer(unittest.TestCase):
             binning[0] *= 2
             self.spectrometer.binning.value = binning
             self.assertEqual(self.spectrometer.binning.value, tuple(binning))
-            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            self.assertEqual(self.detector.binning.value[0], binning[0])
+            self.assertEqual(self.detector.binning.value[1] * self.detector.resolution.value[1],
+                             binning[1])
+
             new_res = self.spectrometer.resolution.value
             time.sleep(1)
             # Empty the queue
