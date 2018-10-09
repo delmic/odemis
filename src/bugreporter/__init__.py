@@ -1,0 +1,1 @@
+from odemis_bugreporter import OdemisBugreporter
