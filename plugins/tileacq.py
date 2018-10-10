@@ -52,7 +52,7 @@ from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.4"
+    __version__ = "1.5"
     __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
@@ -108,8 +108,8 @@ class TileAcqPlugin(Plugin):
                 logging.info("Tile acquisition not available as no stage present")
                 return
 
-        self.nx = model.IntContinuous(5, (1, 1000))
-        self.ny = model.IntContinuous(5, (1, 1000))
+        self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
+        self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
         self.overlap = model.FloatContinuous(20, (1, 80), unit="%")
         self.filename = model.StringVA("a.ome.tiff")
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
@@ -119,8 +119,6 @@ class TileAcqPlugin(Plugin):
         # of the ROI and linearly interpolate)
         # TODO: on SECOM allow to do fine alignment for each tile
 
-        self.nx.subscribe(self._check_range)
-        self.ny.subscribe(self._check_range)
         self.nx.subscribe(self._update_exp_dur)
         self.ny.subscribe(self._update_exp_dur)
         self.nx.subscribe(self._update_total_area)
@@ -184,7 +182,6 @@ class TileAcqPlugin(Plugin):
         """
         Called when VA that affects the total area is changed
         """
-        logging.debug("Updating total area")
         # Find the stream with the smallest FoV
         try:
             fov = self._guess_smallest_fov()
@@ -195,39 +192,55 @@ class TileAcqPlugin(Plugin):
         # * number of tiles - overlap
         nx = self.nx.value
         ny = self.ny.value
+        logging.debug("Updating total area based on FoV = %s m x (%d x %d)", fov, nx, ny)
         ta = (fov[0] * (nx - (nx - 1) * self.overlap.value / 100),
               fov[1] * (ny - (ny - 1) * self.overlap.value / 100))
 
         # Use _set_value as it's read only
         self.totalArea._set_value(ta, force_write=True)
 
-    def _check_range(self, _=None):
+    def _set_nx(self, nx):
         """
-        Check that stage limit is not exceeded during acquisition of nx * ny tiles. Set
-        self.nx and self.ny to its maximum values if input exceeds possible number of tiles. 
+        Check that stage limit is not exceeded during acquisition of nx tiles.
+        It automatically clips the maximum value.
         """
         stage = self.main_app.main_data.stage
         orig_pos = stage.position.value
         tile_size = self._guess_smallest_fov()
         overlap = 1 - self.overlap.value / 100
-        tile_pos = (orig_pos["x"] + self.nx.value * tile_size[0] * overlap,
-                    orig_pos["y"] - self.ny.value * tile_size[1] * overlap)
+        tile_pos_x = orig_pos["x"] + self.nx.value * tile_size[0] * overlap
 
         # The acquisition region only extends to the right and to the bottom, never
         # to the left of the top of the current position, so it is not required to
         # check the distance to the top and left edges of the stage.
         if hasattr(stage.axes["x"], "range"):
             max_x = stage.axes["x"].range[1]
-            if tile_pos[0] > max_x:
-                self.nx.value = max(1, int((max_x - orig_pos["x"]) / (overlap * tile_size[0])))
-                logging.info("Restricting number of tiles in x direction to %i due to stage limit."
-                              % self.nx.value)
+            if tile_pos_x > max_x:
+                nx = max(1, int((max_x - orig_pos["x"]) / (overlap * tile_size[0])))
+                logging.info("Restricting number of tiles in x direction to %i due to stage limit.",
+                             nx)
+
+        return nx
+
+    def _set_ny(self, ny):
+        """
+        Check that stage limit is not exceeded during acquisition of ny tiles.
+        It automatically clips the maximum value.
+        """
+        stage = self.main_app.main_data.stage
+        orig_pos = stage.position.value
+        tile_size = self._guess_smallest_fov()
+        overlap = 1 - self.overlap.value / 100
+        tile_pos_y = orig_pos["y"] - self.ny.value * tile_size[1] * overlap
+
         if hasattr(stage.axes["y"], "range"):
             min_y = stage.axes["y"].range[0]
-            if tile_pos[1] < min_y:
-                self.ny.value = max(1, int(-(min_y - orig_pos["y"]) / (overlap * tile_size[1])))
-                logging.info("Restricting number of tiles in y direction to %i due to stage limit."
-                              % self.ny.value)
+            if tile_pos_y < min_y:
+                ny = max(1, int(-(min_y - orig_pos["y"]) / (overlap * tile_size[1])))
+                logging.info("Restricting number of tiles in y direction to %i due to stage limit.",
+                             ny)
+
+        return ny
 
     def _guess_smallest_fov(self):
         """
@@ -299,7 +312,10 @@ class TileAcqPlugin(Plugin):
         dlg.view.stream_tree.flat.subscribe(self._update_total_area, init=True)
         dlg.view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
 
-        self._check_range()
+        # This looks tautologic, but actually, it forces the setter to check the
+        # value is within range, and will automatically reduce it if necessary.
+        self.nx.value = self.nx.value
+        self.ny.value = self.ny.value
         self._memory_check()
 
         # TODO: disable "acquire" button if no stream selected.
