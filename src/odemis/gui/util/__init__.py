@@ -45,15 +45,21 @@ import wx
 def call_in_wx_main(f, self, *args, **kwargs):
     """ This method decorator makes sure the method is called from the main
     (GUI) thread.
-    The function may be run asynchronously, so the function return value cannot
+    The function will run asynchronously, so the function return value cannot
     be returned. So it's typically an error if a decorated function returns
     something useful.
     """
+    # We could try to be clever, and only run asynchronously if it's not called
+    # from the main thread, but that can cause anachronic issues. For example:
+    # 1. Call from another thread -> queued for later
+    # 2. Call from main thread -> immediately executed
+    # => Call 2 is executed before call 1, which could mean that an old value
+    # is displayed on the GUI.
     # TODO: with Python 3, update that line to:
     # if threading.current_thread() == threading.main_thread()
-    if isinstance(threading.current_thread(), threading._MainThread):
-        f(self, *args, **kwargs)
-        return
+#     if isinstance(threading.current_thread(), threading._MainThread):
+#         f(self, *args, **kwargs)
+#         return
 
     wx.CallAfter(f, self, *args, **kwargs)
 
@@ -62,15 +68,13 @@ def call_in_wx_main_wrapper(f):
 
     @wraps(f)
     def call_after_wrapzor(*args, **kwargs):
-        if isinstance(threading.current_thread(), threading._MainThread):
-            f(*args, **kwargs)
-            return
-
-        if not wx.GetApp():
-            logging.info("Skipping call to %s() as wxApp is already ended", f.__name__)
-            return
-
-        wx.CallAfter(f, *args, **kwargs)
+        try:
+            wx.CallAfter(f, *args, **kwargs)
+        except AssertionError:
+            if not wx.GetApp():
+                logging.info("Skipping call to %s() as wxApp is already ended", f.__name__)
+            else:
+                raise
 
     return call_after_wrapzor
 
