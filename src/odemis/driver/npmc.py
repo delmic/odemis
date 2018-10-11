@@ -41,12 +41,32 @@ UNIT_DEF = {
     'in': 4,
     }
 
+# Constants for referencing
+REF_POSITIVE_LIMIT = 3
+REF_NEGATIVE_LIMIT = 4
+
+# Error codes (these values will have the axis number * 100 added to them.
+# e.g. 104 is a positive limit error in axis 1
+ERR_POSITIVE_LIMIT = 4
+ERR_NEGATIVE_LIMIT = 5
+ERR_PARAMETER_OUT_OF_RANGE = 7
+ERR_AXIS_NUMBER_OUT_OF_RANGE = 9
+ERR_HOMING_ABORTED = 20
+
+# Lock keypad
+KEYPAD_UNLOCK = 0
+KEYPAD_LOCK_EXCEPT_STOP = 1
+KEYPAD_ALL_LOCKED = 2
+
 
 class ESPError(model.HwError):
     """
     Exception used to indicate a problem reported by the device.
     """
-    pass
+
+    def __init__(self, msg, code=None):
+        self.code = code
+        model.HwError.__init__(self, msg)
 
 
 class ESP(model.Actuator):
@@ -89,6 +109,14 @@ class ESP(model.Actuator):
         self._port, self._version = self._findDevice(port)  # sets ._serial and ._file
         logging.info("Found Newport ESP301 device on port %s, Ver: %s",
                      self._port, self._version)
+
+        self.LockKeypad(KEYPAD_LOCK_EXCEPT_STOP)  # lock user input for the controller
+
+        # Clear errors at start
+        try:
+            self.checkError()
+        except ESPError:
+            pass
 
         self._offset = {}
         self._axis_conv_factor = {}
@@ -143,6 +171,9 @@ class ESP(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
+        # whether the axes are referenced
+        self.referenced = model.VigilantAttribute({a: False for a in axes}, readonly=True)
+
         self._hwVersion = str(self._id)
         self._swversion = self._version
 
@@ -166,6 +197,9 @@ class ESP(model.Actuator):
         self.checkError()
         
     def terminate(self):
+        if self._serial.isOpen():
+            self.LockKeypad(KEYPAD_UNLOCK)  # unlock user input for the controller
+
         with self._ser_access:
             self._serial.close()
         model.Actuator.terminate(self)
@@ -331,13 +365,49 @@ class ESP(model.Actuator):
 
         # After errors are collected
         if len(err_q) > 0:
-            raise ESPError("Error code(s) %s" % (err_q))
+            for err in err_q[:-1]:
+                logging.warning("Discarding error %d", err)
+            raise ESPError("Error code %d" % err_q[-1], err_q[-1])
 
     def SetAxisUnit(self, axis_num, unit):
         # Set the internal unit used by the controller
         if not unit in UNIT_DEF:
             raise ValueError("Unknown unit name %s" % (unit,))
         self._sendOrder("%d SN %d" % (axis_num, UNIT_DEF[unit]))
+
+    def MoveLimit(self, aid, limit):
+        """
+        Requests a move to the positive or negative limit.
+        limit (str): either '+' or '-', defining positive or negative limit
+        """
+        if not limit in ("+", "-"):
+            raise ValueError("Asked to move %d to %s limit. Only + or - allowed." % (aid, limit,))
+        self._sendOrder("%d MV %s" % (aid, limit))
+
+    def LockKeypad(self, lock_type):
+        """
+        Lock keypad on device from preventing bad user input
+        lock_type (KEYPAD_*)
+        """
+        self._sendOrder("LC %d" % (lock_type,))
+
+    def HomeSearch(self, aid, search_type):
+        """
+        Searches for home using a search type (int 0,1,2,3,4,5,6) as per manual
+        """
+        self._sendOrder("%d OR %d" % (aid, search_type))
+
+    def SetHome(self, aid, value):
+        """
+        Set the position value to use at the origin (home)
+        """
+        self._sendOrder("%d SH %f" % (aid, value))
+
+    def SaveMemory(self):
+        """
+        Save configuration to non - volatile memory
+        """
+        self._sendOrder("SM")
 
     def MoveAbsPos(self, axis_num, pos):
         """
@@ -623,6 +693,13 @@ class ESP(model.Actuator):
         for an, aid in self._axis_map.items():
             if axes is None or an in axes:
                 self.StopMotion(aid)
+                try:
+                    self.checkError()
+                except ESPError as e:
+                    logging.warning("Cancellation error %d", e.code)
+
+                # Should now turn the motor back on
+                self.MotorOn(aid)
         
     def _createMoveFuture(self):
         """
@@ -634,6 +711,51 @@ class ESP(model.Actuator):
         f._was_stopped = False  # if cancel was successful
         f.task_canceller = self._cancelCurrentMove
         return f
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        f = self._createMoveFuture()
+        f = self._executor.submitf(f, self._doReference, f, axes)
+        return f
+
+    def _doReference(self, future, axes):
+        """
+        Actually runs the referencing code
+        axes (set of str)
+        raise:
+            IOError: if referencing failed due to hardware
+            CancelledError if was cancelled
+        """
+        # Reset reference so that if it fails, it states the axes are not
+        # referenced (anymore)
+        with future._moving_lock:
+            try:
+                # do the referencing for each axis sequentially
+                # (because each referencing is synchronous)
+                for a in axes:
+                    if future._must_stop.is_set():
+                        raise CancelledError()
+                    aid = self._axis_map[a]
+                    self.referenced._value[a] = False
+                    self.HomeSearch(aid, REF_NEGATIVE_LIMIT)  # search for the negative limit signal to set an origin
+                    self._waitEndMove(future, (aid,), time.time() + 100)  # block until it's over
+                    self.SetHome(aid, 0.0)  # set negative limit as origin
+                    self.referenced._value[a] = True
+            except CancelledError as ex:
+                logging.info("Referencing cancelled: %s", ex)
+                future._was_stopped = True
+                raise
+            except Exception:
+                logging.exception("Referencing failure")
+                raise
+            finally:
+                # We only notify after updating the position so that when a listener
+                # receives updates both values are already updated.
+                self._updatePosition(axes)  # all the referenced axes should be back to 0
+                # read-only so manually notify
+                self.referenced.notify(self.referenced.value)
 
 
 class ESPSimulator(object):
@@ -650,9 +772,9 @@ class ESPSimulator(object):
 
         self._pos = [0, 0, 0]  # internal posiiton in mm
         self._start_pos = [0, 0, 0]  # mm
-        self._range = [-500, 500]  # mm
+        self._range = [-100, 800]  # mm
         self._target_pos = [0, 0, 0]  # mm
-        self._speed = [50, 50, 50]  # mm/s
+        self._speed = [100, 100, 100]  # mm/s
         self._accel = [20, 20, 20]  # mm/s^2
         self._decel = [20, 20, 20]  # mm/s^2
         self._error_stack = []  # Stack that is populated by error codes
@@ -687,6 +809,9 @@ class ESPSimulator(object):
         # using read or write will fail after that
         del self._output_buf
         del self._input_buf
+
+    def isOpen(self):
+        return hasattr(self, "_output_buf")
 
     def _addError(self, err):
         logging.debug("SIM: Adding error %d", err)
@@ -725,11 +850,11 @@ class ESPSimulator(object):
             self._current_move_start = time.time()
             self._current_move_finish = time.time() + dur
         else:
-            if new_pos > self._range[1]:
-                self._addError(axis * 100 + 4)  # Error - detected positive limit
+            if new_pos >= self._range[1]:
+                self._addError(axis * 100 + ERR_POSITIVE_LIMIT)  # Error - detected positive limit
                 self._pos[axis] = self._range[1]
-            elif new_pos < self._range[0]:
-                self._addError(axis * 100 + 5)  # error - detected negative limit
+            elif new_pos <= self._range[0]:
+                self._addError(axis * 100 + ERR_NEGATIVE_LIMIT)  # error - detected negative limit
                 self._pos[axis] = self._range[0]
 
     def _parseMessage(self, msg):
@@ -762,61 +887,134 @@ class ESPSimulator(object):
         # Query absolute position
         elif re.match(r'\dTP\?', msg):
             axis = int(msg[0])
-            self._updateCurrentPosition()
-            self._sendAnswer(str(self._pos[axis - 1]))
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                self._updateCurrentPosition()
+                self._sendAnswer(str(self._pos[axis - 1]))
 
         # Query current target
         elif re.match(r'\dDP\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._target_pos[axis - 1]))
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                self._sendAnswer(str(self._target_pos[axis - 1]))
 
         # Query current speed
         elif re.match(r'\dVA\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._speed[axis - 1]))
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                self._sendAnswer(str(self._speed[axis - 1]))
 
         # Query current accel
         elif re.match(r'\dAC\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._accel[axis - 1]))
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                self._sendAnswer(str(self._accel[axis - 1]))
 
         # Query current decel
         elif re.match(r'\dAG\?', msg):
             axis = int(msg[0])
-            self._sendAnswer(str(self._decel[axis - 1]))
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                self._sendAnswer(str(self._decel[axis - 1]))
 
         # Query motion done
         elif re.match(r'\dMD\?', msg):
             self._updateCurrentPosition()
+            axis = int(msg[0])
 
-            if self._isMoving():
-                self._sendAnswer(0)
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
             else:
-                self._sendAnswer(1)
+                if self._isMoving():
+                    self._sendAnswer(0)
+                else:
+                    self._sendAnswer(1)
 
         # Move to an absolute position
         elif re.match(r'\dPA', msg):
             axis = int(msg[0])
-            new_pos = float(msg[3:])
-            self._doMove(axis - 1, new_pos)
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                new_pos = float(msg[3:])
+                self._doMove(axis - 1, new_pos)
+
+        # Move to a limit
+        elif re.match(r'\dMV', msg):
+            axis = int(msg[0])
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                limit = msg[3:]
+                if limit == "+":
+                    self._doMove(axis - 1, self._range[1])
+                elif limit == "-":
+                    self._doMove(axis - 1, self._range[0])
+
+        # Home search
+        elif re.match(r'\dOR', msg):
+            axis = int(msg[0])
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                search_type = int(msg[3:])
+                if search_type == REF_NEGATIVE_LIMIT:
+                    self._doMove(axis - 1, self._range[0])
+                if search_type == REF_POSITIVE_LIMIT:
+                    self._doMove(axis - 1, self._range[1])
+
+        # Set home
+        elif re.match(r'\dSH', msg):
+            axis = int(msg[0])
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                origin = float(msg[3:])
+                self._pos[axis - 1] = origin
+                span = self._range[1] - self._range[0]
+                self._range[0] = origin
+                self._range[1] = origin + span
+                self._target_pos = copy.copy(self._pos)
+                self._updateCurrentPosition()
+                logging.debug("SIM: Setting new home position %f for axis %d", origin, axis)
 
         # Move to a relative position
         elif re.match(r'\dPR', msg):
             axis = int(msg[0])
-            shift = float(msg[3:])
-            new_pos = self._pos[axis - 1] + shift
-            self._doMove(axis - 1, new_pos)
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                shift = float(msg[3:])
+                new_pos = self._pos[axis - 1] + shift
+                self._doMove(axis - 1, new_pos)
 
         # Set speed
         elif re.match(r'\dVA', msg):
             axis = int(msg[0])
-            speed = float(msg[3:])
-            self._speed[axis - 1] = speed
+            if axis > 3:
+                self._addError(ERR_AXIS_NUMBER_OUT_OF_RANGE)
+            else:
+                speed = float(msg[3:])
+                self._speed[axis - 1] = speed
 
         # Set unit
         elif re.match(r'\dSN', msg):
             # we don't need to do anything here
             pass
+        
+        # Lock keypad
+        elif re.match(r'LC\d', msg):
+            val = int(msg[2:])
+            if val not in (KEYPAD_ALL_LOCKED, KEYPAD_LOCK_EXCEPT_STOP, KEYPAD_UNLOCK):
+                self._addError(ERR_PARAMETER_OUT_OF_RANGE)
 
         else:
             pass
