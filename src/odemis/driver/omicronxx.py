@@ -242,18 +242,31 @@ class DevxX(object):
 
         if status & 1:  # bit 0: error state
             error = self.GetFailureByte()
-            if error & 1:  # Soft-interlock => reset will fix it
-                logging.info("Device (on port %s) reports error %X, will reset it",
-                             acc.port, error)
+            if error & (1 << 9):  # bit 9: external interlock
+                raise HwError("External interlock loop is opened, close the interlock to activate the device")
+
+            lerror = self.GetLatchedFailure()
+            if not (error & 0xfffe):
+                # no other bit? could be just soft-interlock => reset will fix it
+                logging.info("Device (on port %s) reports error 0x%X (latched 0x%X), will reset it",
+                             acc.port, error, lerror)
+            else:
+                # any other bit set? a soft-reset will probably not be enough
+                logging.error("Device (on port %s) reports hardware error 0x%X (latched 0x%X), see manual.",
+                              acc.port, error, lerror)
+
+            # always reset the master, so temporarily do not send the channel
+            try:
+                self._com_chan = ""
                 self.ResetController()
-                error = self.GetFailureByte()
-                status = self.GetActualStatus()
+            finally:
+                self._com_chan = "[%d]" % channel
 
-            # TODO: if there is an error state, but no error in failure byte =>
-            # check LatchFailure and reset?
-
+            # Check if that has helped
+            error = self.GetFailureByte()
+            status = self.GetActualStatus()
             if error:
-                raise HwError("Device reports error %04X, power cycle the light source. "
+                raise HwError("Device reports error 0x%04X, power cycle the light source. "
                               "If the problem persists, contact a support technician." %
                               (error,))
 
@@ -879,6 +892,9 @@ class HubxXSimulator(object):
         self._output_buf = ""  # what the commands sends back to the "host computer"
         self._input_buf = ""  # what we receive from the "host computer"
 
+        # For simulating a "small error" (calling reset will fix it)
+        self._error = 0x0001  # In error state, but it's now fine
+
         # Sub devices info: channel -> wavelength (nm) / power (mw)
         self._csi = {1: (400, 1400),
                      5: (500, 525),
@@ -949,7 +965,18 @@ class HubxXSimulator(object):
         elif com == "GSN":
             self._sendAnswer("GSN", chan, "123456.7")
         elif com == "GAS":
-            self._sendAnswer("GAS", chan, "02C2")  # Device on (bit 1) + Led ready (bit 6)
+            if self._error:
+                self._sendAnswer("GAS", chan, "00C9")  # Error
+            else:
+                self._sendAnswer("GAS", chan, "02C2")  # Device on (bit 1) + Led ready (bit 6)
+        elif com == "GFB":
+            self._sendAnswer("GFB", chan, "%04X" % self._error)
+        elif com == "GLF":
+            self._sendAnswer("GLF", chan, "0201")  # External interlock
+        elif com == "RsC":
+            # Hack to send both a confirmation and a $end command
+            self._sendAnswer("RsC", chan, ">\r$RsC")
+            self._error = 0
         elif com == "GOM":
             self._sendAnswer("GOM", chan, "FCFB")
         elif com == "SOM":
