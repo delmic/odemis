@@ -42,12 +42,15 @@ class OpticalLens(model.HwComponent):
     or the parabolic mirror and lens of a SPARC.
     It should "affect" the detector on which it's in front of.
     """
-    def __init__(self, name, role, mag, na=0.95, ri=1,
+
+    def __init__(self, name, role, mag, mag_choices=None, na=0.95, ri=1,
                  pole_pos=None, x_max=None, hole_diam=None,
                  focus_dist=None, parabola_f=None, rotation=None, **kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
+        mag_choices (None, list of floats > 0): list of allowed magnification ratio.
+          If None, the magnification will be allowed for any value between 1e-3 to 1e6.
         na (float > 0): numerical aperture
         ri (0.01 < float < 100): refractive index
         pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
@@ -77,7 +80,15 @@ class OpticalLens(model.HwComponent):
         self._hwVersion = name
 
         # allow the user to modify the value, if the lens is manually changed
-        self.magnification = model.FloatContinuous(mag, range=(1e-3, 1e6), unit="")
+        if mag_choices is None:
+            self.magnification = model.FloatContinuous(mag, range=(1e-3, 1e6), unit="")
+        else:
+            mag_choices = frozenset(mag_choices)
+            if mag not in mag_choices:
+                raise ValueError("mag (%s) is not within the mag_choices %s" %
+                                 (mag, mag_choices))
+            self.magnification = model.FloatEnumerated(mag, choices=mag_choices, unit="")
+
         self.numericalAperture = model.FloatContinuous(na, range=(1e-6, 1e3), unit="")
         self.refractiveIndex = model.FloatContinuous(ri, range=(0.01, 10), unit="")
 

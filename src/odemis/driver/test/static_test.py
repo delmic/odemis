@@ -56,6 +56,17 @@ class TestOpticalLens(unittest.TestCase):
         mag = 10.
         comp = static.OpticalLens("test", "lens", mag, pole_pos=(512.3, 400))
         self.assertEqual(mag, comp.magnification.value)
+        comp.magnification.value = 1.5  # should be allowed
+        comp.terminate()
+
+    def test_mag_choices(self):
+        mag_choices = [1, 1.5, 2.5]
+        comp = static.OpticalLens("test", "lens", 1, mag_choices=mag_choices)
+        self.assertEqual(1, comp.magnification.value)
+        self.assertEqual(comp.magnification.choices, set(mag_choices))
+        comp.magnification.value = 1.5  # should be allowed
+        with self.assertRaises(IndexError):
+            comp.magnification.value = 2.0
         comp.terminate()
 
 
