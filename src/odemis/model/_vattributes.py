@@ -29,6 +29,7 @@ import logging
 import numbers
 import numpy
 from odemis.util.weak import WeakMethod, WeakRefLostError
+import weakref
 import os
 import threading
 from types import NoneType
@@ -149,6 +150,11 @@ class VigilantAttribute(VigilantAttributeBase):
         self.pipe = None
         self.debug = False  # If True, this VA will print a call stack when its value is set
         self.max_discard = max_discard
+        
+        self._finalizer = weakref.ref(self, self.__finalize__)
+
+    def __finalize__(self):
+        self._unregister()
 
     def __default_setter(self, value):
         return value
@@ -325,9 +331,6 @@ class VigilantAttribute(VigilantAttributeBase):
         # publish locally
         VigilantAttributeBase.notify(self, v)
 
-    def __del__(self):
-        self._unregister()
-
 
 # noinspection PyBroadException
 class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
@@ -348,6 +351,8 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._ctx = None
         self._commands = None
         self._thread = None
+
+        self._finalizer = weakref.ref(self, self.__finalize__)
 
     @property
     def value(self):
@@ -451,7 +456,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         if self._commands:
             self._commands.send("UNSUB")
 
-    def __del__(self):
+    def __finalize__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
         try:
             if self._thread:
