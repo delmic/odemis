@@ -132,7 +132,7 @@ class VigilantAttribute(VigilantAttributeBase):
 
         self.readonly = readonly
         if setter is None:
-            self._setter = self.__default_setter
+            self._setter = WeakMethod(self.__default_setter)
         else:
             self._setter = WeakMethod(setter) # to avoid cycles
 
