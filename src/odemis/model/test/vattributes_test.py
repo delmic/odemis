@@ -63,6 +63,15 @@ class VigilantAttributeTest(unittest.TestCase):
 
         self.assertTrue(prop.value == 0)
         self.assertTrue(self.called == 2)
+        
+    def test_del(self):
+        """
+        Test that the VA is properly deleted.
+        """
+        prop = model.IntVA(2)
+        ref = weakref.ref(prop)
+        del prop
+        self.assertEqual(ref(), None)
 
     def test_pretty_str(self):
         prop = model.IntVA(2)
