@@ -57,6 +57,9 @@ export NOMANUAL=1
 # This environment variable (should) make the driver test not try to use real hardware (only simulator)
 export TEST_NOHW=1
 
+# This environment variable makes the bugreporter test skip test cases that involve ticket creation
+export TEST_SUPPORT_TICKET=1
+
 TESTLOG=./unittest-full-$DATE.log
 # make sure it is full path
 TESTLOG="$(readlink -m "$TESTLOG")"
