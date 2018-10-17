@@ -44,6 +44,7 @@ from odemis.model import (isasync, ParallelThreadPoolExecutor,
 from odemis.util import driver, TimeoutError
 import os
 import random
+import re
 import serial
 import struct
 import threading
@@ -55,6 +56,7 @@ class TMCLError(Exception):
     def __init__(self, status, value, cmd, *args, **kwargs):
         super(TMCLError, self).__init__(status, value, cmd, *args, **kwargs)
         self.args = (status, value, cmd)
+        self.errno = status
 
     def __str__(self):
         status, value, cmd = self.args
@@ -87,6 +89,10 @@ USE_INTERNAL_UNIT_429 = {1110, 1140, 3110, 6110}
 
 # Info for storing config data that is not directly recordable in EEPROM
 UC_FORMAT = 1  # Version number
+
+# List of models which support the current UC_FORMAT
+UC_SUPPORTED_MODELS = {1110, 1140, 3110, 6110}
+
 # Contains also the number of axes
 # Axis param number -> size (in bits) + un/signed (negative if signed)
 UC_APARAM = OrderedDict((
@@ -155,7 +161,7 @@ class TMCLController(model.Actuator):
     def __init__(self, name, role, port, axes, ustepsize, address=None,
                  rng=None, unit=None, abs_encoder=None,
                  refproc=None, refswitch=None, temp=False,
-                 minpower=10.8, **kwargs):
+                 minpower=10.8, param_file=None, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
@@ -189,6 +195,8 @@ class TMCLController(model.Actuator):
          (10 mV <-> 1 °C)
         minpower (0<=float): minimum voltage supplied to be functional. If the
           device receives less than this, an error will be reported at initialisation.
+        param_file (str or None): (absolute) path to a tmcm.tsv file which will
+          be used to initialise the axis parameters (and IO).
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
         """
@@ -355,7 +363,23 @@ class TMCLController(model.Actuator):
         except Exception:
             logging.exception("Error during user config extraction")
         else:
-            logging.debug("Extracted config %s", axis_params)
+            logging.debug("Extracted config: %s, %s", axis_params, io_config)
+            self.apply_config(axis_params, io_config)
+
+        if param_file:
+            try:
+                f = open(param_file)
+            except Exception as ex:
+                raise ValueError("Failed to open file %s: %s" % (param_file, ex))
+            try:
+                axis_params, global_params, io_config = self.parse_tsv_config(f)
+            except Exception as ex:
+                raise ValueError("Failed to parse file %s: %s" % (param_file, ex))
+            if global_params:
+                # All global parameters can be recorded in the flash,
+                # so we don't support reading them live, to avoid confusion.
+                raise ValueError("Param file contain global parameters (G0), which should be set via tmcmconfig")
+            logging.debug("Extracted param file config: %s, %s", axis_params, io_config)
             self.apply_config(axis_params, io_config)
 
         # Note: if multiple instances of the driver are running simultaneously,
@@ -521,7 +545,7 @@ class TMCLController(model.Actuator):
 
     # The next three methods are to handle the extra configuration saved in user
     # memory (global param, bank 2)
-    # Note: there is no way to read the config from the live memory because it
+    # Note: there is no method to read the config from the live memory because it
     # is not possible to read the current output values (written by SetIO()).
 
     def apply_config(self, axis_params, io_config):
@@ -545,6 +569,9 @@ class TMCLController(model.Actuator):
         io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
           Note that all the data in UC_OUT must be defined
         """
+        if not self._modl in UC_SUPPORTED_MODELS:
+            logging.warning("User config is not officially supported on TMCM-%s", self._modl)
+
         naxes = max(ax for ax, ad in axis_params.keys()) + 1
 
         # TODO: special format for storing _all_ the axes param (for the 3214)
@@ -588,6 +615,10 @@ class TMCLController(model.Actuator):
         raise:
             TypeError: the configuration saved doesn't appear to be valid
         """
+        if not self._modl in UC_SUPPORTED_MODELS:
+            logging.info("User config doesn't support TMCM-%s, so not reading it", self._modl)
+            return {}, {}
+
         # Read header (and check it makes sense)
         h = self.GetGlobalParam(2, 0)
         sh = struct.pack(">i", h)
@@ -634,6 +665,46 @@ class TMCLController(model.Actuator):
                 i += 1
 
         return axis_params, io_config
+
+    @staticmethod
+    def parse_tsv_config(f):
+        """
+        Parse a tab-separated value (TSV) file in the following format:
+          bank/axis    address   value    # comment
+          bank/axis can be either G0 -> G3 (global: bank), A0->A5 (axis: number), or O0 -> 02 (output: bank)
+          address is between 0 and 255
+          value is a number
+        f (File): opened file
+        return:
+          axis_params (dict (int, int) -> int): axis number/param number -> value
+          global_params (dict (int, int) -> int): bank/param number -> value
+          io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+        """
+        axis_params = {}  # (axis/add) -> val (int)
+        global_params = {}  # (bank/add) -> val (int)
+        io_config = {}  # (bank/port) -> val (int)
+
+        # read the parameters "database" the file
+        for l in f:
+            # comment or empty line?
+            mc = re.match(r"\s*(#|$)", l)
+            if mc:
+                logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
+                continue
+            m = re.match(r"(?P<type>[AGO])(?P<num>[0-9]+)\t(?P<add>[0-9]+)\t(?P<value>[0-9]+)\s*(#.*)?$", l)
+            if not m:
+                raise ValueError("Failed to parse line '%s'" % l.rstrip("\n\r"))
+            typ, num, add, val = m.group("type"), int(m.group("num")), int(m.group("add")), int(m.group("value"))
+            if typ == "A":
+                axis_params[(num, add)] = val
+            elif typ == "G":
+                global_params[(num, add)] = val
+            elif typ == "O":
+                io_config[(num, add)] = val
+            else:
+                raise ValueError("Unexpected line '%s'" % l.rstrip("\n\r"))
+
+        return axis_params, global_params, io_config
 
     # TODO: finish this method and use where possible
     def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
@@ -1225,9 +1296,12 @@ class TMCLController(model.Actuator):
         raise:
             IOError: if timeout happen
         """
+        # TODO: compute timeout based on the axis range, and ref speed.
+        timeout = 60  # s
+        endt = time.time() + timeout
         try:
             # wait 60 s max
-            for i in range(6000):
+            while time.time() < endt:
                 if self._refproc_cancelled[axis].wait(0.01):
                     break
                 if not self.GetStatusRefSearch(axis):
@@ -1236,7 +1310,7 @@ class TMCLController(model.Actuator):
             else:
                 self.StopRefSearch(axis)
                 logging.warning("Reference search failed to finish in time")
-                raise IOError("Timeout after 60s when referencing axis %d" % axis)
+                raise IOError("Timeout after %g s when referencing axis %d" % (timeout, axis))
 
             if self._refproc_cancelled[axis].is_set():
                 logging.debug("Referencing for axis %d cancelled while running", axis)

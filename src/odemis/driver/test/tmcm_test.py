@@ -115,6 +115,25 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
+    def test_param_file(self):
+        """
+        Check the tsv file is read properly
+        """
+        # Very simple TSV file
+        PARAM_FILE = "tmcm_test.tmcm.tsv"
+        f = open(PARAM_FILE, "w")
+        f.write("A0\t4\t500")  # Default value of simulator is 1024
+        f.close()
+
+        dev = CLASS(param_file=PARAM_FILE, **KWARGS_SIM)
+
+        self.assertGreater(len(dev.axes), 0)
+        self.assertEqual(dev.GetAxisParam(0, 4), 500)
+        self.assertEqual(dev.GetAxisParam(1, 4), 1024)
+
+        dev.terminate()
+        os.remove(PARAM_FILE)
+
 
 # @skip("faster")
 class TestActuator(unittest.TestCase):

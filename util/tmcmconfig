@@ -8,6 +8,9 @@
 #            Address is between 0 and 255
 #                     Value a number (actual allowed values depend on the parameter)
 # The recommend file extension is '.tmcm.tsv'
+# To test:
+# tmcmconfig --port "/dev/fake6" --read test.tmcm.tsv
+# tmcmconfig --port "/dev/fake6" --write test.tmcm.tsv
 '''
 Created on September 2015
 
@@ -91,6 +94,7 @@ OUT_CONFIG = {  # Saved in user config
     (0, 0): "Pull-ups for reference switches",
 }
 
+# (port/add) -> val (int)
 OUT_CONFIG_DEFAULT = {
     (0, 0): 3,
 }
@@ -208,31 +212,22 @@ def read_param(ctrl, f):
 def write_param(ctrl, f):
     # First parse the file to check if it completely makes sense before actually
     # writing it.
+
+    # read the parameters "database" from the file
+    all_axis_params, global_params, io_config_read = tmcm.TMCLController.parse_tsv_config(f)
+
+    # Put some default values in IO config
+    io_config = OUT_CONFIG_DEFAULT.copy()
+    io_config.update(io_config_read)
+
+    # separate the standard axis parameters from the ones recorded in the user config
     axis_params = {}  # (axis/add) -> val (int)
     axis_params_user = {}  # (axis/add) -> val (int)
-    global_params = {}  # (bank/add) -> val (int)
-    io_config = OUT_CONFIG_DEFAULT.copy()  # (bank/add) -> val (int)
-
-    # read the parameters "database" from stdin
-    for l in f:
-        # comment or empty line?
-        mc = re.match(r"\s*(#|$)", l)
-        if mc:
-            logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
-            continue
-        m = re.match(r"(?P<type>[AGO])(?P<num>[0-9]+)\t(?P<add>[0-9]+)\t(?P<value>[0-9]+)\s*(#.*)?$", l)
-        if not m:
-            raise ValueError("Failed to parse line '%s'" % l.rstrip("\n\r"))
-        typ, num, add, val = m.group("type"), int(m.group("num")), int(m.group("add")), int(m.group("value"))
-        if typ == "A":
-            if add in tmcm.UC_APARAM:
-                axis_params_user[(num, add)] = val
-            else:
-                axis_params[(num, add)] = val
-        elif typ == "G":
-            global_params[(num, add)] = val
+    for (num, add), val in all_axis_params.items():
+        if add in tmcm.UC_APARAM:
+            axis_params_user[(num, add)] = val
         else:
-            io_config[(num, add)] = val
+            axis_params[(num, add)] = val
 
     logging.debug("Parsed axis parameters as:\n%s", axis_params)
     logging.debug("Parsed user axis parameters as:\n%s", axis_params_user)
