@@ -52,22 +52,38 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               inverted=["x"])
 
 # For testing encoder
-KWARGS_ENC = dict(name="test", role="selector", port=PORT,
+KWARGS_AENC = dict(name="test", role="selector", port=PORT,
               axes=["x"],
               ustepsize=[122e-9],  # rad/µstep
               unit=["rad"],
               abs_encoder=[True],
               )
 
+# For testing 3214 (relative encoder + param_file)
+ABS_PATH = os.path.abspath(os.path.dirname(__file__))
+KWARGS_RENC = dict(name="test", role="stage",
+              port=PORT,
+              axes=["x", "y"],
+              ustepsize=[10e-9, 16e-9],
+              rng=[[-15.e-3, 15.e-3], [-1e-3, 150e-3]],  # m, min/max
+              abs_encoder=[False, False],
+              refproc="Standard",
+              # minpower=20,  # Expects 24V
+              param_file=ABS_PATH + "/tmcm3214.tmcm.tsv",
+              )
+
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "Standard"
 KWARGS_SIM["port"] = "/dev/fake6"
-KWARGS_ENC_SIM = dict(KWARGS_ENC)
-KWARGS_ENC_SIM["port"] = "/dev/fake1"
+KWARGS_AENC_SIM = dict(KWARGS_AENC)
+KWARGS_AENC_SIM["port"] = "/dev/fake1"
+KWARGS_RENC_SIM = dict(KWARGS_RENC)
+KWARGS_RENC_SIM["port"] = "/dev/fake3"
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
-    KWARGS_ENC = KWARGS_ENC_SIM
+    KWARGS_AENC = KWARGS_AENC_SIM
+    KWARGS_RENC = KWARGS_RENC_SIM
 
 
 # @skip("faster")
@@ -106,7 +122,7 @@ class TestStatic(unittest.TestCase):
         """
         Just makes sure we don't (completely) break the simulator after an update
         """
-        dev = CLASS(**KWARGS_ENC_SIM)
+        dev = CLASS(**KWARGS_AENC_SIM)
 
         self.assertGreater(len(dev.axes), 0)
         for axis in dev.axes:
@@ -241,6 +257,7 @@ class TestActuator(unittest.TestCase):
         move_back = {'x':-1e-3}
         start = time.time()
         expected_time = 4 * move_forth["x"] / self.dev.speed.value["x"]
+        logging.info("Speed = %g m/s -> expecting %g s", self.dev.speed.value["x"], expected_time)
         f0 = self.dev.moveRel(move_forth)
         f1 = self.dev.moveRel(move_back)
         f2 = self.dev.moveRel(move_forth)
@@ -436,10 +453,10 @@ class TestActuator(unittest.TestCase):
         self.assertFalse(all(self.dev.referenced.value.values()))
 
 
-class TestActuatorEnc(TestActuator):
+class TestActuatorAbsEnc(TestActuator):
 
     def setUp(self):
-        self.dev = CLASS(**KWARGS_ENC)
+        self.dev = CLASS(**KWARGS_AENC)
         self.orig_pos = dict(self.dev.position.value)
 
     def test_move_circle(self):
@@ -463,6 +480,14 @@ class TestActuatorEnc(TestActuator):
             f.result()
             self.assertTrue(self.dev.referenced.value[a])
             # position is not 0, as it's not really referenced!
+
+
+class TestActuatorRelEnc(TestActuator):
+
+    def setUp(self):
+        self.dev = CLASS(**KWARGS_RENC)
+        self.orig_pos = dict(self.dev.position.value)
+
 
 
 if __name__ == "__main__":

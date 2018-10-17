@@ -1,0 +1,28 @@
+# Parameters from TMCM-3214 (firmware 1.09), address 5
+# Bank/Axis	Address	Value	Description
+# Axis 0 = S
+A0	4	5120	# Maximum positioning speed
+A0	5	5110	# Maximum acceleration
+A0	6	20	# Absolute max current
+A0	7	0	# Standby current
+A0	16	0	# Velocity V1 (0 = first phase disabled)
+A0	127	1	# Relative positionning option (1 = actual pos, as expected by the driver)
+A0	140	8	# Microstep resolution
+A0	193	5	# Reference search mode
+A0	194	15000	# Reference search speed
+A0	195	3000	# Reference switch speed
+A0	210	500	# Encounder counts per round
+A0	212	10000	# Maximum encoder deviation (encoder steps) 0.1mm
+
+# Axis 1 = L (long range, first to be parked)
+A1	4	5120	# Maximum positioning speed
+A1	5	5110	# Maximum acceleration
+A1	6	20	# Absolute max current
+A1	7	0	# Standby current
+A1	127	1	# Relative positionning option (1 = actual pos, as expected by the driver)
+A1	140	8	# Microstep resolution
+A1	193	1	# Reference search mode (1 = left switch)
+A1	194	100000	# Reference search speed
+A1	195	3000	# Reference switch speed
+A1	210	800	# Encounder counts per round
+#A1	212	512	# Maximum encoder deviation (encoder steps)
