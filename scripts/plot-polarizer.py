@@ -9,8 +9,13 @@ This is a script to acquire light at different polarizer angles, and plots the
 brightness for the each angles.
 
 run as:
-./scripts/plot-polarizer.py --polarizer qwp --output qwp.tsv
 ./scripts/plot-polarizer.py --polarizer linear --output linear.tsv
+# Now, compensate the offset with:
+odemis-cli --update-metadata lin-pol POS_COR 0.1 # rad
+
+./scripts/plot-polarizer.py --polarizer qwp --output qwp.tsv
+# Now compensate the offset with:
+odemis-cli --update-metadata quarter-wave-plate POS_COR -0.15 # rad
 
 
 The configuration used is the settings of the hardware just _before_ starting
@@ -50,7 +55,7 @@ def acquire_angles(polarizer, angles):
             i += 1
             logging.info("Request move to target position %.8f rad (%d/%d)",
                          a, i, len(angles))
-            polarizer.moveAbs({'rz': a}).result()
+            polarizer.moveAbs({'rz': a % (2 * math.pi)}).result()
             brightness.append(numpy.average(ccd.data.get()))
     finally:
         # return to original position
@@ -78,14 +83,19 @@ def main(args):
         if "." not in options.filename[-5:]:
             raise ValueError("Output argument must contain extension, "
                              "but got '%s'" % (options.filename,))
+
         if options.polarizer == "linear":
             role = "lin-pol"
-            amax = math.pi  # 180°
         else: # qwp
+            # Search for qwp = 0 by optimizing RHC
             role = "quarter-wave-plate"
-            amax = math.pi / 2  # 90°
+            logging.info("Moving the linear polarizer to positive diagonal")
+            linpol = model.getComponent(role="lin-pol")
+            linpol.moveAbsSync({"rz": math.radians(45)})
+
         polarizer = model.getComponent(role=role)
-        angles = numpy.linspace(0, amax, 90)
+        # 180° (every 2°) + 25% to check it's indeed repeating
+        angles = numpy.arange(0, math.pi * 1.25, math.radians(2))
         brightness = acquire_angles(polarizer, angles)
         logging.debug("Acquired brightness: %s", brightness)
         
