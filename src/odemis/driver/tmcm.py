@@ -329,6 +329,7 @@ class TMCLController(model.Actuator):
         self._executor = ParallelThreadPoolExecutor()  # one task at a time
 
         self._abs_encoder = {}  # int -> bool: axis ID -> use encoder position
+        self._ref_max_length = {}  # int -> float: axis ID -> max distance during referencing
         axes_def = {}
         for n, i in self._name_to_axis.items():
             if not n:
@@ -351,6 +352,13 @@ class TMCLController(model.Actuator):
                 if not sw_rng[0] <= 0 <= sw_rng[1]:
                     raise ValueError("Range of axis %d doesn't include 0: %s" % (i, sw_rng))
                 phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
+                self._ref_max_length[i] = phy_rng[1] - phy_rng[0]
+            else:
+                # For safety, for referencing timeout, consider that the a range
+                # is not too long. If it times out, the user should specify a
+                # axis range.
+                # => 50 mm.
+                self._ref_max_length[i] = 50e-3  # m
 
             if not isinstance(unit[i], basestring):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
@@ -1078,6 +1086,8 @@ class TMCLController(model.Actuator):
                 # instead of setting the parameter!
                 self.MotorStop(axis)
                 ep = self.GetAxisParam(axis, 209)
+                ap = self.GetAxisParam(axis, 1)
+                logging.debug("Reseting actual position from %d to %d usteps", ap, ep)
                 self.SetAxisParam(axis, 1, ep)
 
     def _setInputInterruptFF(self, axis):
@@ -1343,11 +1353,18 @@ class TMCLController(model.Actuator):
         raise:
             IOError: if timeout happen
         """
-        # TODO: compute timeout based on the axis range, and ref speed.
-        timeout = 60  # s
+        # Guess the maximum duration based on the whole range (can't move more
+        # than that) at the search speed, + 50% for estimating the switch
+        # search. Then double it and add 1 s for margin.
+        # We could try to be even more clever, by check the referencing mode,
+        # but that shouldn't affect the time by much.
+        ref_speed = self._readSpeed(axis, 194)  # The fast speed
+        d = self._ref_max_length[axis]
+        dur_search = driver.estimateMoveDuration(d, ref_speed, self._readAccel(axis))
+        timeout = dur_search * 1.5 * 2 + 1  # s
+        logging.debug("Estimating a referencing of at most %g s", timeout)
         endt = time.time() + timeout
         try:
-            # wait 60 s max
             while time.time() < endt:
                 if self._refproc_cancelled[axis].wait(0.01):
                     break
@@ -1437,11 +1454,14 @@ class TMCLController(model.Actuator):
         self.speed._value = speed
         self.speed.notify(self.speed.value)
 
-    def _readSpeed(self, a):
+    def _readSpeed(self, a, param=4):
         """
+        param (int): the parameter number from which to read the speed.
+          It's normally 4 (= maximum speed), but could also be 194 (reference
+          search) or 195 (reference switch)
         return (float): the speed of the axis in m/s
         """
-        velocity = self.GetAxisParam(a, 4)
+        velocity = self.GetAxisParam(a, param)
         if self._modl in USE_INTERNAL_UNIT_429:
             # As described in section 6.1.1:
             #       fCLK * velocity
@@ -1736,7 +1756,7 @@ class TMCLController(model.Actuator):
         moving_axes = set(axes)
 
         last_upd = time.time()
-        dur = max(0.01, min(end - last_upd, 60))
+        dur = max(0.01, min(end - last_upd, 100))
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
@@ -2034,6 +2054,8 @@ class TMCMSimulator(object):
                            8: 1, # target reached? (unused directly)
                            153: 0,  # ramp div
                            154: 3, # pulse div
+                           194: 1024,  # reference search speed
+                           195: 200,  # reference switch speed
                            197: 10,  # previous position before referencing (unused directly)
         }
         self._astates = [dict(self._orig_axis_state) for i in range(self._naxes)]
