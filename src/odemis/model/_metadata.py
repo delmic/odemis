@@ -43,6 +43,7 @@ MD_BASELINE = "Baseline value" # ADU, int or float (same as image data) represen
 MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel (on a CCD/CMOS)
 MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre of 2 pixels on the detector sensor
 MD_SENSOR_SIZE = "Sensor size" # px, px, maximum resolution that can be acquire by the detector
+MD_RESOLUTION = "Resolution"  # number of px in x,y after binning
 MD_SENSOR_TEMP = "Sensor temperature" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre. X goes right, and Y goes up
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
@@ -73,6 +74,7 @@ MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 # not be used simultaneously.
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
+MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
 
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
 MD_TIME_OFFSET = "Time offset"  # Time of the first 'pixel' in the time dimension (added to ACQ_DATE), default is 0
@@ -88,6 +90,8 @@ MD_AT_CL = "Cathodoluminescence"
 MD_AT_OVV_FULL = "Full overview"
 MD_AT_OVV_TILES = "Built-up overview"
 MD_AT_HISTORY = "History"
+MD_AT_STREAK = "Streak"
+MD_AT_STREAK_PC = "Streak Photocounting"
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
@@ -107,6 +111,13 @@ MD_POL_POSDIAG = "posdiag"  # (string) polarization analyzer position
 MD_POL_NEGDIAG = "negdiag"  # (string) polarization analyzer position
 MD_POL_RHC = "rhc"  # (string) polarization analyzer position
 MD_POL_LHC = "lhc"  # (string) polarization analyzer position
+
+MD_STREAK_TIMERANGE = "Streak Time Range"  # Time range for one streak/sweep
+MD_STREAK_MCPGAIN  = "Streak MCP Gain"  # Multiplying gain for microchannel plate
+MD_STREAK_MODE = "Streak Mode"  # Mode of streak camera (Focus or Operate)
+
+MD_DELAY_A = "Delay A"  # Delay A between ext. trigger and starting of the streak/sweeping
+MD_DELAY_REPRATE = "Repetition Rate"  # Repetition Rate of the trigger signal
 
 MD_DET_TYPE = "Detector type"
 # The following tags are to be used as the values of MD_DET_TYPE
