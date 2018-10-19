@@ -54,25 +54,38 @@ class RemoteExError(StandardError):
         }
 
 
-class CancelledError(Exception):  #TODO needed?
+class CancelledError(Exception):  # TODO
     """
     raise to indicate the acquisition is cancelled and must stop
     """
     pass
 
 
-class OrcaFlash(model.DigitalCamera):
+class ReadoutCamera(model.DigitalCamera):
     """
     Represents Hamamatsu readout camera.
     """
 
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name, role, parent, children=None, daemon=None, **kwargs):
         """ Initializes the Hamamatsu OrcaFlash readout camera.
         :parameter name: (str) as in Odemis  # TODO
         :parameter role: (str) as in Odemis  # TODO
         :parameter parent: class streakcamera
         """
-        super(OrcaFlash, self).__init__(name, role, parent=parent, **kwargs)  # init HwComponent
+        # if "spectrograph" in kwargs.keys():
+        #     # remove spectrograph from kwargs to not pass it to init of HwComponent
+        #     self._spectrograph = kwargs.pop("spectrograph")
+
+        try:
+            self._spectrograph = children["spectrograph"]
+        except (KeyError, TypeError):
+            logging.debug("No spectrograph specified. Run streakcamera without spectrograph.")
+            self._spectrograph = None
+
+        # self.children.value.add(self._spectrograph)  # add spectrograph to children-VA  # TODO no children VA
+
+        super(ReadoutCamera, self).__init__(name, role, parent=parent,
+                                            daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
 
@@ -89,14 +102,24 @@ class OrcaFlash(model.DigitalCamera):
         parent.CamParamSet("Setup", "HWidth", '1344')
         parent.CamParamSet("Setup", "ShowGainOffset", 'True')
 
-        # TODO trouble reading see readCommandResponse
-        # self._hwVersion = parent.CamParamGet("Setup", "CameraInfo")
-        # self._metadata[model.MD_HW_VERSION] = self._hwVersion
-        # self._swVersion = self._hwVersion[3]
-        # self._metadata[model.MD_SW_VERSION] = self._swVersion
-        # self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING # ?? MD_DT_NORMAL
+        # TODO make nice!
+        self.parent._getReadoutCamInfo = True
+        cam_info = parent.CamParamGet("Setup", "CameraInfo")
+        try:
+            self._hwVersion = cam_info[0][:3]
+        except:
+            self._hwVersion = "dummy"
+            logging.debug("Could not get hardware information for streak readout camera.")
+        self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        try:
+            self._swVersion = cam_info[0][3:]
+        except:
+            self._swVersion = "dummy"
+            logging.debug("Could not get software information for streak readout camera.")
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
-        # output CameraInfo:
+        # output CameraInfo should be:
         # 'Product number: C13440-20C'
         # 'Serial number: 301730'
         # 'Firmware: 4.20.B'
@@ -113,21 +136,30 @@ class OrcaFlash(model.DigitalCamera):
         self._shape = resolution + (2 ** 16,)
 
         # physical pixel size is 6.5um x 6.5um
-        pixelsize = (6.5e-06, 6.5e-06)
-        self.pixelSize = model.VigilantAttribute(pixelsize, unit="m", readonly=True)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
+        sensor_pixelsize = (6.5e-06, 6.5e-06)
+        # self.pixelSize = model.VigilantAttribute(pixelsize, unit="m", readonly=True)
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize   #self.pixelSize.value
 
-        self._binning = self._getBinning()  # used by resolutionFitter()
+        self._binning = self._getBinning()  # used by _setResolution
 
         # need to be before binning, as it is modified when changing binning
-        # _resolution = physical pixelsize * _binning / _magnification
         _resolution = (int(resolution[0]/self._binning[0]), int(resolution[1]/self._binning[1]))
-        self.resolution = model.ResolutionVA(_resolution, ((1, 1), resolution), setter=self._setResolution)
-        self._metadata[model.MD_RESOLUTION] = self.resolution
+        self.resolution = model.ResolutionVA(_resolution, ((1, 1), resolution), setter=self._setResolution,
+                                             readonly=True)
+        self._metadata[model.MD_RESOLUTION] = self.resolution.value
 
         choices_bin = self._getReadoutCamBinningChoices()
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
         self._metadata[model.MD_BINNING] = self.binning.value
+
+        # TODO _resolution = physical pixelsize * _binning / _magnification
+        # TODO in odemis resolution is number of pixels, resolution in odemis equals pixelsize
+        # TODO magnification only affects horizontal aka wavelength direction not time axis
+        # TODO does pixelSize include magnification but not binning? should include binning? why extra in updateWavelengthList?
+        magnification = float(1/1.)  # or 1/2.1 get value from streak Lens!!
+        pixelsize = sensor_pixelsize[0] * self._binning[0] / magnification
+        self.pixelSize = model.VigilantAttribute(pixelsize, unit="m", readonly=True)
+        self._metadata[model.MD_PIXEL_SIZE] = self.pixelSize
 
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
@@ -138,13 +170,19 @@ class OrcaFlash(model.DigitalCamera):
         # TODO Might be necessary to have multiple VAs in future for using other acq options in RemoteEx.
         range_exp = self._getCamExpTimeRange()
         self._exp_time = self._getCamExpTime()
-        self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self.setExposureTime)
+        self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
         self._metadata[model.MD_EXP_TIME] = self.exposureTime.value
-
         # Note: timeRange of streakunit > exposureTime readoutcam is possible and okay.
 
         self.readoutRate = model.VigilantAttribute(425000000, unit="Hz", readonly=True)  # MHz
         self._metadata[model.MD_READOUT_TIME] = 1 / self.readoutRate.value  # s
+
+        # spectrograph VAs after readout camera VAs
+        # TODO do? to have later local VAs in stream?
+        # TODO have a updateWavelength fct.
+        if self._spectrograph:
+            self._spectrograph.position.subscribe(self._updateWavelengthList)
+            self._updateWavelengthList()
 
         # for synchronized acquisition
         self._sync_event = None
@@ -153,16 +191,23 @@ class OrcaFlash(model.DigitalCamera):
         self.queue_events = collections.deque()
         self._acq_sync_lock = threading.Lock()
 
-        # # TODO move maybe to readoutcam
-        # # start thread, which keeps reading the dataport when an image/scaling table has arrived
-        # # after commandport thread to be able to set the RingBuffer
-        # # AcqLiveMonitor writes images to Ringbuffer, which we can read from
-        # # only works if we use "Live" or "SingleLive" mode
-        # self.parent.AcqLiveMonitor("RingBuffer", "10")  # TODO need to be handled in case we use other acq modes
-        # self.t_image = threading.Thread(target=self._getDataFromBuffer)
-        # self.t_image.start()
+        # start thread, which keeps reading the dataport when an image/scaling table has arrived
+        # after commandport thread to be able to set the RingBuffer
+        # AcqLiveMonitor writes images to Ringbuffer, which we can read from
+        # only works if we use "Live" or "SingleLive" mode
+        self.parent.AcqLiveMonitor("RingBuffer", "10")  # TODO need to be handled in case we use other acq modes
+        self.t_image = threading.Thread(target=self._getDataFromBuffer)
+        self.t_image.start()
 
-        self.data = streakCameraDataFlow(self._start, self._stop, self._sync)
+        self.data = streakCameraDataFlow(self._start, self._stop, self._sync, self._unsubscribe)
+
+    def _updateWavelengthList(self):
+        npixels = self.resolution.value[0]  # number of pixels, horizontal is wavelength
+        pxs = self.pixelSize.value[0] * self.binning.value[0]  # pixel size after binning (pixelSize includes magnification)
+        wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
+        # md = {model.MD_WL_LIST: wll}
+        # self.updateMetadata(md)
+        self._metadata[model.MD_WL_LIST] = wll  # TODO when saving the data after acq WL_LIST not recognized as C dim
 
     def _getReadoutCamBinningChoices(self):
         """
@@ -204,62 +249,32 @@ class OrcaFlash(model.DigitalCamera):
                    int(round(old_resolution[1] * change[1])))
 
         # fit
-        self.resolution.value = new_res
+        self.resolution._set_value(new_res, force_write=True)
 
         self._metadata[model.MD_BINNING] = self._binning  # update MD
 
+        if self._spectrograph:
+            self._updateWavelengthList()  # update WavelengthList when changing binning
+
         return self._binning
 
-    def _setResolution(self, value):
-        new_res = self.resolutionFitter(value)
-        self._metadata[model.MD_RESOLUTION] = new_res  # update MD
-        return new_res
-
-    def resolutionFitter(self, size_req):  # TODO do we need to do it that fancy?
-        # TODO think we can keep it simple as we do not provide to change the sensor size yet...
-        """
-        Finds a resolution allowed by the camera which fits best the requested
-          resolution.
-        size_req (2-tuple of int): resolution requested
-        returns (2-tuple of int): resolution which fits the camera. It is equal
-         or bigger than the requested resolution
-        """
+    def _setResolution(self, value):  # TODO "value" not used
+        """Sets the resolution VA.
+        So far the full field of view is always used. Therefore, resolution only changes with binnig."""
+        # TODO we can keep it simple as long as we do not provide to change the sensor size yet...
         resolution = self._shape[:2]
-        # max_size = (int(resolution[0] // self._binning[0]),
-        #             int(resolution[1] // self._binning[1]))  # floor division: not below zero
-
-        size = (int(resolution[0] // self._binning[0]),
+        new_res = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))  # floor division: not below zero
+        self._metadata[model.MD_RESOLUTION] = new_res  # update MD
+        self.resolution._set_value(new_res, force_write=True)
 
-        # smaller than the whole sensor
-        # size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
-        # # Note: the current binning is taken into account for the ranges
-        # ranges = (self._bin_to_resrng[0][self._binning[0]],
-        #           self._bin_to_resrng[1][self._binning[1]])
-        # size = (max(ranges[0][0], size[0]), max(ranges[1][0], size[1]))
-
-        return size
-
-    def getExposureTime(self):
-        """Get the exposure time from the VA.
-        :return: exposure time
-        """
-        exp_time = self._getCamExpTime()  # TODO why not directly call that one?
-        return exp_time
-
-    def setExposureTime(self, value):
-        """Set the exposure time VA.
-        :param value: exposure time to set
-        :return: exposure time
-        """
-        self._setCamExpTime(value)  # TODO why not directly call that one?
-        self._metadata[model.MD_EXP_TIME] = value  # update MD
-        return value
+        if self._spectrograph:
+            self._updateWavelengthList()  # update WavelengthList when changing binning
 
     def _getCamExpTimeRange(self):
         """
         Get min and max values for exposure time. Values are in order. First to fourth values see CamParamInfoEx.
-        :parameter location: (str) see CamParamGet
+        :parameter location: (str) see CamParamGet  # TODO keep for later when using different acq mode e.g. PC
         :return: tuple containing min and max exposure time
         """
         min_value = self.parent.CamParamInfoEx("Live", "Exposure")[4]
@@ -286,16 +301,19 @@ class OrcaFlash(model.DigitalCamera):
 
         return exp_time
 
-    def _setCamExpTime(self, exp_time):
+    def _setCamExpTime(self, value):
         """Translate exposure time into a for RemoteEx readable format.
         :parameter location: (str) see CamParamGet
         :parameter exp_time (float): exposure time"""
         try:
-            exp_time_raw = self.parent.convertTime2Unit(exp_time)
+            exp_time_raw = self.parent.convertTime2Unit(value)
         except Exception:
-            raise logging.debug("Exposure time of %s sec is not supported for read-out camera." % exp_time)
+            raise logging.debug("Exposure time of %s sec is not supported for read-out camera." % value)
 
         self.parent.CamParamSet("Live", "Exposure", exp_time_raw)
+        self._metadata[model.MD_EXP_TIME] = value  # update MD
+
+        return value
 
     def _start(self):
         """Start an acquisition.
@@ -336,6 +354,9 @@ class OrcaFlash(model.DigitalCamera):
             # softwareTrigger subscribes to onEvent method: if softwareTrigger.notify() called, onEvent method called
             self._sync_event.subscribe(self)  # must have onEvent method
 
+    def _unsubscribe(self):
+        self.parent._streakunit.MCPgain.value = 0
+
     @oneway
     def onEvent(self):
         """Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify())."""
@@ -354,137 +375,153 @@ class OrcaFlash(model.DigitalCamera):
         """
         pass  # TODO needed for MD? now handle update MD directly when updating the VAs.
 
-    # TODO move fct to readoutcam however, steakunit.mode VA needs to be available somehow....
-    # def _getDataFromBuffer(self):
-    #     """This method runs in a separate thread and waits for messages in queue indicating
-    #     that some data was received. The image is then received from the device via the dataport IP socket or
-    #     the vertical scaling table is received, which corresponds to a time range for a single sweep.
-    #     It corrects the vertical time information. The table contains the actual timestamps for each px.."""
-    #
-    #     # TODO need to check that there is an ringbuffer available!?
-    #
-    #
-    #     logging.debug("Starting data thread.")
-    #     time.sleep(2)
-    #     is_receiving_image = False
-    #
-    #     try:
-    #         while True:
-    #
-    #             if self._sync_event and not is_receiving_image:
-    #                 commandStatus = self.parent.AsyncCommandStatus()
-    #                 while int(commandStatus[1]) or int(commandStatus[2]):
-    #                     # TODO it can happen that we run into this loop, which is okay, but in general
-    #                     # it looks like that it happens when RemoteEx is not responding anymore...
-    #                     # RemoteEx does then not stop the acquisition properly if requested.
-    #                     time.sleep(0)
-    #                     self.parent.AcqStop()
-    #                     logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
-    #                 try:
-    #                     event_time = self.queue_events.popleft()
-    #                     logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
-    #                     self.parent.AcqStart(self.acqMode)
-    #                     is_receiving_image = True
-    #                 except IndexError:
-    #                     # No event (yet) => fine
-    #                     pass
-    #
-    #             rargs = self.parent.queue_img.get(block=True)  # block until receive something
-    #             logging.debug("Received message %s", rargs)
-    #
-    #             if rargs is None:  # if message is None end the thread
-    #                 return
-    #
-    #             # synchronized mode
-    #             if self._sync_event:
-    #                 if rargs == "start":
-    #                     logging.info("Received event trigger")
-    #                     continue
-    #                 else:
-    #                     logging.info("Get the synchronized image.")
-    #
-    #             # non-sync mode
-    #             else:
-    #                 while not self.parent.queue_img.empty():
-    #                     # keep reading to check if there might be a newer image for display
-    #                     # in case we are too slow with reading
-    #                     rargs = self.parent.queue_img.get(block=False)
-    #
-    #                     if rargs is None:  # if message is None end the thread
-    #                         return
-    #                 logging.info("No more images in queue, so get the image.")
-    #
-    #             if rargs == "F":  # Flush => the previous images are from the previous acquisition
-    #                 logging.debug("Acquisiton was stopped so flush previous images.")
-    #                 continue
-    #
-    #             self._metadata[model.MD_ACQ_DATE] = time.time()
-    #             # TODO more fancy maybe? metadata[model.MD_ACQ_DATE] = time.time() - (exposure_time + readout_time)
-    #
-    #             # get the image from the buffer
-    #             img_num = rargs[1]
-    #             img_info = self.parent.ImgRingBufferGet("Data", img_num)
-    #
-    #             # can be NoneType if img_num to high!!
-    #             # TODO looks like img_info can be empty/None type object -> need a check here?
-    #             # TODO can it be empty? Should there not first the Live acq start, and then getImage as we have the
-    #             # TODO lock for sending commands
-    #
-    #             img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive #TODO why 2
-    #             img_num_actual = img_info[4]
-    #
-    #             img = ""
-    #             try:
-    #                 while len(img) < img_size:  # wait until all bytes are received
-    #                     img += self.parent._dataport.recv(img_size)
-    #             except socket.timeout as msg:
-    #                 logging.error("Did not receive an image: %s", msg)
-    #                 continue
-    #
-    #             image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
-    #             image.shape = (int(img_info[1]), int(img_info[0]))
-    #
-    #             logging.debug("Requested image number %s, received image number %s from buffer."
-    #                           % (img_num, img_num_actual))
-    #
-    #             # # get the scaling table to correct the time axis
-    #             # # TODO only request scaling table if corresponding MD not available for this time range
-    #             # if self._streakunit.mode.value:
-    #             #     # TODO some sync problem might be here if a different command is in queue
-    #             #     # in between ImgRingBufferGet and ImgDataGet: check again!
-    #             #     scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")  # request scaling table
-    #             #
-    #             #     scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
-    #             #
-    #             #     # receive the bytes via the dataport
-    #             #     tab = ''
-    #             #     try:
-    #             #         while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
-    #             #             tab += self.parent._dataport.recv(scl_table_size)
-    #             #             table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
-    #             #             table_converted = table * self.parent.timeRangeConversionFactor  # convert to sec
-    #             #             self._metadata[model.MD_TIME_LIST] = table_converted
-    #             #     except socket.timeout as msg:
-    #             #         logging.error("Did not receive a scaling table: %s", msg)
-    #             #         continue
-    #             # else:
-    #             #     if model.MD_TIME_LIST in self._metadata.keys():
-    #             #         self._metadata.pop(model.MD_TIME_LIST, None)
-    #
-    #             md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
-    #             self.updateMetadata(md)  # merge dict
-    #             dataarray = model.DataArray(image, md)
-    #             self.data.notify(dataarray)  # pass the new image plus MD to the callback fct  #TODO correct?
-    #
-    #             if self._sync_event:
-    #                 is_receiving_image = False
-    #
-    #     except Exception:
-    #         logging.exception("Hamamatsu streak camera TCP/IP image thread failed.")
-    #     finally:
-    #         logging.info("Hamamatsu streak camera TCP/IP image thread ended.")
+    def updateMetadata(self, md):
+        """Create dict containing all metadata from the children readout camera, streak unit, delay genereator
+        and the metadata from the parent streak camera."""
+
+        md_devices = [self.parent._streakunit._metadata, self.parent._delaybox._metadata]
+
+        for md_dev in md_devices:
+            for key in md_dev.keys():
+                if key not in md.keys():
+                    md[key] = md_dev[key]
+                else:
+                    md[key].append(md_dev[key])  # TODO make nice
+            # md.update(md_child_dict)
+
+        return md
+
+    def _getDataFromBuffer(self):
+        """This method runs in a separate thread and waits for messages in queue indicating
+        that some data was received. The image is then received from the device via the dataport IP socket or
+        the vertical scaling table is received, which corresponds to a time range for a single sweep.
+        It corrects the vertical time information. The table contains the actual timestamps for each px.."""
+
+        # TODO need to check that there is an ringbuffer available!?
+        # TODO move fct to readoutcam see comment readoutcam
+
+        logging.debug("Starting data thread.")
+        time.sleep(1)
+        is_receiving_image = False
+
+        try:
+            while True:
+
+                if self._sync_event and not is_receiving_image:
+                    while int(self.parent.AsyncCommandStatus()[0]):
+                        time.sleep(0)
+                        logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
+                        # TODO if not finished after some time might be live mode, so StopAcq again
+                    try:
+                        event_time = self.queue_events.popleft()
+                        logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
+                        self.parent.AcqStart(self.acqMode)
+                        is_receiving_image = True
+                    except IndexError:
+                        # No event (yet) => fine
+                        pass
+
+                rargs = self.parent.queue_img.get(block=True)  # block until receive something
+                logging.debug("Received message %s", rargs)
+
+                if rargs is None:  # if message is None end the thread
+                    return
+
+                # synchronized mode
+                if self._sync_event:
+                    if rargs == "start":
+                        logging.info("Received event trigger")
+                        continue
+                    else:
+                        logging.info("Get the synchronized image.")
+
+                # non-sync mode
+                else:
+                    while not self.parent.queue_img.empty():
+                        # keep reading to check if there might be a newer image for display
+                        # in case we are too slow with reading
+                        rargs = self.parent.queue_img.get(block=False)
+
+                        if rargs is None:  # if message is None end the thread
+                            return
+                    logging.info("No more images in queue, so get the image.")
+
+                if rargs == "F":  # Flush => the previous images are from the previous acquisition
+                    logging.debug("Acquisiton was stopped so flush previous images.")
+                    continue
+
+                self._metadata[model.MD_ACQ_DATE] = time.time()
+                # TODO more fancy maybe? metadata[model.MD_ACQ_DATE] = time.time() - (exposure_time + readout_time)
+
+                # get the image from the buffer
+                img_num = rargs[1]
+                img_info = self.parent.ImgRingBufferGet("Data", img_num)
+
+                # can be NoneType if img_num to high!!
+                # TODO looks like img_info can be empty/None type object -> need a check here?
+                # TODO can it be empty? Should there not first the Live acq start, and then getImage as we have the
+                # TODO lock for sending commands
+
+                img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive #TODO why 2
+                img_num_actual = img_info[4]
+
+                img = ""
+                try:
+                    while len(img) < img_size:  # wait until all bytes are received
+                        img += self.parent._dataport.recv(img_size)
+                except socket.timeout as msg:
+                    logging.error("Did not receive an image: %s", msg)
+                    continue
+
+                image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
+                image.shape = (int(img_info[1]), int(img_info[0]))
+
+                logging.debug("Requested image number %s, received image number %s from buffer."
+                              % (img_num, img_num_actual))
+
+                # get the scaling table to correct the time axis
+                # TODO only request scaling table if corresponding MD not available for this time range
+                if self.parent._streakunit.streakMode.value:
+                    # TODO some sync problem might be here if a different command is in queue
+                    # in between ImgRingBufferGet and ImgDataGet: check again!
+                    # request scaling table
+                    scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")
+
+                    scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
+
+                    # receive the bytes via the dataport
+                    tab = ''
+                    try:
+                        while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
+                            tab += self.parent._dataport.recv(scl_table_size)
+                            table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
+                            table_converted = table * self.parent.timeRangeConversionFactor  # convert to sec
+                            self._metadata[model.MD_TIME_LIST] = table_converted
+                    except socket.timeout as msg:
+                        logging.error("Did not receive a scaling table: %s", msg)
+                        continue
+                else:
+                    if model.MD_TIME_LIST in self._metadata.keys():
+                        self._metadata.pop(model.MD_TIME_LIST, None)
+
+                md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
+                self.updateMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
+                dataarray = model.DataArray(image, md)
+                self.data.notify(dataarray)  # pass the new image plus MD to the callback fct
+
+                if self._sync_event:
+                    is_receiving_image = False
+
+        except Exception:
+            logging.exception("Hamamatsu streak camera TCP/IP image thread failed.")
+        finally:
+            logging.info("Hamamatsu streak camera TCP/IP image thread ended.")
 
     def terminate(self):
+        # terminate image thread
+        if self.t_image.isAlive():
+            self.parent.queue_img.put(None)
+            self.t_image.join(5)
         try:
             self._stop()  # stop any acquisition
         except Exception:  # TODO which exception?
@@ -496,27 +533,27 @@ class StreakUnit(model.HwComponent):
     Represents Hamamatsu streak unit.
     """
 
-    def __init__(self, name, role, parent, location, **kwargs):
-        super(StreakUnit, self).__init__(name, role, parent=parent, **kwargs)  # init HwComponent
+    def __init__(self, name, role, parent, daemon=None, **kwargs):
+        super(StreakUnit, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
-        self.location = location
+        self.location = "Streakcamera"  # don't change, internally needed by HPDTA/RemoteEx
 
-        self._hwVersion = parent.DevParamGet(location, "DeviceName")
+        self._hwVersion = parent.DevParamGet(self.location, "DeviceName")
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
 
         # Set parameters streak unit
-        parent.DevParamSet(location, "Time Range", "1 ns")
-        parent.DevParamSet(location, "MCP Gain", "0")
+        parent.DevParamSet(self.location, "Time Range", "1 ns")
+        parent.DevParamSet(self.location, "MCP Gain", "0")
         # Switch Mode to "Focus", MCPGain = 0 (implemented in RemoteEx and also here in the driver).
-        parent.DevParamSet(location, "Mode", "Focus")
+        parent.DevParamSet(self.location, "Mode", "Focus")
         # Resets behavior for a vertical single shot sweep: Automatic reset occurs after each sweep.
-        parent.DevParamSet(location, "Trig. Mode", "Cont")
+        parent.DevParamSet(self.location, "Trig. Mode", "Cont")
         # [Volt] Input and indication of the trigger level for the vertical sweep.
-        parent.DevParamSet(location, "Trig. level", "1") # TODO??
-        parent.DevParamSet(location, "Trig. slope", "Rising")
+        parent.DevParamSet(self.location, "Trig. level", "1") # TODO??
+        parent.DevParamSet(self.location, "Trig. slope", "Rising")
 
-        parent.DevParamGet(location, "Trig. status")  # read only
+        parent.DevParamGet(self.location, "Trig. status")  # read only
 
         # Ready: Is displayed when the system is ready to receive a trigger signal.
         # Fired: Is displayed when the system has received a trigger signal but the sweep has not
@@ -525,24 +562,24 @@ class StreakUnit(model.HwComponent):
         # Do Reset: Do Reset can be selected when the system is in trigger mode Fired. After selecting Do
         # Reset the trigger status changes to Ready.
 
-        self._metadata[model.MD_STREAK_TIMERANGE] = parent.DevParamGet(location, "Time Range")
-        self._metadata[model.MD_STREAK_MCPGAIN] = parent.DevParamGet(location, "MCP Gain")
-        self._metadata[model.MD_STREAK_MODE] = parent.DevParamGet(location, "Mode")
+        self._metadata[model.MD_STREAK_TIMERANGE] = parent.DevParamGet(self.location, "Time Range")
+        self._metadata[model.MD_STREAK_MCPGAIN] = parent.DevParamGet(self.location, "MCP Gain")
+        self._metadata[model.MD_STREAK_MODE] = parent.DevParamGet(self.location, "Mode")
 
         # VAs
-        self.mode = model.BooleanVA(False, setter=self._updateMode)  # default False see set params above
+        self.streakMode = model.BooleanVA(False, setter=self._updateStreakMode)  # default False see set params above
 
-        gain = self._convertOutput2Value(self.parent.DevParamGet(location, "MCP Gain"))
-        self.MCPgain = model.VigilantAttribute(gain, setter=self._updateMCPGain)
+        gain = self._convertOutput2Value(self.parent.DevParamGet(self.location, "MCP Gain"))
+        range_gain = (0, 63)  # TODO get the range via RemoteEx
+        self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._updateMCPGain)
 
         timeRange = self._getStreakUnitTimeRange()
         choices = set(self._getStreakUnitTimeRangeChoices())
-        self.timeRange = self.exposureTime = model.FloatEnumerated(timeRange, choices,
-                                                                   setter=self._updateTimeRange)
+        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._updateTimeRange)
         # read-only VAs
         # TODO: Trig. Mode, Trig. level, Trig. slope??? plus MD!?
 
-    def _updateMode(self, value):
+    def _updateStreakMode(self, value):
         """
         update the mode VA
         """
@@ -584,7 +621,7 @@ class StreakUnit(model.HwComponent):
         elif isinstance(input_value, int):
             return str(input_value)
         else:
-            logging.debug("Requested conversion of input type %s is not supported.", type(input))
+            raise ValueError("Requested conversion of input type %s is not supported.", type(input))
 
     def _convertOutput2Value(self, output_value):
         """Converts an output of type list and length 1 containing strings to a value
@@ -622,13 +659,13 @@ class StreakUnit(model.HwComponent):
         try:
             time_range_raw = self.parent.convertTime2Unit(time_range)
         except Exception:
-            raise logging.debug("Time range of %s sec for one sweep is not supported for streak unit." % time_range)
+            raise ValueError("Time range of %s sec for one sweep is not supported for streak unit." % time_range)
 
         self.parent.DevParamSet(location, "Time Range", time_range_raw)
 
     def terminate(self):
         self.MCPgain.value = 0
-        self.mode = False
+        self.streakMode = False
 
 
 class DelayGenerator(model.HwComponent):
@@ -636,38 +673,36 @@ class DelayGenerator(model.HwComponent):
     Represents delay generator.
     """
 
-    def __init__(self, name, role, parent, location, **kwargs):
-        super(DelayGenerator, self).__init__(name, role, parent=parent, **kwargs)  # init HwComponent
+    def __init__(self, name, role, parent, daemon=None, **kwargs):
+        super(DelayGenerator, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
-        self.location = location
+        self.location = "Delaybox"  # don't change, internally needed by HPDTA/RemoteEx
 
-        self._hwVersion = parent.DevParamGet(location, "DeviceName")
+        self._hwVersion = parent.DevParamGet(self.location, "DeviceName")
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
-        # self._swVersion = ??
-        # self._metadata[model.MD_SW_VERSION] = self._swVersion
 
         # Set parameters delay generator
-        parent.DevParamSet(location, "Setting", "M1")  # TODO might be enough and don't need the rest...check!!
-        parent.DevParamSet(location, "Trig. Mode", "Int.")  # TODO set to "Ext. rising" for SEM
-        parent.DevParamSet(location, "Repetition Rate", "1000000")  # [0.001, 10000000] # read-only for Ext. rising
-        parent.DevParamSet(location, "Delay A", "0")
-        parent.DevParamSet(location, "Delay B", "0.00000002")
-        parent.DevParamSet(location, "Burst Mode", "Off")
+        parent.DevParamSet(self.location, "Setting", "M1")  # TODO might be enough and don't need the rest...check!!
+        parent.DevParamSet(self.location, "Trig. Mode", "Int.")  # TODO set to "Ext. rising" for SEM
+        parent.DevParamSet(self.location, "Repetition Rate", "1000000")  # [0.001, 10000000] # read-only for Ext. rising
+        parent.DevParamSet(self.location, "Delay A", "0")
+        parent.DevParamSet(self.location, "Delay B", "0.00000002")
+        parent.DevParamSet(self.location, "Burst Mode", "Off")
 
-        self._metadata[model.MD_DELAY_A] = self.parent.DevParamGet(location, "Delay A")
-        self._metadata[model.MD_DELAY_REPRATE] = self.parent.DevParamGet(location, "Repetition Rate")  # TODO check how to update!
+        self._metadata[model.MD_DELAY_TRIGGER] = self.parent.DevParamGet(self.location, "Delay A")
+        self._metadata[model.MD_DELAY_REPRATE] = self.parent.DevParamGet(self.location, "Repetition Rate")  # TODO check how to update!
 
         # VAs
-        self.repetitionRate = model.VigilantAttribute(self.parent.DevParamGet(location, "Repetition Rate"),
+        self.repetitionRate = model.VigilantAttribute(self.parent.DevParamGet(self.location, "Repetition Rate"),
                                                       readonly=True)
 
         triggerDelay = self._getTriggerDelay()
-        range = self._getTriggerDelayTimeRange()
-        self.triggerDelay = model.FloatContinuous(triggerDelay, range, setter=self._updateTriggerDelay)
+        range_trigDelay = self._getTriggerDelayTimeRange()
+        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._updateTriggerDelay)
 
         # TODO do we need: Burst Mode, Setting, Trig. Mode, delay B ??? as read only... plus MD!?
-        # self.delayB = model.VigilantAttribute(self.parent.DevParamGet(location, "Delay B"), readonly=True)
+        # self.delayB = model.VigilantAttribute(self.parent.DevParamGet(self.location, "Delay B"), readonly=True)
 
     def _updateTriggerDelay(self, value):
         """
@@ -676,7 +711,7 @@ class DelayGenerator(model.HwComponent):
         value_str = self._convertInput2Str(value)
         self.parent.DevParamSet(self.location, "Delay A", value_str)
         logging.debug("Reporting trigger delay %s for delay generator.", value)
-        self._metadata[model.MD_DELAY_A] = value
+        self._metadata[model.MD_DELAY_TRIGGER] = value
 
         return value
 
@@ -731,13 +766,13 @@ class StreakCamera(model.HwComponent):
     Client to connect to HPD-TA software via RemoteEx.
     """
 
-    def __init__(self, name, role, children=None, port=None, host=None, **kwargs):
+    def __init__(self, name, role, children=None, port=None, host=None, daemon=None, **kwargs):
         """
         Initializes the device.
         host (str): hostname or IP-address
         port (int or None): port number for sending/receiving commands (None if not set)
         """
-        super(StreakCamera, self).__init__(name, role, **kwargs)
+        super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
 
         if port is None:
             raise ValueError("Please specify port of camera to be used.")
@@ -786,6 +821,7 @@ class StreakCamera(model.HwComponent):
 
         self.should_listen = True  # used in readCommandResponse thread
         self._waitForCorrectResponse = True  # used in sendCommand
+        self._getReadoutCamInfo = False  # nasty trick to get cam info
 
         # start thread, which keeps reading the commandport response continuously
         self._start_receiverThread()
@@ -805,43 +841,31 @@ class StreakCamera(model.HwComponent):
         self.timeout_commandport = 5  # new timeout for standard commands
         #  TODO might be other commands also needing a longer timeout
 
-        # # TODO move maybe to readoutcam
-        # # start thread, which keeps reading the dataport when an image/scaling table has arrived
-        # # after commandport thread to be able to set the RingBuffer
-        # # AcqLiveMonitor writes images to Ringbuffer, which we can read from
-        # # only works if we use "Live" or "SingleLive" mode
-        # self.AcqLiveMonitor("RingBuffer", "10")  # TODO need to be handled in case we use other acq modes
-        # self.t_image = threading.Thread(target=self._getDataFromBuffer)
-        # self.t_image.start()
-
         if children:
             try:
                 kwargs = children["readoutcam"]
             except Exception:
                 raise
-            self._readoutcam = OrcaFlash(parent=self, **kwargs)
+            try:
+                child = children["spectrograph"]
+            except:
+                child = None
+
+            self._readoutcam = ReadoutCamera(parent=self, children=child, daemon=daemon, **kwargs)
+            # self._readoutcam = ReadoutCamera(parent=self, daemon=daemon, **kwargs)  # works for child of streakcam in yaml
             self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
             try:
                 kwargs = children["streakunit"]
             except Exception:
                 raise
-            self._streakunit = StreakUnit(parent=self, **kwargs)
+            self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._streakunit)  # add streakunit to children-VA
             try:
                 kwargs = children["delaybox"]
             except Exception:
                 raise
-            self._delaybox = DelayGenerator(parent=self, **kwargs)
+            self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._delaybox)  # add delaybox to children-VA
-
-        # TODO move maybe to readoutcam
-        # Note: needs to be after initializing children and after commandport thread to be able to set the RingBuffer
-        # start thread, which keeps reading the dataport when an image/scaling table has arrived
-        # AcqLiveMonitor writes images to Ringbuffer, which we can read from
-        # only works if we use "Live" or "SingleLive" mode
-        self.AcqLiveMonitor("RingBuffer", "10")  # TODO need to be handled in case we use other acq modes
-        self.t_image = threading.Thread(target=self._getDataFromBuffer)
-        self.t_image.start()
 
     def _openConnection(self):
         """
@@ -901,10 +925,6 @@ class StreakCamera(model.HwComponent):
         """
         Close App (HPDTA) and RemoteEx and close connection to RemoteEx. Called by backend.
         """
-        # terminate image thread
-        if self.t_image.isAlive():
-            self.queue_img.put(None)
-            self.t_image.join(5)
         # terminate children
         for child in self.children.value:
             child.terminate()
@@ -1012,30 +1032,50 @@ class StreakCamera(model.HwComponent):
                         logging.warning("Received response, which is not according to the known protocol.")
                         continue  # return to try-statement and start receiving again
 
-                    # continue listening as there is additional info in coming
+                    if self._getReadoutCamInfo:
+                        # command parent.CamParamGet("Setup", "CameraInfo") behaves differently then all other commands
+                        # nasty trick to work around for this command
+                        # This command is nasty as it first receives the EC and then additional information
+                        # TODO are there more cases like that??
 
-                    # TODO
-                    # problem for e.g. parent.CamParamGet("Setup", "CameraInfo")
-                    # nasty trick to work around for this command TODO are there more cases like that??
-                    # This command is nasty as it first receives the EC and then additional information
-                    # if rfunc == "CamParamGet":
-                    #     # TODO make a dict to extract firmware version
-                    #     # TODO need something that waits until all lines are received..
-                    #     i = 0
-                    #     while i < 4:
-                    #         additional_info = self._commandport.recv(4096)  # receive more data
-                    #         additional_info = additional_info.split("\r")
-                    #         additional_info = additional_info[:-1]
-                    #         for i, item in enumerate(additional_info):
-                    #             additional_info[i] = item.replace("\n", "")
-                    #         rargs.append(additional_info)
-                    #         i += 1
-                    #     # rargs = list(rargs) + additional_info
+                        # info_size = 2 * 1000  # TODO how many bytes??
+                        # additional_info = []
+                        # time.sleep(1)
+                        # self.timeout_commandport = 10
+                        # self._commandport.settimeout(5.0)
+
+                        # TODO would like to use that, but socket.timeout not handled correctly
+                        # while len(additional_info) < info_size:
+                        #     try:
+                        #         additional_info.append(self._commandport.recv(4096))  # receive more data
+                        #     except socket.timeout:
+                        #         break
+
+                        additional_info = ""
+                        timeout = 1
+                        start = time.time()
+                        time_now = time.time()
+                        while time_now < start + timeout:
+                            try:
+                                # continue listening as there is additional info in coming
+                                additional_info += self._commandport.recv(4096)   # receive more data
+                                time_now = time.time()
+                            except Exception:
+                                break
+                        try:
+                            additional_info = additional_info.split("\r")[:-1]
+                            for i, item in enumerate(additional_info):
+                                rargs.append(item.replace("\n", ""))
+                            msg_splitted[2] = rargs
+                        except Exception:
+                            logging.error("Could not retrieve readout camera information.")
+                        self._getReadoutCamInfo = False
 
                     if EC in (4, 5):
                         logging.debug("Received message %s from RemoteEx software." % rargs)
                         if EC == 4 and rfunc == "Livemonitor":
-                            # if len(rargs) > 0: # TODO maybe check if rargs is empty, should not for type 4 and 5 i think
+                            # TODO maybe check if rargs is empty, should not for type 4 and 5 i think
+                            # if len(rargs) > 0:
                             self.queue_img.put(rargs)  # only put msg in queue when it notifies about an image
 
                     else:  # send response including EC to queue
@@ -1045,142 +1085,6 @@ class StreakCamera(model.HwComponent):
             logging.exception("Hamamatsu streak camera TCP/IP receiver thread failed.")
         finally:
             logging.info("Hamamatsu streak camera TCP/IP receiver thread ended.")
-
-    def updateMetadata(self, md):
-        """Create dict containing all metadata from the children readout camera, streak unit, delay genereator
-        and the metadata from the parent streak camera."""
-
-        md_children = [self._readoutcam._metadata, self._streakunit._metadata, self._delaybox._metadata]
-
-        for md_dict in md_children:
-            # TODO if key exists, append string e.g. for HW version
-            md.update(md_dict)
-
-        return md
-
-    def _getDataFromBuffer(self):
-        """This method runs in a separate thread and waits for messages in queue indicating
-        that some data was received. The image is then received from the device via the dataport IP socket or
-        the vertical scaling table is received, which corresponds to a time range for a single sweep.
-        It corrects the vertical time information. The table contains the actual timestamps for each px.."""
-
-        # TODO need to check that there is an ringbuffer available!?
-        # TODO move fct to readoutcam see comment readoutcam
-
-        logging.debug("Starting data thread.")
-        is_receiving_image = False
-
-        try:
-            while True:
-
-                if self._readoutcam._sync_event and not is_receiving_image:
-                    while int(self.AsyncCommandStatus()[0]):
-                        time.sleep(0)
-                        logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
-                        # TODO if not finished after some time might be live mode, so StopAcq again
-                    try:
-                        event_time = self._readoutcam.queue_events.popleft()
-                        logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
-                        self.AcqStart(self._readoutcam.acqMode)
-                        is_receiving_image = True
-                    except IndexError:
-                        # No event (yet) => fine
-                        pass
-
-                rargs = self.queue_img.get(block=True)  # block until receive something
-                logging.debug("Received message %s", rargs)
-
-                if rargs is None:  # if message is None end the thread
-                    return
-
-                # synchronized mode
-                if self._readoutcam._sync_event:
-                    if rargs == "start":
-                        logging.info("Received event trigger")
-                        continue
-                    else:
-                        logging.info("Get the synchronized image.")
-
-                # non-sync mode
-                else:
-                    while not self.queue_img.empty():
-                        # keep reading to check if there might be a newer image for display
-                        # in case we are too slow with reading
-                        rargs = self.queue_img.get(block=False)
-
-                        if rargs is None:  # if message is None end the thread
-                            return
-                    logging.info("No more images in queue, so get the image.")
-
-                if rargs == "F":  # Flush => the previous images are from the previous acquisition
-                    logging.debug("Acquisiton was stopped so flush previous images.")
-                    continue
-
-                self._metadata[model.MD_ACQ_DATE] = time.time()
-                # TODO more fancy maybe? metadata[model.MD_ACQ_DATE] = time.time() - (exposure_time + readout_time)
-
-                # get the image from the buffer
-                img_num = rargs[1]
-                img_info = self.ImgRingBufferGet("Data", img_num)
-
-                # can be NoneType if img_num to high!!
-                # TODO looks like img_info can be empty/None type object -> need a check here?
-                # TODO can it be empty? Should there not first the Live acq start, and then getImage as we have the
-                # TODO lock for sending commands
-
-                img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive #TODO why 2
-                img_num_actual = img_info[4]
-
-                img = ""
-                try:
-                    while len(img) < img_size:  # wait until all bytes are received
-                        img += self._dataport.recv(img_size)
-                except socket.timeout as msg:
-                    logging.error("Did not receive an image: %s", msg)
-                    continue
-
-                image = numpy.frombuffer(img, dtype=numpy.uint16)  # convert to array
-                image.shape = (int(img_info[1]), int(img_info[0]))
-
-                logging.debug("Requested image number %s, received image number %s from buffer."
-                              % (img_num, img_num_actual))
-
-                # get the scaling table to correct the time axis
-                # TODO only request scaling table if corresponding MD not available for this time range
-                if self._streakunit.mode.value:
-                    # TODO some sync problem might be here if a different command is in queue
-                    # in between ImgRingBufferGet and ImgDataGet: check again!
-                    scl_table_info = self.ImgDataGet("current", "ScalingTable", "Vertical")  # request scaling table
-
-                    scl_table_size = int(scl_table_info[0]) * 4  # num of bytes we need to receive
-
-                    # receive the bytes via the dataport
-                    tab = ''
-                    try:
-                        while len(tab) < scl_table_size:  # keep receiving bytes until we received all expected bytes
-                            tab += self._dataport.recv(scl_table_size)
-                            table = numpy.frombuffer(tab, dtype=numpy.float32)  # convert to array
-                            table_converted = table * self.timeRangeConversionFactor  # convert to sec
-                            self._readoutcam._metadata[model.MD_TIME_LIST] = table_converted
-                    except socket.timeout as msg:
-                        logging.error("Did not receive a scaling table: %s", msg)
-                        continue
-                else:
-                    if model.MD_TIME_LIST in self._readoutcam._metadata.keys():
-                        self._readoutcam._metadata.pop(model.MD_TIME_LIST, None)
-
-                md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
-                self.updateMetadata(md)  # merge dict
-                dataarray = model.DataArray(image, md)
-                self._readoutcam.data.notify(dataarray)  # pass the new image plus MD to the callback fct
-
-                if self._readoutcam._sync_event:
-                    is_receiving_image = False
-
-        except Exception:
-            logging.exception("Hamamatsu streak camera TCP/IP image thread failed.")
-        finally:
-            logging.info("Hamamatsu streak camera TCP/IP image thread ended.")
 
     def StartAcquisition(self, AcqMode):
         """Start an acquisition.
@@ -1399,10 +1303,10 @@ class StreakCamera(model.HwComponent):
                       Acquire: Acquire mode
                       AI: Analog integration
                       PC: Photon counting"""
-        if not self.t_image.isAlive():  # restart thread in case it was terminated
+        if not self._readoutcam.t_image.isAlive():  # restart thread in case it was terminated
             self.AcqLiveMonitor("RingBuffer", "10")
-            self.t_image = threading.Thread(target=self._getDataFromBuffer)
-            self.t_image.start()
+            self._readoutcam.t_image = threading.Thread(target=self._readoutcam._getDataFromBuffer)
+            self._readoutcam.t_image.start()
         self.sendCommand("AcqStart", AcqMode)
 
     def AcqStatus(self):
@@ -2075,7 +1979,7 @@ class StreakCamera(model.HwComponent):
         elif unit == "s":
             value = float(value)
         else:
-            raise logging.error("Unit conversion %s for value %s not supported" % (unit, value))
+            raise ValueError("Unit conversion %s for value %s not supported" % (unit, value))
 
         return value
 
@@ -2101,7 +2005,7 @@ class StreakCamera(model.HwComponent):
             value_raw = str(int(value)) + " s"
             self.timeRangeConversionFactor = 1
         else:
-            raise logging.error("Unit conversion for value %s not supported" % value)
+            raise ValueError("Unit conversion for value %s not supported" % value)
 
         return value_raw
 
@@ -2113,7 +2017,7 @@ class streakCameraDataFlow(model.DataFlow):
     Represents Hamamatsu streak camera.
     """
 
-    def __init__(self,  start_func, stop_func, sync_func):
+    def __init__(self,  start_func, stop_func, sync_func, unsubscribe_func):
         """
         camera: instance ready to acquire images  TODO is that correct?
         """
@@ -2122,6 +2026,7 @@ class streakCameraDataFlow(model.DataFlow):
         self._start = start_func
         self._stop = stop_func
         self._sync = sync_func
+        self._unsubscribe = unsubscribe_func
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
@@ -2132,3 +2037,7 @@ class streakCameraDataFlow(model.DataFlow):
 
     def synchronizedOn(self, event):
         self._sync(event)
+
+    def unsubscribe(self, listener):
+        self._unsubscribe()
+        super(streakCameraDataFlow, self).unsubscribe(listener)
