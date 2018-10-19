@@ -43,6 +43,7 @@ MD_BASELINE = "Baseline value" # ADU, int or float (same as image data) represen
 MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel (on a CCD/CMOS)
 MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre of 2 pixels on the detector sensor
 MD_SENSOR_SIZE = "Sensor size" # px, px, maximum resolution that can be acquire by the detector
+MD_RESOLUTION = "Resolution"  # number of px in x,y after binning
 MD_SENSOR_TEMP = "Sensor temperature" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre. X goes right, and Y goes up
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
@@ -115,6 +116,13 @@ MD_POL_POSDIAG = "posdiag"  # (string) polarization analyzer position
 MD_POL_NEGDIAG = "negdiag"  # (string) polarization analyzer position
 MD_POL_RHC = "rhc"  # (string) polarization analyzer position
 MD_POL_LHC = "lhc"  # (string) polarization analyzer position
+
+MD_STREAK_TIMERANGE = "Streak Time Range"  # Time range for one streak/sweep
+MD_STREAK_MCPGAIN  = "Streak MCP Gain"  # Multiplying gain for microchannel plate
+MD_STREAK_MODE = "Streak Mode"  # Mode of streak camera (Focus (Off) or Operate (On))
+
+MD_DELAY_A = "Delay A"  # Delay A between ext. trigger and starting of the streak/sweeping
+MD_DELAY_REPRATE = "Repetition Rate"  # Repetition Rate of the trigger signal
 
 MD_DET_TYPE = "Detector type"
 # The following tags are to be used as the values of MD_DET_TYPE
