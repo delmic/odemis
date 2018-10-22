@@ -63,6 +63,12 @@ MD_EBEAM_VOLTAGE = "Electron beam acceleration voltage" # V (float), voltage use
 MD_EBEAM_CURRENT = "Electron beam emission current"  # A (float), emission current of the electron beam (typically, the probe current is a bit smaller and the spot diameter is linearly proportional)
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)
 
+MD_STREAK_TIMERANGE = "Streak Time Range"  # (s) Time range for one streak/sweep
+MD_STREAK_MCPGAIN = "Streak MCP Gain"  # (int) Multiplying gain for microchannel plate
+MD_STREAK_MODE = "Streak Mode"  # (bool) Mode of streak camera (Focus (Off) or Operate (On))
+MD_TRIGGER_DELAY = "Streak Trigger Delay"  # (float) Delay A between ext. trigger and starting of the streak/sweeping
+MD_TRIGGER_RATE = "Streak Repetition Rate"  # (Hz) Repetition Rate of the trigger signal
+
 # This one is a kind of a hack, to store the evolution of the current over the time
 # of an acquisition.
 # tuple of (float, float) -> s since epoch, A
@@ -73,6 +79,7 @@ MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 # not be used simultaneously.
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
+MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
 
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
 MD_TIME_OFFSET = "Time offset"  # Time of the first 'pixel' in the time dimension (added to ACQ_DATE), default is 0
@@ -88,6 +95,7 @@ MD_AT_CL = "Cathodoluminescence"
 MD_AT_OVV_FULL = "Full overview"
 MD_AT_OVV_TILES = "Built-up overview"
 MD_AT_HISTORY = "History"
+MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
@@ -133,6 +141,7 @@ MD_RESOLUTION_SLOPE = "Resolution slope"  # (float, float) resolution related SE
 MD_RESOLUTION_INTERCEPT = "Resolution intercept"  # (float, float) resolution related SEM image shift, intercept of linear fit
 MD_HFW_SLOPE = "HFW slope"  # (float, float) HFW related SEM image shift, slope of linear fit
 MD_SPOT_SHIFT = "Spot shift"  # (float, float), SEM spot shift in percentage of HFW
+MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping time range to trigger delay in streak camera
 
 # The following metadata is used to store specific known positions for the
 # actuators.
