@@ -30,6 +30,7 @@ import logging
 import gc
 import math
 import numpy
+import scipy.spatial
 import copy
 from odemis import model
 from odemis.acq import calibration
@@ -1161,6 +1162,536 @@ class StaticSpectrumStream(StaticStream):
 # updated. So we need to use the "old" way of directly computing the projection,
 # as for the live streams. Eventually, when DataProjection supports updated .raw,
 # we could simplify/merge the two stream classes.
+
+
+class TemporalSpectrumStream(StaticStream):
+    """
+    A Temporal spectrum stream which displays only one static image/data.
+
+    """
+
+    def __init__(self, name, image, *args, **kwargs):
+        """
+        name (string)
+        image (model.DataArray(Shadow) of shape (CTYX) or (CT1YX)). The metadata
+        MD_TIME_LIST should be included in order to associate the T to a time value because of the
+        non-linear time spacing.
+        """
+        # Spectrum stream has in addition to normal stream:
+        #  * information about the current bandwidth displayed (avg. spectrum)
+        #  * coordinates of 1st point (1-point, line)
+        #  * coordinates of 2nd point (line)
+
+        # TODO: need to handle DAS properly, in case it's tiled (in XY), to avoid
+        # loading too much data in memory.
+        # Ensure the data is a DataArray, as we don't handle (yet) DAS
+        if isinstance(image, model.DataArrayShadow):
+            image = image.getData()
+
+        self._md = image.metadata
+
+        if len(image.shape) == 4:
+            # force 5D
+            image = image[:, :, numpy.newaxis, :, :]
+        elif len(image.shape) != 5 or image.shape[2] != 1:
+            logging.error("Cannot handle data of shape %s", image.shape)
+            raise NotImplementedError("TemporalSpectrumStream needs 4D data")
+
+        # This is for "average spectrum" projection
+        try:
+            # cached list of wavelength for each pixel pos
+            self._wl_px_values = spectrum.get_wavelength_per_pixel(image)
+        except (ValueError, KeyError):
+            # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+            # TODO: try to make them always int?
+            max_bw = image.shape[0] // 2
+            min_bw = (max_bw - image.shape[0]) + 1
+            self._wl_px_values = range(min_bw, max_bw + 1)
+            assert(len(self._wl_px_values) == image.shape[0])
+            unit_bw = "px"
+            cwl = (max_bw + min_bw) // 2
+            width = image.shape[0] // 12
+        else:
+            min_bw, max_bw = self._wl_px_values[0], self._wl_px_values[-1]
+            unit_bw = "m"
+            cwl = (max_bw + min_bw) / 2
+            width = (max_bw - min_bw) / 12
+
+        # This is for "time list" projection
+        try:
+            # cached list of wavelength for each pixel pos
+            self._tl_px_values = spectrum.get_time_per_pixel(image)
+        except (ValueError, KeyError):
+            # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+            # TODO: try to make them always int?
+            max_t = image.shape[1] // 2
+            min_t = (max_t - image.shape[1]) + 1
+            self._tl_px_values = range(min_t, max_t + 1)
+            assert(len(self._tl_px_values) == image.shape[1])
+            unit_t = "px"
+            cwl = (max_t + min_t) // 2
+            width_t = image.shape[1] // 12
+        else:
+            min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
+            unit_t = "s"
+            ct = (max_t + min_t) / 2
+            width_t = (max_t - min_t) / 12
+
+        # TODO: allow to pass the calibration data as argument to avoid
+        # recomputing the data just after init?
+        # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
+        self.efficiencyCompensation = model.VigilantAttribute(None, setter=self._setEffComp)
+
+        # low/high values of the spectrum displayed
+        self.spectrumBandwidth = model.TupleContinuous(
+                                    (cwl - width, cwl + width),
+                                    range=((min_bw, min_bw), (max_bw, max_bw)),
+                                    unit=unit_bw,
+                                    cls=(int, long, float))
+
+        self.selected_time = model.FloatContinuous(self._tl_px_values[0],
+                                                   range=(min_t, max_t),
+                                                   unit=unit_t,
+                                                   setter=self._setTime)
+        # Use a nearest-neighbor algorithm to allow parsing values set
+        self.time_kdtree = scipy.spatial.KDTree([[x] for x in self._tl_px_values])
+
+        self.selected_wavelength = model.FloatContinuous(self._wl_px_values[0],
+                                                   range=(min_bw, max_bw),
+                                                   unit=unit_bw,
+                                                   setter=self._setWavelength)
+        # Use a nearest-neighbor algorithm to allow parsing values set
+        self.wl_kdtree = scipy.spatial.KDTree([[x] for x in self._wl_px_values])
+
+        # Whether the (per bandwidth) display should be split intro 3 sub-bands
+        # which are applied to RGB
+        self.fitToRGB = model.BooleanVA(False)
+
+        # This attribute is used to keep track of any selected pixel within the
+        # data for the display of a spectrum
+        self.selected_pixel = model.TupleVA((None, None))  # int, int
+
+        # Peak method index, None if spectrum peak fitting curve is not displayed
+        self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
+
+        # The thickness of a point or a line (shared).
+        # A point of width W leads to the average value between all the pixels
+        # which are within W/2 from the center of the point.
+        # A line of width W leads to a 1D spectrum taking into account all the
+        # pixels which fit on an orthogonal line to the selected line at a
+        # distance <= W/2.
+        self.selectionWidth = model.IntContinuous(1, [1, 50], unit="px")
+
+        self.fitToRGB.subscribe(self.onFitToRGB)
+        self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
+        self.efficiencyCompensation.subscribe(self._onCalib)
+        self.selectionWidth.subscribe(self._onSelectionWidth)
+        self.selected_time.subscribe(self._onTimeSelect)
+        self.selected_wavelength.subscribe(self._onWavelengthSelect)
+
+        self._calibrated = image  # the raw data after calibration
+
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_SPECTRUM
+        super(TemporalSpectrumStream, self).__init__(name, [image], *args, **kwargs)
+
+        # Automatically select point/line if data is small (can only be done
+        # after .raw is set)
+        if image.shape[-2:] == (1, 1):  # Only one point => select it immediately
+            self.selected_pixel.value = (0, 0)
+            
+    def _setTime(self, value):
+        of, i = self.time_kdtree.query([value])
+        return self._tl_px_values[i]
+
+    def _setWavelength(self, value):
+        of, i = self.wl_kdtree.query([value])
+        return self._wl_px_values[i]
+
+    def _onTimeSelect(self, _):
+        # Update other VA's so that displays are updated.
+        self.selected_pixel.notify(self.selected_pixel.value)
+
+    def _onWavelengthSelect(self, _):
+        # Update other VA's so that displays are updated.
+        self.selected_pixel.notify(self.selected_pixel.value)
+
+    # The tricky part is we need to keep the raw data as .raw for things
+    # like saving the stream or updating the calibration, but all the
+    # display-related methods must work on the calibrated data.
+    def _updateDRange(self, data=None):
+        if data is None:
+            data = self._calibrated
+        super(TemporalSpectrumStream, self)._updateDRange(data)
+
+    def _updateHistogram(self, data=None):
+        if data is None:
+            spec_range = self._get_bandwidth_in_pixel()
+            t = self._tl_px_values.index(self.selected_time.value)
+            data = self._calibrated[spec_range[0]:spec_range[1] + 1, t]
+        super(TemporalSpectrumStream, self)._updateHistogram(data)
+
+    def _get_bandwidth_in_pixel(self):
+        """
+        Return the current bandwidth in pixels index
+        returns (2-tuple of int): low and high pixel coordinates (included)
+        """
+        low, high = self.spectrumBandwidth.value
+
+        # Find the closest pixel position for the requested wavelength
+        low_px = numpy.searchsorted(self._wl_px_values, low, side="left")
+        low_px = min(low_px, len(self._wl_px_values) - 1)  # make sure it fits
+        # TODO: might need better handling to show just one pixel (in case it's
+        # useful) as in almost all cases, it will end up displaying 2 pixels at
+        # least
+        if high == low:
+            high_px = low_px
+        else:
+            high_px = numpy.searchsorted(self._wl_px_values, high, side="right")
+            high_px = min(high_px, len(self._wl_px_values) - 1)
+
+        logging.debug("Showing between %g -> %g nm = %d -> %d px",
+                      low * 1e9, high * 1e9, low_px, high_px)
+        assert low_px <= high_px
+        return low_px, high_px
+    
+    # TODO: have an "area=None" argument which allows to specify the 2D region
+    # within which the spectrum should be computed
+    # TODO: should it also return the wavelength values? Or maybe another method
+    # can do it?
+    def getMeanSpectrum(self):
+        """
+        Compute the global spectrum of the data as an average over all the pixels
+        returns (numpy.ndarray of float): average intensity for each wavelength
+         You need to use the metadata of the raw data to find out what is the
+         wavelength for each pixel, but the range of wavelengthBandwidth is
+         the same as the range of this spectrum.
+        """
+        data = self._calibrated
+        # flatten all but the C dimension, for the average
+        data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))
+        av_data = numpy.mean(data, axis=1)
+
+        return av_data
+
+    def _updateImage(self):
+        """ Recomputes the image with all the raw data available
+          Note: for spectrum-based data, it mostly computes a projection of the
+          3D data to a 2D array.
+        """
+        try:
+            data = self._calibrated
+            if data is None: # can happen during __init__
+                return
+            self.image.value = self.get_spatial_spectrum(data)
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+
+    # We don't have problems of rerunning this when the data is updated,
+    # as the data is static.
+    def _updateCalibratedData(self, bckg=None, coef=None):
+        """
+        Try to update the data with new calibration. The two parameters are
+        the same as compensate_spectrum_efficiency(). The input data comes from
+        .raw and the calibrated data is saved in ._calibrated
+        bckg (DataArray or None)
+        coef (DataArray or None)
+        raise ValueError: if the data and calibration data are not valid or
+          compatible. In that case the current calibrated data is unchanged.
+        """
+        data = self.raw[0]
+
+        if data is None:
+            self._calibrated = None
+            return
+
+        if bckg is None and coef is None:
+            # make sure to not display any other error
+            self._calibrated = data
+            return
+
+        if not (set(data.metadata.keys()) &
+                {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            raise ValueError("Spectrum data contains no wavelength information")
+
+        # will raise an exception if incompatible
+        calibrated = calibration.compensate_spectrum_efficiency(data, bckg, coef)
+        self._calibrated = calibrated
+
+    def _setBackground(self, bckg):
+        """
+        Setter of the spectrum background
+        raises ValueError if it's impossible to apply it (eg, no wavelength info)
+        """
+        # If the coef data is wrong, this function will fail with an exception,
+        # and the value never be set.
+        self._updateCalibratedData(bckg=bckg, coef=self.efficiencyCompensation.value)
+        return bckg
+
+    def _force_selected_spectrum_update(self):
+        # There is no explicit way to do it, so instead, pretend the pixel and
+        # line have changed (to the same value).
+        # TODO: It could be solved by using dataflows (in which case a new data
+        # would come whenever settings change).
+        if self.selected_pixel.value != (None, None):
+            self.selected_pixel.notify(self.selected_pixel.value)
+
+    def _setEffComp(self, coef):
+        """
+        Setter of the spectrum efficiency compensation
+        raises ValueError if it's impossible to apply it (eg, no wavelength info)
+        """
+        # If the coef data is wrong, this function will fail with an exception,
+        # and the value never be set.
+        self._updateCalibratedData(bckg=self.background.value, coef=coef)
+        return coef
+
+    def _onCalib(self, unused):
+        """
+        called when the background or efficiency compensation is changed
+        """
+        # histogram will change as the pixel intensity is different
+        self._updateHistogram()
+        self._shouldUpdateImage()
+        self._force_selected_spectrum_update()
+
+    def _onSelectionWidth(self, width):
+        """
+        Called when the selection width is updated
+        """
+        # 0D and/or 1D spectrum will need updates
+        self._force_selected_spectrum_update()
+
+    def _onIntensityRange(self, irange):
+        super(TemporalSpectrumStream, self)._onIntensityRange(irange)
+        # If auto_bc is active, it will not affect the line spectrum directly
+        if not self.auto_bc.value:
+            self._force_selected_spectrum_update()
+
+    def onFitToRGB(self, value):
+        """
+        called when fitToRGB is changed
+        """
+        self._shouldUpdateImage()
+
+    def onSpectrumBandwidth(self, value):
+        """
+        called when spectrumBandwidth is changed
+        """
+        self._updateHistogram()
+        self._shouldUpdateImage()
+        
+    def get_spectrum_range(self):
+        """ Return the wavelength for each pixel of a (complete) spectrum
+
+        returns (list of numbers or None): one wavelength per spectrum pixel.
+          Values are in meters, unless the spectrum cannot be determined, in
+          which case integers representing pixels index is returned.
+          If no data is available, None is returned.
+                (str): unit of spectrum range
+        """
+        data = self._calibrated
+
+        try:
+            return spectrum.get_wavelength_per_pixel(data), "m"
+        except (ValueError, KeyError):
+            # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+            max_bw = data.shape[0] // 2
+            min_bw = (max_bw - data.shape[0]) + 1
+            return range(min_bw, max_bw + 1), "px"
+
+    def get_time_values(self):
+        return (self._tl_px_values, "s")
+
+    def get_time_range(self):
+        """
+        Returns the range and unit of the time data from the time list.
+        """
+        return (min(self._tl_px_values), max(self._tl_px_values)), "s"
+
+    def get_spatial_spectrum(self, data=None, raw=False):
+        """
+        Project a spectrum cube (CTYX) to XY space in RGB, by averaging the
+          intensity over all the wavelengths (selected by the user)
+        data (DataArray or None): if provided, will use the cube, otherwise,
+          will use the whole data from the stream.
+        raw (bool): if True, will return the "raw" values (ie, same data type as
+          the original data). Otherwise, it will return a RGB image.
+        return (DataArray YXC of uint8 or YX of same data type as data): average
+          intensity over the selected wavelengths
+        """
+        if data is None:
+            data = self._calibrated
+        md = self._find_metadata(data.metadata)
+
+        # pick only the data inside the bandwidth
+        spec_range = self._get_bandwidth_in_pixel()
+        t = self._tl_px_values.index(self.selected_time.value)
+        logging.debug("Spectrum range picked: %s px", spec_range)
+
+        if raw:
+            av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
+            av_data = img.ensure2DImage(av_data).astype(data.dtype)
+            return model.DataArray(av_data, md)
+        else:
+            irange = self._getDisplayIRange()  # will update histogram if not yet present
+
+            if not self.fitToRGB.value:
+                # TODO: use better intermediary type if possible?, cf semcomedi
+                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                rgbim = img.DataArray2RGB(av_data, irange)
+            else:
+                # Note: For now this method uses three independent bands. To give
+                # a better sense of continuum, and be closer to reality when using
+                # the visible light's band, we should take a weighted average of the
+                # whole spectrum for each band. But in practice, that would be less
+                # useful.
+
+                # divide the range into 3 sub-ranges (BRG) of almost the same length
+                len_rng = spec_range[1] - spec_range[0] + 1
+                brange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
+                grange = [brange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
+                rrange = [grange[1] + 1, spec_range[1]]
+                # ensure each range contains at least one pixel
+                brange[1] = max(brange)
+                grange[1] = max(grange)
+                rrange[1] = max(rrange)
+
+                # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
+                av_data = numpy.mean(data[rrange[0]:rrange[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                rgbim = img.DataArray2RGB(av_data, irange)
+                av_data = numpy.mean(data[grange[0]:grange[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                gim = img.DataArray2RGB(av_data, irange)
+                rgbim[:, :, 1] = gim[:, :, 0]
+                av_data = numpy.mean(data[brange[0]:brange[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                bim = img.DataArray2RGB(av_data, irange)
+                rgbim[:, :, 2] = bim[:, :, 0]
+
+            rgbim.flags.writeable = False
+            md[model.MD_DIMS] = "YXC"  # RGB format
+
+            return model.DataArray(rgbim, md)
+
+    def get_pixel_spectrum(self):
+        """
+        Return the (0D) spectrum belonging to the selected pixel.
+        See get_spectrum_range() to know the wavelength values for each index of
+         the spectrum dimension
+        return (None or DataArray with 1 dimension): the spectrum of the given
+         pixel or None if no spectrum is selected.
+        """
+
+        if self.selected_pixel.value == (None, None):
+            return None
+        x, y = self.selected_pixel.value
+        t = self._tl_px_values.index(self.selected_time.value)
+
+        spec2d = self._calibrated[:, :, 0, :, :]  # same data but remove useless dims
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            return spec2d[:, t, y, x]
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, t, py, px]
+
+        mean = datasum / n
+        return model.DataArray(mean.astype(spec2d.dtype))
+
+    def get_pixel_time_spectrum(self):
+        """
+        returns a the temporal spectrum image for the given .selected_pixel
+        """
+        if self.selected_pixel.value == (None, None):
+            return None
+        x, y = self.selected_pixel.value
+
+        spec2d = self._calibrated[:, :, 0, :, :]  # same data but remove useless dims
+
+        md = self._find_metadata(self._calibrated.metadata)
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            return model.DataArray(spec2d[:, :, y, x], md)
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, :, py, px]
+
+        mean = datasum / n
+        return model.DataArray(mean.astype(spec2d.dtype))
+
+    def get_pixel_time(self):
+        """
+        returns a plot for a given .selected_pixel and .spectrum
+        """
+        if self.selected_pixel.value == (None, None):
+            return None
+        x, y = self.selected_pixel.value
+        c = self._wl_px_values.index(self.selected_wavelength.value)
+        md = self._find_metadata(self._calibrated.metadata)
+        spec2d = self._calibrated[:, :, 0, :, :]  # same data but remove useless dims
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            return model.DataArray(spec2d[c, :, y, x], md)
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[c, :, py, px]
+
+        mean = datasum / n
+        return model.DataArray(mean.astype(spec2d.dtype))
 
 
 class RGBUpdatableStream(StaticStream):
