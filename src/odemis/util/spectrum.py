@@ -75,6 +75,35 @@ def get_wavelength_per_pixel(da):
     raise KeyError("No MD_WL_* metadata available")
 
 
+def get_time_per_pixel(da):
+    """
+    Computes the time list for each pixel along the T dimension
+
+    :param da: (model.DataArray of shape C...): the DataArray with metadata
+        MD_TIME_LIST
+    :return: (list of float of length T): the time (in s) for each pixel
+        in T
+    :raises:
+        AttributeError: if no metadata is present
+        KeyError: if no metadata is available
+        ValueError: if the metadata doesn't provide enough information
+    """
+
+    if not hasattr(da, 'metadata'):
+        raise AttributeError("No metadata found in data array")
+
+    # MD_WL_LIST has priority
+    if model.MD_TIME_LIST in da.metadata:
+        tl = da.metadata[model.MD_TIME_LIST]
+        if len(tl) == da.shape[1]:
+            return tl
+        else:
+            raise ValueError("Time list metadata (MD_TIME_LIST) is not the same "
+                             "length as the data")
+
+    raise KeyError("No MD_TIME_LIST metadata available")
+
+
 def coefficients_to_dataarray(coef):
     """
     Convert a spectrum efficiency coefficient array to a DataArray as expected

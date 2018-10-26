@@ -488,7 +488,7 @@ class TestHDF5IO(unittest.TestCase):
         """
         Checks that we can read back the metadata of an image
         """
-        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
+        sizes = [(512, 256), (100, 50, 1, 128, 128)]  # different sizes to ensure different acquisitions
         # Create fake current over time report
         cot = [[time.time(), 1e-12]]
         for i in range(1, 171):
@@ -511,9 +511,10 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      #model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
                      model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_TIME_LIST: [1e-9 * i for i in range(sizes[1][-2])],
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
@@ -524,7 +525,7 @@ class TestHDF5IO(unittest.TestCase):
         dtype = numpy.dtype("uint8")
         ldata = []
         for i, s in enumerate(sizes):
-            a = model.DataArray(numpy.zeros(s[::-1], dtype), metadata[i])
+            a = model.DataArray(numpy.random.randint(0, 200, s[::-1], dtype), metadata[i])
             ldata.append(a)
 
         # thumbnail : small RGB completely red
@@ -572,6 +573,10 @@ class TestHDF5IO(unittest.TestCase):
             elif model.MD_WL_LIST in md:
                 wl = md[model.MD_WL_LIST]
                 self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
+
+            if model.MD_TIME_LIST in md:
+                cot = md[model.MD_TIME_LIST]
+                self.assertListEqual(im.metadata[model.MD_TIME_LIST], cot)
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 # Note: technically, it could be a list or tuple and still be fine

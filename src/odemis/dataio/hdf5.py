@@ -323,13 +323,19 @@ def _add_image_info(group, dataset, image):
 
         if "T" in dims:
             tpos = dims.index("T")
-            try:
-                v = image.metadata[model.MD_PIXEL_DUR]
+
+            if (model.MD_TIME_LIST in image.metadata):
+                v = image.metadata[model.MD_TIME_LIST]
                 s = ST_REPORTED
-            except KeyError:
-                # Just to put something
-                v = 1.0  # s
-                s = ST_DEFAULT
+            else:
+                try:
+                    v = image.metadata[model.MD_PIXEL_DUR]
+                    s = ST_REPORTED
+                except KeyError:
+                    # Just to put something
+                    v = 1.0  # s
+                    s = ST_DEFAULT
+
             group["DimensionScaleT"] = v  # s
             group["DimensionScaleT"].attrs["UNIT"] = "s"
             dataset.dims.create_scale(group["DimensionScaleT"], "T")
@@ -495,6 +501,11 @@ def _read_image_info(group):
                             md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
                         else:
                             md[model.MD_WL_POLYNOMIAL] = pn
+
+            elif dim.label == "T" and dim:
+                if dim[0].shape == (dataset.shape[i],):
+                    md[model.MD_TIME_LIST] = map(float, dim[0][...].tolist())
+
     except Exception:
         logging.warning("Failed to parse C scale", exc_info=True)
 
