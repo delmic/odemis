@@ -29,7 +29,9 @@ from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
-from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, images_to_export_data, line_to_export_data
+from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, \
+    images_to_export_data, line_to_export_data, temporal_spectrum_to_export_data, \
+    time_spectrum_to_export_data
 import os
 import time
 import wx
@@ -43,7 +45,10 @@ PP_PREFIX = "Post-processing"
 EXPORTERS = {"spatial": (("PNG", "TIFF"), ("Serialized TIFF",)),
              "AR": (("PNG", "TIFF"), ("CSV",)),
              "spectrum": (("PNG", "TIFF"), ("CSV",)),
-             "spectrum-line": (("PNG", "TIFF"), ("CSV",))}
+             "spectrum-line": (("PNG", "TIFF"), ("CSV",)),
+             "spectrum-temporal": (("PNG", "TIFF"), ("CSV",)),
+             "spectrum-time": (("PNG", "TIFF"), ("CSV",)),
+             }
 
 
 class ExportController(object):
@@ -198,6 +203,10 @@ class ExportController(object):
             export_type = 'spectrum'
         elif view_name == 'Spatial spectrum':
             export_type = 'spectrum-line'
+        elif view_name == 'Temporal spectrum':
+            export_type = 'spectrum-temporal'
+        elif view_name == 'Time spectrum':
+            export_type = 'spectrum-time'
         else:
             export_type = 'spatial'
         return export_type
@@ -224,6 +233,10 @@ class ExportController(object):
             exported_data = spectrum_to_export_data(vp.stream, raw)
         elif export_type == 'spectrum-line':
             exported_data = line_to_export_data(vp.stream, raw)
+        elif export_type == 'spectrum-temporal':
+            exported_data = temporal_spectrum_to_export_data(vp.stream, raw)
+        elif export_type == 'spectrum-time':
+            exported_data = time_spectrum_to_export_data(vp.stream, raw)
         else:
             view_px = tuple(vp.canvas.ClientSize)
             view_mpp = fview.mpp.value

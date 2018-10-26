@@ -29,6 +29,7 @@ from abc import abstractmethod, ABCMeta
 from concurrent.futures._base import CancelledError
 import logging
 import math
+import numpy
 from odemis import gui, model, util
 from odemis.acq.stream import EMStream, SpectrumStream, \
                               StaticStream, CLStream, FluoStream, \
@@ -42,9 +43,10 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
-from odemis.util import units, spectrum, peak
+from odemis.util import units, spectrum, peak, img
 import wx
 from odemis.util import no_conflict
+from odemis.acq.stream._static import TemporalSpectrumStream
 
 
 class ViewPort(wx.Panel):
@@ -1182,6 +1184,70 @@ class PointSpectrumViewport(PlotViewport):
             self._curve_overlay.clear_labels()
             self.canvas.Refresh()
 
+            
+class TimeSpectrumViewport(PointSpectrumViewport):
+    """
+    Shows the time spectrum of a point -> bar plot + legend
+    Legend axes are time/intensity.
+    """
+
+    def _on_new_data(self, data):
+        """
+        Called when a new data is available (in a live stream)
+        data (1D DataArray)
+        """
+        if data.size:
+            # TODO: factorize with get_spectrum_range() for static stream?
+            try:
+                time_range = spectrum.get_time_per_pixel(data)
+                unit_x = "s"
+            except (ValueError, KeyError):
+                # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+                max_t = data.shape[0] // 2
+                min_t = (max_t - data.shape[0]) + 1
+                time_range = range(min_t, max_t + 1)
+                unit_x = "px"
+
+            self.canvas.set_1d_data(time_range, data, unit_x)
+
+            self.bottom_legend.unit = unit_x
+            self.bottom_legend.range = (time_range[0], time_range[-1])
+            self.left_legend.range = (min(data), max(data))
+            # For testing
+            # import random
+            # self.left_legend.range = (min(data) + random.randint(0, 100),
+            #                           max(data) + random.randint(-100, 100))
+        else:
+            self.clear()
+        self.Refresh()
+
+    def _on_pixel_select(self, pixel):
+        """
+        Pixel selection event handler.
+        Called when the user picks a new point to display on a 2D spectrum.
+        pixel (int, int): position of the point (in px, px) on the stream
+        """
+        if pixel == (None, None):
+            # TODO: handle more graciously when pixel is unselected?
+            logging.debug("No pixel selected")
+            # Remove legend ticks and clear plot
+            self.clear()
+            return
+        elif self.stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
+        data = self.stream.get_pixel_time()
+        time_range, unit_x = self.stream.get_time_values()
+
+        self.canvas.set_1d_data(time_range, data, unit_x)
+
+        self.bottom_legend.unit = unit_x
+        self.bottom_legend.range = (time_range[0], time_range[-1])
+        self.left_legend.range = (min(data), max(data))
+
+        self.Refresh()
+
 
 class ChronographViewport(PlotViewport):
     """
@@ -1227,6 +1293,109 @@ class ChronographViewport(PlotViewport):
         self.Refresh()
 
     def _on_pixel_select(self, pixel):
+        pass
+
+
+class TemporalSpectrumViewport(PlotViewport):
+    """
+    Shows a temporal spectrum image from a streak camera (time vs. wavelength)
+    """
+
+    canvas_class = miccanvas.TwoDPlotCanvas
+
+    def __init__(self, *args, **kwargs):
+        super(TemporalSpectrumViewport, self).__init__(*args, **kwargs)
+        self.ol = self.canvas.markline_overlay
+        # self.canvas.markline_overlay.hide_x_label()
+
+    def Refresh(self, *args, **kwargs):
+        """
+        Refresh the ViewPort while making sure the legends get redrawn as well
+        Can be called safely from other threads
+        """
+        self.left_legend.Refresh()
+        self.bottom_legend.Refresh()
+        # Note: this is not thread safe, so would need to be in a CallAfter()
+        # super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
+        wx.CallAfter(self.canvas.update_drawing)
+
+    def setView(self, view, tab_data):
+        super(TemporalSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength (m)")
+        wx.CallAfter(self.left_legend.SetToolTip, "Time (s)")
+        
+    def connect_stream(self, _=None):
+        """ This method will connect this ViewPort to the Spectrum Stream so it
+        it can react to spectrum pixel selection.
+        """
+        ss = self.view.stream_tree.get_streams_by_type(TemporalSpectrumStream)
+        if self.stream in ss:
+            logging.debug("not reconnecting to stream as it's already connected")
+            return
+
+        # There should be exactly one Spectrum stream. In the future there
+        # might be scenarios where there are more than one.
+        if not ss:
+            self.stream = None
+            logging.info("No spectrum streams found")
+            self.clear()  # Remove legend ticks and clear image
+            return
+        elif len(ss) > 1:
+            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
+
+        self.stream = ss[0]
+        self.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+
+    def _on_new_data(self, data):
+        if data.size:
+            spectrum, unit_x = self.stream.get_spectrum_range()
+            spectrum_range = (min(spectrum), max(spectrum))
+            time_range, unit_y = self.stream.get_time_range()
+            md = data.metadata
+            data = numpy.swapaxes(data, 0, 1)
+            data = model.DataArray(img.DataArray2RGB(data), md)
+
+            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range, yflip=False)
+
+            self.bottom_legend.unit = unit_x
+            self.left_legend.unit = unit_y
+            self.bottom_legend.range = spectrum_range
+            # self.left_legend.range = (time_range[1], time_range[0])
+            self.left_legend.range = time_range
+
+        else:
+            self.clear()
+        self.Refresh()
+
+    def _on_pixel_select(self, pixel):
+        """
+        Pixel selection event handler.
+        Called when the user picks a new point to display on a 2D spectrum.
+        pixel (int, int): position of the point (in px, px) on the stream
+        """
+        if pixel == (None, None):
+            # TODO: handle more graciously when pixel is unselected?
+            logging.debug("No pixel selected")
+            # Remove legend ticks and clear plot
+            self.clear()
+            return
+        elif self.stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
+        data = self.stream.get_pixel_time_spectrum()
+        logging.debug("Drawing new temporal data. x=%d, y=%d",
+                      self.stream.selected_pixel.value[0], self.stream.selected_pixel.value[1])
+        # Call new data
+        self._on_new_data(data)
+    
+    def _on_peak_method(self, state):
+        pass
+
+    def _on_stream_play(self, is_playing):
+        pass
+
+    def _on_stream_update(self, _):
         pass
 
 
@@ -1307,7 +1476,7 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        ss = self.view.stream_tree.get_streams_by_type(SpectrumStream)
+        ss = self.view.stream_tree.get_streams_by_type((SpectrumStream, TemporalSpectrumStream))
         if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
@@ -1323,7 +1492,8 @@ class SpatialSpectrumViewport(ViewPort):
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
         self.stream = ss[0]
-        self.stream.selected_line.subscribe(self._on_line_select, init=True)
+        if hasattr(self.stream, "selected_line"):
+            self.stream.selected_line.subscribe(self._on_line_select, init=True)
         self.stream.selected_pixel.subscribe(self._on_pixel_select)
 
     def _on_pixel_select(self, pixel):

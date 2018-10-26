@@ -344,13 +344,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_streams = self._tab_data_model.streams.value
             if not len(stream_tree):
                 return
-            elif stream_tree.get_streams_by_type(stream.SpectrumStream):
+            elif stream_tree.get_streams_by_type((stream.SpectrumStream, stream.TemporalSpectrumStream)):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
             elif any(isinstance(s, stream.ARStream) for s in tab_streams):
                 self.add_world_overlay(self.points_overlay)
                 self.points_overlay.activate()
-            elif any(isinstance(s, stream.SpectrumStream) for s in tab_streams):
+            elif any(isinstance(s, (stream.SpectrumStream, stream.TemporalSpectrumStream)) for s in tab_streams):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
         else:
@@ -1268,12 +1268,18 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.view = view
         self._tab_data_model = tab_data
 
-    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None):
+    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None, xflip=False, yflip=False):
         """ Set the data to be displayed
 
         TODO: Allow for both a horizontal and vertical domain
         """
-        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, None, "Spatial Spectrum")])
+        flip = 0
+        if xflip:
+            flip = wx.HORIZONTAL
+        if yflip:
+            flip = wx.VERTICAL
+
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, flip, None, "Spatial Spectrum")])
         self.unit_x = unit_x
         self.unit_y = unit_y
         self.range_x = range_x

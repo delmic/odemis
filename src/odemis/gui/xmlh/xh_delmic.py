@@ -567,6 +567,27 @@ class SpatialSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(SpatialSpectrumViewportXmlHandler)
 
 
+class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.TemporalSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "TemporalSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
+
+
+class TimeSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.TimeSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "TimeSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(TimeSpectrumViewportXmlHandler)
+
 ##################################
 # Sliders
 ##################################

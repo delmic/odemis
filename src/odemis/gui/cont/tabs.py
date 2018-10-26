@@ -43,7 +43,7 @@ import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport
+    PlotViewport, SpatialSpectrumViewport, TemporalSpectrumViewport, TimeSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings
@@ -75,6 +75,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
+from odemis.acq.stream._static import TemporalSpectrumStream
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
@@ -1582,11 +1583,13 @@ class AnalysisTab(Tab):
         assert(isinstance(viewports[4], AngularResolvedViewport))
         assert(isinstance(viewports[5], PlotViewport))
         assert(isinstance(viewports[6], SpatialSpectrumViewport))
+        assert(isinstance(viewports[7], TemporalSpectrumViewport))
+        assert(isinstance(viewports[8], TimeSpectrumViewport))
 
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
              {"name": "Optical",
-              "stream_classes": (OpticalStream, SpectrumStream, CLStream),
+              "stream_classes": (OpticalStream, SpectrumStream, TemporalSpectrumStream, CLStream),
               "zPos": self.tab_data_model.zPos,
               }),
             (viewports[1],
@@ -1596,12 +1599,12 @@ class AnalysisTab(Tab):
               }),
             (viewports[2],
              {"name": "Combined 1",
-              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, TemporalSpectrumStream, CLStream, RGBStream),
               "zPos": self.tab_data_model.zPos,
               }),
             (viewports[3],
              {"name": "Combined 2",
-              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, TemporalSpectrumStream, CLStream, RGBStream),
               "zPos": self.tab_data_model.zPos,
               }),
             (viewports[4],
@@ -1610,11 +1613,19 @@ class AnalysisTab(Tab):
               }),
             (viewports[5],
              {"name": "Spectrum plot",
-              "stream_classes": SpectrumStream,
+              "stream_classes": (SpectrumStream, TemporalSpectrumStream),
               }),
             (viewports[6],
              {"name": "Spatial spectrum",
-              "stream_classes": (SpectrumStream, CLStream),
+              "stream_classes": (SpectrumStream, CLStream, TemporalSpectrumStream),
+              }),
+            (viewports[7],
+             {"name": "Temporal spectrum",
+              "stream_classes": (TemporalSpectrumStream,),
+              }),
+            (viewports[8],
+             {"name": "Time spectrum",
+              "stream_classes": (TemporalSpectrumStream,),
               }),
         ])
 
@@ -1788,7 +1799,7 @@ class AnalysisTab(Tab):
         all_streams = streams + self.tab_data_model.streams.value
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
-        spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream)]
+        spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream) or isinstance(s, acqstream.TemporalSpectrumStream)]
         ar_streams = [s for s in all_streams if isinstance(s, acqstream.ARStream)]
 
         new_visible_views = list(self._def_views)  # Use a copy
@@ -1824,7 +1835,7 @@ class AnalysisTab(Tab):
                     ol.set_data_properties(pixel_width, center_position, (width, height))
                     ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
 
-                if hasattr(viewport.canvas, "line_overlay"):
+                if hasattr(viewport.canvas, "line_overlay") and hasattr(spec_stream, "selected_line"):
                     ol = viewport.canvas.line_overlay
                     ol.set_data_properties(pixel_width, center_position, (width, height))
                     ol.connect_selection(
@@ -1832,21 +1843,36 @@ class AnalysisTab(Tab):
                         spec_stream.selectionWidth,
                         spec_stream.selected_pixel
                     )
-
+                    
                 # Adjust the viewport layout (if needed) when a pixel or line is selected
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-                spec_stream.selected_line.subscribe(self._on_line_select, init=True)
+                if hasattr(spec_stream, "selected_line"):
+                    spec_stream.selected_line.subscribe(self._on_line_select, init=True)
 
             # ########### Combined views and spectrum view visible
 
-            new_visible_views[0:2] = self._def_views[2:4]  # Combined
-            new_visible_views[2] = self.panel.vp_spatialspec.view
-            new_visible_views[3] = self.panel.vp_inspection_plot.view
+            if isinstance(spec_stream, TemporalSpectrumStream):
+                new_visible_views[0] = self._def_views[2]  # Combined
+                new_visible_views[1] = self.panel.vp_timespec.view
+                new_visible_views[2] = self.panel.vp_inspection_plot.view
+                new_visible_views[3] = self.panel.vp_temporalspec.view
+                # Only set a defulat value for testing.
+                # spec_stream.selected_pixel.value = (1, 1)
+                
+                # Connect markline
+                self.panel.vp_temporalspec.ol.connect_selection(
+                    spec_stream.selected_time,
+                    spec_stream.selected_wavelength
+                )
+            else:
+                new_visible_views[0:2] = self._def_views[2:4]  # Combined
+                new_visible_views[2] = self.panel.vp_spatialspec.view
+                self.tb.enable_button(TOOL_LINE, True)
+                new_visible_views[3] = self.panel.vp_inspection_plot.view
 
             # ########### Update tool menu
 
             self.tb.enable_button(TOOL_POINT, True)
-            self.tb.enable_button(TOOL_LINE, True)
 
         elif ar_streams:
 
