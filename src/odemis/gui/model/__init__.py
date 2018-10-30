@@ -639,8 +639,8 @@ class AnalysisGUIData(MicroscopyGUIData):
                 metadata = s.getRawMetadata()[0]  # take only the first
                 zcentre = metadata[model.MD_POS][2]
                 zstep = metadata[model.MD_PIXEL_SIZE][2]
-                limits.append(zcentre - (s.zIndex.range[1] + 1) * zstep / 2)
-                limits.append(zcentre + (s.zIndex.range[1] + 1) * zstep / 2)
+                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
+                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
 
         if len(limits) > 1:
             self.zPos.range = (min(limits), max(limits))

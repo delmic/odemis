@@ -116,19 +116,10 @@ class InfoLegend(wx.Panel):
         self.zPos_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.zPos_text.SetForegroundColour(parent.GetForegroundColour())
         self.zPos_text.SetToolTip("Z Position")
+        self.zPos_text.Hide()
 
         # Scale window
         self.scale_win = ScaleWindow(self)
-
-        # TODO more...
-        # self.LegendWl = wx.StaticText(self.legend)
-        # self.LegendWl.SetToolTip("Wavelength")
-        # self.LegendET = wx.StaticText(self.legend)
-        # self.LegendET.SetToolTip("Exposure Time")
-
-        # self.LegendDwell = wx.StaticText(self.legend)
-        # self.LegendSpot = wx.StaticText(self.legend)
-        # self.LegendHV = wx.StaticText(self.legend)
 
         ## Child window layout
 
@@ -159,9 +150,9 @@ class InfoLegend(wx.Panel):
                           flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(self.scale_win, 3, border=10,
                           flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
         control_sizer.Add(self.zPos_text, 2, border=10,
                           flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
         # border_sizer is needed to add a border around the legend
         border_sizer = wx.BoxSizer(wx.VERTICAL)
         border_sizer.Add(control_sizer, border=6, flag=wx.ALL | wx.EXPAND)
@@ -184,6 +175,7 @@ class InfoLegend(wx.Panel):
 
         self.hfw_text.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.magnification_text.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.zPos_text.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
 
         # Explicitly set the
         # self.SetMinSize((-1, 40))
@@ -211,10 +203,17 @@ class InfoLegend(wx.Panel):
         self.Layout()
 
     def set_zPos_label(self, label):
-        # TODO: compute the real size needed (using GetTextExtent())
-        approx_width = len(label) * 7
-        self.zPos_text.SetMinSize((approx_width, -1))
-        self.zPos_text.SetValue(label)
+        """
+        label (unicode or None): if None, zPos is hidden, otherwise show the value
+        """
+        if label is None:
+            self.zPos_text.Hide()
+        else:
+            self.zPos_text.Show()
+            # TODO: compute the real size needed (using GetTextExtent())
+            approx_width = len(label) * 7
+            self.zPos_text.SetMinSize((approx_width, -1))
+            self.zPos_text.SetValue(label)
         self.Layout()
 
     def set_stream_type(self, side, acq_type):
