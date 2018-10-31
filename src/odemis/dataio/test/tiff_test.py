@@ -785,6 +785,7 @@ class TestTiffIO(unittest.TestCase):
                              model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
                              model.MD_POS: (1.2e-3, -30e-3),  # m
                              model.MD_EXP_TIME: 1.2,  # s
+                             model.MD_OUT_WL: (300e-9, 900e-9),  # m  (band pass filter)
                              model.MD_AR_POLE: (253.1, 65.1),
                              model.MD_AR_XMAX: 12e-3,
                              model.MD_AR_HOLE_DIAMETER: 0.6e-3,
@@ -839,6 +840,8 @@ class TestTiffIO(unittest.TestCase):
         im = rthumbs[0]
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
+# TODO: multiple AR pole pos with multiple lin pol  and qwp
 
 #    @skip("simple")
     def testReadMDFluo(self):
