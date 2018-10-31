@@ -509,9 +509,9 @@ class StaticARStream(StaticStream):
                 # should be only one bg image with the same metadata entry
                 return bg  # DataArray
 
-            # Nothing found e.g. pol_mode = "rhc" but no bg image with "rhc"
-            logging.debug("No background image with polarization mode %s ." % pol_mode)
-            return None
+        # Nothing found e.g. pol_mode = "rhc" but no bg image with "rhc"
+        logging.debug("No background image with polarization mode %s ." % pol_mode)
+        return None
 
     def _find_metadata(self, md):
         # For polar view, no PIXEL_SIZE nor POS
