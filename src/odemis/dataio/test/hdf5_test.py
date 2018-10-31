@@ -269,7 +269,6 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 1),  # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5, 2e-5),  # m/px
-                    model.MD_WL_POLYNOMIAL: [500e-9, 1e-9],  # m, m/px: wl polynomial
                     model.MD_POS: (1e-3, -30e-3),  # m
                     model.MD_EXP_TIME: 1.2,  # s
                     model.MD_IN_WL: (500e-9, 520e-9),  # m
@@ -286,15 +285,12 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9),  # m
                     }
         ldata = []
-        # 3D data generation (+ metadata): gradient along the wavelength
+        # 3D data generation (+ metadata): gradient along the Z
         data3d = numpy.empty(size3d[-1::-1], dtype=dtype)
         end = 2 ** metadata3d[model.MD_BPP]
-        step = end // size3d[2]
-        lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
+        lin = numpy.linspace(0, end, size3d[2], dtype=dtype)
         lin.shape = (size3d[2], 1, 1)  # to be able to copy it on the first dim
         data3d[:] = lin
-        # introduce Time and Z dimension to state the 3rd dim is channel
-        data3d = data3d[numpy.newaxis, numpy.newaxis, :, :, :]
         ldata.append(model.DataArray(data3d, metadata3d))
 
         # an additional 2D data, for the sake of it
@@ -307,11 +303,20 @@ class TestHDF5IO(unittest.TestCase):
         rdata = hdf5.read_data(FILENAME)
 
         imr = rdata[0]
+        if imr.ndim > 3:
+            # Check CT dims are 1 and remove them
+            for s in imr.shape[:-3]:
+                self.assertEqual(s, 1)
+            imr.shape = imr.shape[-3:]
+        self.assertEqual(imr.shape, size3d[::-1])
 
         self.assertEqual(imr.metadata[model.MD_DESCRIPTION], metadata3d[model.MD_DESCRIPTION])
         self.assertEqual(imr.metadata[model.MD_POS], metadata3d[model.MD_POS])
         self.assertEqual(imr.metadata[model.MD_PIXEL_SIZE], metadata3d[model.MD_PIXEL_SIZE])
         self.assertEqual(imr.metadata[model.MD_ACQ_DATE], metadata3d[model.MD_ACQ_DATE])
+
+        self.assertEqual(imr[0, 0, 0], 0)
+        self.assertEqual(imr[-1, 0, 0], end)
 
     def testExportRGB(self):
         """
