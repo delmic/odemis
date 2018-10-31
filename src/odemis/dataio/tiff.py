@@ -1071,13 +1071,14 @@ def _findImageGroups(das):
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
         if (prev_da is None
-            or not (model.MD_IN_WL in da.metadata or model.MD_OUT_WL in da.metadata)
+            or da.shape[0] != 1  # If C != 1 => not possible to merge (C is always first dimension)
+            or (model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata)
             or prev_da.shape != da.shape
             or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
             or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
             or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
             or prev_da.metadata.get(model.MD_LIGHT_POWER) != da.metadata.get(model.MD_LIGHT_POWER)
-            # or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
+            or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
             or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
             or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
            ):
