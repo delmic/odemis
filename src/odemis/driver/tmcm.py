@@ -1361,7 +1361,7 @@ class TMCLController(model.Actuator):
         ref_speed = self._readSpeed(axis, 194)  # The fast speed
         d = self._ref_max_length[axis]
         dur_search = driver.estimateMoveDuration(d, ref_speed, self._readAccel(axis))
-        timeout = dur_search * 1.5 * 2 + 1  # s
+        timeout = max(15, dur_search * 1.5 * 2 + 1)  # s
         logging.debug("Estimating a referencing of at most %g s", timeout)
         endt = time.time() + timeout
         try:
