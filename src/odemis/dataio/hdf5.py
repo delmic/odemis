@@ -214,7 +214,7 @@ def _add_image_info(group, dataset, image):
             group["ZOffset"] = 0
             _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
 
-    group["ZOffset"].attrs["UNIT"] = "m"  # our extension
+        group["ZOffset"].attrs["UNIT"] = "m"  # our extension
 
     # If ids.CLASS is set and the wrong padding type attach_scale() fails.
     # As a workaround, we temporarily remove it
@@ -291,30 +291,31 @@ def _add_image_info(group, dataset, image):
             group["DimensionScaleY"].attrs["UNIT"] = "m"
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
 
-            try:
-                zPos = dims.index("Z")
-                group["DimensionScaleZ"] = pxs[2]  # m
-                _h5svi_set_state(group["DimensionScaleZ"], ST_REPORTED)
-
-            except (ValueError, IndexError):
-                group["DimensionScaleZ"] = 0  # m
-                _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-
-            group["DimensionScaleZ"].attrs["UNIT"] = "m"
-
             # Attach the scales to each dimensions (referenced by their label)
             dataset.dims.create_scale(group["DimensionScaleX"], "X")
             dataset.dims.create_scale(group["DimensionScaleY"], "Y")
-            dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
             dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
             dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
-            dataset.dims[zPos].attach_scale(group["DimensionScaleZ"])
+
+            if "Z" in dims:
+                zpos = dims.index("Z")
+                try:
+                    group["DimensionScaleZ"] = pxs[2]  # m
+                    _h5svi_set_state(group["DimensionScaleZ"], ST_REPORTED)
+                except IndexError:
+                    # That makes Huygens happy
+                    group["DimensionScaleZ"] = 0  # m
+                    _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
+
+                group["DimensionScaleZ"].attrs["UNIT"] = "m"
+                dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+                dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
 
         # Unknown data, but SVI needs them to take the scales into consideration
         if "Z" in dims:
             # Put here to please Huygens
             # Seems to be the coverslip position, ie, the lower and upper glass of
-            # the sample. Not clear what's the relation with ZOffset.
+            # the sample. They are typically the very min and max of ZOffset.
             group["PrimaryGlassMediumInterfacePosition"] = 0.0  # m?
             _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)
             group["SecondaryGlassMediumInterfacePosition"] = 1.0  # m?
