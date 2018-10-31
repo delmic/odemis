@@ -53,7 +53,7 @@ The microscope component can have as role:
  * delphi
 
 Roles of components found in the DELPHI/SECOM system:
-----------------------------------------------------------------------------------
+-----------------------------------------------------
 .. TODO missing components SECOM:
 .. TODO * filter: Emission filter on the optical path to select a specific wavelength band. It has an axis: band.
 .. TODO * focus: Changes the distance between the sample and the optical detectors. It has one axis: z.
@@ -92,7 +92,7 @@ System:
  * lens: Contains parameters concerning the parabolic mirror and the lens system.
 
 Roles of components found in the SPARCv1/SPARCv2 system:
------------------------------------------------------------------------------------
+--------------------------------------------------------
 Emitters:
  * e-beam: Electron beam of the SEM to scan the sample (emitter).
 
@@ -165,14 +165,13 @@ Detectors:
 
 System:
  * lens: Contains parameters concerning the parabolic mirror and the lens system.
- * power-control: Power supply for the hardware components (e.g. ccd and sp-ccd
-   , polarization filters, lens actuators, spectrograph).
+ * power-control: Power supply for the hardware components (e.g., ccd, sp-ccd,
+   polarization filters, lens actuators, spectrograph).
 
 
 Overview schemas
 ----------------
 
-The figure below represents the different roles in a `secom`.
 
 .. figure:: secom-roles.*
     :width: 50 %
@@ -180,50 +179,43 @@ The figure below represents the different roles in a `secom`.
 
     Schema of a SECOM and the roles of the components
 
-The figure below represents the different roles in a `secom` with confocal optical microscope.
-
 .. figure:: secom-confocal-roles.*
-    :width: 50 %
+    :width: 70 %
     :align: center
 
-    Schema of a SECOM confocal and the roles of the components
-
-The figure below represents the different roles in a `sparc2`, with every
-supported type of detector connected.
+    Schema of a SECOM confocal with fluorescence life-time imaging (FLIM) and the roles of the components
 
 .. figure:: sparc2-roles.*
     :width: 100 %
     
-    Schema of a SPARCv2 and the roles of the components
-
-The figure below represents the different roles in a `sparc2` for CL spectroscopy (SPEC).
+    Generic schema of a SPARCv2 and the roles of most of supported components
 
 .. figure:: SPARC2_AR.*
     :width: 100 %
     :align: center
 
-    Schema of a SPARCv2 and the roles of the components for CL spectroscopy (SPEC).
-
-The figure below represents the different roles in a `sparc2` for angle resolved CL polarimetry (ARPOL).
+    Schema of a SPARCv2 and the roles of the components for CL spectroscopy.
 
 .. figure:: SPARC2_ARPOL.*
     :width: 100 %
     :align: center
 
-    Schema of a SPARCv2 and the roles of the components for angle resolved CL polarimetry (ARPOL).
-
-The figure below represents the different roles in a `sparc2` for angle resolved CL imaging (AR).
+    Schema of a SPARCv2 and the roles of the components for angle resolved CL polarimetry.
 
 .. figure:: SPARC2_SPEC.*
     :width: 100 %
     :align: center
 
-    Schema of a SPARCv2 and the roles of the components for angle resolved CL imaging (AR).
-
-The figure below represents the different roles in a `sparc2` for angle resolved CL polarization spectroscopy (ARPOLSPEC).
+    Schema of a SPARCv2 and the roles of the components for angle resolved (AR) CL imaging.
 
 .. figure:: SPARC2_ARPOLSPEC.*
     :width: 100 %
     :align: center
 
-    Schema of a SPARCv2 and the roles of the components for angle resolved CL polarization spectroscopy (ARPOLSPEC)
+    Schema of a SPARCv2 and the roles of the components for angle resolved CL polarization spectroscopy.
+    
+.. figure:: SPARC2_StreakCam.*
+    :width: 100 %
+    :align: center
+
+    Schema of a SPARCv2 and the roles of the components for CL spectrometry and streak camera to acquire temporal spectrum information.

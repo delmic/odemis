@@ -334,7 +334,7 @@ Starting odemis from the terminal/console
 =========================================
 
 After setting up the development environment it is possible to start odemis via the terminal.
-It is also possible to specify a specific configuration (*.yaml) file used for staring odemis.
+It is also possible to specify a specific configuration (``*.yaml``) file used for staring odemis.
 
 
 Starting Odemis
@@ -344,13 +344,13 @@ Odemis can be started from the terminal by typing the following command in the t
 
     odemis-start
 
-The default microscope file (*.yaml) is defined in the configuration file, which can be found and changed in
+The default microscope file (``*.yaml``) is defined in the configuration file, which can be found and changed in
 ``/etc/odemis.conf``.
 
 Starting Odemis with configuration file
 ---------------------------------------
 
-Odemis can be started using different hardware microscope files (*.yaml).
+Odemis can be started using different hardware microscope files (``*.yaml``).
 There are various examples, hardware tests and simulators available in
 ``~/development/odemis/install/linux/usr/share/odemis/``.
 
