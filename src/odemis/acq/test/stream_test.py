@@ -2538,6 +2538,43 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # TODO
         # change center wavelength and try again
 
+    def test_repetitions_and_roi(self):
+        logging.debug("Testing repetitions and roi")
+
+        helper = stream.SpectrumSettingsStream("test",
+                      self.spec, self.spec.data, self.ebeam,
+                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+
+        # Check it follows what we ask
+        helper.pixelSize.value = helper.pixelSize.range[0]
+        helper.roi.value = (0.1, 0.2, 0.3, 0.4)
+        numpy.testing.assert_almost_equal(helper.roi.value, (0.1, 0.2, 0.3, 0.4), decimal=2)
+
+        helper.repetition.value = (64, 64)
+        self.assertEqual(helper.repetition.value, (64, 64))
+
+        # As the shape ratio of the ebeam is 4:3, a "square" ROI is not a square rep
+        eshape = self.ebeam.shape
+        eratio = eshape[0] / eshape[1]
+        helper.repetition.value = (512, 512)
+        helper.roi.value = (0, 0, 1, 1)
+        rep = helper.repetition.value
+        rep_ratio = rep[0] / rep[1]
+        self.assertAlmostEqual(eratio, rep_ratio, places=1)
+
+        # Again, but with some smaller ROI
+        helper.roi.value = (0.4, 0.4, 0.6, 0.6)
+        rep = helper.repetition.value
+        rep_ratio = rep[0] / rep[1]
+        self.assertAlmostEqual(eratio, rep_ratio, places=1)
+
+        # When asking for a square area, the ROI compensates for the non-square eshape
+        helper.repetition.value = (1, 1)
+        roi = helper.roi.value
+        roi_size = (roi[2] - roi[0], roi[3] - roi[1])
+        roi_ratio = roi_size[0] / roi_size[1]
+        self.assertAlmostEqual(eratio, 1 / roi_ratio, places=2)
+
     def test_cancel_active(self):
         """
         Test stopping the stream before it's done preparing

@@ -43,6 +43,7 @@ SPARC-MONASH: {
         channels: [1, 0],
         limits: [[0, 5], [0, 5]],  # V
         park: [0, 0], # V
+        max_res: [5448, 4096], # 4:3 ratio
         settle_time: 5.e-6, # s
         hfw_nomag: 0.2553, # m
     },

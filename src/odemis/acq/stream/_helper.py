@@ -250,26 +250,28 @@ class RepetitionStream(LiveStream):
                       (roi[1] + roi[3]) / 2)
         roi_size = (rep[0] * pxs / phy_size[0],
                     rep[1] * pxs / phy_size[1])
-        roi = [roi_center[0] - roi_size[0] / 2,
+        roi = (roi_center[0] - roi_size[0] / 2,
                roi_center[1] - roi_size[1] / 2,
                roi_center[0] + roi_size[0] / 2,
-               roi_center[1] + roi_size[1] / 2]
+               roi_center[1] + roi_size[1] / 2)
         roi = self._fitROI(roi)
-        # In case the roi got modified again and the aspect ratio is not anymore
+
+        # In case the ROI got modified again and the aspect ratio is not anymore
         # the same as the rep, we shrink it to ensure the pixels are square (and
         # it should still fit within the FoV).
-        roi_center = ((roi[0] + roi[2]) / 2,
-                      (roi[1] + roi[3]) / 2)
-        rel_pxs = (roi[2] - roi[0]) / rep[0], (roi[3] - roi[1]) / rep[1]
+        eratio = phy_size[0] / phy_size[1]
+        rel_pxs = eratio * (roi[2] - roi[0]) / rep[0], (roi[3] - roi[1]) / rep[1]
         if rel_pxs[0] != rel_pxs[1]:
-            logging.debug("Shrinking ROI to ensure pixel is square")
+            logging.debug("Shrinking ROI to ensure pixel is square (relative pxs = %s)", rel_pxs)
+            roi_center = ((roi[0] + roi[2]) / 2,
+                          (roi[1] + roi[3]) / 2)
             sq_pxs = min(rel_pxs)
-            roi_size = sq_pxs * rep[0], sq_pxs * rep[1]
+            roi_size = sq_pxs * rep[0] / eratio, sq_pxs * rep[1]
             roi = (roi_center[0] - roi_size[0] / 2,
                    roi_center[1] - roi_size[1] / 2,
                    roi_center[0] + roi_size[0] / 2,
                    roi_center[1] + roi_size[1] / 2)
-            pxs = sq_pxs * phy_size[0]
+            pxs = sq_pxs * phy_size[0] / eratio
 
         # Double check we didn't end up with scale < 1
         # TODO: for some scanners, the scale can be < 1 => check the scale range
