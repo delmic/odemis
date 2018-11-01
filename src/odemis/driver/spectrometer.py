@@ -293,7 +293,16 @@ class SpecDataFlow(model.DataFlow):
             # Subtract baseline (aka black level) to avoid it from being multiplied
             try:
                 baseline = data.metadata[model.MD_BASELINE]
-                data -= (orig_shape[1] - 1) * baseline
+                baseline_sum = orig_shape[1] * baseline
+                # If the baseline is too high compared to the actual black, we
+                # could end up subtracting too much, and values would underflow
+                # => be extra careful and never subtract more than min value.
+                extra_bl = min(long(data.min()), baseline_sum) - baseline
+                if extra_bl > 0:
+                    data -= extra_bl
+                else:
+                    logging.info("Baseline reported at %d, but lower values found, so not compensating",
+                                 baseline)
             except KeyError:
                 pass
 
