@@ -474,3 +474,4 @@ class RadioLegend(wx.Panel):
 
         # refresh layout
         self.border_sizer.Layout()
+        self.Parent.Layout()  # need to be called as method is called after self.Layout im main thread
