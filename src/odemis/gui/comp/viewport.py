@@ -321,12 +321,13 @@ class MicroscopeViewport(ViewPort):
         self.bottom_legend.set_hfw_label(label)
 
     def UpdateZposLabel(self):
-        # Check if z position should be displayed
-        if not self._tab_data_model.zPos.range == (0, 0):
-            label = u"Z Pos.: %s" % units.readable_str(self._tab_data_model.zPos.value, unit=self._tab_data_model.zPos.unit, sig=3)
-        else:
-            label = u""
         if self.bottom_legend:
+            # Check if z position should be displayed
+            if self._tab_data_model.zPos.range == (0, 0):
+                label = None
+            else:
+                label = u"Z Pos.: %s" % units.readable_str(self._tab_data_model.zPos.value, unit=self._tab_data_model.zPos.unit, sig=3)
+
             self.bottom_legend.set_zPos_label(label)
 
     def UpdateMagnification(self):
