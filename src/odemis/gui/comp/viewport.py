@@ -130,7 +130,7 @@ class ViewPort(wx.Panel):
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy, source=self)
 
     def _on_destroy(self, evt):
         # Drop references

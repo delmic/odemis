@@ -127,7 +127,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._dc_region = None  # The ROI VA of the drift correction
         self.driftcor_overlay = None
 
-        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy, source=self)
 
     def _on_destroy(self, evt):
         # FIXME: it seems like this object stays in memory even after being destroyed.
