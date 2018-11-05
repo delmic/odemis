@@ -3301,9 +3301,11 @@ class Sparc2AlignTab(Tab):
             b = stream.detBinning.value
         else:
             b = (1, 1)
-        max_res = stream.detResolution.range[1]
-        res = max_res[0] // b[0], max_res[1] // b[1]
-        stream.detResolution.value = stream.detResolution.clip(res)
+
+        if hasattr(stream, "detResolution"):
+            max_res = stream.detResolution.range[1]
+            res = max_res[0] // b[0], max_res[1] // b[1]
+            stream.detResolution.value = stream.detResolution.clip(res)
 
     def _addMoIEntries(self, cont):
         """
