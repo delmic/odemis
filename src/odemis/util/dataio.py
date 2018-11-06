@@ -60,23 +60,22 @@ def data_to_static_streams(data):
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
+        # TODO reorganize this part when staticspectrumstream is generic!
+        # only check if ci >= 2 and ti >= 2 (more than one wl and more than one t value)
         if (((model.MD_WL_LIST in d.metadata or
               model.MD_WL_POLYNOMIAL in d.metadata) and
-             (ci >= 0 and d.shape[ci] > 1)
-             ) or
-            (ci >= 0 and d.shape[ci] >= 5)
-           ):
-            if (model.MD_TIME_LIST in d.metadata and
-                (ti >= 0 and d.shape[ti] > 1)):
-                # Streak camera data. Create a temporal spectrum
+             (ci >= 0 and d.shape[ci] > 1)) or
+             (ci >= 0 and d.shape[ci] >= 5)):
+            if ti >= 0 and d.shape[ti] > 1:
+                # Streak camera data. Create a temporal spectrum independent of operating mode (Focus or Operate)
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
-                klass = stream.TemporalSpectrumStream
+                klass = stream.StaticTemporalSpectrumStream
             else:
                 # Spectrum: either it's obvious according to metadata, or no metadata
                 # but lots of wavelengths, so no other way to display
                 name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 klass = stream.StaticSpectrumStream
-        elif model.MD_PIXEL_DUR in d.metadata and ti >= 0 and d.shape[ti] > 1:
+        elif model.MD_TIME_LIST in d.metadata and ti >= 0 and d.shape[ti] > 1:
             # Time data (with XY)
             logging.info("Converting time data into spectrum data")
             # HACK: for now we don't have a good static stream and GUI tools for
@@ -92,12 +91,7 @@ def data_to_static_streams(data):
 
             d = sda
             d.metadata[model.MD_DIMS] = "TYX"
-            # Convert linear scale (PIXEL_DUR + TIME_OFFSET) to WL_LIST
-            pd = d.metadata[model.MD_PIXEL_DUR]
-            to = d.metadata.get(model.MD_TIME_OFFSET, 0)
-            n = sda.shape[0]
-            tv = numpy.linspace(to, to + pd * (n - 1), n)
-            d.metadata[model.MD_WL_LIST] = tv
+            d.metadata[model.MD_WL_LIST] = d.metadata[model.MD_TIME_LIST]
 
             name = d.metadata.get(model.MD_DESCRIPTION, "Time")
             klass = stream.StaticSpectrumStream

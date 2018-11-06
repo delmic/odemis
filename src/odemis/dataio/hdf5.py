@@ -324,7 +324,7 @@ def _add_image_info(group, dataset, image):
         if "T" in dims:
             tpos = dims.index("T")
 
-            if (model.MD_TIME_LIST in image.metadata):
+            if model.MD_TIME_LIST in image.metadata:
                 v = image.metadata[model.MD_TIME_LIST]
                 s = ST_REPORTED
             else:
@@ -752,6 +752,7 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
+        # polarization analyzer
         try:
             ds = pdgroup["Polarization"]
             pol = str(ds[i])
@@ -779,6 +780,57 @@ def _parse_physical_data(pdgroup, da):
             if state and state[i] == ST_INVALID:
                 raise ValueError
             md[model.MD_POL_POS_LINPOL] = poslinpol
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        # streak camera
+        try:
+            ds = pdgroup["TimeRange"]
+            timeRange = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_STREAK_TIMERANGE] = timeRange
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["MCPGain"]
+            MCPgain = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_STREAK_MCPGAIN] = MCPgain
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["StreakMode"]
+            streakMode = bool(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_STREAK_MODE] = streakMode
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["TriggerDelay"]
+            triggerDelay = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_TRIGGER_DELAY] = triggerDelay
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["TriggerRate"]
+            triggerRate = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_TRIGGER_RATE] = triggerRate
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -1094,15 +1146,26 @@ def _add_image_metadata(group, image, mds):
     # ParabolaF: parabola_parameter=1/4f
     # (only meaningful for AR/SPARC)
     pf, st_pf = [], []
+
     # Polarization: position (string) of polarization analyzer
     # (only meaningful for AR/SPARC with polarization analyzer)
     pol, st_pol = [], []
     # Polarization: position (float) of quarter wave plate
-    # (only meaningful for AR/SPARC with polarization analyzer)
     posqwp, st_posqwp = [], []
     # Polarization: position (float) of linear polarizer
-    # (only meaningful for AR/SPARC with polarization analyzer)
     poslinpol, st_poslinpol = [], []
+
+    # Streak camera info (only meaningful for SPARC with streak camera)
+    # Streak unit: time range (float) for streaking
+    timeRange, st_timeRange = [], []
+    # Streak unit: MCPgain (float)
+    MCPgain, st_MCPgain = [], []
+    # Streak unit: streak mode (bool)
+    streakMode, st_streakMode = [], []
+    # Streak delay generator: trigger delay (float) for starting to streak
+    triggerDelay, st_triggerDelay = [], []
+    # Streak delay generator: trigger rate (float) (aka blanking rate of ebeam)
+    triggerRate, st_triggerRate = [], []
 
     for md in mds:
         if model.MD_AR_POLE in md:
@@ -1136,6 +1199,7 @@ def _add_image_metadata(group, image, mds):
             pf.append(0)
             st_pf.append(ST_INVALID)
 
+        # polarization analyzer
         if model.MD_POL_MODE in md:
             pol.append(md[model.MD_POL_MODE])
             st_pol.append(ST_REPORTED)
@@ -1155,6 +1219,38 @@ def _add_image_metadata(group, image, mds):
             poslinpol.append(0)
             st_poslinpol.append(ST_INVALID)
 
+        # streak camera
+        if model.MD_STREAK_TIMERANGE in md:
+            timeRange.append(md[model.MD_STREAK_TIMERANGE])
+            st_timeRange.append(ST_REPORTED)
+        else:
+            timeRange.append("")
+            st_timeRange.append(ST_INVALID)
+        if model.MD_STREAK_MCPGAIN in md:
+            MCPgain.append(md[model.MD_STREAK_MCPGAIN])
+            st_MCPgain.append(ST_REPORTED)
+        else:
+            MCPgain.append("")
+            st_MCPgain.append(ST_INVALID)
+        if model.MD_STREAK_MODE in md:
+            streakMode.append(md[model.MD_STREAK_MODE])
+            st_streakMode.append(ST_REPORTED)
+        else:
+            streakMode.append("")
+            st_streakMode.append(ST_INVALID)
+        if model.MD_TRIGGER_DELAY in md:
+            triggerDelay.append(md[model.MD_TRIGGER_DELAY])
+            st_triggerDelay.append(ST_REPORTED)
+        else:
+            triggerDelay.append("")
+            st_triggerDelay.append(ST_INVALID)
+        if model.MD_TRIGGER_RATE in md:
+            triggerRate.append(md[model.MD_TRIGGER_RATE])
+            st_triggerRate.append(ST_REPORTED)
+        else:
+            triggerRate.append("")
+            st_triggerRate.append(ST_INVALID)
+
     if not all(st == ST_INVALID for st in st_pp):
         gp["PolePosition"] = pp
         _h5svi_set_state(gp["PolePosition"], st_pp)
@@ -1171,6 +1267,7 @@ def _add_image_metadata(group, image, mds):
         gp["ParabolaF"] = pf
         _h5svi_set_state(gp["ParabolaF"], st_pf)
 
+    # polarization analyzer
     if not all(st == ST_INVALID for st in st_pol):
         gp["Polarization"] = pol
         _h5svi_set_state(gp["Polarization"], st_pol)
@@ -1180,6 +1277,23 @@ def _add_image_metadata(group, image, mds):
     if not all(st == ST_INVALID for st in st_poslinpol):
         gp["LinearPolarizer"] = poslinpol
         _h5svi_set_state(gp["LinearPolarizer"], st_poslinpol)
+
+    # streak camera
+    if not all(st == ST_INVALID for st in st_timeRange):
+        gp["TimeRange"] = timeRange
+        _h5svi_set_state(gp["TimeRange"], st_timeRange)
+    if not all(st == ST_INVALID for st in st_MCPgain):
+        gp["MCPGain"] = MCPgain
+        _h5svi_set_state(gp["MCPGain"], st_MCPgain)
+    if not all(st == ST_INVALID for st in st_streakMode):
+        gp["StreakMode"] = streakMode
+        _h5svi_set_state(gp["StreakMode"], st_streakMode)
+    if not all(st == ST_INVALID for st in st_triggerDelay):
+        gp["TriggerDelay"] = triggerDelay
+        _h5svi_set_state(gp["TriggerDelay"], st_triggerDelay)
+    if not all(st == ST_INVALID for st in st_triggerRate):
+        gp["TriggerRate"] = triggerRate
+        _h5svi_set_state(gp["TriggerRate"], st_triggerRate)
 
 
 def _add_svi_info(group):

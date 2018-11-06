@@ -343,7 +343,9 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 #                          # we explicitly reference each DataArray to avoid
 #                          # potential ordering problems of the "Image" elements
 #        + ROIRef (*)
-#        + ARData (*)
+#        + ARData ({0, 1})
+#        + POLData ({0, 1})
+#        + StreakCamData ({0, 1})
 #      + ROI (*)
 #        . ID
 #        . Name
@@ -770,7 +772,8 @@ def _updateMDFromOME(root, das):
 
             try:
                 t = int(ple.attrib["TheT"])
-                deltats[t] = float(ple.attrib["DeltaT"])  # s
+                deltats[t] = float(ple.attrib["DeltaT"])  # s  if key exists -> overwritten
+                # TODO can we put this code somewhere else, as time_list should be the same for all in c-dim
             except (KeyError, ValueError):
                 pass
 
@@ -804,19 +807,12 @@ def _updateMDFromOME(root, das):
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
 
-        # Convert the DeltaT's into PIXEL_DUR + TIME_OFFSET
-        if len(deltats) >= 2:
-            dk = deltats.keys()
-            mint = min(dk)
-            maxt = max(dk)
-            tof = deltats[mint]
-            pxd = (deltats[maxt] - tof) / (maxt - mint)
-            for t, dt in deltats.iteritems():
-                if not util.almost_equal(dt, tof + pxd * t):
-                    logging.warning("DeltaT's are not linear, which cannot be encoded in metadata: %s",
-                                    deltats)
-
-            # Update metadata of all the DAs
+        # Update metadata of each da, so that they will be merged
+        if deltats:
+            time_list = [v for k, v in sorted(deltats.items(), key=lambda (k, v): k)]
+            if len(time_list) != len(deltats.keys()):
+                logging.warning("TIME_LIST has length %d, while expected %d",
+                                len(time_list), len(deltats.keys()))
             for ifd in hd_2_ifd.flat:
                 if ifd == -1:
                     continue
@@ -827,8 +823,7 @@ def _updateMDFromOME(root, das):
                     continue
                 if da is None:
                     continue
-                da.metadata.update({model.MD_TIME_OFFSET: tof,
-                                    model.MD_PIXEL_DUR: pxd})
+                da.metadata.update({model.MD_TIME_LIST: time_list})
 
         # Mirror data
         md = {}
@@ -845,7 +840,7 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
 
-        # TODO what does .find do? seems to work anyways
+        # polarization analyzer
         poldata = ime.find("POLData")  # there must be only one per Image
         try:
             pol = str(poldata.attrib["Polarization"])
@@ -860,6 +855,35 @@ def _updateMDFromOME(root, das):
         try:
             poslinpol = float(poldata.attrib["LinearPolarizer"])
             md[model.MD_POL_POS_LINPOL] = poslinpol
+        except (AttributeError, KeyError, ValueError):
+            pass
+
+        # streak camera
+        # TODO shorten code: if timeRange then also the others should be there??
+        streakCamData = ime.find("StreakCamData")  # there must be only one per Image
+        try:
+            timeRange = float(streakCamData.attrib["TimeRange"])
+            md[model.MD_STREAK_TIMERANGE] = timeRange
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            MCPgain = int(streakCamData.attrib["MCPGain"])
+            md[model.MD_STREAK_MCPGAIN] = MCPgain
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            streakMode = bool(streakCamData.attrib["StreakMode"])
+            md[model.MD_STREAK_MODE] = streakMode
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            triggerDelay = float(streakCamData.attrib["TriggerDelay"])
+            md[model.MD_TRIGGER_DELAY] = triggerDelay
+        except (AttributeError, KeyError, ValueError):
+            pass
+        try:
+            triggerRate = float(streakCamData.attrib["TriggerRate"])
+            md[model.MD_TRIGGER_RATE] = triggerRate
         except (AttributeError, KeyError, ValueError):
             pass
 
@@ -905,6 +929,19 @@ def _updateMDFromOME(root, das):
                         continue
                     # First apply the global MD, then per-channel
                     da.metadata.update(md)
+
+        # TODO make it a separate method (it is called multiple times in this method here...)
+        for ifd in hd_2_ifd.flat:
+            if ifd == -1:
+                continue
+            try:
+                da = das[ifd]
+            except IndexError:
+                logging.warning("IFD %d not present, cannot update its metadata", ifd)
+                continue
+            if da is None:
+                continue
+            da.metadata.update(md)
 
 
 def _getIFDsFromOME(pxe, offset=0):
@@ -1271,6 +1308,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         except Exception:
             logging.warning("Spectrum metadata is insufficient to be saved")
 
+    time_list = None
+    if model.MD_TIME_LIST in globalMD:
+        try:
+            time_list = spectrum.get_time_per_pixel(da0)
+        except Exception:
+            logging.warning("Temporal spectrum metadata is insufficient to be saved")
+
     subid = 0
     for da in das:
         if is_rgb or len(da.shape) < 5:
@@ -1430,10 +1474,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         # much never useful to know the slightly different acquisition dates for
         # each C.
         # We now just store TIME_OFFSET + PIXEL_DUR info
+        # TODO in future only use TIME_LIST
         if model.MD_PIXEL_DUR in da.metadata:
             t = index[hdims.index("T")]
             deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
             plane.attrib["DeltaT"] = "%.15f" % deltat
+        if model.MD_TIME_LIST in da.metadata:
+            plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
@@ -1482,7 +1529,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         if model.MD_AR_PARABOLA_F in globalMD:
             ardata.attrib["ParabolaF"] = "%.15f" % globalMD[model.MD_AR_PARABOLA_F]
 
-    # Store polarization analyzer data if any
+    # Store polarization analyzer MD data if any
     if any(rd in globalMD for rd in [model.MD_POL_MODE,
                                      model.MD_POL_POS_QWP,
                                      model.MD_POL_POS_LINPOL]):
@@ -1494,6 +1541,25 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             poldata.attrib["QuarterWavePlate"] = "%.15f" % globalMD[model.MD_POL_POS_QWP]
         if model.MD_POL_POS_LINPOL in globalMD:
             poldata.attrib["LinearPolarizer"] = "%.15f" % globalMD[model.MD_POL_POS_LINPOL]
+
+    # Store streak camera MD data if any
+    if any(rd in globalMD for rd in [model.MD_STREAK_TIMERANGE,
+                                     model.MD_STREAK_MCPGAIN,
+                                     model.MD_STREAK_MODE,
+                                     model.MD_TRIGGER_DELAY,
+                                     model.MD_TRIGGER_RATE]):
+
+        streakCamData = ET.SubElement(ime, "StreakCamData")
+        if model.MD_STREAK_TIMERANGE in globalMD:
+            streakCamData.attrib["TimeRange"] = "%.9f" % globalMD[model.MD_STREAK_TIMERANGE]
+        if model.MD_STREAK_MCPGAIN in globalMD:
+            streakCamData.attrib["MCPGain"] = "%d" % globalMD[model.MD_STREAK_MCPGAIN]
+        if model.MD_STREAK_MODE in globalMD:
+            streakCamData.attrib["StreakMode"] = "%s" % globalMD[model.MD_STREAK_MODE]
+        if model.MD_TRIGGER_DELAY in globalMD:
+            streakCamData.attrib["TriggerDelay"] = "%.12f" % globalMD[model.MD_TRIGGER_DELAY]
+        if model.MD_TRIGGER_RATE in globalMD:
+            streakCamData.attrib["TriggerRate"] = "%f" % globalMD[model.MD_TRIGGER_RATE]
 
 
 def _createPointROI(rois, name, p, shp_attrib=None):
