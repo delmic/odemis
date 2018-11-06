@@ -117,14 +117,6 @@ MD_POL_NEGDIAG = "negdiag"  # (string) polarization analyzer position
 MD_POL_RHC = "rhc"  # (string) polarization analyzer position
 MD_POL_LHC = "lhc"  # (string) polarization analyzer position
 
-MD_STREAK_TIMERANGE = "Streak Time Range"  # Time range for one streak/sweep
-MD_STREAK_MCPGAIN  = "Streak MCP Gain"  # Multiplying gain for microchannel plate
-MD_STREAK_MODE = "Streak Mode"  # Mode of streak camera (Focus (Off) or Operate (On))
-
-MD_DELAY_TRIGGER = "Trigger Delay"  # Trigger delay between ext. trigger and starting of the streak/sweeping
-MD_DELAY_REPRATE = "Repetition Rate"  # Repetition Rate of the trigger signal
-MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping time range to trigger delay in streak camera
-
 MD_DET_TYPE = "Detector type"
 # The following tags are to be used as the values of MD_DET_TYPE
 MD_DT_NORMAL = "Detector normal"  # The detector sends the same level of signal independent of the acq duration (eg, ETD)
