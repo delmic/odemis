@@ -118,6 +118,9 @@ class MetadataUpdater(model.Component):
                 elif a.role == "pol-analyzer":
                     # update the position of the polarization analyzer
                     observed = self.observePolAnalyzer(a, d)
+                elif a.role == "streak-lens":
+                    # update the magnification of the streak lens
+                    observed = self.observeStreakLens(a, d)
                 else:
                     observed = False
 
@@ -356,6 +359,20 @@ class MetadataUpdater(model.Component):
 
             analyzer.position.subscribe(updatePosition, init=True)
             self._onTerminate.append((analyzer.position.unsubscribe, (updatePosition,)))
+
+        return True
+
+    def observeStreakLens(self, streak_lens, comp_affected):
+        """Update the magnification of the streak lens affecting the
+        streak readout camera."""
+
+        def updateMagnification(unused, streak_lens=streak_lens, comp_affected=comp_affected):
+            mag = streak_lens.magnification.value
+            md = {model.MD_LENS_MAG: mag}
+            comp_affected.updateMetadata(md)
+
+        streak_lens.magnification.subscribe(updateMagnification, init=True)
+        self._onTerminate.append((streak_lens.magnification.unsubscribe, (updateMagnification,)))
 
         return True
 
