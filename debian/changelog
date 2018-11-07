@@ -1,3 +1,12 @@
+odemis (2.8.5-1) precise; urgency=medium
+
+  * New version: 2.8.5
+  * Main bugs fixed:
+    - Avoid memory leak when opening/closing files
+    - Fix live SPARC AR view not always centered if stage can be controlled
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 07 Nov 2018 09:43:04 +0100
+
 odemis (2.8.4-1) precise; urgency=medium
 
   * New version: 2.8.4
