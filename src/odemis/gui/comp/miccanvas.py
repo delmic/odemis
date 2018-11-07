@@ -1246,10 +1246,12 @@ class SparcARCanvas(DblMicroscopeCanvas):
 
         # always refit to image (for the rare case it has changed size)
         self.fit_view_to_content(recenter=True)
+        self.requested_phys_pos = (0, 0)
 
     def on_size(self, event):
         # refit image
         self.fit_view_to_content(recenter=True)
+        self.requested_phys_pos = (0, 0)
         # Skip DblMicroscopeCanvas.on_size which plays with mpp
         canvas.DraggableCanvas.on_size(self, event)
 
