@@ -2419,7 +2419,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         ar_drift = sas.raw[-1]  # angle resolved data arrays
         self.assertGreaterEqual(ar_drift.shape[-4], 2)
 
-    def test_arpol_ss(self):
+    def test_arpol_ss(self): # TODO move to SettingStreamTest cases?
         """ Test ARSettingsStream """
         # Create the stream
         ars = stream.ARSettingsStream("test",
@@ -2450,7 +2450,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         # change VA --> polarization analyzer should move as stream active
         ars.polarization.value = "vertical"
-        time.sleep(2)
+        time.sleep(7)
         # check polarization VA connected to GUI shows same value as position VA listening to HW
         self.assertEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
