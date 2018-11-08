@@ -56,18 +56,18 @@ KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: "slit-in", 3: "slit-monochromator"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
 
-# TODO this is testing the a work around version regarding the child spectrograph problem for the
-# readoutcam in the yaml (other version see below)
+
 class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
+    """Test the Hamamatsu streak camera class with real streak camera HW and
+     a simulated spectrograph"""
 
     @classmethod
     def setUpClass(cls):
 
         cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
-        CONFIG_SPECTROGRAPH = {"spectrograph": cls.spectrograph}
 
         children = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
-                    "delaybox": CONFIG_DELAYBOX, "spectrograph": CONFIG_SPECTROGRAPH}
+                    "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
 
         cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
                                                     children=children)
@@ -83,6 +83,30 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.streakcam.terminate()
+
+    def test_magnification(self):
+        """Test the streak lens component and the corresponding magnification is
+        correctly applied to calculate the effective pixel size of the readout camera."""
+
+        # default mag is 1. if not specified
+        wll = self.readoutcam._metadata[model.MD_WL_LIST]
+
+        mag = 0.476
+        md = {model.MD_LENS_MAG: mag}
+        self.readoutcam.updateMetadata(md)
+        self.assertIn(model.MD_LENS_MAG, self.readoutcam._metadata)
+        self.assertEqual(self.readoutcam._metadata[model.MD_LENS_MAG], mag)
+        self.readoutcam._updateWavelengthList()
+        wll_mag = self.readoutcam._metadata[model.MD_WL_LIST]
+
+        with self.assertRaises(AssertionError):
+            self.assertListEqual(wll, wll_mag)  # there is not assertListNotEqual...
+
+        mag = 1.0
+        md = {model.MD_LENS_MAG: mag}
+        self.readoutcam.updateMetadata(md)
+        self.assertIn(model.MD_LENS_MAG, self.readoutcam._metadata)
+        self.assertEqual(self.readoutcam._metadata[model.MD_LENS_MAG], mag)
 
     def test_acq_wavelengthTable(self):
         """Get the scaling table (correction for mapping vertical px with timestamps)
@@ -98,7 +122,7 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         self.assertIn(model.MD_TIME_LIST, img.metadata)
         self.assertIn(model.MD_WL_LIST, img.metadata)
 
-    def test_spectrographVAs(self):  # TODO
+    def test_spectrographVAs(self):
 
         self.assertIn("wavelength", self.spectrograph.axes)
         self.assertIn("grating", self.spectrograph.axes)
@@ -108,59 +132,26 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         pos_wl = 500e-9  # max: 808.650024 nm
         pos_grating = 2  # range: 1 -> 3
         pos_slit = 0.0001  # range: 0.000010 -> 0.002500
+
         f = self.spectrograph.moveAbs({"wavelength": pos_wl})
         f.result()  # wait for the position to be set
         f = self.spectrograph.moveAbs({"grating": pos_grating})
         f.result()  # wait for the position to be set
         f = self.spectrograph.moveAbs({"slit-in": pos_slit})
         f.result()  # wait for the position to be set
-        # TODO so far wavelength no local VA correct? so no need to test if HWaxis changed...
-
-        # TODO write testcase for updateWavelength list correctly
-        # TODO check that pixel size is correctly calculated (binning, magnification due to streak optics)
-
-        # TODO check for MD, which MD should be saved? center wavelength? grating? input slit width? self.spectrograph.position.value
 
         # VAs should have same values as HW positions
-        self.assertEqual(self.spectrograph.position.value["wavelength"], pos_wl)
+        self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], pos_wl)
         self.assertEqual(self.spectrograph.position.value["grating"], pos_grating)
-        self.assertEqual(self.spectrograph.position.value["slit-in"], pos_slit)
+        self.assertAlmostEqual(self.spectrograph.position.value["slit-in"], pos_slit)
 
-
-class TestHamamatsurxCamWithSpectrographWithReadoutCamChild(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-
-        cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
-        child = {"spectrograph": cls.spectrograph}
-        CONFIG_READOUTCAM = {"name": "ReadoutCamera", "role": "readoutcam", "children": child}
-
-        children = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
-
-        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
-
-        for child in cls.streakcam.children.value:
-            if child.name == CONFIG_READOUTCAM["name"]:
-                cls.readoutcam = child
-            if child.name == CONFIG_STREAKUNIT["name"]:
-                cls.streakunit = child
-            if child.name == CONFIG_DELAYBOX["name"]:
-                cls.delaybox = child
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.streakcam.terminate()
-
-    def test_acq_scalingTable_WavelengthTable(self):
-        pass
 
 # Inheritance order is important for setUp, tearDown
 #@skip("simple")
 class TestHamamatsurxCamGenericCam(VirtualTestCam, unittest.TestCase):
     """
     Test directly the Hamamatsu streak camera class.
+    Run the generic camera test cases.
     """
     camera_type = None
     camera_kwargs = None
@@ -195,7 +186,8 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
 #@skip("simple")
 class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
-    Test the synchronizedOn(Event) interface, using the fake SEM
+    Test the synchronizedOn(Event) interface with real streak camera HW, using the fake SEM.
+    Run the generic camera test cases.
     """
     camera_type = None
     camera_kwargs = None
@@ -230,6 +222,7 @@ class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest
 
 
 class TestHamamatsurxCam(unittest.TestCase):
+    """Test the Hamamatsu streak camera class with real streak camera HW."""
 
     @classmethod
     def setUpClass(cls):
@@ -298,6 +291,23 @@ class TestHamamatsurxCam(unittest.TestCase):
         # request value, which is not in range of VA
         with self.assertRaises(IndexError):
             self.readoutcam.exposureTime.value = 0
+
+    def test_Binning(self):
+        """Test binning time VA for readout camera."""
+        self.readoutcam.binning.value = (1, 1)
+        prev_bin = self.readoutcam.binning.value
+        # change binning VA
+        self.readoutcam.binning.value = (2, 2)
+        cur_bin = self.readoutcam.binning.value
+        # check previous and current value are not the same
+        self.assertNotEqual(prev_bin, cur_bin)
+
+        # request value, which is not in choices of VA
+        with self.assertRaises(IndexError):
+            self.readoutcam.binning.value = (3, 3)
+        # now test clip function
+        self.readoutcam.binning.value = self.readoutcam.binning.clip((3, 3))
+        self.assertEqual(self.readoutcam.binning.value, (1, 1))
 
     ### Delay generator #####################################################
     def test_TriggerDelay(self):
@@ -516,7 +526,7 @@ class TestHamamatsurxCam(unittest.TestCase):
             self.readoutcam.data.unsubscribe(callback)
             self.assertEqual(self.streakunit.MCPgain.value, 0)  # when unsubscribe, mcpGain should be zero
             size = self.readoutcam.resolution.value
-            self.assertEqual(image.T.shape, size)  # TODO why transposed? dataarray object?
+            self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
 
         self.readoutcam.data.subscribe(callback)
@@ -539,7 +549,7 @@ class TestHamamatsurxCam(unittest.TestCase):
 
         def receive_image(dataflow, image):
             """Callback for readout camera"""
-            self.assertEqual(image.T.shape, size)
+            self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
             self.assertNotIn(model.MD_TIME_LIST, image.metadata)
             self.assertFalse(image.metadata[model.MD_STREAK_MODE])
@@ -577,7 +587,7 @@ class TestHamamatsurxCam(unittest.TestCase):
 
         def receive_image(dataflow, image):
             """Callback for readout camera"""
-            self.assertEqual(image.T.shape, size)
+            self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
             self.assertIn(model.MD_TIME_LIST, image.metadata)
             self.assertTrue(image.metadata[model.MD_STREAK_MODE])
@@ -615,7 +625,7 @@ class TestHamamatsurxCam(unittest.TestCase):
 
         def receive_image(dataflow, image):
             """Callback for readout camera"""
-            self.assertEqual(image.T.shape, size)
+            self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
             self.camera_left -= 1
             if self.camera_left <= 0:
