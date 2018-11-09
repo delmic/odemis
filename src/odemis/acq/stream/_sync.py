@@ -689,9 +689,10 @@ class MultipleDetectorStream(Stream):
         assert len(data_list) > 0
         assert data_list[0].ndim == 2
 
-        # extend the shape to TZ dimensions to allow the concatenation on T
-        for d in data_list:
-            d.shape = (1, 1) + d.shape
+        # Extend the shape to TZ dimensions to allow the concatenation on T.
+        # Note: we must be careful to not change the anchor data, as it might
+        # still be used (by later acquisitions).
+        data_list = [d.reshape((1, 1) + d.shape) for d in data_list]
 
         anchor_data = numpy.concatenate(data_list)
         anchor_data.shape = (1,) + anchor_data.shape
@@ -729,6 +730,9 @@ class MultipleDetectorStream(Stream):
             except Exception:
                 logging.exception("Leech %s failed to start, will be disabled for this acquisition", l)
                 np = None
+                if self._dc_estimator is l:
+                    # Make sure to avoid all usages of this special leech
+                    self._dc_estimator = None
             leech_np.append(np)
 
         # extra time needed on average for a single pixel (ebeam pos) for all leches (s)
