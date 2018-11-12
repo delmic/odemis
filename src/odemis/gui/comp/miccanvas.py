@@ -820,19 +820,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)
 
-    # TODO: just return best scale and center? And let the caller do what it wants?
-    # It would allow to decide how to redraw depending if it's on size event or more high level.
-    def fit_to_content(self, recenter=False):
-        """ Adapt the scale and (optionally) center to fit to the current content
-
-        :param recenter: (boolean) If True, also recenter the view.
-
+    def _getContentBoundingBox(self):
         """
-
-        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
-
+        return (4 floats or Nones): ltrb in m. The physical position of the content
+        or 4 Nones if no content is present.
+        """
         # Find bounding box of all the content
-        bbox = [None, None, None, None]  # ltrb in m
+        bbox = (None, None, None, None)  # ltrb in m
         if self.view is not None:
             streams = self.view.stream_tree.getStreams()
             for s in streams:
@@ -846,6 +840,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
                             max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
 
+        return bbox
+
+    # TODO: just return best scale and center? And let the caller do what it wants?
+    # It would allow to decide how to redraw depending if it's on size event or more high level.
+    def fit_to_content(self, recenter=False):
+        """ Adapt the scale and (optionally) center to fit to the current content
+        :param recenter: (boolean) If True, also recenter the view.
+        """
+        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
+
+        bbox = self._getContentBoundingBox()
         if bbox[0] is None:
             return  # no image => nothing to do
 
@@ -1001,7 +1006,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
 class SparcARCanvas(DblMicroscopeCanvas):
     """
     Special restricted version that displays the first stream always fitting
-    the entire canvas.
+    the entire canvas (and without taking into account rotation/shear).
     It also has a .flip attribute to flip horizontally and/or vertically the
     whole image if needed.
     """
@@ -1055,13 +1060,35 @@ class SparcARCanvas(DblMicroscopeCanvas):
         self.merge_ratio = self.view.stream_tree.kwargs.get("merge", 1)
 
         # always refit to image (for the rare case it has changed size)
-        self.fit_view_to_content(recenter=True)
+        self.fit_view_to_content(recenter=False)
 
     def on_size(self, event):
         # refit image
-        self.fit_view_to_content(recenter=True)
+        self.fit_view_to_content(recenter=False)
         # Skip DblMicroscopeCanvas.on_size which plays with mpp
         canvas.DraggableCanvas.on_size(self, event)
+
+    def fit_to_content(self, recenter=False):
+        # Override the default function to _not_ move the center, as we always
+        # display everything at 0,0.
+
+        bbox = self._getContentBoundingBox()
+        if bbox[0] is None:
+            return  # no image => nothing to do
+
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f m", w, h)
+            return  # no image
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
+
+        # Force it back to the center (in case recenter_buffer was called)
+        self.requested_phys_pos = (0, 0)
+        wx.CallAfter(self.request_drawing_update)
 
 
 class BarPlotCanvas(canvas.PlotCanvas):
