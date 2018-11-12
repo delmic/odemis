@@ -249,6 +249,7 @@ class VirtualTestCam(object):
 
         number = 5
         self.left = number
+
         self.camera.data.subscribe(self.receive_image)
         for i in range(number):
             # end early if it's already finished
@@ -388,12 +389,14 @@ class VirtualTestCam(object):
 
 #    @unittest.skip("simple")
     def test_binning(self):
-        if (not model.hasVA(self.camera, "binning") or
-            self.camera.binning.readonly):
+        if not model.hasVA(self.camera, "binning") or self.camera.binning.readonly:
             self.skipTest("Camera doesn't support setting binning")
 
         self.camera.binning.value = (1, 1)
-        max_binning = self.camera.binning.range[1]
+        if hasattr(self.camera.binning, "range"):
+            max_binning = self.camera.binning.range[1]
+        else:  # if binning-VA is VAEnumerated
+            max_binning = max(self.camera.binning.choices)
         new_binning = (2, 2)
         if new_binning >= max_binning:
             # if there is no binning 2, let's not try

@@ -327,6 +327,30 @@ class VigilantAttributeTest(unittest.TestCase):
         for v in prop.choices:
             prop.value = v # they all should work
 
+        # It's also allowed to use tuples as choices, which contain no numbers
+        prop = model.VAEnumerated((1, 1), {(1, 1), (4, 4), (5, "aaa")})
+        prop.value = prop.clip((3, 3))
+        # should find the closest value
+        self.assertEqual(prop.value, (4, 4))
+        for v in prop.choices:
+            prop.value = v  # they all should work
+
+        prop = model.VAEnumerated((1, "aaa"), {(1, "aaa"), (3, "bbb"), (4, "ccc")})
+        prev_value = prop.value
+        prop.value = prop.clip((3, 3))
+        # should not find a closest value, but return old value
+        self.assertEqual(prop.value, prev_value)
+        for v in prop.choices:
+            prop.value = v  # they all should work
+
+        prop = model.VAEnumerated((1, "aaa"), {(1, "aaa"), (3, "bbb"), (4, "ccc")})
+        prev_value = prop.value
+        prop.value = prop.clip((5, "ddd"))
+        # should not find a closest value as not all values in tuple are numbers, but return old value
+        self.assertEqual(prop.value, prev_value)
+        for v in prop.choices:
+            prop.value = v  # they all should work
+
     def test_resolution(self):
         va = model.ResolutionVA((10,10), ((1,1), (100, 150)))
         self.assertEqual(va.value, (10,10))
