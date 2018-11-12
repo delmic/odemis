@@ -172,12 +172,15 @@ class BtnMixin(object):
         # system background
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
+        if bmpLabel is None:
+            self.bmpLabel = self._create_main_bitmap()
+
         # Clear the hovering attributes
         self.bmpHover = None
         self.hovering = None
 
         # Previous size, used to check if bitmaps should be recreated
-        self.previous_size = (0, 0)
+        self.previous_size = self.Size
 
         # Set the font size to the default. This will be overridden if another font (size) is
         # defined in the XRC file
@@ -217,10 +220,12 @@ class BtnMixin(object):
 
         self.Refresh()
 
-    def OnSize(self, _):
+    def OnSize(self, evt):
         if self.Size != self.previous_size and self.height:
             self._reset_bitmaps()
             self.previous_size = self.Size
+
+        super(BtnMixin, self).OnSize(evt)
 
     def SetLabel(self, label):
         super(BtnMixin, self).SetLabel(label)
