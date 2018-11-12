@@ -131,14 +131,20 @@ class MetadataUpdater(model.Component):
 
         # TODO: drop subscriptions to dead components
 
-    def observeStage(self, stage, comp):
+# Note: The scope of variables is redefined in the nested/local function
+# to ensure that the correct variables are used and were not overwritten
+# before calling the function. That's why all the local functions are written
+# with extra arguments such as "a=a" (for more info on this issue see:
+# https://eev.ee/blog/2011/04/24/gotcha-python-scoping-closures/)
+
+    def observeStage(self, stage, comp_affected):
         """
         return bool: True if will actually update the affected component,
                      False if the affect is not supported (here)
         """
 
         # we need to keep the information on the detector to update
-        def updateStagePos(pos, comp=comp):
+        def updateStagePos(pos, comp_affected=comp_affected):
             # We need axes X and Y
             if "x" not in pos or "y" not in pos:
                 logging.warning("Stage position doesn't contain X/Y axes")
@@ -147,21 +153,21 @@ class MetadataUpdater(model.Component):
             y = pos.get("y", 0)
             md = {model.MD_POS: (x, y)}
             logging.debug("Updating position for component %s, to %f, %f",
-                          comp.name, x, y)
-            comp.updateMetadata(md)
+                          comp_affected.name, x, y)
+            comp_affected.updateMetadata(md)
 
         stage.position.subscribe(updateStagePos, init=True)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
 
         return True
 
-    def observeLens(self, lens, comp):
-        if comp.role not in ("ccd", "sp-ccd", "laser-mirror"):
+    def observeLens(self, lens, comp_affected):
+        if comp_affected.role not in ("ccd", "sp-ccd", "laser-mirror"):
             return False
 
         # update static information
         md = {model.MD_LENS_NAME: lens.hwVersion}
-        comp.updateMetadata(md)
+        comp_affected.updateMetadata(md)
 
         # List of direct VA -> MD mapping
         md_va_list = {"numericalAperture": model.MD_LENS_NA,
@@ -178,23 +184,25 @@ class MetadataUpdater(model.Component):
         # MD_LENS_MAG.
         # For DigitalCamera, the .pixelSize is the SENSOR_PIXEL_SIZE, and we
         # compute PIXEL_SIZE every time the LENS_MAG *or* binning change.
-        if model.hasVA(comp, "scale"):
+        if model.hasVA(comp_affected, "scale"):
             md_va_list["magnification"] = model.MD_LENS_MAG
         else:
             # TODO: instead of updating PIXEL_SIZE everytime the CCD changes binning,
             # just let the CCD component compute the value based on its sensor
             # pixel size + MAG, like for the scanners.
-            if model.hasVA(comp, "binning"):
-                binva = comp.binning
+            if model.hasVA(comp_affected, "binning"):
+                binva = comp_affected.binning
             else:
                 logging.debug("No binning")
                 binva = None
 
             # Depends on the actual size of the ccd's density (should be constant)
-            captor_mpp = comp.pixelSize.value  # m, m
+            captor_mpp = comp_affected.pixelSize.value  # m, m
 
             # we need to keep the information on the detector to update
-            def updatePixelDensity(unused, lens=lens, comp=comp, binva=binva):
+            def updatePixelDensity(unused, lens=lens, comp_affected=comp_affected, binva=binva):
+                # unused: because it might be magnification or binning
+
                 # the formula is very simple: actual MpP = CCD MpP * binning / Mag
                 if binva is None:
                     binning = 1, 1
@@ -204,7 +212,7 @@ class MetadataUpdater(model.Component):
                 mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag)
                 md = {model.MD_PIXEL_SIZE: mpp,
                       model.MD_LENS_MAG: mag}
-                comp.updateMetadata(md)
+                comp_affected.updateMetadata(md)
 
             lens.magnification.subscribe(updatePixelDensity, init=True)
             self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
@@ -213,22 +221,24 @@ class MetadataUpdater(model.Component):
 
         # update pole position (if available), taking into account the binning
         if model.hasVA(lens, "polePosition"):
-            def updatePolePos(unused, lens=lens, comp=comp):
+            def updatePolePos(unused, lens=lens, comp_affected=comp_affected):
+                # unused: because it might be polePos or binning
+
                 # the formula is: Pole = Pole_no_binning / binning
                 try:
-                    binning = comp.binning.value
+                    binning = comp_affected.binning.value
                 except AttributeError:
                     binning = 1, 1
                 pole_pos = lens.polePosition.value
                 pp = (pole_pos[0] / binning[0], pole_pos[1] / binning[1])
                 md = {model.MD_AR_POLE: pp}
-                comp.updateMetadata(md)
+                comp_affected.updateMetadata(md)
 
             lens.polePosition.subscribe(updatePolePos, init=True)
             self._onTerminate.append((lens.polePosition.unsubscribe, (updatePolePos,)))
             try:
-                comp.binning.subscribe(updatePolePos)
-                self._onTerminate.append((comp.binning.unsubscribe, (updatePolePos,)))
+                comp_affected.binning.subscribe(updatePolePos)
+                self._onTerminate.append((comp_affected.binning.unsubscribe, (updatePolePos,)))
             except AttributeError:
                 pass
 
@@ -236,9 +246,9 @@ class MetadataUpdater(model.Component):
         for va_name, md_key in md_va_list.items():
             if model.hasVA(lens, va_name):
 
-                def updateMDFromVA(val, md_key=md_key, comp=comp):
+                def updateMDFromVA(val, md_key=md_key, comp_affected=comp_affected):
                     md = {md_key: val}
-                    comp.updateMetadata(md)
+                    comp_affected.updateMetadata(md)
 
                 logging.debug("Listening to VA %s.%s -> MD %s", lens.name, va_name, md_key)
                 va = getattr(lens, va_name)
@@ -247,9 +257,9 @@ class MetadataUpdater(model.Component):
 
         return True
 
-    def observeLight(self, light, comp):
+    def observeLight(self, light, comp_affected):
 
-        def updateInputWL(emissions, light=light, comp=comp):
+        def updateInputWL(emissions, light=light, comp_affected=comp_affected):
             # MD_IN_WL expects just min/max => if multiple sources, we need to combine
             spectra = light.spectra.value
             wls = []
@@ -269,12 +279,12 @@ class MetadataUpdater(model.Component):
 
             md = {model.MD_IN_WL: wl_range,
                   model.MD_LIGHT_POWER: p}
-            comp.updateMetadata(md)
+            comp_affected.updateMetadata(md)
 
-        def updateLightPower(power, light=light, comp=comp):
+        def updateLightPower(power, light=light, comp_affected=comp_affected):
             p = power * numpy.sum(light.emissions.value)
             md = {model.MD_LIGHT_POWER: p}
-            comp.updateMetadata(md)
+            comp_affected.updateMetadata(md)
 
         light.power.subscribe(updateLightPower, init=True)
         self._onTerminate.append((light.power.unsubscribe, (updateLightPower,)))
@@ -284,36 +294,36 @@ class MetadataUpdater(model.Component):
 
         return True
 
-    def observeSpectrograph(self, spectrograph, comp):
-        if comp.role != "monochromator":
+    def observeSpectrograph(self, spectrograph, comp_affected):
+        if comp_affected.role != "monochromator":
             return False
 
         if 'slit-monochromator' not in spectrograph.axes:
             logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
 
-            def updateOutWLRange(pos, sp=spectrograph, comp=comp):
-                wl = sp.position.value["wavelength"]
+            def updateOutWLRange(pos, comp_affected=comp_affected):
+                wl = pos["wavelength"]
                 md = {model.MD_OUT_WL: (wl, wl)}
-                comp.updateMetadata(md)
+                comp_affected.updateMetadata(md)
 
         else:
-            def updateOutWLRange(pos, sp=spectrograph, comp=comp):
+            def updateOutWLRange(pos, sp=spectrograph, comp_affected=comp_affected):
                 width = pos['slit-monochromator']
                 bandwidth = sp.getOpeningToWavelength(width)
                 md = {model.MD_OUT_WL: bandwidth}
-                comp.updateMetadata(md)
+                comp_affected.updateMetadata(md)
 
         spectrograph.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
 
         return True
 
-    def observeFilter(self, filter, comp):
+    def observeFilter(self, filter, comp_affected):
         # FIXME: If a monochromator + spectrograph, which MD_OUT_WL to pick?
         # update any affected component
-        def updateOutWLRange(pos, fl=filter, comp=comp):
-            wl_out = fl.axes["band"].choices[fl.position.value["band"]]
-            comp.updateMetadata({model.MD_OUT_WL: wl_out})
+        def updateOutWLRange(pos, fl=filter, comp_affected=comp_affected):
+            wl_out = fl.axes["band"].choices[pos["band"]]
+            comp_affected.updateMetadata({model.MD_OUT_WL: wl_out})
 
         filter.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
@@ -323,9 +333,8 @@ class MetadataUpdater(model.Component):
     def observeQWP(self, qwp, comp_affected):
 
         if model.hasVA(qwp, "position"):
-            def updatePosition(unused, qwp=qwp, comp_affected=comp_affected):
-                pos = qwp.position.value["rz"]
-                md = {model.MD_POL_POS_QWP: pos}
+            def updatePosition(pos, comp_affected=comp_affected):
+                md = {model.MD_POL_POS_QWP: pos["rz"]}
                 comp_affected.updateMetadata(md)
 
             qwp.position.subscribe(updatePosition, init=True)
@@ -336,9 +345,8 @@ class MetadataUpdater(model.Component):
     def observeLinPol(self, linpol, comp_affected):
 
         if model.hasVA(linpol, "position"):
-            def updatePosition(unused, linpol=linpol, comp_affected=comp_affected):
-                pos = linpol.position.value["rz"]
-                md = {model.MD_POL_POS_LINPOL: pos}
+            def updatePosition(pos, comp_affected=comp_affected):
+                md = {model.MD_POL_POS_LINPOL: pos["rz"]}
                 comp_affected.updateMetadata(md)
 
             linpol.position.subscribe(updatePosition, init=True)
@@ -349,9 +357,8 @@ class MetadataUpdater(model.Component):
     def observePolAnalyzer(self, analyzer, comp_affected):
 
         if model.hasVA(analyzer, "position"):
-            def updatePosition(unused, analyzer=analyzer, comp_affected=comp_affected):
-                pos = analyzer.position.value["pol"]
-                md = {model.MD_POL_MODE: pos}
+            def updatePosition(pos, comp_affected=comp_affected):
+                md = {model.MD_POL_MODE: pos["rz"]}
                 comp_affected.updateMetadata(md)
 
             analyzer.position.subscribe(updatePosition, init=True)
