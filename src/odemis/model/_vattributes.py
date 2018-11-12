@@ -34,6 +34,7 @@ import threading
 from types import NoneType
 import types
 import zmq
+from scipy.spatial import distance
 
 from . import _core
 
@@ -981,6 +982,37 @@ class VAEnumerated(VigilantAttribute, Enumerated):
     def _check(self, value):
         Enumerated._check(self, value)
         VigilantAttribute._check(self, value)
+
+    def clip(self, val):
+        """ Clip the given value to fit within the choices.
+
+        If the range contains vectors of length n, each element of val will be
+        clipped separately by position for positions 0..n-1
+        return (same type as val): value clipped
+        """
+        if val in self.choices:
+            return val
+
+        # find the closest choice (for numbers or tuples only)
+        if isinstance(val, collections.Iterable) or isinstance(val, numbers.Real):
+            ls = []
+
+            for choice in self.choices:
+                try:
+                    # Calculate euclidean distance.
+                    # If choice contains non numbers, choice and val cannot be compared.
+                    ls.append((choice, distance.euclidean(choice, val)))
+                except (TypeError, ValueError):
+                    pass
+
+            if not ls:
+                return self.value  # in case of all choices of type tuple and not containing only numbers
+
+            return min(ls, key=lambda (choice, distance): distance)[0]
+
+        else:
+            # if not possible to set the requested value, return the current value
+            return self.value
 
 
 class FloatContinuous(FloatVA, Continuous):
