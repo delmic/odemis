@@ -366,8 +366,10 @@ class MetadataUpdater(model.Component):
         """Update the magnification of the streak lens affecting the
         streak readout camera."""
 
-        def updateMagnification(unused, streak_lens=streak_lens, comp_affected=comp_affected):
-            mag = streak_lens.magnification.value
+        if not comp_affected.role.endswith("ccd"):
+            return False
+
+        def updateMagnification(mag, comp_affected=comp_affected):
             md = {model.MD_LENS_MAG: mag}
             comp_affected.updateMetadata(md)
 

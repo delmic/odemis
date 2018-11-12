@@ -163,7 +163,7 @@ class MainGUIData(object):
         "overview-light": "overview_light",
         "pol-analyzer": "pol_analyzer",
         "streak-cam": "streak_cam",
-        "streak-ccd": "streak_readoutcam",
+        "streak-ccd": "streak_ccd",
         "streak-unit": "streak_unit",
         "streak-delay": "streak_delay",
         "streak-lens": "streak_lens"
@@ -226,7 +226,7 @@ class MainGUIData(object):
         self.overview_light = None  # light of the overview CCD
         self.pol_analyzer = None  # polarization analyzer
         self.streak_cam = None  # streak camera
-        self.streak_readoutcam = None  # readout camera of the streak camera
+        self.streak_ccd = None  # readout camera of the streak camera
         self.streak_unit = None  # streak unit of the streak camera
         self.streak_delay = None  # delay generator of the streak camera
         self.streak_lens = None  # input optics in front of the streak camera
