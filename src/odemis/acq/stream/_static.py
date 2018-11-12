@@ -177,8 +177,8 @@ class Static2DStream(StaticStream):
         metadata = copy.copy(raw[0].metadata)
 
         # If there are 5 dims in CTZYX, eliminate CT and only take spatial dimensions
-        if raw[0].ndim > 3:
-            dims = metadata.get(model.MD_DIMS, "ZYX")
+        if raw[0].ndim >= 3:
+            dims = metadata.get(model.MD_DIMS, "CTZYX"[-raw[0].ndim::])
             if dims[-3:] != "ZYX":
                 logging.warning("Metadata has %s dimensions, which may be invalid.", dims)
             if len(raw[0].shape) == 5:
@@ -189,10 +189,15 @@ class Static2DStream(StaticStream):
                 if any(x > 1 for x in raw[0].shape[:1]):
                     logging.error("Higher dimensional data is being discarded.")
                 raw[0] = raw[0][0]
-            metadata[model.MD_DIMS] = "ZYX"
+
+            # Squash the Z dimension if it's empty
+            if  raw[0].shape[0] == 1:
+                raw[0] = raw[0][0, :, :]
+            metadata[model.MD_DIMS] = "CTZYX"[-raw[0].ndim::]
 
         logging.debug("%s shape: %s", name, raw[0].shape)
 
+        # Define if z-index should be created.
         if len(raw[0].shape) == 3 and metadata[model.MD_DIMS] == "ZYX":
             try:
                 pxs = metadata[model.MD_PIXEL_SIZE]
