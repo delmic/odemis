@@ -549,10 +549,13 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
 
 #    @skip("simple")
-    def testReadMDSpec(self):
+    def testReadAndSaveMDSpec(self):
         """
-        Checks that we can read back the metadata of a spectrum image
+        Checks that we can save and read back the metadata of a spectrum image.
         """
+        # TODO may write a loop once testing for polynomial and once for WL_LIST?
+        # create 2 simple greyscale images (sem overview, Spec): XY, XYZTC (XY ebeam pos scanned, C Spec info)
+        sizes = [(512, 256), (100, 110, 1, 1, 200)]  # different sizes to ensure different acquisitions
         # Create fake current over time report
         cot = [(time.time(), 1e-12)]
         for i in range(1, 171):
@@ -560,14 +563,14 @@ class TestTiffIO(unittest.TestCase):
 
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "test",
+                     model.MD_DESCRIPTION: "test spectrum",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 2), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_BINNING: (1, 2),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_IN_WL: (500e-9, 520e-9), # m
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
                      model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                      model.MD_EBEAM_CURRENT: 20e-6,  # A
                     },
@@ -576,16 +579,15 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_DESCRIPTION: "test3d",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
-                     model.MD_POS: (13.7e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9],  # m, m/px: wl polynomial
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
                      model.MD_EBEAM_CURRENT_TIME: cot,
+                     # model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
                     },
                     ]
-        # create 2 simple greyscale images
-        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
         dtype = numpy.dtype("uint8")
         ldata = []
         for i, s in enumerate(sizes):
@@ -596,7 +598,7 @@ class TestTiffIO(unittest.TestCase):
         tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
         tdtype = numpy.uint8
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
-        thumbnail[:, :, 1] += 255 # green
+        thumbnail[:, :, 1] += 255  # green
 
         # export
         tiff.export(FILENAME, ldata, thumbnail)
@@ -618,18 +620,135 @@ class TestTiffIO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
             self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
 
+            # reading back the data always returns a MD_WL_LIST never MD_WL_POLYNOMINAL
             if model.MD_WL_POLYNOMIAL in md:
                 pn = md[model.MD_WL_POLYNOMIAL]
-                # 2 formats possible
-                if model.MD_WL_LIST in im.metadata:
-                    l = ldata[i].shape[0]
-                    npn = polynomial.Polynomial(pn,
-                                    domain=[0, l - 1],
-                                    window=[0, l - 1])
-                    wl = npn.linspace(l)[1]
-                    numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
-                else:
-                    numpy.testing.assert_allclose(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+                l = ldata[i].shape[0]
+                npn = polynomial.Polynomial(pn,
+                                            domain=[0, l - 1],
+                                            window=[0, l - 1])
+                wl = npn.linspace(l)[1]
+                numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
+
+            if model.MD_EBEAM_CURRENT_TIME in md:
+                ocot = md[model.MD_EBEAM_CURRENT_TIME]
+                rcot = im.metadata[model.MD_EBEAM_CURRENT_TIME]
+                assert len(ocot) == len(rcot)
+                for (od, oc), (rd, rc) in zip(ocot, rcot):
+                    self.assertAlmostEqual(od, rd)
+                    self.assertAlmostEqual(oc, rc)
+
+        # check thumbnail
+        rthumbs = tiff.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
+    #    @skip("simple")
+    def testReadAndSaveMDTempSpec(self):
+        """
+        Checks that we can save and read back the metadata of a temporal spectrum image.
+        """
+        # create 2 simple greyscale images (sem overview, tempSpec): XY, XYZTC (XY ebeam pos scanned, TC tempSpec image)
+        sizes = [(512, 256), (100, 110, 1, 10, 20)]  # different sizes to ensure different acquisitions
+        # Create fake current over time report
+        cot = [(time.time(), 1e-12)]
+        for i in range(1, 171):
+            cot.append((cot[0][0] + i, i * 1e-12))
+
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "test temporal spectrum",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
+                     model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9),  # m
+                     model.MD_EBEAM_CURRENT: 20e-6,  # A
+                     },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake temp spec",
+                     model.MD_DESCRIPTION: "test3d",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9],  # m, m/px: wl polynomial
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_EBEAM_CURRENT_TIME: cot,
+
+                     # model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_TIME_LIST: [1e-6 * i for i in range(sizes[1][-2])],
+                     model.MD_STREAK_MCPGAIN: 3,
+                     model.MD_STREAK_MODE: True,
+                     model.MD_STREAK_TIMERANGE: 0.000000001,  # sec
+                     model.MD_TRIGGER_DELAY: 0.0000001,  # sec
+                     model.MD_TRIGGER_RATE: 1000000,  # Hz
+                     },
+                    ]
+        dtype = numpy.dtype("uint8")
+        ldata = []
+        for i, s in enumerate(sizes):
+            a = model.DataArray(numpy.zeros(s[::-1], dtype), metadata[i])
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255  # green
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
+            numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
+            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+
+            # reading back the data always returns a MD_WL_LIST never MD_WL_POLYNOMINAL
+            if model.MD_WL_POLYNOMIAL in md:
+                pn = md[model.MD_WL_POLYNOMIAL]
+                l = ldata[i].shape[0]
+                npn = polynomial.Polynomial(pn,
+                                            domain=[0, l - 1],
+                                            window=[0, l - 1])
+                wl = npn.linspace(l)[1]
+                numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
+            elif model.MD_WL_LIST in md:
+                wl = md[model.MD_WL_LIST]
+                numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
+
+            if model.MD_TIME_LIST in md:
+                tm = md[model.MD_TIME_LIST]
+                numpy.testing.assert_allclose(im.metadata[model.MD_TIME_LIST], tm)
+            if model.MD_STREAK_TIMERANGE in md:
+                self.assertEqual(im.metadata[model.MD_STREAK_TIMERANGE], md[model.MD_STREAK_TIMERANGE])
+            if model.MD_STREAK_MCPGAIN in md:
+                self.assertEqual(im.metadata[model.MD_STREAK_MCPGAIN], md[model.MD_STREAK_MCPGAIN])
+            if model.MD_STREAK_MODE in md:
+                self.assertEqual(im.metadata[model.MD_STREAK_MODE], md[model.MD_STREAK_MODE])
+            if model.MD_TRIGGER_DELAY in md:
+                self.assertEqual(im.metadata[model.MD_TRIGGER_DELAY], md[model.MD_TRIGGER_DELAY])
+            if model.MD_TRIGGER_RATE in md:
+                self.assertEqual(im.metadata[model.MD_TRIGGER_RATE], md[model.MD_TRIGGER_RATE])
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 ocot = md[model.MD_EBEAM_CURRENT_TIME]
@@ -1418,12 +1537,10 @@ class TestTiffIO(unittest.TestCase):
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
 
-            if model.MD_PIXEL_DUR in md:
-                pxd = md[model.MD_PIXEL_DUR]
-                self.assertAlmostEqual(im.metadata[model.MD_PIXEL_DUR], pxd)
-            if model.MD_TIME_OFFSET in md:
-                tof = md[model.MD_TIME_OFFSET]
-                self.assertAlmostEqual(im.metadata[model.MD_TIME_OFFSET], tof)
+            # only MD_TIME_LIST is read back
+            if model.MD_PIXEL_DUR in md and model.MD_TIME_OFFSET in md:
+                self.assertIn(model.MD_TIME_LIST, im.metadata)
+                self.assertEqual(len(im.metadata[model.MD_TIME_LIST]), rdata[i].shape[1])
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)
