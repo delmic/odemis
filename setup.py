@@ -78,6 +78,7 @@ if sys.platform.startswith('linux'):
                   ('share/icons/hicolor/256x256/apps/', glob.glob('install/linux/usr/share/icons/hicolor/256x256/apps/odemis*.png')),
                   ('share/doc/odemis/', glob.glob('doc/*.txt')),
                   ('share/doc/odemis/scripts/', glob.glob('scripts/*.py') + glob.glob('scripts/*.m')),
+                  ('share/odemis/osticket.key')
                   ]
     # TODO: see if we could use entry_points instead
     scripts = ['install/linux/usr/bin/odemisd',
