@@ -521,6 +521,9 @@ class ReadoutCamera(model.DigitalCamera):
                     if model.MD_TIME_LIST in self._metadata.keys():
                         self._metadata.pop(model.MD_TIME_LIST, None)
 
+                # update the trigger rate VA and MD for the current image
+                self.parent._delaybox._getTriggerRate()
+
                 md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
                 self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
                 dataarray = model.DataArray(image, md)
@@ -735,9 +738,9 @@ class DelayGenerator(model.HwComponent):
         # TODO how to handle updating this MD/VA?
         self._metadata[model.MD_TRIGGER_RATE] = self.parent.DevParamGet(self.location, "Repetition Rate")
 
-        # VAs
+        # VAs  TODO how to force to display in GUI if readonly=True?
         self.triggerRate = model.VigilantAttribute(self.parent.DevParamGet(self.location, "Repetition Rate"),
-                                                      readonly=True)
+                                                    setter=self._updateTriggerRate)
 
         triggerDelay = self._getTriggerDelay()
         range_trigDelay = self._getTriggerDelayTimeRange()
@@ -774,6 +777,19 @@ class DelayGenerator(model.HwComponent):
         triggerDelay = self._convertOutput2Value(triggerDelay_raw)
 
         return triggerDelay
+
+    def _updateTriggerRate(self, value):
+        """Update the trigger rate VA. Trigger rate corresponds to ebeam blanking frequency."""
+        self._metadata[model.MD_TRIGGER_RATE] = value
+        return value
+
+    def _getTriggerRate(self):
+        """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
+        The Trigger rate corresponds to the ebeam blanking frequency. As the delay
+        generator is operated "external", the trigger rate is a read-only value.
+        Called whenever an image arrives."""
+        value = self.parent.DevParamGet(self.location, "Repetition Rate")
+        self.triggerRate.value = value
 
     def _convertInput2Str(self, input_value):
         """Function that converts any input to a string as requested by RemoteEx."""

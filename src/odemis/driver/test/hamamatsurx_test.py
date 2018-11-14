@@ -528,8 +528,10 @@ class TestHamamatsurxCam(unittest.TestCase):
             size = self.readoutcam.resolution.value
             self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
+            logging.debug("Got image.")
 
         self.readoutcam.data.subscribe(callback)
+        time.sleep(5)  # TODO check if needed similar as in streak simCam
 
     def test_acqSync_SingleLive_RingBuffer_subscribe(self):
         """Test to acquire one synchronized image in Live mode by subscribing."""
@@ -554,6 +556,7 @@ class TestHamamatsurxCam(unittest.TestCase):
             self.assertNotIn(model.MD_TIME_LIST, image.metadata)
             self.assertFalse(image.metadata[model.MD_STREAK_MODE])
             self.images_left -= 1
+            logging.debug("Got image.")
             if self.images_left == 0:
                 dataflow.unsubscribe(receive_image)
                 self.assertEqual(self.streakunit.MCPgain.value, 0)  # MCPGain should be zero when acq finished
@@ -592,6 +595,7 @@ class TestHamamatsurxCam(unittest.TestCase):
             self.assertIn(model.MD_TIME_LIST, image.metadata)
             self.assertTrue(image.metadata[model.MD_STREAK_MODE])
             self.images_left -= 1
+            logging.debug("Got image.")
             if self.images_left == 0:
                 dataflow.unsubscribe(receive_image)
                 self.end_time = time.time()
@@ -628,6 +632,7 @@ class TestHamamatsurxCam(unittest.TestCase):
             self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
             self.camera_left -= 1
+            logging.debug("Got image.")
             if self.camera_left <= 0:
                 dataflow.unsubscribe(receive_image)
 
