@@ -69,7 +69,7 @@ def _data_read_wrapper(comedi_f):
     def f(*args):
         rc, data = comedi_f(*args)
         if rc < 0:
-            _raise_comedi_error(rc)
+            _raise_comedi_error(comedi_f.__name__, rc)
         return data
 
     return f
