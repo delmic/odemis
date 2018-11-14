@@ -505,6 +505,75 @@ class SpectrumSettingsStream(CCDSettingsStream):
         super(SpectrumSettingsStream, self)._onNewData(dataflow, specdata)
 
 
+class TemporalSpectrumSettingsStream(CCDSettingsStream):
+    """
+    An streak camera stream, for a set of points (on the SEM).
+    The live view is just the raw readout camera image.
+    """
+    def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay,
+                 streak_unit_vas, **kwargs):  # init of TemporalSpectrumSettingsSteam
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
+
+        super(TemporalSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)  # init of CCDSettingsStream
+
+        # Fuzzing doesn't make much sense as it would mostly blur the image
+        # del self.fuzzing  # TODO why in spectrum then?
+
+        self.active = False  # variable keep track if stream is active/inactive
+
+        # For SPARC: typical user wants density much lower than SEM
+        self.pixelSize.value *= 30  # TODO still true for streak  What does that mean?
+        self.streak_unit = streak_unit
+        self.streak_delay = streak_delay
+
+        # the VAs are used in SEMCCDMDStream (_sync.py)
+        self._streak_unit_vas = self._duplicateVAs(streak_unit, "dev", streak_unit_vas or set())
+        # TODO we most likely need the delay
+        # self._streak_delay_vas = self._duplicateVAs(streak_delay, "dev", streak_delay_vas or set())
+        # TODO check if we change the timeRange VA in the GUI and a stream is active
+        # also change the triggerDelay via the LUT MD_TIME_RANGE_TO_DELAY
+        # if value not in MD it will use the default value in yaml
+        # maybe report that the delay for that timeRange was not calibrated!
+        # TODO should we have a readonly delay VA in acq tab? might be useful
+        # self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay)
+
+        # whenever .timeRange and/or .streakMode changes
+        # -> set .MCPgain = 0 and update .MCPgain.range
+        self._streak_unit_vas["timeRange"].subscribe(self._OnMCPGain)
+        self._streak_unit_vas["streakMode"].subscribe(self._OnMCPGain)
+        self._streak_unit_vas["MCPgain"].subscribe(self._OnMCPGainRange)
+
+    # Override Stream._is_active_setter() in _base.py
+    def _is_active_setter(self, active):
+        self.active = super(TemporalSpectrumSettingsStream, self)._is_active_setter(active)
+        if self.active:
+            # make the full MCPgain range available when stream is active
+            self._streak_unit_vas["MCPgain"].range = self.streak_unit.MCPgain.range
+        else:
+            self._setMCPGainHWVA()
+            # only allow values <= current MCPgain value for HW safety reasons when stream inactive
+            self._streak_unit_vas["MCPgain"].range = (0, self._streak_unit_vas["MCPgain"].value)
+        return self.active
+
+    def _setMCPGainHWVA(self):
+        """"Set HW MCPgain VA = 0, but keep GUI VA = previous value, when stream = inactive."""
+        self.streak_unit.MCPgain.value = 0
+
+    def _OnMCPGain(self, value):
+        """Callback, which sets MCPgain GUI VA = 0,
+        if .timeRange and/or .streakMode GUI VAs have changed."""
+        self._streak_unit_vas["MCPgain"].value = 0  # set GUI VA 0
+        self._OnMCPGainRange(value)  # update the .MCPgain VA
+
+    def _OnMCPGainRange(self, _=None):
+        """Callback, which updates the range of possible values for MCPgain GUI VA if stream is inactive:
+        only values <= current value are allowed.
+        If stream is active the full range is available."""
+        if not self.active:
+            self._streak_unit_vas["MCPgain"].range = (0, self._streak_unit_vas["MCPgain"].value)
+
+
 class MonochromatorSettingsStream(PMTSettingsStream):
     """
     A stream acquiring a count corresponding to the light at a given wavelength,

@@ -1784,6 +1784,69 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         return model.DataArray(spec_data, metadata=md)
 
 
+class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
+    """
+    Multiple detector Stream made of SEM + temporal spectrum.
+    """
+
+    def _onCompletedData(self, n, raw_das):
+        # raw_das: tempSpectrum-images (arrays) excluding SEM-image (array)
+        if n != self._ccd_idx:
+            return super(SEMTemporalSpectrumMDStream, self)._onCompletedData(n, raw_das)
+
+        # number of images should equal number of ebeam pos
+        exp_num_images = numpy.prod(self.repetition.value)
+        if len(raw_das) != exp_num_images:
+            logging.error("Only got %d temporal spectrum images while expected %d images.",
+                          len(raw_das), exp_num_images)
+
+        # assemble all the CCD data into one
+        rep = self.repetition.value
+        tempSpec_data = self._assembleTempSpecData(raw_das, rep)
+
+        # Compute metadata based on SEM metadata
+        sem_data = self._raw[0]
+        epxs = sem_data.metadata[MD_PIXEL_SIZE]
+
+        # TODO handle fuzzing
+
+        # Not much to do: just save everything as is
+        tempSpec_data.metadata[MD_POS] = sem_data.metadata[MD_POS]
+        tempSpec_data.metadata[MD_PIXEL_SIZE] = epxs
+        tempSpec_data.metadata[MD_DESCRIPTION] = self._streams[n].name.value
+
+        self._raw.append(tempSpec_data)
+
+    def _assembleTempSpecData(self, data_list, repetition):
+        """
+        Take all the data received from the spectrometer and assemble it in a
+        cube.
+
+        data_list (list of M DataArrays of shape (lambda, time)): all the data received
+        repetition (list of 2 int): X,Y shape of the high dimensions of the cube
+         so that X * Y = M
+        return (DataArray)
+        """
+        assert len(data_list) > 0
+
+        # each image has a shape of (time, lambda)
+        # reshape to (lambda, time)
+        for img in data_list:
+            img.shape = img.shape[::-1]
+
+        # concatenate into one big array of (lambda, time, z=1, ebeam pos y, ebeam pos x)
+        # CTZYX, ebeam scans x and then y (x slow axis)
+        tempSpec_data = numpy.concatenate(data_list, axis=1)
+        # reshape to (C, T, 1, Y, X)
+        spec_res = data_list[0].shape[0]
+        temp_res = data_list[0].shape[1]
+        tempSpec_data.shape = (spec_res, temp_res, 1, repetition[1], repetition[0])
+
+        # copy the metadata from the first point and add the ones from metadata
+        md = data_list[0].metadata.copy()
+        return model.DataArray(tempSpec_data, metadata=md)
+
+
 class SEMARMDStream(SEMCCDMDStream):
     """
     Multiple detector Stream made of SEM + AR.
