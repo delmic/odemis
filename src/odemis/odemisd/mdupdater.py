@@ -361,7 +361,7 @@ class MetadataUpdater(model.Component):
 
         if model.hasVA(analyzer, "position"):
             def updatePosition(pos, comp_affected=comp_affected):
-                md = {model.MD_POL_MODE: pos["rz"]}
+                md = {model.MD_POL_MODE: pos["pol"]}
                 comp_affected.updateMetadata(md)
 
             analyzer.position.subscribe(updatePosition, init=True)
