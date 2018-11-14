@@ -4,6 +4,7 @@
 # To rebuild just the cython modules, use these commands:
 # sudo apt-get install python-setuptools cython
 # python setup.py build_ext --inplace
+from __future__ import division, print_function
 
 from setuptools import setup, find_packages
 from Cython.Build import cythonize # Warning: must be _after_ setup import
@@ -24,8 +25,8 @@ ROOT = os.geteuid() == 0
 # For Debian packaging it could be a fakeroot so reset flag to prevent execution of
 # system update services for Mime and Desktop registrations.
 # The debian/odemis.postinst script must do those.
-if not os.getenv("FAKEROOTKEY") == None:
-    print "NOTICE: Detected execution in a FakeRoot so disabling system update services."
+if "FAKEROOTKEY" in os.environ:
+    print("NOTICE: Detected execution in a FakeRoot so disabling system update services.")
     ROOT = False
 
 # almost copy from odemis.__init__.py, but we cannot load it as it's not installed yet
@@ -137,7 +138,7 @@ if ROOT and dist != None:
     # for mime file association, see openshot's setup.py
     # update the XDG .desktop file database
     try:
-        print "Updating the .desktop file database."
+        print("Updating the .desktop file database.")
         subprocess.check_output(["update-desktop-database"])
     except Exception:
         sys.stderr.write("Failed to update.\n")
