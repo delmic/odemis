@@ -858,10 +858,10 @@ class Continuous(object):
             value = self.value
             start, end = new_range
             if not isinstance(value, collections.Iterable):
-                value = (value,)
+                tvalue = (value,)
                 start, end = (start,), (end,)
 
-            if not all(mn <= v <= mx for v, mn, mx in zip(value, start, end)):
+            if not all(mn <= v <= mx for v, mn, mx in zip(tvalue, start, end)):
                 msg = "Current value '%s' is outside of the range %s->%s."
                 raise IndexError(msg % (value, start, end))
 
