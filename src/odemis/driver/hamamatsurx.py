@@ -738,10 +738,6 @@ class DelayGenerator(model.HwComponent):
         # TODO how to handle updating this MD/VA?
         self._metadata[model.MD_TRIGGER_RATE] = self.parent.DevParamGet(self.location, "Repetition Rate")
 
-        # VAs  TODO how to force to display in GUI if readonly=True?
-        self.triggerRate = model.VigilantAttribute(self.parent.DevParamGet(self.location, "Repetition Rate"),
-                                                    setter=self._updateTriggerRate)
-
         triggerDelay = self._getTriggerDelay()
         range_trigDelay = self._getTriggerDelayTimeRange()
         self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._updateTriggerDelay)
@@ -778,18 +774,13 @@ class DelayGenerator(model.HwComponent):
 
         return triggerDelay
 
-    def _updateTriggerRate(self, value):
-        """Update the trigger rate VA. Trigger rate corresponds to ebeam blanking frequency."""
-        self._metadata[model.MD_TRIGGER_RATE] = value
-        return value
-
     def _getTriggerRate(self):
         """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
         The Trigger rate corresponds to the ebeam blanking frequency. As the delay
         generator is operated "external", the trigger rate is a read-only value.
         Called whenever an image arrives."""
         value = self.parent.DevParamGet(self.location, "Repetition Rate")
-        self.triggerRate.value = value
+        self._metadata[model.MD_TRIGGER_RATE] = value
 
     def _convertInput2Str(self, input_value):
         """Function that converts any input to a string as requested by RemoteEx."""
