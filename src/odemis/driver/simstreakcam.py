@@ -420,14 +420,11 @@ class DelayGenerator(model.HwComponent):
 
         self._metadata[model.MD_HW_VERSION] = "Simulated delay generator DG645"
 
-        # VAs  TODO how to force to display in GUI if readonly=True?
-        self.triggerRate = model.VigilantAttribute(1000000, setter=self._updateTriggerRate)
-
         range_trigDelay = [0.0, 1]  # sec TODO  check which values were actually allowed
         self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, setter=self._updateTriggerDelay)
 
         self._metadata[model.MD_TRIGGER_DELAY] = self.triggerDelay.value
-        self._metadata[model.MD_TRIGGER_RATE] = self.triggerRate.value
+        self._metadata[model.MD_TRIGGER_RATE] = 1000000
 
     def _updateTriggerDelay(self, value):
         """
@@ -438,18 +435,13 @@ class DelayGenerator(model.HwComponent):
 
         return value
 
-    def _updateTriggerRate(self, value):
-        """Update the trigger rate VA. Trigger rate corresponds to ebeam blanking frequency."""
-        self._metadata[model.MD_TRIGGER_RATE] = value
-        return value
-
     def _getTriggerRate(self):
         """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
         The Trigger rate corresponds to the ebeam blanking frequency. As the delay
         generator is operated "external", the trigger rate is a read-only value.
         Called whenever an image arrives."""
         value = numpy.random.randint(100000, 1000000)  # return a random trigger rate
-        self.triggerRate.value = value
+        self._metadata[model.MD_TRIGGER_RATE] = value
 
     def terminate(self):
         """nothing to do here"""
