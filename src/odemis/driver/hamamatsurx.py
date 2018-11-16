@@ -185,6 +185,7 @@ class ReadoutCamera(model.DigitalCamera):
 
         range_exp = self._getCamExpTimeRange()
         self._exp_time = self._getCamExpTime()
+        # TODO update max and min values via CamParamInfoEx("Live", "Exposure")
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
         self._metadata[model.MD_EXP_TIME] = self.exposureTime.value
         # Note: timeRange of streakunit > exposureTime readoutcam is possible and okay.
@@ -254,7 +255,7 @@ class ReadoutCamera(model.DigitalCamera):
         prev_binning, self._binning = self._binning, value
 
         # adapt resolution
-        # TODO check if really necessary: why not just call resolutionFitter
+        # TODO check if really necessary
         # TODO self._binning is already updated and shape does not change
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
@@ -364,7 +365,6 @@ class ReadoutCamera(model.DigitalCamera):
             return
 
         if self._sync_event:  # if new event = None, unsubscribe previous event (which was softwareTrigger)
-            self.acqMode = "Live"
             self._sync_event.unsubscribe(self)
 
         self._sync_event = event
@@ -373,6 +373,8 @@ class ReadoutCamera(model.DigitalCamera):
             self.acqMode = "SingleLive"  # TODO or use "Live"? and just get latest image in buffer when software trigger request it?
             # softwareTrigger subscribes to onEvent method: if softwareTrigger.notify() called, onEvent method called
             self._sync_event.subscribe(self)  # must have onEvent method
+        else:
+            self.acqMode = "Live"
 
     @oneway
     def onEvent(self):
@@ -380,17 +382,6 @@ class ReadoutCamera(model.DigitalCamera):
         logging.debug("Event triggered to start a new synchronized acquisition.")
         self.queue_events.append(time.time())
         self.parent.queue_img.put("start")
-
-    def _update_settings(self):
-        """
-        Commits the settings to the camera. Only the settings which have been
-        modified are updated.
-        Note: acquisition_lock must be taken, and acquisition must _not_ going on.
-        return:
-            size (3 ints): width, height, itemsize
-            synchronised (bool): whether the acquisition has a software trigger
-        """
-        pass  # TODO needed for MD? now handle update MD directly when updating the VAs.
 
     def _mergeMetadata(self, md):
         """Create dict containing all metadata from the children readout camera, streak unit, delay genereator
@@ -522,7 +513,7 @@ class ReadoutCamera(model.DigitalCamera):
                         self._metadata.pop(model.MD_TIME_LIST, None)
 
                 # update the trigger rate VA and MD for the current image
-                self.parent._delaybox._getTriggerRate()
+                self.parent._delaybox._updateTriggerRate()
 
                 md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
                 self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
@@ -589,7 +580,7 @@ class StreakUnit(model.HwComponent):
         # VAs
         self.streakMode = model.BooleanVA(False, setter=self._updateStreakMode)  # default False see set params above
 
-        gain = self._convertOutput2Value(self.parent.DevParamGet(self.location, "MCP Gain"))
+        gain = int(self.parent.DevParamGet(self.location, "MCP Gain"))
         range_gain = (0, 63)  # TODO get the range via RemoteEx
         self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._updateMCPGain)
 
@@ -622,8 +613,7 @@ class StreakUnit(model.HwComponent):
         """
         update the MCP gain VA
         """
-        value_str = self._convertInput2Str(value)
-        self.parent.DevParamSet(self.location, "MCP Gain", value_str)
+        self.parent.DevParamSet(self.location, "MCP Gain", value)
         logging.debug("Reporting MCP gain %s for streak unit.", value)
         self._metadata[model.MD_STREAK_MCPGAIN] = value
 
@@ -638,23 +628,6 @@ class StreakUnit(model.HwComponent):
         self._metadata[model.MD_STREAK_TIMERANGE] = value
 
         return value
-
-    def _convertInput2Str(self, input_value):
-        """Function that converts any input to a string as requested by RemoteEx."""
-        if isinstance(input_value, str):
-            return input_value
-        elif isinstance(input_value, int):
-            return str(input_value)
-        else:
-            raise ValueError("Requested conversion of input type %s is not supported.", type(input))
-
-    def _convertOutput2Value(self, output_value):
-        """Converts an output of type list and length 1 containing strings to a value
-        if value is a number."""
-        try:
-            return int(output_value[0])
-        except:
-            return output_value[0]  # return a string
 
     def _getStreakUnitTimeRangeChoices(self):
         """
@@ -749,8 +722,7 @@ class DelayGenerator(model.HwComponent):
         """
         update the mode VA
         """
-        value_str = self._convertInput2Str(value)
-        self.parent.DevParamSet(self.location, "Delay A", value_str)
+        self.parent.DevParamSet(self.location, "Delay A", value)
         logging.debug("Reporting trigger delay %s for delay generator.", value)
         self._metadata[model.MD_TRIGGER_DELAY] = value
 
@@ -774,27 +746,13 @@ class DelayGenerator(model.HwComponent):
 
         return triggerDelay
 
-    def _getTriggerRate(self):
+    def _updateTriggerRate(self):
         """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
         The Trigger rate corresponds to the ebeam blanking frequency. As the delay
         generator is operated "external", the trigger rate is a read-only value.
         Called whenever an image arrives."""
         value = self.parent.DevParamGet(self.location, "Repetition Rate")
         self._metadata[model.MD_TRIGGER_RATE] = value
-
-    def _convertInput2Str(self, input_value):
-        """Function that converts any input to a string as requested by RemoteEx."""
-        if isinstance(input_value, str):
-            return input_value
-        elif isinstance(input_value, int):
-            return str(input_value)
-        elif isinstance(input_value, float):
-            value = '{:.9f}'.format(input_value) # TODO check which precision needed
-            # important remove all additional zeros: otherwise RemoteEx error!
-            # TODO not nice I know...
-            return "0" + value.strip("0")
-        else:
-            logging.debug("Requested conversion of input type %s is not supported.", type(input))
 
     def _convertOutput2Value(self, output_value):
         """Converts an output of type list and length 1 containing strings to a value
@@ -804,10 +762,6 @@ class DelayGenerator(model.HwComponent):
         except:  # TODO ValueError?
             return output_value[0]  # return a string
 
-    def terminate(self):
-        """nothing to do here"""
-        pass
-
 
 class StreakCamera(model.HwComponent):
     """
@@ -815,18 +769,13 @@ class StreakCamera(model.HwComponent):
     Client to connect to HPD-TA software via RemoteEx.
     """
 
-    def __init__(self, name, role, children=None, port=None, host=None, daemon=None, **kwargs):
+    def __init__(self, name, role, port, host, children=None, daemon=None, **kwargs):
         """
         Initializes the device.
         host (str): hostname or IP-address
-        port (int or None): port number for sending/receiving commands (None if not set)
+        port (int or None): port number for sending/receiving commands
         """
         super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
-
-        if port is None:
-            raise ValueError("Please specify port of camera to be used.")
-        if host is None:
-            raise ValueError("Please specify host to connect to.")
 
         port_d = port + 1  # the port number to receive the image data
         self.host = host
@@ -844,24 +793,10 @@ class StreakCamera(model.HwComponent):
             self._commandport, self._dataport = self._openConnection()
         except Exception:
             raise logging.error("Failed to initialise Hamamatsu readout camera.")
-            # TODO errors
-            # if isinstance(exp, ATError):
-            #     if exp.errno == 6: # OUTOFRANGE
-            #         raise HwError("Failed to find Andor camera %d, check that it "
-            #                       "is turned on and connected to the computer." %
-            #                       device)
-            #     elif exp.errno in (10, 38): # CONNECTION, DEVICEINUSE
-            #         raise HwError("Failed to initialise Andor camera %d, try to "
-            #                       "turning it off, waiting for 10 s and turning "
-            #                       "in on again." % device)
-            # raise
-        # if device is None:
-        #     # nothing else to initialise
-        #     return  # TODO  don't need this maybe
 
-        # collect responses (EC = 0-3,6-10) from commandport
+        # collect responses (error_code = 0-3,6-10) from commandport
         self.queue_command_responses = Queue.Queue(maxsize=0)
-        # save messages (EC = 4,5) from commandport
+        # save messages (error_code = 4,5) from commandport
         self.queue_img = Queue.Queue(maxsize=0)
 
         self.should_listen = True  # used in readCommandResponse thread
@@ -881,10 +816,8 @@ class StreakCamera(model.HwComponent):
         # TODO is there a clever way for checking if app still running? Seems to be no command available to check
         # TODO appEnd only works for the last opened window
         # TODO want to check if we want to start app invisible (sVisible = False)
-        self.timeout_commandport = 15  # need a long timeout for starting App as it takes a while
+
         # self.AppStart() # start HPDTA software  # TODO for testing in order to not start a new App
-        self.timeout_commandport = 5  # new timeout for standard commands
-        #  TODO might be other commands also needing a longer timeout
 
         if children:
             try:
@@ -974,10 +907,11 @@ class StreakCamera(model.HwComponent):
             self.t_receiver.join(5)
         self._closeConnection()
 
-    def sendCommand(self, func, *args):
+    def sendCommand(self, func, timeout=5, *args):
         """
         Sends a command to RemoteEx.
         :parameter func: (str) command or function, which should be send to RemoteEx
+        :parameter timeout: (int) timeout while waiting for command response [sec]
         :parameter args: (str) optional parameters allowed for function
         :raise:
            HwError: if error communicating with the hardware, probably due to
@@ -997,8 +931,10 @@ class StreakCamera(model.HwComponent):
             try:
                 logging.debug("Sending: '%s'", command.encode('string_escape'))
                 self._commandport.send(command)
-            except Exception:  # TODO what type of exception?
+            except Exception:
                 try:  # try to reconnect if connection was lost
+                    logging.exception("Failed to send the command %s, will try to reconnect to RemoteEx."
+                                      % command.encode('string_escape'))
                     self._commandport, self._dataport = self._openConnection()
                     # restart receiver thread, which keeps reading the commandport response continuously
                     self._start_receiverThread()
@@ -1010,40 +946,39 @@ class StreakCamera(model.HwComponent):
             while self._waitForCorrectResponse:  # wait for correct response until Timeout
                 try:
                     # if not receive something after timeout
-                    response = self.queue_command_responses.get(timeout=self.timeout_commandport)
+                    response = self.queue_command_responses.get(timeout=timeout)
                 except Queue.Empty:
                     if last_error_code:
                         # log the last error code received before timeout
                         logging.error("Last error code for function %s before timeout was %s with message %s."
                                   % (last_error_fct, last_error_code, last_error_msg))
                     raise util.TimeoutError("No answer received after %s sec for command %s."
-                                            % (self.timeout_commandport, command.encode('string_escape')))
+                                            % (timeout, command.encode('string_escape')))
 
                 try:
-                    EC, rfunc, rargs = int(response[0]), response[1], response[2:]
+                    error_code, rfunc, rargs = int(response[0]), response[1], response[2:]
                 except Exception as msg:
                     raise IOError("Received response, which is not according to the known protocol."
                                   "Error message was %s" % msg)
 
                 # check if the response corresponds to the command sent before
                 # the response corresponding to a command always also includes the command name
-                if rfunc.lower() == func.lower() and EC == 0:  # fct name not case sensitive
+                if rfunc.lower() == func.lower():  # fct name not case sensitive
                     logging.debug("Hamamatsu streak camera RemoteEx response: %s." % response)
-                    return rargs  # successfully executed command and return message
-                elif rfunc.lower() == func.lower() and EC != 0:  # response corresponds to command, but an error occured
-                    logging.error(RemoteExError(EC))
-                    logging.error("Hamamatsu streak camera RemoteEx error response: %s." % response)
-                    raise RemoteExError(EC)
                 else:
                     # save the last error message and code in case we don't receive any other response before timeout
-                    last_error_code = EC
+                    last_error_code = error_code
                     last_error_fct = rfunc
                     last_error_msg = rargs
                     logging.debug("Hamamatsu streak camera RemoteEx response not as expected. "
                                   "Will wait some more time.")
                     continue  # continue listening to receive the correct response for the sent command or timeout
-                    # TODO if for some reason there was still something in the buffer, it will raise
-                    # TODO an exception though the correct answer might be also in the buffer
+
+                if error_code:  # != 0, response corresponds to command, but an error occurred
+                    logging.error(RemoteExError(error_code))
+                    raise RemoteExError(error_code)
+                else:  # successfully executed command and return message
+                    return rargs
 
     def readCommandResponse(self):
         """
@@ -1073,7 +1008,7 @@ class StreakCamera(model.HwComponent):
                     msg_splitted = msg.split(",")
 
                     try:
-                        EC, rfunc, rargs = int(msg_splitted[0]), msg_splitted[1], msg_splitted[2:]
+                        error_code, rfunc, rargs = int(msg_splitted[0]), msg_splitted[1], msg_splitted[2:]
                     except (TypeError, ValueError, IOError):
                         logging.warning("Received response, which is not according to the known protocol.")
                         continue  # return to try-statement and start receiving again
@@ -1081,7 +1016,7 @@ class StreakCamera(model.HwComponent):
                     if self._getReadoutCamInfo:
                         # command parent.CamParamGet("Setup", "CameraInfo") behaves differently then all other commands
                         # nasty trick to work around for this command
-                        # This command is nasty as it first receives the EC and then additional information
+                        # This command is nasty as it first receives the error_code and then additional information
                         # TODO are there more cases like that??
 
                         # info_size = 2 * 1000  # TODO how many bytes??
@@ -1117,12 +1052,12 @@ class StreakCamera(model.HwComponent):
                             logging.error("Could not retrieve readout camera information.")
                         self._getReadoutCamInfo = False
 
-                    if EC in (4, 5):
+                    if error_code in (4, 5):
                         logging.debug("Received message %s from RemoteEx software." % rargs)
-                        if EC == 4 and rfunc == "Livemonitor":
+                        if error_code == 4 and rfunc == "Livemonitor":
                             self.queue_img.put(rargs)  # only put msg in queue when it notifies about an image
-                        # Note: all other messages with EC 4 or 5 are currently discarded as not of interest for now
-                    else:  # send response including EC to queue
+                        # Note: all other messages with error_code 4 or 5 are currently discarded as not of interest for now
+                    else:  # send response including error_code to queue
                         self.queue_command_responses.put(msg_splitted)
 
         except Exception:
@@ -1213,7 +1148,8 @@ class StreakCamera(model.HwComponent):
         # TODO think about where we want to specify the ini-file!
         # "1": App starts visible (use 0 for invisible)
         # returnValue = self.sendCommand("AppStart", "1", "C:\ProgramData\Hamamatsu\HPDTA\HPDTA8.ini")
-        self.sendCommand("AppStart")
+        # need more time when starting App -> use larger timeout
+        self.sendCommand("AppStart", timeout=15)
 
     def AppEnd(self):
         """Close RemoteEx."""
@@ -1748,15 +1684,32 @@ class StreakCamera(model.HwComponent):
 
     def DevParamSet(self, location, parameter, value):
         """Sets the specified parameter of the acquisition options.
-        :parameter location: (str) see DevParamSet
-        :parameter parameter: (str) see DevParamSet
+        :parameter location: (str) see DevParamGet
+        :parameter parameter: (str) see DevParamGet
         :parameter value: (str) The value has to be written as it appears in the corresponding control."""
+
+        # convert any input to a string as requested by RemoteEx
+        if not isinstance(value, str):
+            value = self._convertInput2Str(value)
+
         self.sendCommand("DevParamSet", location, parameter, value)
+
+    def _convertInput2Str(self, input_value):
+        """Function that converts any input to a string as requested by RemoteEx."""
+        if isinstance(input_value, int):
+            return str(input_value)
+        elif isinstance(input_value, float):
+            value = '{:.9f}'.format(input_value) # TODO check which precision needed
+            # important remove all additional zeros: otherwise RemoteEx error!
+            # TODO not nice I know...
+            return "0" + value.strip("0")
+        else:
+            logging.debug("Requested conversion of input type %s is not supported.", type(input))
 
     def DevParamInfo(self, location, parameter):
         """Return information about the specified parameter.
-        :parameter location: (str) see DevParamSet
-        :parameter parameter: (str) see DevParamSet
+        :parameter location: (str) see DevParamGet
+        :parameter parameter: (str) see DevParamGet
         :return: Label, current value, param type, min (numerical only), max (numerical only).
             param type: PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
             Note: In case of a list the number of entries and all list entries are returned in the response of the
@@ -1766,8 +1719,8 @@ class StreakCamera(model.HwComponent):
     def DevParamInfoEx(self, location, parameter):
         """Return information about the specified parameter.
         Returns more detailed information in case of a list parameter (param type=2) than DevParamInfo.
-        :parameter location: (str) see DevParamSet
-        :parameter parameter: (str) see DevParamSet
+        :parameter location: (str) see DevParamGet
+        :parameter parameter: (str) see DevParamGet
         :return: Control available, status available, label, current value, param type, number of entries, entries.
             param type: PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST"""
         # TODO useful for checking if value is valid!!
@@ -1775,7 +1728,7 @@ class StreakCamera(model.HwComponent):
 
     def DevParamsList(self, device):
         """Return list of all parameters of a specified device.
-        :parameter device (str): see location in DevParamSet
+        :parameter device (str): see location in DevParamGet
         :return: number of parameters, parameters"""
         return self.sendCommand("DevParamsList", device)
 
@@ -1826,21 +1779,21 @@ class StreakCamera(model.HwComponent):
 
     def SeqParamSet(self, parameter, value):
         """Sets the specified parameter of the sequence options or parameters.
-        :parameter parameter: (str) see SeqParamSet
+        :parameter parameter: (str) see SeqParamGet
         :parameter value: (str) The value for the sequence option or parameter."""
         self.sendCommand("SeqParamSet", parameter, value)
 
     def SeqParamInfo(self, parameter):
         """Return information about the specified parameter.
-        :parameter parameter: (str) see SeqParamSet
+        :parameter parameter: (str) see SeqParamGet
         :return: TODO not specified in manual check return"""
         return self.sendCommand("SeqParamInfo", parameter)
 
-    def SeqParamInfoEx(self, location, parameter):
+    def SeqParamInfoEx(self, parameter):
         """Return information about the specified parameter.
         Returns more detailed information in case of a list parameter (param type=2) than SeqParamInfo.
         In case of a numeric parameter (Parameter type = 1) it additionally returns the step width.
-        :parameter parameter: (str) see SeqParamSet
+        :parameter parameter: (str) see SeqParamGet
         :return: TODO not specified in manual check return"""
         return self.sendCommand("SeqParamInfoEx", parameter)
 
@@ -2058,8 +2011,6 @@ class StreakCamera(model.HwComponent):
             raise ValueError("Unit conversion for value %s not supported" % value)
 
         return value_raw
-
-        # TODO update max and min values via CamParamInfoEx("Live", "Exposure")
 
 
 class StreakCameraDataFlow(model.DataFlow):

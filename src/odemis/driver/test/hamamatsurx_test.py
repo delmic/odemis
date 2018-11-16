@@ -46,9 +46,9 @@ CONFIG_READOUTCAM = {"name": "ReadoutCamera", "role": "readoutcam"}
 CONFIG_STREAKUNIT = {"name": "StreakUnit", "role": "streakunit"}
 CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 
-children = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
+STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
 
-KWARGS = dict(name="streak cam", role="ccd", host="DESKTOP-E6H9DJ0", port=1001, children=children)
+KWARGS = dict(name="streak cam", role="ccd", host="delmic-desktop", port=1001, children=STREAK_CHILDREN)
 
 # test with spectrograph
 CLASS_SHRK = andorshrk.Shamrock
@@ -66,11 +66,11 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
 
         cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
 
-        children = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
+        STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
                     "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
 
         cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+                                                    children=STREAK_CHILDREN)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
@@ -94,8 +94,8 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         mag = 0.476
         md = {model.MD_LENS_MAG: mag}
         self.readoutcam.updateMetadata(md)
-        self.assertIn(model.MD_LENS_MAG, self.readoutcam._metadata)
-        self.assertEqual(self.readoutcam._metadata[model.MD_LENS_MAG], mag)
+        self.assertIn(model.MD_LENS_MAG, self.readoutcam.getMetadata())
+        self.assertEqual(self.readoutcam.getMetadata()[model.MD_LENS_MAG], mag)
         self.readoutcam._updateWavelengthList()
         wll_mag = self.readoutcam._metadata[model.MD_WL_LIST]
 
@@ -106,7 +106,7 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         md = {model.MD_LENS_MAG: mag}
         self.readoutcam.updateMetadata(md)
         self.assertIn(model.MD_LENS_MAG, self.readoutcam._metadata)
-        self.assertEqual(self.readoutcam._metadata[model.MD_LENS_MAG], mag)
+        self.assertEqual(self.readoutcam.getMetadata()[model.MD_LENS_MAG], mag)
 
     def test_acq_wavelengthTable(self):
         """Get the scaling table (correction for mapping vertical px with timestamps)
@@ -160,7 +160,7 @@ class TestHamamatsurxCamGenericCam(VirtualTestCam, unittest.TestCase):
     def setUpClass(cls):
 
         cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+                                                    children=STREAK_CHILDREN)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
@@ -196,7 +196,7 @@ class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest
     def setUpClass(cls):
 
         cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+                                                    children=STREAK_CHILDREN)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
@@ -227,8 +227,8 @@ class TestHamamatsurxCam(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="delmic-desktop", port=1001,
+                                                    children=STREAK_CHILDREN)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
@@ -320,8 +320,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         # check previous and current value are not the same
         self.assertNotEqual(prev_triggerDelay, cur_triggerDelay)
         # get trigger delay from hardware
-        remoteEx_triggerDelay = self.delaybox._convertOutput2Value(
-            self.streakcam.DevParamGet(self.delaybox.location, "Delay A"))
+        remoteEx_triggerDelay = float(self.streakcam.DevParamGet(self.delaybox.location, "Delay A"))
         self.assertEqual(cur_triggerDelay, remoteEx_triggerDelay)
 
         # request value, which is not in range of VA
@@ -333,16 +332,14 @@ class TestHamamatsurxCam(unittest.TestCase):
         """Test operating mode VA of streak unit."""
         self.streakunit.streakMode.value = False
         # check MCP Gain is 0 after changing to Focus mode!
-        mcpGain = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
+        mcpGain = int(self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
         self.assertEqual(mcpGain, 0)
-        remoteEx_mode = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "Mode"))
+        remoteEx_mode = self.streakcam.DevParamGet(self.streakunit.location, "Mode")
         self.assertEqual(remoteEx_mode, "Focus")
 
         # change mode VA
         self.streakunit.streakMode.value = True
-        remoteEx_mode = self.streakunit._convertOutput2Value(self.streakcam.DevParamGet(self.streakunit.location, "Mode"))
+        remoteEx_mode = self.streakcam.DevParamGet(self.streakunit.location, "Mode")
         self.assertEqual(remoteEx_mode, "Operate")
         self.assertTrue(self.streakunit.streakMode.value)
 
@@ -350,31 +347,27 @@ class TestHamamatsurxCam(unittest.TestCase):
         # This case is not handled internally by RemoteEx! RemoteEx only handles this when switching from operate
         # mode to focus mode, but not when requesting again focus mode!
         self.streakunit.streakMode.value = False
-        gain = self.streakunit._convertInput2Str(1)
+        gain = int(1)
         self.streakcam.DevParamSet(self.streakunit.location, "MCP Gain", gain)
         self.streakunit.streakMode.value = False
         # MCP Gain should be automatically 0 after changing to Focus mode!
-        mcpGain = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
+        mcpGain = int(self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
         self.assertEqual(mcpGain, 0)
-        remoteEx_mode = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "Mode"))
+        remoteEx_mode = self.streakcam.DevParamGet(self.streakunit.location, "Mode")
         self.assertEqual(remoteEx_mode, "Focus")
         self.assertFalse(self.streakunit.streakMode.value)
 
         # now check switching from operate to focus mode, with a MCP gain > 0.
         # This case is already handled by RemoteEx.
         self.streakunit.streakMode.value = True
-        gain = self.streakunit._convertInput2Str(1)
+        gain = 1
         self.streakcam.DevParamSet(self.streakunit.location, "MCP Gain", gain)
         time.sleep(0.5)  # give it some time to actually change the value
         self.streakunit.streakMode.value = False
         # MCP Gain should be automatically 0 after changing to Focus mode!
-        mcpGain = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
+        mcpGain = int(self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
         self.assertEqual(mcpGain, 0)
-        remoteEx_mode = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "Mode"))
+        remoteEx_mode = self.streakcam.DevParamGet(self.streakunit.location, "Mode")
         self.assertEqual(remoteEx_mode, "Focus")
         self.assertFalse(self.streakunit.streakMode.value)
 
@@ -393,8 +386,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         # compare previous and current gain
         self.assertNotEqual(prev_MCPgain, self.streakunit.MCPgain.value)
         # check MCPgain-VA reports the same value as RemoteEx
-        remoteEx_gain = self.streakunit._convertOutput2Value(
-            self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain"))
+        remoteEx_gain = self.streakcam.DevParamGet(self.streakunit.location, "MCP Gain")
         self.assertEqual(cur_MCPgain, remoteEx_gain)
 
     def test_TimeRange(self):
@@ -427,9 +419,9 @@ class TestHamamatsurxCam(unittest.TestCase):
     def test_metadataUpdate(self):
         """Test if the metadata is correctly updated, when a VA changes."""
         self.streakunit.streakMode.value = False
-        self.assertFalse(self.streakunit._metadata[model.MD_STREAK_MODE])
+        self.assertFalse(self.streakunit.getMetadata()[model.MD_STREAK_MODE])
         self.streakunit.streakMode.value = True
-        self.assertTrue(self.streakunit._metadata[model.MD_STREAK_MODE])
+        self.assertTrue(self.streakunit.getMetadata()[model.MD_STREAK_MODE])
 
     ### Acquisition commands #####################################################
 
@@ -450,10 +442,11 @@ class TestHamamatsurxCam(unittest.TestCase):
         # check first value in table is the same order as the conversion factor
         # the quotient should be greater than zero
         firstCorrectedValue = img.metadata[model.MD_TIME_LIST][0]
-        conversionFactor = self.streakcam.timeRangeConversionFactor
+        conversionFactor = self.streakcam.timeRangeFactor
         self.assertGreater(firstCorrectedValue/conversionFactor, 0)
 
         # test a second value
+        # test a second value)
         self.streakunit.timeRange.value = util.find_closest(0.001, self.streakunit.timeRange.choices)  # 1ms
 
         img = self.readoutcam.data.get()
@@ -464,7 +457,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         # check first value in table is the same order as the conversion factor
         # the quotient should be greater than zero
         firstCorrectedValue = img.metadata[model.MD_TIME_LIST][0]
-        conversionFactor = self.streakcam.timeRangeConversionFactor
+        conversionFactor = self.streakcam.timeRangeFactor
         self.assertGreater(firstCorrectedValue/conversionFactor, 0)
 
         # check that scaling correction is not included when image is acquired in Focus mode
@@ -487,7 +480,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         # check first value in table is the same order as the conversion factor
         # the quotient should be greater than zero
         firstCorrectedValue = img.metadata[model.MD_TIME_LIST][0]
-        conversionFactor = self.streakcam.timeRangeConversionFactor
+        conversionFactor = self.streakcam.timeRangeFactor
         self.assertGreater(firstCorrectedValue/conversionFactor, 0)
 
     def test_acq_Live_RingBuffer_subscribe(self):
@@ -580,8 +573,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         # test sync acq in operate mode
         self.streakunit.streakMode.value = True
 
-        # self.streakunit.timeRange.value = util.find_closest(0.001, self.streakunit.timeRange.choices)
-        # TODO check setting timeRangeConversionFactor in init! Sometimes error as it is still None...
+        self.streakunit.timeRange.value = util.find_closest(0.001, self.streakunit.timeRange.choices)
 
         num_images = 5
         self.images_left = num_images  # unsubscribe after receiving number of images
