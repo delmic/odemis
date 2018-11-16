@@ -27,114 +27,28 @@ from odemis.driver import andorshrk
 
 import unittest
 
-from cam_test_abs import VirtualTestCam, VirtualTestSynchronized  # TODO do we need VirtualStaticTestCam?
+from cam_test_abs import VirtualTestCam, VirtualTestSynchronized
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CLASS = simstreakcam.StreakCamera
+
+# streak camera class
+CLASS_STREAKCAM = simstreakcam.StreakCamera
 
 # arguments used for the creation of basic components
 CONFIG_READOUTCAM = {"name": "ReadoutCamera", "role": "readoutcam", "image": "sparc-tempSpec-sim.h5"}
 CONFIG_STREAKUNIT = {"name": "StreakUnit", "role": "streakunit"}
 CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 
-children = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
+STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
 
-KWARGS = dict(name="streak cam", role="ccd", host="DESKTOP-E6H9DJ0", port=1001, children=children)
+KWARGS = dict(name="streak cam", role="ccd", host="DESKTOP-E6H9DJ0", port=1001, children=STREAK_CHILDREN)
 
 # test with spectrograph
 CLASS_SPECTROGRAPH = andorshrk.Shamrock
 KWARGS_SPECTROGRAPH = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: "slit-in", 3: "slit-monochromator"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
-
-
-class TestSimStreakCamWithSpectrograph(unittest.TestCase):
-    """Test the streak camera class with simulated streak camera and spectrograph"""
-
-    @classmethod
-    def setUpClass(cls):
-
-        cls.spectrograph = CLASS_SPECTROGRAPH(**KWARGS_SPECTROGRAPH)
-
-        children = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
-                    "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
-
-        cls.streakcam = simstreakcam.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0",
-                                                        port=1001, children=children)
-
-        for child in cls.streakcam.children.value:
-            if child.name == CONFIG_READOUTCAM["name"]:
-                cls.readoutcam = child
-            if child.name == CONFIG_STREAKUNIT["name"]:
-                cls.streakunit = child
-            if child.name == CONFIG_DELAYBOX["name"]:
-                cls.delaybox = child
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.streakcam.terminate()
-
-    def test_magnification(self):
-        """Test the streak lens component and the corresponding magnification is
-        correctly applied to calculate the effective pixel size of the readout camera."""
-
-        # default mag is 1. if not specified
-        wll = self.readoutcam._metadata[model.MD_WL_LIST]
-
-        mag = 0.476
-        md = {model.MD_LENS_MAG: mag}
-        self.readoutcam.updateMetadata(md)
-        self.assertIn(model.MD_LENS_MAG, self.readoutcam._metadata)
-        self.assertEqual(self.readoutcam._metadata[model.MD_LENS_MAG], mag)
-        self.readoutcam._updateWavelengthList()
-        wll_mag = self.readoutcam._metadata[model.MD_WL_LIST]
-
-        with self.assertRaises(AssertionError):
-            self.assertListEqual(wll, wll_mag)  # there is not assertListNotEqual...
-
-        mag = 1.0
-        md = {model.MD_LENS_MAG: mag}
-        self.readoutcam.updateMetadata(md)
-        self.assertIn(model.MD_LENS_MAG, self.readoutcam._metadata)
-        self.assertEqual(self.readoutcam._metadata[model.MD_LENS_MAG], mag)
-
-    def test_acq_wavelengthTable(self):
-        """Get the scaling table (correction for mapping vertical px with timestamps)
-        for the streak Time Range chosen for one sweep."""
-
-        # test a first value
-        self.streakunit.timeRange.value = util.find_closest(0.000000002, self.streakunit.timeRange.choices)  # 2ns
-        self.streakunit.streakMode.value = True
-        # Note: RemoteEx automatically stops and restarts "Live" acq when changing settings
-
-        img = self.readoutcam.data.get()
-
-        self.assertIn(model.MD_TIME_LIST, img.metadata)
-        self.assertIn(model.MD_WL_LIST, img.metadata)
-
-    def test_spectrographVAs(self):
-
-        self.assertIn("wavelength", self.spectrograph.axes)
-        self.assertIn("grating", self.spectrograph.axes)
-        self.assertIn("slit-in", self.spectrograph.axes)
-
-        # put a meaningful wavelength
-        pos_wl = 500e-9  # max: 808.650024 nm
-        pos_grating = 2  # range: 1 -> 3
-        pos_slit = 0.0001  # range: 0.000010 -> 0.002500
-
-        f = self.spectrograph.moveAbs({"wavelength": pos_wl})
-        f.result()  # wait for the position to be set
-        f = self.spectrograph.moveAbs({"grating": pos_grating})
-        f.result()  # wait for the position to be set
-        f = self.spectrograph.moveAbs({"slit-in": pos_slit})
-        f.result()  # wait for the position to be set
-
-        # VAs should have same values as HW positions
-        self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], pos_wl)
-        self.assertEqual(self.spectrograph.position.value["grating"], pos_grating)
-        self.assertAlmostEqual(self.spectrograph.position.value["slit-in"], pos_slit)
 
 
 # Inheritance order is important for setUp, tearDown
@@ -144,34 +58,24 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
     Test directly the streak camera class with simulated streak camera HW.
     Run the generic camera test cases.
     """
-    camera_type = None
-    camera_kwargs = None
+    camera_type = CLASS_STREAKCAM
+    camera_kwargs = KWARGS
 
     @classmethod
     def setUpClass(cls):
 
-        cls.streakcam = simstreakcam.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+        super(TestSimStreakCamGenericCam, cls).setUpClass()
+
+        cls.streakcam = cls.camera
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
                 cls.camera = child
-            if child.name == CONFIG_STREAKUNIT["name"]:
-                cls.streakunit = child
-            if child.name == CONFIG_DELAYBOX["name"]:
-                cls.delaybox = child
 
     @classmethod
     def tearDownClass(cls):
+        super(TestSimStreakCamGenericCam, cls).tearDownClass()
         cls.streakcam.terminate()
-
-
-CONFIG_SED = {"name": "sed", "role": "sed", "channel": 5, "limits": [-3, 3]}
-CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]],
-                  "channels": [0, 1], "settle_time": 10e-6, "hfw_nomag": 10e-3}
-CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
-              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
-              }
 
 
 #@skip("simple")
@@ -180,35 +84,24 @@ class TestSimStreakCamGenericCamSynchronized(VirtualTestSynchronized, unittest.T
     Test the synchronizedOn(Event) interface with a simulated streak camera, using the fake SEM.
     Run the generic camera test cases.
     """
-    camera_type = None
-    camera_kwargs = None
+    camera_type = CLASS_STREAKCAM
+    camera_kwargs = KWARGS
 
     @classmethod
     def setUpClass(cls):
 
-        cls.streakcam = simstreakcam.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+        super(TestSimStreakCamGenericCamSynchronized, cls).setUpClass()
 
+        cls.streakcam = cls.ccd
+
+        # overwrite cls.ccd as this corresponds to the readout cam of the streak cam class
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
                 cls.ccd = child
-            if child.name == CONFIG_STREAKUNIT["name"]:
-                cls.streakunit = child
-            if child.name == CONFIG_DELAYBOX["name"]:
-                cls.delaybox = child
-
-        # TODO set up SEM scanner, can we use the setUpClass from generic test?
-        cls.sem = semcomedi.SEMComedi(**CONFIG_SEM)
-
-        for child in cls.sem.children.value:
-            if child.name == CONFIG_SED["name"]:
-                cls.sed = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.scanner = child
 
     @classmethod
     def tearDownClass(cls):
-        cls.sem.terminate()
+        super(TestSimStreakCamGenericCamSynchronized, cls).tearDownClass()
         cls.streakcam.terminate()
 
 
@@ -218,8 +111,7 @@ class TestSimStreakCam(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        cls.streakcam = simstreakcam.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0", port=1001,
-                                                    children=children)
+        cls.streakcam = simstreakcam.StreakCamera(**KWARGS)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
@@ -340,9 +232,9 @@ class TestSimStreakCam(unittest.TestCase):
     def test_metadataUpdate(self):
         """Test if the metadata is correctly updated, when a VA changes."""
         self.streakunit.streakMode.value = False
-        self.assertFalse(self.streakunit._metadata[model.MD_STREAK_MODE])
+        self.assertFalse(self.streakunit.getMetadata()[model.MD_STREAK_MODE])
         self.streakunit.streakMode.value = True
-        self.assertTrue(self.streakunit._metadata[model.MD_STREAK_MODE])
+        self.assertTrue(self.streakunit.getMetadata()[model.MD_STREAK_MODE])
 
     ### Acquisition commands #####################################################
 
@@ -409,7 +301,7 @@ class TestSimStreakCam(unittest.TestCase):
         size = self.readoutcam.resolution.value
         self.readoutcam.exposureTime.value = 2  # s
         exp_time = self.readoutcam.exposureTime.value
-        triggerRate = self.delaybox.triggerRate.value
+        triggerRate = 100  # fake starting value
 
         num_images = 5
         self.images_left = num_images  # unsubscribe after receiving number of images
@@ -488,6 +380,94 @@ class TestSimStreakCam(unittest.TestCase):
 
         # check we can still get data normally
         img = self.readoutcam.data.get()
+
+
+class TestSimStreakCamWithSpectrograph(unittest.TestCase):
+    """Test the streak camera class with simulated streak camera and spectrograph"""
+
+    @classmethod
+    def setUpClass(cls):
+
+        cls.spectrograph = CLASS_SPECTROGRAPH(**KWARGS_SPECTROGRAPH)
+
+        STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
+                    "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
+
+        cls.streakcam = simstreakcam.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0",
+                                                        port=1001, children=STREAK_CHILDREN)
+
+        for child in cls.streakcam.children.value:
+            if child.name == CONFIG_READOUTCAM["name"]:
+                cls.readoutcam = child
+            if child.name == CONFIG_STREAKUNIT["name"]:
+                cls.streakunit = child
+            if child.name == CONFIG_DELAYBOX["name"]:
+                cls.delaybox = child
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.streakcam.terminate()
+
+    def test_magnification(self):
+        """Test the streak lens component and the corresponding magnification is
+        correctly applied to calculate the effective pixel size of the readout camera."""
+
+        # default mag is 1. if not specified
+        wll = self.readoutcam._metadata[model.MD_WL_LIST]
+
+        mag = 0.476
+        md = {model.MD_LENS_MAG: mag}
+        self.readoutcam.updateMetadata(md)
+        self.assertIn(model.MD_LENS_MAG, self.readoutcam.getMetadata())
+        self.assertEqual(self.readoutcam.getMetadata()[model.MD_LENS_MAG], mag)
+        self.readoutcam._updateWavelengthList()
+        wll_mag = self.readoutcam._metadata[model.MD_WL_LIST]
+
+        with self.assertRaises(AssertionError):
+            self.assertListEqual(wll, wll_mag)  # there is not assertListNotEqual...
+
+        mag = 1.0
+        md = {model.MD_LENS_MAG: mag}
+        self.readoutcam.updateMetadata(md)
+        self.assertIn(model.MD_LENS_MAG, self.readoutcam.getMetadata())
+        self.assertEqual(self.readoutcam.getMetadata()[model.MD_LENS_MAG], mag)
+
+    def test_acq_wavelengthTable(self):
+        """Get the scaling table (correction for mapping vertical px with timestamps)
+        for the streak Time Range chosen for one sweep."""
+
+        # test a first value
+        self.streakunit.timeRange.value = util.find_closest(0.000000002, self.streakunit.timeRange.choices)  # 2ns
+        self.streakunit.streakMode.value = True
+        # Note: RemoteEx automatically stops and restarts "Live" acq when changing settings
+
+        img = self.readoutcam.data.get()
+
+        self.assertIn(model.MD_TIME_LIST, img.metadata)
+        self.assertIn(model.MD_WL_LIST, img.metadata)
+
+    def test_spectrographVAs(self):
+
+        self.assertIn("wavelength", self.spectrograph.axes)
+        self.assertIn("grating", self.spectrograph.axes)
+        self.assertIn("slit-in", self.spectrograph.axes)
+
+        # put a meaningful wavelength
+        pos_wl = 500e-9  # max: 808.650024 nm
+        pos_grating = 2  # range: 1 -> 3
+        pos_slit = 0.0001  # range: 0.000010 -> 0.002500
+
+        f = self.spectrograph.moveAbs({"wavelength": pos_wl})
+        f.result()  # wait for the position to be set
+        f = self.spectrograph.moveAbs({"grating": pos_grating})
+        f.result()  # wait for the position to be set
+        f = self.spectrograph.moveAbs({"slit-in": pos_slit})
+        f.result()  # wait for the position to be set
+
+        # VAs should have same values as HW positions
+        self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], pos_wl)
+        self.assertEqual(self.spectrograph.position.value["grating"], pos_grating)
+        self.assertAlmostEqual(self.spectrograph.position.value["slit-in"], pos_slit)
 
 
 if __name__ == '__main__':

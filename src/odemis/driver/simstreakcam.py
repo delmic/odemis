@@ -28,33 +28,32 @@ import os
 
 class ReadoutCamera(model.DigitalCamera):
     """
-    Represents Hamamatsu readout camera.
+    Represents a readout camera for the streak camera system.
     """
 
-    def __init__(self, name, role, parent, spectrograph=None, daemon=None, **kwargs):
-        """ Initializes a fake Hamamatsu OrcaFlash readout camera.
+    def __init__(self, name, role, parent, image, spectrograph=None, daemon=None, **kwargs):
+        """ Initializes a fake readout camera.
         :parameter name: (str) as in Odemis
         :parameter role: (str) as in Odemis
         :parameter parent: class streakcamera
+        :parameter image: fake input image
         """
         # TODO image focus and operate mode
         # get the fake images
         try:
-            image = kwargs.pop("image")
-            image = unicode(image)
+            image_filename = unicode(image)
             # ensure relative path is from this file
             if not os.path.isabs(image):
-                image = os.path.join(os.path.dirname(__file__), image)
-            converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
-            self._img = []
-            for i in range(10):
-                img = converter.read_data(image)[i+2]
+                image_filename = os.path.join(os.path.dirname(__file__), image)
+            converter = dataio.find_fittest_converter(image_filename, mode=os.O_RDONLY)
+            self._img_list = []
+            img_list = converter.read_data(image_filename)
+            for img in img_list:
                 if img.ndim > 3:  # remove dims of length 1
                     img = numpy.squeeze(img)
-                self._img.append(img)  # can be RGB or greyscale
-            self._img_counter = 0  # image counter to provide different images to live view
-        except:
-            raise Exception("No fake image provided")
+                self._img_list.append(img)  # can be RGB or greyscale
+        except ValueError:
+            raise Exception("Fake image does not fit requirements for temporal spectrum acquisition.")
 
         super(ReadoutCamera, self).__init__(name, role, parent=parent,
                                             daemon=daemon, **kwargs)  # init HwComponent
@@ -73,7 +72,8 @@ class ReadoutCamera(model.DigitalCamera):
         # sensor size (resolution)
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
         # However, only a smaller subarea is used for operating the streak system.
-        resolution = (1344, 1016)  # x (lambda): horizontal, y (time): vertical
+        # x (lambda): horizontal, y (time): vertical
+        resolution = (self._img_list[0].shape[1], self._img_list[0].shape[0])
         self._metadata[model.MD_SENSOR_SIZE] = resolution
 
         # 16-bit
@@ -95,15 +95,6 @@ class ReadoutCamera(model.DigitalCamera):
 
         # pixelsize VA is the sensor size, it does not include binning or magnification
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
-
-        # multiply with mag as we use the 1/M as input in yaml file!
-        eff_pixelsize = sensor_pixelsize[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
-        # self._metadata[model.MD_RESOLUTION] = eff_pixelsize  # TODO think it is useful
-
-        # Note: no function to get current acqMode.
-        # Note: Acquisition mode, needs to be before exposureTime!
-        # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
-        self.acqMode = "Live"
 
         range_exp = [0.00001, 10]  # 10us to 10s
         self._exp_time = 0.1  # 100 msec
@@ -143,7 +134,6 @@ class ReadoutCamera(model.DigitalCamera):
 
         # adapt resolution
         # TODO check if really necessary: why not just call resolutionFitter
-        # TODO self._binning is already updated and shape does not change
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
         old_resolution = self.resolution.value
@@ -168,7 +158,7 @@ class ReadoutCamera(model.DigitalCamera):
         # Note: we can keep it simple as long as we do not provide to change the sensor size yet...
         resolution = self._shape[:2]
         new_res = (int(resolution[0] // self._binning[0]),
-                    int(resolution[1] // self._binning[1]))  # floor division: not below zero
+                    int(resolution[1] // self._binning[1]))  # floor division
 
         if self._spectrograph:
             self._updateWavelengthList()  # update WavelengthList when changing binning
@@ -257,17 +247,20 @@ class ReadoutCamera(model.DigitalCamera):
 
     def _getNewImage(self):
         """Gets a new image from the list of fake images provided."""
-        if self._img_counter == 10:
-            self._img_counter = 0
-        return self._img[self._img_counter]
+        # image counter to provide different images to live view
+        if not hasattr(self, "_img_counter"):
+            self._img_counter = 0  # initialize the image counter
+        self._img_counter = self._img_counter % len(self._img_list)
+        image = self._img_list[self._img_counter]
+        self._img_counter += 1
+        return image
 
     def _generate(self):
         """
         Generates the fake output based on the resolution.
         """
         gen_img = self._getNewImage()
-        # TODO pass different image
-        # gen_img = self._img  # TODO needed if we allow to change binning: self._simulate()
+        gen_img = self._simulate(gen_img)
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
         self._waitSync()
         if self._sync_event:
@@ -275,7 +268,7 @@ class ReadoutCamera(model.DigitalCamera):
             time.sleep(self.exposureTime.value)
 
         # update the trigger rate VA and MD for the current image
-        self.parent._delaybox._getTriggerRate()
+        self.parent._delaybox._updateTriggerRate()
 
         metadata = gen_img.metadata.copy()  # MD of image
         metadata.update(self._metadata)  # MD of camera
@@ -304,8 +297,6 @@ class ReadoutCamera(model.DigitalCamera):
         # simulate exposure time
         timer.period = self.exposureTime.value
 
-        self._img_counter += 1
-
     def _waitSync(self):
         """
         Block until the Event on which the dataflow is synchronised has been
@@ -315,33 +306,19 @@ class ReadoutCamera(model.DigitalCamera):
         if self._sync_event:
             self._evtq.get()
 
-    # def _simulate(self):  # TODO
-    #     """
-    #     Processes the fake image based on the translation, resolution and
-    #     current drift.
-    #     """
-    #     binning = self.binning.value
-    #     res = self.resolution.value
-    #     pxs_pos = self.translation.value
-    #     shape = self._img.shape
-    #     center = (shape[1] / 2, shape[0] / 2)
-    #     lt = (center[0] + pxs_pos[0] - (res[0] / 2) * binning[0],
-    #           center[1] + pxs_pos[1] - (res[1] / 2) * binning[1])
-    #     assert(lt[0] >= 0 and lt[1] >= 0)
-    #     # compute each row and column that will be included
-    #     # TODO: Could use something more hardwarish like that:
-    #     # data0 = data0.reshape(shape[0]//b0, b0, shape[1]//b1, b1).mean(3).mean(1)
-    #     # (or use sum, to simulate binning)
-    #     # Alternatively, it could use just [lt:lt+res:binning]
-    #     coord = ([int(round(lt[0] + i * binning[0])) for i in range(res[0])],
-    #              [int(round(lt[1] + i * binning[1])) for i in range(res[1])])
-    #     sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
-    #     return sim_img
+    def _simulate(self, img):
+        """
+        Processes the fake image based on resolution and binning.
+        """
+        binning = self.binning.value
+        res = self.resolution.value
+        sim_img = img.reshape((res[1], binning[0], res[0], binning[1])).mean(axis=3).mean(axis=1)
+        return sim_img
 
 
 class StreakUnit(model.HwComponent):
     """
-    Represents Hamamatsu streak unit.
+    Represents a streak unit.
     """
 
     def __init__(self, name, role, parent, daemon=None, **kwargs):
@@ -409,7 +386,7 @@ class StreakUnit(model.HwComponent):
 
 class DelayGenerator(model.HwComponent):
     """
-    Represents delay generator.
+    Represents a delay generator.
     """
 
     def __init__(self, name, role, parent, daemon=None, **kwargs):
@@ -435,7 +412,7 @@ class DelayGenerator(model.HwComponent):
 
         return value
 
-    def _getTriggerRate(self):
+    def _updateTriggerRate(self):
         """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
         The Trigger rate corresponds to the ebeam blanking frequency. As the delay
         generator is operated "external", the trigger rate is a read-only value.
@@ -443,29 +420,19 @@ class DelayGenerator(model.HwComponent):
         value = numpy.random.randint(100000, 1000000)  # return a random trigger rate
         self._metadata[model.MD_TRIGGER_RATE] = value
 
-    def terminate(self):
-        """nothing to do here"""
-        pass
-
 
 class StreakCamera(model.HwComponent):
     """
-    Represents Hamamatsu readout camera for the streak unit.
-    Client to connect to HPD-TA software via RemoteEx.
+    Represents the streak camera system.
     """
 
-    def __init__(self, name, role, children=None, port=None, host=None, daemon=None, **kwargs):
+    def __init__(self, name, role, port, host, children=None, daemon=None, **kwargs):
         """
         Initializes the device.
         host (str): hostname or IP-address
         port (int or None): port number for sending/receiving commands (None if not set)
         """
         super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
-
-        if port is None:
-            raise ValueError("Please specify port of camera to be used.")
-        if host is None:
-            raise ValueError("Please specify host to connect to.")
 
         port_d = port + 1  # the port number to receive the image data
         self.host = host
@@ -482,10 +449,15 @@ class StreakCamera(model.HwComponent):
 
         if children:
             try:
+                image = children["readoutcam"].pop("image")
+            except ValueError:
+                raise Exception("No fake image provided.")
+            try:
                 kwargs = children["readoutcam"]
             except Exception:
                 raise
-            self._readoutcam = ReadoutCamera(parent=self, spectrograph=children.get("spectrograph"),
+            self._readoutcam = ReadoutCamera(parent=self, image=image,
+                                             spectrograph=children.get("spectrograph"),
                                              daemon=daemon, **kwargs)
             self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
             try:
@@ -519,7 +491,7 @@ class StreakCamera(model.HwComponent):
 
 class SimpleStreakCameraDataFlow(model.DataFlow):
     """
-    Represents Hamamatsu streak camera.
+    Represents the dataflow on the readout camera.
     """
 
     def __init__(self,  start_func, stop_func, sync_func):
