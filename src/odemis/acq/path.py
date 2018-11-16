@@ -138,6 +138,14 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
+            'temporal-spectrum': ("streak-ccd",  # acquisition tab
+                {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'on'},  # opened
+                 'filter': {'band': 'pass-through'},
+                 'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
+                 }),
             'spectral-integrated': ("spectrometer-integrated",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},

@@ -3500,6 +3500,11 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <object class="ARAcquiViewport" name="vp_sparc_ts">  <!-- TODO replace with TemporalSpectrumViewport -->
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <object class="ChronographViewport" name="vp_sparc_br">
             <XRCED>
               <assign_var>1</assign_var>

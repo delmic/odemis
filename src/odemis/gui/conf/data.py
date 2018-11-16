@@ -329,6 +329,27 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "streak-ccd":
+        OrderedDict((
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (0.00001, 10.0),  # TODO GUI only accepts until 1sec error!
+                "type": "float",
+                "tooltip": u"Readout camera exposure time.",
+            }),
+            ("binning", {
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Readout camera: number of pixels combined.",
+                # "choices": {(2, 2), (4, 4)},  # TODO only allow 2x2 and 4x4 as 1x1 does not make sense for res
+            }),
+            ("resolution", {
+                # Read-only it shouldn't be changed by the user
+                "control_type": odemis.gui.CONTROL_READONLY,
+                "accuracy": None,  # never simplify the numbers
+                "tooltip": u"Readout camera resolution: number of pixels.",
+            }),
+        )),
     "spectrometer":
         OrderedDict((
             ("exposureTime", {
@@ -713,6 +734,40 @@ STREAM_SETTINGS_CONFIG = {
             ("slit-in", {
                 "label": "Input slit",
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+        )),
+    stream.TemporalSpectrumSettingsStream:
+        OrderedDict((
+            ("detStreakMode", {
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "label": "Streak mode",
+                "tooltip": u"If checked streak camera is in operate mode and streaking.\n"
+                           u"If not checked steak camera is in focus mode.",
+            }),
+            ("detTimeRange", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "label": "Time range",
+                "tooltip": u"Time needed by the streak unit for one sweep from top to bottom of "
+                           u"the readout camera chip.",
+            }),
+            ("detMCPgain", {
+                "control_type": odemis.gui.CONTROL_INT,
+                "label": "MCP gain",
+                "tooltip": u"Microchannel plate gain of the streak unit.\n"
+                           u"Be careful when setting the gain while operating the camera in focus-mode.",
+            }),
+            ("wavelength", {
+                "tooltip": "Center wavelength of the spectrograph",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "range": (0.0, 1900e-9),
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+            ("band", {  # from filter
+                "label": "Filter",
             }),
         )),
     stream.MonochromatorSettingsStream:

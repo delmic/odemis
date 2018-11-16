@@ -34,7 +34,8 @@ import numpy
 from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
-from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
+from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
+    CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
     RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
     ScannedTCSettingsStream
@@ -911,11 +912,33 @@ class SparcAcquisitionTab(Tab):
              {"name": "Spectrum",
               "stream_classes": SpectrumStream,
               }),
-            (viewports[3],
-             {"name": "Monochromator",
-              "stream_classes": MonochromatorSettingsStream,
-              }),
         ])
+
+        # depending on HW choose which viewport should be connected to a stream
+        # TODO: for now only time correlator HW or streak cam HW handled
+        if main_data.streak_cam:
+            vpv[viewports[3]] = {
+                "name": "Temporal Spectrum",
+                "stream_classes": TemporalSpectrumStream,
+            }
+
+        else:
+            vpv[viewports[4]] = {
+                "name": "Monochromator",
+                "stream_classes": MonochromatorSettingsStream,
+            }
+
+        # show either one or the other depending on HW
+        # TODO it seems to have no impact ... GUI responds always the same...for streakcam HW and for Monochromator
+        # viewports[3].Show(main_data.streak_cam is not None)
+        # viewports[4].Show(main_data.time_correlator is not None)  # panel.vp_flim_chronograph.Show()
+        # if main_data.streak_cam:
+        #     panel.vp_sparc_ts.Show()
+        # if main_data.time_correlator:
+        #     panel.vp_flim_chronograph.Show()
+
+        # TODO what if none of both? double one of the other viewports? Can we go with 3?
+
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
             vpv[viewports[0]]["fov_hw"] = main_data.ebeam
@@ -939,8 +962,13 @@ class SparcAcquisitionTab(Tab):
                 (panel.vp_sparc_bl, panel.lbl_sparc_view_bl)),
             (
                 panel.btn_sparc_view_br,
-                (panel.vp_sparc_br, panel.lbl_sparc_view_br)),
+                (panel.vp_sparc_br, panel.lbl_sparc_view_br)),  # default is now monochromator
         ])
+
+        # hack to overwrite the view buttons
+        if main_data.streak_cam:
+            # Note: for now either streak camera HW or monochromator HW possible
+            buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_ts, panel.lbl_sparc_view_br)
 
         self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
