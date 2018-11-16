@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 '''
-Created on 14 Jun 2016
+Created on Aug 2018
 
-@author: Sabrina Rossberger
+@author: Sabrina Rossberger, Delmic
 
 Copyright © 2018 Sabrina Rossberger, Delmic
 
@@ -658,8 +658,8 @@ class StreakUnit(model.HwComponent):
 
     def _getStreakUnitTimeRangeChoices(self):
         """
-        Get min and max values for exposure time. Values are in order. First to fourth values see CamParamInfoEx.
-        :return: tuple containing min and max exposure time
+        Get choices for streak unit time range. Values are in order. First six values see CamParamInfoEx.
+        :return: set of floats
         """
         choices_raw = self.parent.DevParamInfoEx(self.location, "Time Range")[6:]
         choices = []
