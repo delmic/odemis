@@ -1787,6 +1787,7 @@ def images_to_export_data(streams, view_hfw, view_pos,
                           draw_merge_ratio, raw=False,
                           interpolate_data=False, logo=None):
     """
+    streams (Streams or DataProjection): the data to be exported
     view_hfw (tuple of float): X (width), Y (height) in m
     view_pos (tuple of float): center position X, Y in m
     raw (bool): if False, generates one RGB image out of all the streams, otherwise

@@ -113,9 +113,6 @@ class Stream(object):
         # every time it's modified, image is also modified
         if raw is None:
             self.raw = []
-        elif isinstance(raw[0], model.DataArrayShadow):
-            self._das = raw[0]
-            self.raw = (())
         else:
             self.raw = raw
 
@@ -165,9 +162,9 @@ class Stream(object):
         # The drawback of not using the full image, is that some of the pixels are lost, so
         # maybe the max/min of the smaller image is different from the min/max of the full image.
         # And the histogram of both images will probably be a bit different also.
-        if hasattr(self, '_das'):
+        if raw and isinstance(raw[0], model.DataArrayShadow):
             # if the image is pyramidal, use the smaller image
-            drange_raw = self._getMergedRawImage(self._das.maxzoom)
+            drange_raw = self._getMergedRawImage(raw[0], raw[0].maxzoom)
         else:
             drange_raw = None
 
@@ -592,21 +589,12 @@ class Stream(object):
         self.status.notify(self.status.value)
 
     def onTint(self, value):
-        if isinstance(self.raw, list):
-            if len(self.raw) > 0:
-                raw = self.raw[0]
-            else:
-                raw = None
-        elif isinstance(self.raw, tuple):
-            raw = self._das
+        if self.raw:
+            raw = self.raw[0]
         else:
-            raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+            raw = None
 
         if raw is not None:
-            # If the image is pyramidal, the exported image is based on tiles from .raw.
-            # And the metadata from raw will be used to generate the metadata of the merged
-            # image from the tiles. So, in the end, the exported image metadata will be based
-            # on the raw metadata
             raw.metadata[model.MD_USER_TINT] = value
 
         self._shouldUpdateImage()
@@ -640,15 +628,11 @@ class Stream(object):
         # different 4th or 5th dimension). => just a generic version that tries
         # to handle all the cases.
 
-        if data is None:
-            if self.raw:
-                if isinstance(self.raw, list):
-                    data = self.raw[0]
-                elif isinstance(self.raw, tuple):
-                    # if the image is pyramidal, use the smaller image
-                    data = self._getMergedRawImage(self.raw.maxzoom)
-                else:
-                    raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+        if data is None and self.raw:
+            data = self.raw[0]
+            if isinstance(data, model.DataArrayShadow):
+                # if the image is pyramidal, use the smaller image
+                data = self._getMergedRawImage(data, data.maxzoom)
 
         # 2 types of drange management:
         # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
@@ -874,24 +858,25 @@ class Stream(object):
 
         gc.collect()
 
-    def _getMergedRawImage(self, z):
+    def _getMergedRawImage(self, das, z):
         """
-        Returns the merged image based on z and .rect, using the raw tiles (not projected)
+        Returns the entire raw data of DataArrayShadow at a given zoom level
+        das (DataArrayShadow): shadow of the raw data
         z (int): Zoom level index
         return (DataArray): The merged image
         """
         # calculates the size of the merged image
-        width_zoomed = self._das.shape[1] / (2 ** z)
-        height_zoomed = self._das.shape[0] / (2 ** z)
+        width_zoomed = das.shape[1] / (2 ** z)
+        height_zoomed = das.shape[0] / (2 ** z)
         # calculates the number of tiles on both axes
-        num_tiles_x = int(math.ceil(width_zoomed / self._das.tile_shape[1]))
-        num_tiles_y = int(math.ceil(height_zoomed/ self._das.tile_shape[0]))
+        num_tiles_x = int(math.ceil(width_zoomed / das.tile_shape[1]))
+        num_tiles_y = int(math.ceil(height_zoomed / das.tile_shape[0]))
 
         tiles = []
         for x in range(num_tiles_x):
             tiles_column = []
             for y in range(num_tiles_y):
-                tile = self._das.getTile(x, y, z)
+                tile = das.getTile(x, y, z)
                 tiles_column.append(tile)
             tiles.append(tiles_column)
 
@@ -982,13 +967,14 @@ class Stream(object):
         """
         # Compute histogram and compact version
         if data is None:
-            if isinstance(self.raw, tuple):  # Pyramidal => use the smallest
-                data = self._getMergedRawImage(self._das.maxzoom)
-            elif not self.raw or not isinstance(self.raw, list):
-                logging.debug("Not computing histogram as .raw is ")
+            if not self.raw:
+                logging.debug("Not computing histogram as .raw is empty")
                 return
-            else:  # the normal case: .raw is a list of DataArrays
-                data = self.raw[0]
+
+            data = self.raw[0]
+            if isinstance(data, model.DataArrayShadow):
+                # Pyramidal => use the smallest version
+                data = self._getMergedRawImage(data, data.maxzoom)
 
             # We only do background subtraction when automatically selecting raw
             bkg = self.background.value
@@ -1057,7 +1043,4 @@ class Stream(object):
         Gets the raw metadata structure from the stream.
         A list of metadata dicts is returned.
         """
-        if hasattr(self, '_das'):
-            return [self._das.metadata]
-        else:
-            return [None if data is None else data.metadata for data in self.raw]
+        return [None if data is None else data.metadata for data in self.raw]
