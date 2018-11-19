@@ -40,7 +40,6 @@ import yaml
 from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 
-
 class SafeLoader(yaml.SafeLoader):
 
     def construct_mapping(self, node, deep=False):
@@ -140,10 +139,12 @@ class Instantiator(object):
     """
     manages the instantiation of a whole model
     """
-    def __init__(self, inst_file, container=None, create_sub_containers=False,
+
+    def __init__(self, inst_file, settings_file, container=None, create_sub_containers=False,
                  dry_run=False):
         """
-        inst_file (file): opened file that contains the yaml
+        inst_file (file): opened file that contains the YAML
+        settings_file (File): opened settings file in YAML format
         container (Container): container in which to instantiate the components
         create_sub_containers (bool): whether the leave components (components which
            have no children created separately) are running in isolated containers
@@ -152,7 +153,8 @@ class Instantiator(object):
           be stricter, and some issues which are normally just warnings will be
           considered errors.
         """
-        self.ast = self._parse_instantiation_model(inst_file) # AST of the model to instantiate
+        self.ast = self._parse_instantiation_model(inst_file)  # AST of the model to instantiate
+        self._persistent_props, self._persistent_mds = self._parse_settings(settings_file)
         self.root_container = container # the container for non-leaf components
 
         self.microscope = None # the root of the model (Microscope component)
@@ -657,42 +659,102 @@ class Instantiator(object):
         self.microscope = self._instantiate_comp(self._microscope_name)
         return self.microscope
 
-    def _update_properties(self, name):
+    def _update_properties(self, comp_name):
         """
-        Set the VA values as defined in the "properties" section of the component
+        Set the VA values as defined in the "properties" section of the component. In case
+        of persistent properties (specified in "persistent" section of component) try
+        to restore the latest value from the settings file. If this fails,
+        use the VA definition in the "properties" section instead.
 
-        name (str): name of the component for which to set the VAs
+        comp_name (str): name of the component for which to set the VAs
         """
-        attrs = self.ast[name]
+        attrs = self.ast[comp_name]
+        comp = self._get_component_by_name(comp_name)
+
+        # Initialize persistent properties from settings file
+        props, _ = self.get_persistent(comp_name)
+        persistent_props_values = self._persistent_props.get(comp_name, {})
+        for prop_name in props:
+            # If persistent property wasn't saved in settings file, still check for errors
+            try:
+                va = getattr(comp, prop_name)
+                if not isinstance(va, model.VigilantAttributeBase):
+                    raise AttributeError
+            except AttributeError:
+                raise SemanticError("Error in microscope file: "
+                                    "Component '%s' has no property '%s' (defined as persistent)." % (comp_name, prop_name))
+
+            # Load value from settings file if available
+            if prop_name in persistent_props_values:
+                value = persistent_props_values[prop_name]
+                try:
+                    va.value = value
+                except Exception as exp:
+                    logging.warning("Error in settings file: "
+                                     "%s.%s = '%s' failed due to '%s'" %
+                                     (comp_name, prop_name, value, exp))
+                    del persistent_props_values[prop_name]
+
         if "properties" in attrs:
-            comp = self._get_component_by_name(name)
             for prop_name, value in attrs["properties"].items():
+                if prop_name in persistent_props_values:
+                    # Don't change value for persistent properties if stored value could be found
+                    # in settings file
+                    break
                 try:
                     va = getattr(comp, prop_name)
                 except AttributeError:
                     raise SemanticError("Error in microscope file: "
-                            "Component '%s' has no property '%s'." % (name, prop_name))
+                            "Component '%s' has no property '%s'." % (comp_name, prop_name))
                 if not isinstance(va, model.VigilantAttributeBase):
                     raise SemanticError("Error in microscope file: "
-                            "Component '%s' has no property (VA) '%s'." % (name, prop_name))
+                            "Component '%s' has no property (VA) '%s'." % (comp_name, prop_name))
                 try:
                     va.value = value
                 except Exception as exp:
                     raise ValueError("Error in microscope file: "
                                      "%s.%s = '%s' failed due to '%s'" %
-                                     (name, prop_name, value, exp))
+                                     (comp_name, prop_name, value, exp))
 
-    def _update_metadata(self, name):
+    def _update_metadata(self, comp_name):
         """
-        Update the metadata as defined in the "metadata" section of the component
+        Update the metadata as defined in the "metadata" section of the component. In case
+        of persistent metadata (specified in "persistent" section of component) try
+        to restore the latest value from the settings file.
 
-        name (str): name of the component for which to set the metadata
+        comp_name (str): name of the component for which to set the metadata
         """
-        attrs = self.ast[name]
+        attrs = self.ast[comp_name]
+        comp = self._get_component_by_name(comp_name)
+        compmd = {}
+
+        # Initialize persistent metadata from settings file
+        _, mds = self.get_persistent(comp_name)
+        persistent_mds_values = self._persistent_mds.get(comp_name, {})
+        for md_name in mds:
+            # Also check persistent metadata that are specified in the model file, but were not saved
+            # in the settings file. If something goes wrong, it should fail now rather than at the
+            # end when we're trying to write the metadata to the settings file.
+            try:
+                # To indicate the metadata name:
+                # UPPER_CASE_NAME -> use model.MD_UPPER_CASE_NAME
+                # We could also accept the actual MD string, but it'd get more
+                # complicated and not really help anyone.
+                fullname = "MD_" + md_name
+                md = getattr(model, fullname)
+            except AttributeError:
+                logging.warning("Error in settings file: "
+                    "Component '%s' has unknown metadata '%s'." % (comp_name, md_name))
+                break
+
+            if md_name in persistent_mds_values:
+                compmd[md] = persistent_mds_values[md_name]
+
+        # Initialize other metadata from model file
         if "metadata" in attrs:
-            comp = self._get_component_by_name(name)
-            compmd = {}
             for md_name, value in attrs["metadata"].items():
+                if md_name in compmd:
+                    break
                 # To indicate the metadata name:
                 # UPPER_CASE_NAME -> use model.MD_UPPER_CASE_NAME
                 # We could also accept the actual MD string, but it'd get more
@@ -702,11 +764,13 @@ class Instantiator(object):
                     md = getattr(model, fullname)
                 except AttributeError:
                     raise SemanticError("Error in microscope file: "
-                        "Component '%s' has unknown metadata '%s'." % (name, md_name))
-
+                        "Component '%s' has unknown metadata '%s'." % (comp_name, md_name))
                 compmd[md] = value
 
-            comp.updateMetadata(compmd)  # Ought to work
+        # Only update if metadata not empty. Updating a component with empty metadata should not
+        # have any effect, but it's safer not to update it when it's not necessary.
+        if compmd:
+            comp.updateMetadata(compmd)
 
     def _update_affects(self, name):
         """
@@ -792,4 +856,57 @@ class Instantiator(object):
                 comps.add(n)
 
         return comps
+            
+    def read_yaml(self, f):
+        """
+        Read content of YAML file. This is a wrapper for yaml.safe_load that returns an
+        empty dictionary in case a YAMLError is raised or the file is empty.
+        f (File): opened YAML file
+        return (dict): dictionary with file contents or empty dictionary. The format is:
+          comp -> ('metadata'|'properties' -> (key -> value)) 
+        """
+        try:
+            data = yaml.safe_load(f)
+            if not isinstance(data, dict):
+                logging.warning("Settings file reset.")
+                data = {}
+        except yaml.YAMLError as ex:
+            logging.warning("Settings file reset after loading failed with Exception %s." % ex)
+            data = {}
+        return data
+        
+    def _parse_settings(self, settings_file):
+        """
+        Parse settings file and return persistent properties and metadata in useful format.
+        settings_file (File): opened settings file. If the file is empty or corrupted, two empty
+          dict will be returned.
+        return (list of 2 nested dicts): persistent properties and persistent metadata for
+          each component in the settings file.
+          props[comp][prop_name] --> value, mds[comp][md_name] --> value
+        """
+        data = self.read_yaml(settings_file)
+        # Rearrange data from data[comp][type][prop_name] --> type[comp][prop_name],
+        # type is 'properties' or 'metadata'
+        mds = {}
+        props = {}
+        for comp in data:
+            mds[comp] = data[comp].get('metadata', {})
+            props[comp] = data[comp].get('properties', {})
+            if not isinstance(mds[comp], collections.Mapping):
+                raise ValueError("Persistent metadata for component %s is not a mapping." % comp)
+            if not isinstance(props[comp], collections.Mapping):
+                raise ValueError("Persistent properties for component %s is not a mapping." % comp)
+        return props, mds
+
+    def get_persistent(self, comp_name):
+        """
+        List all persistent properties and metadata as specified in the model file.
+        comp_name (str): name of the component
+        return (2 lists of str): VA names, metadata keys
+        """
+        attrs = self.ast[comp_name]
+        persistent = attrs.get("persistent", {})
+        prop_names = persistent.get("properties", [])
+        md_names = persistent.get("metadata", [])
+        return prop_names, md_names
 

@@ -1,0 +1,105 @@
+SimOptical: {
+    class: Microscope,
+    role: brightfield,
+    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    detectors: ["Andor SimCam"],
+    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+}
+
+#Light: {
+#    class: simulated.Light,
+#    role: brightlight,
+#    affects: ["Andor SimCam"],
+#    properties: {
+#        power: 100 # W
+#    }
+#}
+
+Spectra: {
+    class: lle.FakeLLE,
+    role: light,
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        sources: {"red": [615.e-9, 625.e-9, 635.e-9, 640.e-9, 650.e-9],
+                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
+                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
+                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
+                  "yellow": [595.e-9, 580.e-9, 565.e-9, 560.e-9, 555.e-9],
+                  "blue": [420.e-9, 430.e-9, 437.e-9, 445.e-9, 455.e-9],
+                  "teal": [495.e-9, 505.e-9, 515.e-9, 520.e-9, 530.e-9],
+                 }
+        },
+    affects: ["Andor SimCam"],
+}
+
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Andor SimCam"]
+}
+
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    affects: ["Andor SimCam"]
+}
+
+"Andor SimCam": {
+    class: andorcam2.FakeAndorCam2,
+    role: ccd,
+    init: {device: 0},
+    persistent: {
+        properties: [resolution, gain, exposureTime],
+        metadata: ['SENSOR_PIXEL_SIZE']
+    }
+}
+
+"FakeRedStoneStage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: [x, y]},
+    affects: ["Andor SimCam"],
+    properties: {
+        speed: {x: 0.1, y: 0.1} #m/s
+    },
+    persistent: {
+        properties: [speed]
+    }
+}
+
+"SEM-Optical Alignment": {
+    class: actuator.MultiplexActuator,
+    role: align,
+    affects: ["Andor SimCam"],
+    children: {"a": FakePIGCS, "b": FakePIGCS},
+    init: {
+        axes_map: {"a": "a", "b": "b"},
+#        inverted: ["a"]
+    },
+    properties: {
+        speed: {'a': 0.001, 'b': 0.001} #m/s
+    }
+}
+
+"OpticalZ actuator": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    affects: ["Andor SimCam"],
+    children: {"z": FakePIGCS},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
+FakePIGCS: {
+    class: simulated.Stage,
+    role: AlignAndFocus,
+    init: {axes: ["a", "b", "z"]},
+}
+

@@ -41,7 +41,7 @@ import stat
 import sys
 import threading
 import time
-
+import yaml
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
@@ -54,10 +54,12 @@ class BackendContainer(model.Container):
     A normal container which also terminates all the other containers when it
     terminates.
     """
-    def __init__(self, model_file, create_sub_containers=False,
+
+    def __init__(self, model_file, settings_file, create_sub_containers=False,
                  dry_run=False, name=model.BACKEND_NAME):
         """
         inst_file (file): opened file that contains the yaml
+        settings_file (file): opened file that contains the persistent data
         container (Container): container in which to instantiate the components
         create_sub_containers (bool): whether the leave components (components which
            have no children created separately) are running in isolated containers
@@ -67,6 +69,7 @@ class BackendContainer(model.Container):
         model.Container.__init__(self, name)
 
         self._model = model_file
+        self._settings = settings_file
         self._mdupdater = None
         self._inst_thread = None # thread running the component instantiation
         self._must_stop = threading.Event()
@@ -76,7 +79,8 @@ class BackendContainer(model.Container):
         # parse the instantiation file
         logging.debug("model instantiation file is: %s", self._model.name)
         try:
-            self._instantiator = modelgen.Instantiator(model_file, self, create_sub_containers, dry_run)
+            self._instantiator = modelgen.Instantiator(model_file, settings_file, self,
+                                                       create_sub_containers, dry_run)
             # save the model
             logging.info("model has been successfully parsed")
         except modelgen.ParseError as exp:
@@ -86,6 +90,57 @@ class BackendContainer(model.Container):
         except Exception:
             logging.exception("When instantiating file %s", self._model.name)
             raise IOError("Unexpected error at instantiation")
+
+        # Initialize persistent data, will be updated and written to the settings_file in the
+        # end and every time a va is changed.
+        self._persistent_listeners = []  # keep reference to persistent va listeners
+        self._persistent_data = self._instantiator.read_yaml(settings_file)
+
+    def _observe_persistent_va(self, comp, prop_name):
+        """
+        Listen to changes in persistent va, update the value of self._persistent_data
+        and write data to file.
+        comp (HwComponent): component
+        prop_name (str): name of va
+        """
+
+        def on_va_change(value, comp_name=comp.name, prop_name=prop_name):
+            self._persistent_data[comp_name]['properties'][prop_name] = value
+            self._write_persistent_data()
+
+        self._persistent_data.setdefault(comp.name, {}).setdefault('properties', {})
+        try:
+            va = getattr(comp, prop_name)
+            self._persistent_data[comp.name]['properties'][prop_name] = va.value
+        except AttributeError:
+            logging.warning("Persistent property %s not found for component %s." % (prop_name, comp.name))
+        else:     
+            va.subscribe(on_va_change, init=True)
+            self._persistent_listeners.append(on_va_change)
+
+    def _update_persistent_metadata(self):
+        """
+        Update all metadata in ._persistent_data and write values to settings file.
+        """
+        for comp in self._instantiator.components:
+            _, md_names = self._instantiator.get_persistent(comp.name)
+            md_values = comp.getMetadata()
+            for md in md_names:
+                self._persistent_data.setdefault(comp.name, {}).setdefault('metadata', {})
+                fullname = "MD_" + md
+                try:
+                    self._persistent_data[comp.name]['metadata'][md] = md_values[getattr(model, fullname)]
+                except KeyError:
+                    logging.warning("Persistent metadata %s not found on component %s" % (md, comp.name))
+        self._write_persistent_data()
+
+    def _write_persistent_data(self):
+        """
+        Write values for all persistent properties and metadata to the settings file.
+        """
+        self._settings.truncate(0)  # delete previous file contents
+        self._settings.seek(0)  # go back to position 0
+        yaml.safe_dump(self._persistent_data, self._settings)
 
     def run(self):
         # Create the root
@@ -237,6 +292,12 @@ class BackendContainer(model.Container):
                 del ghosts[n]
 
             mic.ghosts.value = ghosts
+
+            for c in newcmps:
+                prop_names, _ = self._instantiator.get_persistent(c.name)
+                for prop_name in prop_names:
+                    self._observe_persistent_va(c, prop_name)
+            self._update_persistent_metadata()
             return newcmps
 
     def _terminate_all_alive(self):
@@ -320,6 +381,9 @@ class BackendContainer(model.Container):
         if self._must_stop.is_set():
             logging.info("Terminate already called, so not running it again")
 
+        # Save values of persistent properties and metadata
+        self._update_persistent_metadata()
+
         # Stop the component instantiator, to be sure it'll not restart the components
         self._must_stop.set()
         if self._inst_thread:
@@ -363,11 +427,13 @@ class BackendRunner(object):
     CONTAINER_ALL_IN_ONE = "1" # one backend container for everything
     CONTAINER_SEPARATED = "+" # each component is started in a separate container
 
-    def __init__(self, model_file, daemon=False, dry_run=False, containement=CONTAINER_SEPARATED):
+    def __init__(self, model_file, settings_file, daemon=False, dry_run=False,
+                 containement=CONTAINER_SEPARATED):
         """
         containement (CONTAINER_*): the type of container policy to use
         """
         self.model = model_file
+        self.settings = settings_file
         self.daemon = daemon
         self.dry_run = dry_run
         self.containement = containement
@@ -470,7 +536,7 @@ class BackendRunner(object):
         else:
             create_sub_containers = False
 
-        self._container = BackendContainer(self.model, create_sub_containers,
+        self._container = BackendContainer(self.model, self.settings, create_sub_containers,
                                         dry_run=self.dry_run)
 
         try:
@@ -539,6 +605,11 @@ def main(args):
                          default=0, help="Set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--log-target", dest="logtarget", metavar="{auto,stderr,filename}",
                          default="auto", help="Specify the log target (auto, stderr, filename)")
+    # The settings file is opened here because root privileges are dropped at some point after
+    # the initialization.
+    opt_grp.add_argument("--settings", dest='settings', default='/etc/odemis-settings.yaml',
+                         type=argparse.FileType('a+'), help="Specify the path to the settings " +
+                         "file (stores values of persistent properties and metadata")
     parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open,
                         help="Microscope model instantiation file (*.odm.yaml)")
 
@@ -624,7 +695,7 @@ def main(args):
             cont_pol = BackendRunner.CONTAINER_SEPARATED
 
         # let's become the back-end for real
-        runner = BackendRunner(options.model, options.daemon,
+        runner = BackendRunner(options.model, options.settings, options.daemon,
                                dry_run=options.validate, containement=cont_pol)
         runner.run()
     except ValueError as exp:
