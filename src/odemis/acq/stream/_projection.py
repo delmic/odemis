@@ -29,9 +29,12 @@ import logging
 import time
 import math
 import gc
+import numpy
 
 from odemis import model
 from odemis.util import img
+from scipy import ndimage
+from odemis.model import MD_PIXEL_SIZE
 
 
 class DataProjection(object):
@@ -126,7 +129,7 @@ class RGBSpatialProjection(DataProjection):
             md = raw.metadata
             # get the pixel size of the full image
             ps = md[model.MD_PIXEL_SIZE]
-            max_mpp = ps[0] * (2 ** raw.maxzoom)
+            maxLineSpectrumProjection_mpp = ps[0] * (2 ** raw.maxzoom)
             # sets the mpp as the X axis of the pixel size of the full image
             mpp_rng = (ps[0], max_mpp)
             self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
@@ -436,3 +439,304 @@ class RGBSpatialProjection(DataProjection):
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
+
+class SinglePointProjection(RGBSpatialProjection):
+    """
+    Project the (0D) spectrum belonging to the selected pixel.
+    See get_spectrum_range() to know the wavelength values for each index of
+     the spectrum dimension
+    return (None or DataArray with 1 dimension): the spectrum of the given
+     pixel or None if no spectrum is selected.
+    """
+    def __init__(self, stream):
+
+        if hasattr(stream, "selected_pixel"):
+            self.selected_pixel = stream.selected_pixel
+
+        if hasattr(stream, "selectionWidth"):
+            self.selectionWidth = stream.selectionWidth
+
+        super(SinglePointProjection, self).__init__(stream)
+
+    def _projectTile(self, tile):
+
+        if self.selected_pixel.value == (None, None):
+            return None
+        x, y = self.selected_pixel.value
+        spec2d = self.stream._calibrated[:, 0, 0, :, :]  # same data but remove useless dims
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            tile = spec2d[:, y, x]
+            return RGBSpatialProjection._projectTile(self, tile)
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, py, px]
+
+        mean = datasum / n
+        tile = model.DataArray(mean.astype(spec2d.dtype))
+
+        return RGBSpatialProjection._projectTile(self, tile)
+
+
+class LineSpectrumProjection(RGBSpatialProjection):
+
+    def __init__(self, stream):
+
+        if hasattr(stream, "selected_time"):
+            self.selected_time = stream.selected_time
+
+        if hasattr(stream, "selectionWidth"):
+            self.selectionWidth = stream.selectionWidth
+
+        if hasattr(stream, "selected_line"):
+            self.selected_line = stream.selected_line
+
+        super(LineSpectrumProjection, self).__init__(stream)
+
+    def _projectTile(self, tile):
+
+        """ Return the 1D spectrum representing the (average) spectrum
+
+        Call get_spectrum_range() to know the wavelength values for each index
+          of the spectrum dimension.
+        raw (bool): if True, will return the "raw" values (ie, same data type as
+          the original data). Otherwise, it will return a RGB image.
+        return (None or DataArray with 3 dimensions): first axis (Y) is spatial
+          (along the line), second axis (X) is spectrum. If not raw, third axis
+          is colour (RGB, but actually always greyscale). Note: when not raw,
+          the beginning of the line (Y) is at the "bottom".
+          MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
+          If the selected_line is not valid, it will return None
+        """
+
+        if (None, None) in self.selected_line.value:
+            return None
+
+        spec2d = self.stream._calibrated[:, 0, 0, :, :]  # same data but remove useless dims
+        width = self.selectionWidth.value
+
+        # Number of points to return: the length of the line
+        start, end = self.selected_line.value
+        v = (end[0] - start[0], end[1] - start[1])
+        l = math.hypot(*v)
+        n = 1 + int(l)
+        if l < 1:  # a line of just one pixel is considered not valid
+            return None
+
+        # FIXME: if the data has a width of 1 (ie, just a line), and the
+        # requested width is an even number, the output is empty (because all
+        # the interpolated points are outside of the data.
+
+        # Coordinates of each point: ndim of data (5-2), pos on line (Y), spectrum (X)
+        # The line is scanned from the end till the start so that the spectra
+        # closest to the origin of the line are at the bottom.
+        coord = numpy.empty((3, width, n, spec2d.shape[0]))
+        coord[0] = numpy.arange(spec2d.shape[0])  # spectra = all
+        coord_spc = coord.swapaxes(2, 3)  # just a view to have (line) space as last dim
+        coord_spc[-1] = numpy.linspace(end[0], start[0], n)  # X axis
+        coord_spc[-2] = numpy.linspace(end[1], start[1], n)  # Y axis
+
+        # Spread over the width
+        # perpendicular unit vector
+        pv = (-v[1] / l, v[0] / l)
+        width_coord = numpy.empty((2, width))
+        spread = (width - 1) / 2
+        width_coord[-1] = numpy.linspace(pv[0] * -spread, pv[0] * spread, width)  # X axis
+        width_coord[-2] = numpy.linspace(pv[1] * -spread, pv[1] * spread, width)  # Y axis
+
+        coord_cw = coord[1:].swapaxes(0, 2).swapaxes(1, 3)  # view with coordinates and width as last dims
+        coord_cw += width_coord
+
+        # Interpolate the values based on the data
+        if width == 1:
+            # simple version for the most usual case
+            spec1d = ndimage.map_coordinates(spec2d, coord[:, 0, :, :], order=1)
+        else:
+            # FIXME: the mean should be dependent on how many pixels inside the
+            # original data were pick on each line. Currently if some pixels fall
+            # out of the original data, the outside pixels count as 0.
+            # force the intermediate values to float, as mean() still needs to run
+            spec1d_w = ndimage.map_coordinates(spec2d, coord, output=numpy.float, order=1)
+            spec1d = spec1d_w.mean(axis=0).astype(spec2d.dtype)
+        assert spec1d.shape == (n, spec2d.shape[0])
+
+        # Use metadata to indicate spatial distance between pixel
+        pxs_data = self.stream._calibrated.metadata[MD_PIXEL_SIZE]
+        pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
+        md = {MD_PIXEL_SIZE: (None, pxs)}  # for the spectrum, use get_spectrum_range()
+
+        raw = True
+
+        if raw:
+            return model.DataArray(spec1d[::-1, :], md)
+        else:
+            # Scale and convert to RGB image
+            if self.stream.auto_bc.value:
+                hist, edges = img.histogram(spec1d)
+                irange = img.findOptimalRange(hist, edges,
+                                              self.stream.auto_bc_outliers.value / 100)
+            else:
+                # use the values requested by the user
+                irange = sorted(self.stream.intensityRange.value)
+            rgb8 = img.DataArray2RGB(spec1d, irange)
+
+            tile = model.DataArray(rgb8, md)
+
+        return RGBSpatialProjection._projectTile(self, tile)
+
+
+class TemporalSpectrumProjection(RGBSpatialProjection):
+
+    def __init__(self, stream):
+
+        if hasattr(stream, "selected_time"):
+            self.selected_time = stream.selected_time
+
+        if hasattr(stream, "selectionWidth"):
+            self.selectionWidth = stream.selectionWidth
+
+        if hasattr(stream, "selected_pixel"):
+            self.selected_pixel = stream.selected_pixel
+
+        super(TemporalSpectrumProjection, self).__init__(stream)
+
+    def _projectTile(self, tile):
+
+        """
+        returns a the temporal spectrum image for the given .selected_pixel
+        """
+        if self.selected_pixel.value == (None, None):
+            return None
+        x, y = self.selected_pixel.value
+
+        spec2d = self.stream._calibrated[:, :, 0, :, :]  # same data but remove useless dims
+
+        md = self.stream._find_metadata(self._calibrated.metadata)
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            return model.DataArray(spec2d[:, :, y, x], md)
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, :, py, px]
+
+        mean = datasum / n
+        tile = model.DataArray(mean.astype(spec2d.dtype))
+
+        return RGBSpatialProjection._projectTile(self, tile)
+
+
+class RGBSpatialSpectrumProjection(RGBSpatialProjection):
+
+    def __init__(self, stream):
+
+        if hasattr(stream, "selected_time"):
+            self.selected_time = stream.selected_time
+
+        super(RGBSpatialSpectrumProjection, self).__init__(stream)
+
+    def _projectTile(self, data):
+        """
+        Project a spectrum cube (CTYX) to XY space in RGB, by averaging the
+          intensity over all the wavelengths (selected by the user)
+        data (DataArray or None): if provided, will use the cube, otherwise,
+          will use the whole data from the stream.
+        raw (bool): if True, will return the "raw" values (ie, same data type as
+          the original data). Otherwise, it will return a RGB image.
+        return (DataArray YXC of uint8 or YX of same data type as data): average
+          intensity over the selected wavelengths
+        """
+        if data is None:
+            data = self.stream._calibrated
+        md = self.stream._find_metadata(data.metadata)
+
+        # pick only the data inside the bandwidth
+        spec_range = self.stream._get_bandwidth_in_pixel()
+        t = self.stream._tl_px_values.index(self.selected_time.value)
+        logging.debug("Spectrum range picked: %s px", spec_range)
+
+        raw = True
+
+        if raw:
+            av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
+            av_data = img.ensure2DImage(av_data).astype(data.dtype)
+            tile = model.DataArray(av_data, md)
+        else:
+            irange = self._getDisplayIRange()  # will update histogram if not yet present
+
+            if not self.fitToRGB.value:
+                # TODO: use better intermediary type if possible?, cf semcomedi
+                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                rgbim = img.DataArray2RGB(av_data, irange)
+            else:
+                # Note: For now this method uses three independent bands. To give
+                # a better sense of continuum, and be closer to reality when using
+                # the visible light's band, we should take a weighted average of the
+                # whole spectrum for each band. But in practice, that would be less
+                # useful.
+
+                # divide the range into 3 sub-ranges (BRG) of almost the same length
+                len_rng = spec_range[1] - spec_range[0] + 1
+                brange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
+                grange = [brange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
+                rrange = [grange[1] + 1, spec_range[1]]
+                # ensure each range contains at least one pixel
+                brange[1] = max(brange)
+                grange[1] = max(grange)
+                rrange[1] = max(rrange)
+
+                # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
+                av_data = numpy.mean(data[rrange[0]:rrange[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                rgbim = img.DataArray2RGB(av_data, irange)
+                av_data = numpy.mean(data[grange[0]:grange[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                gim = img.DataArray2RGB(av_data, irange)
+                rgbim[:, :, 1] = gim[:, :, 0]
+                av_data = numpy.mean(data[brange[0]:brange[1] + 1, t], axis=0)
+                av_data = img.ensure2DImage(av_data)
+                bim = img.DataArray2RGB(av_data, irange)
+                rgbim[:, :, 2] = bim[:, :, 0]
+
+            rgbim.flags.writeable = False
+            md[model.MD_DIMS] = "YXC"  # RGB format
+
+            tile = model.DataArray(rgbim, md)
+
+        return RGBSpatialProjection._projectTile(self, tile)
+

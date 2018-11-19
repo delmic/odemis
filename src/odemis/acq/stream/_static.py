@@ -663,6 +663,9 @@ class StaticSpectrumStream(StaticStream):
         if len(image.shape) == 3:
             # force 5D
             image = image[:, numpy.newaxis, numpy.newaxis, :, :]
+        elif len(image.shape) == 4:
+            # force 5D
+            image = image[:, :, numpy.newaxis, :, :]
         elif len(image.shape) != 5 or image.shape[1:3] != (1, 1):
             logging.error("Cannot handle data of shape %s", image.shape)
             raise NotImplementedError("SpectrumStream needs a cube data")
@@ -687,6 +690,26 @@ class StaticSpectrumStream(StaticStream):
             cwl = (max_bw + min_bw) / 2
             width = (max_bw - min_bw) / 12
 
+        # This is for "time list" projection
+        try:
+            # cached list of wavelength for each pixel pos
+            self._tl_px_values = spectrum.get_time_per_pixel(image)
+        except (ValueError, KeyError):
+            # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+            # TODO: try to make them always int?
+            max_t = image.shape[1] // 2
+            min_t = (max_t - image.shape[1]) + 1
+            self._tl_px_values = range(min_t, max_t + 1)
+            assert(len(self._tl_px_values) == image.shape[1])
+            unit_t = "px"
+            cwl = (max_t + min_t) // 2
+            width_t = image.shape[1] // 12
+        else:
+            min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
+            unit_t = "s"
+            ct = (max_t + min_t) / 2
+            width_t = (max_t - min_t) / 12
+
         # TODO: allow to pass the calibration data as argument to avoid
         # recomputing the data just after init?
         # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
@@ -698,6 +721,20 @@ class StaticSpectrumStream(StaticStream):
                                     range=((min_bw, min_bw), (max_bw, max_bw)),
                                     unit=unit_bw,
                                     cls=(int, long, float))
+
+        self.selected_time = model.FloatContinuous(self._tl_px_values[0],
+                                                   range=(min_t, max_t),
+                                                   unit=unit_t,
+                                                   setter=self._setTime)
+        # Use a nearest-neighbor algorithm to allow parsing values set
+        self.time_kdtree = scipy.spatial.KDTree([[x] for x in self._tl_px_values])
+
+        self.selected_wavelength = model.FloatContinuous(self._wl_px_values[0],
+                                                   range=(min_bw, max_bw),
+                                                   unit=unit_bw,
+                                                   setter=self._setWavelength)
+        # Use a nearest-neighbor algorithm to allow parsing values set
+        self.wl_kdtree = scipy.spatial.KDTree([[x] for x in self._wl_px_values])
 
         # Whether the (per bandwidth) display should be split intro 3 sub-bands
         # which are applied to RGB
@@ -754,6 +791,22 @@ class StaticSpectrumStream(StaticStream):
             spec_range = self._get_bandwidth_in_pixel()
             data = self._calibrated[spec_range[0]:spec_range[1] + 1]
         super(StaticSpectrumStream, self)._updateHistogram(data)
+
+    def _setTime(self, value):
+        of, i = self.time_kdtree.query([value])
+        return self._tl_px_values[i]
+
+    def _setWavelength(self, value):
+        of, i = self.wl_kdtree.query([value])
+        return self._wl_px_values[i]
+
+    def _onTimeSelect(self, _):
+        # Update other VA's so that displays are updated.
+        self.selected_pixel.notify(self.selected_pixel.value)
+
+    def _onWavelengthSelect(self, _):
+        # Update other VA's so that displays are updated.
+        self.selected_pixel.notify(self.selected_pixel.value)
 
     def _setLine(self, line):
         """
@@ -1156,6 +1209,15 @@ class StaticSpectrumStream(StaticStream):
         """
         self._updateHistogram()
         self._shouldUpdateImage()
+
+    def get_time_values(self):
+        return (self._tl_px_values, "s")
+
+    def get_time_range(self):
+        """
+        Returns the range and unit of the time data from the time list.
+        """
+        return (min(self._tl_px_values), max(self._tl_px_values)), "s"
 
 # TODO: It would make sense to inherit from RGBStream, however, it relies on
 # DataProjection, and currently the DataProjection doesn't support .raw being
