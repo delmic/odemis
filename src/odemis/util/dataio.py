@@ -138,9 +138,9 @@ def data_to_static_streams(data):
                     continue
             name = d.metadata.get(model.MD_DESCRIPTION, "Electrons")
             klass = stream.StaticSEMStream
+
         if issubclass(klass, stream.Static2DStream):
             # FIXME: doesn't work currently if d is a DAS
-            name = d.metadata.get(model.MD_DESCRIPTION)
             if numpy.prod(d.shape[:-3]) != 1:
                 logging.warning("Dropping dimensions from the data %s of shape %s",
                             name, d.shape)
