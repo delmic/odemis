@@ -43,7 +43,6 @@ MD_BASELINE = "Baseline value" # ADU, int or float (same as image data) represen
 MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel (on a CCD/CMOS)
 MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre of 2 pixels on the detector sensor
 MD_SENSOR_SIZE = "Sensor size" # px, px, maximum resolution that can be acquire by the detector
-MD_RESOLUTION = "Resolution"  # number of px in x,y after binning
 MD_SENSOR_TEMP = "Sensor temperature" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre. X goes right, and Y goes up
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample

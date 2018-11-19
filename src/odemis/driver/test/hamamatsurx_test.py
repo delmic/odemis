@@ -3,7 +3,7 @@
 '''
 Created on 30 Aug 2018
 
-@author: Éric Piel
+@author: Sabrina Rossberger, Delmic
 
 Copyright © 2018 Sabrina Rossberger, Delmic
 
