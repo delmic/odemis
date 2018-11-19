@@ -442,7 +442,7 @@ class RGBSpatialProjection(DataProjection):
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
 
-class SinglePointProjection(DataProjection):
+class SinglePointSpectrumProjection(DataProjection):
     """
     Project the (0D) spectrum belonging to the selected pixel.
     See get_spectrum_range() to know the wavelength values for each index of
@@ -452,7 +452,7 @@ class SinglePointProjection(DataProjection):
     """
     def __init__(self, stream):
 
-        super(SinglePointProjection, self).__init__(stream)
+        super(SinglePointSpectrumProjection, self).__init__(stream)
 
         if hasattr(stream, "selected_pixel"):
             self.selected_pixel = stream.selected_pixel
@@ -487,7 +487,7 @@ class SinglePointProjection(DataProjection):
             if isinstance(self.stream.raw, list):
                 x, y = self.selected_pixel.value
                 t = self.stream._tl_px_values.index(self.selected_time.value)
-                spec2d = self.stream._calibrated[:, 0, t, :, :]  # same data but remove useless dims
+                spec2d = self.stream._calibrated[:, t, 0, :, :]  # same data but remove useless dims
 
                 # We treat width as the diameter of the circle which contains the center
                 # of the pixels to be taken into account
@@ -521,6 +521,86 @@ class SinglePointProjection(DataProjection):
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
+class SinglePointChronoProjection(DataProjection):
+    """
+    Project the (0D) spectrum belonging to the selected pixel.
+    See get_spectrum_range() to know the wavelength values for each index of
+     the spectrum dimension
+    return (None or DataArray with 1 dimension): the spectrum of the given
+     pixel or None if no spectrum is selected.
+    """
+    def __init__(self, stream):
+
+        super(SinglePointChronoProjection, self).__init__(stream)
+
+        if hasattr(stream, "selected_pixel"):
+            self.selected_pixel = stream.selected_pixel
+            self.selected_pixel.subscribe(self._on_selected_pixel)
+
+        if hasattr(stream, "selectionWidth"):
+            self.selectionWidth = stream.selectionWidth
+            self.selectionWidth.subscribe(self._on_selected_width)
+            
+        if hasattr(stream, "selected_wavelength"):
+            self.selected_wavelength = stream.selected_wavelength
+            self.selected_wavelength.subscribe(self._on_selected_wl)
+
+    def _on_selected_pixel(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_width(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_wl(self, _):
+        self._shouldUpdateImage()
+
+    def _updateImage(self):
+        """ Recomputes the image with all the raw data available
+        """
+        # logging.debug("Updating image")
+        if self.selected_pixel.value == (None, None):
+            return
+
+        try:
+            # if .raw is a list of DataArray, .image is a complete image
+            if isinstance(self.stream.raw, list):
+                x, y = self.selected_pixel.value
+                c = self._wl_px_values.index(self.selected_wavelength.value)
+                chrono2d = self.stream._calibrated[c, :, 0, :, :]  # same data but remove useless dims
+
+                # We treat width as the diameter of the circle which contains the center
+                # of the pixels to be taken into account
+                width = self.selectionWidth.value
+                if width == 1:  # short-cut for simple case
+                    raw = chrono2d[:, y, x]
+                    self.image.value = raw
+                    return
+
+                # There are various ways to do it with numpy. As typically the spectrum
+                # dimension is big, and the number of pixels to sum is small, it seems
+                # the easiest way is to just do some kind of "clever" mean. Using a
+                # masked array would also work, but that'd imply having a huge mask.
+                radius = width / 2
+                n = 0
+                # TODO: use same cleverness as mean() for dtype?
+                datasum = numpy.zeros(chrono2d.shape[0], dtype=numpy.float64)
+                # Scan the square around the point, and only pick the points in the circle
+                for px in range(max(0, int(x - radius)),
+                                min(int(x + radius) + 1, spec2d.shape[-1])):
+                    for py in range(max(0, int(y - radius)),
+                                    min(int(y + radius) + 1, spec2d.shape[-2])):
+                        if math.hypot(x - px, y - py) <= radius:
+                            n += 1
+                            datasum += chrono2d[:, t, py, px]
+
+                mean = datasum / n
+                raw = model.DataArray(mean.astype(chrono2d.dtype))
+
+                self.image.value = raw
+
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
 
 
 class LineSpectrumProjection(DataProjection):

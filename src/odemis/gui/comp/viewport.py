@@ -1240,12 +1240,12 @@ class TimeSpectrumViewport(PointSpectrumViewport):
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.stream.get_pixel_time()
-        time_range, unit_x = self.stream.get_time_values()
+        data = self.stream.image.value
+        time_range, unit_t = spectrum.get_time_range(data)
 
-        self.canvas.set_1d_data(time_range, data, unit_x)
+        self.canvas.set_1d_data(time_range, data, unit_t)
 
-        self.bottom_legend.unit = unit_x
+        self.bottom_legend.unit = unit_t
         self.bottom_legend.range = (time_range[0], time_range[-1])
         self.left_legend.range = (min(data), max(data))
 
