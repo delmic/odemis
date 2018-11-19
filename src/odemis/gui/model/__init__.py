@@ -1392,7 +1392,8 @@ class StreamView(View):
         ss = self.stream_tree.getStreams()
         # ss is a list of either Streams or DataProjections, so need to convert
         # back to only streams.
-        return [s.stream if isinstance(s, DataProjection) else s for s in ss]
+        # return [s.stream if isinstance(s, DataProjection) else s for s in ss]
+        return ss
 
     def addStream(self, stream):
         """
@@ -1410,7 +1411,7 @@ class StreamView(View):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
             logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
-        if not hasattr(stream, 'image'):
+        if self._projection_klass != RGBSpatialProjection or not hasattr(stream, 'image'):
             # if the stream is a StaticStream, create a projection for it
             logging.debug("Creating a projection for stream %s", stream)
             stream = self._projection_klass(stream)

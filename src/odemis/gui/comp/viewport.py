@@ -923,6 +923,7 @@ class PlotViewport(ViewPort):
         # on the reference within the MicroscopeView, it might be replaced
         # before we get an explicit chance to unsubscribe event handlers
         self.stream = None
+        self.projection = None
 
     def setView(self, view, tab_data):
         """
@@ -1079,12 +1080,11 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.add_view_overlay(self._curve_overlay)
             self._curve_overlay.activate()
             if self.stream is not None:
-                data = self.stream.get_pixel_spectrum()
+                data = self.stream.image.value
                 if data is not None:
                     # cancel previous fitting if there is one in progress
                     self._peak_future.cancel()
-                    spectrum_range, _ = self.stream.get_spectrum_range()
-                    unit_x = self.stream.spectrumBandwidth.unit
+                    spectrum_range, unit_x = spectrum.get_spectrum_range(data)
                     # cancel previous fitting if there is one in progress
                     self.spectrum_range = spectrum_range
                     self.unit_x = unit_x
@@ -1144,10 +1144,12 @@ class PointSpectrumViewport(PlotViewport):
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.stream.get_pixel_spectrum()
-        spectrum_range, unit_x = self.stream.get_spectrum_range()
+        data = self.stream.image.value
+        spectrum_range, unit_x = spectrum.get_spectrum_range(data)
 
-        if self.stream.peak_method.value is not None:
+        projection = self.stream
+
+        if projection.stream.peak_method.value is not None:
             # cancel previous fitting if there is one in progress
             self._peak_future.cancel()
             self._curve_overlay.clear_labels()
@@ -1156,7 +1158,7 @@ class PointSpectrumViewport(PlotViewport):
             # TODO: try to find more peaks (= small window) based on width?
             # => so far not much success
             # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
-            self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=self.stream.peak_method.value)
+            self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=projection.stream.peak_method.value)
             self._peak_future.add_done_callback(self._update_peak)
 
         self.canvas.set_1d_data(spectrum_range, data, unit_x)
@@ -1171,7 +1173,8 @@ class PointSpectrumViewport(PlotViewport):
     def _update_peak(self, f):
         try:
             peak_data, peak_offset = f.result()
-            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
+            projection = self.stream
+            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, projection.stream.peak_method.value)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
@@ -1348,12 +1351,13 @@ class TemporalSpectrumViewport(PlotViewport):
 
     def _on_new_data(self, data):
         if data.size:
-            spectrum, unit_x = self.stream.get_spectrum_range()
-            spectrum_range = (min(spectrum), max(spectrum))
-            time_range, unit_y = self.stream.get_time_range()
+            wl, unit_x = spectrum.get_spectrum_range(data)
+            spectrum_range = (min(wl), max(wl))
+            times, unit_y = spectrum.get_time_range(data)
+            time_range = (min(times), max(times))
             md = data.metadata
             data = numpy.swapaxes(data, 0, 1)
-            data = model.DataArray(img.DataArray2RGB(data), md)
+            data = model.DataArray(data, md)
 
             self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range, yflip=False)
 
@@ -1383,7 +1387,7 @@ class TemporalSpectrumViewport(PlotViewport):
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.stream.get_pixel_time_spectrum()
+        data = self.stream.image.value
         logging.debug("Drawing new temporal data. x=%d, y=%d",
                       self.stream.selected_pixel.value[0], self.stream.selected_pixel.value[1])
         # Call new data

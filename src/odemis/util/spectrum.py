@@ -75,6 +75,28 @@ def get_wavelength_per_pixel(da):
     raise KeyError("No MD_WL_* metadata available")
 
 
+def get_spectrum_range(data):
+    """ Return the wavelength for each pixel of a (complete) spectrum
+
+    :param data: (model.DataArray of shape C...): the DataArray with metadata
+        either MD_WL_POLYNOMIAL or MD_WL_LIST
+
+    :return: (list of numbers or None): one wavelength per spectrum pixel.
+      Values are in meters, unless the spectrum cannot be determined, in
+      which case integers representing pixels index is returned.
+      If no data is available, None is returned.
+            (str): unit of spectrum range
+    """
+
+    try:
+        return get_wavelength_per_pixel(data), "m"
+    except (ValueError, KeyError):
+        # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+        max_bw = data.shape[0] // 2
+        min_bw = (max_bw - data.shape[0]) + 1
+        return range(min_bw, max_bw + 1), "px"
+
+
 def get_time_per_pixel(da):
     """
     Computes the time list for each pixel along the T dimension
@@ -102,6 +124,24 @@ def get_time_per_pixel(da):
                              "length as the data")
 
     raise KeyError("No MD_TIME_LIST metadata available")
+
+
+def get_time_range(data):
+    """ Return the time range
+
+    :param data: (model.DataArray of shape C...): the DataArray with metadata
+        MD_TIME_LIST
+
+    :return: (list of numbers or None):
+    """
+
+    try:
+        return get_time_per_pixel(data), "s"
+    except (ValueError, KeyError):
+        # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+        max_t = data.shape[0] // 2
+        min_t = (max_t - data.shape[0]) + 1
+        return range(min_t, max_t + 1), "px"
 
 
 def coefficients_to_dataarray(coef):

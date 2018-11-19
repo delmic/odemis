@@ -75,6 +75,8 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
+from odemis.acq.stream._projection import SinglePointProjection, LineSpectrumProjection, \
+    TemporalSpectrumProjection, RGBSpatialSpectrumProjection
 from odemis.acq.stream._static import TemporalSpectrumStream
 
 # The constant order of the toolbar buttons
@@ -1614,18 +1616,21 @@ class AnalysisTab(Tab):
             (viewports[5],
              {"name": "Spectrum plot",
               "stream_classes": (SpectrumStream, TemporalSpectrumStream),
+              "projection_class": SinglePointProjection,
               }),
             (viewports[6],
              {"name": "Spatial spectrum",
               "stream_classes": (SpectrumStream, CLStream, TemporalSpectrumStream),
+              "projection_class": RGBSpatialSpectrumProjection,
               }),
             (viewports[7],
              {"name": "Temporal spectrum",
               "stream_classes": (TemporalSpectrumStream,),
+              "projection_class": TemporalSpectrumProjection,
               }),
             (viewports[8],
-             {"name": "Time spectrum",
-              "stream_classes": (TemporalSpectrumStream,),
+             {"name": "Time spectrum Plot",
+              "stream_classes": (SinglePointProjection,),
               }),
         ])
 
