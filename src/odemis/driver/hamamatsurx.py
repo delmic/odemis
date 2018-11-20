@@ -150,18 +150,18 @@ class ReadoutCamera(model.DigitalCamera):
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
         # However, only a smaller subarea is used for operating the streak system.
         # x (lambda): horizontal, y (time): vertical  TODO check again (1344, 1016)
-        resolution = (int(parent.CamParamGet("Setup", "HWidth")[0]),
+        full_res = (int(parent.CamParamGet("Setup", "HWidth")[0]),
                        int(parent.CamParamGet("Setup", "VWidth")[0]))
-        self._metadata[model.MD_SENSOR_SIZE] = resolution
+        self._metadata[model.MD_SENSOR_SIZE] = full_res
 
         # 16-bit
-        self._shape = resolution + (2 ** 16,)
+        self._shape = full_res + (2 ** 16,)
 
         self._binning = self._getBinning()  # used by _setResolution
 
         # need to be before binning, as it is modified when changing binning
-        _resolution = (int(resolution[0]/self._binning[0]), int(resolution[1]/self._binning[1]))
-        self.resolution = model.ResolutionVA(_resolution, ((1, 1), resolution), setter=self._setResolution)
+        resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
+        self.resolution = model.ResolutionVA(resolution, ((1, 1), full_res), setter=self._setResolution)
 
         choices_bin = self._getReadoutCamBinningChoices()
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -176,7 +176,7 @@ class ReadoutCamera(model.DigitalCamera):
 
         # multiply with mag as we use the 1/M as input in yaml file!
         eff_pixelsize = sensor_pixelsize[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
-        # self._metadata[model.MD_RESOLUTION] = eff_pixelsize  # TODO think it is useful
+        # eff_pixelsize  # TODO think it is useful to have the eff px size attached to each image in the MD
 
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
@@ -216,18 +216,19 @@ class ReadoutCamera(model.DigitalCamera):
         self.data = StreakCameraDataFlow(self._start, self._stop, self._sync)
 
     def _updateWavelengthList(self, _=None):
+        """
+        Updates the wavelength list MD based on the current spectrograph position.
+        """
         npixels = self.resolution.value[0]  # number of pixels, horizontal is wavelength
         # pixelsize VA is sensor px size without binning and magnification
         pxs = self.pixelSize.value[0] * self.binning.value[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
         wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
-        # md = {model.MD_WL_LIST: wll}
-        # self.updateMetadata(md)
-        self._metadata[model.MD_WL_LIST] = wll  # ok or use upper fct?
+        self._metadata[model.MD_WL_LIST] = wll
 
     def _getReadoutCamBinningChoices(self):
         """
         Get min and max values for exposure time. Values are in order. First to fourth values see CamParamInfoEx.
-        :return: tuple containing min and max exposure time
+        :return: (tuple) min and max exposure time
         """
         choices_raw = self.parent.CamParamInfoEx("Setup", "Binning")[4:]
         choices = []
@@ -237,16 +238,22 @@ class ReadoutCamera(model.DigitalCamera):
         return set(choices)
 
     def _getBinning(self):
-        """Get binning setting from camera and transfer to format, which resolution VA needs as input."""
-        _binning = self.parent.CamParamGet("Setup", "Binning")
-        # ResolutionVA need tuple instead of list of format [2 x 2]
+        """
+        Get binning setting from camera.
+        Convert the format provided by RemoteEx.
+        :return: (tuple) current binning
+        """
+        _binning = self.parent.CamParamGet("Setup", "Binning")  # returns list of format e.g. [2 x 2]
+        # convert as .resolution VA need tuple instead of list
         binning = int(_binning[0].split("x")[0].strip(" ")), int(_binning[0].split("x")[1].strip(" "))
+
         return binning
 
     def _setBinning(self, value):
         """
-        value (2-tuple int)
-        Called when "binning" VA is modified. It actually modifies the camera binning.
+        Called when .binning VA is modified. It actually modifies the camera binning.
+        :parameter value: (2-tuple int) binning value to set
+        :return: current binning value
         """
         # ResolutionVA need tuple instead of list of format [2 x 2]
         binning = "%s x %s" % (value[0], value[1])
@@ -256,7 +263,6 @@ class ReadoutCamera(model.DigitalCamera):
 
         # adapt resolution
         # TODO check if really necessary
-        # TODO self._binning is already updated and shape does not change
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
         old_resolution = self.resolution.value
@@ -274,9 +280,11 @@ class ReadoutCamera(model.DigitalCamera):
         return self._binning
 
     def _setResolution(self, _=None):
-        """Sets the resolution VA.
-        So far the full field of view is always used. Therefore, resolution only changes with binnig."""
-
+        """
+        Sets the resolution VA.
+        So far the full field of view is always used. Therefore, resolution only changes with binning.
+        :return: current resolution value
+        """
         # Note: we can keep it simple as long as we do not provide to change the sensor size yet...
         resolution = self._shape[:2]
         new_res = (int(resolution[0] // self._binning[0]),
@@ -289,8 +297,8 @@ class ReadoutCamera(model.DigitalCamera):
 
     def _getCamExpTimeRange(self):
         """
-        Get min and max values for exposure time. Values are in order. First to fourth values see CamParamInfoEx.
-        :parameter location: (str) see CamParamGet  # TODO keep for later when using different acq mode e.g. PC
+        Get min and max values for the camera exposure time.
+        Values are in order. First to fourth values see CamParamInfoEx.
         :return: tuple containing min and max exposure time
         """
         min_value = self.parent.CamParamInfoEx("Live", "Exposure")[4]
@@ -303,12 +311,15 @@ class ReadoutCamera(model.DigitalCamera):
         self.max_exp = self.parent.convertUnit2Time(max_value_raw, max_unit)
 
         range = (self.min_exp, self.max_exp)
+
         return range
 
-    def _getCamExpTime(self):
-        """Recalculate exposure time.
-        :parameter location: (str) see CamParamGet
-        :return: exposure time in sec"""
+    def GetCamExpTime(self):
+        """
+        Get the camera exposure time.
+        Converts the provided value received from RemoteEx into sec.
+        :return: (float) exposure time in sec
+        """
         exp_time_raw = self.parent.CamParamGet("Live", "Exposure")[0].split(' ')
         try:
             exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
@@ -318,9 +329,12 @@ class ReadoutCamera(model.DigitalCamera):
         return exp_time
 
     def _setCamExpTime(self, value):
-        """Translate exposure time into a for RemoteEx readable format.
-        :parameter location: (str) see CamParamGet
-        :parameter exp_time (float): exposure time"""
+        """
+        Set the camera exposure time.
+        Converts the time range in sec into a for RemoteEx readable format.
+        :parameter value: (float) exposure time to be set
+        :return: (float) current exposure time
+        """
         try:
             exp_time_raw = self.parent.convertTime2Unit(value)
         except Exception:
@@ -335,9 +349,9 @@ class ReadoutCamera(model.DigitalCamera):
         return value
 
     def _start(self):
-        """Start an acquisition.
-        :parameter AcqMode: (str) see AcqStart
-        :raises CancelledError if the acquisition must stop.
+        """
+        Start an acquisition.
+        :raises CancelledError if the acquisition must stop.  # TODO
         """
         if self._sync_event is None:  # do not care about synchronization, start acquire
             self.parent.StartAcquisition(self.acqMode)
@@ -345,7 +359,9 @@ class ReadoutCamera(model.DigitalCamera):
         # raise CancelledError() # TODO needed?
 
     def _stop(self):
-        """Stop the acquisition."""
+        """
+        Stop the acquisition.
+        """
         self.parent.AcqStop()
         self.parent.queue_img.put("F")  # Flush, to stop reading all images still in the ring buffer
         # Note: set MCPgain to zero after acquiring for HW safety reasons
@@ -378,14 +394,27 @@ class ReadoutCamera(model.DigitalCamera):
 
     @oneway
     def onEvent(self):
-        """Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify())."""
+        """
+        Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify()).
+        """
         logging.debug("Event triggered to start a new synchronized acquisition.")
         self.queue_events.append(time.time())
         self.parent.queue_img.put("start")
 
+    # override  # TODO?
+    def updateMetadata(self, md):
+        """
+        Update the metadata.
+        """
+        super(ReadoutCamera, self).updateMetadata(md)
+        if model.MD_LENS_MAG in md:
+            self._updateWavelengthList()
+
     def _mergeMetadata(self, md):
-        """Create dict containing all metadata from the children readout camera, streak unit, delay genereator
-        and the metadata from the parent streak camera."""
+        """
+        Create dict containing all metadata from the children readout camera, streak unit, delay genereator
+        and the metadata from the parent streak camera.
+        """
 
         md_devices = [self.parent._streakunit._metadata, self.parent._delaybox._metadata]
 
@@ -401,10 +430,12 @@ class ReadoutCamera(model.DigitalCamera):
         return md
 
     def _getDataFromBuffer(self):
-        """This method runs in a separate thread and waits for messages in queue indicating
+        """
+        This method runs in a separate thread and waits for messages in queue indicating
         that some data was received. The image is then received from the device via the dataport IP socket or
         the vertical scaling table is received, which corresponds to a time range for a single sweep.
-        It corrects the vertical time information. The table contains the actual timestamps for each px.."""
+        It corrects the vertical time information. The table contains the actual timestamps for each px..
+        """
 
         # TODO need to check that there is an ringbuffer available!?
 
@@ -535,13 +566,13 @@ class ReadoutCamera(model.DigitalCamera):
             self.t_image.join(5)
         try:
             self._stop()  # stop any acquisition
-        except Exception:  # TODO which exception?
+        except Exception:  # TODO which exception?????
             pass
 
 
 class StreakUnit(model.HwComponent):
     """
-    Represents Hamamatsu streak unit.
+    Represents the Hamamatsu streak unit.
     """
 
     def __init__(self, name, role, parent, daemon=None, **kwargs):
@@ -555,13 +586,13 @@ class StreakUnit(model.HwComponent):
 
         # Set parameters streak unit
         parent.DevParamSet(self.location, "Time Range", "1 ns")
-        parent.DevParamSet(self.location, "MCP Gain", "0")
+        parent.DevParamSet(self.location, "MCP Gain", 0)
         # Switch Mode to "Focus", MCPGain = 0 (implemented in RemoteEx and also here in the driver).
         parent.DevParamSet(self.location, "Mode", "Focus")
         # Resets behavior for a vertical single shot sweep: Automatic reset occurs after each sweep.
         parent.DevParamSet(self.location, "Trig. Mode", "Cont")
         # [Volt] Input and indication of the trigger level for the vertical sweep.
-        parent.DevParamSet(self.location, "Trig. level", "1") # TODO??
+        parent.DevParamSet(self.location, "Trig. level", 1) # TODO??
         parent.DevParamSet(self.location, "Trig. slope", "Rising")
 
         parent.DevParamGet(self.location, "Trig. status")  # read only
@@ -578,15 +609,16 @@ class StreakUnit(model.HwComponent):
         self._metadata[model.MD_STREAK_MODE] = parent.DevParamGet(self.location, "Mode")
 
         # VAs
-        self.streakMode = model.BooleanVA(False, setter=self._updateStreakMode)  # default False see set params above
+        mode = self._getStreakMode()
+        self.streakMode = model.BooleanVA(mode, setter=self._setStreakMode)  # default False see set params above
 
-        gain = int(self.parent.DevParamGet(self.location, "MCP Gain"))
+        gain = self._getMCPGain()
         range_gain = (0, 63)  # TODO get the range via RemoteEx
-        self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._updateMCPGain)
+        self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._setMCPGain)
 
-        timeRange = self._getStreakUnitTimeRange()
+        timeRange = self._getTimeRange()
         choices = set(self._getStreakUnitTimeRangeChoices())
-        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._updateTimeRange)
+        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange)
 
         # a variable that stores the current timeRange conversion for e.g. the scaling table conversion
         # is set in the setter of the timeRange VA
@@ -595,9 +627,24 @@ class StreakUnit(model.HwComponent):
         # read-only VAs
         # TODO: Trig. Mode, Trig. level, Trig. slope??? plus MD!?
 
-    def _updateStreakMode(self, value):
+    def GetStreakMode(self):
         """
-        update the mode VA
+        Get the current value from the the streak unit HW.
+        :return: (bool) current streak mode value
+        """
+        streakMode_raw = self.parent.DevParamGet(self.location, "Mode")  # returns a list
+        if streakMode_raw[0] == "Focus":
+            streakMode = False
+        else:
+            streakMode = True
+
+        return streakMode
+
+    def _setStreakMode(self, value):
+        """
+        Updates the streakMode VA.
+        :parameter value: (bool) value to be set
+        :return: (bool) current streak mode
         """
         if not value:
             self.MCPgain.value = 0
@@ -609,9 +656,21 @@ class StreakUnit(model.HwComponent):
 
         return value
 
-    def _updateMCPGain(self, value):
+    def GetMCPGain(self):
         """
-        update the MCP gain VA
+        Get the current value from the the streak unit HW.
+        :return: (int) current MCPgain value
+        """
+        MCPgain_raw = self.parent.DevParamGet(self.location, "MCP Gain")  # returns a list
+        MCPgain = int(MCPgain_raw[0])
+
+        return MCPgain
+
+    def _setMCPGain(self, value):
+        """
+        Updates the MCPgain VA.
+        :parameter value: (int) value to be set
+        :return: (int) current MCPgain
         """
         self.parent.DevParamSet(self.location, "MCP Gain", value)
         logging.debug("Reporting MCP gain %s for streak unit.", value)
@@ -619,9 +678,20 @@ class StreakUnit(model.HwComponent):
 
         return value
 
-    def _updateTimeRange(self, value):
+    def GetTimeRange(self):
         """
-        update the time range VA
+        Get the current value from the the streak unit HW.
+        :return: (float) current time range value
+        """
+        timeRange = self._getStreakUnitTimeRange()
+
+        return timeRange
+
+    def _setTimeRange(self, value):
+        """
+        Updates the timeRange VA.
+        :parameter value: (int) value to be set
+        :return: (int) current time range
         """
         self._setStreakUnitTimeRange(self.location, value)
         logging.debug("Reporting time range %s for streak unit.", value)
@@ -629,10 +699,26 @@ class StreakUnit(model.HwComponent):
 
         return value
 
+    def _setStreakUnitTimeRange(self, location, time_range):
+        """
+        Sets the time range for the streak unit.
+        Converts the value in sec into a for RemoteEx readable format.
+        :parameter location: (str) see DevParamGet
+        :parameter time range: (float) time range for one sweep in sec
+        """
+        try:
+            time_range_raw = self.parent.convertTime2Unit(time_range)
+            self._setTimeRangeFactor(time_range)
+        except Exception:
+            raise ValueError("Time range of %s sec for one sweep is not supported for streak unit." % time_range)
+
+        self.parent.DevParamSet(location, "Time Range", time_range_raw)
+
     def _getStreakUnitTimeRangeChoices(self):
         """
-        Get choices for streak unit time range. Values are in order. First six values see CamParamInfoEx.
-        :return: set of floats
+        Get choices for streak unit time range. Values are in order.
+        First six values see CamParamInfoEx.
+        :return: (set of floats) possible choices for time range
         """
         choices_raw = self.parent.DevParamInfoEx(self.location, "Time Range")[6:]
         choices = []
@@ -643,29 +729,22 @@ class StreakUnit(model.HwComponent):
         return choices
 
     def _getStreakUnitTimeRange(self):
-        """Convert time range.
-        :return: time range for one sweep in sec"""
+        """
+        Gets the time range of the streak unit.
+        Converts the provided value received from RemoteEx into sec.
+        :return: (float) current time range for one sweep in sec
+        """
         time_range_raw = self.parent.DevParamGet(self.location, "Time Range")[0].split(" ")
         time_range = self.parent.convertUnit2Time(time_range_raw[0], time_range_raw[1])
 
         return time_range
 
-    def _setStreakUnitTimeRange(self, location, time_range):
-        """Translate time range into a for RemoteEx readable format.
-        :parameter location: (str) see DevParamGet
-        :parameter time range (float): time range for one sweep"""
-        try:
-            time_range_raw = self.parent.convertTime2Unit(time_range)
-            self._getTimeRangeFactor(time_range)
-        except Exception:
-            raise ValueError("Time range of %s sec for one sweep is not supported for streak unit." % time_range)
-
-        self.parent.DevParamSet(location, "Time Range", time_range_raw)
-
-    def _getTimeRangeFactor(self, value):
-        """Gets the .timeRange conversion factor to map the values + units obtained for the
-        scaling table (correlating px positions with time values) to values only.
-        :return: (float) conversion factor
+    def _setTimeRangeFactor(self, value):
+        """
+        Sets the time range factor needed for conversion of RemoteEx values to sec.
+        This method maps the values and units obtained from the
+        scaling table (correlating of px positions with corresponding time values) to values only.
+        :parameter value: (float) conversion factor
         """
         # TODO make generic for possible units
         # TODO elegant range fct for float? or itertools?
@@ -681,12 +760,12 @@ class StreakUnit(model.HwComponent):
 
     def terminate(self):
         self.MCPgain.value = 0
-        self.streakMode = False
+        self.streakMode.value = False
 
 
 class DelayGenerator(model.HwComponent):
     """
-    Represents delay generator.
+    Represents the delay generator.
     """
 
     def __init__(self, name, role, parent, daemon=None, **kwargs):
@@ -701,26 +780,37 @@ class DelayGenerator(model.HwComponent):
         # Set parameters delay generator
         parent.DevParamSet(self.location, "Setting", "M1")  # TODO might be enough and don't need the rest...check!!
         parent.DevParamSet(self.location, "Trig. Mode", "Ext. rising")  # Note: set to "Int." for testing without SEM
-        parent.DevParamSet(self.location, "Repetition Rate", "1000000")  # [0.001, 10000000] # read-only for Ext. rising
-        parent.DevParamSet(self.location, "Delay A", "0")
-        parent.DevParamSet(self.location, "Delay B", "0.00000002")
+        parent.DevParamSet(self.location, "Repetition Rate", 1000000)  # [0.001, 10000000] # read-only for Ext. rising
+        parent.DevParamSet(self.location, "Delay A", 0)
+        parent.DevParamSet(self.location, "Delay B", 0.00000002)
         parent.DevParamSet(self.location, "Burst Mode", "Off")
 
         self._metadata[model.MD_TRIGGER_DELAY] = self.parent.DevParamGet(self.location, "Delay A")
         # Note: trigger rate (repetition rate) corresponds to the ebeam blanking frequency (read only in RemoteEx)
-        # TODO how to handle updating this MD/VA?
         self._metadata[model.MD_TRIGGER_RATE] = self.parent.DevParamGet(self.location, "Repetition Rate")
 
-        triggerDelay = self._getTriggerDelay()
-        range_trigDelay = self._getTriggerDelayTimeRange()
-        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._updateTriggerDelay)
+        triggerDelay = self.GetTriggerDelay()
+        range_trigDelay = self._getTriggerDelayRange()
+        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._setTriggerDelay)
 
         # TODO do we need: Burst Mode, Setting, Trig. Mode, delay B ??? as read only... plus MD!?
         # self.delayB = model.VigilantAttribute(self.parent.DevParamGet(self.location, "Delay B"), readonly=True)
 
-    def _updateTriggerDelay(self, value):
+    def GetTriggerDelay(self):
         """
-        update the mode VA
+        Get the current value from the the trigger delay HW (RemoteEx: delay A).
+        :return: (float) current trigger delay value
+        """
+        triggerDelay_raw = self.parent.DevParamGet(self.location, "Delay A")  # returns a list
+        triggerDelay = float(triggerDelay_raw[0])
+
+        return triggerDelay
+
+    def _setTriggerDelay(self, value):
+        """
+        Updates the trigger delay VA.
+        :parameter value: (float) value to be set
+        :return: (float) current trigger delay value
         """
         self.parent.DevParamSet(self.location, "Delay A", value)
         logging.debug("Reporting trigger delay %s for delay generator.", value)
@@ -728,10 +818,11 @@ class DelayGenerator(model.HwComponent):
 
         return value
 
-    def _getTriggerDelayTimeRange(self):
+    def _getTriggerDelayRange(self):
         """
-        Get the time range allowed for delay A. RemoteEx provides a negative minimum,
+        Get the range allowed for delay A. RemoteEx provides a negative minimum,
         which is internally set to zero whenever a negative delay is requested.
+        :return: (tuple) the trigger delay range
         """
         min_time = 0
         max_time = float(self.parent.DevParamInfoEx(self.location, "Delay A")[-1])
@@ -739,28 +830,15 @@ class DelayGenerator(model.HwComponent):
 
         return range_time
 
-    def _getTriggerDelay(self):
-        """Get the value for the trigger delay (RemoteEx: delay A)."""
-        triggerDelay_raw = self.parent.DevParamGet(self.location, "Delay A")
-        triggerDelay = self._convertOutput2Value(triggerDelay_raw)
-
-        return triggerDelay
-
     def _updateTriggerRate(self):
-        """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
+        """
+        Get the trigger rate (repetition) rate from the delay generator and updates the VA.
         The Trigger rate corresponds to the ebeam blanking frequency. As the delay
         generator is operated "external", the trigger rate is a read-only value.
-        Called whenever an image arrives."""
+        Called whenever an image arrives.
+        """
         value = self.parent.DevParamGet(self.location, "Repetition Rate")
         self._metadata[model.MD_TRIGGER_RATE] = value
-
-    def _convertOutput2Value(self, output_value):
-        """Converts an output of type list and length 1 containing strings to a value
-        if value is a number."""
-        try:
-            return float(output_value[0])
-        except:  # TODO ValueError?
-            return output_value[0]  # return a string
 
 
 class StreakCamera(model.HwComponent):
@@ -772,8 +850,8 @@ class StreakCamera(model.HwComponent):
     def __init__(self, name, role, port, host, children=None, daemon=None, **kwargs):
         """
         Initializes the device.
-        host (str): hostname or IP-address
-        port (int or None): port number for sending/receiving commands
+        :parameter host: IP-adress or hostname
+        :parameter port: port for sending/receiving commands
         """
         super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
 
@@ -817,64 +895,61 @@ class StreakCamera(model.HwComponent):
         # TODO appEnd only works for the last opened window
         # TODO want to check if we want to start app invisible (sVisible = False)
 
-        # self.AppStart() # start HPDTA software  # TODO for testing in order to not start a new App
+        self.AppStart() # start HPDTA software  # TODO for testing in order to not start a new App
 
         if children:
             try:
                 kwargs = children["readoutcam"]
             except Exception:
-                raise
+                raise ValueError("Required child readoutcam not provided")
             self._readoutcam = ReadoutCamera(parent=self, spectrograph=children.get("spectrograph"),
                                              daemon=daemon, **kwargs)
             self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
             try:
                 kwargs = children["streakunit"]
             except Exception:
-                raise
+                raise ValueError("Required child streakunit not provided")
             self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._streakunit)  # add streakunit to children-VA
             try:
                 kwargs = children["delaybox"]
             except Exception:
-                raise
+                raise ValueError("Required child delaybox not provided")
             self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._delaybox)  # add delaybox to children-VA
 
     def _openConnection(self):
         """
-        open connection with RemoteEx client.
-        :parameter host: IP-adress or hostname
-        :parameter port: port for sending/receiving commands
-        :parameter port_d: port for reading images
-        return: connection to RemoteEx command and data port
+        Open connection with RemoteEx client.
+        :return: connection to RemoteEx command and data port
         """
         # connect to sockets
         try:
             self._commandport = socket.create_connection((self.host, self.port), timeout=5)
             self._dataport = socket.create_connection((self.host, self.port_d), timeout=5)
-        except socket.timeout as msg:
-            raise model.HwError(msg, "Failed to connect to '%s using port %d'. Check the server "
+        except (socket.timeout, socket.error):
+            raise model.HwError("Failed to connect to host %s using port %d'. Check the server "
                                 "is connected to the network, turned "
                                 " on, and correctly configured." % (self.host, self.port))
-        except socket.error as msg:
-            raise model.HwError(msg, "Failed to connect to '%s:%d'. Check ...." % (self.host, self.port))
 
         # check if connection returns correct response
         try:
             message = self._commandport.recv(self.port)
             if message != 'RemoteEx Ready\r':
-                raise ValueError("Connection to port %s not successfull. "
+                raise ValueError("Connection to port %s not successful. "
                                  "Response %s from server is not as expected." % (self.port, message))
-        except socket.timeout as msg:
-            raise model.HwError(msg, "Failed to receive response from '%s:%d'. Check ..." % (self.host, self.port))
+        except socket.timeout:
+            raise model.HwError("Failed to receive response from %s:%d that commandport"
+                                "is correctly initialized.'." % (self.host, self.port))
 
         try:
             message_d = self._dataport.recv(self.port_d)
             if message_d != 'RemoteEx Data Ready\r':
-                raise ValueError("Connection to port %s not successfull. "
+                raise IOError("Connection to port %s not successful. "
                                  "Response %s from server is not as expected." % (self.port_d, message))
         except socket.timeout as msg:
-            raise model.HwError(msg, "Failed to receive response from '%s:%d'. Check ..." % (self.host, self.port_d))
+            raise model.HwError("Failed to receive response from %s:%d' that dataport"
+                                "is correctly initalized." % (self.host, self.port_d))
 
         # set timeout
         self._commandport.settimeout(1.0)
@@ -883,7 +958,9 @@ class StreakCamera(model.HwComponent):
         return self._commandport, self._dataport
 
     def _start_receiverThread(self):
-        """Start the receiver thread, which keeps listening to the response of the command port."""
+        """
+        Start the receiver thread, which keeps listening to the response of the command port.
+        """
         self.t_receiver = threading.Thread(target=self.readCommandResponse)
         self.t_receiver.start()
 
@@ -907,12 +984,13 @@ class StreakCamera(model.HwComponent):
             self.t_receiver.join(5)
         self._closeConnection()
 
-    def sendCommand(self, func, timeout=5, *args):
+    def sendCommand(self, func, *args, **kwargs):
         """
         Sends a command to RemoteEx.
         :parameter func: (str) command or function, which should be send to RemoteEx
-        :parameter timeout: (int) timeout while waiting for command response [sec]
         :parameter args: (str) optional parameters allowed for function
+        :parameter kwargs: optional arguments not defined in advance
+           kwargs timeout: (int) timeout while waiting for command response [sec]
         :raise:
            HwError: if error communicating with the hardware, probably due to
               the hardware not being in a good state (or connected)
@@ -926,6 +1004,9 @@ class StreakCamera(model.HwComponent):
         last_error_msg = None
 
         with self._lock_command:  # lock this code, when finished lock is automatically released
+
+            # set timeout for waiting for command response
+            timeout = kwargs.pop("timeout", 5)  # default = 5s
 
             # send command to socket
             try:
@@ -1066,7 +1147,8 @@ class StreakCamera(model.HwComponent):
             logging.info("Hamamatsu streak camera TCP/IP receiver thread ended.")
 
     def StartAcquisition(self, AcqMode):
-        """Start an acquisition.
+        """
+        Start an acquisition.
         :parameter AcqMode: (str) see AcqStart
         """
         # Note: sync acquisition calls directly AcqStart
@@ -1308,12 +1390,12 @@ class StreakCamera(model.HwComponent):
         """Stops the currently running acquisition.
         :parameter timeout: (0.001<= float <=60) The timeout value (in s)
         until this command should wait for an acquisition to end.
-        :return: (float) timeout (in s)"""
+        :return: (float) rtimeout (in s)"""
         # Note: RemoteEx needs timeout in ms
-        timeout = timeout * 0.001
-        timeout = float(self.sendCommand("AcqStop", str(timeout))) * 0.001
+        ans = float(self.sendCommand("AcqStop", str(timeout * 1000)))
+        rtimeout = float(ans[0]) * 0.001
         # TODO check timeout returned is really in ms
-        return timeout
+        return rtimeout
 
     def AcqParamGet(self, parameter):
         """Returns the values of the acquisition options.
@@ -1699,10 +1781,9 @@ class StreakCamera(model.HwComponent):
         if isinstance(input_value, int):
             return str(input_value)
         elif isinstance(input_value, float):
-            value = '{:.9f}'.format(input_value) # TODO check which precision needed
+            value = '{:.9f}'.format(input_value)  # TODO check which precision needed
             # important remove all additional zeros: otherwise RemoteEx error!
-            # TODO not nice I know...
-            return "0" + value.strip("0")
+            return value.rstrip("0")
         else:
             logging.debug("Requested conversion of input type %s is not supported.", type(input))
 
@@ -1971,7 +2052,8 @@ class StreakCamera(model.HwComponent):
     # === non RemoteEx functions ================================================================
 
     def convertUnit2Time(self, value, unit):
-        """ Converts a value plus its corresponding unit as received from RemoteEx, to a value.
+        """
+        Converts a value plus its corresponding unit as received from RemoteEx, to a value.
         :param value: (str) value
         :param unit: (str) unit
         :return: (float) value
@@ -1991,7 +2073,8 @@ class StreakCamera(model.HwComponent):
         return value
 
     def convertTime2Unit(self, value):
-        """ Converts a value to a value plus corresponding unit, which will be accepted by RemoteEx.
+        """
+        Converts a value to a value plus corresponding unit, which will be accepted by RemoteEx.
         :param value: (float) value
         :return: (str) a string consisting of a value plus unit
         """
@@ -2030,11 +2113,20 @@ class StreakCameraDataFlow(model.DataFlow):
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
+        """
+        Start the dataflow.
+        """
         self._start()
 
     def stop_generate(self):
+        """
+        Stop the dataflow.
+        """
         self._stop()
 
     def synchronizedOn(self, event):
+        """
+        Synchronize the dataflow.
+        """
         self._sync(event)
 
