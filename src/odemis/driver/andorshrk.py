@@ -497,6 +497,9 @@ class Shamrock(model.Actuator):
             self.position = model.VigilantAttribute({}, readonly=True)
             self._updatePosition()
 
+            # For getPixelToWavelength()
+            self._px2wl_lock = threading.Lock()
+
         except Exception:
             self.Close()
             raise
@@ -1222,9 +1225,12 @@ class Shamrock(model.Actuator):
         if self.position.value["wavelength"] <= 1e-9:
             return []
 
-        self.SetNumberPixels(npixels)
-        self.SetPixelWidth(pxs)
-        calib = self.GetCalibration(npixels)
+        # We need a lock to ensure that in case this function is called twice
+        # simultaneously, it doesn't interleave the calls
+        with self._px2wl_lock:
+            self.SetNumberPixels(npixels)
+            self.SetPixelWidth(pxs)
+            calib = self.GetCalibration(npixels)
         if calib[-1] < 1e-9:
             logging.error("Calibration data doesn't seem valid, will use internal one (cw = %g): %s",
                           self.position.value["wavelength"], calib)
