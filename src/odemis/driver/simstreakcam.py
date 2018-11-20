@@ -52,17 +52,13 @@ class ReadoutCamera(model.DigitalCamera):
                 if img.ndim > 3:  # remove dims of length 1
                     img = numpy.squeeze(img)
                 self._img_list.append(img)  # can be RGB or greyscale
-        except ValueError:
-            raise Exception("Fake image does not fit requirements for temporal spectrum acquisition.")
+        except Exception:
+            raise ValueError("Fake image does not fit requirements for temporal spectrum acquisition.")
 
         super(ReadoutCamera, self).__init__(name, role, parent=parent,
                                             daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
-
-        self._spectrograph = spectrograph
-        if not spectrograph:
-            logging.warning("No spectrograph specified. No wavelength metadata will be attached.")
 
         self._metadata[model.MD_HW_VERSION] = 'Simulated readout camera OrcaFlash 4.0 V3, ' \
                                               'Product number: C13440-20C, Serial number: 301730'
@@ -70,20 +66,19 @@ class ReadoutCamera(model.DigitalCamera):
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
         # sensor size (resolution)
-        # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
-        # However, only a smaller subarea is used for operating the streak system.
         # x (lambda): horizontal, y (time): vertical
-        resolution = (self._img_list[0].shape[1], self._img_list[0].shape[0])
-        self._metadata[model.MD_SENSOR_SIZE] = resolution
+        full_res = (self._img_list[0].shape[1], self._img_list[0].shape[0])
+        self._metadata[model.MD_SENSOR_SIZE] = full_res
 
         # 16-bit
-        self._shape = resolution + (2 ** 16,)
+        depth = 2 ** (self._img_list[0].dtype.itemsize * 8)
+        self._shape = full_res + (depth,)
 
         self._binning = (2, 2)
 
         # need to be before binning, as it is modified when changing binning
-        _resolution = (int(resolution[0]/self._binning[0]), int(resolution[1]/self._binning[1]))
-        self.resolution = model.ResolutionVA(_resolution, ((1, 1), resolution), setter=self._setResolution)
+        resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
+        self.resolution = model.ResolutionVA(resolution, ((1, 1), full_res), setter=self._setResolution)
 
         choices_bin = {(1, 1), (2, 2), (4, 4)}
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -105,9 +100,12 @@ class ReadoutCamera(model.DigitalCamera):
         self._metadata[model.MD_READOUT_TIME] = 1 / self.readoutRate.value  # s
 
         # spectrograph VAs after readout camera VAs
+        self._spectrograph = spectrograph
         if self._spectrograph:
             logging.debug("Starting streak camera with spectrograph.")
             self._spectrograph.position.subscribe(self._updateWavelengthList, init=True)
+        else:
+            logging.warning("No spectrograph specified. No wavelength metadata will be attached.")
 
         # for synchronized acquisition
         self._sync_event = None
@@ -119,6 +117,9 @@ class ReadoutCamera(model.DigitalCamera):
         self._generator = None
 
     def _updateWavelengthList(self, _=None):
+        """
+        Updates the wavelength list MD based on the current spectrograph position.
+        """
         npixels = self.resolution.value[0]  # number of pixels, horizontal is wavelength
         # pixelsize VA is sensor px size without binning and magnification
         pxs = self.pixelSize.value[0] * self.binning.value[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
@@ -127,13 +128,14 @@ class ReadoutCamera(model.DigitalCamera):
 
     def _setBinning(self, value):
         """
-        value (2-tuple int)
         Called when "binning" VA is modified. It actually modifies the camera binning.
+        :parameter value: (2-tuple int) binning value to set
+        :return: current binning value
         """
         prev_binning, self._binning = self._binning, value
 
         # adapt resolution
-        # TODO check if really necessary: why not just call resolutionFitter
+        # TODO check if really necessary
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
         old_resolution = self.resolution.value
@@ -151,10 +153,11 @@ class ReadoutCamera(model.DigitalCamera):
         return self._binning
 
     def _setResolution(self, _=None):
-        """Sets the resolution VA.
-        So far the full field of view is always used. Therefore, resolution only changes with binning
-        or magnification."""
-
+        """
+        Sets the resolution VA.
+        So far the full field of view is always used. Therefore, resolution only changes with binning.
+        :return: current resolution value
+        """
         # Note: we can keep it simple as long as we do not provide to change the sensor size yet...
         resolution = self._shape[:2]
         new_res = (int(resolution[0] // self._binning[0]),
@@ -166,9 +169,11 @@ class ReadoutCamera(model.DigitalCamera):
         return new_res
 
     def _setCamExpTime(self, value):
-        """Translate exposure time into a for RemoteEx readable format.
-        :parameter location: (str) see CamParamGet
-        :parameter exp_time (float): exposure time"""
+        """
+        Set the camera exposure time.
+        :parameter value: (float) exposure time to be set
+        :return: (float) current exposure time
+        """
         self._metadata[model.MD_EXP_TIME] = value  # update MD
 
         return value
@@ -200,19 +205,27 @@ class ReadoutCamera(model.DigitalCamera):
 
     @oneway
     def onEvent(self):
-        """Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify())."""
+        """
+        Called by the Event when it is triggered  (e.g. self.softwareTrigger.notify()).
+        """
         logging.debug("Event triggered to start a new synchronized acquisition.")
         self._evtq.put(time.time())
 
     # override
     def updateMetadata(self, md):
+        """
+        Update the metadata.
+        """
         super(ReadoutCamera, self).updateMetadata(md)
         if model.MD_LENS_MAG in md:
             self._updateWavelengthList()
 
     def _mergeMetadata(self, md):
-        """Create dict containing all metadata from the children readout camera, streak unit, delay genereator
-        and the metadata from the parent streak camera."""
+        """
+        Create dict containing all metadata from the children readout camera, streak unit,
+        delay genereator and the metadata from the parent streak camera.
+        :return: merged metadata
+        """
 
         md_devices = [self.parent._streakunit._metadata, self.parent._delaybox._metadata]
 
@@ -221,17 +234,20 @@ class ReadoutCamera(model.DigitalCamera):
                 if key not in md.keys():
                     md[key] = md_dev[key]
                 else:
-                    md[key] = md[key] + ", " + md_dev[key]  # TODO change in real driver
+                    md[key] = md[key] + ", " + md_dev[key]
                     # md[key].append(md_dev[key])  # TODO make nice  ", ".join(c)
         return md
 
     def terminate(self):
         try:
             self._stop()  # stop any acquisition
-        except Exception:  # TODO which exception?
+        except Exception:
             pass
 
     def _start(self):
+        """
+        Start an acquisition.
+        """
         if self._generator is not None:
             logging.warning("Generator already running")
             return
@@ -241,23 +257,30 @@ class ReadoutCamera(model.DigitalCamera):
         self._generator.start()
 
     def _stop(self):
+        """
+        Stop the acquisition.
+        """
         if self._generator is not None:
             self._generator.cancel()
             self._generator = None
 
     def _getNewImage(self):
-        """Gets a new image from the list of fake images provided."""
+        """
+        Gets a new image from the list of fake images provided.
+        :return: (dataarray) image
+        """
         # image counter to provide different images to live view
         if not hasattr(self, "_img_counter"):
             self._img_counter = 0  # initialize the image counter
         self._img_counter = self._img_counter % len(self._img_list)
         image = self._img_list[self._img_counter]
         self._img_counter += 1
+
         return image
 
     def _generate(self):
         """
-        Generates the fake output based on the resolution.
+        Generates the fake output image based on the resolution.
         """
         gen_img = self._getNewImage()
         gen_img = self._simulate(gen_img)
@@ -309,10 +332,13 @@ class ReadoutCamera(model.DigitalCamera):
     def _simulate(self, img):
         """
         Processes the fake image based on resolution and binning.
+        :parameter img: (dataarray) the unprocessed image
+        :return: (dataarray) the processed image
         """
         binning = self.binning.value
         res = self.resolution.value
-        sim_img = img.reshape((res[1], binning[0], res[0], binning[1])).mean(axis=3).mean(axis=1)
+        sim_img = img.reshape((res[1], binning[0], res[0], binning[1])).mean(axis=3).mean(axis=1).astype(img.dtype)
+
         return sim_img
 
 
@@ -325,31 +351,32 @@ class StreakUnit(model.HwComponent):
         super(StreakUnit, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
-        self.location = "Streakcamera"  # don't change, internally needed by HPDTA/RemoteEx
 
         self._metadata[model.MD_HW_VERSION] = "Simulated streak unit C10627"
 
         # VAs
-        self.streakMode = model.BooleanVA(False, setter=self._updateStreakMode)  # default False see set params above
+        self.streakMode = model.BooleanVA(False, setter=self._setStreakMode)  # default False see set params above
 
         gain = 0
         range_gain = (0, 63)
-        self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._updateMCPGain)
+        self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._setMCPGain)
 
         timeRange = 0.000000001
         choices = {0.000000001, 0.000000002, 0.000000005, 0.00000001, 0.00000002, 0.00000005, 0.0000001,
                    0.0000002, 0.0000005,
                    0.000001, 0.000002, 0.000005, 0.00001, 0.00002, 0.00005, 0.0001, 0.0002, 0.0005,
                    0.001, 0.002, 0.005, 0.01}
-        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._updateTimeRange)
+        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange)
 
         self._metadata[model.MD_STREAK_TIMERANGE] = self.timeRange.value
         self._metadata[model.MD_STREAK_MCPGAIN] = self.MCPgain.value
         self._metadata[model.MD_STREAK_MODE] = self.streakMode.value
 
-    def _updateStreakMode(self, value):
+    def _setStreakMode(self, value):
         """
-        update the mode VA
+        Updates the streakMode VA.
+        :parameter value: (bool) value to be set
+        :return: (bool) current streak mode
         """
         # when changing the StreakMode to Focus, set MCPGain zero for HW safety reasons
         if not value:
@@ -359,18 +386,22 @@ class StreakUnit(model.HwComponent):
 
         return value
 
-    def _updateMCPGain(self, value):
+    def _setMCPGain(self, value):
         """
-        update the MCP gain VA
+        Updates the MCPgain VA.
+        :parameter value: (int) value to be set
+        :return: (int) current MCPgain
         """
         logging.debug("Reporting MCP gain %s for streak unit.", value)
         self._metadata[model.MD_STREAK_MCPGAIN] = value
 
         return value
 
-    def _updateTimeRange(self, value):
+    def _setTimeRange(self, value):
         """
-        update the time range VA
+        Updates the timeRange VA.
+        :parameter value: (int) value to be set
+        :return: (int) current time range
         """
         # when changing the timeRange, set MCPGain zero for HW safety reasons
         self.MCPgain.value = 0
@@ -381,7 +412,7 @@ class StreakUnit(model.HwComponent):
 
     def terminate(self):
         self.MCPgain.value = 0
-        self.streakMode = False
+        self.streakMode.value = False
 
 
 class DelayGenerator(model.HwComponent):
@@ -393,21 +424,22 @@ class DelayGenerator(model.HwComponent):
         super(DelayGenerator, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
 
         self.parent = parent
-        self.location = "Delaybox"  # don't change, internally needed by HPDTA/RemoteEx
 
         self._metadata[model.MD_HW_VERSION] = "Simulated delay generator DG645"
 
         range_trigDelay = [0.0, 1]  # sec TODO  check which values were actually allowed
-        self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, setter=self._updateTriggerDelay)
+        self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, setter=self._setTriggerDelay)
 
         self._metadata[model.MD_TRIGGER_DELAY] = self.triggerDelay.value
         self._metadata[model.MD_TRIGGER_RATE] = 1000000
 
-    def _updateTriggerDelay(self, value):
+    def _setTriggerDelay(self, value):
         """
-        update the mode VA
+        Updates the trigger delay VA.
+        :parameter value: (float) value to be set
+        :return: (float) current trigger delay value
         """
-        logging.debug("Reporting trigger delay` %s for delay generator.", value)
+        logging.debug("Reporting trigger delay %s for delay generator.", value)
         self._metadata[model.MD_TRIGGER_DELAY] = value
 
         return value
@@ -426,37 +458,18 @@ class StreakCamera(model.HwComponent):
     Represents the streak camera system.
     """
 
-    def __init__(self, name, role, port, host, children=None, daemon=None, **kwargs):
+    def __init__(self, name, role, children=None, daemon=None, **kwargs):
         """
         Initializes the device.
-        host (str): hostname or IP-address
-        port (int or None): port number for sending/receiving commands (None if not set)
         """
         super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
 
-        port_d = port + 1  # the port number to receive the image data
-        self.host = host
-        self.port = port
-        self.port_d = port_d
-
-        # collect responses (EC = 0-3,6-10) from commandport
-        self.queue_command_responses = Queue.Queue(maxsize=0)
-        # save messages (EC = 4,5) from commandport
-        self.queue_img = Queue.Queue(maxsize=0)
-
-        self.should_listen = True  # used in readCommandResponse thread
-        self._waitForCorrectResponse = True  # used in sendCommand
-
         if children:
-            try:
-                image = children["readoutcam"].pop("image")
-            except ValueError:
-                raise Exception("No fake image provided.")
             try:
                 kwargs = children["readoutcam"]
             except Exception:
                 raise
-            self._readoutcam = ReadoutCamera(parent=self, image=image,
+            self._readoutcam = ReadoutCamera(parent=self,
                                              spectrograph=children.get("spectrograph"),
                                              daemon=daemon, **kwargs)
             self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
@@ -475,16 +488,15 @@ class StreakCamera(model.HwComponent):
 
     def terminate(self):
         """
-        Close App (HPDTA) and RemoteEx and close connection to RemoteEx. Called by backend.
+        Terminate all components.
         """
         # terminate children
         for child in self.children.value:
             child.terminate()
 
-        self.should_listen = False  # terminates receiver thread
-
-    def StartAcquisition(self, AcqMode):
-        """Start an acquisition.
+    def StartAcquisition(self):
+        """
+        Start an acquisition.
         """
         self._readoutcam._generate()
 
@@ -496,7 +508,7 @@ class SimpleStreakCameraDataFlow(model.DataFlow):
 
     def __init__(self,  start_func, stop_func, sync_func):
         """
-        camera: instance ready to acquire images  TODO is that correct?
+        camera: instance ready to acquire images
         """
         # initialize dataset, which can be subscribed to, to receive data acquired by the dataflow
         model.DataFlow.__init__(self)
@@ -506,11 +518,20 @@ class SimpleStreakCameraDataFlow(model.DataFlow):
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
+        """
+        Start the dataflow.
+        """
         self._start()
 
     def stop_generate(self):
+        """
+        Stop the dataflow.
+        """
         self._stop()
 
     def synchronizedOn(self, event):
+        """
+        Synchronize the dataflow.
+        """
         self._sync(event)
 

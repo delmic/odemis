@@ -42,7 +42,7 @@ CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 
 STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
 
-KWARGS = dict(name="streak cam", role="ccd", host="DESKTOP-E6H9DJ0", port=1001, children=STREAK_CHILDREN)
+KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", children=STREAK_CHILDREN)
 
 # test with spectrograph
 CLASS_SPECTROGRAPH = andorshrk.Shamrock
@@ -59,7 +59,7 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
     Run the generic camera test cases.
     """
     camera_type = CLASS_STREAKCAM
-    camera_kwargs = KWARGS
+    camera_kwargs = KWARGS_STREAKCAM
 
     @classmethod
     def setUpClass(cls):
@@ -85,7 +85,7 @@ class TestSimStreakCamGenericCamSynchronized(VirtualTestSynchronized, unittest.T
     Run the generic camera test cases.
     """
     camera_type = CLASS_STREAKCAM
-    camera_kwargs = KWARGS
+    camera_kwargs = KWARGS_STREAKCAM
 
     @classmethod
     def setUpClass(cls):
@@ -111,7 +111,7 @@ class TestSimStreakCam(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        cls.streakcam = simstreakcam.StreakCamera(**KWARGS)
+        cls.streakcam = CLASS_STREAKCAM(**KWARGS_STREAKCAM)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
@@ -393,8 +393,7 @@ class TestSimStreakCamWithSpectrograph(unittest.TestCase):
         STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
                     "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
 
-        cls.streakcam = simstreakcam.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0",
-                                                        port=1001, children=STREAK_CHILDREN)
+        cls.streakcam = CLASS_STREAKCAM("streak cam", "streakcam", children=STREAK_CHILDREN)
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
