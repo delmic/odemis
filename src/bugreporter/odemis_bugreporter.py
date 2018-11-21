@@ -63,6 +63,7 @@ DESCRIPTION_DEFAULT_TXT = ("Ways to reproduce the problem:\n1.\n2.\n3.\n\nCurren
 # Constants for checking output of odemis-cli --check. Don't import from odemis.util.driver
 # to keep the bugreporter as independent as possible from odemis.
 BACKEND_RUNNING = 0
+BACKEND_STOPPED = 2
 BACKEND_STARTING = 3
 
 
@@ -226,52 +227,80 @@ class OdemisBugreporter():
         t = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.zip_fn = os.path.join(home_dir, 'Desktop', '%s-odemis-log-%s.zip' % (hostname, t))
 
+        logging.debug("Will store bug report in %s", self.zip_fn)
         files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
                  os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
                  os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png']
 
-        # Save yaml file, call MODEL_SELECTOR if needed
-        odemis_config = parse_config("/etc/odemis.conf")
-        if odemis_config["MODEL"]:
-            models = [odemis_config["MODEL"]]
-        elif odemis_config["MODEL_SELECTOR"]:
-            models = [subprocess.check_output(odemis_config["MODEL_SELECTOR"].rstrip().split(' '))]
-        else:
-            # just pick every potential microscope model
-            models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
-        files.extend(models)
+        try:
+            # Save yaml file, call MODEL_SELECTOR if needed
+            odemis_config = parse_config("/etc/odemis.conf")
+            models = []
+            if odemis_config.get("MODEL"):
+                models = [odemis_config["MODEL"]]
+            elif odemis_config.get("MODEL_SELECTOR"):
+                logging.debug("Calling %s", odemis_config["MODEL_SELECTOR"].rstrip().split(' '))
+                try:
+                    cmd = shlex.split(odemis_config["MODEL_SELECTOR"])
+                    logging.debug("Getting the model filename using %s", cmd)
+                    out = subprocess.check_output(cmd).splitlines()
+                    if out:
+                        models = [out[0].strip()]
+                    else:
+                        logging.warning("Model selector failed to pick a model")
+                except Exception as ex:
+                    logging.warning("Failed to run model selector: %s", ex)
 
-        # Add the latest overlay-report if it's possibly related (ie, less than a day old)
-        overlay_reps = glob(os.path.join(home_dir, 'odemis-overlay-report/*'))
-        if overlay_reps and (time.time() - os.path.getmtime(overlay_reps[-1])) / 3600 < 24:
-            files.append(overlay_reps[-1])
+            if not models:
+                # just pick every potential microscope model
+                models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
+            files.extend(models)
 
-        # Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
-        delphi_calib_reps = glob(os.path.join(home_dir, 'delphi-calibration-report/*'))
-        if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
-            files.append(delphi_calib_reps[-1])
+            # FIXME: the following two are not working properly if glob doesn't sort by time,
+            # which it probably doesn't do.
 
-        # Save hw status (if available)
-        ret_code = subprocess.call(['odemis-cli', '--check'])
-        if ret_code in (BACKEND_RUNNING, BACKEND_STARTING):
+            # Add the latest overlay-report if it's possibly related (ie, less than a day old)
+            overlay_reps = glob(os.path.join(home_dir, 'odemis-overlay-report', '*'))
+            if overlay_reps and (time.time() - os.path.getmtime(overlay_reps[-1])) / 3600 < 24:
+                files.append(overlay_reps[-1])
+
+            # Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
+            delphi_calib_reps = glob(os.path.join(home_dir, 'delphi-calibration-report', '*'))
+            if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
+                files.append(delphi_calib_reps[-1])
+
+            # Save hw status (if available)
             try:
-                # subprocess doesn't have timeout argument in python 2.x, so use future instead
-                f = self._executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop', '*'])
-                props = f.result(60)
-                hwfn = "/tmp/odemis-hw-status.txt"
-                with open(hwfn, 'w+') as f:
-                    f.write(props)
-                files.append(hwfn)
-            except:
-                logging.warning("Cannot save hw status.")
+                ret_code = subprocess.call(['odemis-cli', '--check'])
+            except Exception as ex:
+                logging.warning("Failed to run check backend status: %s", ex)
+                ret_code = BACKEND_STOPPED
+            if ret_code in (BACKEND_RUNNING, BACKEND_STARTING):
+                try:
+                    # subprocess doesn't have timeout argument in python 2.x, so use future instead
+                    f = self._executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop', '*'])
+                    props = f.result(60)
+                    hwfn = "/tmp/odemis-hw-status.txt"
+                    with open(hwfn, 'w+') as f:
+                        f.write(props)
+                    files.append(hwfn)
+                except Exception as ex:
+                    logging.warning("Cannot save hw status: %s", ex)
 
-        # Compress files
-        with zipfile.ZipFile(self.zip_fn, "w") as archive:
-            for f in files:
-                if os.path.isfile(f):
-                    archive.write(f, compress_type=zipfile.ZIP_DEFLATED)
-                else:
-                    logging.warning("Bugreporter could not find file %s." % f)
+            # Compress files
+            with zipfile.ZipFile(self.zip_fn, "w", zipfile.ZIP_DEFLATED) as archive:
+                for f in files:
+                    if os.path.isfile(f):
+                        logging.debug("Adding file %s", f)
+                        archive.write(f, os.path.basename(f))
+                    elif os.path.isdir(f):
+                        # TODO: add all the files, with the directory as initial name
+                        pass
+                    else:
+                        logging.warning("Bugreporter could not find file %s", f)
+        except Exception:
+            logging.exception("Failed to store bug report")
+            raise
 
     def _set_description(self, name, email, subject, message):
         """
@@ -318,7 +347,7 @@ class OdemisBugreporter():
 class BugreporterFrame(wx.Frame):
 
     def __init__(self, controller):
-        super(BugreporterFrame, self).__init__(None, title="Problem description", size=(800, 800))
+        super(BugreporterFrame, self).__init__(None, title="Odemis problem description", size=(800, 800))
 
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
