@@ -184,8 +184,7 @@ class ReadoutCamera(model.DigitalCamera):
         self.acqMode = "Live"
 
         range_exp = self._getCamExpTimeRange()
-        self._exp_time = self._getCamExpTime()
-        # TODO update max and min values via CamParamInfoEx("Live", "Exposure")
+        self._exp_time = self.GetCamExpTime()
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp, unit="s", setter=self._setCamExpTime)
         self._metadata[model.MD_EXP_TIME] = self.exposureTime.value
         # Note: timeRange of streakunit > exposureTime readoutcam is possible and okay.
@@ -298,21 +297,20 @@ class ReadoutCamera(model.DigitalCamera):
     def _getCamExpTimeRange(self):
         """
         Get min and max values for the camera exposure time.
-        Values are in order. First to fourth values see CamParamInfoEx.
         :return: tuple containing min and max exposure time
         """
-        min_value = self.parent.CamParamInfoEx("Live", "Exposure")[4]
-        max_value = self.parent.CamParamInfoEx("Live", "Exposure")[-1]
+        exp = self.parent.CamParamInfoEx("Live", "Exposure")  # returns list
+        # Values in returned list "exp" are in order. 1st - 4th values see CamParamInfoEx.
+        min_value = exp[4]
+        max_value = exp[-1]
 
         min_value_raw, min_unit = min_value.split(' ')[0:2]
         max_value_raw, max_unit = max_value.split(' ')[0:2]
 
-        self.min_exp = self.parent.convertUnit2Time(min_value_raw, min_unit)
-        self.max_exp = self.parent.convertUnit2Time(max_value_raw, max_unit)
+        min_exp = self.parent.convertUnit2Time(min_value_raw, min_unit)
+        max_exp = self.parent.convertUnit2Time(max_value_raw, max_unit)
 
-        range = (self.min_exp, self.max_exp)
-
-        return range
+        return min_exp, max_exp
 
     def GetCamExpTime(self):
         """
@@ -401,7 +399,7 @@ class ReadoutCamera(model.DigitalCamera):
         self.queue_events.append(time.time())
         self.parent.queue_img.put("start")
 
-    # override  # TODO?
+    # override
     def updateMetadata(self, md):
         """
         Update the metadata.
@@ -592,7 +590,7 @@ class StreakUnit(model.HwComponent):
         # Resets behavior for a vertical single shot sweep: Automatic reset occurs after each sweep.
         parent.DevParamSet(self.location, "Trig. Mode", "Cont")
         # [Volt] Input and indication of the trigger level for the vertical sweep.
-        parent.DevParamSet(self.location, "Trig. level", 1) # TODO??
+        parent.DevParamSet(self.location, "Trig. level", 1)  # TODO check what value needed regarding HW
         parent.DevParamSet(self.location, "Trig. slope", "Rising")
 
         parent.DevParamGet(self.location, "Trig. status")  # read only
@@ -609,14 +607,14 @@ class StreakUnit(model.HwComponent):
         self._metadata[model.MD_STREAK_MODE] = parent.DevParamGet(self.location, "Mode")
 
         # VAs
-        mode = self._getStreakMode()
+        mode = self.GetStreakMode()
         self.streakMode = model.BooleanVA(mode, setter=self._setStreakMode)  # default False see set params above
 
-        gain = self._getMCPGain()
+        gain = self.GetMCPGain()
         range_gain = (0, 63)  # TODO get the range via RemoteEx
         self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._setMCPGain)
 
-        timeRange = self._getTimeRange()
+        timeRange = self.GetTimeRange()
         choices = set(self._getStreakUnitTimeRangeChoices())
         self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange)
 
@@ -850,8 +848,8 @@ class StreakCamera(model.HwComponent):
     def __init__(self, name, role, port, host, children=None, daemon=None, **kwargs):
         """
         Initializes the device.
-        :parameter host: IP-adress or hostname
-        :parameter port: port for sending/receiving commands
+        :parameter host: (str) IP-adress or hostname
+        :parameter port: (int) port for sending/receiving commands
         """
         super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
 
@@ -895,7 +893,7 @@ class StreakCamera(model.HwComponent):
         # TODO appEnd only works for the last opened window
         # TODO want to check if we want to start app invisible (sVisible = False)
 
-        self.AppStart() # start HPDTA software  # TODO for testing in order to not start a new App
+        self.AppStart()  # start HPDTA software  # TODO comment out for testing in order to not start a new App
 
         if children:
             try:
@@ -936,20 +934,20 @@ class StreakCamera(model.HwComponent):
         try:
             message = self._commandport.recv(self.port)
             if message != 'RemoteEx Ready\r':
-                raise ValueError("Connection to port %s not successful. "
+                raise ValueError("Connection Hamamatsu RemoteEx via port %s not successful. "
                                  "Response %s from server is not as expected." % (self.port, message))
         except socket.timeout:
-            raise model.HwError("Failed to receive response from %s:%d that commandport"
-                                "is correctly initialized.'." % (self.host, self.port))
+            raise model.HwError("Hamamastu RemoteEx didn't respond. "
+                                "Check that it is running properly, or restart the streak camera computer.")
 
         try:
             message_d = self._dataport.recv(self.port_d)
             if message_d != 'RemoteEx Data Ready\r':
-                raise IOError("Connection to port %s not successful. "
-                                 "Response %s from server is not as expected." % (self.port_d, message))
-        except socket.timeout as msg:
-            raise model.HwError("Failed to receive response from %s:%d' that dataport"
-                                "is correctly initalized." % (self.host, self.port_d))
+                raise IOError("Connection Hamamatsu RemoteEx via port %s not successful. "
+                              "Response %s from server is not as expected." % (self.port_d, message))
+        except socket.timeout:
+            raise model.HwError("Hamamastu RemoteEx didn't respond. "
+                                "Check that it is running properly, or restart the streak camera computer.")
 
         # set timeout
         self._commandport.settimeout(1.0)
@@ -1390,7 +1388,7 @@ class StreakCamera(model.HwComponent):
         """Stops the currently running acquisition.
         :parameter timeout: (0.001<= float <=60) The timeout value (in s)
         until this command should wait for an acquisition to end.
-        :return: (float) rtimeout (in s)"""
+        :return: (float) timeout (in s)"""
         # Note: RemoteEx needs timeout in ms
         ans = float(self.sendCommand("AcqStop", str(timeout * 1000)))
         rtimeout = float(ans[0]) * 0.001
