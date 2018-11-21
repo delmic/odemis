@@ -8,34 +8,44 @@ RUNNER=""
 MAX_FILES=4096 # 1024 is the default, which can be limitting on large microscopes
 MEMLIM_FILE=/sys/fs/cgroup/memory/odemisd/memory.limit_in_bytes
 MEMSWLIM_FILE=/sys/fs/cgroup/memory/odemisd/memory.memsw.limit_in_bytes
+
 # make sure we don't use too much memory
+ulimit -n $MAX_FILES
+
 if [ -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgexec -a -f "$MEMLIM_FILE" ]; then
-    MAXMEM=$(( 2 * 1024 * 1024 * 1024 )) # 2Gb
+    MAXMEM=$(( 3 * 1024 * 1024 * 1024 )) # 3Gb
+    # MAXMEMSW is the maximum RAM + swap (must be >= MAXMEM)
+    MAXMEMSW=$(( $MAXMEM + 1 * 1024 * 1024 * 1024 )) # + 1Gb
     # ulimit doesn't work because it can only specify virtual memory, which is extremely unpredictable for multiple processes
     #ulimit -S -d $MAXMEM -v $(( 2 * $MAXMEM ))
-    
-    if [[ "$(<"$MEMLIM_FILE")" -le $MAXMEM && -f "$MEMSWLIM_FILE" && "$(<$MEMSWLIM_FILE)" -le $MAXMEM ]]; then
-        # everything is already fine
-        RUNNER="/usr/bin/cgexec -g memory:odemisd"
-    else
+
+    if [[ "$(<"$MEMLIM_FILE")" -lt $MAXMEM ]]; then
         # try to do it ourselves
         echo $MAXMEM > "$MEMLIM_FILE"
-        [ -f "$MEMSWLIM_FILE" ] && echo $MAXMEM > "$MEMSWLIM_FILE"
-        status=$?
-        if [[ $status == 0 ]]; then
-            RUNNER="/usr/bin/cgexec -g memory:odemisd"
-        fi
+        MEM_STATUS=$?
+    else
+        MEM_STATUS=0 #OK
+    fi
+
+    # memsw is not supported on all kernels, so if not present, don't worry
+    if [[ -f "$MEMSWLIM_FILE" && "$(<$MEMSWLIM_FILE)" -lt $MAXMEMSW ]]; then
+        # try to do it ourselves
+        echo $MAXMEMSW > "$MEMSWLIM_FILE"
+        MEMSW_STATUS=$?
+    else
+        MEMSW_STATUS=0 #OK
     fi
 fi
 
-ulimit -n $MAX_FILES
-
-if [ "$RUNNER" == "" ]; then
+if [[ $MEM_STATUS -eq 0 && $MEMSW_STATUS -eq 0 ]]; then
+    RUNNER="/usr/bin/cgexec -g memory:odemisd"
+else
     echo "Warning: failed to set memory limit protection for odemisd"
     echo "Ensure you have odemisd cgroup available"
     # that should do it:
     # sudo cgcreate -a $USER -g memory:odemisd
 fi
+
 
 export PYTHONPATH
 $RUNNER python2.7 -m $BACKEND "$@"
