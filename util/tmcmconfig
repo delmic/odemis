@@ -34,7 +34,6 @@ from __future__ import division, absolute_import, print_function
 import argparse
 import logging
 from odemis.driver import tmcm
-import re
 import sys
 import time
 

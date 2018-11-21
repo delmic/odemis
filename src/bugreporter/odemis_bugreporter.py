@@ -440,7 +440,13 @@ class BugreporterFrame(wx.Frame):
         if evt.GetKeyCode() in (wx.WXK_BACK, wx.WXK_DELETE):
             self.make_suggestion = False
         else:
-            self.make_suggestion = True
+            # If the user adds/replaces at the end of the text => auto-complete
+            ip = self.name_ctrl.GetInsertionPoint()
+            sel = self.name_ctrl.GetSelection()
+            if sel[0] != sel[1]:
+                ip = sel[1]
+            self.make_suggestion = (ip == self.name_ctrl.GetLastPosition())
+
         evt.Skip()
 
     def on_name_text(self, evt):
