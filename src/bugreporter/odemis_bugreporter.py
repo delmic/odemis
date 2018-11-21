@@ -228,7 +228,8 @@ class OdemisBugreporter():
 
         files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
                  os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
-                 os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png']
+                 os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png',
+                 '/etc/odemis-settings.yaml']
 
         # Save yaml file, call MODEL_SELECTOR if needed
         odemis_config = parse_config("/etc/odemis.conf")
