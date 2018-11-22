@@ -104,8 +104,14 @@ class ShamrockDLL(CDLL):
             # already been done, but if not, we need to do it here. It's not a
             # problem to do it multiple times.
             self._dllandor = CDLL("libandor.so.2", RTLD_GLOBAL)
-            # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libshamrockcif.so.2", RTLD_GLOBAL)
+            try:
+                # Global so that its sub-libraries can access it
+                CDLL.__init__(self, "libshamrockcif.so.2", RTLD_GLOBAL)
+            except OSError:
+                # Renamed to atspectrograph since v2.103
+                # (and the functions have been renamed too, but the old names
+                #  are still valid)
+                CDLL.__init__(self, "libatspectrograph.so.2", RTLD_GLOBAL)
 
     def at_errcheck(self, result, func, args):
         """
@@ -132,17 +138,20 @@ class ShamrockDLL(CDLL):
         return func
 
     ok_code = {
-20202: "SHAMROCK_SUCCESS",
-}
+        20202: "SUCCESS",
+    }
+
     err_code = {
-20201: "SHAMROCK_COMMUNICATION_ERROR",
-20266: "SHAMROCK_P1INVALID",
-20267: "SHAMROCK_P2INVALID",
-20268: "SHAMROCK_P3INVALID",
-20269: "SHAMROCK_P4INVALID",
-20275: "SHAMROCK_NOT_INITIALIZED",
-20292: "SHAMROCK_NOT_AVAILABLE",
-}
+        20201: "COMMUNICATION_ERROR",
+        20249: "ERROR",
+        20266: "P1INVALID",
+        20267: "P2INVALID",
+        20268: "P3INVALID",
+        20269: "P4INVALID",
+        20270: "P5INVALID",
+        20275: "NOT_INITIALIZED",
+        20292: "NOT_AVAILABLE",
+    }
 
 
 class HwAccessMgr(object):
