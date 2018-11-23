@@ -195,14 +195,12 @@ class StreamController(object):
         Display metadata for integration time, ebeam voltage, probe current and
         emission/excitation wavelength
         """
-        if hasattr(self.stream, "_das"):
-            # For tiled stream => use the DataArrayShadow (which is the only reliable one)
-            md = self.stream._das.metadata
-        elif self.stream.raw:
-            md = self.stream.getRawMetadata()[0]
-        else:
+        mds = self.stream.getRawMetadata()
+        if not mds:
             logging.warning("No raw data in stream")
             return
+
+        md = mds[0]
 
         # Use "integration time" instead of "exposure time" since, in some cases,
         # the dwell time is stored in MD_EXP_TIME.
@@ -499,14 +497,10 @@ class StreamController(object):
     def _on_metadata_btn(self, evt):
         text = ""
         # Show empty window if no image present
-        if hasattr(self.stream, '_das'):
-            # For tiled streams
-            r = self.stream._das
+        if self.stream.raw:
+            r = self.stream.raw[0]
         else:
-            if self.stream.raw:
-                r = self.stream.raw[0]
-            else:
-                r = None
+            r = None
 
         if r is not None:
             shape = r.shape
