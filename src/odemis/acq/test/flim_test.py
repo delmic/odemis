@@ -65,7 +65,7 @@ class TestFlim(unittest.TestCase):
             logging.error(str(exp))
             raise
 
-        # Find CCD & SEM components
+        # Find confocal (light + laser-mirror) and FLIM (time-correlator) components
         cls.sft = model.getComponent(role="time-correlator")
         cls.tc_scanner = model.getComponent(role="tc-scanner")
         cls.ex_light = model.getComponent(role="light")
@@ -164,7 +164,7 @@ class TestFlim(unittest.TestCase):
 
         helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
                                                 self.sft, self.tc_scanner)
-        
+
         remote = stream.ScannedRemoteTCStream("remote", helper)
 
         helper.dwellTime.value = 1e-3  # seconds
@@ -175,9 +175,9 @@ class TestFlim(unittest.TestCase):
         f = remote.acquire()
         time.sleep(0.1)
         f.cancel()
-        
+
         self.assertEqual(helper.scanner.resolution.value, (64, 64))
-        
+
         # Try "wrong" repetition values
         helper.pixelSize.value *= 1.1
         self._validate_rep(helper)
@@ -188,15 +188,19 @@ class TestFlim(unittest.TestCase):
         helper.repetition.value = (62, 63)
         self.assertEqual(helper.repetition.value, (64, 64))
 
-        # Ensure the ROI is not too tiny and not too big
+        # Go from a small rep to a big rep (horizontally), and check it's accepted.
+        # First, set a small ROI (but not too small), so that it's possible to
+        # extend it by increasing the rep, and still keep the same area.
         helper.roi.value = (0.4, 0.4, 0.6, 0.6)
         self._validate_rep(helper)
         helper.repetition.value = (64, 64)
         self.assertEqual(helper.repetition.value, (64, 64))
 
+        # ... and now, increase the rep.
         helper.repetition.value = (2047, 63)
         self.assertEqual(helper.repetition.value, (2048, 64))
 
+        # Try acquiring with a non-square ROI
         helper.roi.value = (0, 0.3, 0.9, 0.5)
         helper.repetition.value = (256, 64)
 
@@ -316,24 +320,21 @@ class TestFlim(unittest.TestCase):
         numpy.testing.assert_almost_equal(helper.roi.value, (0.20, 0.20, 0.80, 0.80))
         self.assertEqual(helper.repetition.value, (256, 256))
         self.assertLess(helper.pixelSize.value, pxs256f)
-
-        # TODO: reduce the ROI
-
-        pxs256h = helper.pixelSize.value
+        pxs256s = helper.pixelSize.value
 
         # Same thing but only change in one dimension (typical, from the GUI)
-        # X is twice smaller => exactly twice less rep, that's easy
+        # ROI X is twice smaller -> exactly twice less rep, that's easy
         helper.roi.value = (0.20, 0.20, 0.50, 0.80)
         numpy.testing.assert_almost_equal(helper.roi.value, (0.20, 0.20, 0.50, 0.80))
         self.assertEqual(helper.repetition.value, (128, 256))
-        self.assertAlmostEqual(helper.pixelSize.value, pxs256h)
+        self.assertAlmostEqual(helper.pixelSize.value, pxs256s)
 
-        # Slightly decrease X
-        # -> rep stays the same, pxs stays the same.
+        # Slightly decrease ROI X
+        # -> rep stays the same (because the hardware rounds up), pxs stays the same.
         # ROI adjusted slightly on X (ideally it wouldn't), but size is the same
         helper.roi.value = (0.20, 0.20, 0.45, 0.80)
         self.assertEqual(helper.repetition.value, (128, 256))
-        self.assertAlmostEqual(helper.pixelSize.value, pxs256h)
+        self.assertAlmostEqual(helper.pixelSize.value, pxs256s)
         roi = helper.roi.value
         roi_size = (roi[2] - roi[0], roi[3] - roi[1])
         numpy.testing.assert_almost_equal(roi_size, (0.3, 0.6))
@@ -342,21 +343,36 @@ class TestFlim(unittest.TestCase):
         helper.roi.value = (0.20, 0.20, 0.50, 0.80)
         numpy.testing.assert_almost_equal(helper.roi.value, (0.20, 0.20, 0.50, 0.80))
 
-        # Slightly increase X
-        # -> rep increases (on X), while ROI & pixel size slightly smaller
+        # Slightly increase ROI X
+        # -> rep increases (on X), as the hardware rounds up, it actually doubles,
+        # -> the ROI also doubles on X
+        # while pixel size stays mostly the same
         helper.roi.value = (0.20, 0.20, 0.60, 0.80)
         self.assertEqual(helper.repetition.value, (256, 256))
-        self.assertAlmostEqual(helper.pixelSize.value, pxs256h)
+        self.assertAlmostEqual(helper.pixelSize.value, pxs256s)
         roi = helper.roi.value
         roi_size = (roi[2] - roi[0], roi[3] - roi[1])
         numpy.testing.assert_almost_equal(roi_size, (0.6, 0.6))
 
+        # Decrease pixel size / 2 -> ROI stays the same, rep * 2
+        orig_roi = helper.roi.value
+        helper.pixelSize.value = pxs256s / 2
+        self.assertAlmostEqual(helper.pixelSize.value, pxs256s / 2)
+        self.assertEqual(helper.repetition.value, (512, 512))
+        numpy.testing.assert_almost_equal(helper.roi.value, orig_roi)
+
+        # Rep = 1 -> ROI should be square
         helper.roi.value = (0.15, 0.6, 0.8, 0.8)
         helper.repetition.value = (1, 1)
+        self.assertEqual(helper.repetition.value, (1, 1))
+        roi = helper.roi.value
+        roi_size = (roi[2] - roi[0], roi[3] - roi[1])
+        numpy.testing.assert_almost_equal(roi_size[0], roi_size[0])
 
     def test_setting_stream_small_roi(self):
         """
-        Check the small ROI can be acquire with large rep (=> scale < 1)
+        Check the small ROI can be acquire with large rep. In such case, the
+        pixel size will be smaller than the scanner pixel size (ie, scale < 1).
         """
 
         helper = stream.ScannedTCSettingsStream('Stream', self.apd, self.ex_light, self.lscanner,
@@ -367,12 +383,14 @@ class TestFlim(unittest.TestCase):
         helper.repetition.value = (2048, 2048)
         numpy.testing.assert_almost_equal(helper.roi.value, (0, 0, 1, 1))
         self.assertEqual(helper.repetition.value, (2048, 2048))
+        pxs_full = helper.pixelSize.value
 
-        # quarter of the ROI, still should be able to do 2048x2048
+        # quarter of the ROI (ie, half of each dim), still should be able to do 2048x2048
         helper.roi.value = (0.25, 0.25, 0.75, 0.75)
         helper.repetition.value = (2048, 2048)
         numpy.testing.assert_almost_equal(helper.roi.value, (0.25, 0.25, 0.75, 0.75))
         self.assertEqual(helper.repetition.value, (2048, 2048))
+        self.assertAlmostEqual(helper.pixelSize.value, pxs_full / 2)
 
     def test_setting_stream_tcd_live(self):
         """

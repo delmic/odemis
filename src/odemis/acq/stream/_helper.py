@@ -78,10 +78,21 @@ class RepetitionStream(LiveStream):
         # affect the other one. Of course, all the current complexity would go
         # into the GUI controller then (there is no free lunch!).
 
-        # We ensure in the setters that all the data is always consistent:
-        # roi set: roi + pxs → repetition + roi + pxs
-        # pxs set: roi + pxs → repetition + roi (small changes)
-        # repetition set: repetition + roi → repetition (adjusted) + pxs + roi (small changes)
+        # As the settings are over-specified, whenever ROI, repetition, or pixel
+        # size changes, one (or more) other VA is updated to keep everything
+        # consistent. In addition, there are also hardware constraints, which
+        # must also be satisfied. The main rules followed are:
+        #  * Try to keep the VA which was changed (by the user) as close as
+        #    possible to the requested value (within hardware limits).
+        #  * If the ROI is not the one changed, try to keep it as-is, or at
+        #    least, try to keep the same center, and same area.
+        # So in practice, the three setters behave in this way:
+        #  * ROI set: ROI (as requested) + PxS (current) → repetition (updated)
+        #  * PxS set: PxS (as requested) + ROI (current) → repetition (updated)
+        #    The ROI is adjusted to ensure the repetition is a round number
+        #    and acceptable by the hardware.
+        #  * Rep set: Rep (as requested) + ROI (current) → PxS (updated)
+        #    The repetition is adjusted to fit the hardware limits
 
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
@@ -91,11 +102,12 @@ class RepetitionStream(LiveStream):
                                          cls=(int, long, float),
                                          setter=self._setROI)
 
-        # Start with pixel size to fit 1024 px horizontally (and adjust for the hardware)
-        epxs = self._scanner.pixelSize.value
-        eshape = self._scanner.shape
-        phy_size_x = epxs[0] * eshape[0]  # one dim is enough
-        pxs = phy_size_x / 1024
+        # Start with pixel size to fit 1024 px, as it's typically a sane value
+        # for the user (and adjust for the hardware).
+        spxs = self._scanner.pixelSize.value  # m, size at scale = 1
+        sshape = self._scanner.shape  # px, max number of pixels scanned
+        phy_size_x = spxs[0] * sshape[0]  # m
+        pxs = phy_size_x / 1024  # one dim is enough (arbitrarily: X)
 
         roi, rep, pxs = self._updateROIAndPixelSize(self.roi.value, pxs)
 
@@ -109,8 +121,9 @@ class RepetitionStream(LiveStream):
                                              self._scanner.resolution.range,
                                              setter=self._setRepetition)
 
-        # The size of the pixel, used both horizontally and vertically.
-        # The actual range is dynamic, as it changes with the magnification
+        # The size of the pixel (IOW, the distance between the center of two
+        # consecutive pixels) used both horizontally and vertically.
+        # The actual range is dynamic, as it changes with the magnification.
         self.pixelSize = model.FloatContinuous(pxs, range=(0, 1), unit="m",
                                                setter=self._setPixelSize)
 
@@ -180,9 +193,9 @@ class RepetitionStream(LiveStream):
         # Rep + PxS (+ center of ROI) -> ROI
         roi_center = ((roi[0] + roi[2]) / 2,
                       (roi[1] + roi[3]) / 2)
-        epxs = self._scanner.pixelSize.value
-        eshape = self._scanner.shape
-        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1])  # max physical ROI
+        spxs = self._scanner.pixelSize.value
+        sshape = self._scanner.shape
+        phy_size = (spxs[0] * sshape[0], spxs[1] * sshape[1])  # max physical ROI
         roi_size = (rep[0] * pxs / phy_size[0],
                     rep[1] * pxs / phy_size[1])
         roi = (roi_center[0] - roi_size[0] / 2,
@@ -232,9 +245,9 @@ class RepetitionStream(LiveStream):
         rep (2 ints)
         return pxs (float): the pixel size (based on the X dimension)
         """
-        epxs = self._scanner.pixelSize.value
-        eshape = self._scanner.shape
-        phy_size_x = epxs[0] * eshape[0]  # one dim is enough
+        spxs = self._scanner.pixelSize.value
+        sshape = self._scanner.shape
+        phy_size_x = spxs[0] * sshape[0]  # one dim is enough
         roi_size_x = roi[2] - roi[0]
         pxs = roi_size_x * phy_size_x / rep[0]
         return pxs
@@ -259,18 +272,18 @@ class RepetitionStream(LiveStream):
         roi = self._fitROI(roi)
 
         # Compute scale based on dim X, and ensure it's within range
-        epxs = self._scanner.pixelSize.value
-        scale = pxs / epxs[0]
+        spxs = self._scanner.pixelSize.value
+        scale = pxs / spxs[0]
         min_scale = max(self._scanner.scale.range[0])
         max_scale = min(self._scanner.shape)
         scale = max(min_scale, min(scale, max_scale))
-        pxs = scale * epxs[0]
+        pxs = scale * spxs[0]
 
         # compute the repetition (ints) that fits the ROI with the pixel size
-        eshape = self._scanner.shape
+        sshape = self._scanner.shape
         roi_size = (roi[2] - roi[0], roi[3] - roi[1])
-        rep = (int(round(eshape[0] * roi_size[0] / scale)),
-               int(round(eshape[1] * roi_size[1] / scale)))
+        rep = (int(round(sshape[0] * roi_size[0] / scale)),
+               int(round(sshape[1] * roi_size[1] / scale)))
 
         logging.debug("First trial with roi = %s, rep = %s, pxs = %g", roi, rep, pxs)
 
@@ -285,7 +298,7 @@ class RepetitionStream(LiveStream):
         # In case the ROI got modified again and the aspect ratio is not anymore
         # the same as the rep, we shrink it to ensure the pixels are square (and
         # it should still fit within the FoV).
-        eratio = eshape[0] / eshape[1]
+        eratio = sshape[0] / sshape[1]
         rel_pxs = eratio * (roi[2] - roi[0]) / rep[0], (roi[3] - roi[1]) / rep[1]
         if rel_pxs[0] != rel_pxs[1]:
             logging.debug("Shrinking ROI to ensure pixel is square (relative pxs = %s)", rel_pxs)
@@ -297,7 +310,7 @@ class RepetitionStream(LiveStream):
                    roi_center[1] - roi_size[1] / 2,
                    roi_center[0] + roi_size[0] / 2,
                    roi_center[1] + roi_size[1] / 2)
-            phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1])  # max physical ROI
+            phy_size = (spxs[0] * sshape[0], spxs[1] * sshape[1])  # max physical ROI
             pxs = sq_pxs * phy_size[0] / eratio
 
         # Double check we didn't end up with scale out of range
@@ -408,9 +421,9 @@ class RepetitionStream(LiveStream):
         returns (tuple of 2 ints): new (valid) repetition
         """
         roi = self.roi.value
-        epxs = self._scanner.pixelSize.value
-        eshape = self._scanner.shape
-        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1])  # max physical ROI
+        spxs = self._scanner.pixelSize.value
+        sshape = self._scanner.shape
+        phy_size = (spxs[0] * sshape[0], spxs[1] * sshape[1])  # max physical ROI
 
         # clamp repetition to be sure it's correct (it'll be clipped against
         # the scanner resolution later on, to be sure it's compatible with the
@@ -461,15 +474,15 @@ class RepetitionStream(LiveStream):
         # * merge horizontal/vertical dimensions into one fits-all
 
         # The current scanner pixel size is the minimum size
-        epxs = self._scanner.pixelSize.value
-        min_pxs = max(epxs)
+        spxs = self._scanner.pixelSize.value
+        min_pxs = max(spxs)
         min_scale = max(self._scanner.scale.range[0])
         if min_scale < 1:
-            logging.debug("Pixel size can smaller if not scanning the whole FoV")
+            # Pixel size can be smaller if not scanning the whole FoV
             min_pxs *= min_scale
         shape = self._scanner.shape
         # The maximum pixel size is if we acquire a single pixel for the whole FoV
-        max_pxs = min(epxs[0] * shape[0], epxs[1] * shape[1])
+        max_pxs = min(spxs[0] * shape[0], spxs[1] * shape[1])
         return (min_pxs, max_pxs)
 
     @abstractmethod
