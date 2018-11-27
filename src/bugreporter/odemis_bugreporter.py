@@ -256,16 +256,15 @@ class OdemisBugreporter():
                 models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
             files.extend(models)
 
-            # FIXME: the following two are not working properly if glob doesn't sort by time,
-            # which it probably doesn't do.
-
             # Add the latest overlay-report if it's possibly related (ie, less than a day old)
             overlay_reps = glob(os.path.join(home_dir, 'odemis-overlay-report', '*'))
+            overlay_reps.sort(key=os.path.getmtime)
             if overlay_reps and (time.time() - os.path.getmtime(overlay_reps[-1])) / 3600 < 24:
                 files.append(overlay_reps[-1])
 
             # Add the latest DELPHI calibration report if it's possibly related (ie, less than a day old)
             delphi_calib_reps = glob(os.path.join(home_dir, 'delphi-calibration-report', '*'))
+            delphi_calib_reps.sort(key=os.path.getmtime)
             if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
                 files.append(delphi_calib_reps[-1])
 
@@ -294,8 +293,12 @@ class OdemisBugreporter():
                         logging.debug("Adding file %s", f)
                         archive.write(f, os.path.basename(f))
                     elif os.path.isdir(f):
-                        # TODO: add all the files, with the directory as initial name
-                        pass
+                        logging.debug("Adding directory %s", f)
+                        dirnamef = os.path.dirname(f)
+                        for top, _, files in os.walk(f):
+                            for subf in files:
+                                full_path = os.path.join(top, subf)
+                                archive.write(full_path, full_path[len(dirnamef) + 1:])
                     else:
                         logging.warning("Bugreporter could not find file %s", f)
         except Exception:
