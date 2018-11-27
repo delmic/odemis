@@ -5014,7 +5014,7 @@
                 <flag>wxEXPAND</flag>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_gauge">
+                <object class="wxPanel" name="pnl_info">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxStaticText" name="lbl_acquisition_info">
@@ -5027,7 +5027,6 @@
                           <face>Ubuntu</face>
                           <encoding>UTF-8</encoding>
                         </font>
-                        <hidden>1</hidden>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -5036,6 +5035,19 @@
                       <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
                       <border>10</border>
                     </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <hidden>1</hidden>
+                  <bg>#4D4D4D</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel" name="pnl_gauge">
+                  <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
                         <size>-1,8</size>
@@ -5091,6 +5103,7 @@
                     </object>
                     <orient>wxVERTICAL</orient>
                   </object>
+                  <hidden>1</hidden>
                   <bg>#4D4D4D</bg>
                   <XRCED>
                     <assign_var>1</assign_var>

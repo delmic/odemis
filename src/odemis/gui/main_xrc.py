@@ -597,8 +597,9 @@ class xrcfr_plugin(wx.Dialog):
         self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
         self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
-        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
+        self.pnl_info = xrc.XRCCTRL(self, "pnl_info")
         self.lbl_acquisition_info = xrc.XRCCTRL(self, "lbl_acquisition_info")
+        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
         self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -5632,7 +5633,7 @@ def __init_resources():
                 <flag>wxEXPAND</flag>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_gauge">
+                <object class="wxPanel" name="pnl_info">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxStaticText" name="lbl_acquisition_info">
@@ -5645,7 +5646,6 @@ def __init_resources():
                           <face>Ubuntu</face>
                           <encoding>UTF-8</encoding>
                         </font>
-                        <hidden>1</hidden>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -5654,6 +5654,19 @@ def __init_resources():
                       <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
                       <border>10</border>
                     </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <hidden>1</hidden>
+                  <bg>#4D4D4D</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel" name="pnl_gauge">
+                  <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
                         <size>-1,8</size>
@@ -5709,6 +5722,7 @@ def __init_resources():
                     </object>
                     <orient>wxVERTICAL</orient>
                   </object>
+                  <hidden>1</hidden>
                   <bg>#4D4D4D</bg>
                   <XRCED>
                     <assign_var>1</assign_var>
