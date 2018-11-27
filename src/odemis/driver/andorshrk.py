@@ -396,6 +396,17 @@ class Shamrock(model.Actuator):
                 axes["focus"] = model.Axis(unit="m",
                                            range=(fstepsize, mx))
                 logging.info("Focus actuator added as 'focus'")
+
+                # Store the focus position for each grating/output port combination.
+                # The hardware is supposed to store them already, but actually
+                # only stores it when on first output, and on other outputs, it
+                # stores an offset. This leads to "surprises" because changing
+                # a focus position at a given grating/output can change some other
+                # focus positions. So we override this behaviour, and always use
+                # the focus position last set for a grating/output. In case the
+                # focus hasn't been set yet, we still rely on the hardware to
+                # guess the best focus.
+                self._go2focus = {}  # (int, int) -> int: grating/output -> focus steps
             else:
                 logging.info("Focus actuator is not present")
 
@@ -638,6 +649,7 @@ class Shamrock(model.Actuator):
         assert TURRETMIN <= turret <= TURRETMAX
 
         with self._hw_access:
+            logging.debug("Moving turret to %d", turret)
             self._dll.ShamrockSetTurret(self._device, turret)
 
     def GetTurret(self):
@@ -660,6 +672,7 @@ class Shamrock(model.Actuator):
         # as in SetWavelength()
         with self._hw_access:
             retry = 0
+            logging.debug("Moving grating to %d", grating)
             while True:
                 try:
                     self._dll.ShamrockSetGrating(self._device, grating)
@@ -698,6 +711,7 @@ class Shamrock(model.Actuator):
         """
         # Same as ShamrockGotoZeroOrder()
         with self._hw_access:
+            logging.debug("Reseting wavelength to 0 nm")
             self._dll.ShamrockWavelengthReset(self._device)
 
     #ShamrockAtZeroOrder(self._device, int *atZeroOrder);
@@ -737,6 +751,7 @@ class Shamrock(model.Actuator):
         # works anyway (but not sure).
         # It seems that retrying a couple of times just works
         with self._hw_access:
+            logging.debug("Moving wavelength to %g nm", wavelength * 1e9)
             retry = 0
             while True:
                 try:
@@ -877,20 +892,19 @@ class Shamrock(model.Actuator):
         return offset.value
 
     # Focus mirror management
-    # Note: the focus is automatically saved/changed after changing grating
     def SetFocusMirror(self, steps):
         """
         Relative move on the focus
         Note: It's RELATIVE!!!
         Note: the position is saved per grating + offset for the detector.
-        It seems that changing when on first detector updates the grating value
-        (+ the Fdetector offset), and changing on the second detector only
-        updates the Fdetector offset.
+        It seems that changing when on first detector updates the Fgrating_n value
+        and changing on the second detector only updates the Fdetector offset.
         steps (int): relative numbers of steps to do
         """
         assert isinstance(steps, int)
         # The documentation states focus is >=0, but SR193 only accepts >0
         with self._hw_access:
+            logging.debug("Moving focus mirror by %d stp", steps)
             self._dll.ShamrockSetFocusMirror(self._device, steps)
 
     def GetFocusMirror(self):
@@ -926,6 +940,7 @@ class Shamrock(model.Actuator):
         """
         assert(FILTERMIN <= pos <= FILTERMAX)
         with self._hw_access:
+            logging.debug("Moving filter to %d", pos)
             self._dll.ShamrockSetFilter(self._device, pos)
 
     def GetFilter(self):
@@ -970,6 +985,7 @@ class Shamrock(model.Actuator):
         # then a (short) move to the minimum.
         with self._hw_access:
             with self._led_access:
+                logging.debug("Moving slit %d to %g um", index, width_um.value)
                 self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
 
     def GetAutoSlitWidth(self, index):
@@ -1069,8 +1085,8 @@ class Shamrock(model.Actuator):
     # Shutter management
     def SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
-        logging.info("Setting shutter to mode %d", mode)
         with self._hw_access:
+            logging.info("Setting shutter to mode %d", mode)
             self._dll.ShamrockSetShutter(self._device, mode)
 
     def GetShutter(self):
@@ -1120,9 +1136,14 @@ class Shamrock(model.Actuator):
             return
 
         with self._hw_access:
+            logging.debug("Moving flipper %d to pos %d", flipper, port)
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
     def GetFlipperMirror(self, flipper):
+        """
+        flipper (int from *PUT_FLIPPER): the mirror index
+        return (int from *_PORT): the port position
+        """
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         port = c_int()
 
@@ -1133,6 +1154,9 @@ class Shamrock(model.Actuator):
 # def ShamrockFlipperMirrorReset(int device, int flipper);
 
     def FlipperMirrorIsPresent(self, flipper):
+        """
+        flipper (int from *PUT_FLIPPER): the mirror index
+        """
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         present = c_int()
         self._dll.ShamrockFlipperMirrorIsPresent(self._device, flipper, byref(present))
@@ -1150,6 +1174,7 @@ class Shamrock(model.Actuator):
         else:
             state = 0
         with self._hw_access:
+            logging.debug("Setting accessory line %d to %d", line, state)
             self._dll.ShamrockSetAccessory(self._device, line, state)
 
             # HACK: the Andor driver has a problem and sets the spectrograph in a
@@ -1221,6 +1246,42 @@ class Shamrock(model.Actuator):
             pos["flip-out"] = userv
 
         self.position._set_value(pos, force_write=True)
+
+    def _storeFocus(self):
+        """
+        To be called whenever the user has changed the focus, to store the value,
+        associated to the current grating & output port.
+        """
+        g = self.GetGrating()
+        if "flip-out" in self.axes:
+            op = self.GetFlipperMirror(OUTPUT_FLIPPER)
+        else:
+            op = 0
+        f = self.GetFocusMirror()
+        self._go2focus[(g, op)] = f
+
+    def _restoreFocus(self):
+        """
+        To be called whenever the grating or output flipper have been moved, to
+        ensure that the focus is set back to the previous good position
+        """
+        g = self.GetGrating()
+        if "flip-out" in self.axes:
+            op = self.GetFlipperMirror(OUTPUT_FLIPPER)
+        else:
+            op = DIRECT_PORT
+        current_f = self.GetFocusMirror()
+
+        try:
+            f = self._go2focus[(g, op)]
+        except KeyError:
+            logging.debug("No known focus for %d/%d, using %d stp", g, op, current_f)
+            return
+        try:
+            logging.debug("Restoring focus for %d/%d to %d stp", g, op, f)
+            self.SetFocusMirror(f - current_f)  # relative move
+        except Exception:
+            logging.exception("Failed to set focus to %d stp", f)
 
     def getPixelToWavelength(self, npixels, pxs):
         """
@@ -1385,7 +1446,6 @@ class Shamrock(model.Actuator):
         """
         for a in actions:
             an, func, args = a[0], a[1], a[2:]
-            logging.debug("Moving axis %s", an)
             try:
                 func(*args)
             except Exception:
@@ -1434,6 +1494,7 @@ class Shamrock(model.Actuator):
         self.SetGrating(g)
         # By default the Shamrock library keeps the same wavelength
 
+        self._restoreFocus()
         self._updatePosition()
 
     def _doSetFocusRel(self, shift):
@@ -1446,12 +1507,14 @@ class Shamrock(model.Actuator):
                              (steps * self._focus_step_size, rng[0], rng[1]))
 
         self.SetFocusMirror(shift_st)  # needs relative value
+        self._storeFocus()
         self._updatePosition()
 
     def _doSetFocusAbs(self, pos):
         steps = int(round(pos / self._focus_step_size))
         shift_st = steps - self.GetFocusMirror()
         self.SetFocusMirror(shift_st)  # needs relative value
+        self._storeFocus()
         self._updatePosition()
 
     def _doSetFilter(self, pos):
@@ -1492,6 +1555,7 @@ class Shamrock(model.Actuator):
         self.SetFlipperMirror(flipper, v)
         if flipper == OUTPUT_FLIPPER:
             self._updateShutterMode(pos)
+            self._restoreFocus()
         # Note: That function _only_ changes the mirror position.
         # It doesn't update the turret position, based on the (new) detector offset
         # => Force it by moving an "empty" move
@@ -1639,6 +1703,9 @@ class FakeShamrockDLL(object):
         # focus
         self._focus_pos = 25  # steps
         self._focus_max = 500  # steps
+        # Focus is stored for each grating + an offset for each port
+        self._gr2focus = [25, 25, 25]
+        self._outflip_foff = [0, 0]
 
         # filter wheel
         self._filter = 1  # current position
@@ -1684,6 +1751,14 @@ class FakeShamrockDLL(object):
         if self._ccd and self._ccd.GetStatus() == andorcam2.AndorV2DLL.DRV_ACQUIRING:
             raise ShamrockError(20201, ShamrockDLL.err_code[20201])
 
+    def _updateFocusPos(self):
+        # It's not clear whether the SR193 use this algorithm, but at least it's similar.
+        # It's sufficient to reproduce the same issue/weirdness as on the SR193
+        p = self._gr2focus[self._cg - 1] + self._outflip_foff[self._flippers[OUTPUT_FLIPPER]]
+        self._focus_pos = max(0, min(p, self._focus_max))
+        if self._focus_pos != p:
+            logging.warning("Clipping focus position from %d to %d", p, self._focus_pos)
+
     def ShamrockInitialize(self, path):
         pass
 
@@ -1717,6 +1792,7 @@ class FakeShamrockDLL(object):
         new_g = _val(grating)
         time.sleep(min(1, abs(new_g - self._cg)) * 5) # very bad estimation
         self._cg = new_g
+        self._updateFocusPos()
 
     def ShamrockGetGrating(self, device, p_grating):
         self._check_hw_access()
@@ -1796,6 +1872,15 @@ class FakeShamrockDLL(object):
         if 0 <= self._focus_pos + focus <= self._focus_max:
             self._focus_pos += focus
             time.sleep(abs(focus) / 100)  # 100 steps/s
+
+            # Update the grating and flipper offset based on the new value
+            of = self._flippers[OUTPUT_FLIPPER]
+            if of == 0:  # Use the value as "base" for the grating
+                self._gr2focus[self._cg - 1] = self._focus_pos
+                logging.debug("SIM: Updating focus pos of grating %d to %d", self._cg, self._focus_pos)
+            else:
+                self._outflip_foff[of] = self._focus_pos - self._gr2focus[self._cg - 1]
+                logging.debug("SIM: Updating focus offset of output %d to %d", of, self._outflip_foff[of])
         else:
             raise ShamrockError(20267, ShamrockDLL.err_code[20267])
 
@@ -1900,6 +1985,7 @@ class FakeShamrockDLL(object):
             oldport = self._flippers[f]
             time.sleep(abs(oldport - p))
             self._flippers[f] = p
+            self._updateFocusPos()
         else:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
 

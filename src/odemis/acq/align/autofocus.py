@@ -629,9 +629,7 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
     spectrograph (Actuator): should have grating and wavelength.
     focuser (Actuator): should have a z axis
     detectors (Detector or list of Detectors): all the detectors available on
-      the spectrometer. The first detector will be used to autofocus all the
-      gratings, and each other detector will be focused with the original
-      grating.
+      the spectrometer.
     selector (Actuator or None): must have a rx axis with each position corresponding
      to one of the detectors. If there is only one detector, selector can be None.
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
@@ -646,11 +644,14 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
 
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    et = estimateAutoFocusTime(detectors[0], None)
-    # 1 time / grating + 1 time / extra detector
-    cnts = len(spectrograph.axes["grating"].choices) + (len(detectors) - 1)
+    ngs = len(spectrograph.axes["grating"].choices)
+    nds = len(detectors)
+    et = estimateAutoFocusTime(detectors[0], None) + 20
+    # 1 time for each grating/detector combination
+    move_et = ngs * 20 if ngs > 1 else 0  # extra 20 s for grating moves
+    move_et += nds * 5 if nds > 1 else 0  # extra 5 s for detector selector moves
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + cnts * et)
+                                end=est_start + (ngs * nds) * et + move_et)
     f.task_canceller = _CancelAutoFocusSpectrometer
     # Extra info for the canceller
     f._autofocus_state = RUNNING
@@ -663,30 +664,37 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
     return f
 
 
-def _moveSelectorToDetector(selector, detector):
+def _mapDetectorToSelector(selector, detectors):
     """
-    Move the selector to have the given detector receive light
-    selector (Actuator): a rx axis with a position
-    detector (Component): the component to receive light
-    return (position): the new position of the selector
-    raise LookupError: if no position on the selector affects the detector
+    Maps detector to selector positions
+    returns:
+       axis (str): the selector axis to use
+       position_map (dict (str -> value)): detector name -> selector position
     """
+    # We pick the right axis by assuming that it's the only one which has
+    # choices, and the choices are a dict pos -> detector name.
     # TODO: handle every way of indicating affect position in acq.path? -> move to odemis.util
-    mv = {}
+    det_2_sel = {}
+    sel_axis = None
     for an, ad in selector.axes.items():
         if hasattr(ad, "choices") and isinstance(ad.choices, dict):
+            sel_axis = an
             for pos, value in ad.choices.items():
-                if detector.name in value:
-                    # set the position so it points to the target
-                    mv[an] = pos
+                for d in detectors:
+                    if d.name in value:
+                        # set the position so it points to the target
+                        det_2_sel[d] = pos
 
-    if mv:
-        logging.debug("Moving selector %s to %s for %s",
-                      selector.name, mv, detector.name)
-        selector.moveAbsSync(mv)
-        return mv
-    raise LookupError("Failed to find detector '%s' in positions of selector axes %s" %
-                      (detector.name, selector.axes.keys()))
+            if det_2_sel:
+                # Found an axis with names of detectors, that should be the
+                # right one!
+                break
+
+    if len(det_2_sel) < len(detectors):
+        raise ValueError("Failed to find all detectors (%s) in positions of selector axes %s" %
+                  (", ".join(d.name for d in detectors), selector.axes.keys()))
+
+    return sel_axis, det_2_sel
 
 
 def _updateAFSProgress(future, last_dur, left):
@@ -710,73 +718,68 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
     # Record the wavelength and grating position
     pos_orig = {k: v for k, v in spectrograph.position.value.items()
                               if k in ("wavelength", "grating")}
-    gratings = spectrograph.axes["grating"].choices.keys()
+    gratings = list(spectrograph.axes["grating"].choices.keys())
     if selector:
         sel_orig = selector.position.value
+        sel_axis, det_2_sel = _mapDetectorToSelector(selector, detectors)
 
-    # For progress update
-    cnts = len(gratings) + (len(detectors) - 1)
+    def is_current_det(d):
+        """
+        return bool: True if the given detector is the current one selected by
+          the selector.
+        """
+        if selector is None:
+            return True
+        return det_2_sel[d] == selector.position.value[sel_axis]
 
     # Note: this procedure works well with the SR-193i. In particular, it
-    # records the focus position for each grating (in absolute) and each
-    # detector (as an offset). It needs to be double checked if used with
-    # other detectors.
+    # records the focus position for each grating and detector.
+    # It needs to be double checked if used with other spectrographs.
     if "Shamrock" not in spectrograph.hwVersion:
         logging.warning("Spectrometer autofocusing has not been tested on"
                         "this type of spectrograph (%s)", spectrograph.hwVersion)
 
-    try:
-        # Autofocus each grating, using the first detector
-        detector = detectors[0]
-        if selector:
-            _moveSelectorToDetector(selector, detector)
+    # In theory, it should be "safe" to only find the right focus once for each
+    # grating (for a given detector), and once for each detector (for a given
+    # grating). The focus for the other combinations grating/ detectors should
+    # be grating + detector offset. However, currently the spectrograph API
+    # doesn't allow to explicitly set these values. As in the worse case so far,
+    # the spectrograph has only 2 gratings and 2 detectors, it's simpler to just
+    # run the autofocus a 4th time.
 
+    cnts = len(gratings) * len(detectors) # For progress update
+    try:
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
 
-        # start with the current grating, to save the move time
+        # We "scan" in two dimensions: grating + detector. Grating is the "slow"
+        # dimension, as it's typically the move that takes the most time (eg, 20s).
+
+        # Start with the current grating, to save time
         gratings.sort(key=lambda g: 0 if g == pos_orig["grating"] else 1)
         for g in gratings:
-            logging.debug("Autofocusing on grating %s", g)
-            tstart = time.time()
-            try:
-                # 0th order is not absolutely necessary for focusing, but it
-                # typically gives the best results
-                spectrograph.moveAbsSync({"wavelength": 0, "grating": g})
-            except Exception:
-                logging.exception("Failed to move to 0th order for grating %s", g)
+            # Start with the current detector
+            dets = sorted(detectors, key=is_current_det, reverse=True)
+            for d in dets:
+                logging.debug("Autofocusing on grating %s, detector %s", g, d.name)
+                tstart = time.time()
+                if selector:
+                    selector.moveAbsSync({sel_axis: det_2_sel[d]})
+                try:
+                    # 0th order is not absolutely necessary for focusing, but it
+                    # typically gives the best results
+                    spectrograph.moveAbsSync({"wavelength": 0, "grating": g})
+                except Exception:
+                    logging.exception("Failed to move to 0th order for grating %s", g)
 
-            future._subfuture = AutoFocus(detector, None, focuser)
-            fp, flvl = future._subfuture.result()
-            ret[(g, detector)] = fp
-            cnts -= 1
-            _updateAFSProgress(future, time.time() - tstart, cnts)
+                future._subfuture = AutoFocus(d, None, focuser)
+                fp, flvl = future._subfuture.result()
+                ret[(g, d)] = fp
+                cnts -= 1
+                _updateAFSProgress(future, time.time() - tstart, cnts)
 
-            if future._autofocus_state == CANCELLED:
-                raise CancelledError()
-
-        # Autofocus each additional detector
-        grating = pos_orig["grating"]
-        for d in detectors[1:]:
-            logging.debug("Autofocusing on detector %s", d.name)
-            tstart = time.time()
-            _moveSelectorToDetector(selector, d)
-            try:
-                # 0th order + original grating
-                # TODO: instead of using original grating, use mirror grating if
-                # available
-                spectrograph.moveAbsSync({"wavelength": 0, "grating": grating})
-            except Exception:
-                logging.exception("Failed to move to 0th order and grating %s", grating)
-
-            future._subfuture = AutoFocus(d, None, focuser)
-            fp, flvl = future._subfuture.result()
-            ret[(grating, d)] = fp
-            cnts -= 1
-            _updateAFSProgress(future, time.time() - tstart, cnts)
-
-            if future._autofocus_state == CANCELLED:
-                raise CancelledError()
+                if future._autofocus_state == CANCELLED:
+                    raise CancelledError()
 
         return ret
     except CancelledError:

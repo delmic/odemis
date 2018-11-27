@@ -236,7 +236,11 @@ class TestAutofocusSpectrometer(unittest.TestCase):
             if d is self.ccd:
                 self.assertAlmostEqual(fpos, self._good_focus, 3)
 
-        self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices) + 1)
+        # The number of entries depend on the implementation. For now, we expect
+        # an entry for each combination grating/detector
+        ngs = len(self.spgr.axes["grating"].choices)
+        nds = 2
+        self.assertEqual(len(res), ngs * nds)
 
 
 if __name__ == '__main__':

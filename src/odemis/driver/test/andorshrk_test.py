@@ -106,6 +106,7 @@ class TestSpectrograph(object):
         # restore position
         f = self.spectrograph.moveAbs(self._orig_pos)
         f.result()  # wait for the move to finish
+        pass
 
     def test_simple(self):
         """
@@ -400,6 +401,104 @@ class TestShamrock(TestSpectrograph, unittest.TestCase):
 
         cls.spectrograph.terminate()
 
+    def test_multi_focus(self):
+        """
+        Test specific bug of the SR193 which causes it to improperly put the
+        focus position back (based on grating + detector) in some cases.
+        """
+        sp = self.spectrograph
+        sp.moveAbsSync({"wavelength": 0})
+
+        focus_rng = sp.axes["focus"].range
+        # Pretty much any step value within limits would work, but it's simpler
+        # to read the log if they fit directly the actual steps
+        # focus_step = (focus_rng[1] - focus_rng[0]) / 6
+        fstep = sp._focus_step_size
+
+        outputs = sp.axes["flip-out"].choices
+
+        # Typically, it works fine if focus set in this order:
+        # 1. detector 1 + grating 1
+        # 2. detector 1 + grating 2
+        # 3. detector 2 + grating 1
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 1})
+        logging.debug("d1g1, init focus @ %g", sp.position.value["focus"])
+        sp.moveAbsSync({"focus": focus_rng[0] + 10 * fstep})
+        f11 = sp.position.value["focus"]  # focus position rounded
+        logging.debug("d1g1, focus @ %g", f11)
+
+        sp.moveAbsSync({"flip-out": max(outputs), "grating": 1})
+        logging.debug("d2g1, init focus @ %g", sp.position.value["focus"])
+        sp.moveAbsSync({"focus": focus_rng[0] + 110 * fstep})
+        f21 = sp.position.value["focus"]
+        logging.debug("d2g1, focus @ %g", f21)
+
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 2})
+        logging.debug("d1g2, init focus @ %g", sp.position.value["focus"])
+        sp.moveAbsSync({"focus": focus_rng[0] + 20 * fstep})
+        f12 = sp.position.value["focus"]
+        logging.debug("d1g2, focus @ %g", f12)
+
+        logging.debug("Completed first focus movement")
+
+        # Go back and check...
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 1})
+        self.assertEqual(f11, sp.position.value["focus"])
+
+        sp.moveAbsSync({"flip-out": max(outputs), "grating": 1})
+        self.assertEqual(f21, sp.position.value["focus"])
+
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 2})
+        self.assertEqual(f12, sp.position.value["focus"])
+
+        # Typically, it goes wrong if focus set in this order:
+        # 1. detector 2 + grating 1
+        # 2. detector 2 + grating 2
+        # 3. detector 1 + grating 1
+        sp.moveAbsSync({"flip-out": max(outputs), "grating": 1})
+        logging.debug("d2g1, init focus @ %g", sp.position.value["focus"])
+        sp.moveAbsSync({"focus": focus_rng[0] + 115 * fstep})
+        f21 = sp.position.value["focus"]  # focus position rounded
+        logging.debug("d2g1, focus @ %g", f21)
+
+        sp.moveAbsSync({"flip-out": max(outputs), "grating": 2})
+        logging.debug("d2g2, init focus @ %g", sp.position.value["focus"])
+        sp.moveAbsSync({"focus": focus_rng[0] + 125 * fstep})
+        f22 = sp.position.value["focus"]
+        logging.debug("d2g2, focus @ %g", f22)
+
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 1})
+        logging.debug("d1g1, init focus @ %g", sp.position.value["focus"])
+        sp.moveAbsSync({"focus": focus_rng[0] + 15 * fstep})
+        f11 = sp.position.value["focus"]
+        logging.debug("d1g1, focus @ %g", f11)
+
+        logging.debug("Completed focus second movement")
+
+        # Go back and check... (first read everything, for debugging purpose)
+        sp.moveAbsSync({"flip-out": max(outputs), "grating": 1})
+        f21_actual = sp.position.value["focus"]
+        logging.debug("d2g1, actual focus: %g", f21_actual)
+
+        sp.moveAbsSync({"flip-out": max(outputs), "grating": 2})
+        f22_actual = sp.position.value["focus"]
+        logging.debug("d2g2, actual focus: %g", f22_actual)
+
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 1})
+        f11_actual = sp.position.value["focus"]
+        logging.debug("d1g1, actual focus: %g", f11_actual)
+
+        sp.moveAbsSync({"flip-out": min(outputs), "grating": 2})
+        f12_actual = sp.position.value["focus"]
+        logging.debug("d1g2, actual focus: %g", f12_actual)
+
+        self.assertEqual(f21, f21_actual)
+        self.assertEqual(f22, f22_actual)
+        self.assertEqual(f11, f11_actual)
+
+        # ideally, f12, would be "logically" based on the other values: f11 + (f22-f21)
+        # self.assertEqual(f12_actual, f11 + (f22 - f21))
+
 
 class TestShamrockAndCCD(TestSpectrograph, unittest.TestCase):
     """
@@ -507,7 +606,7 @@ class TestShamrockAndCCD(TestSpectrograph, unittest.TestCase):
 
 class TestShamrockSlit(unittest.TestCase):
     """
-    Tests for the spectrograph with slit let
+    Tests for the spectrograph with slit led
     Subclass needs to inherit from unittest.TestCase too
       and to provide .spectrograph and .ccd.
     """
