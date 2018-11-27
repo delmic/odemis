@@ -467,6 +467,8 @@ class AndorCam2(model.DigitalCamera):
           to use as fake image.
         Raise an exception if the device cannot be opened.
         """
+        self.handle = None  # In case of early failure, to not confuse __del__
+
         if device in ("fake", "fakesys"):
             self.atcore = FakeAndorV2DLL(image)
             if device == "fake":
@@ -482,7 +484,6 @@ class AndorCam2(model.DigitalCamera):
         self.temp_timer = None
         if device is None:
             # nothing else to initialise
-            self.handle = None
             return
 
         self._initpath = None # Will be updated by Initialize()
