@@ -715,7 +715,7 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
         )),
-    stream.TemporalSpectrumStream:
+    stream.StaticSpectrumStream:
         OrderedDict((
             ("selected_time", {
                 "label": "Selected Time",

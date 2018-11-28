@@ -69,8 +69,7 @@ def data_to_static_streams(data):
             if ti >= 0 and d.shape[ti] > 1:
                 # Streak camera data. Create a temporal spectrum independent of operating mode (Focus or Operate)
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
-                klass = stream.StaticTemporalSpectrumStream
-
+                klass = stream.StaticSpectrumStream
             else:
                 # Spectrum: either it's obvious according to metadata, or no metadata
                 # but lots of wavelengths, so no other way to display

@@ -35,6 +35,7 @@ from odemis import model
 from odemis.util import img
 from scipy import ndimage
 from odemis.model import MD_PIXEL_SIZE
+from odemis.acq.stream._static import StaticSpectrumStream
 
 
 class DataProjection(object):
@@ -109,6 +110,13 @@ class DataProjection(object):
 
 
 class RGBSpatialProjection(DataProjection):
+
+    def __new__(cls, stream):
+
+        if isinstance(stream, StaticSpectrumStream):
+            return super(RGBSpatialProjection, cls).__new__(RGBSpatialSpectrumProjection, stream)
+        else:
+            return super(RGBSpatialProjection, cls).__new__(RGBSpatialProjection, stream)
 
     def __init__(self, stream):
         '''
@@ -489,7 +497,10 @@ class SinglePointSpectrumProjection(DataProjection):
             # if .raw is a list of DataArray, .image is a complete image
             if isinstance(self.stream.raw, list):
                 x, y = self.selected_pixel.value
-                t = self.stream._tl_px_values.index(self.selected_time.value)
+                if model.hasVA(self.stream, "selected_time"):
+                    t = self.stream._tl_px_values.index(self.selected_time.value)
+                else:
+                    t = 0
                 spec2d = self.stream._calibrated[:, t, 0, :, :]  # same data but remove useless dims
 
                 # We treat width as the diameter of the circle which contains the center
@@ -664,7 +675,11 @@ class LineSpectrumProjection(DataProjection):
             return
 
         try:
-            t = self.stream._tl_px_values.index(self.selected_time.value)
+            if model.hasVA(self.stream, "selected_time"):
+                t = self.stream._tl_px_values.index(self.selected_time.value)
+            else:
+                t = 0
+
             spec2d = self.stream._calibrated[:, 0, t, :, :]  # same data but remove useless dims
             width = self.selectionWidth.value
 
@@ -828,7 +843,6 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
-
 class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
     def __init__(self, stream):
@@ -837,11 +851,18 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
         super(RGBSpatialSpectrumProjection, self).__init__(stream)
 
+        if hasattr(stream, "selected_pixel"):
+            self.selected_pixel = stream.selected_pixel
+            self.selected_pixel.subscribe(self._on_selected_pixel)
+
         if hasattr(stream, "selected_time"):
             self.selected_time = stream.selected_time
             self.selected_time.subscribe(self._on_selected_time)
 
     def _on_selected_time(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_pixel(self, _):
         self._shouldUpdateImage()
 
     def _updateImage(self):
@@ -865,7 +886,10 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
     
             # pick only the data inside the bandwidth
             spec_range = self.stream._get_bandwidth_in_pixel()
-            t = self.stream._tl_px_values.index(self.selected_time.value)
+            if model.hasVA(self.stream, "selected_time"):
+                t = self.stream._tl_px_values.index(self.selected_time.value)
+            else:
+                t = 0
             logging.debug("Spectrum range picked: %s px", spec_range)
     
             if self.raw_display:

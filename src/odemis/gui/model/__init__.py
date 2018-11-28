@@ -30,7 +30,8 @@ import math
 from odemis import model
 from odemis.acq import path, leech
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
+from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
+    SpectrumStream
 from odemis.gui.conf import get_general_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
@@ -1415,7 +1416,7 @@ class StreamView(View):
             # if the stream is a StaticStream, create a projection for it
             logging.debug("Creating a projection for stream %s", stream)
             stream = self._projection_klass(stream)
-        elif not hasattr(stream, 'image'):
+        elif isinstance(stream, SpectrumStream)or not hasattr(stream, 'image'):
             logging.debug("Creating a projection for stream %s", stream)
             stream = RGBSpatialProjection(stream)
 

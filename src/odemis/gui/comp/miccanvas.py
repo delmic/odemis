@@ -344,13 +344,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_streams = self._tab_data_model.streams.value
             if not len(stream_tree):
                 return
-            elif stream_tree.get_streams_by_type((stream.SpectrumStream, stream.TemporalSpectrumStream)):
+            elif stream_tree.get_streams_by_type(stream.SpectrumStream):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
             elif any(isinstance(s, stream.ARStream) for s in tab_streams):
                 self.add_world_overlay(self.points_overlay)
                 self.points_overlay.activate()
-            elif any(isinstance(s, (stream.SpectrumStream, stream.TemporalSpectrumStream)) for s in tab_streams):
+            elif any(isinstance(s, stream.SpectrumStream) for s in tab_streams):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
         else:

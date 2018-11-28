@@ -77,7 +77,6 @@ import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
 from odemis.acq.stream._projection import SinglePointSpectrumProjection, LineSpectrumProjection, \
     TemporalSpectrumProjection, RGBSpatialSpectrumProjection, SinglePointChronoProjection
-from odemis.acq.stream._static import TemporalSpectrumStream
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
@@ -1591,7 +1590,7 @@ class AnalysisTab(Tab):
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
              {"name": "Optical",
-              "stream_classes": (OpticalStream, SpectrumStream, TemporalSpectrumStream, CLStream),
+              "stream_classes": (OpticalStream, SpectrumStream, CLStream),
               "zPos": self.tab_data_model.zPos,
               }),
             (viewports[1],
@@ -1601,12 +1600,12 @@ class AnalysisTab(Tab):
               }),
             (viewports[2],
              {"name": "Combined 1",
-              "stream_classes": (EMStream, OpticalStream, SpectrumStream, TemporalSpectrumStream, CLStream, RGBStream),
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
               "zPos": self.tab_data_model.zPos,
               }),
             (viewports[3],
              {"name": "Combined 2",
-              "stream_classes": (EMStream, OpticalStream, SpectrumStream, TemporalSpectrumStream, CLStream, RGBStream),
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream, RGBStream),
               "zPos": self.tab_data_model.zPos,
               }),
             (viewports[4],
@@ -1615,22 +1614,21 @@ class AnalysisTab(Tab):
               }),
             (viewports[5],
              {"name": "Spectrum plot",
-              "stream_classes": (SpectrumStream, TemporalSpectrumStream),
+              "stream_classes": (SpectrumStream,),
               "projection_class": SinglePointSpectrumProjection,
               }),
             (viewports[6],
              {"name": "Spatial spectrum",
-              "stream_classes": (SpectrumStream, CLStream, TemporalSpectrumStream),
-              "projection_class": RGBSpatialSpectrumProjection,
+              "stream_classes": (SpectrumStream, CLStream,),
               }),
             (viewports[7],
              {"name": "Temporal spectrum",
-              "stream_classes": (TemporalSpectrumStream,),
+              "stream_classes": (SpectrumStream,),
               "projection_class": TemporalSpectrumProjection,
               }),
             (viewports[8],
              {"name": "Time spectrum Plot",
-              "stream_classes": (TemporalSpectrumStream,),
+              "stream_classes": (SpectrumStream,),
               "projection_class": SinglePointChronoProjection,
               }),
         ])
@@ -1805,7 +1803,7 @@ class AnalysisTab(Tab):
         all_streams = streams + self.tab_data_model.streams.value
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
-        spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream) or isinstance(s, acqstream.TemporalSpectrumStream)]
+        spec_streams = [s for s in all_streams if isinstance(s, acqstream.SpectrumStream)]
         ar_streams = [s for s in all_streams if isinstance(s, acqstream.ARStream)]
 
         new_visible_views = list(self._def_views)  # Use a copy
@@ -1856,8 +1854,7 @@ class AnalysisTab(Tab):
                     spec_stream.selected_line.subscribe(self._on_line_select, init=True)
 
             # ########### Combined views and spectrum view visible
-
-            if isinstance(spec_stream, TemporalSpectrumStream):
+            if hasattr(spec_stream, "selected_time"):
                 new_visible_views[0] = self._def_views[2]  # Combined
                 new_visible_views[1] = self.panel.vp_timespec.view
                 new_visible_views[2] = self.panel.vp_inspection_plot.view

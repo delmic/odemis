@@ -3320,9 +3320,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         return model.DataArray(data, md)
 
     def test_temp_spec(self):
-        """Test TemporalSpectrumStream 2D"""
+        """Test SpectrumStream 2D"""
         spec = self._create_temporal_spec_data()
-        specs = stream.TemporalSpectrumStream("test", spec)
+        specs = stream.SpectrumStream("test", spec)
         time.sleep(1.0)  # wait a bit for the image to update
 
         # Control spatial spectrum
@@ -3363,7 +3363,7 @@ class StaticStreamsTestCase(unittest.TestCase):
     def test_temp_spec_calib(self):
         """Test StaticSpectrumStream calibration"""
         spec = self._create_spec_data()
-        specs = stream.TemporalSpectrumStream("test", spec)
+        specs = stream.SpectrumStream("test", spec)
         specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0], specs.spectrumBandwidth.range[1][1])
         time.sleep(0.5)  # ensure that .image is updated
 

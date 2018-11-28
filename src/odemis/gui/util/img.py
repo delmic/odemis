@@ -1136,7 +1136,7 @@ def spectrum_to_export_data(stream, raw):
     """
     Creates either raw or WYSIWYG representation for the spectrum data plot
 
-    stream (SpectrumStream, TemporalSpectrumStream): spectrum stream
+    stream (SpectrumStream): spectrum stream
     raw (boolean): if True returns raw representation
 
     returns (model.DataArray)
@@ -1247,7 +1247,7 @@ def time_spectrum_to_export_data(stream, raw):
     """
     Creates either raw or WYSIWYG representation for the time spectrum data plot
 
-    stream (SpectrumStream, TemporalSpectrumStream): spectrum stream
+    stream (SpectrumStream): spectrum stream
     raw (boolean): if True returns raw representation
 
     returns (model.DataArray)
@@ -1479,7 +1479,7 @@ def temporal_spectrum_to_export_data(stream, raw):
     """
     Creates either raw or WYSIWYG representation for the temporal spectrum data
 
-    stream (TemporalSpectrumStream)
+    stream (SpectrumStream)
     raw (boolean): if True returns raw representation
 
     returns (model.DataArray)
