@@ -75,9 +75,14 @@ class TestIdentityRegistrar(unittest.TestCase):
                             numpy.zeros((h, l), dtype=dtype)
 
                     # Crop two tiles with different shifts
-                    tile1 = img[0.3 * size[0]:0.6 * size[0], 0:0.6 * size[1]]
-                    tile2 = img[0.5 * size[0] + shift[0]:0.8 * size[0] + shift[0],
-                                shift[1]:0.6 * size[1] + shift[1]]
+                    tsize = (int(0.3 * size[0]), int(0.6 * size[1]))
+                    start = (int(0.3 * size[0]), 0)
+                    end = (start[0] + tsize[0], start[1] + tsize[1])
+                    tile1 = img[start[0]:end[0], start[1]:end[1]]
+
+                    start = numpy.add((int(0.5 * size[0]), 0), shift)
+                    end = (start[0] + tsize[0], start[1] + tsize[1])
+                    tile2 = img[start[0]:end[0], start[1]:end[1]]
 
                     px_size = (1e-6, 2e-5)
                     md1 = {
@@ -321,9 +326,14 @@ class TestShiftRegistrar(unittest.TestCase):
                             numpy.zeros((h, l), dtype=dtype)
 
                     # Crop two tiles with different shifts
-                    tile1 = img[:0.3 * size[0], 0:0.6 * size[1]]
-                    tile2 = img[0.2 * size[0] + shift[0]:0.5 * size[0] +
-                                shift[0], shift[1]:0.6 * size[1] + shift[1]]
+                    tsize = (int(0.3 * size[0]), int(0.6 * size[1]))
+                    start = (0, 0)
+                    end = (start[0] + tsize[0], start[1] + tsize[1])
+                    tile1 = img[start[0]:end[0], start[1]:end[1]]
+
+                    start = numpy.add((int(0.2 * size[0]), 0), shift)
+                    end = (start[0] + tsize[0], start[1] + tsize[1])
+                    tile2 = img[start[0]:end[0], start[1]:end[1]]
 
                     px_size = (1e-6, 2e-5)
                     md1 = {
@@ -576,9 +586,14 @@ class TestGlobalShiftRegistrar(unittest.TestCase):
                             numpy.zeros((h, l), dtype=dtype)
 
                     # Crop two tiles with different shifts
-                    tile1 = img[:0.3 * size[0], 0:0.6 * size[1]]
-                    tile2 = img[0.2 * size[0] + shift[0]:0.5 * size[0] +
-                                shift[0], shift[1]:0.6 * size[1] + shift[1]]
+                    tsize = (int(0.3 * size[0]), int(0.6 * size[1]))
+                    start = (0, 0)
+                    end = (start[0] + tsize[0], start[1] + tsize[1])
+                    tile1 = img[start[0]:end[0], start[1]:end[1]]
+
+                    start = numpy.add((int(0.2 * size[0]), 0), shift)
+                    end = (start[0] + tsize[0], start[1] + tsize[1])
+                    tile2 = img[start[0]:end[0], start[1]:end[1]]
 
                     px_size = (1e-6, 2e-5)
                     md1 = {
