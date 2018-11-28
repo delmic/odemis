@@ -295,19 +295,19 @@ def GuessAnchorRegion(whole_img, sample_region):
     masked_img = cannied_img
 
     # Clip between the bounds
-    left = sorted((0, sample_region[0] * whole_img.shape[0] -
-                   (dc_shape[0] / 2), whole_img.shape[0]))[1]
-    right = sorted((0, sample_region[2] * whole_img.shape[0] +
-                    (dc_shape[0] / 2), whole_img.shape[0]))[1]
-    top = sorted((0, sample_region[1] * whole_img.shape[1] -
-                  (dc_shape[1] / 2), whole_img.shape[1]))[1]
-    bottom = sorted((0, sample_region[3] * whole_img.shape[1] +
-                     (dc_shape[1] / 2), whole_img.shape[1]))[1]
-    masked_img[left:right, top:bottom].fill(0)
-    masked_img[0:(dc_shape[0] / 2), :].fill(0)
-    masked_img[:, 0:(dc_shape[1] / 2)].fill(0)
-    masked_img[masked_img.shape[0] - (dc_shape[0] / 2):masked_img.shape[0], :].fill(0)
-    masked_img[:, masked_img.shape[1] - (dc_shape[1] / 2):masked_img.shape[1]].fill(0)
+    l = sorted((0, int(sample_region[0] * whole_img.shape[0] - dc_shape[0] / 2),
+                whole_img.shape[0]))[1]
+    r = sorted((0, int(sample_region[2] * whole_img.shape[0] + dc_shape[0] / 2),
+                whole_img.shape[0]))[1]
+    t = sorted((0, int(sample_region[1] * whole_img.shape[1] - dc_shape[1] / 2),
+                whole_img.shape[1]))[1]
+    b = sorted((0, int(sample_region[3] * whole_img.shape[1] + dc_shape[1] / 2),
+                whole_img.shape[1]))[1]
+    masked_img[l:r, t:b] = 0
+    masked_img[0:(dc_shape[0] // 2), :] = 0
+    masked_img[:, 0:(dc_shape[1] // 2)] = 0
+    masked_img[masked_img.shape[0] - (dc_shape[0] // 2):masked_img.shape[0], :] = 0
+    masked_img[:, masked_img.shape[1] - (dc_shape[1] // 2):masked_img.shape[1]] = 0
 
     # Find indices of edge pixels
     occurrences_indices = numpy.where(masked_img == 255)
