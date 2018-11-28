@@ -571,6 +571,7 @@ class TestSpatialExport(unittest.TestCase):
         self.assertEqual(len(exp_data[1].shape), 2)  # grayscale
         self.assertEqual(exp_data[0].shape, exp_data[1].shape)  # all exported images must have the same shape
 
+        # Metadata shouldn't be modified
         for s, md in zip(self.streams, orig_md):
             self.assertEqual(md, s.raw[0].metadata)
 

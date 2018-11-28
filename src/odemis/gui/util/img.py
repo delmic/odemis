@@ -1642,10 +1642,14 @@ def get_ordered_images(streams, raw=False):
         if isinstance(s.raw, tuple):  # s.raw has tiles
             md = s.raw[0][0].metadata.copy()
         else:
-            if not model.hasVA(s, "zIndex") and not raw:  # Otherwise we will overwrite teh correct MD_POS
-                md = s.raw[0].metadata.copy()
-            else:
-                md = data.metadata
+            md = s.raw[0].metadata.copy()
+
+        if model.hasVA(s, "zIndex") and not raw:
+            # Make sure we keep the correct Pos[Z] (from the projection)
+            try:
+                md[model.MD_POS] = data.metadata[model.MD_POS]
+            except KeyError:
+                pass
 
         ostream = s.stream if isinstance(s, DataProjection) else s
 
