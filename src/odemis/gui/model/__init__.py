@@ -1411,10 +1411,13 @@ class StreamView(View):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
             logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
-        if self._projection_klass != RGBSpatialProjection or not hasattr(stream, 'image'):
+        if self._projection_klass != RGBSpatialProjection:
             # if the stream is a StaticStream, create a projection for it
             logging.debug("Creating a projection for stream %s", stream)
             stream = self._projection_klass(stream)
+        elif not hasattr(stream, 'image'):
+            logging.debug("Creating a projection for stream %s", stream)
+            stream = RGBSpatialProjection(stream)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations

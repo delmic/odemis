@@ -161,6 +161,9 @@ class RGBSpatialProjection(DataProjection):
 
         self._shouldUpdateImage()
 
+    def _find_metadata(self, md):
+        return self.stream._find_metadata(md)
+
     @property
     def raw(self):
         if hasattr(self, "_raw"):
@@ -218,7 +221,7 @@ class RGBSpatialProjection(DataProjection):
         # if model.MD_ACQ_DATE in data.metadata:
         #     logging.debug("Computed RGB projection %g s after acquisition",
         #                    time.time() - data.metadata[model.MD_ACQ_DATE])
-        md = self.stream._find_metadata(data.metadata)
+        md = self._find_metadata(data.metadata)
         md[model.MD_DIMS] = "YXC" # RGB format
         return model.DataArray(rgbim, md)
 
@@ -512,7 +515,7 @@ class SinglePointSpectrumProjection(DataProjection):
                                     min(int(y + radius) + 1, spec2d.shape[-2])):
                         if math.hypot(x - px, y - py) <= radius:
                             n += 1
-                            datasum += spec2d[:, t, py, px]
+                            datasum += spec2d[:, py, px]
 
                 mean = datasum / n
                 raw = model.DataArray(mean.astype(spec2d.dtype))
@@ -546,6 +549,10 @@ class SinglePointChronoProjection(DataProjection):
             self.selected_wavelength = stream.selected_wavelength
             self.selected_wavelength.subscribe(self._on_selected_wl)
 
+        if hasattr(stream, "selected_time"):
+            self.selected_time = stream.selected_time
+            self.selected_time.subscribe(self._on_selected_time)
+
     def _on_selected_pixel(self, _):
         self._shouldUpdateImage()
 
@@ -553,6 +560,9 @@ class SinglePointChronoProjection(DataProjection):
         self._shouldUpdateImage()
 
     def _on_selected_wl(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_time(self, _):
         self._shouldUpdateImage()
 
     def _updateImage(self):
@@ -566,7 +576,7 @@ class SinglePointChronoProjection(DataProjection):
             # if .raw is a list of DataArray, .image is a complete image
             if isinstance(self.stream.raw, list):
                 x, y = self.selected_pixel.value
-                c = self._wl_px_values.index(self.selected_wavelength.value)
+                c = self.stream._wl_px_values.index(self.selected_wavelength.value)
                 chrono2d = self.stream._calibrated[c, :, 0, :, :]  # same data but remove useless dims
 
                 # We treat width as the diameter of the circle which contains the center
@@ -587,12 +597,12 @@ class SinglePointChronoProjection(DataProjection):
                 datasum = numpy.zeros(chrono2d.shape[0], dtype=numpy.float64)
                 # Scan the square around the point, and only pick the points in the circle
                 for px in range(max(0, int(x - radius)),
-                                min(int(x + radius) + 1, spec2d.shape[-1])):
+                                min(int(x + radius) + 1, chrono2d.shape[-1])):
                     for py in range(max(0, int(y - radius)),
-                                    min(int(y + radius) + 1, spec2d.shape[-2])):
+                                    min(int(y + radius) + 1, chrono2d.shape[-2])):
                         if math.hypot(x - px, y - py) <= radius:
                             n += 1
-                            datasum += chrono2d[:, t, py, px]
+                            datasum += chrono2d[:, py, px]
 
                 mean = datasum / n
                 raw = model.DataArray(mean.astype(chrono2d.dtype))
@@ -706,7 +716,8 @@ class LineSpectrumProjection(DataProjection):
             # Use metadata to indicate spatial distance between pixel
             pxs_data = self.stream._calibrated.metadata[MD_PIXEL_SIZE]
             pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
-            md = {MD_PIXEL_SIZE: (None, pxs)}  # for the spectrum, use get_spectrum_range()
+            md = self.stream._calibrated.metadata
+            md[MD_PIXEL_SIZE] = (None, pxs)  # for the spectrum, use get_spectrum_range()
 
             if self.raw_display:
                 raw = model.DataArray(spec1d[::-1, :], md)
@@ -749,6 +760,13 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
             self.selected_pixel = stream.selected_pixel
             self.selected_pixel.subscribe(self._on_selected_pixel)
 
+        if hasattr(stream, "selected_wavelength"):
+            self.selected_wavelength = stream.selected_wavelength
+            self.selected_wavelength.subscribe(self._on_selected_wl)
+
+    def _find_metadata(self, md):
+        return self.stream._calibrated.metadata
+
     def _on_selected_width(self, _):
         self._shouldUpdateImage()
 
@@ -756,6 +774,9 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
         self._shouldUpdateImage()
 
     def _on_selected_time(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_wl(self, _):
         self._shouldUpdateImage()
 
     def _updateImage(self):
@@ -774,7 +795,7 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
             spec2d = self.stream._calibrated[:, :, 0, :, :]  # same data but remove useless dims
 
             # md = self.stream._find_metadata(self.stream._calibrated.metadata)
-            md = self.stream._md
+            md = self.stream._calibrated.metadata
             # We treat width as the diameter of the circle which contains the center
             # of the pixels to be taken into account
             width = self.selectionWidth.value
@@ -790,7 +811,7 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
             radius = width / 2
             n = 0
             # TODO: use same cleverness as mean() for dtype?
-            datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+            datasum = numpy.zeros((spec2d.shape[0], spec2d.shape[1]), dtype=numpy.float64)
             # Scan the square around the point, and only pick the points in the circle
             for px in range(max(0, int(x - radius)),
                             min(int(x + radius) + 1, spec2d.shape[-1])):
@@ -801,7 +822,7 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
                         datasum += spec2d[:, :, py, px]
 
             mean = datasum / n
-            raw = model.DataArray(mean.astype(spec2d.dtype))
+            raw = model.DataArray(mean.astype(spec2d.dtype), md)
             self.image.value = self._projectXY2RGB(raw)
 
         except Exception:
@@ -840,26 +861,29 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         
         try:
             data = self.stream._calibrated
-            md = self.stream._find_metadata(data.metadata)
+            md = self.stream._calibrated.metadata
     
             # pick only the data inside the bandwidth
             spec_range = self.stream._get_bandwidth_in_pixel()
             t = self.stream._tl_px_values.index(self.selected_time.value)
             logging.debug("Spectrum range picked: %s px", spec_range)
     
-    
             if self.raw_display:
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
                 av_data = img.ensure2DImage(av_data).astype(data.dtype)
                 raw = model.DataArray(av_data, md)
+
+                self.image.value = self._projectXY2RGB(raw)
+
             else:
-                irange = self._getDisplayIRange()  # will update histogram if not yet present
+                irange = self.stream._getDisplayIRange()  # will update histogram if not yet present
     
-                if not self.fitToRGB.value:
+                if not self.stream.fitToRGB.value:
                     # TODO: use better intermediary type if possible?, cf semcomedi
                     av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
                     av_data = img.ensure2DImage(av_data)
                     rgbim = img.DataArray2RGB(av_data, irange)
+
                 else:
                     # Note: For now this method uses three independent bands. To give
                     # a better sense of continuum, and be closer to reality when using
@@ -894,8 +918,8 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
                 md[model.MD_DIMS] = "YXC"  # RGB format
     
                 raw = model.DataArray(rgbim, md)
-    
-            self.image.value = self._projectXY2RGB(raw)
+
+                self.image.value = raw
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)

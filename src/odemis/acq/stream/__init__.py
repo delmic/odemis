@@ -266,3 +266,18 @@ class StreamTree(object):
                 streams.append(s)
 
         return streams
+
+    def get_streams_and_proj_by_type(self, stream_types):
+        """
+        Return a flat list of streams of `stream_type` within the StreamTree
+          Note: if a node is a DataProjection, the corresponding Stream is returned
+        """
+        streams = []
+
+        for s in self.streams:
+            if isinstance(s, StreamTree):
+                streams.extend(s.get_streams_by_type(stream_types))
+            elif isinstance(s, stream_types):
+                streams.append(s)
+
+        return streams

@@ -47,6 +47,7 @@ from odemis.util import units, spectrum, peak, img
 import wx
 from odemis.util import no_conflict
 from odemis.acq.stream._static import TemporalSpectrumStream
+from odemis.acq.stream._projection import TemporalSpectrumProjection
 
 
 class ViewPort(wx.Panel):
@@ -1194,6 +1195,14 @@ class TimeSpectrumViewport(PointSpectrumViewport):
     Legend axes are time/intensity.
     """
 
+    def setView(self, view, tab_data):
+        super(TimeSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Time")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+        self._peak_fitter = None
+        self._peak_future = None
+        self._curve_overlay = None
+
     def _on_new_data(self, data):
         """
         Called when a new data is available (in a live stream)
@@ -1216,10 +1225,7 @@ class TimeSpectrumViewport(PointSpectrumViewport):
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (time_range[0], time_range[-1])
             self.left_legend.range = (min(data), max(data))
-            # For testing
-            # import random
-            # self.left_legend.range = (min(data) + random.randint(0, 100),
-            #                           max(data) + random.randint(-100, 100))
+
         else:
             self.clear()
         self.Refresh()
@@ -1331,7 +1337,7 @@ class TemporalSpectrumViewport(PlotViewport):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        ss = self.view.stream_tree.get_streams_by_type(TemporalSpectrumStream)
+        ss = self.view.stream_tree.get_streams_and_proj_by_type(TemporalSpectrumProjection)
         if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return

@@ -114,10 +114,10 @@ def get_time_per_pixel(da):
     if not hasattr(da, 'metadata'):
         raise AttributeError("No metadata found in data array")
 
-    # MD_WL_LIST has priority
+    # MD_TIME_LIST has priority
     if model.MD_TIME_LIST in da.metadata:
         tl = da.metadata[model.MD_TIME_LIST]
-        if len(tl) == da.shape[1]:
+        if len(tl) == da.shape[0]:
             return tl
         else:
             raise ValueError("Time list metadata (MD_TIME_LIST) is not the same "
