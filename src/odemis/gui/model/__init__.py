@@ -1205,7 +1205,7 @@ class StreamView(View):
                 except Queue.Empty:
                     pass
 
-                logging.debug("Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
+                logging.debug(u"Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
 
                 # clip to the range
                 if rng:
@@ -1214,7 +1214,7 @@ class StreamView(View):
                     req_shift = shift
                     shift = new_pos - pos
                     if abs(shift - req_shift) > 1e-9:
-                        logging.info("Restricting focus move to %f µm as it reached the end",
+                        logging.info(u"Restricting focus move to %f µm as it reached the end",
                                      shift * 1e6)
 
                 time_last_move = time.time()

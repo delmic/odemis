@@ -1002,7 +1002,7 @@ class SEMComedi(model.HwComponent):
         pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
-            logging.error("Going to try to read very large buffer of %g MB, "
+            logging.error(u"Going to try to read very large buffer of %g MB, "
                           "with osr = %d and dpr = %d.",
                           pixelsz / 2 ** 20, osr, dpr)
 
@@ -1020,7 +1020,7 @@ class SEMComedi(model.HwComponent):
             # newPosition trigger.
             maxlines = 1
 
-        logging.debug("Reading %d lines at a time: %d samples/read every %g µs",
+        logging.debug(u"Reading %d lines at a time: %d samples/read every %g µs",
                       maxlines, maxlines * data.shape[1] * osr * len(rchannels),
                       period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
@@ -1095,7 +1095,7 @@ class SEMComedi(model.HwComponent):
 
         # TODO: as we do point per point, we could do the margin (=settle time)
         # shorter than a standard point
-        logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
+        logging.debug(u"Reading one pixel at a time: %d samples/read every %g µs",
                       dpr * osr * len(rchannels), period * 1e6)
         wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
         # read one pixel at a time
@@ -1135,7 +1135,7 @@ class SEMComedi(model.HwComponent):
         # Note: we could optimize slightly more by grouping dpr up to max_dpr
         # but would make the code more complex and anyway it's already huge
         # acquisitions.
-        logging.debug("Reading one sub-pixel at a time: %d samples/read every %g µs",
+        logging.debug(u"Reading one sub-pixel at a time: %d samples/read every %g µs",
                       osr * nrchans, (period / dpr) * 1e6)
         px_rbuf = numpy.empty((dpr, nrchans), dtype=adtype) # intermediary sum for mean
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
@@ -1205,8 +1205,8 @@ class SEMComedi(model.HwComponent):
             # methods will have enough effect to stop the acquisition
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
-            logging.debug("Not generating new write command for %d scans on "
-                          "channels %r with period = %d ns",
+            logging.debug(u"Not generating new write command for %d scans on "
+                          u"channels %r with period = %d ns",
                           nwscans, wchannels, period_ns)
             logging.debug("Generating a new read command for %d scans", nrscans)
 
@@ -1405,7 +1405,7 @@ class SEMComedi(model.HwComponent):
           lines at a time.
         """
         maxlines = min(wdata.shape[0], maxlines)
-        logging.debug("Reading %d lines at a time: %d samples/counter every %g µs",
+        logging.debug(u"Reading %d lines at a time: %d samples/counter every %g µs",
                       maxlines, maxlines * wdata.shape[1] * dpr,
                       period * 1e6)
         rshape = (wdata.shape[0], wdata.shape[1] - margin)
@@ -1555,8 +1555,8 @@ class SEMComedi(model.HwComponent):
         if period < 10e-6:
             # don't even try: that's the time it'd take to have just one loop
             # doing nothing
-            logging.error("Cannot generate newPosition events at such a "
-                          "small period of %s µs", period * 1e6)
+            logging.error(u"Cannot generate newPosition events at such a "
+                          u"small period of %s µs", period * 1e6)
             return
 
         self._new_position_thread_pipe = []
@@ -1588,8 +1588,8 @@ class SEMComedi(model.HwComponent):
             self._scanner.newPosition.notify()
 
         if failures:
-            logging.warning("Failed to trigger newPosition in time %d times, "
-                            "last trigger was %g µs late.", failures, -left * 1e6)
+            logging.warning(u"Failed to trigger newPosition in time %d times, "
+                            u"last trigger was %g µs late.", failures, -left * 1e6)
 
     def _cancel_new_position_notifier(self):
         logging.debug("cancelling npnotifier")

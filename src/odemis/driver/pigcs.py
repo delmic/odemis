@@ -2736,7 +2736,7 @@ class SMOController(Controller):
         speed = self._speed[axis]
         v, t, ad = self._convertDistanceSpeedToPIDControl(distance, speed)
         if t == 0: # if distance is too small, report it
-            logging.debug("Move of %g µm too small, not moving", distance * 1e-6)
+            logging.debug(u"Move of %g µm too small, not moving", distance * 1e-6)
             return 0
         else:
             self.OLMovePID(axis, v, t)
