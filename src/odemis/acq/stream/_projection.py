@@ -793,7 +793,10 @@ class LineSpectrumProjection(RGBProjection):
 
             # Use metadata to indicate spatial distance between pixel
             pxs_data = self.stream._calibrated.metadata[MD_PIXEL_SIZE]
-            pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
+            if pxs_data[0] is not None:
+                pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
+            else:
+                pxs = math.hypot(v[0] * pxs_data[1], v[1] * pxs_data[1]) / (n - 1)
             md = self.stream._calibrated.metadata
             md[model.MD_DIMS] = "YXC"  # RGB format
             md[MD_PIXEL_SIZE] = (None, pxs)  # for the spectrum, use get_spectrum_range()
@@ -996,14 +999,14 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
                     rrange[1] = max(rrange)
     
                     # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
-                    av_data = numpy.mean(data[rrange[0]:rrange[1] + 1, t], axis=0)
+                    av_data = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
                     av_data = img.ensure2DImage(av_data)
                     rgbim = img.DataArray2RGB(av_data, irange)
-                    av_data = numpy.mean(data[grange[0]:grange[1] + 1, t], axis=0)
+                    av_data = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
                     av_data = img.ensure2DImage(av_data)
                     gim = img.DataArray2RGB(av_data, irange)
                     rgbim[:, :, 1] = gim[:, :, 0]
-                    av_data = numpy.mean(data[brange[0]:brange[1] + 1, t], axis=0)
+                    av_data = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
                     av_data = img.ensure2DImage(av_data)
                     bim = img.DataArray2RGB(av_data, irange)
                     rgbim[:, :, 2] = bim[:, :, 0]

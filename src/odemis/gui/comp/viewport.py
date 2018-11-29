@@ -1475,7 +1475,7 @@ class SpatialSpectrumViewport(ViewPort):
         if hasattr(self.stream, "selected_line"):
             self.stream.selected_line.subscribe(self._on_line_select, init=True)
         self.stream.selected_pixel.subscribe(self._on_pixel_select)
-        self.stream.image.subscribe(self._on_new_data)
+        self.stream.image.subscribe(self._on_new_data, init=True)
 
     def _on_pixel_select(self, pixel):
         """ Clear the marking line when the selected pixel is cleared """
@@ -1498,7 +1498,7 @@ class SpatialSpectrumViewport(ViewPort):
 
     def _on_new_data(self, data):
         if data is not None:
-            spectrum_range, unit_x = self.stream.get_spectrum_range()
+            spectrum_range, unit_x = spectrum.get_spectrum_range(data)
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
             self.bottom_legend.unit = unit_x
