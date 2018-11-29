@@ -1416,7 +1416,7 @@ class StreamView(View):
             # if the stream is a StaticStream, create a projection for it
             logging.debug("Creating a projection for stream %s", stream)
             stream = self._projection_klass(stream)
-        elif isinstance(stream, SpectrumStream)or not hasattr(stream, 'image'):
+        elif not hasattr(stream, 'image'):
             logging.debug("Creating a projection for stream %s", stream)
             stream = RGBSpatialProjection(stream)
 

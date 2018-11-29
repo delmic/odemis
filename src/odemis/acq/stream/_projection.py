@@ -109,22 +109,14 @@ class DataProjection(object):
         self._im_needs_recompute.set()
 
 
-class RGBSpatialProjection(DataProjection):
-
-    def __new__(cls, stream):
-
-        if isinstance(stream, StaticSpectrumStream):
-            return super(RGBSpatialProjection, cls).__new__(RGBSpatialSpectrumProjection, stream)
-        else:
-            return super(RGBSpatialProjection, cls).__new__(RGBSpatialProjection, stream)
+class RGBProjection(DataProjection):
 
     def __init__(self, stream):
         '''
         stream (Stream): the Stream to project
         '''
-        super(RGBSpatialProjection, self).__init__(stream)
+        super(RGBProjection, self).__init__(stream)
 
-        self.should_update = model.BooleanVA(False)
         self.name = stream.name
         self.image = model.VigilantAttribute(None)
 
@@ -133,41 +125,6 @@ class RGBSpatialProjection(DataProjection):
         self.stream.intensityRange.subscribe(self._onIntensityRange)
         self.stream.auto_bc.subscribe(self._onAutoBC)
         self.stream.auto_bc_outliers.subscribe(self._onOutliers)
-
-        # handle z stack
-        if model.hasVA(stream, "zIndex"):
-            self.zIndex = stream.zIndex
-            self.zIndex.subscribe(self._onZIndex)
-
-        if stream.raw and isinstance(stream.raw[0], model.DataArrayShadow):
-            # The raw tiles corresponding to the .image, updated whenever .image is updated
-            self._raw = (())  # 2D tuple of DataArrays
-            raw = stream.raw[0]
-            md = raw.metadata
-            # get the pixel size of the full image
-            ps = md[model.MD_PIXEL_SIZE]
-            maxLineSpectrumProjection_mpp = ps[0] * (2 ** raw.maxzoom)
-            # sets the mpp as the X axis of the pixel size of the full image
-            mpp_rng = (ps[0], max_mpp)
-            self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
-
-            full_rect = img._getBoundingBox(raw)
-            l, t, r, b = full_rect
-            rect_range = ((l, b, l, b), (r, t, r, t))
-            self.rect = model.TupleContinuous(full_rect, rect_range)
-
-            self.mpp.subscribe(self._onMpp)
-            self.rect.subscribe(self._onRect)
-
-            # initialize the projected tiles cache
-            self._projectedTilesCache = {}
-            # initialize the raw tiles cache
-            self._rawTilesCache = {}
-
-            # When True, the projected tiles cache should be invalidated
-            self._projectedTilesInvalid = True
-
-        self._shouldUpdateImage()
 
     def _find_metadata(self, md):
         return self.stream._find_metadata(md)
@@ -200,6 +157,112 @@ class RGBSpatialProjection(DataProjection):
     def needImageUpdate(self):
         # set projected tiles cache as invalid
         self._projectedTilesInvalid = True
+        self._shouldUpdateImage()
+
+    def onTint(self, value):
+        if isinstance(self.raw, list):
+            if len(self.stream.raw) > 0:
+                raw = self.stream.raw[0]
+            else:
+                raw = None
+        elif isinstance(self.stream.raw, tuple):
+            raw = self.stream._das
+        else:
+            raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+
+        if raw is not None:
+            # If the image is pyramidal, the exported image is based on tiles from .raw.
+            # And the metadata from raw will be used to generate the metadata of the merged
+            # image from the tiles. So, in the end, the exported image metadata will be based
+            # on the raw metadata
+            raw.metadata[model.MD_USER_TINT] = value
+
+        self._shouldUpdateImage()
+
+    def _project2RGB(self, data, tint=(255, 255, 255)):
+        """
+        Project a 2D DataArray into a RGB representation
+        data (DataArray): 2D DataArray
+        tint ((int, int, int)): colouration of the image, in RGB.
+        return (DataArray): 3D DataArray
+        """
+        # TODO replace by local irange
+        irange = self.stream._getDisplayIRange()
+        rgbim = img.DataArray2RGB(data, irange, tint)
+        rgbim.flags.writeable = False
+        # Commented to prevent log flooding
+        # if model.MD_ACQ_DATE in data.metadata:
+        #     logging.debug("Computed RGB projection %g s after acquisition",
+        #                    time.time() - data.metadata[model.MD_ACQ_DATE])
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC"  # RGB format
+        return model.DataArray(rgbim, md)
+
+    def _updateImage(self):
+        """ Recomputes the image with all the raw data available
+        """
+        # logging.debug("Updating image")
+        if not self.stream.raw and isinstance(self.stream.raw, list):
+            return
+
+        try:
+            # if .raw is a list of DataArray, .image is a complete image
+            if isinstance(self.stream.raw, list):
+                raw = self.stream.raw[0]
+
+            raw = img.ensure2DImage(raw)
+            self.image.value = self._project2RGB(raw, self.stream.tint.value)
+
+        except Exception:
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
+
+class RGBSpatialProjection(RGBProjection):
+
+    def __new__(cls, stream):
+
+        if isinstance(stream, StaticSpectrumStream):
+            return super(RGBSpatialProjection, cls).__new__(RGBSpatialSpectrumProjection, stream)
+        else:
+            return super(RGBSpatialProjection, cls).__new__(RGBSpatialProjection, stream)
+
+    def __init__(self, stream):
+        '''
+        stream (Stream): the Stream to project
+        '''
+        super(RGBSpatialProjection, self).__init__(stream)
+
+        # handle z stack
+        if model.hasVA(stream, "zIndex"):
+            self.zIndex = stream.zIndex
+            self.zIndex.subscribe(self._onZIndex)
+
+        if hasattr(stream, '_das'):
+            raw = stream._das
+            md = raw.metadata
+            # get the pixel size of the full image
+            ps = md[model.MD_PIXEL_SIZE]
+            maxLineSpectrumProjection_mpp = ps[0] * (2 ** raw.maxzoom)
+            # sets the mpp as the X axis of the pixel size of the full image
+            mpp_rng = (ps[0], max_mpp)
+            self.mpp = model.FloatContinuous(max_mpp, mpp_rng, setter=self._set_mpp)
+
+            full_rect = img._getBoundingBox(raw)
+            l, t, r, b = full_rect
+            rect_range = ((l, b, l, b), (r, t, r, t))
+            self.rect = model.TupleContinuous(full_rect, rect_range)
+
+            self.mpp.subscribe(self._onMpp)
+            self.rect.subscribe(self._onRect)
+
+            # initialize the projected tiles cache
+            self._projectedTilesCache = {}
+            # initialize the raw tiles cache
+            self._rawTilesCache = {}
+
+            # When True, the projected tiles cache should be invalidated
+            self._projectedTilesInvalid = True
+
         self._shouldUpdateImage()
 
     def _onMpp(self, mpp):
@@ -560,10 +623,6 @@ class SinglePointChronoProjection(DataProjection):
             self.selected_wavelength = stream.selected_wavelength
             self.selected_wavelength.subscribe(self._on_selected_wl)
 
-        if hasattr(stream, "selected_time"):
-            self.selected_time = stream.selected_time
-            self.selected_time.subscribe(self._on_selected_time)
-
     def _on_selected_pixel(self, _):
         self._shouldUpdateImage()
 
@@ -571,9 +630,6 @@ class SinglePointChronoProjection(DataProjection):
         self._shouldUpdateImage()
 
     def _on_selected_wl(self, _):
-        self._shouldUpdateImage()
-
-    def _on_selected_time(self, _):
         self._shouldUpdateImage()
 
     def _updateImage(self):
@@ -680,7 +736,7 @@ class LineSpectrumProjection(DataProjection):
             else:
                 t = 0
 
-            spec2d = self.stream._calibrated[:, 0, t, :, :]  # same data but remove useless dims
+            spec2d = self.stream._calibrated[:, t, 0, :, :]  # same data but remove useless dims
             width = self.selectionWidth.value
 
             # Number of points to return: the length of the line
@@ -755,7 +811,10 @@ class LineSpectrumProjection(DataProjection):
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
 
-class TemporalSpectrumProjection(RGBSpatialProjection):
+class TemporalSpectrumProjection(RGBProjection):
+
+    def __new__(cls, stream):
+        return super(TemporalSpectrumProjection, cls).__new__(TemporalSpectrumProjection, stream)
 
     def __init__(self, stream):
 
@@ -816,7 +875,7 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
             width = self.selectionWidth.value
             if width == 1:  # short-cut for simple case
                 raw = model.DataArray(spec2d[:, :, y, x], md)
-                self.image.value = self._projectXY2RGB(raw)
+                self.image.value = self._project2RGB(raw)
                 return
 
             # There are various ways to do it with numpy. As typically the spectrum
@@ -838,7 +897,7 @@ class TemporalSpectrumProjection(RGBSpatialProjection):
 
             mean = datasum / n
             raw = model.DataArray(mean.astype(spec2d.dtype), md)
-            self.image.value = self._projectXY2RGB(raw)
+            self.image.value = self._project2RGB(raw)
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)

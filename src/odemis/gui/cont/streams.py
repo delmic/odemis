@@ -705,7 +705,7 @@ class StreamController(object):
 
         # TODO: should the stream have a way to know when the raw data has changed?
         # => just a spectrum VA, like histogram VA
-        self.stream.image.subscribe(self._on_new_spec_data, init=True)
+        # self.stream.image.subscribe(self._on_new_spec_data, init=True)
 
     @wxlimit_invocation(0.2)
     def _on_new_spec_data(self, _):

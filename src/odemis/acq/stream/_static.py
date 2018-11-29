@@ -786,6 +786,17 @@ class StaticSpectrumStream(StaticStream):
         elif image.shape[-1] == 1:  # Vertical line => select line immediately
             self.selected_line.value = [(0, 0), (0, image.shape[-2] - 1)]
 
+    def _init_projection_vas(self):
+        ''' On RGBStream, the projection is done on RGBSpatialProjection
+        '''
+        pass
+
+    def _init_thread(self):
+        ''' The thread for updating the image on RGBStream resides on DataProjection
+            TODO remove this function when all the streams become projectionless
+        '''
+        pass
+
     # The tricky part is we need to keep the raw data as .raw for things
     # like saving the stream or updating the calibration, but all the
     # display-related methods must work on the calibrated data.
