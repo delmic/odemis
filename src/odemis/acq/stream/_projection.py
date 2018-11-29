@@ -680,7 +680,7 @@ class SinglePointChronoProjection(DataProjection):
             logging.exception("Updating %s image", self.__class__.__name__)
 
 
-class LineSpectrumProjection(DataProjection):
+class LineSpectrumProjection(RGBProjection):
 
     def __init__(self, stream):
 
@@ -700,6 +700,10 @@ class LineSpectrumProjection(DataProjection):
             self.selected_line = stream.selected_line
             self.selected_line.subscribe(self._on_selected_line)
 
+        if hasattr(stream, "selected_pixel"):
+            self.selected_pixel = stream.selected_pixel
+            self.selected_pixel.subscribe(self._on_selected_pixel)
+
     def _on_selected_width(self, _):
         self._shouldUpdateImage()
 
@@ -707,6 +711,9 @@ class LineSpectrumProjection(DataProjection):
         self._shouldUpdateImage()
 
     def _on_selected_time(self, _):
+        self._shouldUpdateImage()
+
+    def _on_selected_pixel(self, _):
         self._shouldUpdateImage()
 
     def _updateImage(self):
@@ -788,6 +795,7 @@ class LineSpectrumProjection(DataProjection):
             pxs_data = self.stream._calibrated.metadata[MD_PIXEL_SIZE]
             pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
             md = self.stream._calibrated.metadata
+            md[model.MD_DIMS] = "YXC"  # RGB format
             md[MD_PIXEL_SIZE] = (None, pxs)  # for the spectrum, use get_spectrum_range()
 
             if self.raw_display:
@@ -808,7 +816,7 @@ class LineSpectrumProjection(DataProjection):
             self.image.value = raw
 
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s image", self.__class__.__name__)
 
 
 class TemporalSpectrumProjection(RGBProjection):
@@ -914,14 +922,14 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
             self.selected_pixel = stream.selected_pixel
             self.selected_pixel.subscribe(self._on_selected_pixel)
 
-        if hasattr(stream, "selected_time"):
-            self.selected_time = stream.selected_time
-            self.selected_time.subscribe(self._on_selected_time)
-
-    def _on_selected_time(self, _):
-        self._shouldUpdateImage()
+        if hasattr(stream, "spectrumBandwidth"):
+            self.spectrumBandwidth = stream.spectrumBandwidth
+            self.spectrumBandwidth.subscribe(self._on_spectrumBandwidth)
 
     def _on_selected_pixel(self, _):
+        self._shouldUpdateImage()
+
+    def _on_spectrumBandwidth(self, _):
         self._shouldUpdateImage()
 
     def _updateImage(self):
@@ -942,20 +950,23 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         try:
             data = self.stream._calibrated
             md = self.stream._calibrated.metadata
-    
+
+            # Average time values if they exist.
+            if data.shape[1] > 1:
+                t = data.shape[1] - 1
+                av_data = numpy.mean(data[0:t], axis=1)
+            else:
+                av_data = data[:, 0, 0, :, :]
+
             # pick only the data inside the bandwidth
             spec_range = self.stream._get_bandwidth_in_pixel()
-            if model.hasVA(self.stream, "selected_time"):
-                t = self.stream._tl_px_values.index(self.selected_time.value)
-            else:
-                t = 0
+
             logging.debug("Spectrum range picked: %s px", spec_range)
     
             if self.raw_display:
-                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
+                av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
                 av_data = img.ensure2DImage(av_data).astype(data.dtype)
                 raw = model.DataArray(av_data, md)
-
                 self.image.value = self._projectXY2RGB(raw)
 
             else:
@@ -963,7 +974,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
     
                 if not self.stream.fitToRGB.value:
                     # TODO: use better intermediary type if possible?, cf semcomedi
-                    av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1, t], axis=0)
+                    av_data = numpy.mean(av_data[spec_range[0]:spec_range[1] + 1], axis=0)
                     av_data = img.ensure2DImage(av_data)
                     rgbim = img.DataArray2RGB(av_data, irange)
 

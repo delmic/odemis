@@ -1620,6 +1620,7 @@ class AnalysisTab(Tab):
             (viewports[6],
              {"name": "Spatial spectrum",
               "stream_classes": (SpectrumStream, CLStream,),
+              "projection_class": LineSpectrumProjection,
               }),
             (viewports[7],
              {"name": "Temporal spectrum",

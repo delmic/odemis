@@ -47,7 +47,7 @@ from odemis.util import units, spectrum, peak, img
 import wx
 from odemis.util import no_conflict
 from odemis.acq.stream._projection import TemporalSpectrumProjection, \
-    RGBSpatialSpectrumProjection, DataProjection
+    RGBSpatialSpectrumProjection, DataProjection, LineSpectrumProjection
 
 
 class ViewPort(wx.Panel):
@@ -1456,7 +1456,7 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        ss = self.view.stream_tree.get_streams_and_proj_by_type(RGBSpatialSpectrumProjection)
+        ss = self.view.stream_tree.get_streams_and_proj_by_type(LineSpectrumProjection)
         if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
@@ -1475,6 +1475,7 @@ class SpatialSpectrumViewport(ViewPort):
         if hasattr(self.stream, "selected_line"):
             self.stream.selected_line.subscribe(self._on_line_select, init=True)
         self.stream.selected_pixel.subscribe(self._on_pixel_select)
+        self.stream.image.subscribe(self._on_new_data)
 
     def _on_pixel_select(self, pixel):
         """ Clear the marking line when the selected pixel is cleared """
@@ -1493,9 +1494,9 @@ class SpatialSpectrumViewport(ViewPort):
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.stream.get_line_spectrum()
-        self.current_line = line
+        self.Refresh()
 
+    def _on_new_data(self, data):
         if data is not None:
             spectrum_range, unit_x = self.stream.get_spectrum_range()
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]

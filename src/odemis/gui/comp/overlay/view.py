@@ -475,7 +475,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
         ctx.set_source_rgba(*self.colour)
 
-        if self.val.value is not None:
+        if self.val.value is not None and self.cnvs.range_x is not None and self.cnvs.range_y is not None:
             val = self.val.value
             if self.map_y_from_x:
                 # Maps Y and also snap X to the closest X value in the data
