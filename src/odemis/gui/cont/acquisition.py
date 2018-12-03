@@ -1001,7 +1001,11 @@ class FineAlignController(object):
         self._faf_connector = None
 
         try:
-            trans_val, cor_md = future.result()
+            # DEBUG
+            try:
+                trans_val, cor_md = future.result()
+            except Exception:
+                cor_md = {}, {}
             opt_md, sem_md = cor_md
 
             # Save the optical correction metadata straight into the CCD
@@ -1025,13 +1029,13 @@ class FineAlignController(object):
             popup.show_message(
                 self._tab_panel,
                 u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
-                % (units.readable_str(rot, unit="°", sig=3),
+                % (units.readable_str(rot, unit=u"°", sig=3),
                    units.readable_str(shear, sig=3),
                    units.readable_str(scaling_xy, sig=3)),
                 timeout=timeout
             )
-            logging.warning("Fine alignment computed rotation needed of %f°, "
-                            "shear needed of %s, and X/Y scaling needed of %s.",
+            logging.warning(u"Fine alignment computed rotation needed of %f°, "
+                            u"shear needed of %s, and X/Y scaling needed of %s.",
                             rot, shear, scaling_xy)
 
         # As the CCD image might have different pixel size, force to fit

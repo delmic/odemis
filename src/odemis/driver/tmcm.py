@@ -1513,7 +1513,7 @@ class TMCLController(model.Actuator):
             logging.exception("Failed to read the temperature")
             return
 
-        logging.info("Temperature 0 = %g °C, temperature 1 = %g °C", t0, t1)
+        logging.info(u"Temperature 0 = %g °C, temperature 1 = %g °C", t0, t1)
 
         self.temperature._value = t0
         self.temperature.notify(t0)

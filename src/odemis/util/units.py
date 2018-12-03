@@ -110,16 +110,24 @@ def si_scale_val(val, si):
     return val
 
 
-def si_scale_list(values, si=None):
-    """ Scales a list of numerical values using the same metric scale """
+def si_scale_list(values, prefix=None):
+    """
+    Scales a list of numerical values using the same metric scale
+    values (list of numbers)
+    prefix (None or SI_PREFIXES): the unit prefix to use. If None, the best one
+      will be picked, based on the values.
+    returns:
+       rescaled values (list of floats)
+       prefix (str): the unit prefix
+    """
     if values:
-        if si is None:
+        if prefix is None:
             marker = max(values)
             divisor, prefix = get_si_scale(marker)
-        elif si in SI_PREFIXES:
-            divisor, prefix = (10 ** SI_PREFIXES[si]), si
+        elif prefix in SI_PREFIXES:
+            divisor = 10 ** SI_PREFIXES[prefix]
         else:
-            raise ValueError("Si %s is invalid!" % si)
+            raise ValueError(u"Prefix %s is unknown" % prefix)
         return [v / divisor for v in values], prefix
     return None, u""
 
@@ -159,10 +167,10 @@ def decompose_si_prefix(str_val, unit=None):
     """
 
     if unit:
-        match = re.match(r"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
+        match = re.match(ur"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
                          str_val.strip())
     else:  # Look for any unit
-        match = re.match(r"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
+        match = re.match(ur"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
                          str_val.strip())
 
     if match:
@@ -171,7 +179,7 @@ def decompose_si_prefix(str_val, unit=None):
         if (rprefix is not None and runit is None and
             (not unit or rprefix == unit)):
             rprefix, runit = runit, rprefix
-        if rprefix == "u":
+        if rprefix == u"u":
             rprefix = u"µ"
         return val, rprefix, runit
     else:
