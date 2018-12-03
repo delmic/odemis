@@ -173,6 +173,7 @@ class BackendStarter(object):
                           size=(800, 800),
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
+        frame.SetMinClientSize((400, 200)) 
         # TODO: use ListCtrl
         # self._text = wx.TextCtrl(frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
         self._list = wx.ListCtrl(frame,
