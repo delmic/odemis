@@ -490,7 +490,8 @@ class TestHDF5IO(unittest.TestCase):
         """
         # TODO: write testcase for WL_LIST and MD_POLYNOMIAL
         # create 2 simple greyscale images (sem overview, Spec): XY, XYZTC (XY ebeam pos scanned, C Spec info)
-        sizes = [(512, 256), (100, 110, 1, 1, 200)]  # different sizes to ensure different acquisitions
+
+        sizes = [(512, 256), (100, 50, 1, 128, 128)]  # different sizes to ensure different acquisitions
         # Create fake current over time report
         cot = [[time.time(), 1e-12]]
         for i in range(1, 171):
@@ -516,6 +517,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      #model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
                      model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_TIME_LIST: [1e-9 * i for i in range(sizes[1][-2])],
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
@@ -696,6 +698,8 @@ class TestHDF5IO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_TRIGGER_DELAY], md[model.MD_TRIGGER_DELAY])
             if model.MD_TRIGGER_RATE in md:
                 self.assertEqual(im.metadata[model.MD_TRIGGER_RATE], md[model.MD_TRIGGER_RATE])
+                cot = md[model.MD_TIME_LIST]
+                self.assertListEqual(im.metadata[model.MD_TIME_LIST], cot)
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 # Note: technically, it could be a list or tuple and still be fine

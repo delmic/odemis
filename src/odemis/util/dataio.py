@@ -70,12 +70,15 @@ def data_to_static_streams(data):
                 # Streak camera data. Create a temporal spectrum independent of operating mode (Focus or Operate)
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
                 klass = stream.StaticTemporalSpectrumStream
+
             else:
                 # Spectrum: either it's obvious according to metadata, or no metadata
                 # but lots of wavelengths, so no other way to display
                 name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 klass = stream.StaticSpectrumStream
+
         elif model.MD_TIME_LIST in d.metadata and ti >= 0 and d.shape[ti] > 1:
+
             # Time data (with XY)
             logging.info("Converting time data into spectrum data")
             # HACK: for now we don't have a good static stream and GUI tools for

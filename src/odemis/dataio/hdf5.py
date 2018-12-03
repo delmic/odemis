@@ -209,6 +209,7 @@ def _add_image_info(group, dataset, image):
         try:
             group["ZOffset"] = pos[2]
             _h5svi_set_state(group["ZOffset"], ST_REPORTED)
+            group["ZOffset"].attrs["UNIT"] = "m"  # our extension
 
         except IndexError:
             group["ZOffset"] = 0
