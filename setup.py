@@ -68,6 +68,8 @@ if sys.platform.startswith('linux'):
                   ('share/odemis/sim', glob.glob('install/linux/usr/share/odemis/sim/*.odm.yaml')),
                   ('share/odemis/examples', glob.glob('install/linux/usr/share/odemis/examples/*.odm.yaml')),
                   ('share/odemis/hwtest', glob.glob('install/linux/usr/share/odemis/hwtest/*.odm.yaml')),
+                  # The key(s) for the bug reporter
+                  ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.key')),
                   # /usr/lib/odemis/plugins/ contains the plugins to be _loaded_,
                   # in /usr/share/, which put all the plugins which are available.
                   ('share/odemis/plugins/', glob.glob('plugins/*.py')),
@@ -79,7 +81,6 @@ if sys.platform.startswith('linux'):
                   ('share/icons/hicolor/256x256/apps/', glob.glob('install/linux/usr/share/icons/hicolor/256x256/apps/odemis*.png')),
                   ('share/doc/odemis/', glob.glob('doc/*.txt')),
                   ('share/doc/odemis/scripts/', glob.glob('scripts/*.py') + glob.glob('scripts/*.m')),
-                  ('share/odemis/osticket.key')
                   ]
     # TODO: see if we could use entry_points instead
     scripts = ['install/linux/usr/bin/odemisd',
