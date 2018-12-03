@@ -274,7 +274,6 @@ class AxisLegend(wx.Panel):
         self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
         self._vtp_ratio = None  # Ratio to convert value to pixel
         self._pixel_space = None  # Number of available pixels
-
         self.on_size()  # Force a refresh
 
     @property
@@ -293,11 +292,10 @@ class AxisLegend(wx.Panel):
 
     @range.setter
     def range(self, val):
-        if val and val[0] > val[1]:
-            raise ValueError("The range values need to be ordered!")
-        elif self._value_range != val:
+        if self._value_range != val:
             self._value_range = val
-            self.Refresh()
+
+        self.Refresh()
 
     def clear(self):
         self._value_range = None
@@ -330,7 +328,7 @@ class AxisLegend(wx.Panel):
         if rng[0] == rng[1]:
             sig = None
         else:
-            ratio_rng = max(abs(v) for v in rng) / (rng[1] - rng[0])
+            ratio_rng = max(abs(v) for v in rng) / (max(rng) - min(rng))
             sig = max(3, 1 + math.ceil(math.log10(ratio_rng * len(self._tick_list))))
 
         # Set Font

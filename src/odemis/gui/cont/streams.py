@@ -51,6 +51,7 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
+from odemis.acq.stream import MeanSpectrumProjection
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -165,6 +166,8 @@ class StreamController(object):
 
         if hasattr(stream, "spectrumBandwidth"):
             self._add_wl_ctrls()
+            self.mean_spec_proj = MeanSpectrumProjection(self.stream)
+            self.mean_spec_proj.image.subscribe(self._on_new_spec_data, init=True)
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
                 
@@ -705,18 +708,14 @@ class StreamController(object):
                           ctrl_2_va=_get_bandwidth)
         self.entries[se.name] = se
 
-        # TODO: should the stream have a way to know when the raw data has changed?
-        # => just a spectrum VA, like histogram VA
-        self.stream.image.subscribe(self._on_new_spec_data, init=True)
-
     @wxlimit_invocation(0.2)
-    def _on_new_spec_data(self, _):
-        if not self or not self._sld_spec:
+    def _on_new_spec_data(self, gspec):
+        if not self or not self._sld_spec or gspec is None:
+            # if no new calibration, or empty data
             return  # already deleted
 
         logging.debug("New spec data")
         # Display the global spectrum in the visual range slider
-        gspec = self.stream.getMeanSpectrum()
         if len(gspec) <= 1:
             logging.warning("Strange spectrum of len %d", len(gspec))
             return
