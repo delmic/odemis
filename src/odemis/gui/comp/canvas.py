@@ -635,14 +635,15 @@ class BufferedCanvas(wx.Panel):
         :param scale: the scale of the world compared to the buffer.
             I.e.: with scale 2, 100px of world data are displayed using 200px of buffer space.
             (The world is zoomed in with a scale > 1)
-        :param offset (int, int): the returned value is translated using the offset
+        :param offset (float, float): the returned value is translated using the offset
 
-        :return: (int or float, int or float)
+        :return: (float, float): the coordinates in the buffer.
+          They are _not_ rounded to the closest pixel, so the caller needs to
+          use round() to get to an exact pixel.
 
         """
-
-        return (round((p_pos[0] - p_buff_center[0]) * scale + offset[0]),
-                round(-(p_pos[1] - p_buff_center[1]) * scale + offset[1]))
+        return ((p_pos[0] - p_buff_center[0]) * scale + offset[0],
+                -(p_pos[1] - p_buff_center[1]) * scale + offset[1])
 
     @classmethod
     def buffer_to_phys_pos(cls, b_pos, p_buffer_center, scale, offset=(0, 0)):
