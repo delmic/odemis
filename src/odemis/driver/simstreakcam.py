@@ -24,6 +24,7 @@ from odemis.model import oneway
 import time
 import numpy
 import os
+import numbers
 
 
 class ReadoutCamera(model.DigitalCamera):
@@ -135,7 +136,7 @@ class ReadoutCamera(model.DigitalCamera):
         prev_binning, self._binning = self._binning, value
 
         # adapt resolution
-        # TODO check if really necessary
+        # TODO check if really necessary  - can be removed??
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
         old_resolution = self.resolution.value
@@ -182,7 +183,7 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
-        Behaviour is unspecified if the acquisition is already running.  # TODO still True?
+        Behaviour is unspecified if the acquisition is already running.  # TODO still True???
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronized only with one Event at a time.
@@ -217,7 +218,7 @@ class ReadoutCamera(model.DigitalCamera):
         Update the metadata.
         """
         super(ReadoutCamera, self).updateMetadata(md)
-        if model.MD_LENS_MAG in md:
+        if model.MD_LENS_MAG in md and self._spectrograph:
             self._updateWavelengthList()
 
     def _mergeMetadata(self, md):
@@ -231,9 +232,9 @@ class ReadoutCamera(model.DigitalCamera):
 
         for md_dev in md_devices:
             for key in md_dev.keys():
-                if key not in md.keys():
+                if key not in md:
                     md[key] = md_dev[key]
-                else:
+                elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
                     md[key] = md[key] + ", " + md_dev[key]
                     # md[key].append(md_dev[key])  # TODO make nice  ", ".join(c)
         return md
@@ -366,7 +367,7 @@ class StreakUnit(model.HwComponent):
                    0.0000002, 0.0000005,
                    0.000001, 0.000002, 0.000005, 0.00001, 0.00002, 0.00005, 0.0001, 0.0002, 0.0005,
                    0.001, 0.002, 0.005, 0.01}
-        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange)
+        self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange, unit="s")
 
         self._metadata[model.MD_STREAK_TIMERANGE] = self.timeRange.value
         self._metadata[model.MD_STREAK_MCPGAIN] = self.MCPgain.value
@@ -400,13 +401,21 @@ class StreakUnit(model.HwComponent):
     def _setTimeRange(self, value):
         """
         Updates the timeRange VA.
-        :parameter value: (int) value to be set
-        :return: (int) current time range
+        :parameter value: (float) value to be set
+        :return: (float) current time range
         """
-        # when changing the timeRange, set MCPGain zero for HW safety reasons
-        self.MCPgain.value = 0
         logging.debug("Reporting time range %s for streak unit.", value)
         self._metadata[model.MD_STREAK_TIMERANGE] = value
+
+        # set corresponding trigger delay
+        tr2d = self.parent._delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+        if tr2d:
+            key = util.find_closest(value, tr2d.keys())
+            if util.almost_equal(key, value):
+                self.parent._delaybox.triggerDelay.value = tr2d[key]
+            else:
+                logging.warning("Time range %s is not a key in MD for time range to "
+                                "trigger delay calibration" % value)
 
         return value
 
@@ -427,11 +436,26 @@ class DelayGenerator(model.HwComponent):
 
         self._metadata[model.MD_HW_VERSION] = "Simulated delay generator DG645"
 
-        range_trigDelay = [0.0, 1]  # sec TODO  check which values were actually allowed
-        self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, setter=self._setTriggerDelay)
+        range_trigDelay = [0.0, 1]  # sec
+        # set default value according to timeRange setting (look up in MD)
+        self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, setter=self._setTriggerDelay, unit="s")
 
         self._metadata[model.MD_TRIGGER_DELAY] = self.triggerDelay.value
         self._metadata[model.MD_TRIGGER_RATE] = 1000000
+
+    # override HwComponent.updateMetadata
+    def updateMetadata(self, md):
+
+        if model.MD_TIME_RANGE_TO_DELAY in md:
+            for timeRange, delay in md[model.MD_TIME_RANGE_TO_DELAY].iteritems():
+                if not isinstance(delay, numbers.Real):
+                    raise ValueError("Trigger delay %s corresponding to time range %s is not of type float."
+                                     "Please check calibration file for trigger delay." % (delay, timeRange))
+                if not 0. <= delay <= 1.:
+                    raise ValueError("Trigger delay %s corresponding to time range %s is not in range (0, 1)."
+                                     "Please check the calibration file for the trigger delay." % (delay, timeRange))
+
+        super(DelayGenerator, self).updateMetadata(md)
 
     def _setTriggerDelay(self, value):
         """
@@ -464,27 +488,28 @@ class StreakCamera(model.HwComponent):
         """
         super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
 
-        if children:
-            try:
-                kwargs = children["readoutcam"]
-            except Exception:
-                raise
-            self._readoutcam = ReadoutCamera(parent=self,
-                                             spectrograph=children.get("spectrograph"),
-                                             daemon=daemon, **kwargs)
-            self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
-            try:
-                kwargs = children["streakunit"]
-            except Exception:
-                raise
-            self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._streakunit)  # add streakunit to children-VA
-            try:
-                kwargs = children["delaybox"]
-            except Exception:
-                raise
-            self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._delaybox)  # add delaybox to children-VA
+        children = children or {}
+
+        try:
+            kwargs = children["readoutcam"]
+        except Exception:
+            raise
+        self._readoutcam = ReadoutCamera(parent=self,
+                                         spectrograph=children.get("spectrograph"),
+                                         daemon=daemon, **kwargs)
+        self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
+        try:
+            kwargs = children["streakunit"]
+        except Exception:
+            raise
+        self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
+        self.children.value.add(self._streakunit)  # add streakunit to children-VA
+        try:
+            kwargs = children["delaybox"]
+        except Exception:
+            raise
+        self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
+        self.children.value.add(self._delaybox)  # add delaybox to children-VA
 
     def terminate(self):
         """

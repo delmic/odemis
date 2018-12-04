@@ -21,7 +21,6 @@ from __future__ import division
 import logging
 from odemis import model, util
 from odemis.driver import simstreakcam
-from odemis.driver import semcomedi
 import time
 from odemis.driver import andorshrk
 
@@ -121,6 +120,32 @@ class TestSimStreakCam(unittest.TestCase):
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
 
+        cls.delaybox._metadata[model.MD_TIME_RANGE_TO_DELAY] = \
+            {
+            1.e-9: 7.99e-9,
+            2.e-9: 9.63e-9,
+            5.e-9: 33.2e-9,
+            10.e-9: 45.9e-9,
+            20.e-9: 66.4e-9,
+            50.e-9: 102e-9,
+            100.e-9: 169e-9,
+            200.e-9: 302e-9,
+            500.e-9: 731e-9,
+            1.e-6: 1.39e-6,
+            2.e-6: 2.69e-6,
+            5.e-6: 7.02e-6,
+            10.e-6: 13.8e-6,
+            20.e-6: 26.7e-6,
+            50.e-6: 81.6e-6,
+            100.e-6: 161e-6,
+            200.e-6: 320e-6,
+            500.e-6: 798e-6,
+            1.e-3: 1.62e-3,
+            2.e-3: 3.18e-3,
+            5.e-3: 7.88e-3,
+            10.e-3: 15.4e-3,
+            }
+
     @classmethod
     def tearDownClass(cls):
         cls.streakcam.terminate()
@@ -214,14 +239,17 @@ class TestSimStreakCam(unittest.TestCase):
 
     def test_TimeRange(self):
         """Test time range VA for sweeping of streak unit."""
-        # change MCPgain VA
-        self.streakunit.MCPgain.value = 4
-        # change timeRange VA to value in range
-        self.streakunit.timeRange.value = 0.000005
-        timeRange = self.streakunit.timeRange.value
-        self.assertAlmostEqual(timeRange, 0.000005)
-        # check MCPgain is zero, whenever changing the timeRange
-        self.assertEqual(self.streakunit.MCPgain.value, 0)
+        for timeRange in self.streakunit.timeRange.choices:
+            # change timeRange VA to value in range
+            self.streakunit.timeRange.value = util.find_closest(timeRange, self.streakunit.timeRange.choices)
+            self.assertAlmostEqual(self.streakunit.timeRange.value, timeRange)
+
+            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+            if tr2d:
+                key = util.find_closest(timeRange, tr2d.keys())
+                # check that the corresponding trigger delay is set when changing the .timeRange VA
+                md_triggerDelay = tr2d[key]
+                self.assertAlmostEqual(self.delaybox.triggerDelay.value, md_triggerDelay)
 
         # request value, which is not in choices of VA
         with self.assertRaises(IndexError):
@@ -271,7 +299,7 @@ class TestSimStreakCam(unittest.TestCase):
         self.assertIsNotNone(img.metadata[model.MD_TIME_LIST])
 
     def test_acq_subscribe(self):
-        """Acquire single image and receive it via the dataport."""
+        """Acquire single image."""
         self.readoutcam.binning.value = (2, 2)
         self.readoutcam.exposureTime.value = 1
 
@@ -282,8 +310,8 @@ class TestSimStreakCam(unittest.TestCase):
         def callback(dataflow, image):
             self.readoutcam.data.unsubscribe(callback)
             time.sleep(2)
-            # TODO as not handled in unsubscribe anymore
-            # self.assertEqual(self.streakunit.MCPgain.value, 0)  # when unsubscribe, mcpGain should be zero
+            # Note: MCPGain set to 0 is handled by stream not by driver except when changing from
+            # "Operate" mode to "Focus" mode
             size = self.readoutcam.resolution.value
             self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
