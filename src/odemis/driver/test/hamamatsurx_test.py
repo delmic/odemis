@@ -21,21 +21,13 @@ from __future__ import division
 import logging
 from odemis import model, util
 from odemis.driver import hamamatsurx
-from odemis.driver import semcomedi
 import time
 from odemis.driver import andorshrk
-
-import socket
-import numpy
-from matplotlib import pyplot as plt
-import matplotlib.animation as animation
-from odemis.cli.video_displayer import VideoDisplayer
-import threading
 
 import unittest
 from unittest.case import skip
 
-from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized  # TODO do we need VirtualStaticTestCam?????
+from cam_test_abs import VirtualTestCam, VirtualTestSynchronized  # TODO do we need VirtualStaticTestCam?????
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -48,7 +40,7 @@ CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 
 STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
 
-KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host="piel-volstro", port=1001, children=STREAK_CHILDREN)
+KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001, children=STREAK_CHILDREN)
 
 # test with spectrograph
 CLASS_SPECTROGRAPH = andorshrk.Shamrock
@@ -98,11 +90,11 @@ class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest
 
         super(TestHamamatsurxCamGenericCamSynchronized, cls).setUpClass()
 
-        cls.streakcam = cls.camera
+        cls.streakcam = cls.ccd
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:
-                cls.camera = child
+                cls.ccd = child
 
     @classmethod
     def tearDownClass(cls):
@@ -126,28 +118,41 @@ class TestHamamatsurxCam(unittest.TestCase):
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
 
+        cls.delaybox._metadata[model.MD_TIME_RANGE_TO_DELAY] = \
+            {
+            1.e-9: 7.99e-9,
+            2.e-9: 9.63e-9,
+            5.e-9: 33.2e-9,
+            10.e-9: 45.9e-9,
+            20.e-9: 66.4e-9,
+            50.e-9: 102e-9,
+            100.e-9: 169e-9,
+            200.e-9: 302e-9,
+            500.e-9: 731e-9,
+            1.e-6: 1.39e-6,
+            2.e-6: 2.69e-6,
+            5.e-6: 7.02e-6,
+            10.e-6: 13.8e-6,
+            20.e-6: 26.7e-6,
+            50.e-6: 81.6e-6,
+            100.e-6: 161e-6,
+            200.e-6: 320e-6,
+            500.e-6: 798e-6,
+            1.e-3: 1.62e-3,
+            2.e-3: 3.18e-3,
+            5.e-3: 7.88e-3,
+            10.e-3: 15.4e-3,
+            }
+
     @classmethod
     def tearDownClass(cls):
         cls.streakcam.terminate()
 
-    def test_error(self):  # TODO more testcases?
+    def test_error(self):  # TODO more testcases
         """Test the different RemoteEx errors possible."""
-        # request invalid parameter: EC = 7
-        # with self.assertRaises(hamamatsurx.RemoteExError):  # already handled in odemis
-        #     self.streakunit.timeRange.value = "WrongMode"
-
         # send wrong command, will timeout
-        # with self.assertRaises(hamamatsurx.RemoteExError):
-        #     self.streakcam.sendCommand("Appinfoo", "type")
         with self.assertRaises(util.TimeoutError):
             self.streakcam.sendCommand("Appinfoo", "type")
-
-        # close connection and try sending a command
-        # with self.assertRaises(socket.error):  # TODO which error?? this one is not correct. thread fails ..
-        #     self.streakcam._closeConnection()
-        # self.assertFalse(self.streakcam.t_receiver.isAlive())  # check connection lost
-        msg = self.streakcam.sendCommand("Appinfo", "type")  # now send again a simple command
-        self.assertEqual(msg, ["HPDTA"])  # will fail if not properly reconnected
 
     ### General commands #####################################################
 
@@ -172,6 +177,7 @@ class TestHamamatsurxCam(unittest.TestCase):
 
         # set value > 1 sec
         self.readoutcam.exposureTime.value = 2  # 2s
+        cur_exp = self.readoutcam.exposureTime.value
         # get exposureTime via RemoteEx
         remoteEx_exp = self.readoutcam.GetCamExpTime()
         self.assertEqual(cur_exp, remoteEx_exp)
@@ -194,8 +200,11 @@ class TestHamamatsurxCam(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.readoutcam.binning.value = (3, 3)
         # now test clip function
-        self.readoutcam.binning.value = self.readoutcam.binning.clip((3, 3))
-        self.assertEqual(self.readoutcam.binning.value, (1, 1))
+        self.readoutcam.binning.value = self.readoutcam.binning.clip((3.5, 3.5))
+        self.assertEqual(self.readoutcam.binning.value, (4, 4))
+
+        # change back to 2 x 2 which is normally  used
+        self.readoutcam.binning.value = (2, 2)
 
     ### Delay generator #####################################################
     def test_TriggerDelay(self):
@@ -216,19 +225,19 @@ class TestHamamatsurxCam(unittest.TestCase):
             self.delaybox.triggerDelay.value = -1
 
     ### Streakunit #####################################################
-    def test_streakMode(self):
+    def test_StreakMode(self):
         """Test operating mode VA of streak unit."""
         self.streakunit.streakMode.value = False
         # check MCP Gain is 0 after changing to Focus mode!
-        mcpGain = self.streakunit.GetMCPgain()
+        mcpGain = self.streakunit.GetMCPGain()
         self.assertEqual(mcpGain, 0)
         remoteEx_mode = self.streakunit.GetStreakMode()
-        self.assertEqual(remoteEx_mode, "Focus")
+        self.assertFalse(remoteEx_mode)
 
         # change mode VA
         self.streakunit.streakMode.value = True
         remoteEx_mode = self.streakunit.GetStreakMode()
-        self.assertEqual(remoteEx_mode, "Operate")
+        self.assertTrue(remoteEx_mode)
         self.assertTrue(self.streakunit.streakMode.value)
 
         # change to focus mode, change MCP Gain to a value slightly > 0 and then request again focus mode
@@ -239,10 +248,10 @@ class TestHamamatsurxCam(unittest.TestCase):
         self.streakcam.DevParamSet(self.streakunit.location, "MCP Gain", gain)
         self.streakunit.streakMode.value = False
         # MCP Gain should be automatically 0 after changing to Focus mode!
-        mcpGain = self.streakunit.GetMCPgain()
+        mcpGain = self.streakunit.GetMCPGain()
         self.assertEqual(mcpGain, 0)
         remoteEx_mode = self.streakunit.GetStreakMode()
-        self.assertEqual(remoteEx_mode, "Focus")
+        self.assertFalse(remoteEx_mode)
         self.assertFalse(self.streakunit.streakMode.value)
 
         # now check switching from operate to focus mode, with a MCP gain > 0.
@@ -253,10 +262,10 @@ class TestHamamatsurxCam(unittest.TestCase):
         time.sleep(0.5)  # give it some time to actually change the value
         self.streakunit.streakMode.value = False
         # MCP Gain should be automatically 0 after changing to Focus mode!
-        mcpGain = self.streakunit.GetMCPgain()
+        mcpGain = self.streakunit.GetMCPGain()
         self.assertEqual(mcpGain, 0)
         remoteEx_mode = self.streakunit.GetStreakMode()
-        self.assertEqual(remoteEx_mode, "Focus")
+        self.assertFalse(remoteEx_mode)
         self.assertFalse(self.streakunit.streakMode.value)
 
     def test_MCPGain(self):
@@ -274,33 +283,26 @@ class TestHamamatsurxCam(unittest.TestCase):
         # compare previous and current gain
         self.assertNotEqual(prev_MCPgain, self.streakunit.MCPgain.value)
         # check MCPgain-VA reports the same value as RemoteEx
-        remoteEx_gain = self.streakunit.GetMCPgain()
+        remoteEx_gain = self.streakunit.GetMCPGain()
         self.assertEqual(cur_MCPgain, remoteEx_gain)
 
     def test_TimeRange(self):
         """Test time range VA for sweeping of streak unit."""
-        timeRange = self.streakunit.timeRange.value
-        remoteEx_timeRange = self.streakunit.GetTimeRange()
-        self.assertEqual(timeRange, remoteEx_timeRange)
+        for timeRange in self.streakunit.timeRange.choices:
+            # change timeRange VA to value in range
+            self.streakunit.timeRange.value = util.find_closest(timeRange, self.streakunit.timeRange.choices)
+            self.assertAlmostEqual(self.streakunit.timeRange.value, timeRange)
 
-        # change timeRange VA to value in range
-        self.streakunit.timeRange.value = util.find_closest(0.000005, self.streakunit.timeRange.choices)  # 5us
-        timeRange = self.streakunit.timeRange.value
-        remoteEx_timeRange = self.streakunit.GetTimeRange()
-        self.assertAlmostEqual(timeRange, 0.000005)
-        self.assertAlmostEqual(remoteEx_timeRange, 0.000005)
+            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+            if tr2d:
+                key = util.find_closest(timeRange, tr2d.keys())
+                # check that the corresponding trigger delay is set when changing the .timeRange VA
+                md_triggerDelay = tr2d[key]
+                self.assertAlmostEqual(self.delaybox.triggerDelay.value, md_triggerDelay)
 
         # request value, which is not in choices of VA
         with self.assertRaises(IndexError):
             self.streakunit.timeRange.value = 0.000004  # 4us
-
-        # test to set all possible values in choices, as we encountered problems
-        # with some values
-        for choice in self.streakunit.timeRange.choices:  # TODO run this testcase and check which values cased the trouble and why
-            self.streakunit.timeRange.value = choice
-            remoteEx_timeRange = self.streakunit.GetTimeRange()
-            timeRange = self.streakunit.timeRange.value
-            self.assertAlmostEqual(timeRange, remoteEx_timeRange)
 
     ### Metadata #####################################################
 
@@ -405,14 +407,15 @@ class TestHamamatsurxCam(unittest.TestCase):
         def callback(dataflow, image):
             # self.streakcam.AcqAcqMonitor("Off")  # TODO?
             self.readoutcam.data.unsubscribe(callback)
-            self.assertEqual(self.streakunit.MCPgain.value, 0)  # when unsubscribe, mcpGain should be zero
+            # Note: MCPGain set to 0 is handled by stream not by driver except when changing from
+            # "Operate" mode to "Focus" mode
             size = self.readoutcam.resolution.value
             self.assertEqual(image.shape, size[::-1])  # invert size
             self.assertIn(model.MD_EXP_TIME, image.metadata)
             logging.debug("Got image.")
 
         self.readoutcam.data.subscribe(callback)
-        time.sleep(5)  # TODO check if needed similar as in streak simCam
+        time.sleep(5)
 
     def test_acqSync_SingleLive_RingBuffer_subscribe(self):
         """Test to acquire one synchronized image in Live mode by subscribing."""
@@ -531,55 +534,6 @@ class TestHamamatsurxCam(unittest.TestCase):
         self.assertEqual(len(self.readoutcam.queue_events), 0)
 
 
-    # TODO some old stuff I will delete when we are sure we don't need any of that...
-
-    # def test_acq_Live(self):
-    #     """Acquire single image and receive it via the dataport."""
-    #
-    #     # TODO
-    #     # 1.    wait for response acqStart
-    #     # 2.    wait until AsyncCommandPreparing = False
-    #     # 3.    collect data
-    #     self.stop = False
-    #     window = VideoDisplayer("Live from ", (500, 500))
-    #
-    #     # self.streakcam.sendCommand("AcqStatus")
-    #     # self.streakcam._asyncCommandStatus()
-    #     time.sleep(0.4)  # TODO AcqStop ansynch??? runs into trouble when not time.sleep...
-    #     self.streakcam.AcqStart("Live")  # acquire continuously image
-    #
-    #     # while self.streakcam.sendCommand("AcqStatus")[0] == "busy":
-    #
-    #     exp_time = self.readoutcam._get_cam_exposure_time()
-    #     t = threading.Thread(target=self._get_image, args=(window, exp_time))
-    #     t.start()
-    #
-    #     # visualize
-    #     window.waitQuit()
-    #
-    #     # self.streakcam.sendCommand("AcqStatus")  # ['busy', 'Live']
-    #     self.stop = True
-    #     self.streakcam.sendCommand("AcqStop")  # ['idle']
-    #     print "stop here"
-    #     # self.assertEqual(img.shape, ?)
-    #
-    #
-    #     # load an image
-    #     # self.streakcam.sendCommand("ImgLoad", "img", "C:/Users/Hamamatsu/Desktop/test images/test seq0001.img")
-    #     # 0x01*2**8 + 0x8f  (0*16 + 256 + 8*16 + 15 = 399)
-    #
-    # def _get_image(self, window, exp_time):
-    #     while self.stop == False:
-    #         # time.sleep(exp_time)
-    #         while int(self.streakcam.AsyncCommandStatus()[1]):  # iPreparing = True
-    #             logging.debug("Waiting while preparing asynchronous command.")
-    #             print "================================================================"
-    #         else:
-    #             img = self.streakcam.getImageData()
-    #             print "receive data -----------------------------------------------"
-    #             window.new_image(img)
-
-
 class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
     """Test the Hamamatsu streak camera class with real streak camera HW and
      a simulated spectrograph"""
@@ -592,7 +546,7 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
                     "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
 
-        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="DESKTOP-E6H9DJ0",
+        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="172.16.4.2",
                                                  port=1001, children=STREAK_CHILDREN)
 
         for child in cls.streakcam.children.value:
@@ -602,6 +556,32 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
                 cls.streakunit = child
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
+
+        cls.delaybox._metadata[model.MD_TIME_RANGE_TO_DELAY] = \
+            {
+            1.e-9: 7.99e-9,
+            2.e-9: 9.63e-9,
+            5.e-9: 33.2e-9,
+            10.e-9: 45.9e-9,
+            20.e-9: 66.4e-9,
+            50.e-9: 102e-9,
+            100.e-9: 169e-9,
+            200.e-9: 302e-9,
+            500.e-9: 731e-9,
+            1.e-6: 1.39e-6,
+            2.e-6: 2.69e-6,
+            5.e-6: 7.02e-6,
+            10.e-6: 13.8e-6,
+            20.e-6: 26.7e-6,
+            50.e-6: 81.6e-6,
+            100.e-6: 161e-6,
+            200.e-6: 320e-6,
+            500.e-6: 798e-6,
+            1.e-3: 1.62e-3,
+            2.e-3: 3.18e-3,
+            5.e-3: 7.88e-3,
+            10.e-3: 15.4e-3,
+            }
 
     @classmethod
     def tearDownClass(cls):
