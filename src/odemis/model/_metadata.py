@@ -143,6 +143,10 @@ MD_HFW_SLOPE = "HFW slope"  # (float, float) HFW related SEM image shift, slope 
 MD_SPOT_SHIFT = "Spot shift"  # (float, float), SEM spot shift in percentage of HFW
 MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping time range to trigger delay in streak camera
 
+# The following metadata is for correction on the Nikon Confocal
+# dict (int (resolution X) -> dict (float (dwell time) -> tuple of 4 floats (correction factors)))
+MD_SHIFT_LOOKUP = "Pixel shift compensation table"
+
 # The following metadata is used to store specific known positions for the
 # actuators.
 MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)
