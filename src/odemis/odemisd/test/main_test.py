@@ -34,6 +34,7 @@ import subprocess
 import sys
 import time
 import unittest
+import yaml
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -269,6 +270,171 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("testdaemon.log")
+
+    @timeout(40)
+    def test_persistent_data(self):
+        """Test initialization with persistent data"""
+
+        # Start backend with persistent data specified in yaml file
+        filename = "sim-persistent.odm.yaml"
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        if os.path.isfile("test-settings.yaml"):
+            os.remove("test-settings.yaml")
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
+        cmdline = "--log-level=2 --log-target=test.log --daemonize --settings=test-settings.yaml %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(1)  # give some time to start
+        ret = self._wait_backend_starts(10)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+        # Check if default properties for stage.speed are set properly
+        stage = model.getComponent(role='stage')
+        self.assertEqual(stage.speed.value, {'x': 0.1, 'y': 0.1})
+
+        # New property and metadata values
+        res = [512, 512]
+        gain = 1.0
+        expt = 3.0
+        pxs = [5e-07, 5e-07]
+        speed = {'x': 0.3, 'y': 0.3}
+
+        # Change persistent data
+        ccd = model.getComponent(role='ccd')
+        ccd.resolution.value = res
+        ccd.gain.value = gain
+        ccd.exposureTime.value = expt
+        ccd.updateMetadata({model.MD_SENSOR_PIXEL_SIZE: pxs})
+        stage = model.getComponent(role='stage')
+        stage.speed.value = speed
+
+        # Check if persistent VAs are written to file before closing
+        with open('test-settings.yaml', 'r+') as f:
+            f_content = yaml.load(f)
+        self.assertEqual(f_content["Andor SimCam"]["properties"]["resolution"], res)
+        self.assertEqual(f_content["Andor SimCam"]["properties"]["gain"], gain)
+        self.assertEqual(f_content["Andor SimCam"]["properties"]["exposureTime"], expt)
+
+        # Restart backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        main.main(cmdline.split())
+        time.sleep(5)
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
+        cmdline = "--log-level=2 --log-target=test.log --daemonize --settings=test-settings.yaml %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(1)  # give some time to start
+        ret = self._wait_backend_starts(5)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+        # Check values of persistent data
+        ccd = model.getComponent(role="ccd")
+        self.assertEqual(ccd.resolution.value, tuple(res))
+        self.assertEqual(ccd.gain.value, gain)
+        self.assertEqual(ccd.exposureTime.value, expt)
+        self.assertEqual(ccd.getMetadata()[model.MD_SENSOR_PIXEL_SIZE], pxs)
+        stage = model.getComponent(role="stage")
+        self.assertEqual(stage.speed.value, speed)
+
+        # Clean up
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(5)  # give some time to stop
+        ret = main.main(cmdline.split())
+        os.remove("test.log")
+        os.remove("test-settings.yaml")
+
+    @timeout(40)
+    def test_persistent_data_broken_file(self):
+        """Test initialization with persistent data with a broken file"""
+
+        # Create broken settings file
+        broken_data = {}
+        broken_data['non_existing_comp'] = {'properties': {'exposureTime': 5}}
+        broken_data['Andor SimCam'] = {'properties': {'not_a_property': 10}}
+        broken_data['Andor SimCam'] = {'unknown_type': {'': 10}}
+        broken_data[''] = {'properties': {'not_a_property': 10}}
+
+        with open("test-settings-broken.yaml", "w+") as f:
+            yaml.dump(broken_data, f)
+
+        # Same test as before, should still work with other persistent data
+        # The broken data should be ignored and a warning should be issued.
+
+        # Start backend with persistent data specified in yaml file
+        filename = "sim-persistent.odm.yaml"
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
+        cmdline = "--log-level=2 --log-target=test.log --daemonize --settings=test-settings-broken.yaml %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(1)  # give some time to start
+        ret = self._wait_backend_starts(10)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+        # Check if default properties for stage.speed are set properly
+        stage = model.getComponent(role='stage')
+        self.assertEqual(stage.speed.value, {'x': 0.1, 'y': 0.1})
+
+        # New property and metadata values
+        res = [512, 512]
+        gain = 1.0
+        expt = 3.0
+        pxs = [5e-07, 5e-07]
+        speed = {'x': 0.3, 'y': 0.3}
+
+        # Change persistent data
+        ccd = model.getComponent(role='ccd')
+        ccd.resolution.value = res
+        ccd.gain.value = gain
+        ccd.exposureTime.value = expt
+        ccd.updateMetadata({model.MD_SENSOR_PIXEL_SIZE: pxs})
+        stage = model.getComponent(role='stage')
+        stage.speed.value = speed
+
+        # Check if persistent VAs are written to file before closing
+        with open('test-settings-broken.yaml', 'r') as f:
+            f_content = yaml.load(f)
+        self.assertEqual(f_content["Andor SimCam"]["properties"]["resolution"], res)
+        self.assertEqual(f_content["Andor SimCam"]["properties"]["gain"], gain)
+        self.assertEqual(f_content["Andor SimCam"]["properties"]["exposureTime"], expt)
+
+        # Restart backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        main.main(cmdline.split())
+        time.sleep(5)
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
+        cmdline = "--log-level=2 --log-target=test.log --daemonize --settings=test-settings-broken.yaml %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(1)  # give some time to start
+        ret = self._wait_backend_starts(5)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+        # Check values of persistent data
+        ccd = model.getComponent(role="ccd")
+        self.assertEqual(ccd.resolution.value, tuple(res))
+        self.assertEqual(ccd.gain.value, gain)
+        self.assertEqual(ccd.exposureTime.value, expt)
+        self.assertEqual(ccd.getMetadata()[model.MD_SENSOR_PIXEL_SIZE], pxs)
+        stage = model.getComponent(role="stage")
+        self.assertEqual(stage.speed.value, speed)
+
+        # Clean up
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(5)  # give some time to stop
+        ret = main.main(cmdline.split())
+        os.remove("test.log")
+        os.remove("test-settings-broken.yaml")
 
     def _wait_backend_starts(self, timeout=5):
         """
