@@ -421,7 +421,7 @@ class Stream(object):
     # This should be the behaviour of the hardware component... but the driver
     # might be buggy, so beware!
     VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation", "DwellTime",
-                "TimeRange", "StreakMode", "MCPgain")
+                "TimeRange", "StreakMode", "MCPGain")
     def _index_in_va_order(self, va_entry):
         """
         return the position of the VA name in VA_ORDER

@@ -1216,7 +1216,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             ccd_data = self._acq_data[self._ccd_idx][-1]
             ccd_data.metadata[MD_POS] = cor_pos
 
-            self._acq_data[-1][-1] = self._preprocessData(len(self._streams) - 1, ccd_data, px_idx)
+            self._acq_data[-1][-1] = self._preprocessData(self._ccd_idx, ccd_data, px_idx)
             logging.debug("Processed CCD data %d = %s", n, px_idx)
 
             self._updateProgress(future, time.time() - start, n + 1, tot_num, extra_time)
@@ -1732,7 +1732,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
     """
 
     def _onCompletedData(self, n, raw_das):
-        if n < len(self._streams) - 1:
+        if n < self._ccd_idx:
             r = super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
             return r
 
@@ -1787,45 +1787,47 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     """
     Multiple detector Stream made of SEM + temporal spectrum.
+    The image is typically acquired with a streak camera system.
+    Data format: SEM (2D=XY) + TemporalSpectrum(4D=CT1YX).
     """
 
     def _onCompletedData(self, n, raw_das):
-        # raw_das: tempSpectrum-images (arrays) excluding SEM-image (array)
+        # n: detector
+        # raw_das: list of data acquried for given detector n
         if n != self._ccd_idx:
             return super(SEMTemporalSpectrumMDStream, self)._onCompletedData(n, raw_das)
 
-        # number of images should equal number of ebeam pos
-        exp_num_images = numpy.prod(self.repetition.value)
-        if len(raw_das) != exp_num_images:
-            logging.error("Only got %d temporal spectrum images while expected %d images.",
-                          len(raw_das), exp_num_images)
+        # if n is the optical detector
+        # -> raw_das is list of tempSpectrum-images (arrays) excluding SEM-image (array)
 
         # assemble all the CCD data into one
         rep = self.repetition.value
-        tempSpec_data = self._assembleTempSpecData(raw_das, rep)
+        temp_spec_data = self._assembleTempSpecData(raw_das, rep)
 
         # Compute metadata based on SEM metadata
         sem_data = self._raw[0]
         epxs = sem_data.metadata[MD_PIXEL_SIZE]
 
-        # TODO handle fuzzing
+        # handle sub-pixels (aka fuzzing)
+        tile_shape = self._emitter.resolution.value
+        pxs = (epxs[0] * tile_shape[0], epxs[1] * tile_shape[1])
 
         # Not much to do: just save everything as is
-        tempSpec_data.metadata[MD_POS] = sem_data.metadata[MD_POS]
-        tempSpec_data.metadata[MD_PIXEL_SIZE] = epxs
-        tempSpec_data.metadata[MD_DESCRIPTION] = self._streams[n].name.value
+        temp_spec_data.metadata[MD_POS] = sem_data.metadata[MD_POS]
+        temp_spec_data.metadata[MD_PIXEL_SIZE] = pxs
+        temp_spec_data.metadata[MD_DESCRIPTION] = self._streams[n].name.value
 
-        self._raw.append(tempSpec_data)
+        self._raw.append(temp_spec_data)
 
     def _assembleTempSpecData(self, data_list, repetition):
         """
-        Take all the data received from the spectrometer and assemble it in a
-        cube.
+        Take all the data received from the streak camera and assemble it in a
+        hypercube.
 
         data_list (list of M DataArrays of shape (lambda, time)): all the data received
-        repetition (list of 2 int): X,Y shape of the high dimensions of the cube
-         so that X * Y = M
-        return (DataArray)
+        repetition (list of 2 int): X,Y shape of the higher dimensions of the hypercube
+        so that X * Y = M (aka number of ebeam positions)
+        return (DataArray): hypercube (ndarray with shape: CT1YX) + MD (dict)
         """
         assert len(data_list) > 0
 
@@ -1855,9 +1857,13 @@ class SEMARMDStream(SEMCCDMDStream):
     """
 
     def _onCompletedData(self, n, raw_das):
-        # raw_das: AR-images (arrays) excluding SEM-image (array)
+        # n: detector
+        # raw_das: list of data acquried for given detector n
         if n != self._ccd_idx:
             return super(SEMARMDStream, self)._onCompletedData(n, raw_das)
+
+        # if n is the optical detector
+        # -> raw_das is list of AR-images (arrays) excluding SEM-image (array)
 
         # Not much to do: just save everything as is
 
@@ -1968,7 +1974,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         """
         return (Future)
         """
-        if n < len(self._streams) - 1:
+        if n < self._ccd_idx:
             return super(MomentOfInertiaMDStream, self)._preprocessData(n, data, i)
 
         # Instead of storing the actual data, we queue the MoI computation in a future
@@ -1986,7 +1992,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         return self._executor.submit(self.ComputeMoI, data, self.background.value, self._drange, ss)
 
     def _onCompletedData(self, n, raw_das):
-        if n < len(self._streams) - 1:
+        if n < self._ccd_idx:
             return super(MomentOfInertiaMDStream, self)._onCompletedData(n, raw_das)
 
         # Wait for the moment of inertia calculation results
