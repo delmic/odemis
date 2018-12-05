@@ -1479,7 +1479,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             t = index[hdims.index("T")]
             deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
             plane.attrib["DeltaT"] = "%.15f" % deltat
-        if model.MD_TIME_LIST in da.metadata:
+        if time_list:
             plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
@@ -1746,7 +1746,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
             write_rgb = True
             hdim = data.shape[:-3]
-        # TODO: handle RGB for C at any posiion before and after XY, but iif TZ=11
+        # TODO: handle RGB for C at any position before and after XY, but iif TZ=11
         # for data > 2D: write as a sequence of 2D images or RGB images
         elif data.ndim == 5 and data.shape[0] == 3:  # RGB
             # Write an RGB image, instead of 3 images along C
