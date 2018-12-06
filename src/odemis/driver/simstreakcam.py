@@ -75,11 +75,15 @@ class ReadoutCamera(model.DigitalCamera):
         depth = 2 ** (self._img_list[0].dtype.itemsize * 8)
         self._shape = full_res + (depth,)
 
+        # variable needed to update resolution VA and wavelength list correctly (_updateWavelengthList())
         self._binning = (2, 2)
 
         # need to be before binning, as it is modified when changing binning
         resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
         self.resolution = model.ResolutionVA(resolution, ((1, 1), full_res), setter=self._setResolution)
+
+        # variable needed to update wavelength list correctly (_updateWavelengthList())
+        self._resolution = self.resolution.value
 
         choices_bin = {(1, 1), (2, 2), (4, 4)}
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -121,9 +125,9 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Updates the wavelength list MD based on the current spectrograph position.
         """
-        npixels = self.resolution.value[0]  # number of pixels, horizontal is wavelength
+        npixels = self._resolution[0]  # number of pixels, horizontal is wavelength
         # pixelsize VA is sensor px size without binning and magnification
-        pxs = self.pixelSize.value[0] * self.binning.value[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
+        pxs = self.pixelSize.value[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
         wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
         self._metadata[model.MD_WL_LIST] = wll
 
@@ -135,34 +139,26 @@ class ReadoutCamera(model.DigitalCamera):
         """
         prev_binning, self._binning = self._binning, value
 
-        # adapt resolution
-        # TODO check if really necessary  - can be removed??
-        change = (prev_binning[0] / self._binning[0],
-                  prev_binning[1] / self._binning[1])
-        old_resolution = self.resolution.value
-        new_res = (int(round(old_resolution[0] * change[0])),
-                   int(round(old_resolution[1] * change[1])))
-
-        # fit
-        self.resolution.value = new_res
+        # call resolution setter to update res
+        self.resolution.value = self.resolution.value  # set any value
 
         self._metadata[model.MD_BINNING] = self._binning  # update MD
-
-        if self._spectrograph:
-            self._updateWavelengthList()  # update WavelengthList when changing binning
 
         return self._binning
 
     def _setResolution(self, _=None):
         """
-        Sets the resolution VA.
+        Sets the resolution VA and also ensures the wavelength list is correct.
         So far the full field of view is always used. Therefore, resolution only changes with binning.
         :return: current resolution value
         """
         # Note: we can keep it simple as long as we do not provide to change the sensor size yet...
+
         resolution = self._shape[:2]
         new_res = (int(resolution[0] // self._binning[0]),
-                    int(resolution[1] // self._binning[1]))  # floor division
+                   int(resolution[1] // self._binning[1]))  # floor division
+
+        self._resolution = new_res  # update so wavelength list is correctly calculated
 
         if self._spectrograph:
             self._updateWavelengthList()  # update WavelengthList when changing binning
@@ -360,7 +356,7 @@ class StreakUnit(model.HwComponent):
 
         gain = 0
         range_gain = (0, 63)
-        self.MCPgain = model.IntContinuous(gain, range_gain, setter=self._setMCPGain)
+        self.MCPGain = model.IntContinuous(gain, range_gain, setter=self._setMCPGain)
 
         timeRange = 0.000000001
         choices = {0.000000001, 0.000000002, 0.000000005, 0.00000001, 0.00000002, 0.00000005, 0.0000001,
@@ -370,7 +366,7 @@ class StreakUnit(model.HwComponent):
         self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange, unit="s")
 
         self._metadata[model.MD_STREAK_TIMERANGE] = self.timeRange.value
-        self._metadata[model.MD_STREAK_MCPGAIN] = self.MCPgain.value
+        self._metadata[model.MD_STREAK_MCPGAIN] = self.MCPGain.value
         self._metadata[model.MD_STREAK_MODE] = self.streakMode.value
 
     def _setStreakMode(self, value):
@@ -381,7 +377,7 @@ class StreakUnit(model.HwComponent):
         """
         # when changing the StreakMode to Focus, set MCPGain zero for HW safety reasons
         if not value:
-            self.MCPgain.value = 0
+            self.MCPGain.value = 0
         logging.debug("Reporting mode %s for streak unit.", value)
         self._metadata[model.MD_STREAK_MODE] = value
 
@@ -389,9 +385,9 @@ class StreakUnit(model.HwComponent):
 
     def _setMCPGain(self, value):
         """
-        Updates the MCPgain VA.
+        Updates the MCPGain VA.
         :parameter value: (int) value to be set
-        :return: (int) current MCPgain
+        :return: (int) current MCPGain
         """
         logging.debug("Reporting MCP gain %s for streak unit.", value)
         self._metadata[model.MD_STREAK_MCPGAIN] = value
@@ -420,7 +416,7 @@ class StreakUnit(model.HwComponent):
         return value
 
     def terminate(self):
-        self.MCPgain.value = 0
+        self.MCPGain.value = 0
         self.streakMode.value = False
 
 
@@ -447,11 +443,11 @@ class DelayGenerator(model.HwComponent):
     def updateMetadata(self, md):
 
         if model.MD_TIME_RANGE_TO_DELAY in md:
-            for timeRange, delay in md[model.MD_TIME_RANGE_TO_DELAY].iteritems():
+            for timeRange, delay in md[model.MD_TIME_RANGE_TO_DELAY].items():
                 if not isinstance(delay, numbers.Real):
                     raise ValueError("Trigger delay %s corresponding to time range %s is not of type float."
                                      "Please check calibration file for trigger delay." % (delay, timeRange))
-                if not 0. <= delay <= 1.:
+                if not 0 <= delay <= 1:
                     raise ValueError("Trigger delay %s corresponding to time range %s is not in range (0, 1)."
                                      "Please check the calibration file for the trigger delay." % (delay, timeRange))
 
