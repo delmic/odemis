@@ -53,7 +53,14 @@ def get_wavelength_per_pixel(da):
     # MD_WL_LIST has priority
     if model.MD_WL_LIST in da.metadata:
         wl = da.metadata[model.MD_WL_LIST]
-        if len(wl) == da.shape[0]:
+        # check dimension of data
+        dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
+        try:
+            ci = dims.index("C")  # get index of dimension C
+        except ValueError:
+            logging.debug("Dimension 'C' not in dimensions, so skip computing wavelength list.")
+            return None
+        if len(wl) == da.shape[ci]:
             return wl
         else:
             raise ValueError("Wavelength metadata (MD_WL_LIST) is not the same "
@@ -95,7 +102,14 @@ def get_time_per_pixel(da):
     # MD_WL_LIST has priority
     if model.MD_TIME_LIST in da.metadata:
         tl = da.metadata[model.MD_TIME_LIST]
-        if len(tl) == da.shape[1]:
+        # check available dimension of data
+        dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
+        try:
+            ti = dims.index("T")  # get index of dimension T
+        except ValueError:
+            logging.debug("Dimension 'T' not in dimensions, so skip computing time list.")
+            return None
+        if len(tl) == da.shape[ti]:
             return tl
         else:
             raise ValueError("Time list metadata (MD_TIME_LIST) is not the same "
