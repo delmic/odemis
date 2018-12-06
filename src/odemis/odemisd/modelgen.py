@@ -140,11 +140,12 @@ class Instantiator(object):
     manages the instantiation of a whole model
     """
 
-    def __init__(self, inst_file, settings_file, container=None, create_sub_containers=False,
+    def __init__(self, inst_file, settings_file=None, container=None, create_sub_containers=False,
                  dry_run=False):
         """
         inst_file (file): opened file that contains the YAML
-        settings_file (File): opened settings file in YAML format
+        settings_file (file or None): opened settings file in YAML format.
+          If None, persistent settings will be not be stored.
         container (Container): container in which to instantiate the components
         create_sub_containers (bool): whether the leave components (components which
            have no children created separately) are running in isolated containers
@@ -154,6 +155,7 @@ class Instantiator(object):
           considered errors.
         """
         self.ast = self._parse_instantiation_model(inst_file)  # AST of the model to instantiate
+        self._can_persist = settings_file is not None
         self._persistent_props, self._persistent_mds = self._parse_settings(settings_file)
         self.root_container = container # the container for non-leaf components
 
@@ -698,9 +700,7 @@ class Instantiator(object):
         if "properties" in attrs:
             for prop_name, value in attrs["properties"].items():
                 if prop_name in persistent_props_values:
-                    # Don't change value for persistent properties if stored value could be found
-                    # in settings file
-                    break
+                    continue  # Already known, from persistent settings
                 try:
                     va = getattr(comp, prop_name)
                 except AttributeError:
@@ -743,9 +743,8 @@ class Instantiator(object):
                 fullname = "MD_" + md_name
                 md = getattr(model, fullname)
             except AttributeError:
-                logging.warning("Error in settings file: "
-                    "Component '%s' has unknown metadata '%s'." % (comp_name, md_name))
-                break
+                raise SemanticError("Error in microscope file: "
+                      "Component '%s' has unknown metadata '%s'." % (comp_name, md_name))
 
             if md_name in persistent_mds_values:
                 compmd[md] = persistent_mds_values[md_name]
@@ -753,18 +752,15 @@ class Instantiator(object):
         # Initialize other metadata from model file
         if "metadata" in attrs:
             for md_name, value in attrs["metadata"].items():
-                if md_name in compmd:
-                    break
-                # To indicate the metadata name:
-                # UPPER_CASE_NAME -> use model.MD_UPPER_CASE_NAME
-                # We could also accept the actual MD string, but it'd get more
-                # complicated and not really help anyone.
                 try:
                     fullname = "MD_" + md_name
                     md = getattr(model, fullname)
                 except AttributeError:
                     raise SemanticError("Error in microscope file: "
                         "Component '%s' has unknown metadata '%s'." % (comp_name, md_name))
+
+                if md in compmd:
+                    continue  # Already known, from persistent settings
                 compmd[md] = value
 
         # Only update if metadata not empty. Updating a component with empty metadata should not
@@ -861,10 +857,13 @@ class Instantiator(object):
         """
         Read content of YAML file. This is a wrapper for yaml.safe_load that returns an
         empty dictionary in case a YAMLError is raised or the file is empty.
-        f (File): opened YAML file
+        f (File or None): opened YAML file
         return (dict): dictionary with file contents or empty dictionary. The format is:
           comp -> ('metadata'|'properties' -> (key -> value)) 
         """
+        if f is None:
+            return {}
+
         try:
             data = yaml.safe_load(f)
             if not isinstance(data, dict):
@@ -878,7 +877,7 @@ class Instantiator(object):
     def _parse_settings(self, settings_file):
         """
         Parse settings file and return persistent properties and metadata in useful format.
-        settings_file (File): opened settings file. If the file is empty or corrupted, two empty
+        settings_file (File or None): opened settings file. If the file is empty or corrupted, two empty
           dict will be returned.
         return (list of 2 nested dicts): persistent properties and persistent metadata for
           each component in the settings file.
@@ -908,5 +907,10 @@ class Instantiator(object):
         persistent = attrs.get("persistent", {})
         prop_names = persistent.get("properties", [])
         md_names = persistent.get("metadata", [])
+
+        if not self._can_persist and prop_names or md_names:
+            logging.warning("Component %s has persistent settings, but no persistent file available",
+                            comp_name)
+
         return prop_names, md_names
 

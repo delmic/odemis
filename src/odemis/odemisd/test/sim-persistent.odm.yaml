@@ -1,21 +1,12 @@
 SimOptical: {
     class: Microscope,
     role: brightfield,
-    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter"],
-    detectors: ["Andor SimCam"],
-    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    children: ["Spectra", "Nikon Super Duper", "MultiBand Fixed Filter",
+               "Andor SimCam",
+               "FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
-#Light: {
-#    class: simulated.Light,
-#    role: brightlight,
-#    affects: ["Andor SimCam"],
-#    properties: {
-#        power: 100 # W
-#    }
-#}
-
-Spectra: {
+"Spectra": {
     class: lle.FakeLLE,
     role: light,
     init: {
@@ -51,10 +42,15 @@ Spectra: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0},
+    metadata: {
+        POS_COR: [5.e-6, -62.1e-6],  # m, m
+    },
     persistent: {
         properties: [resolution, gain, exposureTime],
-        metadata: ['SENSOR_PIXEL_SIZE']
-    }
+        # Note: typically SENSOR_PIXEL_SIZE wouldn't be persistent, as it's
+        # automatically set by the driver based on the hardware information.
+        metadata: [POS_COR, SENSOR_PIXEL_SIZE],
+    },
 }
 
 "FakeRedStoneStage": {
@@ -63,11 +59,11 @@ Spectra: {
     init: {axes: [x, y]},
     affects: ["Andor SimCam"],
     properties: {
-        speed: {x: 0.1, y: 0.1} #m/s
+        speed: {x: 0.1, y: 0.1}, #m/s
     },
     persistent: {
-        properties: [speed]
-    }
+        properties: [speed],
+    },
 }
 
 "SEM-Optical Alignment": {
@@ -81,7 +77,13 @@ Spectra: {
     },
     properties: {
         speed: {'a': 0.001, 'b': 0.001} #m/s
-    }
+    },
+    metadata: {
+        FAV_POS_ACTIVE: {"a": 48.e-3, "b": 1.e-3},  # m, m
+    },
+    persistent: {
+        metadata: [FAV_POS_ACTIVE],
+    },
 }
 
 "OpticalZ actuator": {
@@ -94,7 +96,11 @@ Spectra: {
     },
     properties: {
         speed: {'z': 0.1} #m/s
-    }
+    },
+    persistent: {
+        # Non existent metadata => just not recorded
+        metadata: [FAV_POS_ACTIVE],
+    },
 }
 
 FakePIGCS: {

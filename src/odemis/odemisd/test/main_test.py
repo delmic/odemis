@@ -289,9 +289,12 @@ class TestCommandLine(unittest.TestCase):
         ret = self._wait_backend_starts(10)
         self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
 
-        # Check if default properties for stage.speed are set properly
+        # Check if default properties for stage.speed and SimCam metadata are set
         stage = model.getComponent(role='stage')
+        ccd = model.getComponent(role='ccd')
         self.assertEqual(stage.speed.value, {'x': 0.1, 'y': 0.1})
+        init_pos_cor = [5.e-6, -62.1e-6]
+        self.assertEqual(ccd.getMetadata()[model.MD_POS_COR], init_pos_cor)
 
         # New property and metadata values
         res = [512, 512]
@@ -299,13 +302,14 @@ class TestCommandLine(unittest.TestCase):
         expt = 3.0
         pxs = [5e-07, 5e-07]
         speed = {'x': 0.3, 'y': 0.3}
+        pos_cor = (-9.e-6, -7.3e-6)  # Will be stored as a _list_
 
         # Change persistent data
-        ccd = model.getComponent(role='ccd')
         ccd.resolution.value = res
         ccd.gain.value = gain
         ccd.exposureTime.value = expt
-        ccd.updateMetadata({model.MD_SENSOR_PIXEL_SIZE: pxs})
+        ccd.updateMetadata({model.MD_SENSOR_PIXEL_SIZE: pxs,
+                            model.MD_POS_COR: pos_cor})
         stage = model.getComponent(role='stage')
         stage.speed.value = speed
 
@@ -316,13 +320,21 @@ class TestCommandLine(unittest.TestCase):
         self.assertEqual(f_content["Andor SimCam"]["properties"]["gain"], gain)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["exposureTime"], expt)
 
-        # Restart backend
+        # End backend => metadata should also be saved
         cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
         main.main(cmdline.split())
         time.sleep(5)
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 2, "Backend is said to be running")
+
+        with open('test-settings.yaml', 'r+') as f:
+            f_content = yaml.load(f)
+        self.assertEqual(f_content["Andor SimCam"]["metadata"]["SENSOR_PIXEL_SIZE"], pxs)
+        self.assertEqual(f_content["Andor SimCam"]["metadata"]["POS_COR"], list(pos_cor))
+
+        # Restart backend
+        logging.debug("Restarting backend...")
         cmdline = "--log-level=2 --log-target=test.log --daemonize --settings=test-settings.yaml %s" % filename
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -336,6 +348,7 @@ class TestCommandLine(unittest.TestCase):
         self.assertEqual(ccd.gain.value, gain)
         self.assertEqual(ccd.exposureTime.value, expt)
         self.assertEqual(ccd.getMetadata()[model.MD_SENSOR_PIXEL_SIZE], pxs)
+        self.assertEqual(ccd.getMetadata()[model.MD_POS_COR], list(pos_cor))
         stage = model.getComponent(role="stage")
         self.assertEqual(stage.speed.value, speed)
 
@@ -435,6 +448,32 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("test-settings-broken.yaml")
+
+    @timeout(20)
+    def test_no_persistent(self):
+        """Test initialization with persistent data but without a settings file"""
+        # Start backend without any settings file defined. As it's not running
+        # as root, it will run without persistent data stored.
+        # => just show warnings in the log file, and runs fine.
+        filename = "sim-persistent.odm.yaml"
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
+        cmdline = "--log-level=2 --log-target=test.log --daemonize %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        time.sleep(1)  # give some time to start
+        ret = self._wait_backend_starts(10)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+        # Restart backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        main.main(cmdline.split())
+        time.sleep(5)
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 2, "Backend is said to be running")
+        os.remove("test.log")
 
     def _wait_backend_starts(self, timeout=5):
         """
