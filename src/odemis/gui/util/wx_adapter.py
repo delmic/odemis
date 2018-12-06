@@ -21,6 +21,7 @@ from __future__ import division
 
 import wx
 import sys
+import io
 
 if wx.MAJOR_VERSION <= 3:
     # ComboBox is now in .adv
@@ -40,7 +41,7 @@ if wx.MAJOR_VERSION <= 3:
     class ImageClever(wx.Image):
 
         def __new__(cls, *args, **kwargs):
-            if isinstance(args[0], file):
+            if isinstance(args[0], (file, io.IOBase)):
                 return wx.ImageFromStream(*args)
             elif len(args) >= 2 and isinstance(args[0], int) and isinstance(args[1], int):
                 return wx.EmptyImage(*args, **kwargs)

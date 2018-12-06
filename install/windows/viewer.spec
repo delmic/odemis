@@ -57,7 +57,7 @@ def get_dataio_imports():
     import odemis.dataio
 
     imports = []
-    for module in odemis.dataio.__all__:
+    for module in odemis.dataio._iomodules:
         imports.append("odemis.dataio.%s" % module)
     return imports
 
@@ -65,9 +65,13 @@ def get_dataio_imports():
 def get_wx_imports():
     # Special hooks-wx-lib.pubsub doesn't work properly if these modules are not 
     # collected explicitly
-    return collect_submodules('wx.lib.pubsub.core.kwargs') + \
-    	   collect_submodules('wx.lib.pubsub.core.arg1') + \
-    	   ["wx.lib.pubsub.core.publisherbase", "wx.lib.pubsub.core.listenerbase"]
+    return collect_submodules('pubsub.core.kwargs') + \
+            collect_submodules('pubsub.core.arg1') + \
+            ["pubsub.core.publisherbase", "pubsub.core.listenerbase" ]
+    # Put it back, once wxpython 4 has an internal pubsub again
+    #return collect_submodules('wx.lib.pubsub.core.kwargs') + \
+    #	   collect_submodules('wx.lib.pubsub.core.arg1') + \
+    #	   ["wx.lib.pubsub.core.publisherbase", "wx.lib.pubsub.core.listenerbase" ]
 
 def get_libtiff_imports():
     # tiff_h_x_y_z needs administrator rights to be generated, so import it here
