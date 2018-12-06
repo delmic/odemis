@@ -27,7 +27,7 @@ from odemis.driver import andorshrk
 import unittest
 from unittest.case import skip
 
-from cam_test_abs import VirtualTestCam, VirtualTestSynchronized  # TODO do we need VirtualStaticTestCam?????
+from cam_test_abs import VirtualTestCam, VirtualTestSynchronized
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -118,31 +118,32 @@ class TestHamamatsurxCam(unittest.TestCase):
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
 
-        cls.delaybox._metadata[model.MD_TIME_RANGE_TO_DELAY] = \
-            {
-            1.e-9: 7.99e-9,
-            2.e-9: 9.63e-9,
-            5.e-9: 33.2e-9,
-            10.e-9: 45.9e-9,
-            20.e-9: 66.4e-9,
-            50.e-9: 102e-9,
-            100.e-9: 169e-9,
-            200.e-9: 302e-9,
-            500.e-9: 731e-9,
-            1.e-6: 1.39e-6,
-            2.e-6: 2.69e-6,
-            5.e-6: 7.02e-6,
-            10.e-6: 13.8e-6,
-            20.e-6: 26.7e-6,
-            50.e-6: 81.6e-6,
-            100.e-6: 161e-6,
-            200.e-6: 320e-6,
-            500.e-6: 798e-6,
-            1.e-3: 1.62e-3,
-            2.e-3: 3.18e-3,
-            5.e-3: 7.88e-3,
-            10.e-3: 15.4e-3,
-            }
+        cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
+                                    {
+                                        1.e-9: 7.99e-9,
+                                        2.e-9: 9.63e-9,
+                                        5.e-9: 33.2e-9,
+                                        10.e-9: 45.9e-9,
+                                        20.e-9: 66.4e-9,
+                                        50.e-9: 102e-9,
+                                        100.e-9: 169e-9,
+                                        200.e-9: 302e-9,
+                                        500.e-9: 731e-9,
+                                        1.e-6: 1.39e-6,
+                                        2.e-6: 2.69e-6,
+                                        5.e-6: 7.02e-6,
+                                        10.e-6: 13.8e-6,
+                                        20.e-6: 26.7e-6,
+                                        50.e-6: 81.6e-6,
+                                        100.e-6: 161e-6,
+                                        200.e-6: 320e-6,
+                                        500.e-6: 798e-6,
+                                        1.e-3: 1.62e-3,
+                                        2.e-3: 3.18e-3,
+                                        5.e-3: 7.88e-3,
+                                        10.e-3: 15.4e-3,
+                                    }
+                                    })
 
     @classmethod
     def tearDownClass(cls):
@@ -272,19 +273,19 @@ class TestHamamatsurxCam(unittest.TestCase):
         """Test MCP gain VA of streak unit."""
         # switch to operate mode to decrease chance of damage
         self.streakunit.streakMode.value = True
-        # set MCPgain VA
-        self.streakunit.MCPgain.value = 1
+        # set MCPGain VA
+        self.streakunit.MCPGain.value = 1
         time.sleep(0.5)  # give it some time to actually change the value
-        prev_MCPgain = self.streakunit.MCPgain.value
-        # change MCPgain VA
-        self.streakunit.MCPgain.value = 5
+        prev_MCPGain = self.streakunit.MCPGain.value
+        # change MCPGain VA
+        self.streakunit.MCPGain.value = 5
         time.sleep(0.5)  # give it some time to actually change the value
-        cur_MCPgain = self.streakunit.MCPgain.value
+        cur_MCPGain = self.streakunit.MCPGain.value
         # compare previous and current gain
-        self.assertNotEqual(prev_MCPgain, self.streakunit.MCPgain.value)
-        # check MCPgain-VA reports the same value as RemoteEx
+        self.assertNotEqual(prev_MCPGain, self.streakunit.MCPGain.value)
+        # check MCPGain-VA reports the same value as RemoteEx
         remoteEx_gain = self.streakunit.GetMCPGain()
-        self.assertEqual(cur_MCPgain, remoteEx_gain)
+        self.assertEqual(cur_MCPGain, remoteEx_gain)
 
     def test_TimeRange(self):
         """Test time range VA for sweeping of streak unit."""
@@ -395,7 +396,7 @@ class TestHamamatsurxCam(unittest.TestCase):
 
         self.streakunit.streakMode.value = True
         self.streakunit.timeRange.value = util.find_closest(0.000000002, self.streakunit.timeRange.choices)  # 1ms
-        self.streakunit.MCPgain.value = 2
+        self.streakunit.MCPGain.value = 2
         time.sleep(1)
 
         # start Live mode
@@ -443,7 +444,7 @@ class TestHamamatsurxCam(unittest.TestCase):
             logging.debug("Got image.")
             if self.images_left == 0:
                 dataflow.unsubscribe(receive_image)
-                self.assertEqual(self.streakunit.MCPgain.value, 0)  # MCPGain should be zero when acq finished
+                self.assertEqual(self.streakunit.MCPGain.value, 0)  # MCPGain should be zero when acq finished
                 self.end_time = time.time()
 
         self.readoutcam.data.subscribe(receive_image)
@@ -557,31 +558,32 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
 
-        cls.delaybox._metadata[model.MD_TIME_RANGE_TO_DELAY] = \
-            {
-            1.e-9: 7.99e-9,
-            2.e-9: 9.63e-9,
-            5.e-9: 33.2e-9,
-            10.e-9: 45.9e-9,
-            20.e-9: 66.4e-9,
-            50.e-9: 102e-9,
-            100.e-9: 169e-9,
-            200.e-9: 302e-9,
-            500.e-9: 731e-9,
-            1.e-6: 1.39e-6,
-            2.e-6: 2.69e-6,
-            5.e-6: 7.02e-6,
-            10.e-6: 13.8e-6,
-            20.e-6: 26.7e-6,
-            50.e-6: 81.6e-6,
-            100.e-6: 161e-6,
-            200.e-6: 320e-6,
-            500.e-6: 798e-6,
-            1.e-3: 1.62e-3,
-            2.e-3: 3.18e-3,
-            5.e-3: 7.88e-3,
-            10.e-3: 15.4e-3,
-            }
+        cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
+                                    {
+                                        1.e-9: 7.99e-9,
+                                        2.e-9: 9.63e-9,
+                                        5.e-9: 33.2e-9,
+                                        10.e-9: 45.9e-9,
+                                        20.e-9: 66.4e-9,
+                                        50.e-9: 102e-9,
+                                        100.e-9: 169e-9,
+                                        200.e-9: 302e-9,
+                                        500.e-9: 731e-9,
+                                        1.e-6: 1.39e-6,
+                                        2.e-6: 2.69e-6,
+                                        5.e-6: 7.02e-6,
+                                        10.e-6: 13.8e-6,
+                                        20.e-6: 26.7e-6,
+                                        50.e-6: 81.6e-6,
+                                        100.e-6: 161e-6,
+                                        200.e-6: 320e-6,
+                                        500.e-6: 798e-6,
+                                        1.e-3: 1.62e-3,
+                                        2.e-3: 3.18e-3,
+                                        5.e-3: 7.88e-3,
+                                        10.e-3: 15.4e-3,
+                                    }
+                                    })
 
     @classmethod
     def tearDownClass(cls):
@@ -621,32 +623,58 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         # Note: RemoteEx automatically stops and restarts "Live" acq when changing settings
 
         img = self.readoutcam.data.get()
+        wl_list_bin1 = img.metadata[model.MD_WL_LIST]
 
         self.assertIn(model.MD_TIME_LIST, img.metadata)
         self.assertIn(model.MD_WL_LIST, img.metadata)
 
+        # check wavelength list changes when changing binning
+        self.readoutcam.binning.value = (2, 2)
+
+        img = self.readoutcam.data.get()
+        wl_list_bin2 = img.metadata[model.MD_WL_LIST]
+
+        self.assertEqual(len(wl_list_bin1)/2, len(wl_list_bin2))
+
+        with self.assertRaises(AssertionError):
+            self.assertListEqual(wl_list_bin1, wl_list_bin2)  # there is not assertListNotEqual...
+
     def test_spectrographVAs(self):
+        """Test spectrograph VA behavior.
+        If grating = mirror, checks that wl = 0."""
 
         self.assertIn("wavelength", self.spectrograph.axes)
         self.assertIn("grating", self.spectrograph.axes)
         self.assertIn("slit-in", self.spectrograph.axes)
 
-        # put a meaningful wavelength
-        pos_wl = 500e-9  # max: 808.650024 nm
-        pos_grating = 2  # range: 1 -> 3
-        pos_slit = 0.0001  # range: 0.000010 -> 0.002500
+        gratings = self.spectrograph.axes["grating"].choices
 
+        # move to a grating, which is not a mirror
+        # if it is a mirror, it has the key word "mirror" by convention
+        for grating in gratings.keys():
+            if gratings[grating] != "mirror":
+                f = self.spectrograph.moveAbs({"grating": grating})
+                f.result()  # wait for the position to be set
+                break
+
+        # put a meaningful wavelength different from 0
+        pos_wl = 500e-9  # max: 808.650024 nm
         f = self.spectrograph.moveAbs({"wavelength": pos_wl})
         f.result()  # wait for the position to be set
-        f = self.spectrograph.moveAbs({"grating": pos_grating})
-        f.result()  # wait for the position to be set
-        f = self.spectrograph.moveAbs({"slit-in": pos_slit})
-        f.result()  # wait for the position to be set
+        self.assertNotEqual(self.spectrograph.position.value["wavelength"], 0)
+
+        # move to mirror
+        for grating in gratings.keys():
+            if gratings[grating] == "mirror":
+                pos_grating = grating
+                f = self.spectrograph.moveAbs({"grating": grating})
+                f.result()  # wait for the position to be set
+                break
 
         # VAs should have same values as HW positions
-        self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], pos_wl)
+        # wavelength should be zero, when grating = mirror
+        self.assertEqual(self.spectrograph.position.value["wavelength"], 0)
         self.assertEqual(self.spectrograph.position.value["grating"], pos_grating)
-        self.assertAlmostEqual(self.spectrograph.position.value["slit-in"], pos_slit)
 
 
 if __name__ == '__main__':
