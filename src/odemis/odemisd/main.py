@@ -43,6 +43,8 @@ import threading
 import time
 import yaml
 
+DEFAULT_SETTINGS_FILE = "/etc/odemis-settings.yaml"
+
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
                     BACKEND_STOPPED: 2,
@@ -138,6 +140,9 @@ class BackendContainer(model.Container):
         """
         Write values for all persistent properties and metadata to the settings file.
         """
+        if not self._settings or self._dry_run:
+            return
+
         self._settings.truncate(0)  # delete previous file contents
         self._settings.seek(0)  # go back to position 0
         yaml.safe_dump(self._persistent_data, self._settings)
@@ -607,9 +612,10 @@ def main(args):
                          default="auto", help="Specify the log target (auto, stderr, filename)")
     # The settings file is opened here because root privileges are dropped at some point after
     # the initialization.
-    opt_grp.add_argument("--settings", dest='settings', default='/etc/odemis-settings.yaml',
-                         type=argparse.FileType('a+'), help="Specify the path to the settings " +
-                         "file (stores values of persistent properties and metadata")
+    opt_grp.add_argument("--settings", dest='settings',
+                         type=argparse.FileType('a+'), help="Path to the settings file "
+                         "(stores values of persistent properties and metadata). "
+                         "Default is %s, if writable." % DEFAULT_SETTINGS_FILE)
     parser.add_argument("model", metavar="file.odm.yaml", nargs='?', type=open,
                         help="Microscope model instantiation file (*.odm.yaml)")
 
@@ -688,6 +694,12 @@ def main(args):
 
         if options.model is None:
             raise ValueError("No microscope model instantiation file provided")
+
+        if options.settings is None:
+            try:
+                options.settings = open(DEFAULT_SETTINGS_FILE, "a+")
+            except IOError as ex:
+                logging.warning("%s. Will not be able to use persistent data", ex)
 
         if options.debug:
             cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
