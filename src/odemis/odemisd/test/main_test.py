@@ -309,6 +309,7 @@ class TestCommandLine(unittest.TestCase):
         stage = model.getComponent(role='stage')
         stage.speed.value = speed
 
+        time.sleep(1)  # make sure the backend is done writing the VA values to the settings file
         # Check if persistent VAs are written to file before closing
         with open('test-settings.yaml', 'r+') as f:
             f_content = yaml.load(f)
@@ -398,6 +399,7 @@ class TestCommandLine(unittest.TestCase):
         stage.speed.value = speed
 
         # Check if persistent VAs are written to file before closing
+        time.sleep(1)
         with open('test-settings-broken.yaml', 'r') as f:
             f_content = yaml.load(f)
         self.assertEqual(f_content["Andor SimCam"]["properties"]["resolution"], res)
