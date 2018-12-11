@@ -1494,6 +1494,15 @@ class Shamrock(model.Actuator):
         self.SetGrating(g)
         # By default the Shamrock library keeps the same wavelength
 
+        # With a mirror as grating, the SR193 always stays physically at wavelength 0,
+        # but it doesn't report it back (aka changing wavelength value in the position VA)
+        # after changing the grating to a mirror.
+        # So this can lead to positions in the position VA, which are impossible to set
+        # (e.g. grating = "mirror" and wavelength = "300").
+        # Also, calling GetCalibration() on a mirror raises an error.
+        # Setting the wavelength to 0 ( SetWavelength(0)) ensures that getPixelToWavelength()
+        # never tries to call GetCalibration(), but simply returns an empty wavelength list
+        # and that the position VA is correctly updated.
         if self.axes["grating"].choices[g] == "mirror":
             logging.debug("Grating is mirror, so resetting wavelength to 0")
             self.SetWavelength(0)
