@@ -750,7 +750,7 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": u"Time needed by the streak unit for one sweep from top to bottom of "
                            u"the readout camera chip.",
             }),
-            ("detMCPgain", {
+            ("detMCPGain", {
                 "control_type": odemis.gui.CONTROL_INT,
                 "label": "MCP gain",
                 "tooltip": u"Microchannel plate gain of the streak unit.\n"

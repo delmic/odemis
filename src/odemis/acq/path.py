@@ -141,7 +141,7 @@ SPARC2_MODES = {
             'temporal-spectrum': ("streak-ccd",  # acquisition tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'on'},  # opened
+                 'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
                  'filter': {'band': 'pass-through'},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},

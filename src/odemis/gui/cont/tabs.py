@@ -916,7 +916,7 @@ class SparcAcquisitionTab(Tab):
 
         # depending on HW choose which viewport should be connected to a stream
         # TODO: for now only time correlator HW or streak cam HW handled
-        if main_data.streak_cam:
+        if main_data.streak_ccd:
             vpv[viewports[3]] = {
                 "name": "Temporal Spectrum",
                 "stream_classes": TemporalSpectrumStream,
@@ -927,15 +927,6 @@ class SparcAcquisitionTab(Tab):
                 "name": "Monochromator",
                 "stream_classes": MonochromatorSettingsStream,
             }
-
-        # show either one or the other depending on HW
-        # TODO it seems to have no impact ... GUI responds always the same...for streakcam HW and for Monochromator
-        # viewports[3].Show(main_data.streak_cam is not None)
-        # viewports[4].Show(main_data.time_correlator is not None)  # panel.vp_flim_chronograph.Show()
-        # if main_data.streak_cam:
-        #     panel.vp_sparc_ts.Show()
-        # if main_data.time_correlator:
-        #     panel.vp_flim_chronograph.Show()
 
         # TODO what if none of both? double one of the other viewports? Can we go with 3?
 
@@ -966,7 +957,7 @@ class SparcAcquisitionTab(Tab):
         ])
 
         # hack to overwrite the view buttons
-        if main_data.streak_cam:
+        if main_data.streak_ccd:
             # Note: for now either streak camera HW or monochromator HW possible
             buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_ts, panel.lbl_sparc_view_br)
 
