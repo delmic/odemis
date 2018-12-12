@@ -171,7 +171,7 @@ class OdemisBugreporter():
 
     def create_ticket(self, api_key, fields, files=None):
         """
-        Create ticket on osticket server.
+        Create ticket on osTicket server.
         :arg api_key: (String) API-Key
         :arg fields: (String --> String) dictionary containing keys name, email, subject, message
         :arg files: (None or list of Strings) pathname of zip files that should be attached
@@ -214,7 +214,7 @@ class OdemisBugreporter():
             with open(fallback_key_path, 'r') as key_file:
                 api_key = key_file.read().strip('\n')
         else:
-            raise LookupError("Osticket key not found.")
+            raise LookupError("osTicket key not found.")
         return api_key
 
     def compress_files(self):
@@ -314,29 +314,29 @@ class OdemisBugreporter():
         keys
         """
         self._compress_files_f.result()
-        report_description = {'name': name,
-                              'email': email,
-                              'subject': subject,
-                              'message': message}
+        report_description = {'name': name.encode("utf-8"),
+                              'email': email.encode("utf-8"),
+                              'subject': subject.encode("utf-8"),
+                              'message': message.encode("utf-8")}
         # Create ticket with special id when testing
         if TEST_SUPPORT_TICKET:
             report_description['topicId'] = 12
 
-        with open('/tmp/description.txt', 'w+') as f:
-            f.write('Name: %s\n' % name.encode("utf-8"))
-            f.write('Email: %s\n' % email.encode("utf-8"))
-            f.write('Summary: %s\n\n' % subject.encode("utf-8"))
-            f.write('Description:\n%s' % message.encode("utf-8"))
+        description = ('Name: %s\n' % name.encode("utf-8") +
+                       'Email: %s\n' % email.encode("utf-8") +
+                       'Summary: %s\n\n' % subject.encode("utf-8") +
+                       'Description:\n%s' % message.encode("utf-8")
+                       )
 
-        with zipfile.ZipFile(self.zip_fn, "a") as archive:
-            archive.write('/tmp/description.txt', compress_type=zipfile.ZIP_DEFLATED)
+        with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('description.txt', description)
         wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
         try:
             api_key = self.search_api_key()
             self.create_ticket(api_key, report_description, [self.zip_fn])
             wx.CallAfter(self.gui.Destroy)
         except Exception as e:
-            logging.warning("Osticket upload failed with exception %s" % e)
+            logging.warning("osTicket upload failed: %s", e)
             wx.CallAfter(self.gui.open_failed_upload_dlg)
 
     def send_report(self, name, email, subject, message):
