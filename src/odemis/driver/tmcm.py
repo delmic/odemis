@@ -354,11 +354,10 @@ class TMCLController(model.Actuator):
                 phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
                 self._ref_max_length[i] = phy_rng[1] - phy_rng[0]
             else:
-                # For safety, for referencing timeout, consider that the a range
-                # is not too long. If it times out, the user should specify a
-                # axis range.
-                # => 50 mm.
-                self._ref_max_length[i] = 50e-3  # m
+                # For safety, for referencing timeout, consider that the range
+                # is not too long (ie, 2M µsteps).
+                # If it times out, the user should specify an axis range.
+                self._ref_max_length[i] = sz * 2e6  # m
 
             if not isinstance(unit[i], basestring):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
@@ -1356,7 +1355,7 @@ class TMCLController(model.Actuator):
         # Guess the maximum duration based on the whole range (can't move more
         # than that) at the search speed, + 50% for estimating the switch
         # search. Then double it and add 1 s for margin.
-        # We could try to be even more clever, by check the referencing mode,
+        # We could try to be even more clever, by checking the referencing mode,
         # but that shouldn't affect the time by much.
         ref_speed = self._readSpeed(axis, 194)  # The fast speed
         d = self._ref_max_length[axis]
