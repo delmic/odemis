@@ -545,8 +545,14 @@ class SpectrumSettingsStream(CCDSettingsStream):
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
 
     def _updateImage(self):
-        # Just copy the raw data into the image, removing useless second dimension
-        self.image.value = self.raw[0][:, 0, 0, 0, 0]
+        if not self.raw:
+            return
+
+        # Just copy the raw data into the image, removing useless extra dimensions
+        im = self.raw[0][:, 0, 0, 0, 0]
+        im.metadata = im.metadata.copy()
+        im.metadata[model.MD_DIMS] = "C"
+        self.image.value = im
 
     # No histogram => no need to do anything to update it
     @staticmethod
