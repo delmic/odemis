@@ -201,12 +201,12 @@ class OdemisBugreporter():
         
     def search_api_key(self):
         """
-        Searches for a valid osticket key on the system. First, the customer key
+        Searches for a valid osTicket key on the system. First, the customer key
         is checked, then the fallback.
         """
         customer_key_path = os.path.join(os.path.expanduser(u"~"), '.local', 'share',
                                          'odemis', 'osticket.key')
-        fallback_key_path = os.path.join('usr', 'share', 'odemis', 'osticket.key')
+        fallback_key_path = '/usr/share/odemis/osticket.key'
         if os.path.isfile(customer_key_path):
             with open(customer_key_path, 'r') as key_file:
                 api_key = key_file.read().strip('\n')
