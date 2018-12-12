@@ -170,12 +170,15 @@ class Stream(object):
 
         # TODO: move to the DataProjection class
         self.auto_bc = model.BooleanVA(True)
+        self.auto_bc.subscribe(self._onAutoBC)
 
         # % of values considered outliers discarded in auto BC detection
         # Note: 1/256th is a nice value because on RGB, it means in degenerated
         # cases (like flat histogram), you still loose only one value on each
         # side.
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
+        self.auto_bc_outliers.subscribe(self._onOutliers)
+
         self.tint = model.ListVA((255, 255, 255), unit="RGB")  # 3-int R,G,B
 
         # Used if auto_bc is False
@@ -218,17 +221,11 @@ class Stream(object):
                 raw = self.raw
             self._onNewData(None, raw)
 
-        # When True, the projected tiles cache should be invalidated
-        self._projectedTilesInvalid = False
-
     def _init_projection_vas(self):
         """ Initialize the VAs related with image projection
         """
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
-
-        self.auto_bc.subscribe(self._onAutoBC)
-        self.auto_bc_outliers.subscribe(self._onOutliers)
 
         # Don't call at init, so don't set metadata if default value
         self.tint.subscribe(self.onTint)
@@ -732,16 +729,8 @@ class Stream(object):
             # The main thing to pay attention is that the data range is identical
             if self.histogram._edges != self._drange:
                 self._updateHistogram()
-            irange = img.findOptimalRange(self.histogram._full_hist,
-                                          self.histogram._edges,
-                                          self.auto_bc_outliers.value / 100)
-            # clip is needed for some corner cases with floats
-            irange = self.intensityRange.clip(irange)
-            self.intensityRange.value = irange
-        else:
-            # just use the values requested by the user
-            irange = sorted(self.intensityRange.value)
 
+        irange = sorted(self.intensityRange.value)
         return irange
 
     def _find_metadata(self, md):
@@ -886,7 +875,7 @@ class Stream(object):
         """ Recomputes the image with all the raw data available
         """
         # logging.debug("Updating image")
-        if not self.raw and isinstance(self.raw, list):
+        if not self.raw:
             return
 
         try:
@@ -935,13 +924,19 @@ class Stream(object):
     def _onAutoBC(self, enabled):
         # if changing to auto: B/C might be different from the manual values
         if enabled:
-            self._shouldUpdateImage()
+            self._recomputeIntensityRange()
 
     def _onOutliers(self, outliers):
         if self.auto_bc.value:
-            # set projected tiles cache as invalid
-            self._projectedTilesInvalid = True
-            self._shouldUpdateImage()
+            self._recomputeIntensityRange()
+
+    def _recomputeIntensityRange(self):
+        irange = img.findOptimalRange(self.histogram._full_hist,
+                                      self.histogram._edges,
+                                      self.auto_bc_outliers.value / 100)
+        # clip is needed for some corner cases with floats
+        irange = self.intensityRange.clip(irange)
+        self.intensityRange.value = irange
 
     def _setIntensityRange(self, irange):
         # Not much to do, but force int if the data is int
@@ -953,17 +948,13 @@ class Stream(object):
         return irange
 
     def _onIntensityRange(self, irange):
-        # If auto_bc is active, it updates intensities (from _updateImage()),
-        # so no need to refresh image again.
-        if not self.auto_bc.value:
-            # set projected tiles cache as invalid
-            self._projectedTilesInvalid = True
-            self._shouldUpdateImage()
+        self._shouldUpdateImage()
 
     def _updateHistogram(self, data=None):
         """
         data (DataArray): the raw data to use, default to .raw[0] - background
           (if present).
+        If will also update the intensityRange if auto_bc is enabled.
         """
         # Compute histogram and compact version
         if data is None:
@@ -995,8 +986,13 @@ class Stream(object):
             chist = hist
         self.histogram._full_hist = hist
         self.histogram._edges = edges
-        # Read-only VA, so we need to go around...
+        # First update the value, before the intensityRange subscribers are called...
         self.histogram._value = chist
+
+        if self.auto_bc.value:
+            self._recomputeIntensityRange()
+
+        # Notify last, so intensityRange is correct when subscribers get the new histogram
         self.histogram.notify(chist)
 
     def _onNewData(self, dataflow, data):

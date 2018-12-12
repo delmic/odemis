@@ -111,8 +111,6 @@ class RGBSpatialProjection(DataProjection):
         # Don't call at init, so don't set metadata if default value
         self.stream.tint.subscribe(self._onTint)
         self.stream.intensityRange.subscribe(self._onIntensityRange)
-        self.stream.auto_bc.subscribe(self._onAutoBC)
-        self.stream.auto_bc_outliers.subscribe(self._onOutliers)
 
         # handle z stack
         if model.hasVA(stream, "zIndex"):
@@ -156,25 +154,18 @@ class RGBSpatialProjection(DataProjection):
         else:
             return self.stream.raw
 
-    def _onAutoBC(self, enabled):
-        # if changing to auto: B/C might be different from the manual values
-        if enabled:
-            self.needImageUpdate()
-
-    def _onOutliers(self, outliers):
-        if self.stream.auto_bc.value:
-            self.needImageUpdate()
-
     def _onIntensityRange(self, irange):
-        # If auto_bc is active, it updates intensities (from _updateImage()),
-        # so no need to refresh image again.
-        if not self.stream.auto_bc.value:
-            self.needImageUpdate()
+        logging.debug("Intensity range changed to %s", irange)
+        self._shouldUpdateImageEntirely()
 
     def _onTint(self, value):
-        self.needImageUpdate()
+        self._shouldUpdateImageEntirely()
 
-    def needImageUpdate(self):
+    def _shouldUpdateImageEntirely(self):
+        """
+        Indicate that the .image should be computed _and_ that all the previous
+        tiles cached (and visible in the new image) have to be recomputed too
+        """
         # set projected tiles cache as invalid
         self._projectedTilesInvalid = True
         self._shouldUpdateImage()
@@ -339,10 +330,9 @@ class RGBSpatialProjection(DataProjection):
             tile.metadata = self.stream._find_metadata(tile.metadata)
             tile.metadata[model.MD_DIMS] = "YXC" # RGB format
             return tile
-        elif dims in ("ZYX",):
-            if tile.ndim != 2 and model.hasVA(self, "zIndex"):
-                tile = img.getYXFromZYX(tile, self.zIndex.value)  # Remove extra dimensions (of length 1)
-                tile.metadata[model.MD_DIMS] = "ZYX"
+        elif dims in ("ZYX",) and model.hasVA(self.stream, "zIndex"):
+            tile = img.getYXFromZYX(tile, self.stream.zIndex.value)
+            tile.metadata[model.MD_DIMS] = "ZYX"
         else:
             tile = img.ensure2DImage(tile)
 

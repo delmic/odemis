@@ -102,12 +102,6 @@ class StaticStream(Stream):
                 # sleep as much, to ensure we are not using too much CPU
                 tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
-
-                # If still nothing to do, update the RGB image with the new B/C.
-                if not ht_needs_recompute.is_set() and stream.auto_bc.value:
-                    # Note that this can cause the .image to be updated even after the
-                    # stream is not active (but that can happen even without this).
-                    stream._shouldUpdateImage()
         except Exception:
             logging.exception("histogram update thread failed")
 
@@ -1123,23 +1117,9 @@ class StaticSpectrumStream(StaticStream):
         # 0D and/or 1D spectrum will need updates
         self._force_selected_spectrum_update()
 
-    def _onAutoBC(self, enabled):
-        super(StaticSpectrumStream, self)._onAutoBC(enabled)
-        # if changing to auto, need to recompute line spectrum
-        if enabled:
-            self._force_selected_spectrum_update()
-
-    def _onOutliers(self, outliers):
-        super(StaticSpectrumStream, self)._onOutliers(outliers)
-        # if changing outliers while in auto, need to recompute line spectrum
-        if self.auto_bc.value:
-            self._force_selected_spectrum_update()
-
     def _onIntensityRange(self, irange):
         super(StaticSpectrumStream, self)._onIntensityRange(irange)
-        # If auto_bc is active, it will not affect the line spectrum directly
-        if not self.auto_bc.value:
-            self._force_selected_spectrum_update()
+        self._force_selected_spectrum_update()
 
     def onFitToRGB(self, value):
         """

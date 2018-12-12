@@ -179,12 +179,6 @@ class LiveStream(Stream):
                 # sleep as much, to ensure we are not using too much CPU
                 tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
-
-                # If still nothing to do, update the RGB image with the new B/C.
-                if not ht_needs_recompute.is_set() and stream.auto_bc.value:
-                    # Note that this can cause the .image to be updated even after the
-                    # stream is not active (but that can happen even without this).
-                    stream._shouldUpdateImage()
         except Exception:
             logging.exception("histogram update thread failed")
 
@@ -1151,13 +1145,7 @@ class RGBCameraStream(CameraStream):
         self.auto_bc.value = False  # Typically, it should be displayed as-is
 
     # TODO: handle brightness and contrast VAs
-    def _onAutoBC(self, enabled):
-        pass
-
-    def _onOutliers(self, outliers):
-        pass
-
-    def _onIntensityRange(self, irange):
+    def _recomputeIntensityRange(self):
         pass
 
     def _onActive(self, active):
