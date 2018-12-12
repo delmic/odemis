@@ -254,7 +254,8 @@ class OdemisBugreporter():
 
             if not models:
                 # just pick every potential microscope model
-                models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
+                models = glob(os.path.join(odemis_config['CONFIGPATH'], '*.odm.yaml'))
+
             files.extend(models)
 
             # Add the latest overlay-report if it's possibly related (ie, less than a day old)
