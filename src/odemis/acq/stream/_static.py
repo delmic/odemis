@@ -195,8 +195,6 @@ class Static2DStream(StaticStream):
                 raw[0] = raw[0][0, :, :]
             metadata[model.MD_DIMS] = "CTZYX"[-raw[0].ndim::]
 
-        logging.debug("%s shape: %s", name, raw[0].shape)
-
         # Define if z-index should be created.
         if len(raw[0].shape) == 3 and metadata[model.MD_DIMS] == "ZYX":
             try:
@@ -204,20 +202,20 @@ class Static2DStream(StaticStream):
                 pos = metadata[model.MD_POS]
                 if len(pxs) < 3:
                     assert len(pxs) == 2
-                    logging.warning("Metadata for 3D data invalid. Using default pixel size 1e-6 m")
-                    pxs = (pxs[0], pxs[1], 1e-6)
+                    logging.warning(u"Metadata for 3D data invalid. Using default pixel size 10µm")
+                    pxs = (pxs[0], pxs[1], 10e-6)
                     metadata[model.MD_PIXEL_SIZE] = pxs
 
                 if len(pos) < 3:
                     assert len(pos) == 2
                     pos = (pos[0], pos[1], 0)
                     metadata[model.MD_POS] = pos
-                    logging.warning("Metadata for 3D data invalid. Using default centre position 0")
+                    logging.warning(u"Metadata for 3D data invalid. Using default centre position 0")
 
             except KeyError:
                 raise ValueError("Pixel size or position are missing from metadata")
             # Define a z-index
-            self.zIndex = model.IntContinuous(0, [0, raw[0].shape[0] - 1])
+            self.zIndex = model.IntContinuous(0, (0, raw[0].shape[0] - 1))
             self.zIndex.subscribe(self._on_zIndex)
 
         # Copy back the metadata
