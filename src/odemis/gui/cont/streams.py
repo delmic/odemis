@@ -441,7 +441,10 @@ class StreamController(object):
         metadata = self.stream.getRawMetadata()[0]  # take the first only
         zcentre = metadata[model.MD_POS][2]
         zstep = metadata[model.MD_PIXEL_SIZE][2]
-        zstart = zcentre - (self.stream.zIndex.range[1] + 1) * zstep / 2
+        # The number of zIndexes is zIndex.range[1] + 1 (as it starts at 0).
+        # zstart is the *center* position of the first pixel, so we need
+        # len(zIndexes) - 1 ==  zIndex.range[1]
+        zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
         self.tab_data_model.zPos.value = zstart + zstep * zIndex
 
         self.tab_data_model.zPos.subscribe(self._on_z_pos)
@@ -455,9 +458,8 @@ class StreamController(object):
         metadata = self.stream.getRawMetadata()[0]  # take the first only
         zcentre = metadata[model.MD_POS][2]
         zstep = metadata[model.MD_PIXEL_SIZE][2]
-        zstart = zcentre - (self.stream.zIndex.range[1] + 1) * zstep / 2
+        zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
         val = int(round((zPos - zstart) / zstep))
-
         self.stream.zIndex.value = self.stream.zIndex.clip(val)
 
         self.stream.zIndex.subscribe(self._on_z_index)
