@@ -58,8 +58,7 @@ def get_wavelength_per_pixel(da):
         try:
             ci = dims.index("C")  # get index of dimension C
         except ValueError:
-            logging.debug("Dimension 'C' not in dimensions, so skip computing wavelength list.")
-            return None
+            raise ValueError("No C dimension, WL_LIST is not meaningful.")
         if len(wl) == da.shape[ci]:
             return wl
         else:
@@ -107,8 +106,7 @@ def get_time_per_pixel(da):
         try:
             ti = dims.index("T")  # get index of dimension T
         except ValueError:
-            logging.debug("Dimension 'T' not in dimensions, so skip computing time list.")
-            return None
+            raise ValueError("No T dimension, TIME_LIST is not meaningful.")
         if len(tl) == da.shape[ti]:
             return tl
         else:
