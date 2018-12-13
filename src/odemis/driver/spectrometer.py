@@ -313,19 +313,22 @@ class SpecDataFlow(model.DataFlow):
 
         # Check the metadata seems correct, and if not, recompute it on-the-fly
         md = self._beg_metadata
-        if model.MD_WL_LIST in md:
-            # TODO: the current metadata should contain the pxs/res/wl/grating it corresponds to
-            if len(md[model.MD_WL_LIST]) != data.shape[1]:
-                dmd = data.metadata
-                logging.debug("WL_LIST len = %d vs %d", len(md[model.MD_WL_LIST]), data.shape[1])
-                try:
-                    npixels = data.shape[1]
-                    pxs = dmd[model.MD_SENSOR_PIXEL_SIZE][0] * dmd[model.MD_BINNING][0]
-                    logging.info("Recomputing correct WL_LIST metadata")
-                    wll = self.component._spectrograph.getPixelToWavelength(npixels, pxs)
-                    md[model.MD_WL_LIST] = wll
-                except KeyError:
-                    logging.warning("Failed to compute correct WL_LIST metadata", exc_info=True)
+        # WL_LIST should be the same length as the data (excepted if the
+        # spectrograph is in 0th order, then it should be empty or not present)
+        wll = md.get(model.MD_WL_LIST)
+        if wll and len(wll) != data.shape[1]:
+            dmd = data.metadata
+            logging.debug("WL_LIST len = %d vs %d", len(wll), data.shape[1])
+            try:
+                npixels = data.shape[1]
+                pxs = dmd[model.MD_SENSOR_PIXEL_SIZE][0] * dmd[model.MD_BINNING][0]
+                logging.info("Recomputing correct WL_LIST metadata")
+                wll = self.component._spectrograph.getPixelToWavelength(npixels, pxs)
+                md[model.MD_WL_LIST] = wll
+            except KeyError as ex:
+                logging.warning("Failed to compute correct WL_LIST metadata: %s", ex)
+            except Exception:
+                logging.exception("Failed to compute WL_LIST metadata")
 
         # Remove non useful metadata
         for k in NON_SPEC_MD:
