@@ -806,7 +806,7 @@ class StreamPanel(wx.Panel):
         # accuracy to avoid rounding.
 
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
-        tooltip_txt = "Value mapped to black"
+        tooltip_txt = "Values below are mapped to black [cts/px]."
         lbl_lowi.SetToolTip(tooltip_txt)
 
         txt_lowi = FloatTextCtrl(self._panel, -1,
@@ -821,7 +821,7 @@ class StreamPanel(wx.Panel):
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
 
-        tooltip_txt = "Value mapped to white"
+        tooltip_txt = "Values above are mapped to white [cts/px]."
         lbl_highi.SetToolTip(tooltip_txt)
         txt_highi = FloatTextCtrl(self._panel, -1,
                                   self.stream.intensityRange.value[1],
