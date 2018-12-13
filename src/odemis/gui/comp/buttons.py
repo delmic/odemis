@@ -33,7 +33,7 @@ from __future__ import division
 import logging
 import math
 import numpy
-from odemis.gui import FG_COLOUR_HIGHLIGHT
+from odemis.gui import FG_COLOUR_HIGHLIGHT, FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_RADIO_ACTIVE
 from odemis.gui import img
 from odemis.gui.util.img import wxImageScaleKeepRatio
 import wx
@@ -414,18 +414,19 @@ class BtnMixin(object):
         dc.DrawBitmap(bmp, 0, 0, True)
         self.DrawText(dc, width, height)
 
-    def DrawText(self, dc, width, height, dx=0, dy=0):
+    def DrawText(self, dc, width, height, dx=0, dy=0, text_colour=None):
 
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
-        if self.fg_colour_set:
-            text_colour = self.GetForegroundColour()
-        else:
-            if self.IsEnabled():
-                text_colour = self.btns[self.face_colour]['text_colour']
+        if text_colour is None:
+            if self.fg_colour_set:
+                text_colour = self.GetForegroundColour()
             else:
-                text_colour = self.btns[self.face_colour]['text_col_dis']
+                if self.IsEnabled():
+                    text_colour = self.btns[self.face_colour]['text_colour']
+                else:
+                    text_colour = self.btns[self.face_colour]['text_col_dis']
 
         dc.SetTextForeground(text_colour)
 
@@ -508,7 +509,17 @@ class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
 
 
 class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
-    pass
+
+    def __init__(self, *args, **kwargs):
+        self.active_color = kwargs.pop("active_color", None)
+        super(ImageTextToggleButton, self).__init__(*args, **kwargs)
+
+    def DrawText(self, dc, width, height, dx=0, dy=0):
+        if self.active_color and self.GetValue():
+            text_colour = self.active_color
+        else:
+            text_colour = None
+        super(ImageTextToggleButton, self).DrawText(dc, width, height, dx=0, dy=0, text_colour=text_colour)
 
 
 class ImageStateButton(ImageToggleButton):
@@ -715,6 +726,7 @@ class TabButton(GraphicRadioButton):
 
     def DrawLabel(self, *args, **kwargs):
         super(TabButton, self).DrawLabel(*args, **kwargs)
+
 
 class ColourButton(ImageButton):
     """ An ImageButton that has a single colour background that can be altered """
