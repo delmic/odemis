@@ -33,7 +33,7 @@ from __future__ import division
 import logging
 import math
 import numpy
-from odemis.gui import FG_COLOUR_HIGHLIGHT, FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_RADIO_ACTIVE
+from odemis.gui import FG_COLOUR_HIGHLIGHT
 from odemis.gui import img
 from odemis.gui.util.img import wxImageScaleKeepRatio
 import wx
