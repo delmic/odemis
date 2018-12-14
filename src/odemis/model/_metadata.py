@@ -28,7 +28,7 @@ MD_ACQ_DATE = "Acquisition date" # s since epoch
 MD_AD_LIST = "Acquisition dates" # s since epoch for each element in dimension T
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus
-MD_PIXEL_SIZE = "Pixel size" # (m, m)
+MD_PIXEL_SIZE = "Pixel size"  # (m, m) or (m, m, m) if the data has XY or XYZ dimensions
 MD_SHEAR = "Shear"  # float, vertical shear (0, means no shearing)
 MD_FLIP = "Flip"
 MD_BINNING = "Binning" # (px, px), number of pixels acquired as one big pixel, in each dimension
@@ -44,7 +44,9 @@ MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel (on a CCD/CMO
 MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre of 2 pixels on the detector sensor
 MD_SENSOR_SIZE = "Sensor size" # px, px, maximum resolution that can be acquire by the detector
 MD_SENSOR_TEMP = "Sensor temperature" # C
-MD_POS = "Centre position" # (m, m), location of the picture centre. X goes right, and Y goes up
+MD_POS = "Centre position"  # (m, m) or (m, m, m) if the data has XY or XYZ dimensions.
+# It's the location of the picture *centre*. X goes "right" (ie, pixel index increases),
+# Y goes "up" (ie, pixel index decreases), and Z goes "top" (ie, pixel index increases).
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
 MD_ROTATION = "Rotation" # radians (0<=float<2*PI) rotation applied to the image (from its center) counter-clockwise
 # Note that the following two might be a set of ranges
