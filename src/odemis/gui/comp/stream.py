@@ -29,7 +29,7 @@ from decorator import decorator
 import logging
 from odemis import acq, gui
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
-    FG_COLOUR_DIS
+    FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE
 from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
@@ -758,7 +758,7 @@ class StreamPanel(wx.Panel):
 
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
-                                                   label="Auto")
+                                                   label="Auto", active_color=FG_COLOUR_RADIO_ACTIVE)
         btn_autobc.SetToolTip("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
