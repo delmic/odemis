@@ -511,12 +511,12 @@ class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
 class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
 
     def __init__(self, *args, **kwargs):
-        self.active_color = kwargs.pop("active_color", None)
+        self.active_colour = kwargs.pop("active_colour", None)
         super(ImageTextToggleButton, self).__init__(*args, **kwargs)
 
     def DrawText(self, dc, width, height, dx=0, dy=0):
-        if self.active_color and self.GetValue():
-            text_colour = self.active_color
+        if self.active_colour and self.GetValue():
+            text_colour = self.active_colour
         else:
             text_colour = None
         super(ImageTextToggleButton, self).DrawText(dc, width, height, dx=0, dy=0, text_colour=text_colour)
