@@ -1954,6 +1954,13 @@ class TMCLController(model.Actuator):
         elif port == "/dev/fake6":
             return TMCMSimulator(timeout=0.1, naxes=6)
 
+        # write_timeout is only support in PySerial v3+
+        kwargs = {}
+        ser_maj_ver = int(serial.VERSION.split(".")[0])
+        if ser_maj_ver >= 3:
+            # should never be needed... excepted that sometimes write() blocks
+            kwargs["write_timeout"] = 1  # s
+
         try:
             ser = serial.Serial(
                 port=port,
@@ -1962,7 +1969,7 @@ class TMCLController(model.Actuator):
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
                 timeout=0.1,  # s
-                write_timeout=1,  # s (should never be needed... excepted that sometimes write() blocks)
+                **kwargs
             )
         except IOError:
             raise HwError("Failed to find a TMCM controller on port '%s'. "
