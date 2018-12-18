@@ -424,14 +424,6 @@ def _read_image_info(group):
     except Exception:
         logging.warning("Failed to parse TOffset info", exc_info=True)
 
-    try:
-        toffset = float(group["TOffsetRelative"][()])
-        md[model.MD_TIME_OFFSET] = toffset
-    except KeyError:
-        pass
-    except Exception:
-        logging.warning("Failed to parse TOffsetRelative info", exc_info=True)
-
     # Scale pixel size
     try:
         px_x, px_y, px_z = None, None, None
@@ -459,19 +451,7 @@ def _read_image_info(group):
     except Exception:
         logging.warning("Failed to parse XY scale", exc_info=True)
 
-    # Time scale
-    try:
-        for dim in dataset.dims:
-            if dim.label == "T" and dim:
-                state = _h5svi_get_state(dim[0])
-                if state != ST_REPORTED:
-                    # Only set as real metadata if it was actual information
-                    break
-                pxd = float(dim[0][()])
-                md[model.MD_PIXEL_DUR] = pxd
-    except Exception:
-        logging.warning("Failed to parse T scale", exc_info=True)
-
+    # Time and wavelength dimensions:
     # Wavelength is only if the data has a C dimension and it has two numbers
     # that represent the range of the monochromator bandwidth or the offset and
     # scale (linear polynomial) or it has a list of wavelengths (one per pixel).
@@ -497,17 +477,35 @@ def _read_image_info(group):
                         if dataset.shape[i] == 1:
                             # To support some files saved with Odemis 2.2
                             # Now MD_OUT_WL is only mapped to EmissionWavelength
-                            logging.info("Updating MD_OUT_WL from DimensionScaleC, only supported in backward compatible mode")
+                            logging.info("Updating MD_OUT_WL from DimensionScaleC, "
+                                         "only supported in backward compatible mode")
                             md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
                         else:
                             md[model.MD_WL_POLYNOMIAL] = pn
 
             elif dim.label == "T" and dim:
+                # add time list to metadata, containing info on time stamp per px if available
                 if dim[0].shape == (dataset.shape[i],):
                     md[model.MD_TIME_LIST] = map(float, dim[0][...].tolist())
+                    
+                # handle old data acquired with Odemis xxx TODO,
+                #  which still has pixel_duration and time_offset in MD
+                elif dim[0].shape == ():
+                    try:
+                        toffset = float(group["TOffsetRelative"][()])
+                    except KeyError:
+                        break
+                    state = _h5svi_get_state(dim[0])  # TODO not needed really?
+                    if state != ST_REPORTED:
+                        # Only set as real metadata if it was actual information
+                        break
+                    pxd = float(dim[0][()])
+                    # create TIME_LIST based on time_offset and pixel_dur
+                    md[model.MD_TIME_LIST] = numpy.arange(pxd, pxd * (dataset.shape[i] + 1),
+                                                          (toffset + pxd)).tolist()
 
     except Exception:
-        logging.warning("Failed to parse C scale", exc_info=True)
+        logging.warning("Failed to parse C or T dimension.", exc_info=True)
 
     try:
         rot = group["Rotation"]

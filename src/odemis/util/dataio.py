@@ -90,7 +90,7 @@ def data_to_static_streams(data):
                 logging.warning("Attempted to reduce data to TYX, but data had shape %s", d.shape)
 
             d = sda
-            d.metadata[model.MD_DIMS] = "TYX"
+            d.metadata[model.MD_DIMS] = "CYX"
             d.metadata[model.MD_WL_LIST] = d.metadata[model.MD_TIME_LIST]
 
             name = d.metadata.get(model.MD_DESCRIPTION, "Time")
