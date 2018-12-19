@@ -758,7 +758,7 @@ class StreamPanel(wx.Panel):
 
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
-                                                   label="Auto", active_color=FG_COLOUR_RADIO_ACTIVE)
+                                                   label="Auto", active_colour=FG_COLOUR_RADIO_ACTIVE)
         btn_autobc.SetToolTip("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
