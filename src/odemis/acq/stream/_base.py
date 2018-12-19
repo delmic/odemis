@@ -151,6 +151,7 @@ class Stream(object):
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
+        self._dRangeLock = threading.Lock()
         self._drange = None  # min/max data range, or None if unknown
         self._drange_unreliable = True  # if current values are a rough guess (based on detector)
 
@@ -628,77 +629,83 @@ class Stream(object):
         # different 4th or 5th dimension). => just a generic version that tries
         # to handle all the cases.
 
-        if data is None and self.raw:
-            data = self.raw[0]
-            if isinstance(data, model.DataArrayShadow):
-                # if the image is pyramidal, use the smaller image
-                data = self._getMergedRawImage(data, data.maxzoom)
+        # Note: Add a lock to avoid calling this fct simultaneously. When starting
+        # Odemis, the image thread and the histogram thread call this method.
+        # It happened sometimes that self._drange_unreliable was already updated, while
+        # self._drange was not updated yet. This resulted in incorrectly updated min and max
+        # values for drange calc by the second thread as using the new
+        # self._drange_unreliable but the old self._drange values.
+        with self._dRangeLock:
+            if data is None and self.raw:
+                data = self.raw[0]
+                if isinstance(data, model.DataArrayShadow):
+                    # if the image is pyramidal, use the smaller image
+                    data = self._getMergedRawImage(data, data.maxzoom)
 
-        # 2 types of drange management:
-        # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
-        # * dtype is float -> data.max
-        if data is not None:
-            if data.dtype.kind in "biu":
-                try:
-                    depth = 2 ** data.metadata[model.MD_BPP]
-                    if depth <= 1:
-                        logging.warning("Data reports a BPP of %d",
-                                        data.metadata[model.MD_BPP])
-                        raise ValueError()
-                    drange = (0, depth - 1)
-                except (KeyError, ValueError):
-                    drange = self._guessDRangeFromDetector()
+            # 2 types of drange management:
+            # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
+            # * dtype is float -> data.max
+            if data is not None:
+                if data.dtype.kind in "biu":
+                    try:
+                        depth = 2 ** data.metadata[model.MD_BPP]
+                        if depth <= 1:
+                            logging.warning("Data reports a BPP of %d", data.metadata[model.MD_BPP])
+                            raise ValueError()
+                        drange = (0, depth - 1)
+                    except (KeyError, ValueError):
+                        drange = self._guessDRangeFromDetector()
 
-                if drange is None:
-                    idt = numpy.iinfo(data.dtype)
-                    drange = (idt.min, idt.max)
-                elif data.dtype.kind == "i":  # shift the range for signed data
-                    depth = drange[1] + 1
-                    drange = (-depth // 2, depth // 2 - 1)
+                    if drange is None:
+                        idt = numpy.iinfo(data.dtype)
+                        drange = (idt.min, idt.max)
+                    elif data.dtype.kind == "i":  # shift the range for signed data
+                        depth = drange[1] + 1
+                        drange = (-depth // 2, depth // 2 - 1)
 
-                # If range is too big to be used as is => look really at the data
-                if (drange[1] - drange[0] > 4095 and
-                    (self._drange is None or
-                     self._drange_unreliable or
-                     self._drange[1] - self._drange[0] < drange[1] - drange[0])):
-                    mn = int(data.view(numpy.ndarray).min())
-                    mx = int(data.view(numpy.ndarray).max())
+                    # If range is too big to be used as is => look really at the data
+                    if (drange[1] - drange[0] > 4095 and
+                        (self._drange is None or
+                         self._drange_unreliable or
+                         self._drange[1] - self._drange[0] < drange[1] - drange[0])):
+                        mn = int(data.view(numpy.ndarray).min())
+                        mx = int(data.view(numpy.ndarray).max())
+                        if self._drange is not None and not self._drange_unreliable:
+                            # Only allow the range to expand, to avoid it constantly moving
+                            mn = min(mn, self._drange[0])
+                            mx = max(mx, self._drange[1])
+                        # Try to find "round" values. Either:
+                        # * mn = 0, mx = max rounded to next power of 2  -1
+                        # * mn = min, width = width rounded to next power of 2
+                        # => pick the one which gives the smallest width
+                        diff = max(2, mx - mn + 1)
+                        diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
+                        width0 = max(2, mx + 1)
+                        width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
+                        if diffrd < width0rd:
+                            drange = (mn, mn + diffrd - 1)
+                        else:
+                            drange = (0, width0rd - 1)
+                else:  # float
+                    # cast to ndarray to ensure a scalar (instead of a DataArray)
+                    drange = (data.view(numpy.ndarray).min(),
+                              data.view(numpy.ndarray).max())
                     if self._drange is not None and not self._drange_unreliable:
-                        # Only allow the range to expand, to avoid it constantly moving
-                        mn = min(mn, self._drange[0])
-                        mx = max(mx, self._drange[1])
-                    # Try to find "round" values. Either:
-                    # * mn = 0, mx = max rounded to next power of 2  -1
-                    # * mn = min, width = width rounded to next power of 2
-                    # => pick the one which gives the smallest width
-                    diff = max(2, mx - mn + 1)
-                    diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
-                    width0 = max(2, mx + 1)
-                    width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
-                    if diffrd < width0rd:
-                        drange = (mn, mn + diffrd - 1)
-                    else:
-                        drange = (0, width0rd - 1)
-            else: # float
-                # cast to ndarray to ensure a scalar (instead of a DataArray)
-                drange = (data.view(numpy.ndarray).min(),
-                          data.view(numpy.ndarray).max())
-                if self._drange is not None and not self._drange_unreliable:
-                    drange = (min(drange[0], self._drange[0]),
-                              max(drange[1], self._drange[1]))
+                        drange = (min(drange[0], self._drange[0]),
+                                  max(drange[1], self._drange[1]))
+
+                if drange:
+                    self._drange_unreliable = False
+            else:
+                # no data, give a large estimate based on the detector
+                drange = self._guessDRangeFromDetector()
+                self._drange_unreliable = True
 
             if drange:
-                self._drange_unreliable = False
-        else:
-            # no data, give a large estimate based on the detector
-            drange = self._guessDRangeFromDetector()
-            self._drange_unreliable = True
-
-        if drange:
-            # This VA will clip its own value if it is out of range
-            self.intensityRange.range = ((drange[0], drange[0]),
-                                         (drange[1], drange[1]))
-        self._drange = drange
+                # This VA will clip its own value if it is out of range
+                self.intensityRange.range = ((drange[0], drange[0]),
+                                             (drange[1], drange[1]))
+            self._drange = drange
 
     def _guessDRangeFromDetector(self):
         try:
