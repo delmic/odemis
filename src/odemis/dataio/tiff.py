@@ -867,8 +867,8 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
         try:
-            MCPgain = int(streakCamData.attrib["MCPGain"])
-            md[model.MD_STREAK_MCPGAIN] = MCPgain
+            MCPGain = int(streakCamData.attrib["MCPGain"])
+            md[model.MD_STREAK_MCPGAIN] = MCPGain
         except (AttributeError, KeyError, ValueError):
             pass
         try:
