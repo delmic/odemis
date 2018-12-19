@@ -792,6 +792,21 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
         )),
+    stream.StreakCamStream:
+        OrderedDict((
+            ("detStreakMode", {
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "label": "Streak mode",
+                "tooltip": u"If checked streak camera is in operate mode and streaking.\n"
+                           u"If not checked steak camera is in focus mode.",
+            }),
+            ("detMCPGain", {
+                "control_type": odemis.gui.CONTROL_INT,
+                "label": "MCP gain",
+                "tooltip": u"Microchannel plate gain of the streak unit.\n"
+                           u"Be careful when setting the gain while operating the camera in focus-mode.",
+            }),
+        )),
 }
 
 

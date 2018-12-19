@@ -47,6 +47,10 @@ from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
 import time
 import wx
+import csv
+import os
+from odemis.gui.util import get_picture_folder
+from odemis.acq import calibration
 
 import odemis.gui.conf as guiconf
 
@@ -719,3 +723,199 @@ class SparcAlignSettingsController(SettingsBarController):
                     continue
                 conf = self._va_config[comp.role].get(a)
                 self._spect_setting_cont.add_axis(a, comp, conf)
+
+
+# constants defining the displayed status in the GUI
+SAVE = "Save"
+LOAD = "Load"
+ERROR = "Error"
+STATUS = "Status"
+
+
+class StreakCamAlignSettingsController(SettingsBarController):
+    """
+    Controller, which creates the streak panel in the alignment tab and
+    provides the necessary settings to align and calibrate a streak camera.
+    """
+    def __init__(self, tab_panel, tab_data):
+        super(StreakCamAlignSettingsController, self).__init__(tab_data)
+        self.panel = tab_panel
+        main_data = tab_data.main
+        self.streak_ccd = main_data.streak_ccd
+        self.streak_delay = main_data.streak_delay
+        self.streak_unit = main_data.streak_unit
+        self.streak_lens = main_data.streak_lens
+
+        self._calib_path = get_picture_folder()  # path to the trigger delay calibration folder
+
+        self.panel_streak = SettingsPanel(self.panel.pnl_streak)
+        self.panel_streak.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.panel.pnl_streak.GetSizer().Add(self.panel_streak, 1, border=5,
+                                             flag=wx.BOTTOM | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+
+        entry_timeRange = create_setting_entry(self.panel_streak, "Time range",
+                                               self.streak_unit.timeRange,
+                                               self.streak_unit,
+                                               conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                     "label": "Time range",
+                                                     "tooltip": "Time needed by the streak unit for one sweep "
+                                                                "from top to bottom of the readout camera chip."}
+                                               )
+        entry_timeRange.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.ctrl_timeRange = entry_timeRange.value_ctrl
+
+        entry_triggerDelay = create_setting_entry(self.panel_streak, "Trigger delay",
+                                                  self.streak_delay.triggerDelay,
+                                                  self.streak_delay,
+                                                  conf={"control_type": odemis.gui.CONTROL_FLT,
+                                                        "label": "Trigger delay",
+                                                        "tooltip": "Change the trigger delay value to "
+                                                                   "center the image."},
+                                                  change_callback=self._onUpdateTriggerDelayMD)
+
+        entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.ctrl_triggerDelay = entry_triggerDelay.value_ctrl
+
+        entry_magnification = create_setting_entry(self.panel_streak, "Magnification",
+                                                   self.streak_lens.magnification,
+                                                   self.streak_lens,
+                                                   conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                         "label": "Magnification",
+                                                         "tooltip": "Change the magnification of the input"
+                                                                    "optics for the streak camera system. \n"
+                                                                    "Values < 1: De-magnifying \n"
+                                                                    "Values > 1: Magnifying"})
+
+        entry_magnification.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.combo_magnification = entry_magnification.value_ctrl
+
+        # remove border
+        self.panel_streak.GetSizer().GetItem(0).SetBorder(0)
+        self.panel_streak.Layout()
+
+        self.panel.btn_open_streak_calib_file.Bind(wx.EVT_BUTTON, self._onOpenCalibFile)
+        self.panel.btn_save_streak_calib_file.Bind(wx.EVT_BUTTON, self._onSaveCalibFile)
+
+    def _onUpdateTriggerDelayMD(self, value):
+        """
+        Callback method for trigger delay ctrl GUI element.
+        Overwrites the triggerDelay value in the MD after a new value was requested via the GUI.
+        """
+        cur_timeRange = self.streak_unit.timeRange.value
+        requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
+        # get a copy of  MD
+        trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        trigger2delay_MD[cur_timeRange] = requested_triggerDelay
+        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: trigger2delay_MD})
+        # Note: updateMetadata should here never raise an exception as the UnitFloatCtrl already
+        # catches errors regarding type and out-of-range inputs
+
+        # update txt displayed in GUI
+        self._onUpdateTriggerDelayGUI(STATUS, None)
+
+    def _onUpdateTriggerDelayGUI(self, mode, filename):
+        """
+        Updates the GUI elements regarding the new trigger delay value.
+        :parameter mode: (constant) SAVE, LOAD, ERROR or STATUS for display
+        :parameter filename: (str) filename of the loaded/saved file
+        """
+        if mode in (LOAD, SAVE):
+            self.panel.txt_StreakCalibFilename.Value = "%s" % filename
+            self.panel.txt_StreakCalibFilename.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        elif mode == ERROR:
+            self.panel.txt_StreakCalibFilename.Value = "Error while loading file!"
+            self.panel.txt_StreakCalibFilename.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
+        elif mode == STATUS:
+            self.panel.txt_StreakCalibFilename.Value = "Calibration not saved yet!"
+            self.panel.txt_StreakCalibFilename.SetForegroundColour(odemis.gui.FG_COLOUR_WARNING)
+        else:
+            raise ValueError("Mode %s for display of the current status of the trigger delay "
+                             "calibration file is unknown.", mode)
+
+    def _onOpenCalibFile(self, event):
+        """
+        Loads a calibration file (*csv) containing the time range and the corresponding trigger delay
+        for streak camera calibration.
+        """
+        logging.debug("Open trigger delay calibration file for temporal acquisition.")
+
+        dialog = wx.FileDialog(self.panel,
+                               message="Choose a calibration file to load",
+                               defaultDir=self._calib_path,
+                               defaultFile="",
+                               style=wx.FD_OPEN,
+                               wildcard="csv files (*.csv)|*.csv")
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return
+
+        # get selected path + filename and update default directory
+        self._calib_path = dialog.GetDirectory()
+        path = dialog.GetPath()
+        filename = dialog.GetFilename()
+
+        # read file
+        with open(path, 'rb') as csvfile:
+            calibFile = csv.reader(csvfile, delimiter=':')
+
+            try:
+                tr2d_dict = calibration.get_time_range_to_trigger_delay(calibFile,
+                                                                        self.streak_unit.timeRange.choices,
+                                                                        self.streak_delay.triggerDelay.range)
+            except ValueError as error:
+                self._onUpdateTriggerDelayGUI(ERROR, filename)  # update txt displayed in GUI
+                logging.error(error)
+                return
+
+        # update the MD
+        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d_dict})
+
+        # update triggerDelay shown in GUI
+        cur_timeRange = self.streak_unit.timeRange.value
+        # find the corresponding trigger delay
+        key = odemis.util.find_closest(cur_timeRange, tr2d_dict.keys())
+        # Note: no need to check almost_equal again as we do that already when loading the file
+        self.streak_delay.triggerDelay.value = tr2d_dict[key]  # set the new value
+
+        self._onUpdateTriggerDelayGUI(LOAD, filename)  # update txt displayed in GUI
+
+    def _onSaveCalibFile(self, event):
+        """
+        Saves a calibration file (*csv) containing the time range and the corresponding trigger delay
+        for streak camera calibration.
+        """
+        logging.debug("Save trigger delay calibration file for temporal acquisition.")
+
+        dialog = wx.FileDialog(self.panel,
+                               message="Choose a filename and destination to save the calibration file. "
+                                       "It is advisory to include the SEM voltage into the filename.",
+                               defaultDir=self._calib_path,
+                               defaultFile="",
+                               style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+                               wildcard="csv files (*.csv)|*.csv")
+
+        # Show the dialog and check whether is was accepted or cancelled
+        if dialog.ShowModal() != wx.ID_OK:
+            return
+
+        # get selected path + filename and update default directory
+        self._calib_path = dialog.GetDirectory()
+        path = dialog.GetPath()
+        filename = dialog.GetFilename()
+
+        # check if filename is provided with the correct extension
+        if os.path.splitext(filename)[1] != ".csv":
+            filename += ".csv"
+            path += ".csv"
+
+        # get a copy of the triggerDelay dict from MD
+        triggerDelay_dict = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+
+        with open(path, 'wb') as csvfile:
+            calibFile = csv.writer(csvfile, delimiter=':')
+            for key in triggerDelay_dict.keys():
+                calibFile.writerow([key, triggerDelay_dict[key]])
+
+        # update txt displayed in GUI
+        self._onUpdateTriggerDelayGUI(SAVE, filename)

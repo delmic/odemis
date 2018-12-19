@@ -121,6 +121,23 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
+            'streak-align': ("streak-ccd",  # alignment tab
+                {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
+                 'spectrograph': {'grating': "mirror"},
+                 'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
+                }),
+            'streak-focus': ("streak-ccd",  # manual focus in alignment tab
+                {'lens-switch': {'x': 'off'},
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'filter': {'band': 'pass-through'},
+                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
+                 'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': 'pass-through'},
+                }),
             'spectral-integrated': ("spectrometer-integrated",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -246,7 +263,7 @@ SECOM_MODES = {
                 }),
             }
 
-ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus', 'spec-fiber-focus'}
+ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus', 'streak-focus'}
 
 
 # TODO: Could be moved to util
@@ -630,11 +647,13 @@ class OpticalPathManager(object):
         # wait for all the moves to be completed
         for f in fmoves:
             try:
-                # TODO: have some timeout?
                 # Can be large, eg within 5 min one (any) move should finish.
-                f.result()
+                f.result(timeout=180)
             except IOError as e:
                 logging.warning("Actuator move failed giving the error %s", e)
+            except:
+                logging.exception("Actuator move failed!")
+                raise
 
         # When going to chamber view, store the current focus position, and
         # restore the special focus position for chamber, after _really_ all
