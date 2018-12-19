@@ -1,0 +1,48 @@
+      <font size="2">
+        <b><font size="3">Streak camera hardware alignment</font></b>
+          <ol>
+            <li>At all time limit the pixel intensity to max. 1000 cts.</li>
+            <li>Blank or turn off the e-beam.</li>
+            <li>Close the shutter and the slit of the streak camera, then move the streak camera backwards.</li>
+            <li>Put the camera in focus mode (unchecked).</li>
+            <li>Open the shutter and carefully open the slit until the signal is visible in the displayed live view.</li>
+            <li>Adjust the rotation and height of the slit such that the complete photocathode is illuminated.</li>
+            <li>Adjust the focus ring of the input optics to maximize the pixel intensity.</li>
+            <li>Close the slit and move the streak camera back against the SPARC.</li>
+            <li>Turn on the calibration light and close the slit of the spectrograph by toggling the manual
+                focus button.
+                Open the slit of the streak camera to get the signal in live view. Maximize the intensity
+                by moving the focus of the spectrograph manually. Turn the calibration light off by
+                untoggling the manual focus button.</li>
+            <li>Turn on the e-beam and find the CL spot by adjusting the height of the streak camera with
+                the lab-jack.</li>
+            <li>Adjust the spectrograph detector offset by adjusting the offset value based on the horizontal
+                position of the CL-spot on the displayed image (change offset using shrkconfig commands in terminal).
+                The spot should be centered on the horizontal wavelength axis.</li>
+            <li>Optional: Perform a fine spectral calibration by toggling the manual focus button,
+                selecting a grating and setting the center wavelength. Position the peaks of the calibration
+                light (Ar) using the shrkconfig commands in the terminal (see manual: Ar spectrum).</li>
+            <li>Select the magnification corresponding to the input optics of the camera
+                in the streak tab.</li>
+          </ol>
+        <br/>
+	<br/>
+      </font>
+      <font size="2">
+        <b><font size="3">Trigger delay calibration</font></b>
+          <ol>
+            <li>Check that the e-beam settings fit the sample.</li>
+            <li>Load an existing calibration file for a specified e-beam voltage
+                or perform a new trigger delay calibration.</li>
+            <li>Turn on the e-beam blanker.</li>
+            <li>Choose the largest time range setting.</li>
+            <li>Switch on the streak mode (checked).</li>
+            <li>Optimize the MCP-Gain and the exposure time until the signal (a line) is sufficient.</li>
+            <li>Choose a smaller time range if multiple lines are visible.</li>
+            <li>Center the line by adjusting the trigger delay.</li>
+            <li>Perform the same procedure for all higher zoom levels.  </li> <!--Hack: empty space to avoid not empty line-->
+            <li>Save the calibration file specifying the e-beam voltage.</li>
+          </ol>
+        <br/>
+	<br/>
+      </font>
