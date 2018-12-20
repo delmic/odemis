@@ -828,11 +828,11 @@ def _parse_physical_data(pdgroup, da):
 
         try:
             ds = pdgroup["MCPGain"]
-            MCPgain = float(ds[i])
+            MCPGain = float(ds[i])
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_STREAK_MCPGAIN] = MCPgain
+            md[model.MD_STREAK_MCPGAIN] = MCPGain
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -1190,8 +1190,8 @@ def _add_image_metadata(group, image, mds):
     # Streak camera info (only meaningful for SPARC with streak camera)
     # Streak unit: time range (float) for streaking
     timeRange, st_timeRange = [], []
-    # Streak unit: MCPgain (float)
-    MCPgain, st_MCPgain = [], []
+    # Streak unit: MCPGain (float)
+    MCPGain, st_MCPGain = [], []
     # Streak unit: streak mode (bool)
     streakMode, st_streakMode = [], []
     # Streak delay generator: trigger delay (float) for starting to streak
@@ -1259,11 +1259,11 @@ def _add_image_metadata(group, image, mds):
             timeRange.append("")
             st_timeRange.append(ST_INVALID)
         if model.MD_STREAK_MCPGAIN in md:
-            MCPgain.append(md[model.MD_STREAK_MCPGAIN])
-            st_MCPgain.append(ST_REPORTED)
+            MCPGain.append(md[model.MD_STREAK_MCPGAIN])
+            st_MCPGain.append(ST_REPORTED)
         else:
-            MCPgain.append("")
-            st_MCPgain.append(ST_INVALID)
+            MCPGain.append("")
+            st_MCPGain.append(ST_INVALID)
         if model.MD_STREAK_MODE in md:
             streakMode.append(md[model.MD_STREAK_MODE])
             st_streakMode.append(ST_REPORTED)
@@ -1314,9 +1314,9 @@ def _add_image_metadata(group, image, mds):
     if not all(st == ST_INVALID for st in st_timeRange):
         gp["TimeRange"] = timeRange
         _h5svi_set_state(gp["TimeRange"], st_timeRange)
-    if not all(st == ST_INVALID for st in st_MCPgain):
-        gp["MCPGain"] = MCPgain
-        _h5svi_set_state(gp["MCPGain"], st_MCPgain)
+    if not all(st == ST_INVALID for st in st_MCPGain):
+        gp["MCPGain"] = MCPGain
+        _h5svi_set_state(gp["MCPGain"], st_MCPGain)
     if not all(st == ST_INVALID for st in st_streakMode):
         gp["StreakMode"] = streakMode
         _h5svi_set_state(gp["StreakMode"], st_streakMode)

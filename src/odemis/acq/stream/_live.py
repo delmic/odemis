@@ -924,6 +924,67 @@ class FluoStream(CameraStream):
         super(FluoStream, self)._onNewData(dataflow, data)
 
 
+class StreakCamStream(CameraStream):
+
+    def __init__(self, name, detector, dataflow,
+                 streak_unit, streak_delay, streak_unit_vas,
+                 emitter, emtvas=None, **kwargs):
+
+        # We use emission directly to control the emitter
+        if emtvas and "emission" in emtvas:
+            raise ValueError("emission VA cannot be made local")
+
+        super(StreakCamStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
+
+        # duplicate VAs for GUI except .timeRange VA (displayed on left for calibration)
+        self._streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas or set())
+
+        self.streak_unit = streak_unit
+        self.streak_delay = streak_delay
+
+        # whenever .streakMode changes
+        # -> set .MCPGain = 0 and update .MCPGain.range
+        # This is important for HW safety reasons to not destroy the streak unit,
+        # when changing on of the VA while using a high MCPGain.
+        # While the stream is not active: range of possible values for MCPGain
+        # is limited to values <= current value to also prevent HW damage
+        # when starting to play the stream again.
+        try:
+            self.detStreakMode.subscribe(self._OnStreakSettings)
+            self.detMCPGain.subscribe(self._OnMCPGain)
+        except AttributeError:
+            raise ValueError("Necessary HW VAs for streak camera was not provided")
+
+    # Override Stream._is_active_setter() in _base.py
+    def _is_active_setter(self, active):
+        self.active = super(StreakCamStream, self)._is_active_setter(active)
+        if self.active:
+            # make the full MCPGain range available when stream is active
+            self.detMCPGain.range = self.streak_unit.MCPGain.range
+        else:
+            self._resetMCPGainHW()
+            # only allow values <= current MCPGain value for HW safety reasons when stream inactive
+            self.detMCPGain.range = (0, self.detMCPGain.value)
+        return self.active
+
+    def _resetMCPGainHW(self):
+        """"Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive."""
+        self.streak_unit.MCPGain.value = 0
+
+    def _OnStreakSettings(self, value):
+        """Callback, which sets MCPGain GUI VA = 0,
+        if .timeRange and/or .streakMode GUI VAs have changed."""
+        self.detMCPGain.value = 0  # set GUI VA 0
+        self._OnMCPGain(value)  # update the .MCPGain VA
+
+    def _OnMCPGain(self, _=None):
+        """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
+        only values <= current value are allowed.
+        If stream is active the full range is available."""
+        if not self.active:
+            self.detMCPGain.range = (0, self.detMCPGain.value)
+
+
 class ScannerSettingsStream(Stream):
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
