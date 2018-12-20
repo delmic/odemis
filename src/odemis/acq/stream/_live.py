@@ -953,7 +953,7 @@ class StreakCamStream(CameraStream):
             self.detStreakMode.subscribe(self._OnStreakSettings)
             self.detMCPGain.subscribe(self._OnMCPGain)
         except AttributeError:
-            raise ValueError("Necessary HW VAs for streak camera was not provided")
+            raise ValueError("Necessary HW VAs .detStreakMode and .detMCPGain for streak camera was not provided")
 
     # Override Stream._is_active_setter() in _base.py
     def _is_active_setter(self, active):
