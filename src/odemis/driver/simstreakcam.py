@@ -121,6 +121,8 @@ class ReadoutCamera(model.DigitalCamera):
         self.data = SimpleStreakCameraDataFlow(self._start, self._stop, self._sync)
         self._generator = None
 
+        self._img_counter = 0  # initialize the image counter
+
     def _updateWavelengthList(self, _=None):
         """
         Updates the wavelength list MD based on the current spectrograph position.
@@ -232,7 +234,7 @@ class ReadoutCamera(model.DigitalCamera):
                     md[key] = md_dev[key]
                 elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
                     md[key] = md[key] + ", " + md_dev[key]
-                    # md[key].append(md_dev[key])  # TODO make nice  ", ".join(c)
+
         return md
 
     def terminate(self):
@@ -266,12 +268,8 @@ class ReadoutCamera(model.DigitalCamera):
         Gets a new image from the list of fake images provided.
         :return: (dataarray) image
         """
-        # image counter to provide different images to live view
-        if not hasattr(self, "_img_counter"):
-            self._img_counter = 0  # initialize the image counter
-        self._img_counter = self._img_counter % len(self._img_list)
+        self._img_counter = (self._img_counter + 1) % len(self._img_list)
         image = self._img_list[self._img_counter]
-        self._img_counter += 1
 
         return image
 
@@ -280,14 +278,20 @@ class ReadoutCamera(model.DigitalCamera):
         Generates the fake output image based on the resolution.
         """
         gen_img = self._getNewImage()
-        gen_img = self._simulate(gen_img)
+
+        # Processes the fake image based on resolution and binning.
+        binning = self.binning.value
+        res = self.resolution.value
+        gen_img = gen_img.reshape((res[1], binning[0], res[0],
+                                   binning[1])).mean(axis=3).mean(axis=1).astype(gen_img.dtype)
+
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
         self._waitSync()
         if self._sync_event:
             # If sync event, we need to simulate period after event (not efficient, but works)
             time.sleep(self.exposureTime.value)
 
-        # update the trigger rate VA and MD for the current image
+        # update MD for the current image
         self.parent._delaybox._updateTriggerRate()
 
         metadata = gen_img.metadata.copy()  # MD of image
@@ -300,13 +304,11 @@ class ReadoutCamera(model.DigitalCamera):
         metadata[model.MD_EXP_TIME] = exp
         metadata.pop(model.MD_PIXEL_SIZE, None)  # TODO get rid of this MD for now
 
-        # TODO check if that time list can be used to update the live view legend if there is one
         if self.parent._streakunit.streakMode.value:  # if in Mode 'Operate'
             # shape of gen_image is (time, lambda)
             timeRange = self.parent._streakunit.timeRange.value  # time range of the time axis in image
-            # each px in time axis corresponds to a time stamp (easy approch: equally distributed)
-            step_time = timeRange/float(gen_img.shape[0])
-            metadata[model.MD_TIME_LIST] = list(numpy.arange(0, timeRange, step_time))  # append fake time list
+            # each px in time axis corresponds to a time stamp (easy approach: equally distributed)
+            metadata[model.MD_TIME_LIST] = list(numpy.linspace(0, timeRange, gen_img.shape[0]))  # append fake time list
         logging.debug("Generating new fake image of shape %s", gen_img.shape)
 
         img = model.DataArray(gen_img, metadata)
@@ -325,18 +327,6 @@ class ReadoutCamera(model.DigitalCamera):
         """
         if self._sync_event:
             self._evtq.get()
-
-    def _simulate(self, img):
-        """
-        Processes the fake image based on resolution and binning.
-        :parameter img: (dataarray) the unprocessed image
-        :return: (dataarray) the processed image
-        """
-        binning = self.binning.value
-        res = self.resolution.value
-        sim_img = img.reshape((res[1], binning[0], res[0], binning[1])).mean(axis=3).mean(axis=1).astype(img.dtype)
-
-        return sim_img
 
 
 class StreakUnit(model.HwComponent):
@@ -489,7 +479,7 @@ class StreakCamera(model.HwComponent):
         try:
             kwargs = children["readoutcam"]
         except Exception:
-            raise
+            raise ValueError("Required child readoutcam not provided")
         self._readoutcam = ReadoutCamera(parent=self,
                                          spectrograph=children.get("spectrograph"),
                                          daemon=daemon, **kwargs)
@@ -497,13 +487,13 @@ class StreakCamera(model.HwComponent):
         try:
             kwargs = children["streakunit"]
         except Exception:
-            raise
+            raise ValueError("Required child streakunit not provided")
         self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._streakunit)  # add streakunit to children-VA
         try:
             kwargs = children["delaybox"]
         except Exception:
-            raise
+            raise ValueError("Required child delaybox not provided")
         self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._delaybox)  # add delaybox to children-VA
 
