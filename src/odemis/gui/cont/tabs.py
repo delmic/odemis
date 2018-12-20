@@ -915,8 +915,13 @@ class SparcAcquisitionTab(Tab):
         ])
 
         # depending on HW choose which viewport should be connected to a stream
+        # Note: for now either streak camera HW or monochromator HW is added as a viewport
         # TODO: for now only time correlator HW or streak cam HW handled
+        # So far there is no system having both HW available
         if main_data.streak_ccd:
+            if main_data.monochromator:
+                logging.warning("Streak camera and monochromator HW present, but"
+                                "only streak camera viewport will be displayed.")
             vpv[viewports[3]] = {
                 "name": "Temporal Spectrum",
                 "stream_classes": TemporalSpectrumStream,
@@ -927,8 +932,6 @@ class SparcAcquisitionTab(Tab):
                 "name": "Monochromator",
                 "stream_classes": MonochromatorSettingsStream,
             }
-
-        # TODO what if none of both? double one of the other viewports? Can we go with 3?
 
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
@@ -956,9 +959,8 @@ class SparcAcquisitionTab(Tab):
                 (panel.vp_sparc_br, panel.lbl_sparc_view_br)),  # default is now monochromator
         ])
 
-        # hack to overwrite the view buttons
+        # overwrite the view buttons
         if main_data.streak_ccd:
-            # Note: for now either streak camera HW or monochromator HW possible
             buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_ts, panel.lbl_sparc_view_br)
 
         self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
@@ -3174,9 +3176,9 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.btn_bkg_acquire.Show(False)
 
-        self._tempSpec_stream = None
+        self._ts_stream = None
         if main_data.streak_ccd:
-            tempSpecStream = acqstream.StreakCamStream(
+            tsStream = acqstream.StreakCamStream(
                                 "Calibration trigger delay for streak camera",
                                 main_data.streak_ccd,
                                 main_data.streak_ccd.data,
@@ -3189,10 +3191,10 @@ class Sparc2AlignTab(Tab):
                                          model.MD_ROTATION: 0},  # Force the CCD as-is
                                 )
 
-            self._setFullFoV(tempSpecStream, (2, 2))
-            self._tempSpec_stream = tempSpecStream
+            self._setFullFoV(tsStream, (2, 2))
+            self._ts_stream = tsStream
 
-            streak = self._stream_controller.addStream(tempSpecStream,
+            streak = self._stream_controller.addStream(tsStream,
                              add_to_view=self.panel.vp_align_streak.view)
             streak.stream_panel.flatten()  # No need for the stream name
 
@@ -3215,7 +3217,7 @@ class Sparc2AlignTab(Tab):
 
             # To activate the SEM spot when the camera plays
             # (ebeam centered in image)
-            tempSpecStream.should_update.subscribe(self._on_ccd_stream_play)
+            tsStream.should_update.subscribe(self._on_ccd_stream_play)
 
         if "lens-align" not in tab_data.align_mode.choices:
             self.panel.pnl_lens_mover.Show(False)
@@ -3554,8 +3556,8 @@ class Sparc2AlignTab(Tab):
             f.add_done_callback(self._on_fibalign_done)
         elif mode == "streak-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_streak.view
-            if self._tempSpec_stream:
-                self._tempSpec_stream.should_update.value = True
+            if self._ts_stream:
+                self._ts_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
@@ -3650,7 +3652,7 @@ class Sparc2AlignTab(Tab):
         ccdupdate = self._ccd_stream and self._ccd_stream.should_update.value
         spcupdate = self._speccnt_stream and self._speccnt_stream.should_update.value
         moiupdate = self._moi_stream and self._moi_stream.should_update.value
-        streakccdupdate = self._tempSpec_stream and self._tempSpec_stream.should_update.value
+        streakccdupdate = self._ts_stream and self._ts_stream.should_update.value
         self._spot_stream.is_active.value = any((ccdupdate, spcupdate, moiupdate, streakccdupdate))
 
     def _onClickFocus(self, evt):
