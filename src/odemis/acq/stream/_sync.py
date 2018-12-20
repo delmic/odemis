@@ -1732,7 +1732,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
     """
 
     def _onCompletedData(self, n, raw_das):
-        if n < self._ccd_idx:
+        if n != self._ccd_idx:
             r = super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
             return r
 
@@ -1792,13 +1792,15 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     """
 
     def _onCompletedData(self, n, raw_das):
-        # n: detector
-        # raw_das: list of data acquried for given detector n
+        """
+        n: (int) index of detector
+        raw_das: (list) list of data acquired for given detector n
+        """
         if n != self._ccd_idx:
             return super(SEMTemporalSpectrumMDStream, self)._onCompletedData(n, raw_das)
 
         # if n is the optical detector
-        # -> raw_das is list of tempSpectrum-images (arrays) excluding SEM-image (array)
+        # -> raw_das is list of temporal spectrum-images (arrays) excluding SEM-image (array)
 
         # assemble all the CCD data into one
         rep = self.repetition.value
@@ -1838,15 +1840,15 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
 
         # concatenate into one big array of (lambda, time, z=1, ebeam pos y, ebeam pos x)
         # CTZYX, ebeam scans x and then y (x slow axis)
-        tempSpec_data = numpy.concatenate(data_list, axis=1)
+        ts_data = numpy.concatenate(data_list, axis=1)
         # reshape to (C, T, 1, Y, X)
         spec_res = data_list[0].shape[0]
         temp_res = data_list[0].shape[1]
-        tempSpec_data.shape = (spec_res, temp_res, 1, repetition[1], repetition[0])
+        ts_data.shape = (spec_res, temp_res, 1, repetition[1], repetition[0])
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata.copy()
-        return model.DataArray(tempSpec_data, metadata=md)
+        return model.DataArray(ts_data, metadata=md)
 
 
 class SEMARMDStream(SEMCCDMDStream):
@@ -1857,8 +1859,10 @@ class SEMARMDStream(SEMCCDMDStream):
     """
 
     def _onCompletedData(self, n, raw_das):
-        # n: detector
-        # raw_das: list of data acquried for given detector n
+        """
+        n: (int) index of detector
+        raw_das: (list) list of data acquired for given detector n
+        """
         if n != self._ccd_idx:
             return super(SEMARMDStream, self)._onCompletedData(n, raw_das)
 
@@ -1974,7 +1978,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         """
         return (Future)
         """
-        if n < self._ccd_idx:
+        if n != self._ccd_idx:
             return super(MomentOfInertiaMDStream, self)._preprocessData(n, data, i)
 
         # Instead of storing the actual data, we queue the MoI computation in a future
@@ -1992,7 +1996,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         return self._executor.submit(self.ComputeMoI, data, self.background.value, self._drange, ss)
 
     def _onCompletedData(self, n, raw_das):
-        if n < self._ccd_idx:
+        if n != self._ccd_idx:
             return super(MomentOfInertiaMDStream, self)._onCompletedData(n, raw_das)
 
         # Wait for the moment of inertia calculation results

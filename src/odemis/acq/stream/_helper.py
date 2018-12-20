@@ -520,7 +520,8 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         self.active = False  # variable keep track if stream is active/inactive
 
         # For SPARC: typical user wants density much lower than SEM
-        self.pixelSize.value *= 30  # TODO still true for streak  What does that mean?.....please comment
+        self.pixelSize.value *= 30  # increase default value to decrease default repetition rate
+
         self.streak_unit = streak_unit
         self.streak_delay = streak_delay
 
@@ -538,7 +539,17 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
             self.detStreakMode.subscribe(self._OnStreakSettings)
             self.detMCPGain.subscribe(self._OnMCPGain)
         except AttributeError:
-            raise ValueError("Necessary HW VAs for streak camera was not provided")
+            raise ValueError("Necessary HW VAs .detStreakMode and .detMCPGain for streak camera was not provided")
+
+    # TODO can be removed once projections are handled
+    # Override Stream.__find_metadata() in _base.py
+    def _find_metadata(self, md):
+        md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
+        if model.MD_TIME_LIST in self.raw[0].metadata:
+            md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
+        if model.MD_WL_LIST in self.raw[0].metadata:
+            md[model.MD_WL_LIST] = self.raw[0].metadata[model.MD_WL_LIST]
+        return md
 
     # Override Stream._is_active_setter() in _base.py
     def _is_active_setter(self, active):

@@ -2210,15 +2210,15 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(SPARC2STREAK_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        # try:
+        #     test.start_backend(SPARC2STREAK_CONFIG)
+        # except LookupError:
+        #     logging.info("A running backend is already found, skipping tests")
+        #     cls.backend_was_running = True
+        #     return
+        # except IOError as exp:
+        #     logging.error(str(exp))
+        #     raise
 
         # Find CCD & SEM components
         cls.streak_ccd = model.getComponent(role="streak-ccd")
@@ -2232,9 +2232,10 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
+        # if cls.backend_was_running:
+        #     return
+        # test.stop_backend()
+        pass
 
     def setUp(self):
         if self.backend_was_running:
@@ -2310,6 +2311,10 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertIsInstance(self._image, model.DataArray)
         # .image should be a 2D temporal spectrum
         self.assertEqual(self._image.shape[1::-1], streaks.detResolution.value)
+        # check if metadata is correctly stored
+        md = self._image.metadata
+        self.assertIn(model.MD_WL_LIST, md)
+        self.assertIn(model.MD_TIME_LIST, md)
 
         # check raw image is a DataArray with right shape and MD
         self.assertIsInstance(streaks.raw[0], model.DataArray)
@@ -2491,14 +2496,14 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
                                                         self.ebeam, self.streak_unit, self.streak_delay,
                                                         streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
 
-        stss = stream.SEMTemporalSpectrumMDStream("test sem-tempSpectrum", [sems, streaks])
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
 
         self.streak_ccd.exposureTime.value = 0.01  # 10ms
         # # TODO use fixed repetition value -> set ROI?
         streaks.repetition.value = (10, 5)
-        num_tempSpec = numpy.prod(streaks.repetition.value)  # number of expected tempSpec images
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
         exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
 
         # Start acquisition
@@ -2517,7 +2522,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
 
-        # check if number of images in the received data (sem image + tempSpec images) is the same as
+        # check if number of images in the received data (sem image + temporal spectrum images) is the same as
         # number of images stored in raw
         self.assertEqual(len(data), len(stss.raw))
 
@@ -2526,16 +2531,16 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertEqual(sem_da.shape, exp_res[::-1])
 
         # check that sem data array has same shape as expected for the scanning positions of ebeam
-        tempSpec_da = stss.raw[1]  # temporal spectrum data array
-        shape = tempSpec_da.shape
-        self.assertEqual(shape[3] * shape[4], num_tempSpec)
+        ts_da = stss.raw[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        self.assertEqual(shape[3] * shape[4], num_ts)
         # len of shape should be 5: CTZXY
         self.assertEqual(len(shape), 5)
 
         # check if metadata is correctly stored
-        md = tempSpec_da.metadata
+        md = ts_da.metadata
         self.assertIn(model.MD_STREAK_TIMERANGE, md)
-        self.assertIn(model.MD_STREAK_MCPGain, md)
+        self.assertIn(model.MD_STREAK_MCPGAIN, md)
         self.assertIn(model.MD_STREAK_MODE, md)
         self.assertIn(model.MD_TRIGGER_DELAY, md)
         self.assertIn(model.MD_TRIGGER_RATE, md)
@@ -2548,7 +2553,15 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertIn(model.MD_PIXEL_SIZE, md)
         self.assertIn(model.MD_POS, md)
 
-        # TODO start a new acq and check the estimatedAcq time. something wrong
+        # start same acquisition again and check acquisition does not timeout due to sync failures
+        timeout2 = 10 + 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        f.result(timeout2)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
 
 
 class SPARC2PolAnalyzerTestCase(unittest.TestCase):
