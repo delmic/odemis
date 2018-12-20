@@ -465,8 +465,7 @@ class ReadoutCamera(model.DigitalCamera):
                     logging.debug("Acquisiton was stopped so flush previous images.")
                     continue
 
-                self._metadata[model.MD_ACQ_DATE] = time.time() - \
-                                                    (self.exposureTime.value + self._metadata[model.MD_READOUT_TIME])
+                reception_time_image = time.time()
 
                 # get the image from the buffer
                 img_num = rargs[1]
@@ -476,7 +475,7 @@ class ReadoutCamera(model.DigitalCamera):
                     logging.warning("Image info received from buffer is empty!")
                     continue
 
-                img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive #TODO why 2?
+                img_size = int(img_info[0]) * int(img_info[1]) * 2  # num of bytes we need to receive (uint16)
                 img_num_actual = img_info[4]
 
                 img = ""
@@ -498,6 +497,8 @@ class ReadoutCamera(model.DigitalCamera):
                 if self.parent._streakunit.streakMode.value:
                     # TODO some sync problem might be here if a different command is in queue
                     # in between ImgRingBufferGet and ImgDataGet: check again!
+
+                    logging.debug("Request scaling table for time axis of Hamamatsu streak camera.")
                     # request scaling table
                     scl_table_info = self.parent.ImgDataGet("current", "ScalingTable", "Vertical")
 
@@ -514,15 +515,17 @@ class ReadoutCamera(model.DigitalCamera):
                     except socket.timeout as msg:
                         logging.error("Did not receive a scaling table: %s", msg)
                         continue
+                    logging.debug("Received scaling table for time axis of Hamamatsu streak camera.")
                 else:
                     if model.MD_TIME_LIST in self._metadata.keys():
                         self._metadata.pop(model.MD_TIME_LIST, None)
 
-                # update the trigger rate VA and MD for the current image
+                # update MD for the current image
                 self.parent._delaybox._updateTriggerRate()
 
                 md = dict(self._metadata)  # make a copy of md dict so cannot be accidentally changed
                 self._mergeMetadata(md)  # merge dict with metadata from other HW devices (streakunit and delaybox)
+                md[model.MD_ACQ_DATE] = reception_time_image - md[model.MD_EXP_TIME] + md[model.MD_READOUT_TIME]
                 dataarray = model.DataArray(image, md)
                 self.data.notify(dataarray)  # pass the new image plus MD to the callback fct
 
