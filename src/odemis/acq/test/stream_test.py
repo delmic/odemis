@@ -2210,15 +2210,15 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # try:
-        #     test.start_backend(SPARC2STREAK_CONFIG)
-        # except LookupError:
-        #     logging.info("A running backend is already found, skipping tests")
-        #     cls.backend_was_running = True
-        #     return
-        # except IOError as exp:
-        #     logging.error(str(exp))
-        #     raise
+        try:
+            test.start_backend(SPARC2STREAK_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Find CCD & SEM components
         cls.streak_ccd = model.getComponent(role="streak-ccd")
@@ -2232,10 +2232,9 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # if cls.backend_was_running:
-        #     return
-        # test.stop_backend()
-        pass
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:

@@ -539,7 +539,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
             self.detStreakMode.subscribe(self._OnStreakSettings)
             self.detMCPGain.subscribe(self._OnMCPGain)
         except AttributeError:
-            raise ValueError("Necessary HW VAs .detStreakMode and .detMCPGain for streak camera was not provided")
+            raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
 
     # TODO can be removed once projections are handled
     # Override Stream.__find_metadata() in _base.py
