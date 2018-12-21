@@ -796,11 +796,12 @@ class StreakCamAlignSettingsController(SettingsBarController):
         self.panel.btn_open_streak_calib_file.Bind(wx.EVT_BUTTON, self._onOpenCalibFile)
         self.panel.btn_save_streak_calib_file.Bind(wx.EVT_BUTTON, self._onSaveCalibFile)
 
-    def _onUpdateTriggerDelayMD(self, value):
+    def _onUpdateTriggerDelayMD(self, evt):
         """
         Callback method for trigger delay ctrl GUI element.
         Overwrites the triggerDelay value in the MD after a new value was requested via the GUI.
         """
+        evt.Skip()
         cur_timeRange = self.streak_unit.timeRange.value
         requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
         # get a copy of  MD
