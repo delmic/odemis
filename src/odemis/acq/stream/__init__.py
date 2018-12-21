@@ -79,7 +79,6 @@ class TemporalSpectrumStream:
     __metaclass__ = ABCMeta
 
 TemporalSpectrumStream.register(TemporalSpectrumSettingsStream)
-TemporalSpectrumStream.register(StaticTemporalSpectrumStream)
 TemporalSpectrumStream.register(SEMTemporalSpectrumMDStream)
 
 
