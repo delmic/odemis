@@ -32,7 +32,7 @@ from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
 from odemis.dataio import tiff
 from odemis.driver import simcam
-from odemis.util import test, conversion, img
+from odemis.util import test, conversion, img, find_closest
 import os
 import threading
 import time
@@ -50,6 +50,7 @@ SECOM_CONFOCAL_CONFIG = CONFIG_PATH + "sim/secom2-confocal.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
+SPARC2STREAK_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
@@ -2198,6 +2199,368 @@ class SPARC2TestCase(unittest.TestCase):
 
         pcmd = cl_md[model.MD_EBEAM_CURRENT_TIME]
         self.assertGreater(len(pcmd), 500 / 10)
+
+
+class SPARC2StreakCameraTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARCv2 equipped with a streak camera
+    for temporal spectral measurements.
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SPARC2STREAK_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.streak_ccd = model.getComponent(role="streak-ccd")
+        cls.streak_unit = model.getComponent(role="streak-unit")
+        cls.streak_delay = model.getComponent(role="streak-delay")
+
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.cl = model.getComponent(role="cl-detector")
+        cls.spgp = model.getComponent(role="spectrograph")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def _roiToPhys(self, repst):
+        """
+        Compute the (expected) physical position of a stream ROI
+        repst (RepetitionStream): the repetition stream with ROI
+        return:
+            pos (tuple of 2 floats): physical position of the center
+            pxs (tuple of 2 floats): pixel size in m
+            res (tuple of ints): number of pixels
+        """
+        res = repst.repetition.value
+        pxs = (repst.pixelSize.value,) * 2
+
+        # To compute pos, we need to convert the ROI to physical coordinates
+        roi = repst.roi.value
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        try:
+            sem_center = repst.detector.getMetadata()[model.MD_POS]
+        except KeyError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        emt = repst.emitter
+        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                     emt.shape[1] * emt.pixelSize.value[1])
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+        return pos, pxs, res
+
+    def test_streak_live_stream(self):
+        """ Test playing TemporalSpectrumSettingsStream
+        and check shape and MD for image received are correct."""
+
+        # Create the settings stream
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"exposureTime", "readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        self._image = None
+        streaks.image.subscribe(self._on_image)
+
+        # shouldn't affect
+        streaks.roi.value = (0.15, 0.6, 0.8, 0.8)
+        streaks.repetition.value = (5, 6)
+
+        # set GUI VAs
+        streaks.detExposureTime.value = 0.5  # s
+        streaks.detBinning.value = (2, 2)  # TODO check with real HW
+        streaks.detStreakMode.value = True
+        streaks.detTimeRange.value = find_closest(0.000000005, self.streak_unit.timeRange.choices)
+        streaks.detMCPGain.value = 0  # Note: cannot set any other value here as stream is inactive
+
+        # update stream (live)
+        streaks.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        streaks.is_active.value = True
+
+        time.sleep(2)
+        streaks.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No temporal spectrum received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        # .image should be a 2D temporal spectrum
+        self.assertEqual(self._image.shape[1::-1], streaks.detResolution.value)
+        # check if metadata is correctly stored
+        md = self._image.metadata
+        self.assertIn(model.MD_WL_LIST, md)
+        self.assertIn(model.MD_TIME_LIST, md)
+
+        # check raw image is a DataArray with right shape and MD
+        self.assertIsInstance(streaks.raw[0], model.DataArray)
+        self.assertEqual(streaks.raw[0].shape[1::-1], streaks.detResolution.value)
+        self.assertIn(model.MD_TIME_LIST, streaks.raw[0].metadata)
+        self.assertIn(model.MD_WL_LIST, streaks.raw[0].metadata)
+
+        streaks.image.unsubscribe(self._on_image)
+
+    def _on_image(self, im):
+        self._image = im
+
+    def test_streak_gui_vas(self):
+        """ Test playing TemporalSpectrumSettingsStream
+        and check that settings are correctly applied."""
+
+        # Create the settings stream
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"exposureTime", "readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        # shouldn't affect
+        streaks.roi.value = (0.15, 0.6, 0.8, 0.8)
+        streaks.repetition.value = (5, 6)
+
+        ###inactive stream######################################################################################
+        # set GUI VAs
+        streaks.detExposureTime.value = 0.5  # s
+        streaks.detBinning.value = (4, 4)  # TODO check with real HW
+        streaks.detStreakMode.value = True
+        streaks.detTimeRange.value = find_closest(0.000000005, self.streak_unit.timeRange.choices)
+        streaks.detMCPGain.value = 0  # Note: cannot set any other value here as stream is inactive
+
+        # set HW VAs to position different from GUI VAs
+        self.streak_ccd.exposureTime.value = 0.3  # s
+        self.streak_ccd.binning.value = (2, 2)  # TODO runtimeError however values are set correctly in HPDTA
+        self.streak_unit.streakMode.value = False
+        self.streak_unit.timeRange.value = find_closest(0.000000001, self.streak_unit.timeRange.choices)
+        self.streak_unit.MCPGain.value = 2
+
+        # while stream is not active, HW should not move, therefore
+        # check VAs connected to GUI did not trigger VAs listening to HW
+        self.assertNotEqual(streaks.detExposureTime.value, self.streak_ccd.exposureTime.value)
+        self.assertNotEqual(streaks.detBinning.value, self.streak_ccd.binning.value)  # TODO check with real HW
+
+        self.assertNotEqual(streaks.detStreakMode.value, self.streak_unit.streakMode.value)
+        self.assertNotEqual(streaks.detTimeRange.value, self.streak_unit.timeRange.value)
+        self.assertNotEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
+
+        ###active stream######################################################################################
+        # update stream (live)
+        streaks.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        streaks.is_active.value = True
+
+        # set value to higher value only possible if stream is active
+        # hack to check HW VA was updated
+        streaks.detMCPGain.value = 1
+
+        time.sleep(0.1)  # some time to set the HW VAs
+
+        # GUI VA and HW VA should be the same when acquiring or playing the stream
+        # stream got active, HW VA should be same as GUI VA
+        # check streak VA connected to GUI shows same value as streak VA listening to HW
+        self.assertEqual(streaks.detExposureTime.value, self.streak_ccd.exposureTime.value)
+        self.assertEqual(streaks.detBinning.value, self.streak_ccd.binning.value)  # TODO check with real HW
+
+        # the order of setting the HWVAs is TimeRange, StreakMode, MCPGain
+        # MCPGain last as otherwise set to zero due to safety functionality in driver
+        self.assertEqual(streaks.detStreakMode.value, self.streak_unit.streakMode.value)
+        self.assertEqual(streaks.detTimeRange.value, self.streak_unit.timeRange.value)
+        self.assertEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
+
+        # change VAs --> HW VAs should change as stream is still active
+        streaks.detExposureTime.value = 0.1  # s
+        streaks.detBinning.value = (2, 2)  # TODO check with real HW
+        time.sleep(0.1)
+        # check GUI VA show same values as HW VAs
+        self.assertEqual(streaks.detExposureTime.value, self.streak_ccd.exposureTime.value)
+        self.assertEqual(streaks.detBinning.value, self.streak_ccd.binning.value)  # TODO check with real HW
+
+        streaks.detMCPGain.value = 3
+        time.sleep(0.1)
+        # check GUI VA show same values as HW VAs
+        self.assertEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
+
+        streaks.detMCPGain.value = 4
+        streaks.detStreakMode.value = False
+        # test MCP gain is 0 when changing .streakMode
+        time.sleep(0.1)
+        self.assertEqual(streaks.detMCPGain.value, 0)  # GUI VA should be 0 after changing .streakMode
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)  # HW VA should be 0 after changing .streakMode
+        # check GUI VA show same values as HW VAs
+        self.assertEqual(streaks.detStreakMode.value, self.streak_unit.streakMode.value)
+
+        # set value unequal 0 and then pause stream for checking whether GUI VA keeps value,
+        # but HW VA is set to 0 when stream is inactive/paused.
+        streaks.detMCPGain.value = 6
+        # double check GUI VA show same values as HW VAs
+        self.assertEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
+
+        ###inactive stream######################################################################################
+        # deactivate stream
+        streaks.is_active.value = False
+        time.sleep(0.1)
+
+        # check MCPGain HW VA is zero when stream is inactive but GUI VA keeps the previous value
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+        self.assertNotEqual(streaks.detMCPGain.value, 0)
+        # check GUI VA do not show same values as HW VAs
+        self.assertNotEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
+
+        streaks.detMCPGain.value = 4
+        time.sleep(0.1)
+        # check GUI VA do not show same values as HW VAs
+        self.assertNotEqual(streaks.detMCPGain.value, self.streak_unit.MCPGain.value)
+        # value > current MCPGain GUI value while stream is not active shouldn't be possible
+        # also checks if .MCPGain.range has updated
+        with self.assertRaises(IndexError):
+            streaks.detMCPGain.value = 5
+
+        # change GUI VAs --> HW VAs should not update as stream is inactive
+        streaks.detExposureTime.value = 0.2  # s
+        streaks.detBinning.value = (4, 4)  # TODO check with real HW
+        time.sleep(0.1)
+        # check GUI VA do not show same values as HW VAs
+        self.assertNotEqual(streaks.detExposureTime.value, self.streak_ccd.exposureTime.value)
+        self.assertNotEqual(streaks.detBinning.value, self.streak_ccd.binning.value)  # TODO check with real HW
+
+        # change .streakMode and/or .timeRange GUI VAs -> MCPGain GUI VA should be 0
+        streaks.detStreakMode.value = True
+        time.sleep(0.1)
+        self.assertEqual(streaks.detMCPGain.value, 0)  # GUI VA should be 0 after changing .streakMode
+        # check GUI VA do not show same values as HW VAs
+        self.assertNotEqual(streaks.detStreakMode.value, self.streak_unit.streakMode.value)
+        # value > current MCPGain GUI value while stream is not active shouldn't be possible
+        # also checks if .MCPGain.range has been updated
+        with self.assertRaises(IndexError):
+            streaks.detMCPGain.value = 1
+
+        #########################################################################################
+        # checks that the order of setting the VAs when stream gets active is correct
+        # (MCPGain should be last)
+
+        # update stream (live) to change MCPGain
+        streaks.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        streaks.is_active.value = True
+
+        streaks.detMCPGain.value = 5
+        time.sleep(0.1)
+
+        # inactivate stream
+        streaks.is_active.value = False
+
+        # set GUI VAs
+        streaks.detMCPGain.value = 3
+        # check .MCPGain HW VA = 0
+        self.assertEqual(self.streak_unit.MCPGain.value, 0)
+
+        # update stream (live) to change MCPGain
+        streaks.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        streaks.is_active.value = True
+
+        # check MCPGain is not 0 as set last when stream gets active
+        self.assertNotEqual(streaks.detMCPGain.value, 0)
+        # checks that HW VA and GUI VA are equal when stream active
+        self.assertEqual(self.streak_unit.MCPGain.value, streaks.detMCPGain.value)
+
+    def test_streak_acq(self):
+        """Test acquisition with streak camera"""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # test with streak camera
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
+
+        streaks.detStreakMode.value = True
+
+        self.streak_ccd.exposureTime.value = 0.01  # 10ms
+        # # TODO use fixed repetition value -> set ROI?
+        streaks.repetition.value = (10, 5)
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
+        timeout = 10 + 1.5 * stss.estimateAcquisitionTime()  # TODO check with real HW! timedout problems
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # stss.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second array are temporal spectrum images
+        # data: array should contain same images as stss.raw
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        # check if number of images in the received data (sem image + temporal spectrum images) is the same as
+        # number of images stored in raw
+        self.assertEqual(len(data), len(stss.raw))
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = stss.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        ts_da = stss.raw[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        self.assertEqual(shape[3] * shape[4], num_ts)
+        # len of shape should be 5: CTZXY
+        self.assertEqual(len(shape), 5)
+
+        # check if metadata is correctly stored
+        md = ts_da.metadata
+        self.assertIn(model.MD_STREAK_TIMERANGE, md)
+        self.assertIn(model.MD_STREAK_MCPGAIN, md)
+        self.assertIn(model.MD_STREAK_MODE, md)
+        self.assertIn(model.MD_TRIGGER_DELAY, md)
+        self.assertIn(model.MD_TRIGGER_RATE, md)
+        self.assertIn(model.MD_POS, md)  # check the corresponding SEM pos is there
+        self.assertIn(model.MD_PIXEL_SIZE, md)  # check the corresponding SEM pos is there
+        self.assertIn(model.MD_WL_LIST, md)
+        self.assertIn(model.MD_TIME_LIST, md)
+
+        md = sem_da.metadata
+        self.assertIn(model.MD_PIXEL_SIZE, md)
+        self.assertIn(model.MD_POS, md)
+
+        # start same acquisition again and check acquisition does not timeout due to sync failures
+        timeout2 = 10 + 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        f.result(timeout2)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
 
 
 class SPARC2PolAnalyzerTestCase(unittest.TestCase):

@@ -578,6 +578,82 @@ class SpectrumSettingsStream(CCDSettingsStream):
         super(SpectrumSettingsStream, self)._onNewData(dataflow, specdata)
 
 
+class TemporalSpectrumSettingsStream(CCDSettingsStream):
+    """
+    An streak camera stream, for a set of points (on the SEM).
+    The live view is just the raw readout camera image.
+    """
+    def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay,
+                 streak_unit_vas, **kwargs):  # init of TemporalSpectrumSettingsSteam
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
+
+        super(TemporalSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)  # init of CCDSettingsStream
+
+        self.active = False  # variable keep track if stream is active/inactive
+
+        # For SPARC: typical user wants density much lower than SEM
+        self.pixelSize.value *= 30  # increase default value to decrease default repetition rate
+
+        self.streak_unit = streak_unit
+        self.streak_delay = streak_delay
+
+        # the VAs are used in SEMCCDMDStream (_sync.py)
+        self._streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas)
+
+        # whenever .streakMode changes
+        # -> set .MCPGain = 0 and update .MCPGain.range
+        # This is important for HW safety reasons to not destroy the streak unit,
+        # when changing on of the VA while using a high MCPGain.
+        # While the stream is not active: range of possible values for MCPGain
+        # is limited to values <= current value to also prevent HW damage
+        # when starting to play the stream again.
+        try:
+            self.detStreakMode.subscribe(self._OnStreakSettings)
+            self.detMCPGain.subscribe(self._OnMCPGain)
+        except AttributeError:
+            raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
+
+    # TODO can be removed once projections are handled
+    # Override Stream.__find_metadata() in _base.py
+    def _find_metadata(self, md):
+        md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
+        if model.MD_TIME_LIST in self.raw[0].metadata:
+            md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
+        if model.MD_WL_LIST in self.raw[0].metadata:
+            md[model.MD_WL_LIST] = self.raw[0].metadata[model.MD_WL_LIST]
+        return md
+
+    # Override Stream._is_active_setter() in _base.py
+    def _is_active_setter(self, active):
+        self.active = super(TemporalSpectrumSettingsStream, self)._is_active_setter(active)
+        if self.active:
+            # make the full MCPGain range available when stream is active
+            self.detMCPGain.range = self.streak_unit.MCPGain.range
+        else:
+            self._resetMCPGainHW()
+            # only allow values <= current MCPGain value for HW safety reasons when stream inactive
+            self.detMCPGain.range = (0, self.detMCPGain.value)
+        return self.active
+
+    def _resetMCPGainHW(self):
+        """"Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive."""
+        self.streak_unit.MCPGain.value = 0
+
+    def _OnStreakSettings(self, value):
+        """Callback, which sets MCPGain GUI VA = 0,
+        if .timeRange and/or .streakMode GUI VAs have changed."""
+        self.detMCPGain.value = 0  # set GUI VA 0
+        self._OnMCPGain(value)  # update the .MCPGain VA
+
+    def _OnMCPGain(self, _=None):
+        """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
+        only values <= current value are allowed.
+        If stream is active the full range is available."""
+        if not self.active:
+            self.detMCPGain.range = (0, self.detMCPGain.value)
+
+
 class MonochromatorSettingsStream(PMTSettingsStream):
     """
     A stream acquiring a count corresponding to the light at a given wavelength,
