@@ -3513,7 +3513,6 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -3558,6 +3557,8 @@ class Sparc2AlignTab(Tab):
             self.tab_data_model.focussedView.value = self.panel.vp_align_streak.view
             if self._ts_stream:
                 self._ts_stream.should_update.value = True
+                self._ts_stream.auto_bc.value = False  # default manual brightness/contrast
+                self._ts_stream.intensityRange.value = (100, 1000)  # default range
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
