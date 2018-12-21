@@ -75,6 +75,14 @@ SpectrumStream.register(StaticSpectrumStream)
 SpectrumStream.register(SEMSpectrumMDStream)
 
 
+class TemporalSpectrumStream:
+    __metaclass__ = ABCMeta
+
+TemporalSpectrumStream.register(TemporalSpectrumSettingsStream)
+TemporalSpectrumStream.register(StaticTemporalSpectrumStream)
+TemporalSpectrumStream.register(SEMTemporalSpectrumMDStream)
+
+
 class ARStream:
     __metaclass__ = ABCMeta
 
@@ -82,7 +90,7 @@ ARStream.register(ARSettingsStream)
 ARStream.register(StaticARStream)
 ARStream.register(SEMARMDStream)
 
-NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, MonochromatorSettingsStream,
+NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, TemporalSpectrumStream, MonochromatorSettingsStream,
                        ScannedTCSettingsStream, ScannedFluoMDStream, OverlayStream)
 
 
