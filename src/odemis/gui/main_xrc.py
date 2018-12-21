@@ -387,6 +387,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
         self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
         self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
+        self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
         self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
@@ -4122,6 +4123,11 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="PointSpectrumViewport" name="vp_sparc_bl">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ARAcquiViewport" name="vp_sparc_ts">  <!-- TODO replace with TemporalSpectrumViewport -->
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

@@ -1295,6 +1295,7 @@ class StreamBar(wx.Panel):
         acq.stream.CameraStream,
         acq.stream.ARSettingsStream,
         acq.stream.SpectrumSettingsStream,
+        acq.stream.TemporalSpectrumSettingsStream,
         acq.stream.MonochromatorSettingsStream,
         acq.stream.MomentOfInertiaLiveStream,
         acq.stream.CameraCountStream,

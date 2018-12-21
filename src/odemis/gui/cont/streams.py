@@ -2401,6 +2401,9 @@ class SparcStreamsController(StreamBarController):
             act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
             self.add_action(actname, act)
 
+        if main_data.streak_ccd:
+            self.add_action("Temporal spectrum", self.addTemporalSpectrum)
+
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
 
@@ -2490,8 +2493,6 @@ class SparcStreamsController(StreamBarController):
         Display and connect a new RepetitionStream to the GUI
         stream (RepetitionStream): freshly baked stream
         mdstream (MDStream): corresponding new stream for acquisition
-        vas (list of str): name of VAs entries to create (in addition to standard one,
-          such as local HW VAs and B/C control)
         axes (dict axis name -> Component): axis entries to create
         kwargs (dict): to be passed to _add_stream()
         return (StreamController): the new stream controller
@@ -2650,6 +2651,46 @@ class SparcStreamsController(StreamBarController):
         return self._addRepStream(spec_stream, sem_spec_stream,
                                   axes=axes,
                                   )
+
+    def addTemporalSpectrum(self):
+        """
+        Create a temporal spectrum stream and add to to all compatible viewports
+        """
+
+        main_data = self._main_data_model
+
+        ts_stream = acqstream.TemporalSpectrumSettingsStream(
+            "Temporal Spectrum",
+            main_data.streak_ccd,
+            main_data.streak_ccd.data,
+            main_data.ebeam,
+            main_data.streak_unit,
+            main_data.streak_delay,
+            sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm,
+            detvas=get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config),
+            streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_ts_stream = acqstream.SEMTemporalSpectrumMDStream("SEM TempSpec", [sem_stream, ts_stream])
+
+        spg = self._getAffectingSpectrograph(main_data.streak_ccd)
+
+        # TODO: all the axes, including the filter band should be local. The
+        # band should be set to the pass-through by default
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg}
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.streak_ccd.name in fw.affects.value:
+                axes["band"] = fw
+
+        return self._addRepStream(ts_stream, sem_ts_stream, axes=axes)
 
     def addMonochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
