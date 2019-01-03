@@ -102,12 +102,6 @@ class StaticStream(Stream):
                 # sleep as much, to ensure we are not using too much CPU
                 tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
-
-                # If still nothing to do, update the RGB image with the new B/C.
-                if not ht_needs_recompute.is_set() and stream.auto_bc.value:
-                    # Note that this can cause the .image to be updated even after the
-                    # stream is not active (but that can happen even without this).
-                    stream._shouldUpdateImage()
         except Exception:
             logging.exception("histogram update thread failed")
 
@@ -195,8 +189,6 @@ class Static2DStream(StaticStream):
                 raw[0] = raw[0][0, :, :]
             metadata[model.MD_DIMS] = "CTZYX"[-raw[0].ndim::]
 
-        logging.debug("%s shape: %s", name, raw[0].shape)
-
         # Define if z-index should be created.
         if len(raw[0].shape) == 3 and metadata[model.MD_DIMS] == "ZYX":
             try:
@@ -204,20 +196,20 @@ class Static2DStream(StaticStream):
                 pos = metadata[model.MD_POS]
                 if len(pxs) < 3:
                     assert len(pxs) == 2
-                    logging.warning("Metadata for 3D data invalid. Using default pixel size 1e-6 m")
-                    pxs = (pxs[0], pxs[1], 1e-6)
+                    logging.warning(u"Metadata for 3D data invalid. Using default pixel size 10µm")
+                    pxs = (pxs[0], pxs[1], 10e-6)
                     metadata[model.MD_PIXEL_SIZE] = pxs
 
                 if len(pos) < 3:
                     assert len(pos) == 2
                     pos = (pos[0], pos[1], 0)
                     metadata[model.MD_POS] = pos
-                    logging.warning("Metadata for 3D data invalid. Using default centre position 0")
+                    logging.warning(u"Metadata for 3D data invalid. Using default centre position 0")
 
             except KeyError:
                 raise ValueError("Pixel size or position are missing from metadata")
             # Define a z-index
-            self.zIndex = model.IntContinuous(0, [0, raw[0].shape[0] - 1])
+            self.zIndex = model.IntContinuous(0, (0, raw[0].shape[0] - 1))
             self.zIndex.subscribe(self._on_zIndex)
 
         # Copy back the metadata
@@ -1125,23 +1117,9 @@ class StaticSpectrumStream(StaticStream):
         # 0D and/or 1D spectrum will need updates
         self._force_selected_spectrum_update()
 
-    def _onAutoBC(self, enabled):
-        super(StaticSpectrumStream, self)._onAutoBC(enabled)
-        # if changing to auto, need to recompute line spectrum
-        if enabled:
-            self._force_selected_spectrum_update()
-
-    def _onOutliers(self, outliers):
-        super(StaticSpectrumStream, self)._onOutliers(outliers)
-        # if changing outliers while in auto, need to recompute line spectrum
-        if self.auto_bc.value:
-            self._force_selected_spectrum_update()
-
     def _onIntensityRange(self, irange):
         super(StaticSpectrumStream, self)._onIntensityRange(irange)
-        # If auto_bc is active, it will not affect the line spectrum directly
-        if not self.auto_bc.value:
-            self._force_selected_spectrum_update()
+        self._force_selected_spectrum_update()
 
     def onFitToRGB(self, value):
         """
