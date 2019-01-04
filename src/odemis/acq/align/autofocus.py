@@ -751,6 +751,12 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
     try:
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
+        # After the first focusing, pass the previous focus value as "good
+        # focus". This way, the autofocuser will compare the current focus
+        # (maybe restored from a previous session) and this focus value which is
+        # likely not to bad too, and reduce the number of steps before stopping.
+        # => (slightly) faster focusing
+        prev_fp = None
 
         # We "scan" in two dimensions: grating + detector. Grating is the "slow"
         # dimension, as it's typically the move that takes the most time (eg, 20s).
@@ -772,9 +778,10 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
                 except Exception:
                     logging.exception("Failed to move to 0th order for grating %s", g)
 
-                future._subfuture = AutoFocus(d, None, focuser)
+                future._subfuture = AutoFocus(d, None, focuser, good_focus=prev_fp)
                 fp, flvl = future._subfuture.result()
                 ret[(g, d)] = fp
+                prev_fp = fp
                 cnts -= 1
                 _updateAFSProgress(future, time.time() - tstart, cnts)
 
