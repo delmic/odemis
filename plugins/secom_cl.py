@@ -346,6 +346,7 @@ class GridAcquirer(object):
 
     def stop_acquisition(self):
         self._must_stop = True
+        logging.debug("Cancelling acquisition")
 
     def start_ccd(self):
         self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
@@ -447,11 +448,52 @@ class GridAcquirer(object):
         fullsed.shape = self.res  # numpy scans the last dim first
         fullsed = fullsed.T  # Get X as last dim, which is the numpy/Odemis convention
         md = sed_linear[0].metadata.copy()
-        # md[model.MD_POS] # TODO: compute the center of the ROI
-        md[model.MD_PIXEL_SIZE] = stepsizem
+        center, pxs = self._get_center_pxs(self.res, (1, 1), sed_linear[0], stepsizem)
+        md.update({model.MD_POS: center,
+                   model.MD_PIXEL_SIZE: pxs})
+
         fullsed = model.DataArray(fullsed, md)
         self.save_data(fullsed, prefix=fn_prefix + "_sem", xres=self.res[0], yres=self.res[1],
                        stepsize=stepsizem[0] * 1e9, idx=0)
+
+    # From odemis.acq.stream._sync.MultipleDetectorStream
+    def _get_center_pxs(self, rep, sub_shape, datatl, pxs):
+        """
+        Computes the center and pixel size of the entire data based on the
+        top-left data acquired.
+        rep (int, int): number of pixels (tiles) in X, Y
+        sub_shape (int, int): number of sub-pixels in a pixel
+        datatl (DataArray): first data array acquired
+        pxs (float, float): the pixel in m of a pixel
+        return:
+            center (tuple of floats): position in m of the whole data
+            pxs (tuple of floats): pixel size in m of the sub-pixels
+        """
+        # Compute center of area, based on the position of the first point (the
+        # position of the other points can be wrong due to drift correction)
+        center_tl = datatl.metadata[model.MD_POS]
+        dpxs = datatl.metadata[model.MD_PIXEL_SIZE]
+        tl = (center_tl[0] - (dpxs[0] * (datatl.shape[-1] - 1)) / 2,
+              center_tl[1] + (dpxs[1] * (datatl.shape[-2] - 1)) / 2)
+        logging.debug("Computed center of top-left pixel at at %s", tl)
+
+        # Note: we don't rely on the MD_PIXEL_SIZE, because if the e-beam was in
+        # spot mode (res 1x1), the scale is not always correct, which gives an
+        # incorrect metadata.
+        sub_pxs = pxs[0] / sub_shape[0], pxs[1] / sub_shape[1]
+        trep = rep[0] * sub_shape[0], rep[1] * sub_shape[1]
+        center = (tl[0] + (sub_pxs[0] * (trep[0] - 1)) / 2,
+                  tl[1] - (sub_pxs[1] * (trep[1] - 1)) / 2)
+        logging.debug("Computed data width to be %s x %s, with center at %s",
+                      pxs[0] * rep[0], pxs[1] * rep[1], center)
+
+        if numpy.prod(datatl.shape) > 1:
+            # pxs and dpxs ought to be identical
+            if not util.almost_equal(sub_pxs[0], dpxs[0]):
+                logging.warning("Expected pixel size of %s, but data has %s",
+                                sub_pxs, dpxs)
+
+        return center, sub_pxs
 
     def save_data(self, data, **kwargs):
         """
@@ -473,7 +515,7 @@ class GridAcquirer(object):
 
 class CLAcqPlugin(Plugin):
     name = "CL acquisition for SECOM"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel, Lennard Voortman"
     __license__ = "Public domain"
 
@@ -482,16 +524,16 @@ class CLAcqPlugin(Plugin):
     vaconf = OrderedDict((
         ("xres", {
             "label": "Horiz. repetition",
-            "control_type": odemis.gui.CONTROL_INT,  # no slider
+            "control_type": gui.CONTROL_INT,  # no slider
             "accuracy": None,  # never simplify the numbers
         }),
         ("yres", {
             "label": "Vert. repetition",
-            "control_type": odemis.gui.CONTROL_INT,  # no slider
+            "control_type": gui.CONTROL_INT,  # no slider
             "accuracy": None,  # never simplify the numbers
         }),
         ("stepsize", {
-            "control_type": odemis.gui.CONTROL_READONLY,
+            "control_type": gui.CONTROL_READONLY,
         }),
         ("exposureTime", {
             "range": (1e-6, 180),
@@ -501,7 +543,7 @@ class CLAcqPlugin(Plugin):
             "control_type": gui.CONTROL_RADIO,
         }),
         ("filename", {
-            "control_type": odemis.gui.CONTROL_SAVE_FILE,
+            "control_type": gui.CONTROL_SAVE_FILE,
         }),
     ))
 
@@ -596,6 +638,9 @@ class CLAcqPlugin(Plugin):
         dlg.Destroy()
 
     def _acquire(self, dlg):
+        str_ctrl = self.main_app.main_data.tab.value.streambar_controller
+        str_ctrl.pauseStreams()
+
         acquirer = GridAcquirer((self.xres.value, self.yres.value))
 
         estt = self.xres.value * self.yres.value * (acquirer.ccd.exposureTime.value + 0.1) * 1.1
