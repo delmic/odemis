@@ -23,7 +23,8 @@ When a session of the GUI loads, configuration and components from the backend a
 	- **SparcAcquisitionGUIData(MicroscopyGUIData):**
 	
 		Represents an interface used to select a precise area to scan and
-		acquire signal. It allows fine control of the shape and density of the scan. 		It is specifically made for the SPARC system.
+		acquire signal. It allows fine control of the shape and density of the scan.
+      It is specifically made for the SPARC system.
 
 	- **ChamberGUIData(MicroscopyGUIData):**
 	
@@ -44,12 +45,20 @@ When a session of the GUI loads, configuration and components from the backend a
 		Represents an interface used for alignment tabs. 
 
 
+.. figure:: stream_view_diag.*
+    :width: 100 %
+    :align: center
+    
+    Simplified UML class diagram of the main GUI classes.
+
 Controllers
 ===========
 
-.. figure:: gui_tree.*
+.. figure:: gui_cont.*
     :width: 100 %
     :align: center
+    
+    UML class diagram of the main controller classes.
 
 The Odemis GUI has several main controllers that allow a user to directly control functionality. 
 
