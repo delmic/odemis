@@ -28,7 +28,6 @@ import logging
 import math
 import numpy
 from odemis import dataio, model, util, gui
-import odemis
 from odemis.acq import stream
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
@@ -160,17 +159,17 @@ def convert_roi_phys_to_ccd(ccd, roi):
     logging.info("proi: " + str(proi))
 
     # convert to pixel values, rounding to slightly bigger area
-    shape = ccd.shape[0:2]
-    pxroi = (int(proi[0] * shape[0]),
-             int(proi[1] * shape[1]),
-             int(math.ceil(proi[2] * shape[0])),
-             int(math.ceil(proi[3] * shape[1])),
+    res = ccd.resolution.value
+    pxroi = (int(proi[0] * res[0]),
+             int(proi[1] * res[1]),
+             int(math.ceil(proi[2] * res[0])),
+             int(math.ceil(proi[3] * res[1])),
              )
 
     logging.info("pxroi: " + str(pxroi))
 
     # Limit the ROI to the one visible in the FoV
-    trunc_roi = util.rect_intersect(pxroi, (0, 0) + shape)
+    trunc_roi = util.rect_intersect(pxroi, (0, 0) + res)
     if trunc_roi is None:
         return None
     if trunc_roi != pxroi:
@@ -179,7 +178,8 @@ def convert_roi_phys_to_ccd(ccd, roi):
 
     return trunc_roi
 
-def sem_roi_to_ccd(escan, ccd, roi):
+
+def sem_roi_to_ccd(escan, ccd, roi, margin=0):
     """
     Converts a ROI defined in the SEM referential a ratio of FoV to a ROI
     which should cover the same physical area in the optical FoV.
@@ -187,14 +187,19 @@ def sem_roi_to_ccd(escan, ccd, roi):
     return (0<=4 int): ltrb pixels on the CCD, when binning == 1
     """
     # convert ROI to physical position
-    phys_rect = convert_roi_ratio_to_phys(escan,roi)
+    phys_rect = convert_roi_ratio_to_phys(escan, roi)
     logging.info("ROI defined at ({:.3e}, {:.3e}, {:.3e}, {:.3e}) m".format(*phys_rect))
+
+    # Add the margin
+    phys_rect = (phys_rect[0] - margin, phys_rect[1] - margin,
+                 phys_rect[2] + margin, phys_rect[3] + margin)
+    logging.info("ROI with margin defined at ({:.3e}, {:.3e}, {:.3e}, {:.3e}) m".format(*phys_rect))
 
     # convert physical position to CCD
     ccd_roi = convert_roi_phys_to_ccd(ccd, phys_rect)
     if ccd_roi is None:
         logging.error("Failed to find the ROI on the CCD, will use the whole CCD")
-        ccd_roi = (0, 0) + ccd.shape[0:2]
+        ccd_roi = (0, 0) + ccd.resolution.value
     else:
         logging.info("Will use the CCD ROI %s", ccd_roi)
 
@@ -203,9 +208,11 @@ def sem_roi_to_ccd(escan, ccd, roi):
 
 class GridAcquirer(object):
 
-    def __init__(self, res):
+    def __init__(self, res, roi_margin=0):
         """
         res (int, int): number of pixel in X and Y
+        roi_margin (0 <= float): extra margin (in m) around the SEM area to
+           select the CCD ROI.
         """
         self.res = res
         self.escan = model.getComponent(role="e-beam")
@@ -214,6 +221,7 @@ class GridAcquirer(object):
         except LookupError:
             self.edet = model.getComponent(role="bs-detector")
         self.ccd = model.getComponent(role="ccd")
+        self.roi_margin = roi_margin
 
         self._must_stop = False
 
@@ -363,7 +371,7 @@ class GridAcquirer(object):
         self._ccd_data.append(data)
         self._ccd_data_received.set()
 
-    def acquire_ar(self, x, y, ccd_roi_idx):
+    def acquire_ccd(self, x, y, ccd_roi_idx):
         """
         Acquire an image from the CCD while having the e-beam at a spot position
         x, y (floats): spot position in the ebeam coordinates
@@ -410,7 +418,7 @@ class GridAcquirer(object):
         expt = self.ccd.exposureTime.value
 
         # TODO: allow to select the ROI
-        ccd_roi = sem_roi_to_ccd(self.escan, self.ccd, (0, 0, 1, 1))
+        ccd_roi = sem_roi_to_ccd(self.escan, self.ccd, (0, 0, 1, 1), self.roi_margin)
         ccd_roi = [ccd_roi[0], ccd_roi[1],
                    ccd_roi[2], ccd_roi[3]]
         logging.info("ccd roi: %s", ccd_roi)
@@ -427,7 +435,7 @@ class GridAcquirer(object):
                 logging.info("Acquiring at position (%+f, %+f)", xm * 1e9, ym * 1e9)
 
                 startt = time.time()
-                d, sed = self.acquire_ar(x, y, ccd_roi_idx)
+                d, sed = self.acquire_ccd(x, y, ccd_roi_idx)
                 endt = time.time()
                 logging.debug("Took %g s (expected = %g s)", endt - startt, expt)
 
@@ -542,6 +550,10 @@ class CLAcqPlugin(Plugin):
         ("binning", {
             "control_type": gui.CONTROL_RADIO,
         }),
+        ("roi_margin", {
+            "label": "ROI margin",
+            "tooltip": "Extra space around the SEM area to store on the CCD"
+        }),
         ("filename", {
             "control_type": gui.CONTROL_SAVE_FILE,
         }),
@@ -566,6 +578,10 @@ class CLAcqPlugin(Plugin):
         self.xres = model.IntContinuous(10, (1, 1000), unit="px")
         self.yres = model.IntContinuous(10, (1, 1000), unit="px")
         self.stepsize = model.FloatVA(1e-6, unit="m")  # Just to show
+        # Maximum margin is half the CCD FoV
+        ccd_rect = get_ccd_fov(main_data.ccd)
+        max_margin = max(ccd_rect[2] - ccd_rect[0], ccd_rect[3] - ccd_rect[1]) / 2
+        self.roi_margin = model.FloatContinuous(0, (0, max_margin), unit="m")
         self.filename = model.StringVA("a.tiff")
 
         self.xres.subscribe(self._update_stepsize)
@@ -641,7 +657,7 @@ class CLAcqPlugin(Plugin):
         str_ctrl = self.main_app.main_data.tab.value.streambar_controller
         str_ctrl.pauseStreams()
 
-        acquirer = GridAcquirer((self.xres.value, self.yres.value))
+        acquirer = GridAcquirer((self.xres.value, self.yres.value), self.roi_margin.value)
 
         estt = self.xres.value * self.yres.value * (acquirer.ccd.exposureTime.value + 0.1) * 1.1
         f = model.ProgressiveFuture(end=time.time() + estt)
