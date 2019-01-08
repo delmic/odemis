@@ -355,9 +355,9 @@ class TMCLController(model.Actuator):
                 self._ref_max_length[i] = phy_rng[1] - phy_rng[0]
             else:
                 # For safety, for referencing timeout, consider that the range
-                # is not too long (ie, 2M µsteps).
+                # is not too long (ie, 4M µsteps).
                 # If it times out, the user should specify an axis range.
-                self._ref_max_length[i] = sz * 2e6  # m
+                self._ref_max_length[i] = sz * 4e6  # m
 
             if not isinstance(unit[i], basestring):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
