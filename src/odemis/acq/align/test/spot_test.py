@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 from numpy import fft
-import numpy
+import numpy as np
 from odemis import model
 import odemis
 from odemis.acq.align import spot
@@ -30,6 +30,7 @@ from odemis.dataio import hdf5
 from odemis.driver.actuator import ConvertStage
 from odemis.util import test
 import os
+from scipy import ndimage
 import threading
 import time
 import unittest
@@ -42,6 +43,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"  # 4x4
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
+
 
 class TestSpotAlignment(unittest.TestCase):
     """
@@ -188,12 +190,12 @@ class FakeCCD(model.HwComponent):
             self.deltar = x_pxs
             self.deltac = y_pxs
             nr, nc = self.fake_img.shape
-            array_nr = numpy.arange(-numpy.fix(nr / 2), numpy.ceil(nr / 2))
-            array_nc = numpy.arange(-numpy.fix(nc / 2), numpy.ceil(nc / 2))
+            array_nr = np.arange(-np.fix(nr / 2), np.ceil(nr / 2))
+            array_nc = np.arange(-np.fix(nc / 2), np.ceil(nc / 2))
             Nr = fft.ifftshift(array_nr)
             Nc = fft.ifftshift(array_nc)
-            [Nc, Nr] = numpy.meshgrid(Nc, Nr)
-            sim_img = fft.ifft2(fft.fft2(self.fake_img) * numpy.power(math.e,
+            [Nc, Nr] = np.meshgrid(Nc, Nr)
+            sim_img = fft.ifft2(fft.fft2(self.fake_img) * np.power(math.e,
                             z * 2 * math.pi * (self.deltar * Nr / nr + self.deltac * Nc / nc)))
             output = model.DataArray(abs(sim_img), self.fake_img.metadata)
             return output
@@ -214,6 +216,7 @@ class FakeCCD(model.HwComponent):
         finally:
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
+
 
 class CCDDataFlow(model.DataFlow):
     """
@@ -236,6 +239,59 @@ class CCDDataFlow(model.DataFlow):
             self.component().stop_acquire()
         except ReferenceError:
             pass
+
+
+class TestFindGridSpots(unittest.TestCase):
+    """
+    Unit test class to test the behavior of FindGridSpots in odemis.util.spot.
+    """
+
+    def test_find_grid_close_to_image_edge(self):
+        """
+        Create an image with a grid of 8 by 8 spots near the edge of the image. Then test if the spots are found
+        in the correct coordinates.
+        """
+        image = np.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[4:100:12, 4:100:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        # create a grid that contains the coordinates of the spots
+        xv = np.arange(4, 100, 12)
+        xx, yy = np.meshgrid(xv, xv)
+        grid = np.column_stack((xx.ravel(), yy.ravel()))
+        np.testing.assert_array_almost_equal(np.sort(spot_coordinates, axis=1), np.sort(grid, axis=1), decimal=1)
+
+    def test_find_grid(self):
+        """
+        Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct.
+        """
+        image = np.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        self.assertAlmostEqual(rotation, 0, places=4)
+        # create a grid that contains the coordinates of the spots
+        xv = np.arange(54, 150, 12)
+        xx, yy = np.meshgrid(xv, xv)
+        grid = np.column_stack((xx.ravel(), yy.ravel()))
+        np.testing.assert_array_almost_equal(np.sort(spot_coordinates, axis=1), np.sort(grid, axis=1), decimal=2)
+        np.testing.assert_array_almost_equal(translation, np.array([96, 96]), decimal=3)
+        np.testing.assert_array_almost_equal(scaling, np.array([12, 12]), decimal=3)
+
+    def test_find_grid_on_image(self):
+        """
+        Load an image with known spot coordinates, test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct.
+        """
+        grid_spots = np.load("grid_spots.npz")
+        filename = "multiprobe01.png"
+        img = np.asarray(ndimage.imread(filename), dtype=np.float64)
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(img, (14, 14))
+        np.testing.assert_array_almost_equal(spot_coordinates, grid_spots['spot_coordinates'])
+        np.testing.assert_array_almost_equal(translation, grid_spots['translation'], decimal=3)
+        np.testing.assert_array_almost_equal(scaling, grid_spots['scaling'], decimal=3)
+        self.assertAlmostEqual(rotation, grid_spots['rotation'])
 
 
 if __name__ == '__main__':

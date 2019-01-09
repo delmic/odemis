@@ -16,16 +16,19 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+from libtiff import TIFF
 import math
 import numpy
 from odemis import model
 from odemis.dataio import tiff, hdf5
 from odemis.util import spot
 import os
+import scipy.stats
 import unittest
 
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
+
 
 class TestMomentOfInertia(unittest.TestCase):
     """
@@ -92,21 +95,28 @@ class TestSpotIntensity(unittest.TestCase):
 
 class TestFindCenterCoordinates(unittest.TestCase):
     """
-    Test FindCenterCoordinates()
+    Unit test class to test the behavior of FindCenterCoordinates in
+    odemis.util.spot.
     """
+
+    imgfile = TIFF.open('spotdata.tif', mode='r')
+    imgdata = numpy.array(list(imgfile.iter_images()))
+    imgfile.close()
+    coords0 = numpy.genfromtxt('spotdata.csv', delimiter=',')
+
     def test_find_center(self):
         """
         Test FindCenterCoordinates
         """
         expected_coordinates = [(-0.00019439548586790034, -0.023174120210179554),
-                                (0.41813787193469681, -0.77556146879261101),
+                                (0.47957790544657719, -0.82786251901339769),
                                 (0.05418032832973009, -0.046573726263258203),
                                 (0.15117173005078957, 0.20813259555303279),
-                                (0.15372338817998937, -0.071307409462406962),
-                                (0.22214464176322843, 1.5448851668913044),
-                                (-1.3567379189595801, 0.20634334863259929),
-                                (-0.068717256379618827, 0.76902400758882417),
-                                (-0.064496044288789064, 0.14000630665134439),
+                                (-0.16400161706684502, 0.12399078936095265),
+                                (0.21457123595635252, 1.682698104874774),
+                                (-1.3480442345004007, 0.19789183664083154),
+                                (-0.13424061744712734, 0.73739434108133217),
+                                (-0.063230444692135013, 0.14718269387805094),
                                 (0.020941736978718473, -0.0071056828496776324)]
 
         for i in range(10):
@@ -123,13 +133,13 @@ class TestFindCenterCoordinates(unittest.TestCase):
         # Note: it's not very clear why, but the center is not exactly the same
         # as with the original data.
         expected_coordinates = [(-0.0003367114224783442, -0.022941682748052378),
-                                (0.4213370004373016, -0.25313267150174318),
+                                (0.42179351215760619, -0.25668360673638801),
                                 (0.054153514028894206, -0.046475569488448026),
                                 (0.15117193581594143, 0.20813363301021551),
                                 (0.1963834856403108, -0.18329597166583256),
                                 (0.23159684275306583, 1.3670166271550004),
                                 (-1.3363782613242998, 0.20192181693837058),
-                                (-0.15084662336702331, 0.65850157367975504),
+                                (-0.14978764151902624, 0.66067572281822606),
                                 (-0.058984235874285897, 0.13071737132569164),
                                 (0.021009283646695891, -0.007037802630523865)]
 
@@ -148,7 +158,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         """
         Test FindCenterCoordinates on synthetic data
         """
-        offsets = [(0,0),
+        offsets = [(0, 0),
                    (-1, -1),
                    (3, 2),
                    ]
@@ -158,6 +168,57 @@ class TestFindCenterCoordinates(unittest.TestCase):
             data[100 + ofs[1], 100 + ofs[0]] = 500
             spot_coordinates = spot.FindCenterCoordinates(data)
             numpy.testing.assert_almost_equal(spot_coordinates, ofs, 3)
+
+    def test_zero_bias(self):
+        """
+        FindCenterCoordinates should estimate the center position without any
+        bias; i.e. the expectation value of the difference between the actual
+        position and the estimated position should be zero.
+        """
+        n = self.imgdata.shape[0]
+        coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
+        delta = coords - self.coords0
+        bias = numpy.average(delta, axis=0)
+        stdev = numpy.std(delta, axis=0)
+        self.assertTrue(all(numpy.abs(bias) < (stdev / numpy.sqrt(n))))
+        self.assertTrue(all(numpy.abs(bias) < 5.0e-4))
+
+    def test_anisotropic_accuracy(self):
+        """
+        FindCenterCoordinates should have equal accuracy in all directions.
+        Perform Bartlett's test for equal variances on the residuals in x and
+        y at a significance level of 5%.
+        """
+        coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
+        delta = coords - self.coords0
+        _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 0])
+        self.assertTrue(pvalue > 0.05)
+
+    def test_accuracy(self):
+        """
+        FindCenterCoordinates should have an accuracy of better than 0.05 px.
+        """
+        coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
+        delta = coords - self.coords0
+        stdev = numpy.std(delta.ravel())
+        self.assertLess(stdev, 0.05)
+
+    def test_sanity(self):
+        """
+        Create an image consisting of all zeros and a single pixel with value
+        one. FindCenterCoordinates should return the coordinates of this one
+        pixel.
+        """
+        for n in range(5, 12):
+            for m in range(5, 12):
+                for i in range(2, n - 2):
+                    for j in range(2, m - 2):
+                        img = numpy.zeros((n, m))
+                        img[i, j] = 1
+                        xc, yc = spot.FindCenterCoordinates(img)
+                        self.assertAlmostEqual(j, xc + 0.5 * (m - 1))
+                        self.assertAlmostEqual(i, yc + 0.5 * (n - 1))
+
 
 if __name__ == "__main__":
     unittest.main()
