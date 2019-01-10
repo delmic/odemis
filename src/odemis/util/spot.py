@@ -17,7 +17,8 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
-import numpy as np
+import math
+import numpy
 from odemis import model
 from odemis.util import img
 import scipy.signal
@@ -37,7 +38,7 @@ def _SubtractBackground(data, background=None):
             noise_max = 1.3 * data.metadata[model.MD_BASELINE]
         except (AttributeError, KeyError):
             # Fallback: take average of the four corner pixels
-            noise_max = 1.3 * np.mean((data[0, 0], data[0, -1], data[-1, 0], data[-1, -1]))
+            noise_max = 1.3 * numpy.mean((data[0, 0], data[0, -1], data[-1, 0], data[-1, -1]))
 
     noise_max = data.dtype.type(noise_max)  # ensure we don't change the dtype
     data0 = img.Subtract(data, noise_max)
@@ -62,24 +63,24 @@ def MomentOfInertia(data, background=None):
     data0 = _SubtractBackground(data, background)
 
     rows, cols = data0.shape
-    x = np.linspace(1, cols, num=cols)
-    y = np.linspace(1, rows, num=rows)
-    ysum = np.dot(data0.T, y).T.sum()
-    xsum = np.dot(data0, x).sum()
+    x = numpy.linspace(1, cols, num=cols)
+    y = numpy.linspace(1, rows, num=rows)
+    ysum = numpy.dot(data0.T, y).T.sum()
+    xsum = numpy.dot(data0, x).sum()
 
-    data_sum = data0.sum(dtype=np.int64)  # TODO: dtype should depend on data.dtype
+    data_sum = data0.sum(dtype=numpy.int64)  # TODO: dtype should depend on data.dtype
     if data_sum == 0:
         return float('nan')
     cY = ysum / data_sum
     cX = xsum / data_sum
     xx = (x - cX) ** 2
     yy = (y - cY) ** 2
-    XX = np.ndarray(shape=(rows, cols))  # float
-    YY = np.ndarray(shape=(rows, cols))  # float
+    XX = numpy.ndarray(shape=(rows, cols))  # float
+    YY = numpy.ndarray(shape=(rows, cols))  # float
     XX[:] = xx
     YY.T[:] = yy
     diff = XX + YY
-    totDist = np.sqrt(diff)
+    totDist = numpy.sqrt(diff)
     rmsDist = data0 * totDist
     Mdist = float(rmsDist.sum() / data_sum)
     # In case of just one bright pixel, avoid returning 0 and return unknown
@@ -149,42 +150,42 @@ def FindCenterCoordinates(image, smoothing=True):
 
     Examples
     --------
-    >>> img = np.zeros((5, 5))
+    >>> img = numpy.zeros((5, 5))
     >>> img[2, 2] = 1
     >>> FindCenterCoordinates(img)
     (0.0, 0.0)
 
     """
-    image = np.asarray(image, dtype=np.float64)
+    image = numpy.asarray(image, dtype=numpy.float64)
 
     # Compute lattice midpoints (ik, jk).
     n, m = image.shape
-    jk, ik = np.meshgrid(np.arange(m - 1) + 0.5, np.arange(n - 1) + 0.5)
+    jk, ik = numpy.meshgrid(numpy.arange(m - 1) + 0.5, numpy.arange(n - 1) + 0.5)
 
     # Calculate the intensity gradient.
-    ki = np.array([(1, 1), (-1, -1)])
-    kj = np.array([(1, -1), (1, -1)])
+    ki = numpy.array([(1, 1), (-1, -1)])
+    kj = numpy.array([(1, -1), (1, -1)])
     dIdi = scipy.signal.convolve2d(image, ki, mode='valid')
     dIdj = scipy.signal.convolve2d(image, kj, mode='valid')
     if smoothing:
-        k = np.ones((3, 3)) / 9.
+        k = numpy.ones((3, 3)) / 9.
         dIdi = scipy.signal.convolve2d(dIdi, k, boundary='symm', mode='same')
         dIdj = scipy.signal.convolve2d(dIdj, k, boundary='symm', mode='same')
-    dI2 = np.square(dIdi) + np.square(dIdj)
+    dI2 = numpy.square(dIdi) + numpy.square(dIdj)
 
     # Discard entries where the intensity gradient magnitude is zero, flatten
     # the array in the same go.
-    idx = np.flatnonzero(dI2)
-    ik = np.take(ik, idx)
-    jk = np.take(jk, idx)
-    dIdi = np.take(dIdi, idx)
-    dIdj = np.take(dIdj, idx)
-    dI2 = np.take(dI2, idx)
+    idx = numpy.flatnonzero(dI2)
+    ik = numpy.take(ik, idx)
+    jk = numpy.take(jk, idx)
+    dIdi = numpy.take(dIdi, idx)
+    dIdj = numpy.take(dIdj, idx)
+    dI2 = numpy.take(dI2, idx)
 
     # Construct the set of equations for a line passing through the midpoint
     # (ik, jk), parallel to the gradient intensity, in implicit form:
     # `a*i + b*j + c = 0`, normalized such that `a^2 + b^2 = 1`.
-    dI = np.sqrt(dI2)
+    dI = numpy.sqrt(dI2)
     a = -dIdj / dI
     b = dIdi / dI
     c = a * ik + b * jk
@@ -192,13 +193,13 @@ def FindCenterCoordinates(image, smoothing=True):
     # Weighting: weight by the square of the gradient magnitude and inverse
     # distance to the centroid of the square of the gradient intensity
     # magnitude.
-    sdI2 = np.sum(dI2)
-    i0 = np.sum(dI2 * ik) / sdI2
-    j0 = np.sum(dI2 * jk) / sdI2
-    w = np.sqrt(dI2 / np.hypot(ik - i0, jk - j0))
+    sdI2 = numpy.sum(dI2)
+    i0 = numpy.sum(dI2 * ik) / sdI2
+    j0 = numpy.sum(dI2 * jk) / sdI2
+    w = numpy.sqrt(dI2 / numpy.hypot(ik - i0, jk - j0))
 
     # Solve the linear set of equations in a least-squares sense.
-    ic, jc = np.linalg.lstsq(np.vstack((w * a, w * b)).T, w * c)[0]
+    ic, jc = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c)[0]
 
     # Convert from index (top-left) to (center) position information.
     xc = jc - 0.5 * float(m) + 0.5
@@ -207,9 +208,10 @@ def FindCenterCoordinates(image, smoothing=True):
     return xc, yc
 
 
-def sedisk(r=3):
+def _CreateSEDisk(r=3):
     """
-    Create a flat disk-shaped structuring element with the specified radius r.
+    Create a flat disk-shaped structuring element with the specified radius r. The structuring element can be used
+    to interact with an image, for instance with morphological operations like dilation and erosion.
 
     Parameters
     ----------
@@ -217,15 +219,18 @@ def sedisk(r=3):
 
     Returns
     -------
-    nhood : Structuring element
+    neighborhood : array like of booleans of shape [2r+1, 2r+1]
+        Disk shaped structuring element.
+
     """
-    y, x = np.mgrid[-r:r + 1, -r:r + 1]
-    nhood = (x * x + y * y) <= (r * (r + 1))
-    return nhood
+    y, x = numpy.mgrid[-r:r + 1, -r:r + 1]
+    neighborhood = (x * x + y * y) <= (r * (r + 1))
+    return neighborhood
 
 
-def MaximaFind(image, qty, nsize=18):
+def MaximaFind(image, qty, len_object=18):
     """
+    Find the centers coordinates of maximum spots in an image.
 
     Parameters
     ----------
@@ -233,7 +238,8 @@ def MaximaFind(image, qty, nsize=18):
         Data array containing the greyscale image.
     qty : int
         The amount of maxima you want to find.
-    nsize : int
+    len_object : int
+        A length in pixels somewhat larger than a typical object.
 
     Returns
     -------
@@ -241,45 +247,45 @@ def MaximaFind(image, qty, nsize=18):
         A 2D array of shape (N, 2) containing the coordinates of the maxima.
 
     """
-    filtered = BandPassFilter(image, 1, nsize)
+    filtered = BandPassFilter(image, 1, len_object)
 
     # dilation
-    s = sedisk(nsize // 2)
+    s = _CreateSEDisk(len_object // 2)
     dilated = ndimage.grey_dilation(filtered, footprint=s)
 
     # find local maxima
     binary = (filtered == dilated)
 
     # thresholding
-    qradius = max(nsize // 4, 1)
-    BWdil = ndimage.binary_dilation(binary, structure=sedisk(qradius))
+    qradius = max(len_object // 4, 1)
+    BWdil = ndimage.binary_dilation(binary, structure=_CreateSEDisk(qradius))
 
     labels, num_features = ndimage.label(BWdil)
-    index = np.arange(1, num_features + 1)
+    index = numpy.arange(1, num_features + 1)
     mean = ndimage.mean(filtered, labels=labels, index=index)
-    si = np.argsort(mean)[::-1][:qty]
+    si = numpy.argsort(mean)[::-1][:qty]
     # estimate spot center position
-    pos = np.array(ndimage.center_of_mass(filtered, labels=labels,
+    pos = numpy.array(ndimage.center_of_mass(filtered, labels=labels,
                                           index=index[si]))[:, ::-1]
-    if np.any(np.isnan(pos)):
-        logging.warning('not all positions found')
-        pos = pos[np.any(~np.isnan(pos), axis=1)]
+    if numpy.any(numpy.isnan(pos)):
+        pos = pos[numpy.any(~numpy.isnan(pos), axis=1)]
+        logging.debug("Only %d maxima found, while expected %d", len(pos), qty)
     # improve center estimate using radial symmetry method
-    w = nsize // 2
-    refined_position = np.zeros_like(pos)
+    w = len_object // 2
+    refined_position = numpy.zeros_like(pos)
     for idx, xy in enumerate(pos):
-        _ij = np.rint(xy).astype(int)
+        _ij = numpy.rint(xy).astype(int)
         i0, j0 = _ij - w + 1
         i1, j1 = _ij + w
         # if spot is close to edge of image i0 and j0 can be smaller than 0, crop so the spot is still in the center.
         if i0 < 0:
-            i1, j1 = np.array([i1, j1]) + i0
-            i0, j0 = np.array([i0, j0]) - i0
+            i1, j1 = numpy.array([i1, j1]) + i0
+            i0, j0 = numpy.array([i0, j0]) - i0
         if j0 < 0:
-            i1, j1 = np.array([i1, j1]) + j0
-            i0, j0 = np.array([i0, j0]) - j0
+            i1, j1 = numpy.array([i1, j1]) + j0
+            i0, j0 = numpy.array([i0, j0]) - j0
         spot = filtered[j0:j1, i0:i1]
-        refined_position[idx] = np.rint(xy) + np.array(FindCenterCoordinates(spot))
+        refined_position[idx] = numpy.rint(xy) + numpy.array(FindCenterCoordinates(spot))
 
     return refined_position
 
@@ -295,7 +301,9 @@ def EstimateLatticeConstant(pos):
 
     Returns
     -------
-    kxy : lattice constants
+    kxy : array like [2x2]
+        lattice constants
+
     """
     # Find the closest 4 neighbours (excluding itself) for each point.
     tree = KDTree(pos)
@@ -304,29 +312,29 @@ def EstimateLatticeConstant(pos):
 
     # Determine the median radial distance and filter all points beyond
     # 2*sigma.
-    med = np.median(dr)
-    std = np.std(dr)
-    outliers = np.abs(dr - med) > 2. * std  # doesn't work well if std is very high
+    med = numpy.median(dr)
+    std = numpy.std(dr)
+    outliers = numpy.abs(dr - med) > (2 * std)  # doesn't work well if std is very high
 
     # Determine horizontal and vertical distance (only radial distance is
     # returned by tree.query).
-    dpos = pos[ii[:, 0, np.newaxis]] - pos[ii[:, 1:]]
+    dpos = pos[ii[:, 0, numpy.newaxis]] - pos[ii[:, 1:]]
     dx, dy = dpos[:, :, 0], dpos[:, :, 1]
-    assert np.all(np.abs(dr - np.hypot(dx, dy)) < 1.0e-12)
+    assert numpy.all(numpy.abs(dr - numpy.hypot(dx, dy)) < 1.0e-12)
     # Use k-means to group the points into two directions.
-    X = np.column_stack((dx[~outliers], dy[~outliers]))
-    X[X[:, 0] < -0.5 * med] *= -1.
-    X[X[:, 1] < -0.5 * med] *= -1.
+    X = numpy.column_stack((dx[~outliers], dy[~outliers]))
+    X[X[:, 0] < -0.5 * med] *= -1
+    X[X[:, 1] < -0.5 * med] *= -1
 
     centroids, _ = kmeans(X, 2)
     tree = KDTree(centroids)
     _, labels = tree.query(X)
-    kxy = np.vstack((np.median(X[labels.ravel() == 0], axis=0),
-                     np.median(X[labels.ravel() == 1], axis=0)))
+    kxy = numpy.vstack((numpy.median(X[labels.ravel() == 0], axis=0),
+                     numpy.median(X[labels.ravel() == 1], axis=0)))
 
     # The angle between the two directions should be close to 90 degrees.
-    alpha = np.math.atan2(np.linalg.norm(np.cross(*kxy)), np.dot(*kxy))
-    if np.abs(alpha - np.pi / 2.) > np.deg2rad(2.5):
+    alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*kxy)), numpy.dot(*kxy))
+    if abs(alpha - math.pi / 2) > math.radians(2.5):
         logging.warning('Estimated lattice angle differs from 90 degrees by '
                         'more than 2.5 degrees. Input data could be wrong')
 
@@ -348,10 +356,10 @@ def GridPoints(grid_size_x, grid_size_y):
         The coordinates of a grid of points of size x by y.
 
     """
-    xv = np.arange(grid_size_x, dtype=float) - 0.5 * float(grid_size_x - 1)
-    yv = np.arange(grid_size_y, dtype=float) - 0.5 * float(grid_size_y - 1)
-    xx, yy = np.meshgrid(xv, yv)
-    return np.column_stack((xx.ravel(), yy.ravel()))
+    xv = numpy.arange(grid_size_x, dtype=float) - 0.5 * float(grid_size_x - 1)
+    yv = numpy.arange(grid_size_y, dtype=float) - 0.5 * float(grid_size_y - 1)
+    xx, yy = numpy.meshgrid(xv, yv)
+    return numpy.column_stack((xx.ravel(), yy.ravel()))
 
 
 def BandPassFilter(image, len_noise, len_object):
@@ -371,17 +379,22 @@ def BandPassFilter(image, len_noise, len_object):
         Characteristic length scale of noise in pixels. Additive noise averaged
         over this length should vanish.
     len_object : integer
-        A length in pixels somewhat larger than a typical object. Must be
-        integer.
+        A length in pixels somewhat larger than a typical object. Must be integer.
+
+    Returns
+    -------
+    array like
+        The filtered image
+
     """
-    image = np.asarray(image, dtype=np.float64)
+    image = numpy.asarray(image, dtype=numpy.float64)
 
     # Low-pass filter using a Gaussian kernel.
-    std = np.sqrt(2.) * len_noise
+    std = numpy.sqrt(2.) * len_noise
     denoised = ndimage.filters.gaussian_filter(image, std, mode='reflect')
 
     # Estimate background variations using a boxcar kernel.
     N = 2 * int(round(len_object)) + 1
     background = ndimage.filters.uniform_filter(image, N, mode='reflect')
 
-    return np.maximum(denoised - background, 0.)
+    return numpy.maximum(denoised - background, 0.)

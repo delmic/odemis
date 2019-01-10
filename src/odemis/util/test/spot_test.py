@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-from libtiff import TIFF
 import math
 import numpy
 from odemis import model
@@ -99,10 +98,9 @@ class TestFindCenterCoordinates(unittest.TestCase):
     odemis.util.spot.
     """
 
-    imgfile = TIFF.open('spotdata.tif', mode='r')
-    imgdata = numpy.array(list(imgfile.iter_images()))
-    imgfile.close()
-    coords0 = numpy.genfromtxt('spotdata.csv', delimiter=',')
+    def setUp(self):
+        self.imgdata = tiff.read_data('spotdata.tif')
+        self.coords0 = numpy.genfromtxt('spotdata.csv', delimiter=',')
 
     def test_find_center(self):
         """
@@ -175,7 +173,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         bias; i.e. the expectation value of the difference between the actual
         position and the estimated position should be zero.
         """
-        n = self.imgdata.shape[0]
+        n = len(self.imgdata)
         coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
         delta = coords - self.coords0
         bias = numpy.average(delta, axis=0)
@@ -222,4 +220,3 @@ class TestFindCenterCoordinates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

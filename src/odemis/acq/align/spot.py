@@ -26,11 +26,11 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
-import numpy as np
+import numpy
 from odemis import model
 from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
-from odemis.acq.align.transform import Transform
+from odemis.util.transform import Transform
 from odemis.util import executeAsyncTask
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
 from scipy.spatial import cKDTree as KDTree
@@ -53,8 +53,8 @@ def MeasureSNR(image):
     if image.max() < bl * 2:
         return 0  # nothing looks like signal
 
-    sdn = np.std(image[image < (bl * 2)])
-    ms = np.mean(image[image >= (bl * 2)]) - bl
+    sdn = numpy.std(image[image < (bl * 2)])
+    ms = numpy.mean(image[image >= (bl * 2)]) - bl
 
     # Guarantee no negative snr
     if ms <= 0 or sdn <= 0:
@@ -337,12 +337,12 @@ def FindGridSpots(image, repetition):
         return spot_positions
     # Estimate transformation
     lattice_constants = EstimateLatticeConstant(spot_positions)
-    transformation_matrix = np.transpose(lattice_constants)
-    if np.linalg.det(lattice_constants) < 0.:
-        transformation_matrix = np.fliplr(transformation_matrix)
-    translation = np.mean(spot_positions, axis=0)
-    transform_to_spot_positions = Transform(transformation_matrix=transformation_matrix, translation=translation)
-
+    transformation_matrix = numpy.transpose(lattice_constants)
+    if numpy.linalg.det(lattice_constants) < 0.:
+        transformation_matrix = numpy.fliplr(transformation_matrix)
+    translation = numpy.mean(spot_positions, axis=0)
+    transform_to_spot_positions = Transform(translation=translation)
+    transform_to_spot_positions.transformation_matrix = transformation_matrix
     # Iterative closest point algorithm - single iteration, to fit a grid to the found spot positions
     grid = GridPoints(*repetition)
     spot_grid = transform_to_spot_positions.apply(grid)

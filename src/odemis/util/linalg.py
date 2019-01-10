@@ -3,7 +3,7 @@
 
 from __future__ import division, print_function, absolute_import
 
-import numpy as np
+import numpy
 from scipy.linalg.lapack import get_lapack_funcs
 from scipy.linalg.misc import LinAlgError, _datacopied
 
@@ -13,7 +13,7 @@ __all__ = ['tri_inv']
 def tri_inv(c, lower=False, unit_diagonal=False, overwrite_c=False,
             check_finite=True):
     """
-    Compute the inverse of a triangular matrix
+    Compute the inverse of a triangular matrix.
 
     Parameters
     ----------
@@ -37,6 +37,11 @@ def tri_inv(c, lower=False, unit_diagonal=False, overwrite_c=False,
     inv_c : ndarray
         Inverse of the matrix `c`.
 
+    Notes
+    -----
+    Based on scipy.linalg.solve_triangular();
+    https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/basic.py#L261
+
     Raises
     ------
     LinAlgError
@@ -46,19 +51,19 @@ def tri_inv(c, lower=False, unit_diagonal=False, overwrite_c=False,
 
     Examples
     --------
-    >>> c = np.array([(1., 2.), (0., 4.)])
+    >>> c = numpy.array([(1., 2.), (0., 4.)])
     >>> tri_inv(c)
     array([[ 1.  , -0.5 ],
            [ 0.  ,  0.25]])
-    >>> np.dot(c, tri_inv(c))
+    >>> numpy.dot(c, tri_inv(c))
     array([[ 1.,  0.],
            [ 0.,  1.]])
 
     """
     if check_finite:
-        c1 = np.asarray_chkfinite(c)
+        c1 = numpy.asarray_chkfinite(c)
     else:
-        c1 = np.asarray(c)
+        c1 = numpy.asarray(c)
     if len(c1.shape) != 2 or c1.shape[0] != c1.shape[1]:
         raise ValueError('expected square matrix')
     overwrite_c = overwrite_c or _datacopied(c1, c)
