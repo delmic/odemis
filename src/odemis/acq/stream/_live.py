@@ -713,7 +713,7 @@ class CameraCountStream(CameraStream):
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
-        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
+        self.raw = [model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))]
         self.image.value = model.DataArray([]) # start with an empty array
 
         # time over which to accumulate the data. 0 indicates that only the last
@@ -741,30 +741,38 @@ class CameraCountStream(CameraStream):
         """
         Adds a new count and updates the window
         """
+        raw = self.raw[0]
         # delete all old data
         oldest = date - self.windowPeriod.value
-        first = numpy.searchsorted(self.raw[:, 1], oldest)
+        first = numpy.searchsorted(raw[:, 1], oldest)
 
         # We must update .raw atomically as _updateImage() can run simultaneously
         new = numpy.array([[count, date]], dtype=numpy.float64)
-        self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
+        self.raw = [model.DataArray(numpy.append(raw[first:], new, axis=0))]
 
     def _updateImage(self):
-        # convert the list into a DataArray
-        raw = self.raw  # read in one shot
-        count, date = raw[:, 0], raw[:, 1]
-        im = model.DataArray(count)
-        # save the relative time of each point as ACQ_DATE, unorthodox but should not
-        # cause much problems as the data is so special anyway.
-        if len(date) > 0:
-            age = date - date[-1]
-        else:
-            age = date  # empty
-        im.metadata[model.MD_ACQ_DATE] = age
-        assert len(im) == len(date)
-        assert im.ndim == 1
+        try:
+            if not self.raw:
+                return
 
-        self.image.value = im
+            # convert the list into a DataArray
+            raw = self.raw[0]  # read in one shot
+            count, date = raw[:, 0], raw[:, 1]
+            im = model.DataArray(count)
+            # save the relative time of each point as ACQ_DATE, unorthodox but should not
+            # cause much problems as the data is so special anyway.
+            if len(date) > 0:
+                age = date - date[-1]
+            else:
+                age = date  # empty
+            # TODO: use MD_TIME_LIST
+            im.metadata[model.MD_ACQ_DATE] = age
+            assert len(im) == len(date)
+            assert im.ndim == 1
+
+            self.image.value = im
+        except Exception:
+            logging.exception("Failed to generate chronogram")
 
     def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
