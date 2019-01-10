@@ -2668,7 +2668,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,2</cellpos>
+                        <cellpos>0,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_centering">
@@ -2691,7 +2691,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>0,2</cellpos>
                         </object>&gt;
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_streakcam">
@@ -2714,7 +2714,7 @@ def __init_resources():
                             </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>1,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_fiber">
