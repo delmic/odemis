@@ -1,3 +1,21 @@
+odemis (2.9.1-1) precise; urgency=medium
+
+  * New version: 2.9.1
+  * Main bug fixes:
+    - Fix Windows Viewer not building with wxPython4
+    - Persistent metadata could be overridden by default metadata
+    - Fix referencing on TMCM sometimes timing out too early
+    - Andor shamrock with a mirror "grating" only really accepts center wavelength 0
+    - Previous HDF5 time-correlator acquisitions were not read back properly
+    - In some cases, the microscope file could be missing from the bug report
+    - On an acquisition with a Z stack, going to Z=0 via the Z index didn't have any effect
+    - In the GUI, if an axis move (eg, wavelength) was rejected by the hardware,
+      it would be shown as if it succeeded.
+    - AR export to CSV was mirrored on the phi axis
+    - Polarized AR export to CSV would not always correspond to the selected polarization
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 11 Jan 2019 08:55:32 +0100
+
 odemis (2.9.0-1) precise; urgency=medium
 
   * New version: 2.9
