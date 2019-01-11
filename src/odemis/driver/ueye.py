@@ -881,7 +881,7 @@ class Camera(model.DigitalCamera):
 
     def GetPixelClock(self):
         """
-        return (float): the pixel clock in MHz
+        return (0<int): the pixel clock in MHz
         """
         pc = c_uint32()
         self._dll.is_PixelClock(self._hcam, PIXELCLOCK_CMD_GET, byref(pc), sizeof(pc))
