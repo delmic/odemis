@@ -25,7 +25,6 @@ from __future__ import division
 import numpy
 import math
 
-
 def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):
     """
     Returns the translation, scaling and rotation for the optical and electron image coordinates.
