@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 '''
-Created on 29 Nov 2013
+Created on 10 Jan 2019
 
-@author: Kimon Tsitsikas
+@author: Andries Effting
 
-Copyright © 2012-2013 Kimon Tsitsikas, Delmic
+Copyright © 2019 Andries Effting, Delmic
 
 This file is part of Odemis.
 

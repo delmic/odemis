@@ -22,8 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import math
 import numpy
+import math
 
 
 def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):

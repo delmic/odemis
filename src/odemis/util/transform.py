@@ -1,24 +1,24 @@
 # -*- coding: utf-8 -*-
-"""
-Created on 29 Nov 2013
+'''
+Created on 10 Jan 2019
 
-@author: Kimon Tsitsikas
+@author: Andries Effting
 
-Copyright © 2012-2013 Kimon Tsitsikas, Delmic
+Copyright © 2019 Andries Effting, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms  of the GNU General Public License version 2 as published by the Free
-Software  Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY;  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR  PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-"""
+'''
 
 from __future__ import division
 
@@ -34,11 +34,11 @@ class Transform(object):
     A Transform class that is useful for geometrical coordinate transformations.
     """
 
-    def __init__(self, rotation=0, scaling=1, shear=0, translation=numpy.zeros(2)):
+    def __init__(self, rotation=0, scaling=1, shear=0, translation=None):
         self.rotation = rotation
         self.scaling = scaling
         self.shear = shear
-        self.translation = translation
+        self.translation = numpy.zeros(2) if translation is None else translation
 
     def __repr__(self):
         return "<%s %r>" % (self.__class__.__name__, self.__dict__)
