@@ -25,7 +25,6 @@ from __future__ import division
 from itertools import compress
 import logging
 import math
-from numpy import fft
 from numpy import histogram
 from numpy import unravel_index
 import numpy
@@ -37,6 +36,7 @@ from scipy.spatial import cKDTree
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 
+from odemis.util.spot import BandPassFilter
 from ..align import transform
 
 
@@ -65,7 +65,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
     # Bold spots
     # Third parameter must be a length in pixels somewhat larger than a typical
     # spot
-    filtered_image = _BandPassFilter(filtered_image, 1, 20)
+    filtered_image = BandPassFilter(filtered_image, 1, 20)
 
     image = model.DataArray(filtered_image, data.metadata)  # TODO: why a DataArray?
     avg_intensity = numpy.average(image)
@@ -553,35 +553,3 @@ def _FindInnerOutliers(x_coordinates):
     del x_coordinates[inner_outlier]
 
     return x_coordinates
-
-
-def _BandPassFilter(image, len_noise, len_object):
-    """
-    bandpass filter implementation.
-    Source: http://physics-server.uoregon.edu/~raghu/particle_tracking.html
-    """
-    b = len_noise
-    w = int(round(len_object))
-    N = 2 * w + 1
-
-    # Gaussian Convolution Kernel
-    sm = numpy.arange(0, N, dtype=numpy.float)
-    r = (sm - w) / (2 * b)
-    gx = numpy.power(math.e, -r ** 2) / (2 * b * math.sqrt(math.pi))
-    gx = numpy.reshape(gx, (gx.shape[0], 1))
-    gy = gx.conj().transpose()
-
-    # Boxcar average kernel, background
-    bx = numpy.zeros((1, N), numpy.float) + 1 / N
-    by = bx.conj().transpose()
-
-    # Convolution with the matrix and kernels
-    gxy = gx * gy
-    bxy = bx * by
-    kernel = fft.rfft2(gxy - bxy, image.shape)
-
-    res = fft.irfft2(fft.rfft2(image) * kernel)
-    arr_out = numpy.zeros((image.shape))
-    arr_out[w:-w, w:-w] = res[2 * w:, 2 * w:]
-    res = numpy.maximum(arr_out, 0)
-    return res
