@@ -2041,7 +2041,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,2</cellpos>
+                        <cellpos>0,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_centering">
@@ -2064,7 +2064,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>0,2</cellpos>
                         </object>>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_streakcam">
@@ -2087,7 +2087,7 @@
                             </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>1,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_fiber">

@@ -192,9 +192,8 @@ class Stream(object):
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
+        self._updateDRange(drange_raw)  # sets intensityRange
         self._init_projection_vas()
-
-        self._updateDRange(drange_raw)
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
