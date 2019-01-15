@@ -349,10 +349,12 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
-        Behaviour is unspecified if the acquisition is already running.  # TODO still True? please comment
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronized only with one Event at a time.
+        If the camera is already running in live-mode and receiving a sync event, the live-mode will be stopped.
+        TODO: If the sync event is removed, the live-mode is currently not automatically restarted.
+        Need to explicitly restart live-mode for now.
         """
         # if event None and sync as well -> return, or if event sync, but sync already set -> return
         if self._sync_event == event:
@@ -409,7 +411,7 @@ class ReadoutCamera(model.DigitalCamera):
         This method runs in a separate thread and waits for messages in queue indicating
         that some data was received. The image is then received from the device via the dataport IP socket or
         the vertical scaling table is received, which corresponds to a time range for a single sweep.
-        It corrects the vertical time information. The table contains the actual timestamps for each px..
+        It corrects the vertical time information. The table contains the actual timestamps for each px.
         """
 
         # TODO need to check that there is an ringbuffer available!?
@@ -422,10 +424,13 @@ class ReadoutCamera(model.DigitalCamera):
             while True:
 
                 if self._sync_event and not is_receiving_image:
+                    timeout = 2
+                    start = time.time()
                     while int(self.parent.AsyncCommandStatus()[0]):
                         time.sleep(0)
                         logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
-                        # TODO: If not finished after some time, camera might be in live mode, so StopAcq again.
+                        if time.time() > start + timeout:  # most likely camera is in live-mode, so stop camera
+                            self.parent.AcqStop(self.acqMode)
                     try:
                         event_time = self.queue_events.popleft()
                         logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
@@ -494,8 +499,7 @@ class ReadoutCamera(model.DigitalCamera):
                 # get the scaling table to correct the time axis
                 # TODO only request scaling table if corresponding MD not available for this time range
                 if self.parent._streakunit.streakMode.value:
-                    # TODO some sync problem might be here if a different command is in queue
-                    # in between ImgRingBufferGet and ImgDataGet: check again! This was solved by a lock right??
+                    # There should be no sync problem, as we only receive images and scaling table via the dataport
 
                     logging.debug("Request scaling table for time axis of Hamamatsu streak camera.")
                     # request scaling table
@@ -1128,7 +1132,7 @@ class StreakCamera(model.HwComponent):
                         # 'Firmware: 4.20.B'
                         # 'Version: 4.20.B03-A19-B02-4.02'
                         # Note: It is not clear whether rargs might sometimes already contain parts of additional info
-                        additional_info = ""
+                        additional_info = responses
                         timeout = 1  # wait for 1sec, if not receiving all additional info in that time: skip it
                         start = time.time()
                         while time.time() < start + timeout:
