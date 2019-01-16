@@ -54,7 +54,7 @@ class RemoteExError(StandardError):
 
     def __init__(self, errnum, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
-        StandardError.__init__(self, errnum, *args)
+        StandardError.__init__(self, errnum, *args, **kwargs)
         self.errnum = errnum
 
     def __str__(self):
