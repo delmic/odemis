@@ -430,7 +430,8 @@ class ReadoutCamera(model.DigitalCamera):
                         time.sleep(0)
                         logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
                         if time.time() > start + timeout:  # most likely camera is in live-mode, so stop camera
-                            self.parent.AcqStop(self.acqMode)
+                            self.parent.AcqStop()
+                            start = time.time()
                     try:
                         event_time = self.queue_events.popleft()
                         logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
