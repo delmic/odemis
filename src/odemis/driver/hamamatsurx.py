@@ -98,9 +98,7 @@ class ReadoutCamera(model.DigitalCamera):
             logging.warning("No spectrograph specified. No wavelength metadata will be attached.")
 
         # Set parameters readout camera
-        # TODO what we want to have in MD
-        # TODO check if we need to do this or can use default HW file?
-        parent.CamParamSet("Setup", "TimingMode", "Internal timing")  # TODO internal or external?
+        parent.CamParamSet("Setup", "TimingMode", "Internal timing")  # TODO external check displayed command in GUI
         parent.CamParamSet("Setup", "TriggerMode", 'Edge trigger')
         parent.CamParamSet("Setup", "TriggerSource", 'BNC')
         parent.CamParamSet("Setup", "TriggerPolarity", 'neg.')
@@ -116,13 +114,13 @@ class ReadoutCamera(model.DigitalCamera):
         try:
             self._hwVersion = cam_info[0][0] + ", " + cam_info[0][1] + ", " + cam_info[0][2]   # needs to be a string
         except:
-            self._hwVersion = "dummy"
+            self._hwVersion = "N.A."
             logging.debug("Could not get hardware information for streak readout camera.")
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         try:
             self._swVersion = cam_info[0][3] + ", " + cam_info[0][4]   # needs to be a string
         except:
-            self._swVersion = "dummy"
+            self._swVersion = "N.A."
             logging.debug("Could not get software information for streak readout camera.")
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
@@ -141,8 +139,8 @@ class ReadoutCamera(model.DigitalCamera):
         self._binning = self._getBinning()  # used by _setResolution
 
         # need to be before binning, as it is modified when changing binning
-        resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
-        self.resolution = model.ResolutionVA(resolution, ((1, 1), full_res), setter=self._setResolution)
+        self._resolution = (int(full_res[0]/self._binning[0]), int(full_res[1]/self._binning[1]))
+        self.resolution = model.ResolutionVA(self._resolution, ((1, 1), full_res), setter=self._setResolution)
 
         choices_bin = self._getReadoutCamBinningChoices()
         self.binning = model.VAEnumerated(self._binning, choices_bin, setter=self._setBinning)
@@ -157,7 +155,6 @@ class ReadoutCamera(model.DigitalCamera):
 
         # multiply with mag as we use the 1/M as input in yaml file!
         eff_pixelsize = sensor_pixelsize[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
-        # eff_pixelsize  # TODO think it is useful to have the eff px size attached to each image in the MD
 
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
@@ -189,7 +186,7 @@ class ReadoutCamera(model.DigitalCamera):
         # after commandport thread to be able to set the RingBuffer
         # AcqLiveMonitor writes images to Ringbuffer, which we can read from
         # only works if we use "Live" or "SingleLive" mode
-        self.parent.AcqLiveMonitor("RingBuffer", "10")  # TODO need to be handled in case we use other acq modes
+        self.parent.AcqLiveMonitor("RingBuffer", "10")  # Note: need to be handled in case we use other acq modes
         self.t_image = threading.Thread(target=self._getDataFromBuffer)
         self.t_image.start()
 
@@ -199,9 +196,9 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Updates the wavelength list MD based on the current spectrograph position.
         """
-        npixels = self.resolution.value[0]  # number of pixels, horizontal is wavelength
+        npixels = self._resolution[0]  # number of pixels, horizontal is wavelength
         # pixelsize VA is sensor px size without binning and magnification
-        pxs = self.pixelSize.value[0] * self.binning.value[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
+        pxs = self.pixelSize.value[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
         wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
         self._metadata[model.MD_WL_LIST] = wll
 
@@ -241,9 +238,11 @@ class ReadoutCamera(model.DigitalCamera):
         # If camera is acquiring, it is essential to stop cam first and then change binning.
         # Currently, this only affects the Alignment tab, where camera is continuously acquiring.
         if self.data.active:  # Note: not thread save -> change # TODO use update_settings()
-            self.parent.AcqStop()  # TODO check with HW!
+            self.parent.AcqStop()
             self.parent.CamParamSet("Setup", "Binning", binning)
-            self.parent.AcqStart("Live")
+            self.parent.StartAcquisition("Live")
+        else:
+            self.parent.CamParamSet("Setup", "Binning", binning)
 
         prev_binning, self._binning = self._binning, value
 
@@ -272,6 +271,7 @@ class ReadoutCamera(model.DigitalCamera):
         new_res = (int(resolution[0] // self._binning[0]),
                    int(resolution[1] // self._binning[1]))  # floor division
 
+        self._resolution = new_res
         if self._spectrograph:
             self._updateWavelengthList()  # update WavelengthList when changing binning
 
@@ -305,7 +305,7 @@ class ReadoutCamera(model.DigitalCamera):
         try:
             exp_time = self.parent.convertUnit2Time(exp_time_raw[0], exp_time_raw[1])
         except Exception:
-            raise logging.error("Exposure time of %s is not supported for read-out camera." % exp_time_raw)
+            raise IOError("Exposure time of %s is not supported for read-out camera." % exp_time_raw)
 
         return exp_time
 
@@ -319,7 +319,7 @@ class ReadoutCamera(model.DigitalCamera):
         try:
             exp_time_raw = self.parent.convertTime2Unit(value)
         except Exception:
-            raise logging.debug("Exposure time of %s sec is not supported for read-out camera." % value)
+            raise IOError("Exposure time of %s sec is not supported for read-out camera." % value)
 
         # Note: RemoteEx uses different exposure times depending on acquisition mode
         # If we support e.g. photon counting, we need to specify a different location in RemoteEx.
@@ -349,10 +349,12 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
-        Behaviour is unspecified if the acquisition is already running.  # TODO still True?
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronized only with one Event at a time.
+        If the camera is already running in live-mode and receiving a sync event, the live-mode will be stopped.
+        TODO: If the sync event is removed, the live-mode is currently not automatically restarted.
+        Need to explicitly restart live-mode for now.
         """
         # if event None and sync as well -> return, or if event sync, but sync already set -> return
         if self._sync_event == event:
@@ -364,7 +366,7 @@ class ReadoutCamera(model.DigitalCamera):
         self._sync_event = event
 
         if self._sync_event:
-            self.acqMode = "SingleLive"  # TODO or use "Live"? and just get latest image in buffer when software trigger request it?
+            self.acqMode = "SingleLive"
             # softwareTrigger subscribes to onEvent method: if softwareTrigger.notify() called, onEvent method called
             self._sync_event.subscribe(self)  # must have onEvent method
         else:
@@ -401,8 +403,7 @@ class ReadoutCamera(model.DigitalCamera):
                 if key not in md:
                     md[key] = md_dev[key]
                 elif key in (model.MD_HW_NAME, model.MD_HW_VERSION, model.MD_SW_VERSION):
-                    md[key] = md[key] + ", " + md_dev[key]
-                    # md[key].append(md_dev[key])  # TODO make nice  ", ".join(c)
+                    md[key] = ", ".join([md[key], md_dev[key]])
         return md
 
     def _getDataFromBuffer(self):
@@ -410,7 +411,7 @@ class ReadoutCamera(model.DigitalCamera):
         This method runs in a separate thread and waits for messages in queue indicating
         that some data was received. The image is then received from the device via the dataport IP socket or
         the vertical scaling table is received, which corresponds to a time range for a single sweep.
-        It corrects the vertical time information. The table contains the actual timestamps for each px..
+        It corrects the vertical time information. The table contains the actual timestamps for each px.
         """
 
         # TODO need to check that there is an ringbuffer available!?
@@ -423,10 +424,14 @@ class ReadoutCamera(model.DigitalCamera):
             while True:
 
                 if self._sync_event and not is_receiving_image:
+                    timeout = 2
+                    start = time.time()
                     while int(self.parent.AsyncCommandStatus()[0]):
                         time.sleep(0)
                         logging.debug("Asynchronous RemoteEx command still in process. Wait until finished.")
-                        # TODO if not finished after some time might be live mode, so StopAcq again
+                        if time.time() > start + timeout:  # most likely camera is in live-mode, so stop camera
+                            self.parent.AcqStop()
+                            start = time.time()
                     try:
                         event_time = self.queue_events.popleft()
                         logging.warning("Starting acquisition delayed by %g s.", time.time() - event_time)
@@ -495,8 +500,7 @@ class ReadoutCamera(model.DigitalCamera):
                 # get the scaling table to correct the time axis
                 # TODO only request scaling table if corresponding MD not available for this time range
                 if self.parent._streakunit.streakMode.value:
-                    # TODO some sync problem might be here if a different command is in queue
-                    # in between ImgRingBufferGet and ImgDataGet: check again!
+                    # There should be no sync problem, as we only receive images and scaling table via the dataport
 
                     logging.debug("Request scaling table for time axis of Hamamatsu streak camera.")
                     # request scaling table
@@ -604,8 +608,7 @@ class StreakUnit(model.HwComponent):
         # is set in the setter of the timeRange VA
         self.timeRangeFactor = None
 
-        # read-only VAs
-        # TODO: Trig. Mode, Trig. level, Trig. slope??? plus MD!?
+        # read-only VAs TODO: Trig. Mode, Trig. level, Trig. slope?
 
     def GetStreakMode(self):
         """
@@ -798,8 +801,7 @@ class DelayGenerator(model.HwComponent):
         range_trigDelay = self._getTriggerDelayRange()
         self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._setTriggerDelay)
 
-        # TODO do we need: Burst Mode, Setting, Trig. Mode, delay B ??? as read only... plus MD!?
-        # self.delayB = model.VigilantAttribute(self.parent.DevParamGet(self.location, "Delay B"), readonly=True)
+        # read only VAs TODO Burst Mode, Setting, Trig. Mode, delay B?
 
     # override HwComponent.updateMetadata
     def updateMetadata(self, md):
@@ -889,7 +891,8 @@ class StreakCamera(model.HwComponent):
             # initialize connection with RemoteEx client
             self._commandport, self._dataport = self._openConnection()
         except Exception:
-            raise logging.error("Failed to initialise Hamamatsu readout camera.")
+            logging.exception("Failed to initialise Hamamatsu readout camera.")
+            raise
 
         # collect responses (error_code = 0-3,6-10) from commandport
         self.queue_command_responses = Queue.Queue(maxsize=0)
@@ -914,7 +917,7 @@ class StreakCamera(model.HwComponent):
         # TODO appEnd only works for the last opened window
         # TODO want to check if we want to start app invisible (sVisible = False)
 
-        self.AppStart()  # start HPDTA software  # TODO comment out for testing in order to not start a new App
+        self.AppStart()  # start HPDTA software  # Note: comment out for testing in order to not start a new App
 
         children = children or {}
 
@@ -1120,15 +1123,18 @@ class StreakCamera(model.HwComponent):
                         # Use nasty trick to work around for this command.
                         # This command first receives the error_code and then additional information.
                         # The total information has a fixed length of 5 lines:
-                        # raw output: TODO check on HW! check how lines are separated
+                        # rargs: 'OrcaFlash 4.0 V3'
+                        # additional_info:
+                        # '\nProduct number: C13440-20C\r\nSerial number: 301730\r\nFirmware: 4.20.B\r\nVersion: 4.20.B03-A19-B02-4.02\r'
                         # processed output:
-                        # rargs: 'OrcaFlash 4.0 V3' # TODO it is not clear whether rargs might already contain some/parts of the additional info
+                        # 'OrcaFlash 4.0 V3'
                         # 'Product number: C13440-20C'
                         # 'Serial number: 301730'
                         # 'Firmware: 4.20.B'
                         # 'Version: 4.20.B03-A19-B02-4.02'
-                        additional_info = ""
-                        timeout = 1
+                        # Note: It is not clear whether rargs might sometimes already contain parts of additional info
+                        additional_info = responses
+                        timeout = 1  # wait for 1sec, if not receiving all additional info in that time: skip it
                         start = time.time()
                         while time.time() < start + timeout:
                             try:
@@ -1139,7 +1145,7 @@ class StreakCamera(model.HwComponent):
                         try:
                             additional_info = additional_info.split("\r")[:-1]
                             for item in additional_info:
-                                rargs.append(item.replace("\n", ""))  # TODO check if multiple \n in string, else replace with .strip()
+                                rargs.append(item.strip("\n"))
                             msg_splitted[2] = rargs
                         except Exception:
                             logging.error("Could not retrieve readout camera information.")
@@ -1168,7 +1174,9 @@ class StreakCamera(model.HwComponent):
 
         try:
             self.AcqStart(AcqMode)
-        except Exception:  # TODO RemoteEx error not catched...??
+        except RemoteExError as ex:
+            if ex.errnum != 7:  # 7 = command already running
+                raise
             logging.debug("Starting acquisition currently not possible. An acquisition or live mode might be still "
                           "running. Will stop and restart live mode.")
             self.AcqStop()
@@ -1180,22 +1188,6 @@ class StreakCamera(model.HwComponent):
                     logging.error("Could not start acquisition.")
                     return
             self.AcqStart(AcqMode)
-
-        # TODO might need to make use of parts of this code so keep it for now
-        # idea always stop acquisition and restart!
-        # while int(self.AsyncCommandStatus()[1]):  # action preparing
-        #     logging.debug("Already an acquisition in preparation. Wait until started.")
-        #     logging.debug("Asynchronous command status is %s." % self.AsyncCommandStatus()[0])
-        # if int(self.AsyncCommandStatus()[2]):  # action active (acquisition running)
-        #     logging.debug("Acquisition already running. "
-        #                   "Stop acquisition and restart with new acquisition mode %s." % AcqMode)
-        #     # Acq stop also seems to reset the buffer counting
-        #     self.AcqStop()
-        # # wait until action is finished
-        # while int(self.AsyncCommandStatus()[0]):  # action pending (if True still acquisition running)
-        #     logging.debug("Wait until previous acquisition is finished properly.")
-        #
-        # self.AcqStart(AcqMode)
 
     # === General commands ============================================================
 
@@ -1684,7 +1676,7 @@ class StreakCamera(model.HwComponent):
     def CamParamSet(self, location, parameter, value):
         """Sets the specified parameter of the acquisition options.
         :parameter location: (str) see CamParamGet
-        :parameter parameter (str): see CamParamGet
+        :parameter parameter: (str) see CamParamGet
         :parameter value: (str) value for param"""
         # Note: When using self.acqMode = "SingleLive" parameters regarding the readout camera
         # need to be changed via location = "Live"!!!
@@ -1794,7 +1786,7 @@ class StreakCamera(model.HwComponent):
 
     def DevParamsList(self, device):
         """Return list of all parameters of a specified device.
-        :parameter device (str): see location in DevParamGet
+        :parameter device: (str) see location in DevParamGet
         :return: number of parameters, parameters"""
         return self.sendCommand("DevParamsList", device)
 
@@ -2064,15 +2056,13 @@ class StreakCamera(model.HwComponent):
         """
         # Note: For CamParamSet it doesn't matter if value + unit includes a white space or not.
         # However, for DevParamSet it does matter!!!
-        # TODO make generic for possible units
-        # TODO elegant range fct for float? or itertools?
         if 1e-9 <= value < 1e-6:
             value_raw = str(int(round(value * 1e9))) + " ns"
         elif 1e-6 <= value < 1e-3:
             value_raw = str(int(round(value * 1e6))) + " us"
         elif 1e-3 <= value < 1:
             value_raw = str(int(round(value * 1e3))) + " ms"
-        elif 1 <= value <= 10:  # TODO check if values > 10s possible or error in HPDTA?
+        elif 1 <= value <= 10:  # Note values > 10s are caught by VA as not in range of VA
             value_raw = "%.3f s" % (value,)  # only used for exposure time -> can be float
         else:
             raise ValueError("Unit conversion for value %s not supported" % value)

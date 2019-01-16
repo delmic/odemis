@@ -189,6 +189,12 @@ class TestHamamatsurxCam(unittest.TestCase):
 
     def test_Binning(self):
         """Test binning time VA for readout camera."""
+        # Note: The binning can not be changed while an acquisition is going on or cam is in "Live" mode
+        # When changing the binning VA while cam is acquiring, RemoteEx will stop the acquisition, change the binning
+        # but not restart acquiring.
+
+        self.readoutcam.exposureTime.value = 0.1  # 100ms
+        self.streakcam.AcqStop()  # in case it was running
         self.readoutcam.binning.value = (1, 1)
         prev_bin = self.readoutcam.binning.value
         # change binning VA
@@ -203,6 +209,25 @@ class TestHamamatsurxCam(unittest.TestCase):
         # now test clip function
         self.readoutcam.binning.value = self.readoutcam.binning.clip((3.5, 3.5))
         self.assertEqual(self.readoutcam.binning.value, (4, 4))
+
+        # To check changing binning while acq running.
+        def callback(dataflow, image):
+            logging.debug("Got image.")
+
+        self.readoutcam.data.subscribe(callback)
+        time.sleep(2)
+        self.readoutcam.binning.value = (1, 1)
+        hw_bin = self.readoutcam._getBinning()  # get binning via RemoteEx
+        cur_bin = self.readoutcam.binning.value
+        self.assertEqual(hw_bin, cur_bin)
+        time.sleep(2)
+        # change binning VA
+        self.readoutcam.binning.value = (2, 2)
+        hw_bin = self.readoutcam._getBinning()  # get binning via RemoteEx
+        cur_bin = self.readoutcam.binning.value
+        self.assertEqual(hw_bin, cur_bin)
+        time.sleep(2)
+        self.readoutcam.data.unsubscribe(callback)
 
         # change back to 2 x 2 which is normally  used
         self.readoutcam.binning.value = (2, 2)
@@ -382,21 +407,12 @@ class TestHamamatsurxCam(unittest.TestCase):
         # AcqStop is not an asynchronous command. But it takes time until the status of the async command
         # "AcqStart" is properly finished.
         # Changing settings is not async. RemoteEx blocks as long as the settings are changed.
-        # RemoteEx also stops the "Live" mode if a settings change is requested and restarts the "Live" mode.
-
-        # use: AsyncCommandStatus()
-        # AsyncCommandPreparing = True  # action has not yet been started
-        # AsyncCommandActive = True  # action has been started
-        # AsyncCommandPending = False  # action has been ended
-
-        # Note: async commands are: AcqStart, SeqStart, SeqSave, SeqLoad
-        # TODO write testcase!
-        # choose very small exposure time to test for asynchronous command handling
-        # self.readoutcam.exposureTime.value = 0.00001  # 10us
+        # RemoteEx also stops the "Live" mode if a settings change is requested but does not restarts the "Live" mode.
 
         self.streakunit.streakMode.value = True
-        self.streakunit.timeRange.value = util.find_closest(0.000000002, self.streakunit.timeRange.choices)  # 1ms
+        self.streakunit.timeRange.value = util.find_closest(0.000000002, self.streakunit.timeRange.choices)
         self.streakunit.MCPGain.value = 2
+        self.readoutcam.exposureTime.value = 0.1  # 100ms
         time.sleep(1)
 
         # start Live mode
@@ -419,7 +435,7 @@ class TestHamamatsurxCam(unittest.TestCase):
         time.sleep(5)
 
     def test_acqSync_SingleLive_RingBuffer_subscribe(self):
-        """Test to acquire one synchronized image in Live mode by subscribing."""
+        """Test to acquire synchronized images by subscribing."""
 
         # test sync acq in focus mode
         self.streakunit.streakMode.value = False
@@ -502,8 +518,16 @@ class TestHamamatsurxCam(unittest.TestCase):
     def test_acqSync_EarlyEvents(self):
         """Test early events triggered in synchronous acquisition mode."""
 
-        # choose very small exposure time to trigger for asynchronous command handling
+        # AsyncCommandStatus() returns: pending, preparing, active
+        # AsyncCommandPreparing = True  # action has not yet been started
+        # AsyncCommandActive = True  # action has been started
+        # AsyncCommandPending = False  # action has been ended, if True: action still going on
+
+        # Note: async commands are: AcqStart, SeqStart, SeqSave, SeqLoad
+
+        # choose very small exposure time to trigger for asynchronous commands are handled correctly
         self.readoutcam.exposureTime.value = 0.00001  # 10us
+        self.streakunit.timeRange.value = util.find_closest(0.000001, self.streakunit.timeRange.choices)
         size = self.readoutcam.resolution.value
 
         self.readoutcam.data.synchronizedOn(self.readoutcam.softwareTrigger)
@@ -618,6 +642,7 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         for the streak Time Range chosen for one sweep."""
 
         # test a first value
+        self.readoutcam.binning.value = (1, 1)
         self.streakunit.timeRange.value = util.find_closest(0.000000002, self.streakunit.timeRange.choices)  # 2ns
         self.streakunit.streakMode.value = True
         # Note: RemoteEx automatically stops and restarts "Live" acq when changing settings

@@ -3507,7 +3507,6 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_autofocus.Enable(True)
             self.panel.gauge_autofocus.Enable(True)
 
-            self.panel.slider_focus.Enable(False)  # disable manual focus
             self.panel.btn_manualfocus.Enable(False)  # TODO used only for streak cam now, will be implemented soon
 
             self.panel.pnl_moi_settings.Show(False)
@@ -3681,6 +3680,7 @@ class Sparc2AlignTab(Tab):
                                 "Do nothing.", align_mode)
                 return
 
+            # Note: First close slit, then switch on calibration light
             # Go to the special focus mode (=> close the slit & turn on the lamp)
             f = main.opm.setPath(opath)
             f.add_done_callback(self._on_align_mode_done)
@@ -3699,9 +3699,6 @@ class Sparc2AlignTab(Tab):
 
             f.result()  # TODO: don't block the GUI => make it part of the manual focus??
 
-            # Enable slider for manual alignment of spectrograph focus
-            self.panel.slider_focus.Enable(True)
-
             # # Disable autofocus if manual focus btn pushed
             # self.panel.btn_autofocus.Enable(False)
             # self.panel.gauge_autofocus.Enable(False)
@@ -3711,19 +3708,17 @@ class Sparc2AlignTab(Tab):
             if align_mode == "streak-align":
                 s = None
 
-            opath = self._mode_to_opm[align_mode]
-            f = main.opm.setPath(opath)
-            f.add_done_callback(self._on_align_mode_done)
-            f.result()  # TODO: don't block the GUI => make it part of the manual focus??
-
+            # Note: First turn off calibration light, then open slit
             bl.power.value = bl.power.range[0]
             if s:
                 s.should_update.value = True  # the stream will set all the emissions to 0
             else:
                 bl.emissions.value = [0] * len(bl.emissions.value)
 
-            # Disable slider for manual alignment of spectrograph focus
-            self.panel.slider_focus.Enable(False)
+            opath = self._mode_to_opm[align_mode]
+            f = main.opm.setPath(opath)
+            f.add_done_callback(self._on_align_mode_done)
+            f.result()  # TODO: don't block the GUI => make it part of the manual focus??
 
             # if align_mode != "streak-align":
             #     # Enable autofocus if manual focus btn not pushed
@@ -3874,6 +3869,7 @@ class Sparc2AlignTab(Tab):
 
     def _on_autofocus_done(self, future):
         align_mode = self._autofocus_align_mode
+
         if align_mode == "lens-align" and not future.cancelled():
             # Ensure the latest image in _specline_stream shows the slit focused,
             # with the same grating as used in lens-align mode.
@@ -3883,6 +3879,7 @@ class Sparc2AlignTab(Tab):
         # Turn off the light
         bl = self.tab_data_model.main.brightlight
         bl.power.value = bl.power.range[0]
+
         # That VA will take care of updating all the GUI part
         self.tab_data_model.autofocus_active.value = False
         # Go back to normal mode. Note: it can be "a little weird" in case the
