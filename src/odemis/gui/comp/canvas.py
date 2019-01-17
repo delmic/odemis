@@ -1954,7 +1954,9 @@ class PlotCanvas(BufferedCanvas):
             return util.find_closest(val_x, [x for x, _ in self._data])
         else:
             # Clip the value
-            val_x = max(min(val_x, self.data_prop[1][1]), self.data_prop[1][0])
+            max_val = max(self.data_prop[1])
+            min_val = min(self.data_prop[1])
+            val_x = max(min_val, min(val_x, max_val))
 
         return val_x
 

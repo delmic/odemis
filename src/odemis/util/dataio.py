@@ -64,18 +64,23 @@ def data_to_static_streams(data):
         # only check if ci >= 2 and ti >= 2 (more than one wl and more than one t value)
         if (((model.MD_WL_LIST in d.metadata or
               model.MD_WL_POLYNOMIAL in d.metadata) and
-             (ci >= 0 and d.shape[ci] > 1)) or
-             (ci >= 0 and d.shape[ci] >= 5)):
-            if ti >= 0 and d.shape[ti] > 1:
-                # Streak camera data. Create a temporal spectrum independent of operating mode (Focus or Operate)
+
+             (ci >= 0 and d.shape[ci] > 1)
+             ) or
+            (ci >= 0 and d.shape[ci] >= 5)
+           ):
+            if (model.MD_TIME_LIST in d.metadata and
+                (ti >= 0 and d.shape[ti] > 1)):
+                # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
-                klass = stream.StaticTemporalSpectrumStream
+                klass = stream.StaticSpectrumStream
             else:
                 # Spectrum: either it's obvious according to metadata, or no metadata
                 # but lots of wavelengths, so no other way to display
                 name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 klass = stream.StaticSpectrumStream
-        elif model.MD_TIME_LIST in d.metadata and ti >= 0 and d.shape[ti] > 1:
+
+        elif model.MD_PIXEL_DUR in d.metadata and ti >= 0 and d.shape[ti] > 1:
             # Time data (with XY)
             logging.info("Converting time data into spectrum data")
             # HACK: for now we don't have a good static stream and GUI tools for

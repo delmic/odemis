@@ -344,7 +344,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_streams = self._tab_data_model.streams.value
             if not len(stream_tree):
                 return
-            elif stream_tree.get_streams_by_type(stream.SpectrumStream):
+            elif stream_tree.get_projections_by_type(stream.SpectrumStream):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
             elif any(isinstance(s, stream.ARStream) for s in tab_streams):
@@ -368,7 +368,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
             stream_tree = self.view.stream_tree
-            if stream_tree.get_streams_by_type(stream.SpectrumStream):
+            if stream_tree.get_projections_by_type(stream.SpectrumStream):
                 self.line_overlay.activate()
                 self.add_world_overlay(self.line_overlay)
         else:
@@ -399,7 +399,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # The merge ratio actually corresponds to the opacity of the last image drawn
 
         # Use the stream tree, to get the DataProjection if there is one
-        streams = self.view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getProjections()
         images_opt = []
         images_spc = []
         images_std = []
@@ -828,7 +828,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Find bounding box of all the content
         bbox = (None, None, None, None)  # ltrb in m
         if self.view is not None:
-            streams = self.view.stream_tree.getStreams()
+            streams = self.view.stream_tree.getProjections()
             for s in streams:
                 try:
                     s_bbox = s.getBoundingBox()
@@ -1027,7 +1027,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
-        streams = self.view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getProjections()
         ims = []
 
         # order and display the images
@@ -1268,12 +1268,14 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.view = view
         self._tab_data_model = tab_data
 
-    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None):
+    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None, flip=0):
         """ Set the data to be displayed
 
         TODO: Allow for both a horizontal and vertical domain
         """
-        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, None, "Spatial Spectrum")])
+        flip = 0
+
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, flip, None, "")])
         self.unit_x = unit_x
         self.unit_y = unit_y
         self.range_x = range_x
@@ -1299,14 +1301,22 @@ class TwoDPlotCanvas(BitmapCanvas):
         :return: (int, int)
         """
         size = self.ClientSize
-        data_width = self.range_x[1] - self.range_x[0]
-        x = min(max(self.range_x[0], val[0]), self.range_x[1])
-        perc_x = (x - self.range_x[0]) / data_width
+        data_width = max(self.range_x) - min(self.range_x)
+        x = min(max(min(self.range_x), val[0]), max(self.range_x))
+        if self.range_x[1] > self.range_x[0]:
+            perc_x = (x - self.range_x[0]) / data_width
+        else:
+            perc_x = 1 - (x - self.range_x[1]) / data_width
         pos_x = perc_x * size[0]
 
-        data_height = self.range_y[1] - self.range_y[0]
-        y = min(max(self.range_y[0], val[1]), self.range_y[1])
-        perc_y = (self.range_y[1] - y) / data_height
+        data_height = max(self.range_y) - min(self.range_y)
+        y = min(max(min(self.range_y), val[1]), max(self.range_y))
+
+        if self.range_y[1] > self.range_y[0]:
+            perc_y = (self.range_y[1] - y) / data_height
+        else:
+            perc_y = 1 - (self.range_y[0] - y) / data_height
+
         pos_y = perc_y * size[1]
 
         return pos_x, pos_y
@@ -1319,20 +1329,26 @@ class TwoDPlotCanvas(BitmapCanvas):
         """
         size = self.ClientSize
         perc_x = pos[0] / size[0]
-        data_width = self.range_x[1] - self.range_x[0]
-        val_x = perc_x * data_width + self.range_x[0]
+        data_width = max(self.range_x) - min(self.range_x)
+        if self.range_x[1] > self.range_x[0]:
+            val_x = self.range_x[0] + perc_x * data_width
+        else:
+            val_x = self.range_x[1] - perc_x * data_width
 
         perc_y = pos[1] / size[1]
-        data_height = self.range_y[1] - self.range_y[0]
-        val_y = self.range_y[1] - perc_y * data_height
+        data_height = max(self.range_y) - min(self.range_y)
+        if self.range_y[1] > self.range_y[0]:
+            val_y = self.range_y[1] - perc_y * data_height
+        else:
+            val_y = self.range_y[1] + perc_y * data_height
 
         if snap:
             # TODO: should be just a matter of rounding down to the size of a pixel
             raise NotImplementedError("Doesn't know how to snap to value")
         else:
             # Clip the value
-            val_x = max(self.range_x[0], min(val_x, self.range_x[1]))
-            val_y = max(self.range_y[0], min(val_y, self.range_y[1]))
+            val_x = max(min(self.range_x), min(val_x, max(self.range_x)))
+            val_y = max(min(self.range_y), min(val_y, max(self.range_y)))
 
         return val_x, val_y
 
@@ -1393,7 +1409,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         """
 
         # Normally the view.streamtree should have only one image anyway
-        streams = self.view.stream_tree.getStreams()
+        streams = self.view.stream_tree.getProjections()
 
         # add the images in order
         ims = []

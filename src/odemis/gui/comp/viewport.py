@@ -42,9 +42,12 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
-from odemis.util import units, spectrum, peak
+from odemis.util import units, spectrum, peak, img
 import wx
 from odemis.util import no_conflict
+from odemis.acq.stream import PixelTemporalSpectrumProjection, \
+    DataProjection, LineSpectrumProjection
+from odemis.acq.stream._projection import DataProjection
 
 
 class ViewPort(wx.Panel):
@@ -961,7 +964,7 @@ class PlotViewport(ViewPort):
         ss = self._view.getStreams()
         if len(ss) > 0:
             # Any stream not static?
-            show = any(not isinstance(s, StaticStream) for s in ss)
+            show = any(not isinstance(s, (StaticStream, DataProjection)) for s in ss)
         else:
             show = False
         self.canvas.play_overlay.show = show
@@ -987,7 +990,7 @@ class PlotViewport(ViewPort):
 
         """
 
-        ss = self._view.getStreams()
+        ss = self._view.getProjections()
         # Most of the time, there is only one stream, but in some cases, there might be more.
         # TODO: filter based on the type of stream?
         # ss = self.view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
@@ -1030,16 +1033,16 @@ class PlotViewport(ViewPort):
             # to get the point spectrum we need to use get_pixel_spectrum() and
             # listen to selected_pixel VA.
 
-            if hasattr(self.stream, 'selected_pixel'):
-                self.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-            elif hasattr(self.stream, 'image'):
+            if isinstance(self.stream, DataProjection) and hasattr(self.stream.stream, 'selected_pixel'):
+                self.stream.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+            if hasattr(self.stream, 'image'):
                 self.stream.image.subscribe(self._on_new_data, init=True)
         else:
             logging.info("No stream to plot found")
             self.clear()  # Remove legend ticks and clear plot
 
-        if hasattr(self.stream, "peak_method"):
-            self.stream.peak_method.subscribe(self._on_peak_method, init=True)
+        if isinstance(self.stream, DataProjection) and hasattr(self.stream.stream, "peak_method"):
+            self.stream.stream.peak_method.subscribe(self._on_peak_method, init=True)
 
     @abstractmethod
     def _on_new_data(self, data):
@@ -1068,7 +1071,7 @@ class PointSpectrumViewport(PlotViewport):
 
     def clear(self):
         # Try to clear previous curve, if any
-        if hasattr(self, "_curve_overlay"):
+        if hasattr(self, "_curve_overlay") and self._curve_overlay is not None:
             self._curve_overlay.clear_labels()
         super(PointSpectrumViewport, self).clear()
 
@@ -1077,12 +1080,11 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.add_view_overlay(self._curve_overlay)
             self._curve_overlay.activate()
             if self.stream is not None:
-                data = self.stream.get_pixel_spectrum()
+                data = self.stream.image.value
                 if data is not None:
                     # cancel previous fitting if there is one in progress
                     self._peak_future.cancel()
-                    spectrum_range, _ = self.stream.get_spectrum_range()
-                    unit_x = self.stream.spectrumBandwidth.unit
+                    spectrum_range, unit_x = spectrum.get_spectrum_range(data)
                     # cancel previous fitting if there is one in progress
                     self.spectrum_range = spectrum_range
                     self.unit_x = unit_x
@@ -1108,20 +1110,29 @@ class PointSpectrumViewport(PlotViewport):
                 unit_x = "m"
             except (ValueError, KeyError):
                 # useless polynomial => just show pixels values (ex: -50 -> +50 px)
-                max_bw = data.shape[0] // 2
-                min_bw = (max_bw - data.shape[0]) + 1
-                spectrum_range = range(min_bw, max_bw + 1)
+                max_wl = data.shape[0] // 2
+                min_wl = (max_wl - data.shape[0]) + 1
+                spectrum_range = range(min_wl, max_wl + 1)
                 unit_x = "px"
-
             self.canvas.set_1d_data(spectrum_range, data, unit_x)
 
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
             self.left_legend.range = (min(data), max(data))
-            # For testing
-            # import random
-            # self.left_legend.range = (min(data) + random.randint(0, 100),
-            #                           max(data) + random.randint(-100, 100))
+
+            projection = self.stream
+
+            if projection.stream.peak_method.value is not None:
+                # cancel previous fitting if there is one in progress
+                self._peak_future.cancel()
+                self._curve_overlay.clear_labels()
+                self.spectrum_range = spectrum_range
+                self.unit_x = unit_x
+                # TODO: try to find more peaks (= small window) based on width?
+                # => so far not much success
+                # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
+                self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=projection.stream.peak_method.value)
+                self._peak_future.add_done_callback(self._update_peak)
         else:
             self.clear()
         self.Refresh()
@@ -1142,34 +1153,12 @@ class PointSpectrumViewport(PlotViewport):
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.stream.get_pixel_spectrum()
-        spectrum_range, unit_x = self.stream.get_spectrum_range()
-
-        if self.stream.peak_method.value is not None:
-            # cancel previous fitting if there is one in progress
-            self._peak_future.cancel()
-            self._curve_overlay.clear_labels()
-            self.spectrum_range = spectrum_range
-            self.unit_x = unit_x
-            # TODO: try to find more peaks (= small window) based on width?
-            # => so far not much success
-            # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
-            self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=self.stream.peak_method.value)
-            self._peak_future.add_done_callback(self._update_peak)
-
-        self.canvas.set_1d_data(spectrum_range, data, unit_x)
-
-        self.bottom_legend.unit = unit_x
-        self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-        self.left_legend.range = (min(data), max(data))
-
-        self.Refresh()
-
     @call_in_wx_main
     def _update_peak(self, f):
         try:
             peak_data, peak_offset = f.result()
-            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
+            projection = self.stream
+            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, projection.stream.peak_method.value)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
@@ -1181,6 +1170,67 @@ class PointSpectrumViewport(PlotViewport):
             logging.error("Error while try to find peaks", exc_info=True)
             self._curve_overlay.clear_labels()
             self.canvas.Refresh()
+
+
+class TimeSpectrumViewport(PlotViewport):
+    """
+    Shows the time spectrum of a point -> bar plot + legend
+    Legend axes are time/intensity.
+    """
+
+    def setView(self, view, tab_data):
+        super(TimeSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Time")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+        self._peak_fitter = None
+        self._peak_future = None
+        self._curve_overlay = overlay.view.CurveOverlay(self.canvas)
+
+    def _on_new_data(self, data):
+        """
+        Called when a new data is available (in a live stream)
+        data (1D DataArray)
+        """
+        if data.size:
+            # TODO: factorize with get_spectrum_range() for static stream?
+            try:
+                time_range = spectrum.get_time_per_pixel(data)
+                unit_x = "s"
+            except (ValueError, KeyError):
+                # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+                max_t = data.shape[0] // 2
+                min_t = (max_t - data.shape[0]) + 1
+                time_range = range(min_t, max_t + 1)
+                unit_x = "px"
+
+            self.canvas.set_1d_data(time_range, data, unit_x)
+
+            self.bottom_legend.unit = unit_x
+            self.bottom_legend.range = (time_range[0], time_range[-1])
+            self.left_legend.range = (min(data), max(data))
+
+        else:
+            self.clear()
+        self.Refresh()
+
+    def _on_pixel_select(self, pixel):
+        """
+        Pixel selection event handler.
+        Called when the user picks a new point to display on a 2D spectrum.
+        pixel (int, int): position of the point (in px, px) on the stream
+        """
+        if pixel == (None, None):
+            # TODO: handle more graciously when pixel is unselected?
+            logging.debug("No pixel selected")
+            # Remove legend ticks and clear plot
+            self.clear()
+            return
+        elif self.stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
+    def _on_peak_method(self, state):
+        pass
 
 
 class ChronographViewport(PlotViewport):
@@ -1230,6 +1280,103 @@ class ChronographViewport(PlotViewport):
         pass
 
 
+class TemporalSpectrumViewport(PlotViewport):
+    """
+    Shows a temporal spectrum image from a streak camera (time vs. wavelength)
+    """
+
+    canvas_class = miccanvas.TwoDPlotCanvas
+
+    def __init__(self, *args, **kwargs):
+        super(TemporalSpectrumViewport, self).__init__(*args, **kwargs)
+        self.ol = self.canvas.markline_overlay
+        # self.canvas.markline_overlay.hide_x_label()
+
+    def Refresh(self, *args, **kwargs):
+        """
+        Refresh the ViewPort while making sure the legends get redrawn as well
+        Can be called safely from other threads
+        """
+        self.left_legend.Refresh()
+        self.bottom_legend.Refresh()
+        # Note: this is not thread safe, so would need to be in a CallAfter()
+        # super(TemporalSpectrumViewport, self).Refresh(*args, **kwargs)
+        wx.CallAfter(self.canvas.update_drawing)
+
+    def setView(self, view, tab_data):
+        super(TemporalSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Time")
+        
+    def connect_stream(self, _=None):
+        """ This method will connect this ViewPort to the Spectrum Stream so it
+        it can react to spectrum pixel selection.
+        """
+        ss = self.view.stream_tree.get_projections_by_type(PixelTemporalSpectrumProjection)
+        if self.stream in ss:
+            logging.debug("not reconnecting to stream as it's already connected")
+            return
+
+        # There should be exactly one Spectrum stream. In the future there
+        # might be scenarios where there are more than one.
+        if not ss:
+            self.stream = None
+            logging.info("No spectrum streams found")
+            self.clear()  # Remove legend ticks and clear image
+            return
+        elif len(ss) > 1:
+            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
+
+        self.stream = ss[0]
+        self.stream.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+
+    def _on_new_data(self, data):
+        if data.size:
+            wl, unit_x = spectrum.get_spectrum_range(data)
+            spectrum_range = (min(wl), max(wl))
+            times, unit_y = spectrum.get_time_range(data)
+            time_range = (max(times), min(times))
+
+            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range, flip=wx.VERTICAL)
+
+            self.bottom_legend.unit = unit_x
+            self.left_legend.unit = unit_y
+            self.bottom_legend.range = spectrum_range
+            self.left_legend.range = time_range
+
+        else:
+            self.clear()
+        self.Refresh()
+
+    def _on_pixel_select(self, pixel):
+        """
+        Pixel selection event handler.
+        Called when the user picks a new point to display on a 2D spectrum.
+        pixel (int, int): position of the point (in px, px) on the stream
+        """
+        if pixel == (None, None):
+            # TODO: handle more graciously when pixel is unselected?
+            logging.debug("No pixel selected")
+            # Remove legend ticks and clear plot
+            self.clear()
+            return
+        elif self.stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
+        data = self.stream.image.value
+        self._on_new_data(data)
+    
+    def _on_peak_method(self, state):
+        pass
+
+    def _on_stream_play(self, is_playing):
+        pass
+
+    def _on_stream_update(self, _):
+        pass
+
+
 class SpatialSpectrumViewport(ViewPort):
     """
     A viewport for showing 1D spectum: an image with wavelength horizontally and
@@ -1247,7 +1394,8 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.stream = None
+        # TODO: Change thsi to projection
+        self.stream = None  # self.stream is either the DataProjection or a Stream which does its own projection
         self.current_line = None
 
         self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
@@ -1258,7 +1406,7 @@ class SpatialSpectrumViewport(ViewPort):
             rng = self.left_legend.range
             rat = (val[1] - rng[0]) / (rng[1] - rng[0])
             line_pixels = rasterize_line(*self.current_line)
-            self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
+            self.stream.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
     def Refresh(self, *args, **kwargs):
         """
@@ -1307,7 +1455,7 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        ss = self.view.stream_tree.get_streams_by_type(SpectrumStream)
+        ss = self.view.stream_tree.get_projections_by_type(LineSpectrumProjection)
         if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
@@ -1322,9 +1470,17 @@ class SpatialSpectrumViewport(ViewPort):
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
-        self.stream = ss[0]
-        self.stream.selected_line.subscribe(self._on_line_select, init=True)
-        self.stream.selected_pixel.subscribe(self._on_pixel_select)
+        self.stream = proj = ss[0]
+        if isinstance(proj, DataProjection):
+            stream = proj.stream
+        else:  # The stream does its own projection
+            stream = proj
+
+        if hasattr(stream, "selected_line"):
+            stream.selected_line.subscribe(self._on_line_select, init=True)
+        if hasattr(stream, "selected_pixel"):
+            stream.selected_pixel.subscribe(self._on_pixel_select)
+        proj.image.subscribe(self._on_new_data, init=True)
 
     def _on_pixel_select(self, pixel):
         """ Clear the marking line when the selected pixel is cleared """
@@ -1342,12 +1498,14 @@ class SpatialSpectrumViewport(ViewPort):
         elif self.stream is None:
             logging.warning("No Spectrum Stream present!")
             return
-
-        data = self.stream.get_line_spectrum()
+        
         self.current_line = line
 
+        self.Refresh()
+
+    def _on_new_data(self, data):
         if data is not None:
-            spectrum_range, unit_x = self.stream.get_spectrum_range()
+            spectrum_range, unit_x = spectrum.get_spectrum_range(data)
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
             self.bottom_legend.unit = unit_x

@@ -736,38 +736,19 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
         )),
-    stream.TemporalSpectrumSettingsStream:
+
+    stream.StaticSpectrumStream:
         OrderedDict((
-            ("detStreakMode", {
-                "control_type": odemis.gui.CONTROL_CHECK,
-                "label": "Streak mode",
-                "tooltip": u"If checked streak camera is in operate mode and streaking.\n"
-                           u"If not checked steak camera is in focus mode.",
+            ("selected_time", {
+                "label": "Selected Time",
+                "tooltip": "Selected time of data",
+                "control_type": odemis.gui.CONTROL_SLIDER,
             }),
-            ("detTimeRange", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "label": "Time range",
-                "tooltip": u"Time needed by the streak unit for one sweep from top to bottom of "
-                           u"the readout camera chip.",
-            }),
-            ("detMCPGain", {
-                "control_type": odemis.gui.CONTROL_INT,
-                "label": "MCP gain",
-                "tooltip": u"Microchannel plate gain of the streak unit.\n"
-                           u"Be careful when setting the gain while operating the camera in focus-mode.",
-            }),
-            ("wavelength", {
-                "tooltip": "Center wavelength of the spectrograph",
-                "control_type": odemis.gui.CONTROL_FLT,
-                "range": (0.0, 1900e-9),
-            }),
-            ("grating", {}),
-            ("slit-in", {
-                "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
-            }),
-            ("band", {  # from filter
-                "label": "Filter",
+            ("selected_wavelength", {
+                "label": "Selected Wavelength",
+                "tooltip": "Selected wavelength of data",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+
             }),
         )),
     stream.MonochromatorSettingsStream:

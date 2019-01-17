@@ -184,7 +184,7 @@ def computeThumbnail(streamTree, acqTask):
 
     # poor man's implementation: take the first image of the streams, hoping
     # it actually has a renderer (.image)
-    streams = sorted(streamTree.getStreams(), key=_weight_stream,
+    streams = sorted(streamTree.getProjections(), key=_weight_stream,
                      reverse=True)
     if not streams:
         logging.warning("No stream found in the stream tree")

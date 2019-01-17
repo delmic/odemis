@@ -1017,7 +1017,7 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, zPos=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, projection_class=RGBSpatialProjection, zPos=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -1025,6 +1025,8 @@ class StreamView(View):
           streams in this view is allowed to show.
         :param fov_hw (None or Component): Component with a .horizontalFoV VA and
           a .shape. If not None, the view mpp (=mag) will be linked to that FoV.
+        :param projection_class (DataProjection):
+            Determines the projection used to display streams which have no .image
         :param zPos (None or Float VA): Global position in Z coordinate for the view.
           Used when a stream supports Z stack display, which is controlled by the focuser.
         """
@@ -1036,6 +1038,8 @@ class StreamView(View):
         else:
             self.stream_classes = stream_classes
         self._stage = stage
+        
+        self._projection_klass = projection_class
 
         # Two variations on adapting the content based on what the view shows.
         # They are only used as an _indication_ from the widgets, about what
@@ -1123,7 +1127,7 @@ class StreamView(View):
             self.view_pos.value[0] + half_fov[0],
             self.view_pos.value[1] - half_fov[1],
         )
-        streams = self.stream_tree.getStreams()
+        streams = self.stream_tree.getProjections()
         for stream in streams:
             if hasattr(stream, 'rect'): # the stream is probably pyramidal
                 stream.rect.value = stream.rect.clip(view_rect)
@@ -1388,10 +1392,20 @@ class StreamView(View):
         Do not modify directly, use addStream(), and removeStream().
         Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
         """
-        ss = self.stream_tree.getStreams()
+        ss = self.stream_tree.getProjections()
         # ss is a list of either Streams or DataProjections, so need to convert
         # back to only streams.
         return [s.stream if isinstance(s, DataProjection) else s for s in ss]
+
+    def getProjections(self):
+        """
+        :return: [Stream] list of streams that are displayed in the view
+
+        Do not modify directly, use addStream(), and removeStream().
+        Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
+        """
+        ss = self.stream_tree.getProjections()
+        return ss
 
     def addStream(self, stream):
         """
@@ -1410,9 +1424,8 @@ class StreamView(View):
             logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
         if not hasattr(stream, 'image'):
-            # if the stream is a StaticStream, create a RGBSpatialProjection for it
             logging.debug("Creating a projection for stream %s", stream)
-            stream = RGBSpatialProjection(stream)
+            stream = self._projection_klass(stream)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
@@ -1443,7 +1456,7 @@ class StreamView(View):
         """
 
         with self._streams_lock:
-            for node in self.stream_tree.getStreams():
+            for node in self.stream_tree.getProjections():
                 ostream = node.stream if isinstance(node, DataProjection) else node
 
                 # check if the stream is still present on the stream list

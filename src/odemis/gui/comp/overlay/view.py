@@ -374,6 +374,32 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
         self.line_width = 2
 
+        self._horiz_va = None
+        self._vert_va = None
+
+    def connect_selection(self, x_va, y_va):
+        """
+        Connect vigilant attributes to the x,y lines
+        """
+        if self._horiz_va is not None:
+            self._horiz_va.unsubscribe(self._on_selection)
+        if self._vert_va is not None:
+            self._vert_va.unsubscribe(self._on_selection)
+
+        self._horiz_va = x_va
+        self._vert_va = y_va
+
+        if self._horiz_va is not None:
+            self._horiz_va.subscribe(self._on_selection, init=True)
+        if self._vert_va is not None:
+            self._vert_va.subscribe(self._on_selection, init=True)
+
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _on_selection(self, _):
+        self.val.value = (self._vert_va.value, self._horiz_va.value)
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
     @property
     def x_label(self):
         return self._x_label
@@ -436,6 +462,11 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         else:
             y = max(1, min(self.view_height, y))
             val = self.cnvs.pos_to_val((x, y), snap=False)
+
+        if self._horiz_va:
+            self._horiz_va.value = val[1]
+        if self._vert_va:
+            self._vert_va.value = val[0]
         self.val.value = val
 
     def draw(self, ctx):
@@ -444,7 +475,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
         ctx.set_source_rgba(*self.colour)
 
-        if self.val.value is not None:
+        if self.val.value is not None and self.cnvs.range_x is not None and self.cnvs.range_y is not None:
             val = self.val.value
             if self.map_y_from_x:
                 # Maps Y and also snap X to the closest X value in the data
