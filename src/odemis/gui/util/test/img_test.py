@@ -34,7 +34,9 @@ from odemis.acq import stream
 from odemis.gui.util import img
 from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile_to_image, merge_screen
 from odemis.dataio import tiff
-
+from odemis.acq.stream import SinglePointSpectrumProjection, \
+    RGBSpatialSpectrumProjection, LineSpectrumProjection, \
+    SinglePointTemporalProjection, PixelTemporalSpectrumProjection
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -305,13 +307,14 @@ class TestARExport(unittest.TestCase):
 class TestSpectrumExport(unittest.TestCase):
 
     def setUp(self):
-        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data = numpy.ones((251, 3, 1, 200, 300), dtype="uint16")
         data[:, 0, 0, :, 3] = range(200)
         data[:, 0, 0, :, 3] *= 3
         data[:, 0, 0, 1, 3] = range(251)
         data[2, 0, 0, :, :] = range(300)
         data[200, 0, 0, 2, :] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        wld = list(433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9)
+        tld = list(numpy.array(range(data.shape[1])) * 0.1e-9)
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -322,6 +325,7 @@ class TestSpectrumExport(unittest.TestCase):
              model.MD_EXP_TIME: 0.2,  # s
              model.MD_LENS_MAG: 60,  # ratio
              model.MD_WL_LIST: wld,
+             model.MD_TIME_LIST: tld,
             }
         self.spec_data = model.DataArray(data, md)
         self.spec_stream = stream.StaticSpectrumStream("test spec", self.spec_data)
@@ -330,14 +334,31 @@ class TestSpectrumExport(unittest.TestCase):
 
     def test_spectrum_ready(self):
         self.spec_stream.selectionWidth.value = 1
-        exported_data = img.spectrum_to_export_data(self.spec_stream, False)
+        proj = SinglePointSpectrumProjection(self.spec_stream)
+        exported_data = img.spectrum_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
                          (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
                           img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
 
         self.spec_stream.selectionWidth.value = 4
-        exported_data = img.spectrum_to_export_data(self.spec_stream, False)
+        exported_data = img.spectrum_to_export_data(proj, False)
+        self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
+        self.assertEqual(exported_data.shape[:2],
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
+
+    def test_spectrum_temporal(self):
+        self.spec_stream.selectionWidth.value = 1
+        proj = SinglePointTemporalProjection(self.spec_stream)
+        exported_data = img.chronogram_to_export_data(proj, False)
+        self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
+        self.assertEqual(exported_data.shape[:2],
+                         (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
+                          img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
+
+        self.spec_stream.selectionWidth.value = 4
+        exported_data = img.chronogram_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
                          (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
@@ -348,7 +369,8 @@ class TestSpectrumExport(unittest.TestCase):
         filename = "test-spec-spot.csv"
 
         self.spec_stream.selectionWidth.value = 1
-        exported_data = img.spectrum_to_export_data(self.spec_stream, True)
+        proj = SinglePointSpectrumProjection(self.spec_stream)
+        exported_data = img.spectrum_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])  # exported image includes only raw data
 
         # Save into a CSV file
@@ -358,8 +380,39 @@ class TestSpectrumExport(unittest.TestCase):
         self.assertGreater(st.st_size, 10)
 
         self.spec_stream.selectionWidth.value = 3
-        exported_data = img.spectrum_to_export_data(self.spec_stream, True)
+        exported_data = img.spectrum_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])  # exported image includes only raw data
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exported_data)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 10)
+
+        # clean up
+        try:
+            os.remove(filename)
+        except Exception:
+            pass
+        
+    def test_chronogram_raw(self):
+
+        filename = "test-spec-spot.csv"
+
+        self.spec_stream.selectionWidth.value = 1
+        proj = SinglePointTemporalProjection(self.spec_stream)
+        exported_data = img.chronogram_to_export_data(proj, True)
+        self.assertEqual(exported_data.shape[0], self.spec_data.shape[1])  # exported image includes only raw data
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(filename, exported_data)
+        st = os.stat(filename)  # this test also that the file is created
+        self.assertGreater(st.st_size, 10)
+
+        self.spec_stream.selectionWidth.value = 3
+        exported_data = img.chronogram_to_export_data(proj, True)
+        self.assertEqual(exported_data.shape[0], self.spec_data.shape[1])  # exported image includes only raw data
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
@@ -402,14 +455,15 @@ class TestSpectrumLineExport(unittest.TestCase):
 
     def test_line_ready(self):
         self.spec_stream.selectionWidth.value = 1
-        exported_data = img.line_to_export_data(self.spec_stream, False)
+        proj = LineSpectrumProjection(self.spec_stream)
+        exported_data = img.line_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
                          (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
                           img.SPEC_PLOT_SIZE + img.SPEC_SCALE_WIDTH + img.SMALL_SCALE_WIDTH))  # exported image includes scale bars
 
         self.spec_stream.selectionWidth.value = 3
-        exported_data = img.line_to_export_data(self.spec_stream, False)
+        exported_data = img.line_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
                          (img.SPEC_PLOT_SIZE + img.SPEC_SCALE_HEIGHT + img.SMALL_SCALE_WIDTH,
@@ -419,9 +473,11 @@ class TestSpectrumLineExport(unittest.TestCase):
         filename = "test-spec-line.csv"
 
         self.spec_stream.selectionWidth.value = 1
-        exported_data = img.line_to_export_data(self.spec_stream, True)
-        self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])
-        self.assertGreater(exported_data.shape[1], 64)  # at least 65-1 px
+        proj = LineSpectrumProjection(self.spec_stream)
+        exported_data = img.line_to_export_data(proj, True)
+        self.assertEqual(exported_data.shape[1], self.spec_data.shape[0])
+        self.assertGreater(exported_data.shape[0], 64)  # at least 65-1 px
+        self.assertEqual(exported_data.metadata[model.MD_DIMS],"XC")
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
@@ -430,9 +486,10 @@ class TestSpectrumLineExport(unittest.TestCase):
         self.assertGreater(st.st_size, 100)
 
         self.spec_stream.selectionWidth.value = 4
-        exported_data = img.line_to_export_data(self.spec_stream, True)
-        self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])
-        self.assertGreater(exported_data.shape[1], 64)  # at least 65-1 px
+        exported_data = img.line_to_export_data(proj, True)
+        self.assertEqual(exported_data.shape[1], self.spec_data.shape[0])
+        self.assertGreater(exported_data.shape[0], 64)  # at least 65-1 px
+        self.assertEqual(exported_data.metadata[model.MD_DIMS],"XC")
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
@@ -489,6 +546,7 @@ class TestSpatialExport(unittest.TestCase):
         data[2, :, :, :, :] = range(300)
         data[200, 0, 0, 2] = range(300)
         wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        tld = model.DataArray(range(data.shape[1])) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -499,6 +557,7 @@ class TestSpatialExport(unittest.TestCase):
              model.MD_EXP_TIME: 0.2, # s
              model.MD_LENS_MAG: 60, # ratio
              model.MD_WL_LIST: wld,
+             model.MD_TIME_LIST: tld,
             }
         spec_data = model.DataArray(data, md)
         self.spec_stream = stream.StaticSpectrumStream("test spec", spec_data)
@@ -510,7 +569,8 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (0.00025158414075691866, 0.00017445320835792754)
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
-        streams = [self.streams[1], self.spec_stream]
+        proj = RGBSpatialSpectrumProjection(self.spec_stream)
+        streams = [self.streams[1], proj]
         orig_md = [s.raw[0].metadata.copy() for s in streams]
         exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, False)
         self.assertEqual(exp_data[0].shape, (3379, 4199, 4))  # RGB
