@@ -37,7 +37,7 @@ from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks
 from odemis.model import MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
                          MD_AT_CL, MD_AT_OVV_FULL, MD_AT_OVV_TILES, \
-                         MD_AT_EM, MD_AT_HISTORY
+                         MD_AT_EM, MD_AT_HISTORY, MD_AT_SLIT
 import wx
 
 import odemis.util.units as units
@@ -68,6 +68,7 @@ class InfoLegend(wx.Panel):
             (MD_AT_HISTORY, img.getBitmap("icon/ico_blending_history.png")),
             (MD_AT_CL, img.getBitmap("icon/ico_blending_opt.png")),
             (MD_AT_FLUO, img.getBitmap("icon/ico_blending_opt.png")),
+            (MD_AT_SLIT, img.getBitmap("icon/ico_blending_slit.png")),
         )
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
