@@ -201,9 +201,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1.0543283"
-     inkscape:cx="694.96368"
-     inkscape:cy="476.13651"
+     inkscape:zoom="0.74552269"
+     inkscape:cx="577.57337"
+     inkscape:cy="371.13502"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -224,7 +224,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -451,7 +451,7 @@
          sodipodi:role="line"
          id="tspan4365"
          x="475.78918"
-         y="417.80426"></tspan></text>
+         y="417.80426" /></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
@@ -861,39 +861,39 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-       x="606.67279"
+       x="954.67279"
        y="891.29022"
        id="text3803-1-5"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3805-06-0"
-         x="606.67279"
+         x="954.67279"
          y="891.29022"
          style="font-size:20px">time-correlator</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-       x="702.15106"
-       y="945.57617"
+       x="770.74677"
+       y="910.27661"
        id="text3803-922-4"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3805-8-8"
-         x="702.15106"
-         y="945.57617"
-         style="font-size:20px">cl-detector</tspan></text>
+         x="770.74677"
+         y="910.27661"
+         style="font-size:20px">photo-detector0</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-       x="704.49841"
-       y="1011.8351"
+       x="768.72205"
+       y="1041.2377"
        id="text3803-922-7"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3805-8-1"
-         x="704.49841"
-         y="1011.8351"
-         style="font-size:20px">cl-detector2</tspan></text>
+         x="768.72205"
+         y="1041.2377"
+         style="font-size:20px">photo-detector1</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#00ff00;fill-opacity:1;stroke:none"
@@ -909,14 +909,14 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#00ff00;fill-opacity:1;stroke:none"
-       x="567.61255"
-       y="869.40668"
+       x="635.61255"
+       y="881.40668"
        id="text3799-1-2"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3801-4-26"
-         x="567.61255"
-         y="869.40668"
+         x="635.61255"
+         y="881.40668"
          style="font-size:20px;fill:#00ff00">Time correlator</tspan></text>
     <text
        xml:space="preserve"
@@ -946,38 +946,81 @@
        id="rect3793-6-5"
        width="58.084209"
        height="150.40407"
-       x="575.85907"
+       x="923.85907"
        y="896.79059" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:3.54330707;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect3797-5-5-9"
        width="54.884014"
        height="34.844376"
-       x="634.034"
+       x="868.034"
        y="922.00092" />
     <rect
        style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:3.54330707;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect3797-5-5-9-5"
        width="54.884014"
        height="34.844376"
-       x="633.68793"
+       x="867.68793"
        y="987.56158" />
     <path
        style="fill:none;stroke:#ff0000;stroke-width:2.83464575;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:2.83464575, 5.6692915;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 661.96677,940.2921 -156.00177,0"
-       id="path4154-8-4-9"
-       inkscape:connector-curvature="0"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#ff0000;stroke-width:2.83464575;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:2.83464575, 5.6692915;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 600.92066,1006.6043 0,-68.144"
+       d="m 721.86914,1006.6043 0,-68.144"
        id="path4154-8-4-9-7"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cc" />
     <path
        style="fill:none;stroke:#ff0000;stroke-width:2.83464575;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:2.83464575, 5.6692915;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 661.90411,1005.2717 -61.68134,0.3557"
+       d="m 867.90411,1005.2717 -144.19833,0.3557"
        id="path4154-8-4-9-76"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:3.54330707;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.77165353, 1.77165353;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 703.41162,916.47733 40.39474,40.39473"
+       id="path4148-2-0-3"
+       inkscape:connector-curvature="0" />
+    <ellipse
+       style="fill:#ffffff;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:2.96288252;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path4126-36-6"
+       cx="617.91473"
+       cy="940.5105"
+       rx="6.9374475"
+       ry="24.322523" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
+       x="598.78595"
+       y="990.48145"
+       id="text3803-2-7"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3805-61-5"
+         x="598.78595"
+         y="990.48145"
+         style="font-size:20px">tc-filter</tspan></text>
+    <ellipse
+       style="fill:#ffffff;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:2.96288252;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path4126-36-6-3"
+       cx="556.20374"
+       cy="939.81006"
+       rx="6.9374475"
+       ry="24.322523" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:40px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
+       x="463.44528"
+       y="990.48145"
+       id="text3803-2-7-5"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3805-61-5-6"
+         x="463.44528"
+         y="990.48145"
+         style="font-size:20px">tc-od-filter</tspan></text>
+    <path
+       style="fill:none;stroke:#ff0000;stroke-width:2.83464575;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:2.83464575, 5.6692915;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 867.96677,940.2921 -361.15428,0"
+       id="path4154-8-4-9"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cc" />
   </g>
