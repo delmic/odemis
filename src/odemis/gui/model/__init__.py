@@ -592,6 +592,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # Whether to acquire the probe current (via a Leech)
         self.pcdActive = model.BooleanVA(False, readonly=(main.pcd is None))
 
+        # TODO: VA for autofocus procedure mode needs to be connected in the tab
+#         self.autofocus_active = BooleanVA(False)
+
 
 class ChamberGUIData(MicroscopyGUIData):
 
@@ -599,10 +602,10 @@ class ChamberGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
-        # VA for autofocus procedure mode
+        # TODO: VA for autofocus procedure mode needs to be connected in the tab.
         # It's not really recommended (and there is no toolbar button), but it's
         # possible to change the focus, and the menu is there, so why not.
-        self.autofocus_active = BooleanVA(False)
+#         self.autofocus_active = BooleanVA(False)
 
 
 class AnalysisGUIData(MicroscopyGUIData):

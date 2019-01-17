@@ -91,9 +91,9 @@ class MenuController(object):
         # /View/2x2 is handled by the tab controllers
         # /View/cross hair is handled by the tab controllers
 
-        # TODO: disable next 3 if no current stream
         self._prev_streams = None  # latest tab.streams VA represented
         self._prev_stream = None  # latest stream represented by the menu
+        self._prev_autofocus = None  # latest tab.autofocus_active VA
 
         # /View/Play Stream
         main_frame.Bind(wx.EVT_MENU, self._on_play_stream, id=main_frame.menu_item_play_stream.GetId())
@@ -152,10 +152,6 @@ class MenuController(object):
         # /Help/About
         main_frame.Bind(wx.EVT_MENU, self._on_about, id=main_frame.menu_item_about.GetId())
 
-        tab = self._main_data.tab.value
-        if hasattr(tab.tab_data_model, 'autofocus_active'):
-            tab.tab_data_model.autofocus_active.subscribe(self._on_auto_focus_state)
-
     def _on_update(self, evt):
         import odemis.gui.util.updater as updater
         u = updater.WindowsUpdater()
@@ -207,15 +203,30 @@ class MenuController(object):
     @call_in_wx_main
     def _on_tab_change(self, tab):
         tab_data = tab.tab_data_model
+
+        # Autofocus
+        if self._prev_autofocus:
+            self._prev_autofocus.unsubscribe(self._on_auto_focus_state)
+
+        # Autofocus menu disabled if the tab doesn't support it.
+        if hasattr(tab.tab_data_model, 'autofocus_active'):
+            # supported => current stream decides if it's enabled
+            tab.tab_data_model.autofocus_active.subscribe(self._on_auto_focus_state, init=True)
+            self._prev_autofocus = tab.tab_data_model.autofocus_active
+        else:
+            self._main_frame.menu_item_auto_focus.Enable(False)
+
+        # Current stream
         if self._prev_streams:
             self._prev_streams.unsubscribe(self._on_current_stream)
 
         tab_data.streams.subscribe(self._on_current_stream, init=True)
         self._prev_streams = tab_data.streams
 
-        # Handle fit to content
+        # Fit to content
         fit_enable = hasattr(tab, "view_controller") and tab.view_controller is not None
         self._main_frame.menu_item_fit_content.Enable(fit_enable)
+
 
     @call_in_wx_main
     def _on_current_stream(self, streams):
@@ -309,7 +320,16 @@ class MenuController(object):
         self._main_frame.menu_item_play_stream.Check(updated and not static)
 
         # enable only if focuser is available
-        f_enable = (updated and curr_s.focuser is not None)
+        tab = self._main_data.tab.value
+        if tab.name == "sparc2_align":
+            # TODO: autofocus enabling is quite a mess on this tab. Eventually,
+            # it should be the same code that controls the autofocus button.
+            f_enable = (tab.tab_data_model.align_mode.value == "lens-align" and
+                        self._main_data.focus is not None)
+        elif hasattr(tab.tab_data_model, 'autofocus_active'):
+            f_enable = (updated and curr_s.focuser is not None)
+        else:
+            f_enable = False
         self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
     @call_in_wx_main
