@@ -709,6 +709,8 @@ def calculate_raw_ar(data, bg_data):
             small_shape = int(round(768 * y / x)), 768
         # resize
         data = img.rescale_hq(data, small_shape)
+        if bg_data is not None:
+            bg_data = img.rescale_hq(bg_data, small_shape)
         dtype = numpy.float16
     else:
         dtype = None  # just let the function use the best one
@@ -749,17 +751,24 @@ def ar_to_export_data(streams, raw=False):
     s = streams[0]
 
     if raw:  # csv
-        pos = s.point.value
+        polpos = None
+        sempos = s.point.value  # ebeam pos selected
+        if hasattr(s, "polarization"):
+            polpos = s.polarization.value  # polarization pos selected
 
         # find positions of each acquisition
-        # tuple of 2 floats -> DataArray: position on SEM -> data
-        sempos = {}
+        # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
+        pos = {}
         for d in s.raw:
             try:
-                sempos[d.metadata[model.MD_POS]] = img.ensure2DImage(d)
+                pos[d.metadata[model.MD_POS] + (d.metadata.get(model.MD_POL_MODE, None),)] = img.ensure2DImage(d)
             except KeyError:
                 logging.info("Skipping DataArray without known position")
-        raw_ar = calculate_raw_ar(sempos[pos], s.background.value)
+
+        data = pos[sempos + (polpos,)]
+        data_bg = s._getBackground(pos[sempos + (polpos,)].metadata.get(model.MD_POL_MODE, model.MD_POL_NONE))
+
+        raw_ar = calculate_raw_ar(data, data_bg)
         raw_ar.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
         return raw_ar
     else:
