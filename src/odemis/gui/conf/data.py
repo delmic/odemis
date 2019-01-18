@@ -736,21 +736,21 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
         )),
-
-    stream.StaticSpectrumStream:
-        OrderedDict((
-            ("selected_time", {
-                "label": "Selected Time",
-                "tooltip": "Selected time of data",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-            }),
-            ("selected_wavelength", {
-                "label": "Selected Wavelength",
-                "tooltip": "Selected wavelength of data",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-
-            }),
-        )),
+    # For DEBUG
+#     stream.StaticSpectrumStream:
+#         OrderedDict((
+#             ("selected_time", {
+#                 "label": "Selected Time",
+#                 "tooltip": "Selected time of data",
+#                 "control_type": odemis.gui.CONTROL_SLIDER,
+#             }),
+#             ("selected_wavelength", {
+#                 "label": "Selected Wavelength",
+#                 "tooltip": "Selected wavelength of data",
+#                 "control_type": odemis.gui.CONTROL_SLIDER,
+#
+#             }),
+#         )),
     stream.MonochromatorSettingsStream:
         OrderedDict((
             ("wavelength", {
