@@ -32,7 +32,7 @@ from odemis import model
 from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, conversion, polar, img, units
+from odemis.util import intersect, fluo, conversion, angleres, img, units
 import time
 import wx
 
@@ -713,20 +713,18 @@ def calculate_raw_ar(data, bg_data):
         data = img.rescale_hq(data, small_shape)
         if bg_data is not None:
             bg_data = img.rescale_hq(bg_data, small_shape)
-        dtype = numpy.float16
-    else:
-        dtype = None  # just let the function use the best one
 
     size = (90, 360)  # TODO: increase if data is high def
 
     if bg_data is None:
         # Simple version: remove the background value
-        data0 = polar.ARBackgroundSubtract(data)
+        data0 = angleres.ARBackgroundSubtract(data)
     else:
         data0 = img.Subtract(data, bg_data)  # metadata from data
 
     # calculate raw polar representation
-    polard = polar.AngleResolved2Rectangular(data0, size, hole=False, dtype=dtype)
+
+    polard = angleres.AngleResolved2Rectangular(data0, size, hole=False)
 
     return polard
 
