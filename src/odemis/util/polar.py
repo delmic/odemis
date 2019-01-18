@@ -268,7 +268,7 @@ def AngleResolved2Rectangular(data, output_size, hole=True, dtype=None):
 
     # interpolate
     qz = interp(xi, yi)
-    qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
+    qz = qz.swapaxes(0, 1)
     qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation
     assert numpy.all(qz > -1)  # there should be no negative values, some very small due to interpolation are possible
     qz[qz < 0] = 0  # all negative values (due to interpolation) set to zero
