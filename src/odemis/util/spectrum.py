@@ -107,10 +107,13 @@ def get_spectrum_range(data):
         dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
         # useless polynomial => just show pixels values (ex: -50 -> +50 px)
         if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?
-            # This is a hack that works the same way as in get_spectrum_range
+            # This is a hack that works the same way as in get_wavelength_per_pixel
             ci = 1
         else:
-            ci = 0
+            try:
+                ci = dims.index("C")  # get index of dimension C
+            except ValueError:
+                raise ValueError("Dimension 'C' not in dimensions, so skip computing wavelength list.")
 
         max_bw = data.shape[ci] // 2
         min_bw = (max_bw - data.shape[ci]) + 1
@@ -141,7 +144,8 @@ def get_time_per_pixel(da):
         dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
         
         if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB?
-            # This is a hack that works the same way as in get_spectrum_range
+            # This is a hack that works the same way as in get_wavelength_per_pixel
+            # Typically, CT data is represented as TCR.
             ti = 0
         else:
             try:
@@ -171,10 +175,13 @@ def get_time_range(data):
         dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
 
         if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?
-            # This is a hack that works the same way as in get_spectrum_range
+            # This is a hack that works the same way as in get_wavelength_per_pixel
             ti = 0
         else:
-            ti = 1
+            try:
+                ti = dims.index("T")  # get index of dimension C
+            except ValueError:
+                raise ValueError("Dimension 'T' not in dimensions, so skip computing wavelength list.")
 
         # no time list. just show pixels values (ex: 0 -> +50 px)
         max_t = data.shape[ti] // 2  # Typically, a TC array
