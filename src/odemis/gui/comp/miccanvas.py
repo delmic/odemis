@@ -1099,10 +1099,6 @@ class BarPlotCanvas(canvas.PlotCanvas):
     """
 
     def __init__(self, *args, **kwargs):
-
-        # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
-        # would also require renaming the `view` attributes of the
-        # other Canvas classes.
         self.view = None
         self._tab_data_model = None
 
