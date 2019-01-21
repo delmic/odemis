@@ -47,7 +47,6 @@ class DataProjection(object):
         '''
         self.stream = stream
         self.name = stream.name
-        self.acquisitionType = stream.acquisitionType
         self._im_needs_recompute = threading.Event()
         weak = weakref.ref(self)
         self._imthread = threading.Thread(target=self._image_thread,
@@ -59,6 +58,7 @@ class DataProjection(object):
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
 
+    # FIXME: shouldn't be an abstractmethod, if not all the sub-classes overridde it
     @abstractmethod
     def projectAsRaw(self):
         """
@@ -129,7 +129,6 @@ class RGBProjection(DataProjection):
         '''
         super(RGBProjection, self).__init__(stream)
 
-        self.name = stream.name
         self.image = model.VigilantAttribute(None)
 
         # Don't call at init, so don't set metadata if default value
@@ -219,7 +218,7 @@ class RGBProjection(DataProjection):
             self.image.value = self._project2RGB(raw, self.stream.tint.value)
 
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
 
 class RGBSpatialProjection(RGBProjection):
@@ -525,7 +524,7 @@ class RGBSpatialProjection(RGBProjection):
                 self.image.value = self._projectTile(raw[0])
 
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
 
 class RGBSpatialSpectrumProjection(RGBSpatialProjection):
@@ -581,7 +580,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
             return model.DataArray(av_data, md)
 
         except Exception:
-            logging.exception("Projecting %s %s raw image", self.__class__.__name__, self.name.value)
+            logging.exception("Projecting %s %s raw image", self.__class__.__name__, self.stream.name.value)
 
     def _updateImage(self):
         """
@@ -658,7 +657,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
             self.image.value = raw
 
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
 
 class LineSpectrumProjection(RGBProjection):
@@ -848,16 +847,16 @@ class PixelTemporalSpectrumProjection(RGBProjection):
         self._shouldUpdateImage()
 
     def _find_metadata(self, md):
-        return self.stream.calibrated.value.metadata
+        return md  # The data from _computeSpec() should already be correct
 
     def _computeSpec(self):
         """
         Compute the temporal spectrum data array
 
-        returns the array if successful; none otherwise
+        return (DataArray of shape TC, or None): The array if successful, None in
+        case of failure or no selected_pixel
         """
         data = self.stream.calibrated.value
-        raw_md = data.metadata
 
         if (self.stream.selected_pixel.value == (None, None) or 
             (data.shape[1] == 1 or data.shape[0] == 1)):
@@ -866,28 +865,16 @@ class PixelTemporalSpectrumProjection(RGBProjection):
         x, y = self.stream.selected_pixel.value
 
         spec2d = self.stream.calibrated.value[:, :, 0, :, :]  # same data but remove useless dims
-
-        # md = self.stream._find_metadata(self.stream.calibrated.value.metadata)
-        md = {}
-        if model.MD_WL_LIST in raw_md:
-            md[model.MD_WL_LIST] = raw_md[model.MD_WL_LIST]
-        elif model.MD_WL_POLYNOMIAL in raw_md:
-            md[model.MD_WL_POLYNOMIAL] = raw_md[model.MD_WL_POLYNOMIAL]
-        else:
-            logging.info("No wavelength data found in spectrum data.")
-
-        if model.MD_TIME_LIST in raw_md:
-            md[model.MD_TIME_LIST] = raw_md[model.MD_TIME_LIST]
-
+        md = dict(data.metadata)
         md[model.MD_DIMS] = "TC"
 
         # We treat width as the diameter of the circle which contains the center
         # of the pixels to be taken into account
         width = self.stream.selectionWidth.value
         if width == 1:  # short-cut for simple case
-            data = model.DataArray(spec2d[:, :, y, x], md)
+            data = spec2d[:, :, y, x]
             data = numpy.swapaxes(data, 0, 1)
-            return data
+            return model.DataArray(data, md)
 
         # There are various ways to do it with numpy. As typically the spectrum
         # dimension is big, and the number of pixels to sum is small, it seems
@@ -912,8 +899,8 @@ class PixelTemporalSpectrumProjection(RGBProjection):
 
     def projectAsRaw(self):
         """
-        Returns a raw DataArray of the temporal spectrum based on current parameters.
-        2D CT array with metadata
+        Returns the raw for the current selected_pixel (with the calibration).
+        return (DataArray of shape TC, or None): array with metadata
         """
         return self._computeSpec()
 
@@ -929,7 +916,7 @@ class PixelTemporalSpectrumProjection(RGBProjection):
                 self.image.value = self._project2RGB(data)
             
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
 
 class MeanSpectrumProjection(DataProjection):
@@ -956,20 +943,12 @@ class MeanSpectrumProjection(DataProjection):
         Recomputes the image with all the raw data available
         """
         data = self.stream.calibrated.value
+        md = dict(data.metadata)
+        md[model.MD_DIMS] = "C"
+
         # flatten all but the C dimension, for the average
         data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))
         av_data = numpy.mean(data, axis=1)
-
-        raw_md = self.stream.calibrated.value.metadata
-        md = {}
-        md[model.MD_DIMS] = "C"
-        if model.MD_WL_LIST in raw_md:
-            md[model.MD_WL_LIST] = raw_md[model.MD_WL_LIST]
-        elif model.MD_WL_POLYNOMIAL in raw_md:
-            md[model.MD_WL_POLYNOMIAL] = raw_md[model.MD_WL_POLYNOMIAL]
-        else:
-            logging.info("No wavelength data found in spectrum data.")
-            return
 
         self.image.value = model.DataArray(av_data, md)
 
@@ -1005,54 +984,49 @@ class SinglePointSpectrumProjection(DataProjection):
 
         Returns: a 1-D DataArray or None if the spectrum could not be computed
         """
-        if self.stream.selected_pixel.value == (None, None) or self.stream.calibrated.value.shape[0] == 1:
+        data = self.stream.calibrated.value
+
+        if (self.stream.selected_pixel.value == (None, None) or
+            data is None or data.shape[0] == 1):
             return None
 
-        # if .raw is a list of DataArray, .image is a complete image
-        if isinstance(self.stream.raw, list):
-            x, y = self.stream.selected_pixel.value
-            if model.hasVA(self.stream, "selected_time"):
-                t = self.stream._tl_px_values.index(self.stream.selected_time.value)
-            else:
-                t = 0
-            spec2d = self.stream.calibrated.value[:, t, 0, :, :]  # same data but remove useless dims
+        x, y = self.stream.selected_pixel.value
+        if model.hasVA(self.stream, "selected_time"):
+            t = self.stream._tl_px_values.index(self.stream.selected_time.value)
+        else:
+            t = 0
+        spec2d = self.stream.calibrated.value[:, t, 0, :, :]  # same data but remove useless dims
 
-            raw_md = self.stream.calibrated.value.metadata
-            md = {}
-            md[model.MD_DIMS] = "C"
-            if model.MD_WL_LIST in raw_md:
-                md[model.MD_WL_LIST] = raw_md[model.MD_WL_LIST]
-            elif model.MD_WL_POLYNOMIAL in raw_md:
-                md[model.MD_WL_POLYNOMIAL] = raw_md[model.MD_WL_POLYNOMIAL]
+        md = dict(data.metadata)
+        md[model.MD_DIMS] = "C"
 
-            # We treat width as the diameter of the circle which contains the center
-            # of the pixels to be taken into account
-            width = self.stream.selectionWidth.value
-            if width == 1:  # short-cut for simple case
-                raw = spec2d[:, y, x]
-                return model.DataArray(raw, md)
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.stream.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            data = spec2d[:, y, x]
+            return model.DataArray(data, md)
 
-            # There are various ways to do it with numpy. As typically the spectrum
-            # dimension is big, and the number of pixels to sum is small, it seems
-            # the easiest way is to just do some kind of "clever" mean. Using a
-            # masked array would also work, but that'd imply having a huge mask.
-            radius = width / 2
-            n = 0
-            # TODO: use same cleverness as mean() for dtype?
-            datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
-            # Scan the square around the point, and only pick the points in the circle
-            for px in range(max(0, int(x - radius)),
-                            min(int(x + radius) + 1, spec2d.shape[-1])):
-                for py in range(max(0, int(y - radius)),
-                                min(int(y + radius) + 1, spec2d.shape[-2])):
-                    if math.hypot(x - px, y - py) <= radius:
-                        n += 1
-                        datasum += spec2d[:, py, px]
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, py, px]
 
-            mean = datasum / n
+        mean = datasum / n
 
-            return model.DataArray(mean.astype(spec2d.dtype), md)
-        
+        return model.DataArray(mean.astype(spec2d.dtype), md)
 
     def projectAsRaw(self):
         return self._computeSpec()
@@ -1070,7 +1044,7 @@ class SinglePointSpectrumProjection(DataProjection):
                 self.image.value = data
             
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
 
 class SinglePointTemporalProjection(DataProjection):
@@ -1155,4 +1129,4 @@ class SinglePointTemporalProjection(DataProjection):
                 self.image.value = data
 
         except Exception:
-            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
