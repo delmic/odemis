@@ -268,34 +268,10 @@ def AngleResolved2Rectangular(data, output_size, hole=True, dtype=None):
 
     # interpolate
     qz = interp(xi, yi)
-    qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
+    qz = qz.swapaxes(0, 1)
     qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation
     assert numpy.all(qz > -1)  # there should be no negative values, some very small due to interpolation are possible
     qz[qz < 0] = 0  # all negative values (due to interpolation) set to zero
-
-    # plot optional
-    # plt.figure()
-    # plt.imshow(theta_data)
-    # plt.figure()
-    # plt.imshow(phi_data)
-    # plt.figure()
-    # plt.imshow(data)
-    # plt.figure()
-    # plt.imshow(mask)
-    # plt.figure()
-    # plt.imshow(intensity_data)
-    # plt.figure()
-    # plt.imshow(qz)
-
-    # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column
-    # add the phi and theta values as an extra line/column in order to be displayed in the csv-file
-    # attach theta as first column
-    theta_lin = numpy.linspace(0, math.pi / 2, output_size[0])
-    qz = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), qz, axis=1)
-    # attach phi as first row
-    phi_lin = numpy.linspace(0, 2 * math.pi, output_size[1])
-    phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
-    qz = numpy.append(phi_lin, qz, axis=0)
 
     result = model.DataArray(qz, data.metadata)
 

@@ -19,6 +19,7 @@ from __future__ import absolute_import, division
 
 import csv
 import logging
+import math
 import numpy
 from odemis import model
 from odemis.util import spectrum
@@ -99,8 +100,19 @@ def export(filename, data):
         # Data should be in the form of (Y+1, X+1), with the first row and column the angles
         with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)
+
+            # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column
+            # add the phi and theta values as an extra line/column in order to be displayed in the csv-file
+            # attach theta as first column
+            theta_lin = numpy.linspace(0, math.pi / 2, data.shape[0])
+            data = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), data, axis=1)
+            # attach phi as first row
+            phi_lin = numpy.linspace(0, 2 * math.pi, data.shape[1]-1)
+            phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
+            data = numpy.append(phi_lin, data, axis=0)
+
             # Set the 'header' in the 0,0 element
-            first_row = ['theta\phi(rad)'] + [d for d in data[0, 1:]]
+            first_row = ['theta\phi[rad]'] + [d for d in data[0, 1:]]
             csv_writer.writerow(first_row)
             # dump the array
             csv_writer.writerows(data[1:, :])
