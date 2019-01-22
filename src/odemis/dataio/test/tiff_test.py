@@ -1526,6 +1526,137 @@ class TestTiffIO(unittest.TestCase):
             self.assertAlmostEqual(rmd[model.MD_PIXEL_SIZE][0], emd[model.MD_PIXEL_SIZE][0])
             self.assertAlmostEqual(rmd[model.MD_PIXEL_SIZE][1], emd[model.MD_PIXEL_SIZE][1])
 
+    def test_uint32(self):
+        """
+        Checks that can both write and read back image in uint32
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "my exported image",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_DIMS: "YX",
+                    },
+                    ]
+        shape = (5120, 2560)
+        dtype = numpy.uint32
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(shape, dtype), md.copy())
+            a[...] = 2**24
+            a[i, i] = i  # "watermark" it
+            a[i + 1, i + 5] = i + 1  # "watermark" it
+            ldata.append(a)
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            self.assertEqual(im[i + 1, i + 5], i + 1)
+            self.assertEqual(im.shape, shape)
+            self.assertEqual(im.dtype, dtype)
+            emd = metadata[i].copy()
+            rmd = im.metadata
+            img.mergeMetadata(emd)
+            img.mergeMetadata(rmd)
+            self.assertEqual(rmd[model.MD_DESCRIPTION], emd[model.MD_DESCRIPTION])
+            self.assertEqual(rmd[model.MD_DIMS], emd[model.MD_DIMS])
+
+    def testReadAndSaveTemporal(self):
+        """
+        Checks that can both write and read back an time-correlator data
+        """
+        shape = [(512,340), (1, 1024, 1, 2, 2)]
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "survey",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_DIMS: "YX",
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "my exported image",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_DIMS: "CTZYX",
+                     #model.MD_TIME_LIST: [1e-6 * i for i in range(shape[1][1])],
+                     model.MD_PIXEL_DUR: 1e-6,
+                     model.MD_TIME_OFFSET: 0,
+                    },
+                    ]
+        dtype = numpy.uint32
+        ldata = []
+        for i, (s, md) in enumerate(zip(shape, metadata)):
+            a = model.DataArray(numpy.zeros(s, dtype), md.copy())
+            a[...] = 2**24
+            a[..., i, i] = i  # "watermark" it
+            ldata.append(a)
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            self.assertEqual(im.shape, shape[i])
+            self.assertEqual(im.dtype, dtype)
+            emd = metadata[i].copy()
+            rmd = im.metadata
+            img.mergeMetadata(emd)
+            img.mergeMetadata(rmd)
+            self.assertEqual(rmd[model.MD_DESCRIPTION], emd[model.MD_DESCRIPTION])
+            self.assertEqual(rmd[model.MD_DIMS], emd[model.MD_DIMS])
+
+    def testBadTIFFMD(self):
+        """
+        Checks that can both write and read back data with a negative MD_POS.
+        """
+        shape = [(512,340)]
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "survey",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (-13.7, -30e-3),  # m # NEGATIVE position
+                     model.MD_DIMS: "YX",
+                    },
+                    ]
+        dtype = numpy.uint32
+        ldata = []
+        for i, (s, md) in enumerate(zip(shape, metadata)):
+            a = model.DataArray(numpy.zeros(s, dtype), md.copy())
+            a[...] = 2**24
+            a[..., i, i] = i  # "watermark" it
+            ldata.append(a)
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            self.assertEqual(im.shape, shape[i])
+            self.assertEqual(im.dtype, dtype)
+            emd = metadata[i].copy()
+            rmd = im.metadata
+            img.mergeMetadata(emd)
+            img.mergeMetadata(rmd)
+            self.assertEqual(rmd[model.MD_DESCRIPTION], emd[model.MD_DESCRIPTION])
+            self.assertEqual(rmd[model.MD_DIMS], emd[model.MD_DIMS])
+            self.assertEqual(rmd[model.MD_POS], emd[model.MD_POS])
+
     def testReadMDTime(self):
         """
         Checks that we can read back the metadata of an acquisition with time correlation

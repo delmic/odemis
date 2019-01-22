@@ -122,8 +122,11 @@ def _convertToTiffTag(metadata):
             # everything by 1 m, which should be enough as samples are typically
             # a few cm big. The most important is that the image positions are
             # correct relatively to each other (for a given sample).
-            tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
-            tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
+            pos_cm = [100 + v * 100 for v in val]
+            tiffmd[T.TIFFTAG_XPOSITION] = max(0, pos_cm[0])
+            tiffmd[T.TIFFTAG_YPOSITION] = max(0, pos_cm[1])
+            if [tiffmd[T.TIFFTAG_XPOSITION], tiffmd[T.TIFFTAG_YPOSITION]] != pos_cm:
+                logging.warning("Position metadata clipped to avoid negative position %s", pos_cm)
 
 #         elif key == model.MD_ROTATION:
             # TODO: should use the coarse grain rotation to update Orientation
