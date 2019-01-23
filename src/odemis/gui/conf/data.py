@@ -544,6 +544,22 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Pinhole diameter",
             }),
         )),
+    "time-correlator":
+        OrderedDict((
+            ("dwellTime", {
+                "tooltip": "Time spent by the e-beam on each pixel",
+                "scale": "log",
+            }),
+            ("pixelDuration", {
+                "label": "Time resolution",
+            }),
+            ("syncOffset", {
+                "label": "Sync offset",
+            }),
+            ("syncDiv", {
+                "label": "Sync divider",
+            }),
+        )),
 }
 
 # Allows to override some values based on the microscope role

@@ -2406,6 +2406,9 @@ class SparcStreamsController(StreamBarController):
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
 
+        if main_data.time_correlator:
+            self.add_action("Time Correlator", self.addTimeCorrelator)
+
     def _on_streams(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
         Also remove the ROI subscriptions and wx events.
@@ -2728,6 +2731,30 @@ class SparcStreamsController(StreamBarController):
                 axes["band"] = fw
 
         return self._addRepStream(monoch_stream, sem_monoch_stream,
+                                  axes=axes,
+                                  play=False
+                                  )
+
+    def addTimeCorrelator(self):
+        """ Create a Time Correlator stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        tc_stream = acqstream.ScannedTemporalSettingsStream(
+            "Time Correlator",
+            main_data.time_correlator,
+            main_data.time_correlator.data,
+            main_data.ebeam,
+            detvas=get_local_vas(main_data.time_correlator, self._main_data_model.hw_settings_config)
+        )
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_tc_stream = acqstream.SEMTemporalMDStream("SEM Time Correlator",
+                                                  [sem_stream, tc_stream])
+        axes = {"tc-od-filter": main_data.tc_od_filter,
+               "tc-filter": main_data.tc_filter}
+        
+        return self._addRepStream(tc_stream, sem_tc_stream,
                                   axes=axes,
                                   play=False
                                   )
