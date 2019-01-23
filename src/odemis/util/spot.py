@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import cv2
 import logging
 import math
 import numpy
@@ -24,6 +25,7 @@ from odemis.util import img
 import scipy.signal
 from scipy import ndimage
 from scipy.spatial import cKDTree as KDTree
+from scipy.spatial.distance import cdist
 from scipy.cluster.vq import kmeans
 
 
@@ -225,7 +227,7 @@ def _CreateSEDisk(r=3):
     """
     y, x = numpy.mgrid[-r:r + 1, -r:r + 1]
     neighborhood = (x * x + y * y) <= (r * (r + 1))
-    return neighborhood
+    return numpy.array(neighborhood).astype(numpy.uint8)
 
 
 def MaximaFind(image, qty, len_object=18):
@@ -250,43 +252,53 @@ def MaximaFind(image, qty, len_object=18):
     filtered = BandPassFilter(image, 1, len_object)
 
     # dilation
-    s = _CreateSEDisk(len_object // 2)
-    dilated = ndimage.grey_dilation(filtered, footprint=s)
+    structure = _CreateSEDisk(len_object // 2)
+    dilated = cv2.dilate(filtered, structure, iterations=1)
 
     # find local maxima
     binary = (filtered == dilated)
 
     # thresholding
     qradius = max(len_object // 4, 1)
-    BWdil = ndimage.binary_dilation(binary, structure=_CreateSEDisk(qradius))
+    structure = _CreateSEDisk(qradius)
+    BWdil = cv2.dilate(numpy.array(binary).astype(numpy.uint8), structure)
 
     labels, num_features = ndimage.label(BWdil)
     index = numpy.arange(1, num_features + 1)
     mean = ndimage.mean(filtered, labels=labels, index=index)
     si = numpy.argsort(mean)[::-1][:qty]
     # estimate spot center position
-    pos = numpy.array(ndimage.center_of_mass(filtered, labels=labels,
-                                          index=index[si]))[:, ::-1]
+    pos = numpy.array(ndimage.center_of_mass(filtered, labels=labels, index=index[si]))[:, ::-1]
+
     if numpy.any(numpy.isnan(pos)):
         pos = pos[numpy.any(~numpy.isnan(pos), axis=1)]
         logging.debug("Only %d maxima found, while expected %d", len(pos), qty)
     # improve center estimate using radial symmetry method
     w = len_object // 2
-    refined_position = numpy.zeros_like(pos)
+    refined_center = numpy.zeros_like(pos)
+    pos = numpy.rint(pos).astype(numpy.int16)
+    y_max, x_max = image.shape
     for idx, xy in enumerate(pos):
-        _ij = numpy.rint(xy).astype(int)
-        i0, j0 = _ij - w + 1
-        i1, j1 = _ij + w
-        # if spot is close to edge of image i0 and j0 can be smaller than 0, crop so the spot is still in the center.
-        if i0 < 0:
-            i1, j1 = numpy.array([i1, j1]) + i0
-            i0, j0 = numpy.array([i0, j0]) - i0
-        if j0 < 0:
-            i1, j1 = numpy.array([i1, j1]) + j0
-            i0, j0 = numpy.array([i0, j0]) - j0
-        spot = filtered[j0:j1, i0:i1]
-        refined_position[idx] = numpy.rint(xy) + numpy.array(FindCenterCoordinates(spot))
-
+        x_start, y_start = xy - w + 1
+        x_end, y_end = xy + w
+        # If the spot is near the edge of the image, crop so it is still in the center of the sub-image. Subtract the
+        # value of x/y_start from x/y_end to keep the spot in the center when x/y_start is set to 0. Add the difference
+        # between x/y_end and x/y_max to x/y_start to keep the spot in the center when x/y_end is set to x/y_max.
+        if x_start < 0:
+            x_end += x_start
+            x_start = 0
+        elif x_end > x_max:
+            x_start += x_end - x_max
+            x_end = x_max
+        if y_start < 0:
+            y_end += y_start
+            y_start = 0
+        elif y_end > y_max:
+            y_start += y_end - y_max
+            y_end = y_max
+        spot = filtered[y_start:y_end, x_start:x_end]
+        refined_center[idx] = numpy.array(FindCenterCoordinates(spot))
+    refined_position = pos + refined_center
     return refined_position
 
 
@@ -327,10 +339,9 @@ def EstimateLatticeConstant(pos):
     X[X[:, 1] < -0.5 * med] *= -1
 
     centroids, _ = kmeans(X, 2)
-    tree = KDTree(centroids)
-    _, labels = tree.query(X)
-    kxy = numpy.vstack((numpy.median(X[labels.ravel() == 0], axis=0),
-                     numpy.median(X[labels.ravel() == 1], axis=0)))
+    labels = numpy.argmin(cdist(X, centroids), axis=1)
+    kxy = numpy.array([numpy.median(X[labels.ravel() == 0], axis=0),
+                       numpy.median(X[labels.ravel() == 1], axis=0)])
 
     # The angle between the two directions should be close to 90 degrees.
     alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*kxy)), numpy.dot(*kxy))
@@ -356,8 +367,8 @@ def GridPoints(grid_size_x, grid_size_y):
         The coordinates of a grid of points of size x by y.
 
     """
-    xv = numpy.arange(grid_size_x, dtype=float) - 0.5 * float(grid_size_x - 1)
-    yv = numpy.arange(grid_size_y, dtype=float) - 0.5 * float(grid_size_y - 1)
+    xv = numpy.arange(grid_size_x).astype(float) - 0.5 * float(grid_size_x - 1)
+    yv = numpy.arange(grid_size_y).astype(float) - 0.5 * float(grid_size_y - 1)
     xx, yy = numpy.meshgrid(xv, yv)
     return numpy.column_stack((xx.ravel(), yy.ravel()))
 
@@ -387,7 +398,7 @@ def BandPassFilter(image, len_noise, len_object):
         The filtered image
 
     """
-    image = numpy.asarray(image, dtype=numpy.float64)
+    image = numpy.asarray(image).astype(numpy.float64)
 
     # Low-pass filter using a Gaussian kernel.
     std = numpy.sqrt(2.) * len_noise
