@@ -3065,7 +3065,8 @@ class Sparc2AlignTab(Tab):
                                 hwdetvas=hwdetvas,
                                 detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
-                                         model.MD_ROTATION: 0}  # Force the CCD as-is
+                                         model.MD_ROTATION: 0},  # Force the CCD as-is
+                                acq_type=model.MD_AT_AR,  # For the merge slider icon
                                 )
             self._setFullFoV(ccd_stream, (2, 2))
             self._ccd_stream = ccd_stream
@@ -3101,7 +3102,8 @@ class Sparc2AlignTab(Tab):
                                 focuser=ccd_focuser,
                                 detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),
-                                         model.MD_ROTATION: 0}
+                                         model.MD_ROTATION: 0},
+                                acq_type=model.MD_AT_SLIT,
                                 )
             speclines.tint.value = (0, 64, 255)  # colour it blue
             # Fixed values, known to work well for autofocus
