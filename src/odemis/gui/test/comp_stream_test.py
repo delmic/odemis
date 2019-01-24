@@ -25,13 +25,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import numpy
+from odemis.acq.stream import Stream, StaticSpectrumStream, BrightfieldStream, \
+    SEMStream, FluoStream, StaticFluoStream, StaticSEMStream
+from odemis.gui.cont.streams import StreamBarController, StreamController
+from odemis.util import conversion
 import time
 import unittest
 
-from odemis.acq.stream import Stream
-from odemis.gui.cont.streams import StreamBarController, StreamController
-from odemis.util import conversion
-import odemis.acq.stream as stream_mod
 import odemis.gui.comp.stream as stream_comp
 import odemis.gui.model as guimodel
 import odemis.gui.model.dye as dye
@@ -42,7 +42,7 @@ import odemis.model as model
 test.goto_manual()
 
 
-class FakeBrightfieldStream(stream_mod.BrightfieldStream):
+class FakeBrightfieldStream(BrightfieldStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
@@ -58,7 +58,7 @@ class FakeBrightfieldStream(stream_mod.BrightfieldStream):
         pass
 
 
-class FakeSEMStream(stream_mod.SEMStream):
+class FakeSEMStream(SEMStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
@@ -74,40 +74,7 @@ class FakeSEMStream(stream_mod.SEMStream):
         pass
 
 
-class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
-    """
-    A fake stream, which receives no data. Only for testing purposes.
-    """
-
-    def __init__(self, name):
-        self._calibrated = None
-        Stream.__init__(self, name, None, None, None)
-        self.histogram._edges = (0, 0)
-
-        minb, maxb = 0, 1  # unknown/unused
-        pixel_width = 0.01
-
-        self.centerWavelength = model.FloatContinuous((1 + minb) / 2,
-                                                      range=(minb, maxb),
-                                                      unit="m")
-        max_bw = maxb - minb
-        self.bandwidth = model.FloatContinuous(max_bw / 12,
-                                               range=(pixel_width, max_bw),
-                                               unit="m")
-
-        self.fitToRGB = model.BooleanVA(True)
-
-    def _updateImage(self, tint=(255, 255, 255)):
-        pass
-
-    def onActive(self, active):
-        pass
-
-    def getMeanSpectrum(self):
-        return [5, 1, 4, 10, 8, 3]  # fake spectrum
-
-
-class FakeFluoStream(stream_mod.FluoStream):
+class FakeFluoStream(FluoStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
     """
@@ -361,11 +328,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # cont.tabs.AnalysisTab.display_new_data()
         fluo_panel = stream_cont.addStatic("Fluo Stream",
                                            fluod,
-                                           cls=stream_mod.StaticFluoStream,
+                                           cls=StaticFluoStream,
                                            add_to_view=True)
 
         # Check it indeed created a panel entry to a static fluo stream
-        self.assertIsInstance(fluo_panel.stream, stream_mod.StaticFluoStream)
+        self.assertIsInstance(fluo_panel.stream, StaticFluoStream)
 
         # White box testing: we expect that the excitation/emission information
         # are simple text, so no reference to the value controls needs to be saved
@@ -388,11 +355,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Create the streams the same way as when opening a file, in
         # cont.tabs.AnalysisTab.display_new_data()
         sem_cont = stream_cont.addStatic("SEM Stream", semd,
-                                          cls=stream_mod.StaticSEMStream,
+                                          cls=StaticSEMStream,
                                           add_to_view=True)
 
         # Check it indeed created a panel entry to a static fluo stream
-        self.assertIsInstance(sem_cont.stream, stream_mod.StaticSEMStream)
+        self.assertIsInstance(sem_cont.stream, StaticSEMStream)
 
         # White box testing: we expect autobc is available
         self.assertIn("autobc", sem_cont.entries)
@@ -405,12 +372,28 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_bandwidth_stream_panel(self):
 
+        # Spectrum
+        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] *= 3
+        data[2, :, :, :, :] = range(300)
+        data[200, 0, 0, 2] = range(300)
+        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_DESCRIPTION: "Spectrum",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_PIXEL_SIZE: (2e-5, 2e-5), # m/px
+             model.MD_POS: (1.2e-3, -30e-3), # m
+             model.MD_WL_LIST: wld,
+            }
+        spec_data = model.DataArray(data, md)
+        fake_spec_stream = StaticSpectrumStream("First Fixed Stream", spec_data)
+
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
         _ = StreamBarController(tab_mod, stream_bar)
-
-        fake_spec_stream = FakeSpectrumStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_spec_stream)
         stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
@@ -475,7 +458,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             2)
 
         # Hide first stream by changing to a view that only show SEM streams
-        semview = guimodel.MicroscopeView("SEM view", stream_classes=(stream_mod.SEMStream,))
+        semview = guimodel.MicroscopeView("SEM view", stream_classes=(SEMStream,))
         # stream_bar.hide_stream(0)
         tab_mod.focussedView.value = semview
         test.gui_loop()
