@@ -84,7 +84,7 @@ def _ExtractAngleInformation(data, hole):
     # offset of 2 px should be sufficient for all image sizes and
     # should also not cause a problem when transforming to polar coordinates
     # (edge positions in mask are still edge positions after polar transform)
-    offset_radius = 15
+    offset_radius = 2
     circle_mask_dilated = _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius, hole=False)
 
     # For each pixel of the input ndarray, input metadata is used to
@@ -120,33 +120,32 @@ def _ExtractAngleInformation(data, hole):
 def _FindAngle(x_array, y_array, pixel_size, parabola_f):
     """
     For given pixels, finds the angle of the corresponding ray
-    :parameter x_array: (ndarray) x coordinates of the pixels
-    :parameter y_array: (ndarray) y coordinate of the pixel
+    :parameter x_array: (2D ndarray) x coordinates of the pixels
+    :parameter y_array: (2D ndarray) y coordinates of the pixel
     :parameter pixel_size: (float, float) detector pixel size (X/Y)
     :parameter parabola_f: (float) parabola_parameter=1/(4f): f: focal point of mirror (place of sample)
-    :returns: (ndarray) theta, phi (the corresponding spherical coordinates for each pixel in detector)
+    :returns: (2D ndarrays) theta, phi (the corresponding spherical coordinates for each pixel in detector)
                               and omega (solid angle: angular range collected per px)
     """
 
-    y = x_array * pixel_size[0]
-    z = y_array * pixel_size[1]
+    # TODO specify axis regarding parabolic mirror
+    x = x_array * pixel_size[0]
+    y = y_array * pixel_size[1]
 
-    r2 = y ** 2 + z ** 2
+    r2 = x ** 2 + y ** 2
     xfocus = (1 / (4 * parabola_f)) * r2 - parabola_f
     xfocus2plusr2 = xfocus ** 2 + r2
     sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
 
     # theta
-    theta = numpy.arccos(z / sqrtxfocus2plusr2)
+    theta = numpy.arccos(y / sqrtxfocus2plusr2)
 
     # phi
     # negative xfocus to put phi0 and phi180 to match the raw data (convention we chose for display ar data)
     # also map values from -pi to pi -> 0 to 2pi
-    phi = numpy.arctan2(y, -xfocus) % (2 * math.pi)
+    phi = numpy.arctan2(x, -xfocus) % (2 * math.pi)
 
     # omega
-    # omega = (pixel_size[0] * pixel_size[1]) * \
-    #         ((1 / (2 * parabola_f)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
     omega = (pixel_size[0] * pixel_size[1]) * \
             ((1 / (4 * parabola_f)) * r2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
 
