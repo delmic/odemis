@@ -98,6 +98,7 @@ MD_AT_OVV_FULL = "Full overview"
 MD_AT_OVV_TILES = "Built-up overview"
 MD_AT_HISTORY = "History"
 MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
+MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR

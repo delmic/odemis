@@ -24,9 +24,10 @@ from __future__ import division
 
 import logging
 import numpy
+from odemis import dataio
 from odemis import model
 from odemis.acq import stream
-from odemis import dataio
+from odemis.model import MD_WL_LIST, MD_WL_POLYNOMIAL, MD_TIME_LIST
 import os
 
 
@@ -60,16 +61,11 @@ def data_to_static_streams(data):
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ti = dims.find("T")  # -1 if not found
         ci = dims.find("C")  # -1 if not found
-        # TODO reorganize this part when staticspectrumstream is generic!
-        # only check if ci >= 2 and ti >= 2 (more than one wl and more than one t value)
-        if (((model.MD_WL_LIST in d.metadata or
-              model.MD_WL_POLYNOMIAL in d.metadata) and
-
-             (ci >= 0 and d.shape[ci] > 1)
-             ) or
-            (ci >= 0 and d.shape[ci] >= 5)
+        if (((MD_WL_LIST in d.metadata or MD_WL_POLYNOMIAL in d.metadata) and
+             (ci >= 0 and d.shape[ci] > 1)) or
+            (ci >= 0 and d.shape[ci] >= 5)  # No metadata, but looks like a spectrum
            ):
-            if (model.MD_TIME_LIST in d.metadata and
+            if (MD_TIME_LIST in d.metadata and
                 (ti >= 0 and d.shape[ti] > 1)):
                 # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
@@ -79,25 +75,10 @@ def data_to_static_streams(data):
                 # but lots of wavelengths, so no other way to display
                 name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 klass = stream.StaticSpectrumStream
-
-        elif model.MD_PIXEL_DUR in d.metadata and ti >= 0 and d.shape[ti] > 1:
+        elif ((MD_TIME_LIST in d.metadata and ti >= 0 and d.shape[ti] > 1) or
+              (ti >= 5 and d.shape[ti] >= 5)
+             ):
             # Time data (with XY)
-            logging.info("Converting time data into spectrum data")
-            # HACK: for now we don't have a good static stream and GUI tools for
-            # showing data with time, but it's pretty much the same as a spectrum
-            # (expected it's on the 4th dim, in s, instead of 5th dim in m).
-            # FIXME: make the StaticSpectrumStream more generic, to support any
-            # 3D data (ie, dYX).
-            i3d = [0] * (d.ndim - 2) + [slice(None), slice(None)]
-            i3d[ti] = slice(None)
-            sda = d[tuple(i3d)] # basically, d[0, :, 0, :, :] for CTZYX
-            if sda.size != d.size:
-                logging.warning("Attempted to reduce data to TYX, but data had shape %s", d.shape)
-
-            d = sda
-            d.metadata[model.MD_DIMS] = "CYX"
-            d.metadata[model.MD_WL_LIST] = d.metadata[model.MD_TIME_LIST]
-
             name = d.metadata.get(model.MD_DESCRIPTION, "Time")
             klass = stream.StaticSpectrumStream
         elif model.MD_AR_POLE in d.metadata:
