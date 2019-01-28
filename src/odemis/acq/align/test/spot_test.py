@@ -250,15 +250,27 @@ class TestFindGridSpots(unittest.TestCase):
         Create an image with a grid of 8 by 8 spots near the edge of the image. Then test if the spots are found
         in the correct coordinates.
         """
+        # # set a grid of 8 by 8 points to 1 at the top left of the image
         image = numpy.zeros((256, 256))
-        # set a grid of 8 by 8 points to 1
         image[4:100:12, 4:100:12] = 1
         spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
         # create a grid that contains the coordinates of the spots
         xv = numpy.arange(4, 100, 12)
         xx, yy = numpy.meshgrid(xv, xv)
         grid = numpy.column_stack((xx.ravel(), yy.ravel()))
-        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1), decimal=1)
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=1)
+        # set a grid of 8 by 8 points to 1 at the bottom right of the image
+        image = numpy.zeros((256, 300))
+        image[168:253:12, 212:297:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(168, 253, 12)
+        yv = numpy.arange(212, 297, 12)
+        xx, yy = numpy.meshgrid(yv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=1)
 
     def test_find_grid(self):
         """

@@ -334,7 +334,7 @@ def FindGridSpots(image, repetition):
     spot_positions = MaximaFind(image, repetition[0] * repetition[1])
     if len(spot_positions) < repetition[0] * repetition[1]:
         logging.warning('Not enough spots found, returning only the found spots.')
-        return spot_positions
+        return spot_positions, None, None, None
     # Estimate transformation
     lattice_constants = EstimateLatticeConstant(spot_positions)
     transformation_matrix = numpy.transpose(lattice_constants)
