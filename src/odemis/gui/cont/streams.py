@@ -512,24 +512,26 @@ class StreamController(object):
             dtype = r.dtype
             md = r.metadata
 
-            text += "Shape: %s\n" % (" x ".join(str(s) for s in shape),)
-            text += "Data type: %s\n" % (dtype,)
+            text += u"Shape: %s\n" % (u" x ".join(str(s) for s in shape),)
+            text += u"Data type: %s\n" % (dtype,)
             for key in sorted(md):
                 v = md[key]
                 if key == model.MD_ACQ_DATE:  # display date in readable format
-                    text += "%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
+                    text += u"%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
                 else:
                     if isinstance(v, numpy.ndarray):
                         # Avoid ellipses (eg, [1, ..., 100 ])as we want _all_
                         # the data (unless it'd get really crazy).
                         # TODO: from numpy v1.14, the "threshold" argument can
                         # be directly used in array2string().
-                        numpy.set_printoptions(threshold=100000)
-                        v = numpy.array2string(v, max_line_width=100, separator=", ")
+                        numpy.set_printoptions(threshold=2500)
+                        v = numpy.array2string(v, max_line_width=100, separator=u", ")
                         numpy.set_printoptions(threshold=1000)
-                    text += "%s: %s\n" % (key, v)
+                    elif isinstance(v, list) and len(v) > 2500:
+                        v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
+                    text += u"%s: %s\n" % (key, v)
 
-        md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
+        md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
 
     # Panel state methods
