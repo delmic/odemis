@@ -537,10 +537,12 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
     def __init__(self, stream):
 
         super(RGBSpatialSpectrumProjection, self).__init__(stream)
-        self.stream.selected_pixel.subscribe(self._on_selected_pixel)
-        self.stream.spectrumBandwidth.subscribe(self._on_spectrumBandwidth)
-        self.stream.calibrated.subscribe(self._on_new_spec_data)
-        self.stream.fitToRGB.subscribe (self._on_fitToRGB)
+        stream.selected_pixel.subscribe(self._on_selected_pixel)
+        stream.calibrated.subscribe(self._on_new_spec_data)
+        if hasattr(stream, "spectrumBandwidth"):
+            stream.spectrumBandwidth.subscribe(self._on_spectrumBandwidth)
+        if hasattr(stream, "fitToRGB"):
+            stream.fitToRGB.subscribe (self._on_fitToRGB)
         self._updateImage()
 
     def _on_fitToRGB(self, _):
@@ -617,7 +619,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
             irange = self.stream._getDisplayIRange()  # will update histogram if not yet present
 
-            if not self.stream.fitToRGB.value:
+            if not hasattr(self, "fitToRGB") or not self.stream.fitToRGB.value:
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
                 av_data = img.ensure2DImage(av_data)

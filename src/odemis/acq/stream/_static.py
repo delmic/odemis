@@ -694,31 +694,12 @@ class StaticSpectrumStream(StaticStream):
                                                    setter=self._setTime)
             self.selected_time.value = ct
 
-        # TODO: allow to pass the calibration data as argument to avoid
-        # recomputing the data just after init?
-        # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
-        self.efficiencyCompensation = model.VigilantAttribute(None, setter=self._setEffComp)
-
-        # low/high values of the spectrum displayed
-        self.spectrumBandwidth = model.TupleContinuous(
-                                    (cwl - width, cwl + width),
-                                    range=((min_bw, min_bw), (max_bw, max_bw)),
-                                    unit=unit_bw,
-                                    cls=(int, long, float))
-
-        # Whether the (per bandwidth) display should be split intro 3 sub-bands
-        # which are applied to RGB
-        self.fitToRGB = model.BooleanVA(False)
-
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
         self.selected_pixel = model.TupleVA((None, None))  # int, int
 
         # first point, second point in pixels. It must be 2 elements long.
         self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
-
-        # Peak method index, None if spectrum peak fitting curve is not displayed
-        self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
 
         # The thickness of a point or a line (shared).
         # A point of width W leads to the average value between all the pixels
@@ -727,17 +708,46 @@ class StaticSpectrumStream(StaticStream):
         # pixels which fit on an orthogonal line to the selected line at a
         # distance <= W/2.
         self.selectionWidth = model.IntContinuous(1, [1, 50], unit="px")
-
-        self.fitToRGB.subscribe(self.onFitToRGB)
-        self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
-        self.efficiencyCompensation.subscribe(self._onCalib)
         self.selectionWidth.subscribe(self._onSelectionWidth)
+
+        # Peak method index, None if spectrum peak fitting curve is not displayed
+        self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
+
+        # TODO: allow to pass the calibration data as argument to avoid
+        # recomputing the data just after init?
+        # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
+        self.efficiencyCompensation = model.VigilantAttribute(None, setter=self._setEffComp)
+        self.efficiencyCompensation.subscribe(self._onCalib)
+
+        # Is there spectrum data?
+        if image.shape[0] > 1:
+            # low/high values of the spectrum displayed
+            self.spectrumBandwidth = model.TupleContinuous(
+                                        (cwl - width, cwl + width),
+                                        range=((min_bw, min_bw), (max_bw, max_bw)),
+                                        unit=unit_bw,
+                                        cls=(int, long, float))
+            self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
+
+            # Whether the (per bandwidth) display should be split intro 3 sub-bands
+            # which are applied to RGB
+            self.fitToRGB = model.BooleanVA(False)
+            self.fitToRGB.subscribe(self.onFitToRGB)
 
         # the raw data after calibration
         self.calibrated = model.VigilantAttribute(image)
 
         if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_SPECTRUM
+            if image.shape[0] > 1 and image.shape[1] > 1:
+                kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
+            elif image.shape[0] > 1:
+                kwargs["acq_type"] = model.MD_AT_SPECTRUM
+            elif image.shape[1] > 1:
+                kwargs["acq_type"] = model.MD_AT_TEMPORAL
+            else:
+                logging.warning("SpectrumStream data has no spectrum or time dimension, shape = %s",
+                                image.shape)
+
         super(StaticSpectrumStream, self).__init__(name, [image], *args, **kwargs)
 
         # Automatically select point/line if data is small (can only be done
@@ -822,6 +832,10 @@ class StaticSpectrumStream(StaticStream):
         Return the current bandwidth in pixels index
         returns (2-tuple of int): low and high pixel coordinates (included)
         """
+        data = self.raw[0]
+        if data.shape[0] <= 1:  # There is no C dimension
+            return 0, 0
+
         low, high = self.spectrumBandwidth.value
 
         # Find the closest pixel position for the requested wavelength
