@@ -30,13 +30,14 @@ import logging
 import gc
 import math
 import numpy
-import scipy.spatial
 import copy
 from odemis import model
 from odemis.acq import calibration
-from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, MD_PIXEL_SIZE, VigilantAttribute
-from odemis.util import img, conversion, polar, spectrum, find_closest
-import threading, weakref, time
+from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, VigilantAttribute
+from odemis.util import img, conversion, angleres, spectrum, find_closest
+import threading
+import weakref
+import time
 
 from ._base import Stream
 
@@ -451,9 +452,6 @@ class StaticARStream(StaticStream):
                         small_shape = int(round(1024 * y / x)), 1024
                     # resize
                     data = img.rescale_hq(data, small_shape)
-                    dtype = numpy.float16
-                else:
-                    dtype = None  # just let the function use the best one
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
@@ -469,13 +467,14 @@ class StaticARStream(StaticStream):
 
                 if bg_image is None:
                     # Simple version: remove the background value
-                    data0 = polar.ARBackgroundSubtract(data)
+                    data0 = angleres.ARBackgroundSubtract(data)
                 else:
                     data0 = img.Subtract(data, bg_image)  # metadata from data
 
                 # Warning: allocates lot of memory, which will not be free'd until
                 # the current thread is terminated.
-                polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
+
+                polard = angleres.AngleResolved2Polar(data0, size, hole=False)
 
                 # TODO: don't hold too many of them in cache (eg, max 3 * 1134**2)
                 self._polar[pos] = polard
