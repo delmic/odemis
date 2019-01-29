@@ -1,0 +1,426 @@
+# Configuration for the SPARC v2 system with plates:
+# 1. IR
+# 2. Fiber module (to time correlator)
+"SPARC2 Time-Correlator": {
+    class: Microscope,
+    role: sparc2,
+    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
+               "Optical Path Properties", "Spectrometer Selector",
+               "Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer",
+               "Spectrograph", "Fiber align",
+               "Time Correlator", "APD 1", "APD 2",
+               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
+               "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
+               "Lens1 Mover", "Lens2 Switch",
+               "TC Filter Wheel", "TC Optical Density Filter"],
+}
+
+# Light (lamp with known spectrum)
+"Calibration Light": {
+    class: light.Light,
+    role: "brightlight",
+    power_supplier: "Power Control Unit",
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+}
+
+"Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control",
+    init: {
+        port: "/dev/fake", # for simulator
+        pin_map: {
+            "Calibration Light": 0,
+            "Camera": 4,
+            "Spectral Camera": 5, # TODO: check this is correct
+            "Spectrograph": 6,
+            "Optical Actuators": 2,
+        },
+        delay: { # Time it takes before a component is accessible
+            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "CL PMT control unit": 0, # Actually just provide power to the  PMT
+            "Camera": 4,
+            "Spectral Camera": 4,
+            "Spectrograph": 5, # SR-193 needs a looong time to initialise
+            "Optical Actuators": 3,
+        },
+        init: { # Which component to power on from the very beginning (to save time)
+            "Calibration Light": True, # turn if on initially, to warm up. It will automatically be off when the component starts
+            "Camera": True,
+            "Spectral Camera": True,
+            "Spectrograph": True,
+            "Optical Actuators": True,
+        },
+        # List of EEPROM IDs (of the plates) which are required to start properly
+        # TODO: remove the one from the power control unit itself
+        ids: [],
+    }
+}
+
+# This is a more realistic SEM simulator (image-wise, but less realistic HW-wise)
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           drift_period: 2, # s  (disable to get a the whole resolution of the image)
+           image: "sparc-etd-gold-balls.h5",
+    },
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector"
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector", "Spectrometer", "Camera", "Time Correlator", "APD 1", "APD 2"] # affects the CCD in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+"Time Correlator": {
+    class: picoquant.PH300,
+    role: time-correlator,
+    init: {
+        device: "fake",
+        disc_volt: [0.1, 0.1], # V, discriminator for APD 1/2
+        zero_cross: [1.e-3, 1.e-3], # V
+    },
+    # These children allow to have access to the raw data on the APDs
+    "children": {
+        "detector0": "APD 1",
+        "detector1": "APD 2",
+    }
+}
+
+"APD 1": {
+    # Internal child of "Time Correlator", so no class
+    role: photo-detector0,
+}
+
+"APD 2": {
+    # Internal child of "Time Correlator", so no class
+    role: photo-detector1,
+}
+
+# Depending exactly on the configuration, it might also be used for spectrometer
+"Camera": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        transp: [-1, -2],
+        image: "sparc-ar-mirror-align.h5", # only for simulator
+    },
+}
+
+# Spectrometer = Andor Zyla + Shamrock SR193 (connected via USB)
+"Integrated Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-integrated,
+    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [-1, 2], # only applied to the spectrometer data (not raw CCD)
+    },
+    properties: {
+        binning: [4, 512], #to acquire only on half of the CCD
+    },
+}
+
+# Dedicated Andor Newton camera for spectrum acquisition
+"Spectral Camera": {
+    class: andorcam2.AndorCam2,
+    role: sp-ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        transp: [1, 2], # if mirrored on X axis, change 1 to -1
+        shutter_times: [50.e-3, 50.e-3], # s, opening/closing times of the shutter  # TODO: put the right values
+        image: "sparc-spec-sim.h5",
+    },
+    properties: {
+        shutterMinimumPeriod: 0.1, # s  = Max 10Hz frequency # TODO: put the right value for the shutter
+        targetTemperature: -65, # °C  # TODO: might be possible to go a bit further below
+    },
+}
+
+# Spectrometer = Andor iVac 316 + Shamrock SR193 (connected via USB)
+"Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer,
+    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    properties: {
+        binning: [2, 100],
+    },
+}
+
+"Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        bands: { # The filters in the filter-wheel
+            1: "pass-through", # pos -> m,m
+            2: [375.e-9, 425.e-9],
+            3: [425.e-9, 475.e-9],
+            4: [525.e-9, 575.e-9],
+            5: [625.e-9, 675.e-9],
+            6: [675.e-9, 725.e-9],
+        },
+        fstepsize: 10.9e-6, # m, size of one focus step
+        drives_shutter: [1.5707963267948966] # flipper positions: the Spectral Camera drives the shutter
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+}
+
+"Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: "focus",
+    children: {"z": "Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+# It doesn't select the camera (as there is only one), but allows to make some
+# kind of blanker for the CCD
+"Spec CCD Flipper": {
+    class: actuator.FixedPositionsActuator,
+    role: "spec-det-selector",
+    children: {"rx": "Spectrograph"},
+    init: {
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera", "Integrated Spectrometer"],
+            1.5707963267948966: ["Spectral Camera", "Spectrometer"],
+        },
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+}
+
+# Provide the filter wheel of the spectrograph as a separate component
+"Spec Filter Wheel": {
+    class: actuator.MultiplexActuator,
+    role: filter,
+    children: {"band": "Spectrograph"},
+    init: {
+        axes_map: {"band": "band"},
+    },
+    affects: ["Camera", "Spectrometer"],
+}
+
+"Optical Path Properties": {
+    class: static.OpticalLens,
+    role: lens,
+    # Standard mirror config
+    init: {
+       mag: 0.31, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+       pole_pos: [516, 634], # (px, px), position of the pole (aka the hole in the mirror)
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       # TODO: update for the Quanta
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"]
+}
+
+# Controller for the motors moving the various parts of the optical box
+# DIP must be configured with address 2 (= 0100000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
+        # These values only need to be roughly correct
+        ustepsize: [25.1e-9, 25.1e-9, 24.6e-9, 5.86e-9, 5.e-9], # m/µstep
+        refproc: "Standard",
+        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4}, # fiby has no ref swich
+        inverted: ["l2"],
+    },
+}
+
+# The first lens of Plate 1, able to move along the whole range
+"Lens1 Mover": {
+    class: actuator.MultiplexActuator,
+    role: "lens-mover",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 0.0199141141} # m
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+}
+
+# The second lens of Plate 1, either to working or parking position
+"Lens2 Switch": {
+    class: actuator.FixedPositionsActuator,
+    role: "lens-switch",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "l2",
+        positions: {
+            -0.0019875686: "on",
+            -0.0048192: "off", # completely out of the path
+        },
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+}
+
+# Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
+"Slit": {
+    class: actuator.FixedPositionsActuator,
+    role: "slit-in-big",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "slit",
+        positions: {
+            0: "on", # fully opened
+            0.0012: "off", # opening based on the small slit
+        },
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+}
+
+# Note that the next two components actually move the _same_ axis!
+# Mirror & Lens in Plate 2, to change X&Y of fiber alignment
+"Fiber align": {
+    class: actuator.MultiplexActuator,
+    role: "fiber-aligner",
+    children: {"x": "Optical Actuators", "y": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "spec-sel", "y": "fiby"},
+    },
+    affects: ["Time Correlator", "APD 1", "APD 2"],
+}
+
+# Mirror in Plate 2, selects between spectrometer and external optics (time-correlator)
+"Spectrometer Selector": {
+    class: actuator.MultiplexActuator,
+    role: "spec-selector",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "spec-sel"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position of the mirror to select the external spectrometer (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 0.0116214336}, # m
+        FAV_POS_ACTIVE_DEST: ["Fiber align", "Time Correlator", "APD 1", "APD 2"],
+        FAV_POS_DEACTIVE: {"x": 0.013419}, # m
+        FAV_POS_DEACTIVE_DEST: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"], # m
+    },
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+}
+
+"Time-Correlator Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["fw", "od"],
+        # These values only need to be roughly correct
+        ustepsize: [3.392e-5, 3.272e-5], # rad/µstep
+        unit: ["rad", "rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0, "od": 0},
+        #inverted: ["fw"], # TODO
+    },
+}
+
+"TC Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: "tc-filter",
+    children: {"band": "Time-Correlator Actuators"},
+    init: {
+        axis_name: "fw",
+        # It supports up to 8 filters
+        positions: {
+            # pos (rad) -> m,m
+            0.3392:  "pass-through",           # 1
+            1.1245981634:  [0, 400.e-9],       # 2
+            1.90999632679: [425.e-9, 475.e-9], # 3
+            2.69539:       "Blue",             # 4
+            3.48079:       "Green",            # 5
+            4.26619081699: "Red",              # 6
+            5.05159:       [625.e-9, 675.e-9], # 7
+            5.83699:       [675.e-9, 725.e-9], # 8
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    affects: ["Time Correlator", "APD 1", "APD 2"],
+}
+
+# TODO: update when the rotation -> linear position actuator exists
+"TC Optical Density Filter": {
+    class: actuator.RotationActuator,
+    role: "tc-od-filter",
+    children: {"density": "Time-Correlator Actuators"},
+    init: {
+        axis_name: "od",
+    },
+    metadata: {
+        POS_COR: -1.553,
+    },
+    affects: ["Time Correlator", "APD 1", "APD 2"],
+}
+
+
+# Controller for moving the 'Redux' stage
+# DIP must be configured with address 4 (= 0010000)
+"Mirror Actuators": {
+    class: tmcm.TMCLController,
+    role: "mirror",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["s", "l"],
+        ustepsize: [2.e-6, 2.e-6], # m/µstep, for simulator
+        refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        # TODO: update for Quanta Redux stage
+        FAV_POS_ACTIVE: {"l": 0.0707344568, "s": 0.0028446378},  # m, m
+    },
+}
+
+# Internal component to convert between the referential of the mirror actuators
+# and the X/Y referential of the SEM. Used by the mirror alignment functions.
+"Mirror Actuators in XY referential": {
+    class: actuator.ConvertStage,
+    role: "mirror-xy",
+    children: {"orig": "Mirror Actuators"},
+    init: {
+        axes: ["l", "s"], # mapped respectively to X, Y
+        rotation: -1.0471975511965976, # rad (= 60°)
+        # Note: if you want to use absolute moves, add a "translation" too
+    },
+}
+

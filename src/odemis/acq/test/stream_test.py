@@ -54,6 +54,7 @@ SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 SPARC2STREAK_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
+TIME_CORRELATOR_CONFIG = CONFIG_PATH + "sim/sparc2-time-correlator-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
@@ -2829,6 +2830,94 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check polarization VA connected to GUI did not trigger position VA listening to HW
         self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
+class TimeCorrelatorTestCase(unittest.TestCase):
+    """
+    Tests the SEMTemporalMDStream.
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(TIME_CORRELATOR_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.time_correlator = model.getComponent(role="time-correlator")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+
+        mic = model.getMicroscope()
+        cls.optmngr = path.OpticalPathManager(mic)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+            
+    def test_acquisition(self):
+        """
+        Test the output of a simple acquisition and one with subpixel drift correction.
+        """
+        tc_stream = stream.ScannedTemporalSettingsStream(
+            "Time Correlator",
+            self.time_correlator,
+            self.time_correlator.data,
+            self.ebeam,
+        )
+        sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
+        sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
+                                                  [sem_stream, tc_stream])
+
+        sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
+        sem_tc_stream._tc_stream.repetition.value = (5, 10)
+        sem_tc_stream._tc_stream._detector.dwellTime.value = 5e-3
+        f = sem_tc_stream.acquire()
+        data = f.result()
+
+        self.assertEqual(len(data), 2)  # 1 array for se, the other for tc data
+        for d in data:
+            # Last two dimensions correspond to y, x repetition value
+            self.assertEqual(d.shape[-1], 5)
+            self.assertEqual(d.shape[-2], 10)
+
+        # Sub-pixel drift correction
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 5
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        dc.period.value = 1
+        sem_tc_stream._se_stream.leeches.append(dc)
+        
+        sem_tc_stream._tc_stream.repetition.value = (1, 2)
+        sem_tc_stream._tc_stream._detector.dwellTime.value = 2
+        
+        f = sem_tc_stream.acquire()
+        time.sleep(0.1)
+        # Dwell time on detector and emitter should be reduced by 1/2
+        self.assertEqual(sem_tc_stream._tc_stream._detector.dwellTime.value, 1)
+        self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 1)
+        data = f.result()
+        # Dwell time on detector and emitter should be back to normal
+        self.assertEqual(sem_tc_stream._tc_stream._detector.dwellTime.value, 2)
+        self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 2)
+        
+        self.assertEqual(len(data), 3)  # additional anchor region data array
+        self.assertEqual(data[0].shape[-1], 1)
+        self.assertEqual(data[0].shape[-2], 2)
+        self.assertEqual(data[1].shape[-1], 1)
+        self.assertEqual(data[1].shape[-2], 2)
 
 # @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):

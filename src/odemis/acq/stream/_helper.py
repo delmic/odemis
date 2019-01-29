@@ -1433,3 +1433,23 @@ class ScannedTCSettingsStream(RepetitionStream):
             
         RepetitionStream._onActive(self, active)
 
+
+class ScannedTemporalSettingsStream(SpectrumSettingsStream):
+    """
+    Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        super(ScannedTemporalSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+    
+        # typical user wants density much lower than SEM
+        self.pixelSize.value *= 30
+        
+        # Fuzzing not supported (yet)
+        del self.fuzzing
+
+    def _onNewData(self, dataflow, data):
+        # For now, the viewport cannot display large datasets, so we have to crop the temporal data
+        # TODO: remove cropping once PlotCanvas supports bigger data
+        cropvalue = 1024
+        data = data[0][:cropvalue].reshape([1, cropvalue])
+        super(ScannedTemporalSettingsStream, self)._onNewData(dataflow, data)

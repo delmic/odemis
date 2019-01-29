@@ -34,7 +34,7 @@ import logging
 import math
 from odemis import model
 from odemis.acq import _futures
-from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, \
+from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream, \
     OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream
 from odemis.util import img, fluo, executeAsyncTask
 import sys
@@ -232,7 +232,7 @@ def _weight_stream(stream):
         return 85  # Stream for FLIM acquisition with time correlator
     elif isinstance(stream, EMStream):
         return 50 # can be done after any light
-    elif isinstance(stream, (SEMCCDMDStream, SEMMDStream)):
+    elif isinstance(stream, (SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream)):
         return 40 # after standard (=survey) SEM
     elif isinstance(stream, OverlayStream):
         return 10 # after everything (especially after SEM and optical)
