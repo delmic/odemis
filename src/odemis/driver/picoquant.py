@@ -281,7 +281,7 @@ class PH300(model.Detector):
         tresbase, bs = self.GetBaseResolution()
         tres = self.GetResolution()
         pxd_ch = {2 ** i * tresbase * 1e-12 for i in range(BINSTEPSMAX)}
-        self.pixelDuration = model.FloatEnumerated(tres, pxd_ch, unit="s",
+        self.pixelDuration = model.FloatEnumerated(tres * 1e-12, pxd_ch, unit="s",
                                                    setter=self._setPixelDuration)
 
         res = self._shape[:2]
