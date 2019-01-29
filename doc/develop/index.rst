@@ -20,11 +20,11 @@ This document covers the main aspects of development with Odemis.
     base-api
     backend-api
     acq
+    dataio
     gui
     plugins
     microscope
     documentation
-..    dataio
 ..    testing
 ..    (documentation should come here)
 ..    packaging
