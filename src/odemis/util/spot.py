@@ -201,7 +201,9 @@ def FindCenterCoordinates(image, smoothing=True):
     w = numpy.sqrt(dI2 / numpy.hypot(ik - i0, jk - j0))
 
     # Solve the linear set of equations in a least-squares sense.
-    ic, jc = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c)[0]
+    # Note: rcond set to -1 to suppress warnings on numpy 1.11 -> 1.14. It maybe
+    # could be set to None with newer numpy (or entirely removed).
+    ic, jc = numpy.linalg.lstsq(numpy.vstack((w * a, w * b)).T, w * c, rcond=-1)[0]
 
     # Convert from index (top-left) to (center) position information.
     xc = jc - 0.5 * float(m) + 0.5
