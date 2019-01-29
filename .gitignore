@@ -66,3 +66,13 @@ doc/develop/_build/
 # This directory contains the database from fluorophores.org
 # To fill it, run ./util/getfluodb.py
 install/linux/usr/share/odemis/fluodb/
+
+# Data generated during tests
+src/odemis/acq/align/test/res_shift.tiff
+src/odemis/cli/test/test.tiff
+src/odemis/gui/test/test.ome.tiff
+src/odemis/gui/util/test/test.ome.tiff
+src/odemis/util/test/test.ome.tiff
+
+# Hitachi driver
+src/odemis/driver/hitachi.py
