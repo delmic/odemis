@@ -30,7 +30,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.model import InstantaneousFuture
-from odemis.util import executeAsyncTask
+from odemis.util import executeAsyncTask, almost_equal
 from odemis.util.img import Subtract
 from scipy import ndimage
 import threading
@@ -59,23 +59,25 @@ def _convertRBGToGrayscale(image):
     return gray
 
 
-def AssessFocus(levels):
+def AssessFocus(levels, min_ratio=15):
     """
     Given a list of focus levels, it decides if there is any significant value
     or it only contains noise.
     levels (list of floats): List of focus levels
+    min_ratio (0 < float): minimum ratio between the focus level max-mean and
+      the standard deviation to be considered "significant".
     returns (boolean): True if there is significant deviation
     """
     std_l = numpy.std(levels)
-    logging.debug("Current standard deviation in focus levels: %f", std_l)
 
     levels_nomax = list(levels)
     max_l = max(levels)
     levels_nomax.remove(max_l)
     avg_l = numpy.mean(levels_nomax)
     l_diff = max_l - avg_l
-    logging.debug("Difference between maximum and average focus level %f", l_diff)
-    if (l_diff >= 15 * std_l):
+
+    logging.debug("Focus level std dev: %f, avg: %f, diff max: %f", std_l, avg_l, l_diff)
+    if std_l > 0 and l_diff >= min_ratio * std_l:
         logging.debug("Significant focus level deviation was found")
         return True
     return False
@@ -351,10 +353,19 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 last_pos = left
 
             fm_range = (fm_left, fm_center, fm_right)
-            pos_range = (left, center, right)
-            best_fm = max(fm_range)
-            i_max = fm_range.index(best_fm)
-            best_pos = pos_range[i_max]
+            if all(almost_equal(fm_left, fm, rtol=1e-6) for fm in fm_range[1:]):
+                logging.debug("All focus levels identical, picking the middle one")
+                # Most probably the images are all noise, or they are not affected
+                # by the focus. In any case, the best is to not move the focus,
+                # so let's "center" on it. That's better than the default behaviour
+                # which would tend to pick "left" because that's the first one.
+                i_max = 1
+                best_pos, best_fm = center, fm_center
+            else:
+                pos_range = (left, center, right)
+                best_fm = max(fm_range)
+                i_max = fm_range.index(best_fm)
+                best_pos = pos_range[i_max]
 
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -378,6 +389,8 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
 
         if step_cntr == MAX_STEPS_NUMBER:
             logging.info("Auto focus gave up after %d steps @ %g m", step_cntr, best_pos)
+        elif len(focus_levels) >= 10 and not AssessFocus(focus_levels.values(), 2):
+            logging.info("Auto focus indecisive but picking level %g @ %g m", best_fm, best_pos)
         else:
             logging.info("Auto focus found best level %g @ %g m", best_fm, best_pos)
 
