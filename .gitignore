@@ -18,7 +18,6 @@ build
 /install/windows/bin
 eggs
 parts
-/pretty-data
 var
 sdist
 develop-eggs
@@ -35,44 +34,44 @@ pip-log.txt
 *.lprof
 nosetests.xml
 /src/odemis/acq/align/test/hfw_shift*.tiff
+/src/odemis/acq/align/test/res_shift.tiff
 /src/odemis/acq/align/test/twin_stage*.tiff
 /src/odemis/acq/test/test*.tiff
+/src/odemis/cli/test/test.tiff
+/src/odemis/gui/test/test.ome.tiff
+/src/odemis/gui/util/test/test.ome.tiff
+/src/odemis/util/test/test.ome.tiff
+/src/odemis/gui/test/test.png
 
 # Dev environment
 odemis.sublime-project
 odemis.sublime-workspace
-/src/odemis/gui/test/test.png
-.project
-.pydevproject
-.settings
-
-#Translations
-*.mo
-
-#Rinze
-launch_daemon
-xrced
-swap.sh
 *.autosave
 odemis.profile
 magic.odm.yaml
 *.idea
+.project
+.pydevproject
+.settings
+
+# Translations
+*.mo
 
 # documentation files
-doc/code/_build
-doc/code/_gen
-doc/develop/_build/
+/doc/code/_build
+/doc/code/_gen
+/doc/develop/_build/
+/doc/develop/SPARC*.pdf
+/doc/develop/*-roles.pdf
+/doc/develop/gui_cont.pdf
+/doc/develop/stream_view_diag.pdf
+/doc/develop/sys-arch.pdf
 
 # This directory contains the database from fluorophores.org
 # To fill it, run ./util/getfluodb.py
-install/linux/usr/share/odemis/fluodb/
+/install/linux/usr/share/odemis/fluodb/
 
-# Data generated during tests
-src/odemis/acq/align/test/res_shift.tiff
-src/odemis/cli/test/test.tiff
-src/odemis/gui/test/test.ome.tiff
-src/odemis/gui/util/test/test.ome.tiff
-src/odemis/util/test/test.ome.tiff
-
-# Hitachi driver
-src/odemis/driver/hitachi.py
+# External drivers
+/src/odemis/driver/hitachi.py
+/src/odemis/driver/jeol.py
+/src/odemis/driver/nikonc.py
