@@ -26,7 +26,7 @@ Depends: python (>= 2.7.1),
          python-serial,
          python-netifaces,
 # PIL is only needed in test cases, and indirectly by scipy for some image processing
-         python-imaging,
+         python-pil,
 # python-evdev is just to support the Powermate in the GUI
          python-evdev,
          python-cairo,
