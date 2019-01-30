@@ -352,6 +352,7 @@ class AcquisitionDialog(xrcfr_plugin):
         self.streambar_controller = StreamBarController(
             self._dmodel,
             self.pnl_streams,
+            locked=True,
             ignore_view=True
         )
 
