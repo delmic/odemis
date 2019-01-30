@@ -32,7 +32,7 @@ import logging
 import math
 import numpy
 from odemis import model, acq, dataio, util
-from odemis.acq import stitching
+from odemis.acq import stitching, stream
 from odemis.acq.stream import Stream, SEMStream, CameraStream, \
     RepetitionStream, StaticStream, UNDEFINED_ROI, EMStream, ARStream, SpectrumStream, \
     FluoStream, MultipleDetectorStream, MonochromatorSettingsStream, CLStream
@@ -52,7 +52,7 @@ from odemis.acq.stitching import WEAVER_MEAN, WEAVER_COLLAGE_REVERSE
 
 class TileAcqPlugin(Plugin):
     name = "Tile acquisition"
-    __version__ = "1.5"
+    __version__ = "1.6"
     __author__ = u"Éric Piel, Philip Winkler"
     __license__ = "GPLv2"
 
@@ -86,7 +86,9 @@ class TileAcqPlugin(Plugin):
         ("totalArea", {
             "tooltip": "Approximate area covered by all the streams"
         }),
-
+        ("fineAlign", {
+            "label": "Fine alignment",
+        })
     ))
 
     def __init__(self, microscope, main_app):
@@ -96,6 +98,7 @@ class TileAcqPlugin(Plugin):
         self._tab = None  # the acquisition tab
         self.ft = model.InstantaneousFuture()  # acquisition future
         self.microscope = microscope
+
         # Can only be used with a microscope
         if not microscope:
             return
@@ -108,6 +111,8 @@ class TileAcqPlugin(Plugin):
                 logging.info("Tile acquisition not available as no stage present")
                 return
 
+        self._ovrl_stream = None  # stream for fine alignment
+
         self.nx = model.IntContinuous(5, (1, 1000), setter=self._set_nx)
         self.ny = model.IntContinuous(5, (1, 1000), setter=self._set_ny)
         self.overlap = model.FloatContinuous(20, (1, 80), unit="%")
@@ -115,12 +120,13 @@ class TileAcqPlugin(Plugin):
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
+        self.fineAlign = model.BooleanVA(False)
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
         # of the ROI and linearly interpolate)
-        # TODO: on SECOM allow to do fine alignment for each tile
 
         self.nx.subscribe(self._update_exp_dur)
         self.ny.subscribe(self._update_exp_dur)
+        self.fineAlign.subscribe(self._update_exp_dur)
         self.nx.subscribe(self._update_total_area)
         self.ny.subscribe(self._update_total_area)
         self.overlap.subscribe(self._update_total_area)
@@ -130,7 +136,31 @@ class TileAcqPlugin(Plugin):
         self.ny.subscribe(self._memory_check)
         self.stitch.subscribe(self._memory_check)
 
-    def _get_streams(self):
+    def _can_fine_align(self, streams):
+        """
+        Return True if with the given streams it would make sense to fine align
+        streams (iterable of Stream)
+        return (bool): True if at least a SEM and an optical stream are present
+        """
+        # check for a SEM stream
+        for s in streams:
+            if isinstance(s, EMStream):
+                break
+        else:
+            return False
+
+        # check for an optical stream
+        # TODO: allow it also for ScannedFluoStream once fine alignment is supported
+        # on confocal SECOM.
+        for s in streams:
+            if isinstance(s, stream.OpticalStream) and not isinstance(s, stream.ScannedFluoStream):
+                break
+        else:
+            return False
+
+        return True
+
+    def _get_visible_streams(self):
         """
         Returns the streams set as visible in the acquisition dialog
         """
@@ -148,13 +178,26 @@ class TileAcqPlugin(Plugin):
         )
 
     def _on_streams_change(self, _=None):
-        ss = self._get_live_streams()
-
+        ss = self._get_visible_streams()
         # Subscribe to all relevant setting changes
         for s in ss:
             for va in self._get_settings_vas(s):
                 va.subscribe(self._update_exp_dur)
                 va.subscribe(self._memory_check)
+
+        # Disable fine alignment if it's not possible
+        if self._dlg:
+            for entry in self._dlg.setting_controller.entries:
+                if hasattr(entry, "vigilattr"):
+                    if entry.vigilattr == self.fineAlign:
+                        if self._can_fine_align(ss):
+                            entry.lbl_ctrl.Enable(True)
+                            entry.value_ctrl.Enable(True)
+                            self._ovrl_stream = self._create_overlay_stream(ss)
+                        else:
+                            entry.lbl_ctrl.Enable(False)
+                            entry.value_ctrl.Enable(False)
+                        break
 
     def _unsubscribe_vas(self):
         ss = self._get_live_streams()
@@ -219,7 +262,6 @@ class TileAcqPlugin(Plugin):
                 nx = max(1, int((max_x - orig_pos["x"]) / (overlap * tile_size[0])))
                 logging.info("Restricting number of tiles in x direction to %i due to stage limit.",
                              nx)
-
         return nx
 
     def _set_ny(self, ny):
@@ -291,8 +333,10 @@ class TileAcqPlugin(Plugin):
         dlg = AcquisitionDialog(self, "Tiled acquisition",
                                 "Acquire a large area by acquiring the streams multiple "
                                 "times over a grid.")
-
         self._dlg = dlg
+        # don't allow adding/removing streams
+        self._dlg.streambar_controller.to_static_mode()
+
         dlg.addSettings(self, self.vaconf)
         for s in ss:
             if isinstance(s, (ARStream, SpectrumStream, MonochromatorSettingsStream)):
@@ -311,6 +355,14 @@ class TileAcqPlugin(Plugin):
         dlg.view.stream_tree.flat.subscribe(self._update_exp_dur, init=True)
         dlg.view.stream_tree.flat.subscribe(self._update_total_area, init=True)
         dlg.view.stream_tree.flat.subscribe(self._on_streams_change, init=True)
+
+        # Default fineAlign to True if it's possible
+        # Use live streams to make the decision since visible streams might not be initialized yet
+        # TODO: the visibility of the streams seems to be reset when the plugin is started,
+        # a stream that is invisible in the main panel becomes visible. This should be fixed.
+        if self._can_fine_align(ss):
+            self.fineAlign.value = True
+            self._ovrl_stream = self._create_overlay_stream(ss)
 
         # This looks tautologic, but actually, it forces the setter to check the
         # value is within range, and will automatically reduce it if necessary.
@@ -337,6 +389,18 @@ class TileAcqPlugin(Plugin):
     # black list of VAs name which are known to not affect the acquisition time
     VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
                                 "is_active", "should_update", "status", "name", "tint")
+
+    def _create_overlay_stream(self, streams):
+        for s in streams:
+            if isinstance(s, EMStream):
+                em_det = s.detector
+                em_emt = s.emitter
+            elif isinstance(s, stream.OpticalStream) and not isinstance(s, stream.ScannedFluoStream):
+                opt_det = s.detector
+        main_data = self.main_app.main_data
+        st = stream.OverlayStream("Fine alignment", opt_det, em_emt, em_det, opm=main_data.opm)
+        st.dwellTime.value = main_data.fineAlignDwellTime.value
+        return st
 
     def _get_settings_vas(self, stream):
         """
@@ -374,27 +438,34 @@ class TileAcqPlugin(Plugin):
     def _get_acq_streams(self):
         """
         Return the streams that should be used for acquisition
+        all_ss (list of Streams): all acquisition streams possibly including overlay stream
+        stitch_ss (list of Streams): acquisition streams to be used for stitching (no overlay stream)
         """
         # On the SPARC, the acquisition streams are not the same as the live
         # streams. On the SECOM/DELPHI, they are the same (for now)
-        live_st = self._get_streams()
+        live_st = self._get_visible_streams()
         tab_data = self._tab.tab_data_model
+
         if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
+            # Discard the acquisition streams which are not visible
+            stitch_ss = []
+            for acs in acq_st:
+                if isinstance(acs, MultipleDetectorStream):
+                    if any(subs in live_st for subs in acs.streams):
+                        stitch_ss.append(acs)
+                        break
+                elif acs in live_st:
+                    stitch_ss.append(acs)
         else:
             # No special acquisition streams
-            return live_st
+            stitch_ss = live_st[:]
 
-        # Discard the acquisition streams which are not visible
-        ss = []
-        for acs in acq_st:
-            if isinstance(acs, MultipleDetectorStream):
-                if any(subs in live_st for subs in acs.streams):
-                    ss.append(acs)
-                    break
-            elif acs in live_st:
-                ss.append(acs)
-        return ss
+        # Add the overlay stream if requested
+        all_ss = stitch_ss[:]
+        if self.fineAlign.value and self._can_fine_align(live_st):
+            all_ss = stitch_ss + [self._ovrl_stream]
+        return all_ss, stitch_ss
 
     def _generate_scanning_indices(self, rep):
         """
@@ -499,9 +570,7 @@ class TileAcqPlugin(Plugin):
             future._task_state = CANCELLED
             future.running_subf.cancel()
             logging.debug("Acquisition cancelled.")
-
-        if future._task_state == CANCELLED:
-            raise CancelledError("Acquisition cancelled")
+        return True
 
     STITCH_SPEED = 1e-8  # s/px
     MOVE_SPEED = 1e3  # s/m
@@ -510,7 +579,7 @@ class TileAcqPlugin(Plugin):
         """
         Estimates duration for acquisition and stitching.
         """
-        ss = self._get_acq_streams()
+        ss, stitch_ss = self._get_acq_streams()
 
         if remaining is None:
             remaining = self.nx.value * self.ny.value
@@ -519,7 +588,7 @@ class TileAcqPlugin(Plugin):
         if self.stitch.value:
             # Estimate stitching time based on number of pixels in the overlapping part
             max_pxs = 0
-            for s in ss:
+            for s in stitch_ss:
                 for sda in s.raw:
                     pxs = sda.shape[0] * sda.shape[1]
                     if pxs > max_pxs:
@@ -664,7 +733,7 @@ class TileAcqPlugin(Plugin):
         """
         if self.stitch.value:
             # Number of pixels for acquisition
-            pxs = sum(self._estimateStreamPixels(s) for s in self._get_acq_streams())
+            pxs = sum(self._estimateStreamPixels(ss[1]) for ss in self._get_acq_streams())
             pxs *= self.nx.value * self.ny.value
 
             # Memory calculation
@@ -703,7 +772,7 @@ class TileAcqPlugin(Plugin):
         exporter = dataio.find_fittest_converter(fn)
         fn_bs, fn_ext = udataio.splitext(fn)
 
-        ss = self._get_acq_streams()
+        ss, stitch_ss = self._get_acq_streams()
         end = self.estimate_time() + time.time()
 
         ft = model.ProgressiveFuture(end=end)
@@ -746,7 +815,7 @@ class TileAcqPlugin(Plugin):
 
                 if self.stitch.value:
                     # Sort tiles (largest sem on first position)
-                    da_list.append(self.sort_das(das, ss))
+                    da_list.append(self.sort_das(das, stitch_ss))
 
                 # Check the FoV is correct using the data, and if not update
                 if i == 0:
