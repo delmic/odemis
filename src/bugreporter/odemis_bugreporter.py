@@ -281,15 +281,29 @@ class OdemisBugreporter():
                     # subprocess doesn't have timeout argument in python 2.x, so use future instead
                     f = self._executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop', '*'])
                     props = f.result(60)
-                    hwfn = "/tmp/odemis-hw-status.txt"
-                    with open(hwfn, 'w+') as f:
-                        f.write(props)
-                    files.append(hwfn)
                 except Exception as ex:
                     logging.warning("Cannot save hw status: %s", ex)
 
+            # Save processes, kernel name, ip address
+            try:
+                ps = subprocess.check_output(['ps', 'aux'])
+            except Exception as ex:
+                logging.warning("Cannot save ps aux: %s", ex)
+            try:
+                uname = subprocess.check_output(['uname', '-a'])
+            except Exception as ex:
+                logging.warning("Cannot save uname -a: %s", ex)
+            try:
+                ip = subprocess.check_output(['ip', 'address'])
+            except Exception as ex:
+                logging.warning("Cannot save ip address: %s", ex)
+
             # Compress files
             with zipfile.ZipFile(self.zip_fn, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("/odemis-hw-status.txt", props)
+                archive.writestr('/ps.txt', ps)
+                archive.writestr('/uname.txt', uname)
+                archive.writestr('/ip.txt', ip)
                 for f in files:
                     if os.path.isfile(f):
                         logging.debug("Adding file %s", f)
