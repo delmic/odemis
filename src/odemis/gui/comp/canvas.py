@@ -1970,10 +1970,6 @@ class PlotCanvas(BufferedCanvas):
         # dichotomy search, cf bisect.bisect() or numpy.searchsorted()
         return min(self._data, key=lambda v: abs(v[0] - val_x))
 
-    def _val_x_to_val_y(self, val_x, snap=False):
-        """ Map the given x pixel value to a y value """
-        return min((abs(val_x - x), y) for x, y in self._data)[1]
-
     def SetForegroundColour(self, *args, **kwargs):
         BufferedCanvas.SetForegroundColour(self, *args, **kwargs)
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
