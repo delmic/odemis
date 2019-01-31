@@ -26,7 +26,7 @@ import numpy
 from odemis import model
 import odemis
 from odemis.acq import stream
-from odemis.model._metadata import MD_PIXEL_SIZE, MD_DWELL_TIME, MD_POS, MD_ACQ_DATE
+from odemis.model import MD_PIXEL_SIZE, MD_DWELL_TIME, MD_POS, MD_ACQ_DATE
 from odemis.util import test
 import os
 import time

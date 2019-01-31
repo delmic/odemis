@@ -35,13 +35,12 @@ import math
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream, \
-    OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream
+    OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream, \
+    ScannedRemoteTCStream, ScannedTCSettingsStream
 from odemis.util import img, fluo, executeAsyncTask
 import sys
 import threading
 import time
-from odemis.acq.stream._sync import ScannedRemoteTCStream
-from odemis.acq.stream._helper import ScannedTCSettingsStream
 
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
