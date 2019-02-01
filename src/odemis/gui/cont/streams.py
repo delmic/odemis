@@ -529,7 +529,7 @@ class StreamController(object):
                         v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
                     text += u"%s: %s\n" % (key, v)
 
-        # Note: we show empty window even if no date present, to let the user know
+        # Note: we show empty window even if no data present, to let the user know
         # that there is no data, but the button worked fine.
         md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
