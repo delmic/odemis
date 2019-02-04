@@ -939,7 +939,8 @@ class StreakCamStream(CameraStream):
         super(StreakCamStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
         # duplicate VAs for GUI except .timeRange VA (displayed on left for calibration)
-        self._streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas or set())
+        streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas or set())
+        self._det_vas.update(streak_unit_vas)
 
         self.streak_unit = streak_unit
         self.streak_delay = streak_delay

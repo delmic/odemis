@@ -3210,6 +3210,9 @@ class Sparc2AlignTab(Tab):
 
         self._ts_stream = None
         if main_data.streak_ccd:
+            # Don't show the time range, as it's done by the StreakCamAlignSettingsController
+            streak_unit_vas = (get_local_vas(main_data.streak_unit, main_data.hw_settings_config)
+                               -{"timeRange"})
             tsStream = acqstream.StreakCamStream(
                                 "Calibration trigger delay for streak camera",
                                 main_data.streak_ccd,
@@ -3218,7 +3221,7 @@ class Sparc2AlignTab(Tab):
                                 main_data.streak_delay,
                                 emitter=None,
                                 detvas=get_local_vas(main_data.streak_ccd, main_data.hw_settings_config),
-                                streak_unit_vas=get_local_vas(main_data.streak_unit, main_data.hw_settings_config),
+                                streak_unit_vas=streak_unit_vas,
                                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                          model.MD_ROTATION: 0},  # Force the CCD as-is
                                 )

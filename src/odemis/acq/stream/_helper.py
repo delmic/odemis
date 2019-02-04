@@ -599,7 +599,8 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         self.streak_delay = streak_delay
 
         # the VAs are used in SEMCCDMDStream (_sync.py)
-        self._streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas)
+        streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas)
+        self._det_vas.update(streak_unit_vas)
 
         # whenever .streakMode changes
         # -> set .MCPGain = 0 and update .MCPGain.range
