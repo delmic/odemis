@@ -186,7 +186,7 @@ class OdemisBugreporter():
         for fn in files:
             with open(fn, "rb") as f:
                 encoded_data = base64.b64encode(f.read())
-            att_desc = {str(fn): "data:application/zip;base64,%s" % encoded_data}
+            att_desc = {os.path.basename(fn): "data:application/zip;base64,%s" % encoded_data}
             fields["attachments"].append(att_desc)
 
         description = json.dumps(fields)
@@ -216,6 +216,14 @@ class OdemisBugreporter():
         else:
             raise LookupError("osTicket key not found.")
         return api_key
+
+    def _get_future_output(self, command):
+        """
+        Runs a external command in a future, which returns its output
+        command (list of str)
+        return Future returning a str, or raising the error
+        """
+        return self._executor.submit(subprocess.check_output, command)
 
     def compress_files(self):
         """
@@ -276,34 +284,26 @@ class OdemisBugreporter():
             except Exception as ex:
                 logging.warning("Failed to run check backend status: %s", ex)
                 ret_code = BACKEND_STOPPED
+            outputs = {}
             if ret_code in (BACKEND_RUNNING, BACKEND_STARTING):
-                try:
-                    # subprocess doesn't have timeout argument in python 2.x, so use future instead
-                    f = self._executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop', '*'])
-                    props = f.result(60)
-                except Exception as ex:
-                    logging.warning("Cannot save hw status: %s", ex)
+                # subprocess doesn't have timeout argument in python 2.x, so use future instead
+                outputs["odemis-hw-status.txt"] = self._get_future_output(['odemis-cli', '--list-prop', '*'])
 
-            # Save processes, kernel name, ip address
-            try:
-                ps = subprocess.check_output(['ps', 'aux'])
-            except Exception as ex:
-                logging.warning("Cannot save ps aux: %s", ex)
-            try:
-                uname = subprocess.check_output(['uname', '-a'])
-            except Exception as ex:
-                logging.warning("Cannot save uname -a: %s", ex)
-            try:
-                ip = subprocess.check_output(['ip', 'address'])
-            except Exception as ex:
-                logging.warning("Cannot save ip address: %s", ex)
+            # Save USB hardware, processes, kernel name, IP address
+            outputs["lsusb.txt"] = self._get_future_output(['/usr/bin/lsusb', '-v'])
+            outputs["ps.txt"] = self._get_future_output(['/bin/ps', 'aux'])
+            outputs["uname.txt"] = self._get_future_output(['/bin/uname', '-a'])
+            outputs["ip.txt"] = self._get_future_output(['/bin/ip', 'address'])
 
             # Compress files
             with zipfile.ZipFile(self.zip_fn, "w", zipfile.ZIP_DEFLATED) as archive:
-                archive.writestr("/odemis-hw-status.txt", props)
-                archive.writestr('/ps.txt', ps)
-                archive.writestr('/uname.txt', uname)
-                archive.writestr('/ip.txt', ip)
+                for fn, ft in outputs.items():
+                    try:
+                        outp = ft.result(60)
+                        archive.writestr(fn, outp)
+                    except Exception as ex:
+                        logging.warning("Cannot save %s status: %s", fn, ex)
+
                 for f in files:
                     if os.path.isfile(f):
                         logging.debug("Adding file %s", f)
@@ -329,18 +329,18 @@ class OdemisBugreporter():
         keys
         """
         self._compress_files_f.result()
-        report_description = {'name': name.encode("utf-8"),
-                              'email': email.encode("utf-8"),
-                              'subject': subject.encode("utf-8"),
-                              'message': message.encode("utf-8")}
+        report_description = {'name': name,
+                              'email': email,
+                              'subject': subject,
+                              'message': message}
         # Create ticket with special id when testing
         if TEST_SUPPORT_TICKET:
             report_description['topicId'] = 12
 
-        description = ('Name: %s\n' % name.encode("utf-8") +
-                       'Email: %s\n' % email.encode("utf-8") +
-                       'Summary: %s\n\n' % subject.encode("utf-8") +
-                       'Description:\n%s' % message.encode("utf-8")
+        description = (u'Name: %s\n' % name +
+                       u'Email: %s\n' % email +
+                       u'Summary: %s\n\n' % subject +
+                       u'Description:\n%s' % message
                        )
 
         with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
@@ -431,8 +431,8 @@ class BugreporterFrame(wx.Frame):
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.Centre()
-        self.Show()
         self.Layout()
+        self.Show()
 
         # Make these elements class attributes to easily access the contents
         self.panel = panel
