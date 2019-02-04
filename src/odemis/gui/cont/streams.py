@@ -500,14 +500,12 @@ class StreamController(object):
                                    self._dye_ewl, self.stream.emission.value)
 
     def _on_metadata_btn(self, evt):
-        text = ""
-        # Show empty window if no image present
-        if self.stream.raw:
-            r = self.stream.raw[0]
-        else:
-            r = None
+        text = u""
+        raw = [r for r in self.stream.raw if r is not None]
 
-        if r is not None:
+        for i, r in enumerate(raw):
+            if len(raw) > 1:
+                text += u"========= Array %d =========\n" % (i + 1,)
             shape = r.shape
             dtype = r.dtype
             md = r.metadata
@@ -531,6 +529,8 @@ class StreamController(object):
                         v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
                     text += u"%s: %s\n" % (key, v)
 
+        # Note: we show empty window even if no data present, to let the user know
+        # that there is no data, but the button worked fine.
         md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
 
