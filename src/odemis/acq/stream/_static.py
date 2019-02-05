@@ -374,14 +374,24 @@ class StaticARStream(StaticStream):
         # find positions of each acquisition
         # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
         self._pos = {}
-        self._sempos = {}
-        polpos = set()
+        sempositions = set()
+        polpositions = set()
         for d in data:
             try:
-                self._pos[d.metadata[MD_POS] + (d.metadata.get(MD_POL_MODE, None),)] = img.ensure2DImage(d)
-                self._sempos[d.metadata[MD_POS]] = img.ensure2DImage(d)
+                sempos_cur = d.metadata[MD_POS]
+
+                # When reading data: floating point error (slightly different keys for same ebeam pos)
+                # -> check if there is already a position specified, which is very close by
+                # (and therefore the same ebeam pos) and replace with that ebeam position
+                # (e.g. all polarization positions for the same ebeam positions will have exactly the same ebeam pos)
+                for sempos in sempositions:
+                    if almost_equal(sempos_cur[0], sempos[0]) and almost_equal(sempos_cur[1], sempos[1]):
+                        sempos_cur = sempos
+                        break
+                self._pos[sempos_cur + (d.metadata.get(MD_POL_MODE, None),)] = img.ensure2DImage(d)
+                sempositions.add(sempos_cur)
                 if MD_POL_MODE in d.metadata:
-                    polpos.add(d.metadata.get(MD_POL_MODE))
+                    polpositions.add(d.metadata.get(MD_POL_MODE))
             except KeyError:
                 logging.info("Skipping DataArray without known position")
 
@@ -392,12 +402,12 @@ class StaticARStream(StaticStream):
         # SEM position VA
         # SEM position displayed, (None, None) == no point selected (x, y)
         self.point = model.VAEnumerated((None, None),
-                     choices=frozenset([(None, None)] + list(self._sempos.keys())))
+                     choices=frozenset([(None, None)] + list(sempositions)))
 
         if self._pos:
             # Pick one point, e.g., top-left
-            bbtl = (min(x for x, y, pol in self._pos.keys() if x is not None),
-                    min(y for x, y, pol in self._pos.keys() if y is not None))
+            bbtl = (min(x for x, y in sempositions if x is not None),
+                    min(y for x, y in sempositions if y is not None))
 
             # top-left point is the closest from the bounding-box top-left
             def dis_bbtl(v):
@@ -405,7 +415,7 @@ class StaticARStream(StaticStream):
                     return math.hypot(bbtl[0] - v[0], bbtl[1] - v[1])
                 except TypeError:
                     return float("inf")  # for None, None
-            self.point.value = min(self._sempos.keys(), key=dis_bbtl)
+            self.point.value = min(sempositions, key=dis_bbtl)
 
         # no need for init=True, as Stream.__init__ will update the image
         self.point.subscribe(self._onPoint)
@@ -415,7 +425,7 @@ class StaticARStream(StaticStream):
         if self._pos.keys()[0][-1]:
             # use first entry in acquisition to populate VA (acq could have 1 or 6 pol pos)
             self.polarization = model.VAEnumerated(self._pos.keys()[0][-1],
-                                choices=polpos)
+                                choices=polpositions)
 
         if self._pos.keys()[0][-1]:
             self.polarization.subscribe(self._onPolarization)
@@ -434,15 +444,6 @@ class StaticARStream(StaticStream):
             polard = self._polar[pos]
         else:
             # Compute the polar representation
-
-            # When reading data: floating point error
-            # -> different keys for same ebeam pos for the different polarization position
-            for key in self._pos.keys():
-                if pos[-1] in key:  # there must be a corresponding polarization position -> check only those
-                    if almost_equal(pos[0], key[0]) and almost_equal(pos[1], key[1]):
-                        pos = key
-                        break
-
             data = self._pos[pos]
             try:
                 if numpy.prod(data.shape) > (1280 * 1080):
