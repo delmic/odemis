@@ -31,10 +31,10 @@ import gc
 import math
 import numpy
 import copy
-from odemis import model
+from odemis import model, util
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, VigilantAttribute
-from odemis.util import img, conversion, angleres, spectrum, find_closest
+from odemis.util import img, conversion, angleres, spectrum, find_closest, almost_equal
 import threading
 import weakref
 import time
@@ -387,7 +387,7 @@ class StaticARStream(StaticStream):
 
         # Cached conversion of the CCD image to polar representation
         # TODO: automatically fill it in a background thread
-        self._polar = {}  # dict tuple 2 floats -> DataArray
+        self._polar = {}  # dict tuple (float, float, str or None) -> DataArray
 
         # SEM position VA
         # SEM position displayed, (None, None) == no point selected (x, y)
@@ -434,6 +434,15 @@ class StaticARStream(StaticStream):
             polard = self._polar[pos]
         else:
             # Compute the polar representation
+
+            # When reading data: floating point error
+            # -> different keys for same ebeam pos for the different polarization position
+            for key in self._pos.keys():
+                if pos[-1] in key:  # there must be a corresponding polarization position -> check only those
+                    if almost_equal(pos[0], key[0]) and almost_equal(pos[1], key[1]):
+                        pos = key
+                        break
+
             data = self._pos[pos]
             try:
                 if numpy.prod(data.shape) > (1280 * 1080):
