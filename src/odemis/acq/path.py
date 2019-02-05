@@ -110,7 +110,7 @@ SPARC2_MODES = {
             'spectral': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'slit-in-big': {'x': 'off'},  # closed
                  # TODO: need to restore slit-in to the current position?
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
@@ -132,7 +132,7 @@ SPARC2_MODES = {
             'streak-focus': ("streak-ccd",  # manual focus in alignment tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
                  'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
@@ -141,7 +141,7 @@ SPARC2_MODES = {
             'temporal-spectrum': ("streak-ccd",  # acquisition tab
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
+                 'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
@@ -149,7 +149,7 @@ SPARC2_MODES = {
             'spectral-integrated': ("spectrometer-integrated",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'slit-in-big': {'x': 'off'},  # closed
                  # TODO: need to restore slit-in to the current position?
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
@@ -161,7 +161,7 @@ SPARC2_MODES = {
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'slit-in-big': {'x': 'off'},  # closed
                  # 'cl-det-selector': {'x': 'off'},
                  # TODO
                  # 'spec-det-selector': {'rx': math.radians(90)},
@@ -204,7 +204,7 @@ SPARC2_MODES = {
             'spec-focus': ("ccd",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},
+                 'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
