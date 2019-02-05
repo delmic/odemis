@@ -232,6 +232,11 @@ class ReadoutCamera(model.DigitalCamera):
         :parameter value: (2-tuple int) binning value to set
         :return: current binning value
         """
+
+        # only update resolution and especially update wavelength list (on spectrograph) when necessary
+        if value == self.binning.value:
+            return value
+
         # ResolutionVA need tuple instead of list of format [2 x 2]
         binning = "%s x %s" % (value[0], value[1])
 
