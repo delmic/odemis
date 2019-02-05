@@ -1735,8 +1735,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 
     def _onCompletedData(self, n, raw_das):
         if n != self._ccd_idx:
-            r = super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
-            return r
+            return super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
 
         assert raw_das[0].shape[-2] == 1  # should be a spectra (Y == 1)
 
@@ -1989,7 +1988,6 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         das.metadata[model.MD_POS] = pos
 
         self._raw.append(das)
-        return das
 
     def _getNumDriftCors(self):
         """
