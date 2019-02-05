@@ -2017,7 +2017,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>5,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_mirror">
@@ -2041,7 +2041,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,1</cellpos>
+                        <cellpos>5,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_centering">
@@ -2064,7 +2064,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,2</cellpos>
+                        <cellpos>5,2</cellpos>
                         </object>>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_streakcam">
@@ -2087,7 +2087,7 @@
                             </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>5,3</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_fiber">
@@ -2110,7 +2110,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>5,4</cellpos>
                       </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
@@ -4028,6 +4028,18 @@
             </XRCED>
           </object>
           <object class="SpatialSpectrumViewport" name="vp_spatialspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_temporalspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TimeSpectrumViewport" name="vp_timespec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
