@@ -26,7 +26,7 @@ from scipy.spatial import Delaunay as DelaunayTriangulation
 from scipy.interpolate import LinearNDInterpolator
 import numpy
 from odemis import model
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 # Functions to convert/manipulate Angle resolved image to polar projection
 # Based on matlab script created by Ernst Jan Vesseur (from AMOLF).
@@ -313,9 +313,7 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
 
     # interpolate
     qz = interp(xi, yi)
-    qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation
-    assert numpy.all(qz > -1)  # there should be no negative values, some very small due to interpolation are possible
-    qz[qz < 0] = 0  # all negative values (due to interpolation or wrong background subtraction) set to zero
+    qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation but keep negative values 
 
     result = model.DataArray(qz, data.metadata)
 
