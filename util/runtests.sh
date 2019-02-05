@@ -58,7 +58,7 @@ export NOMANUAL=1
 export TEST_NOHW=1
 
 # This environment variable makes the bugreporter test skip test cases that involve ticket creation
-export TEST_SUPPORT_TICKET=1
+export TEST_NO_SUPPORT_TICKET=1
 
 TESTLOG=./unittest-full-$DATE.log
 # make sure it is full path
