@@ -51,7 +51,6 @@ import odemis.util.driver as udriver
 
 from odemis.model import hasVA
 from ._base import Stream, POL_POSITIONS, POL_MOVE_TIME
-from odemis.acq.align.autofocus import estimateAcquisitionTime
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -1736,8 +1735,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 
     def _onCompletedData(self, n, raw_das):
         if n != self._ccd_idx:
-            r = super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
-            return r
+            return super(SEMSpectrumMDStream, self)._onCompletedData(n, raw_das)
 
         assert raw_das[0].shape[-2] == 1  # should be a spectra (Y == 1)
 
@@ -1789,14 +1787,14 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 class SEMTemporalMDStream(MultipleDetectorStream):
     """
     Multiple detector Stream made of SEM + time correlator for lifetime or g(2) mapping.
-    
+
     Acquisitions with a time correlator can have very large dwell times, therefore it might
     become necessary to carry out multiple drift corrections per pixel. This functionality
     is implemented here.
     """
     # TODO: implement multiple dwell time corrections per pixel in SEMCCDStream, so we don't
     # have duplicate code and a correct implementation that works with leeches and other features.
-    
+
     def __init__(self, name, streams):
         """
         streams (list of Streams): in addition to the requirements of
@@ -1810,13 +1808,13 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         if streams[1]._detector.role != "time-correlator":
             raise ValueError("Second stream detector needs to have 'time-correlator' " +
                              "as its role, not %s." % streams[1]._detector.role)
-        
+
         super(SEMTemporalMDStream, self).__init__(name, streams)
-        
+
         self._se_stream = streams[0]
         self._tc_stream = streams[1]
-         
-    def _estimateRawAcquisitionTime(self):      
+
+    def _estimateRawAcquisitionTime(self):
         res = numpy.prod(self._tc_stream.repetition.value)
         pxTime = self._tc_stream._getDetectorVA("dwellTime").value
         if self._dc_estimator:
@@ -1826,7 +1824,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                                                 self._dc_estimator.dwellTime.value)
             pxTime += nDC * drift_est.estimateAcquisitionTime()
         return 1.1 * pxTime * res
-     
+
     def _adjustHardwareSettings(self):
         self._emitter.scale.value = (1, 1)
         self._emitter.resolution.value = (1, 1)
@@ -1837,12 +1835,12 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             dwell_time = self._tc_stream._getDetectorVA("dwellTime").value / max(nDC, 1)
         else:
             dwell_time = self._tc_stream._getDetectorVA("dwellTime").value
-            
+
         logging.debug("Setting dwell time for ebeam and tc detector to %s " % dwell_time +
                       "to account for sub-pixel drift corrections.")
         self._tc_stream._detector.dwellTime.value = dwell_time
         self._emitter.dwellTime.value = dwell_time
-        
+
     def _runAcquisition(self, future):
         self._raw = []
         self._anchor_raw = []
@@ -1855,7 +1853,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                                                 self._dc_estimator.dwellTime.value)
             drift_est.acquire()
         tot_dc_vect = [0, 0]
-        
+
         n = 0
         px_iters = max(nDC, 1)
         se_data = []
@@ -1868,7 +1866,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 x, y = tuple(spot_pos[px_idx])
                 se_px_data = []
                 tc_px_data = []
-                
+
                 # In case of multiple drift corrections per pixel, acquire for part of the dwell time and
                 # perform drift correction iteratively until full dwell time is reached.
                 for _ in range(px_iters):
@@ -1893,7 +1891,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                         tot_dc_vect[1] += dc_vect[1]
                 n += 1
                 logging.info("Acquired %d out of %d pixels", n, numpy.prod(self.repetition.value))
-                
+
                 # Sum up the partial data to get the full output for the pixel
                 dtype = tc_px_data[0].dtype
                 idt = numpy.iinfo(dtype)
@@ -1901,7 +1899,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
                 pxsum = model.DataArray(pxsum.astype(dtype), tc_px_data[0].metadata)
                 tc_data.append(pxsum)
-                
+
                 pxsum = numpy.sum(se_px_data, 0)
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
                 s = model.DataArray(pxsum, se_px_data[0].metadata)
@@ -1936,22 +1934,22 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             dwell_time = self._tc_stream._getDetectorVA("dwellTime").value * max(nDC, 1)
             self._tc_stream._detector.dwellTime.value = dwell_time
             self._emitter.dwellTime.value = dwell_time
-    
+
     def _acquireImage(self, x, y):
-        try: 
+        try:
             for ce in self._acq_complete:
                 ce.clear()
-            
+
             self._emitter.translation.value = (x, y)
             # checks the hardware has accepted it
             trans = self._emitter.translation.value
             if math.hypot(x - trans[0], y - trans[1]) > 1e-3:
                 logging.warning("Ebeam translation is %s instead of requested %s.", trans, (x, y))
-            
+
             # Get data
             for s, sub in zip(self._streams, self._subscribers):
                 s._dataflow.subscribe(sub)
-            
+
             # Wait for detector to acquire image
             for i, s in enumerate(self._streams):
                 timeout = 1.5 * self._tc_stream._getDetectorVA("dwellTime").value + 1
@@ -1963,9 +1961,9 @@ class SEMTemporalMDStream(MultipleDetectorStream):
             return tc_data, se_data
         finally:
             for s, sub in zip(self._streams, self._subscribers):
-                s._dataflow.unsubscribe(sub)   
-    
-    def _onCompletedData(self, n, raw_das):        
+                s._dataflow.unsubscribe(sub)
+
+    def _onCompletedData(self, n, raw_das):
         md = raw_das[0].metadata.copy()
         md[MD_DESCRIPTION] = self._streams[n].name.value
         md[model.MD_PIXEL_SIZE] = (self._tc_stream.pixelSize.value, self._tc_stream.pixelSize.value)
@@ -1985,12 +1983,11 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         # This will not work anymore if we include fuzzing.
         das = numpy.reshape(raw_das, [shape[2], 1, 1, rep[1], rep[0]])
         das = model.DataArray(das, md)
-        
+
         pos, _ = self._get_center_pxs(self._tc_stream.repetition.value, (1, 1), das[0])
         das.metadata[model.MD_POS] = pos
-        
+
         self._raw.append(das)
-        return das
 
     def _getNumDriftCors(self):
         """
@@ -2007,7 +2004,8 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         if 0.1 < tc_dwell_time / dc_period < 1:
             nDC = 1
         return nDC
-        
+
+
 class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     """
     Multiple detector Stream made of SEM + temporal spectrum.
@@ -2480,7 +2478,7 @@ class ScannedFluoMDStream(MultipleDetectorStream):
 
 
 class ScannedRemoteTCStream(LiveStream):
-    
+
     def __init__(self, name, stream, **kwargs):
         '''
         A stream aimed at FLIM acquisition with a time-correlator on a SECOM.

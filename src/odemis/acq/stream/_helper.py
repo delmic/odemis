@@ -804,19 +804,20 @@ class ARSettingsStream(CCDSettingsStream):
 
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
+
+        # The attributes are used in SEMCCDMDStream (_sync.py)
         self.analyzer = analyzer
         if analyzer:
+            # Hardcode the 6 pol pos + pass-through
             positions = set(POL_POSITIONS) | {MD_POL_NONE}
-
             # check positions specified in the microscope file are correct
             for pos in positions:
                 if pos not in analyzer.axes["pol"].choices:
                     raise ValueError("Polarization analyzer %s misses position '%s'" % (analyzer, pos))
-            # the VAs are used in SEMCCDMDStream (_sync.py)
-            # hardcode the 6 pol pos + pass-through + the option to record all 6 positions sequentially
             self.polarization = model.VAEnumerated(MD_POL_NONE, choices=positions)
-            # VA recording all polarization positions except "pass-through" if True
-            # if False, self.polarization.value (pol pos) is selected for acquisition
+
+            # True: acquire all the polarization positions sequentially.
+            # False: acquire just the one selected in .polarization .
             self.acquireAllPol = model.BooleanVA(True)
 
     # onActive & projection: same as the standard LiveStream
