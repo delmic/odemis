@@ -26,7 +26,7 @@ from scipy.spatial import Delaunay as DelaunayTriangulation
 from scipy.interpolate import LinearNDInterpolator
 import numpy
 from odemis import model
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # Functions to convert/manipulate Angle resolved image to polar projection
 # Based on matlab script created by Ernst Jan Vesseur (from AMOLF).
@@ -243,6 +243,9 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
     """
     Converts an angle resolved image to equirectangular (aka cylindrical)
       projection (ie, phi/theta axes)
+      Note: Even if the input contains only positive values, there might be some small negative
+      values in the output due to interpolation. Also note, that NaNs occurring in the
+      interpolation step are set to 0.
     :parameter data: (model.DataArray) The image that was projected on the detector after being
       reflected on the parabolic mirror. The flat line of the D shape is
       expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE

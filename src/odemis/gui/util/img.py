@@ -720,8 +720,8 @@ def calculate_raw_ar(data, bg_data):
         # Simple version: remove the background value
         data0 = angleres.ARBackgroundSubtract(data)
     else:
-        # substract bg image, but don't clip (keep negative values for export)
-        data0 = (data.astype('float64') - bg_data.astype('float64'))  # metadata from data
+        # subtract bg image, but don't clip (keep negative values for export)
+        data0 = (data.astype(numpy.float64) - bg_data.astype(numpy.float64))
 
     # calculate raw polar representation
     polard = angleres.AngleResolved2Rectangular(data0, size, hole=False)
