@@ -243,6 +243,9 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
     """
     Converts an angle resolved image to equirectangular (aka cylindrical)
       projection (ie, phi/theta axes)
+      Note: Even if the input contains only positive values, there might be some small negative
+      values in the output due to interpolation. Also note, that NaNs occurring in the
+      interpolation step are set to 0.
     :parameter data: (model.DataArray) The image that was projected on the detector after being
       reflected on the parabolic mirror. The flat line of the D shape is
       expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE
@@ -313,9 +316,7 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
 
     # interpolate
     qz = interp(xi, yi)
-    qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation
-    assert numpy.all(qz > -1)  # there should be no negative values, some very small due to interpolation are possible
-    qz[qz < 0] = 0  # all negative values (due to interpolation or wrong background subtraction) set to zero
+    qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation but keep negative values 
 
     result = model.DataArray(qz, data.metadata)
 
