@@ -1834,8 +1834,8 @@ class StreamBarController(object):
             # Note: changing tool is fine, because it will only _pause_ the
             # other streams, and we will not come here again.
             if isinstance(stream, self._spot_incompatible):
-                logging.info("Stopping spot mode because %s starts", stream)
                 if self._tab_data_model.tool.value == TOOL_SPOT:
+                    logging.info("Stopping spot mode because %s starts", stream)
                     self._tab_data_model.tool.value = TOOL_NONE
                     spots = self._tab_data_model.spotStream
                     spots.is_active.value = False
