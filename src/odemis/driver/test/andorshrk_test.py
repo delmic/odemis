@@ -22,11 +22,13 @@ import logging
 from odemis import model
 from odemis.driver import andorshrk, andorcam2, pmtctrl
 import os
+import threading
 import time
 import unittest
 from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
@@ -104,9 +106,23 @@ class TestSpectrograph(object):
 
     def tearDown(self):
         # restore position
-        f = self.spectrograph.moveAbs(self._orig_pos)
-        f.result()  # wait for the move to finish
+#         f = self.spectrograph.moveAbs(self._orig_pos)
+#         f.result()  # wait for the move to finish
         pass
+
+    def _move_to_non_mirror_grating(self):
+        sp = self.spectrograph
+
+        choices = sp.axes["grating"].choices
+        if len(choices) <= 1:
+            logging.debug("No grating choice, will not try to change it")
+            return
+
+        for g, desc in choices.items():
+            if desc != "mirror":
+                non_mirror_g = g
+                sp.moveAbsSync({"grating": non_mirror_g})
+                break
 
     def test_simple(self):
         """
@@ -116,6 +132,7 @@ class TestSpectrograph(object):
 
 #    @skip("simple")
     def test_moverel(self):
+        self._move_to_non_mirror_grating()
         orig_wl = self.spectrograph.position.value["wavelength"]
         move = {'wavelength': 1e-9}  # +1nm => should be fast
         f = self.spectrograph.moveRel(move)
@@ -124,6 +141,7 @@ class TestSpectrograph(object):
 
 #    @skip("simple")
     def test_moveabs(self):
+        self._move_to_non_mirror_grating()
         orig_wl = self.spectrograph.position.value["wavelength"]
         new_wl = orig_wl + 1e-9  # 1nm => should be fast
         f = self.spectrograph.moveAbs({'wavelength': new_wl})
@@ -131,6 +149,9 @@ class TestSpectrograph(object):
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
         new_wl += 100e-9  # 100nm
+        if new_wl > self.spectrograph.axes["wavelength"].range[1]:
+            new_wl = orig_wl - 100e-9  # -100nm
+
         f = self.spectrograph.moveAbs({'wavelength': new_wl})
         f.result()  # wait for the move to finish
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
@@ -141,6 +162,8 @@ class TestSpectrograph(object):
         Check that you cannot move more than allowed
         """
         sp = self.spectrograph
+        self._move_to_non_mirror_grating()
+
         # wrong axis
         with self.assertRaises(ValueError):
             pos = {"boo": 0}
@@ -176,8 +199,10 @@ class TestSpectrograph(object):
 
 #    @skip("simple")
     def test_grating(self):
+        self._move_to_non_mirror_grating()
         cw = self.spectrograph.position.value["wavelength"]
         cg = self.spectrograph.position.value["grating"]
+        logging.debug("cw = %s", cw)
         choices = self.spectrograph.axes["grating"].choices
         self.assertGreater(len(choices), 0, "should have at least one grating")
         if len(choices) == 1:
@@ -197,6 +222,8 @@ class TestSpectrograph(object):
         # Go back to the original grating, and change wavelength, to test both
         # changes simultaneously
         new_wl = cw + 10e-9  # +10nm
+        if new_wl > self.spectrograph.axes["wavelength"].range[1]:
+            new_wl = cw - 10e-9  # -10nm
         f = self.spectrograph.moveAbs({"grating": cg, "wavelength": new_wl})
         f.result()
         self.assertEqual(self.spectrograph.position.value["grating"], cg)
@@ -205,6 +232,8 @@ class TestSpectrograph(object):
 #    @skip("simple")
     def test_sync(self):
         sp = self.spectrograph
+        self._move_to_non_mirror_grating()
+
         # For moves big enough, sync should always take more time than async
         delta = 0.0001  # s
 
@@ -235,6 +264,8 @@ class TestSpectrograph(object):
 #    @skip("simple")
     def test_stop(self):
         sp = self.spectrograph
+        self._move_to_non_mirror_grating()
+
         sp.stop()
 
         # two big separate positions that should be always acceptable
@@ -252,6 +283,8 @@ class TestSpectrograph(object):
         Ask for several long moves in a row, and checks that nothing breaks
         """
         sp = self.spectrograph
+        self._move_to_non_mirror_grating()
+
         pos_1 = {'wavelength': 300e-9}
         pos_2 = {'wavelength': 500e-9}
 
@@ -283,6 +316,8 @@ class TestSpectrograph(object):
 #    @skip("simple")
     def test_cancel(self):
         sp = self.spectrograph
+        self._move_to_non_mirror_grating()
+
         pos_1 = {'wavelength': 300e-9}
         pos_2 = {'wavelength': 500e-9}
 
@@ -354,6 +389,7 @@ class TestSpectrograph(object):
 
     def test_calib(self):
         sp = self.spectrograph
+        self._move_to_non_mirror_grating()
 
         # Try with a normal cw.
         # Most gratings (but mirrors) works well with 600 nm
@@ -379,6 +415,50 @@ class TestSpectrograph(object):
         lt = sp.getPixelToWavelength(npixels, pxs)
         for w in lt:
             self.assertTrue(0 <= w <= 20e-9)
+
+    def test_calib_async(self):
+        """
+        Check calling getPixelToWavelength() while the grating changes.
+        This can happen surprisingly often as 1) changing grating is really long,
+        and 2) typically the CCD settings are updated while the grating moves.
+        """
+        sp = self.spectrograph
+        npixels = 1320
+        pxs = 6.5e-6  # m
+
+        self._px2wl = None
+        def run_px2wl(wait_time):
+            time.sleep(wait_time)
+            logging.debug("Requesting px 2 wl")
+            lt = sp.getPixelToWavelength(npixels, pxs)
+            logging.debug("Got px 2 wl: %s", lt)
+            self._px2wl = lt
+
+        # Try to move to a real grating, with actual cw, so that it's more
+        # likely that px2wl needs computation
+        self._move_to_non_mirror_grating()
+        sp.moveAbsSync({"wavelength": 300e-9})
+
+        # just find one grating different from the current one
+        cg = sp.position.value["grating"]
+        choices = sp.axes["grating"].choices
+        for g in choices:
+            if g != cg:
+                newg = g
+                break
+
+        # move grating
+        f = sp.moveAbs({"grating": newg})
+        t = threading.Thread(target=run_px2wl, args=(1,))
+        t.start()
+        f.result()
+
+        # px2wl should be done, and containing a list representing the
+        # Can't really check more about the px2wl, as it might be empty because
+        # the grating is a mirror.
+        t.join(5)
+        self.assertFalse(t.is_alive())
+        self.assertIsInstance(self._px2wl, list)
 
 
 class TestShamrock(TestSpectrograph, unittest.TestCase):
