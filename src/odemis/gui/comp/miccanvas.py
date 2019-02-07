@@ -1183,6 +1183,8 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.view = None
         self._tab_data_model = None
 
+        self._crosshair_ol = None
+
         self.unit_x = None
         self.unit_y = None
         self.range_x = None
@@ -1193,6 +1195,10 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.add_view_overlay(self.markline_overlay)
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
+
+        # play/pause icon
+        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.add_view_overlay(self.play_overlay)
 
     def draw(self):
         """ Map the image data to the canvas and draw it """
@@ -1264,6 +1270,20 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.view = view
         self._tab_data_model = tab_data
 
+        # handle cross hair
+        self.view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
+
+    def _on_cross_hair_show(self, activated):
+        """ Activate the cross hair view overlay """
+        if activated:
+            if self._crosshair_ol is None:
+                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
+            self.add_view_overlay(self._crosshair_ol)
+        elif self._crosshair_ol:
+            self.remove_view_overlay(self._crosshair_ol)
+
+        self.Refresh(eraseBackground=False)
+
     def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None, flip=0):
         """ Set the data to be displayed
 
@@ -1277,7 +1297,6 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.range_x = range_x
         self.range_y = range_y
 
-        self.markline_overlay.clear_labels()
         self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
