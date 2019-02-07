@@ -149,12 +149,12 @@ def get_time_per_pixel(da):
             ti = 0
         else:
             try:
-                ti = dims.index("T")  # get index of dimension C
+                ti = dims.index("T")  # get index of dimension T
             except ValueError:
-                raise ValueError("Dimension 'T' not in dimensions, so skip computing wavelength list.")
+                raise ValueError("Dimension 'T' not in dimensions, so skip computing time list.")
 
         if len(tl) != da.shape[ti]:
-            raise ValueError("Length of wavelength list does not match length of wavelength data.")
+            raise ValueError("Length of time list does not match length of time data.")
         return tl
 
     raise KeyError("No MD_TIME_LIST metadata available")
@@ -179,9 +179,9 @@ def get_time_range(data):
             ti = 0
         else:
             try:
-                ti = dims.index("T")  # get index of dimension C
+                ti = dims.index("T")  # get index of dimension T
             except ValueError:
-                raise ValueError("Dimension 'T' not in dimensions, so skip computing wavelength list.")
+                raise ValueError("Dimension 'T' not in dimensions, so skip computing time list.")
 
         # no time list. just show pixels values (ex: 0 -> +50 px)
         max_t = data.shape[ti] // 2  # Typically, a TC array
