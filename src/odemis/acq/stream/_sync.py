@@ -2056,9 +2056,9 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         assert len(data_list) > 0
 
         # each image has a shape of (time, lambda)
-        # reshape to (lambda, time)
-        for img in data_list:
-            img.shape = img.shape[::-1]
+        # transpose to (lambda, time)
+        for index, img in enumerate(data_list):
+            data_list[index] = img.T
 
         # concatenate into one big array of (lambda, time, z=1, ebeam pos y, ebeam pos x)
         # CTZYX, ebeam scans x and then y (x slow axis)
