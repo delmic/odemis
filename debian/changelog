@@ -1,3 +1,12 @@
+odemis (2.9.2-1) precise; urgency=medium
+
+  * New version: 2.9.2
+  * Main bug fixes:
+    - Display of AR polarized images would sometimes not appear for some polarizations
+    - Andor Shamrock could report a communication issue if the CCD settings were changed while changing the grating
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 07 Feb 2019 11:25:42 +0100
+
 odemis (2.9.1-1) precise; urgency=medium
 
   * New version: 2.9.1
