@@ -614,7 +614,8 @@ class Shamrock(model.Actuator):
         Returns (0<=int) the number of available Shamrocks
         """
         nodevices = c_int()
-        self._dll.ShamrockGetNumberDevices(byref(nodevices))
+        with self._hw_access:
+            self._dll.ShamrockGetNumberDevices(byref(nodevices))
         return nodevices.value
 
     def GetSerialNumber(self):
@@ -622,7 +623,8 @@ class Shamrock(model.Actuator):
         Returns the device serial number
         """
         serial = create_string_buffer(64) # hopefully always fit! (normally 6 bytes)
-        self._dll.ShamrockGetSerialNumber(self._device, serial)
+        with self._hw_access:
+            self._dll.ShamrockGetSerialNumber(self._device, serial)
         return serial.value
 
     # Probably not needed, as ShamrockGetCalibration returns everything already
@@ -635,7 +637,8 @@ class Shamrock(model.Actuator):
         FocalLength = c_float()
         AngularDeviation = c_float()
         FocalTilt = c_float()
-        self._dll.ShamrockEepromGetOpticalParams(self._device,
+        with self._hw_access:
+            self._dll.ShamrockEepromGetOpticalParams(self._device,
                  byref(FocalLength), byref(AngularDeviation), byref(FocalTilt))
 
         return FocalLength.value, math.radians(AngularDeviation.value), math.radians(FocalTilt.value)
@@ -732,8 +735,9 @@ class Shamrock(model.Actuator):
         Blaze = create_string_buffer(64) # decimal of wavelength in nm
         Home = c_int()
         Offset = c_int()
-        self._dll.ShamrockGetGratingInfo(self._device, grating,
-                         byref(Lines), Blaze, byref(Home), byref(Offset))
+        with self._hw_access:
+            self._dll.ShamrockGetGratingInfo(self._device, grating,
+                             byref(Lines), Blaze, byref(Home), byref(Offset))
         logging.debug("Grating %d is %f, %s, %d, %d", grating,
                       Lines.value, Blaze.value, Home.value, Offset.value)
 
@@ -794,7 +798,8 @@ class Shamrock(model.Actuator):
         return (boolean): True if it's possible to change the wavelength
         """
         present = c_int()
-        self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
+        with self._hw_access:
+            self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
         return (present.value != 0)
 
     def GetCalibration(self, npixels):
@@ -1286,29 +1291,37 @@ class Shamrock(model.Actuator):
     def getPixelToWavelength(self, npixels, pxs):
         """
         Return the lookup table pixel number of the CCD -> wavelength observed.
+        Note: if an axis is moving, the call blocks until the move is complete.
         npixels (10 <= int): number of pixels on the CCD (horizontally), after
           binning.
         pxs (0 < float): pixel size in m (after binning)
         return (list of floats): pixel number -> wavelength in m
         """
         # If wavelength is 0, report empty list to indicate it makes no sense
-        if self.position.value["wavelength"] <= 1e-9:
+        cw = self.position.value["wavelength"]
+        if cw <= 1e-9:
             return []
 
         # We need a lock to ensure that in case this function is called twice
         # simultaneously, it doesn't interleave the calls
         with self._px2wl_lock:
+            # Check again, in case it changed before acquiring the lock
+            cw = self.position.value["wavelength"]
+            if cw <= 1e-9:
+                return []
+
             self.SetNumberPixels(npixels)
             self.SetPixelWidth(pxs)
             calib = self.GetCalibration(npixels)
         if calib[-1] < 1e-9:
-            logging.error("Calibration data doesn't seem valid, will use internal one (cw = %g): %s",
-                          self.position.value["wavelength"], calib)
+            cw = self.position.value["wavelength"]
+            logging.error("Calibration data doesn't seem valid, will use internal one (cw = %f nm): %s",
+                          cw * 1e9, calib)
             try:
                 return self._FallbackGetPixelToWavelength(npixels, pxs)
             except Exception:
                 logging.exception("Failed to compute pixel->wavelength (cw = %f nm)",
-                                  self.position.value["wavelength"] * 1e9)
+                                  cw * 1e9)
                 return []
         return calib
 
@@ -1488,15 +1501,32 @@ class Shamrock(model.Actuator):
         """
         Setter for the grating VA.
         It will try to put the same wavelength as before the change of grating.
-        Synchronous until the grating is finished (up to 20s)
+        Synchronous until the grating is finished (up to 30s)
         g (1<=int<=3): the new grating
         """
-        self.SetGrating(g)
-        # By default the Shamrock library keeps the same wavelength
+        # Make sure that getPixelToWavelength() can be called in-between the
+        # moves as the intermediary position might not accepted by the HW.
+        with self._px2wl_lock:
+            self.SetGrating(g)
+            # This is a trick, to immediately report the new position, in case
+            # getPixelToWavelength() uses it. It's not notified.
+            self.position._value["grating"] = g
 
-        if self.axes["grating"].choices[g] == "mirror":
-            logging.debug("Grating is mirror, so resetting wavelength to 0")
-            self.SetWavelength(0)
+            # By default the Shamrock library keeps the same wavelength
+
+            # With a mirror as grating, the SR193 always stays physically at wavelength 0,
+            # but it doesn't report it back (aka changing wavelength value in the position VA)
+            # after changing the grating to a mirror.
+            # So this can lead to positions in the position VA, which are impossible to set
+            # (e.g. grating = "mirror" and wavelength = "300").
+            # Also, calling GetCalibration() on a mirror raises an error.
+            # Setting the wavelength to 0 ensures that getPixelToWavelength()
+            # never tries to call GetCalibration(), but simply returns an empty wavelength list
+            # and that the position VA is correctly updated.
+            if self.axes["grating"].choices[g] == "mirror":
+                logging.debug("Grating is mirror, so resetting wavelength to 0")
+                self.SetWavelength(0)
+                self.position._value["wavelength"] = 0  # same trick
 
         self._restoreFocus()
         self._updatePosition()
