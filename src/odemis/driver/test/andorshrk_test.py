@@ -104,12 +104,6 @@ class TestSpectrograph(object):
       and to provide .spectrograph and .ccd.
     """
 
-    def tearDown(self):
-        # restore position
-#         f = self.spectrograph.moveAbs(self._orig_pos)
-#         f.result()  # wait for the move to finish
-        pass
-
     def _move_to_non_mirror_grating(self):
         sp = self.spectrograph
 
@@ -453,7 +447,7 @@ class TestSpectrograph(object):
         t.start()
         f.result()
 
-        # px2wl should be done, and containing a list representing the
+        # px2wl should be a list representing the wavelength for each pixel.
         # Can't really check more about the px2wl, as it might be empty because
         # the grating is a mirror.
         t.join(5)
