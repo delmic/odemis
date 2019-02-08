@@ -2511,7 +2511,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
 
         # Start acquisition
         # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
-        timeout = 10 + 1.5 * stss.estimateAcquisitionTime()  # TODO check with real HW! timedout problems
+        timeout = 10 + 1.5 * stss.estimateAcquisitionTime()
         start = time.time()
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
 
@@ -2533,7 +2533,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         sem_da = stss.raw[0]  # sem data array for scanning positions
         self.assertEqual(sem_da.shape, exp_res[::-1])
 
-        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        # check that the number of acquired temporal spectrum images matches the number of ebeam positions
         ts_da = stss.raw[1]  # temporal spectrum data array
         shape = ts_da.shape
         self.assertEqual(shape[3] * shape[4], num_ts)
