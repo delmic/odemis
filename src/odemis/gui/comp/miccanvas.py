@@ -1183,22 +1183,22 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.view = None
         self._tab_data_model = None
 
-        self._crosshair_ol = None
-
         self.unit_x = None
         self.unit_y = None
         self.range_x = None
         self.range_y = None
 
+        self._crosshair_ol = None
+
         self.markline_overlay = view_overlay.MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
         self.add_view_overlay(self.markline_overlay)
 
-        self.background_brush = wx.BRUSHSTYLE_SOLID
-
         # play/pause icon
         self.play_overlay = view_overlay.PlayIconOverlay(self)
         self.add_view_overlay(self.play_overlay)
+
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
     def draw(self):
         """ Map the image data to the canvas and draw it """

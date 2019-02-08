@@ -1315,6 +1315,8 @@ class TwoDViewPort(ViewPort):
         self._view = view
         self._tab_data_model = tab_data
 
+        view.show_crosshair.value = False
+
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
