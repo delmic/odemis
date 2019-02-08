@@ -24,10 +24,14 @@ from __future__ import division
 
 import logging
 from odemis.model import MD_PIXEL_SIZE
-
 from .autofocus import AutoFocus, AutoFocusSpectrometer
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
+from odemis.model._futures import CancellableFuture
+import numpy
+from odemis.util import executeAsyncTask, img
+import threading
 from odemis.util.img import Subtract
 
 
@@ -120,3 +124,72 @@ def discard_data(df, data):
     Does nothing, just discard the SEM data received (for spot mode)
     """
     pass
+
+
+def turnLightAndCheck(bl, ccd):
+    f = CancellableFuture()
+
+    f.task_canceller = _cancelTurnLightAndCheck
+
+    f._task_state = RUNNING
+    f._task_lock = threading.Lock()
+    f._done = threading.Event()
+
+    f._was_stopped = False  # if cancel was successful
+
+    # Run in separate thread
+    executeAsyncTask(f, _doTurnLightAndCheck,
+                     args=(f, bl, ccd))
+    return f
+
+
+def _cancelTurnLightAndCheck(f):
+    """
+    Canceller of turnLightAndCheck task.
+    """
+    logging.debug("Cancelling turnLightAndCheck...")
+    with f._task_lock:
+        if f._task_state == FINISHED:
+            logging.debug("The task already finished")
+            return False
+        f._task_state = CANCELLED
+        f._done.set()
+        logging.debug("Task cancelled.")
+    return True
+
+
+def _doTurnLightAndCheck(f, bl, ccd):
+    f._done.clear()
+    try:
+        # check if the light is already turned on. The light should normally be turned off.
+        # In case it's already turned on return and start the procedure of autofocus
+        if bl.emissions.value[0] * bl.power.value != 0:
+            return
+        if f._task_state == CANCELLED:
+            raise CancelledError()
+
+        # Light turned off, take the avg intensity of the image
+        img_light_off = ccd.data.get()
+        avg_intensity_off = numpy.average(img_light_off)
+        # set the avg minimum intensity - a significant change (+50%)
+        avg_intensity_min_on = avg_intensity_off * 1.5 + 0.1
+        # Turn the light on
+        bl.power.value = bl.power.range[1]
+        bl.emissions.value = [1] * len(bl.emissions.value)
+        img2 = ccd.data.get()
+        # Check whether 0.5 percent of the total pixels have intensity more than the avg minimum
+        while (numpy.sum(img2 > avg_intensity_min_on))/(img2.shape[0]*img2.shape[1]) < 0.005:
+            img2 = ccd.data.get()
+        logging.debug("the light is on")
+        return
+
+    except CancelledError:
+        raise  # Just don't log the exception
+    except Exception:
+        logging.exception("Failure")
+        raise
+    finally:
+        with f._task_lock:
+            if f._task_state == CANCELLED:
+                raise CancelledError()
+            f._task_state = FINISHED
