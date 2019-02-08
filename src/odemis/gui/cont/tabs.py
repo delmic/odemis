@@ -893,7 +893,7 @@ class SparcAcquisitionTab(Tab):
 
         viewports = panel.pnl_sparc_grid.viewports
         for vp in viewports[:4]:
-            assert(isinstance(vp, (MicroscopeViewport, PlotViewport)))
+            assert(isinstance(vp, (MicroscopeViewport, PlotViewport, TemporalSpectrumViewport)))
 
         # Connect the views
         # TODO: make them different depending on the hardware available?

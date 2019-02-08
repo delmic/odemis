@@ -3623,7 +3623,7 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ARLiveViewport" name="vp_align_streak">  <!-- TODO replace with TempSpecLiveViewport?-->
+          <object class="TemporalSpectrumViewport" name="vp_align_streak">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
@@ -4129,7 +4129,7 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="ARAcquiViewport" name="vp_sparc_ts">  <!-- TODO replace with TemporalSpectrumViewport -->
+          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

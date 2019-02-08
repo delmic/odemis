@@ -958,6 +958,14 @@ class StreakCamStream(CameraStream):
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
 
+    def _find_metadata(self, md):
+        md = super(LiveStream, self)._find_metadata(md)
+        if model.MD_TIME_LIST in self.raw[0].metadata:
+            md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
+        if model.MD_WL_LIST in self.raw[0].metadata:
+            md[model.MD_WL_LIST] = self.raw[0].metadata[model.MD_WL_LIST]
+        return md
+
     # Override Stream._is_active_setter() in _base.py
     def _is_active_setter(self, active):
         self.active = super(StreakCamStream, self)._is_active_setter(active)

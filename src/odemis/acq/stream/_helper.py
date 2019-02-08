@@ -615,7 +615,6 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
 
-    # TODO can be removed once projections are handled
     # Override Stream.__find_metadata() in _base.py
     def _find_metadata(self, md):
         md = super(TemporalSpectrumSettingsStream, self)._find_metadata(md)
