@@ -690,10 +690,10 @@ class StaticSpectrumStream(StaticStream):
 
         # Is there time data?
         if image.shape[1] > 1:
-            # cached list of wavelength for each pixel pos
+            # cached list of time stamps for each pixel pos
             self._tl_px_values, unit_t = spectrum.get_time_range(image)
             min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
-            ct = (max_t + min_t) / 2
+            ct = (max_t + min_t) / 2  # default value for VA
 
             # Create temporal data VA's
 
@@ -701,7 +701,6 @@ class StaticSpectrumStream(StaticStream):
                                                    range=(min_t, max_t),
                                                    unit=unit_t,
                                                    setter=self._setTime)
-            self.selected_time.value = ct
 
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
