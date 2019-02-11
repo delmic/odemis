@@ -3024,6 +3024,7 @@ class Sparc2AlignTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.view.show_crosshair.value = False
         self.panel.vp_align_center.view.show_crosshair.value = False
+        self.panel.vp_align_streak.view.show_crosshair.value = True
 
         # The streams:
         # * Alignment/AR CCD (ccd): Used to show CL spot during the alignment

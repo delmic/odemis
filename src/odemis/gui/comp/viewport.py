@@ -1315,13 +1315,35 @@ class TwoDViewPort(ViewPort):
         self._view = view
         self._tab_data_model = tab_data
 
+        view.show_crosshair.value = False
+
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
         view.stream_tree.flat.subscribe(self.connect_stream, init=True)
 
-    # TODO: also handle play/pause icon as in PlotViewPort
+        # For the play/pause icon
+        view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
+        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+
+    def _on_stream_play(self, is_playing):
+        """
+        Update the status of the play/pause icon overlay
+        """
+        self.canvas.play_overlay.hide_pause(is_playing)
+
+    def _on_stream_update(self, _):
+        """
+        Hide the play icon overlay if no stream are present (or they are all static)
+        """
+        ss = self._view.getStreams()
+        if len(ss) > 0:
+            # Any stream not static?
+            show = any(not isinstance(s, (StaticStream, DataProjection)) for s in ss)
+        else:
+            show = False
+        self.canvas.play_overlay.show = show
 
     def connect_stream(self, projs):
         """
