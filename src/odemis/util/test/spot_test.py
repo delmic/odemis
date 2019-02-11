@@ -33,7 +33,7 @@ class TestMomentOfInertia(unittest.TestCase):
     """
     def setUp(self):
         # These are example data (computer generated)
-        data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "moi_input.tif"))[0]
+        data = numpy.zeros((480, 640), dtype=numpy.uint16)
         background = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "moi_background.tif"))[0]
         self.data = data
         self.background = background

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-de
 '''
 Created on 28 Jul 2014
 
@@ -18,7 +18,11 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 import logging
+import time
+
 from odemis import model
+import threading
+import weakref
 
 
 class MockComponent(model.HwComponent):
@@ -70,3 +74,107 @@ class MockComponent(model.HwComponent):
     def supply(self, sup):
         logging.debug("Pretending to power on components %s", sup)
         return model.InstantaneousFuture()
+
+
+class FakeCCD(model.HwComponent):
+    """
+    Fake CCD component that returns a spot image
+    """
+    def __init__(self, fake_img):
+        """
+        Use .fake_img to change the image sent by the ccd
+        Args:
+            fake_img: 2D DataArray
+        """
+        super(FakeCCD, self).__init__("testccd", "ccd")
+        self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
+        res = fake_img.shape[1], fake_img.shape[0]  # X, Y
+        self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
+                                       cls=(int, long, float), unit="")
+        self.resolution = model.ResolutionVA(res, [(1, 1), res])
+
+        self.data = CCDDataFlow(self)
+        self._acquisition_thread = None
+        self._acquisition_lock = threading.Lock()
+        self._acquisition_init_lock = threading.Lock()
+        self._acquisition_must_stop = threading.Event()
+        self.fake_img = fake_img
+
+    def start_acquire(self, callback):
+        with self._acquisition_lock:
+            self._wait_acquisition_stopped()
+            target = self._acquire_thread
+            self._acquisition_thread = threading.Thread(target=target,
+                    name="FakeCCD acquire flow thread",
+                    args=(callback,))
+            self._acquisition_thread.start()
+
+    def stop_acquire(self):
+        with self._acquisition_lock:
+            with self._acquisition_init_lock:
+                self._acquisition_must_stop.set()
+
+    def _wait_acquisition_stopped(self):
+        """
+        Waits until the acquisition thread is fully finished _iff_ it was requested
+        to stop.
+        """
+        # "if" is to not wait if it's already finished
+        if self._acquisition_must_stop.is_set():
+            logging.debug("Waiting for thread to stop.")
+            self._acquisition_thread.join(10)  # 10s timeout for safety
+            if self._acquisition_thread.isAlive():
+                logging.exception("Failed to stop the acquisition thread")
+                # Now let's hope everything is back to normal...
+            # ensure it's not set, even if the thread died prematurely
+            self._acquisition_must_stop.clear()
+
+    def _simulate_image(self):
+        """
+        Generates the fake output.
+        """
+        with self._acquisition_lock:
+            self.fake_img.metadata[model.MD_ACQ_DATE] = time.time()
+            output = model.DataArray(self.fake_img, self.fake_img.metadata)
+            return output
+
+    def _acquire_thread(self, callback):
+        """
+        Thread that simulates the CCD acquisition.
+        """
+        try:
+            while not self._acquisition_must_stop.is_set():
+                # dummy
+                duration = 1
+                if self._acquisition_must_stop.wait(duration):
+                    break
+                callback(self._simulate_image())
+        except:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()
+
+class CCDDataFlow(model.DataFlow):
+    """
+    This is an extension of model.DataFlow. It receives notifications from the
+    FakeCCD component once the fake output is generated. This is the dataflow to
+    which the CCD acquisition streams subscribe.
+    """
+    def __init__(self, ccd):
+        model.DataFlow.__init__(self)
+        self.component = weakref.ref(ccd)
+
+    def start_generate(self):
+        try:
+            self.component().start_acquire(self.notify)
+        except ReferenceError:
+            pass
+
+    def stop_generate(self):
+        try:
+            self.component().stop_acquire()
+        except ReferenceError:
+            pass
+
+
