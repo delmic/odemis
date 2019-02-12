@@ -30,6 +30,7 @@ from __future__ import division
 import locale
 import logging
 import math
+import numpy
 import os
 import re
 import string
@@ -579,7 +580,7 @@ class _NumberValidator(ValidatorClass):
 def _step_from_range(min_val, max_val):
     """ Dynamically create step size based on range """
     try:
-        step = (max_val - min_val) / 255
+        step = (max_val - min_val) / 1000
         # To keep the inc/dec values 'clean', set the step
         # value to the nearest power of 10
         step = 10 ** round(math.log10(step))
@@ -618,8 +619,10 @@ class _NumberTextCtrl(wx.TextCtrl):
             raise ValueError("Validator required!")
 
         # The step size for when the up and down keys are pressed
-        self.key_step = kwargs.pop('key_step', None)
+        self.key_step = kwargs.pop('key_step', None)  # used if explicitly specified
         self.accuracy = kwargs.pop('accuracy', None)
+        self.key_step_fallback = kwargs.pop('key_step_fallback', None)  # calculated on min/max values possible
+        self.type = kwargs.pop('type', None)  # type of input widget
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER style needs to be set, but
         # setting it in XRC throws an error. A possible workaround is to include the style by hand
@@ -643,7 +646,7 @@ class _NumberTextCtrl(wx.TextCtrl):
         if val is not None:
             self.SetValue(self._number_value)
 
-        if self.key_step is not None:
+        if self.key_step_fallback is not None:
             self.Bind(wx.EVT_CHAR, self.on_char)
 
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
@@ -761,10 +764,35 @@ class _NumberTextCtrl(wx.TextCtrl):
         prev_num = self._number_value
         num = self._number_value
 
-        if key == wx.WXK_UP and self.key_step and self.IsEditable():
-            num = (num or 0) + self.key_step
-        elif key == wx.WXK_DOWN and self.key_step and self.IsEditable():
-            num = (num or 0) - self.key_step
+        if (key == wx.WXK_UP or key == wx.WXK_DOWN) and self.IsEditable():
+            if evt.ShiftDown():
+                p = -2  # decrease step size of one magnitude (two less then mag of value)
+            elif evt.ControlDown():
+                p = 0  # increase step size of one magnitude (same mag as value)
+            else:
+                p = -1  # default step size with one magnitude less than value
+
+            if key == wx.WXK_UP:
+                if self.key_step:
+                    # Note: If step size (key step) explicitly specified, only arrows needed to change value
+                    num = (num or 0) + self.key_step
+                else:
+                    magnitude = self.magnitude(num)
+                    step_order = magnitude + p
+                    if self.type == numpy.int and (magnitude + p) < 0:  # increase int type widgets by at least one
+                        step_order = 0
+                    num = (num or 0) + 10 ** step_order
+            elif key == wx.WXK_DOWN:
+                if self.key_step:
+                    # Note: If step size (key step) explicitly specified, only arrows needed to change value
+                    num = (num or 0) - self.key_step
+                else:
+                    magnitude = self.magnitude(num * (1 - 10**(p - 1)))
+                    step_order = magnitude + p
+                    if self.type == numpy.int and (magnitude + p) < 0:  # decrease int type widgets by at least one
+                        step_order = 0
+                    num = (num or 0) - 10 ** step_order
+
         else:
             # Skip the event, so it can be processed in the regular way
             # (As in validate typed numbers etc.)
@@ -777,6 +805,19 @@ class _NumberTextCtrl(wx.TextCtrl):
         if prev_num != self._number_value:
             self._display_pretty()  # Update the GUI immediately
             self._send_change_event()
+
+    def magnitude(self, value):
+        try:
+            magnitude = int(math.floor(math.log10(abs(value))))
+            if magnitude <= -15:
+                raise ValueError  # try to calculate magnitude with fallback value
+        except ValueError:  # for requesting a step size when current value is zero or smaller e-12
+            # there should be always a fallback step size, otherwise on_char is never called
+            magnitude = int(math.floor(math.log10(abs(self.key_step_fallback))))
+            if magnitude <= -15:  # if magnitude of fallback out of range
+                return -3  # TODO what to return? should not happen as _step_from_range already raises an exception??
+
+        return magnitude
 
     def on_focus(self, evt):
         """ Select the number part (minus any unit indication) of the data in the text field """
@@ -903,7 +944,8 @@ class IntegerTextCtrl(_NumberTextCtrl):
         choices = kwargs.pop('choices', None)
 
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
-        kwargs['key_step'] = kwargs.get('key_step', 1)
+        kwargs['key_step'] = kwargs.get('key_step', 1)  # TODO also replace with fallback?
+        kwargs['type'] = numpy.int
 
         _NumberTextCtrl.__init__(self, *args, **kwargs)
 
@@ -932,7 +974,9 @@ class UnitIntegerCtrl(UnitNumberCtrl):
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices, unit)
 
         if 'key_step' not in kwargs and (min_val != max_val):
-            kwargs['key_step'] = max(int(round(_step_from_range(min_val, max_val))), 1)
+            kwargs['key_step_fallback'] = max(int(round(_step_from_range(min_val, max_val))), 1)
+
+        kwargs['type'] = numpy.int
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
@@ -986,7 +1030,8 @@ class FloatTextCtrl(_NumberTextCtrl):
         choices = kwargs.pop('choices', None)
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
-        kwargs['key_step'] = kwargs.get('key_step', 0.1)
+        kwargs['key_step'] = kwargs.get('key_step', 0.1)  # TODO also replace with fallback?
+        kwargs['type'] = numpy.float64
 
         _NumberTextCtrl.__init__(self, *args, **kwargs)
 
@@ -1001,8 +1046,9 @@ class UnitFloatCtrl(UnitNumberCtrl):
         kwargs['validator'] = FloatValidator(min_val, max_val, choices, unit)
 
         if 'key_step' not in kwargs and (min_val != max_val):
-            kwargs['key_step'] = _step_from_range(min_val, max_val)
+            kwargs['key_step_fallback'] = _step_from_range(min_val, max_val)
 
+        kwargs['type'] = numpy.float64
         kwargs['accuracy'] = kwargs.get('accuracy', None)
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
