@@ -148,7 +148,7 @@ class ManualOverlayPlugin(Plugin):
         views.extend(self.main_app.main_data.tab.value.tab_data_model.views.value)
 
         for v in views:
-            for sp in v.stream_tree.getStreams():  # stream or projection
+            for sp in v.stream_tree.getProjections():  # stream or projection
                 if isinstance(sp, DataProjection):
                     s = sp.stream
                 else:
