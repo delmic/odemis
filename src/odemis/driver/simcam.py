@@ -271,6 +271,16 @@ class Camera(model.DigitalCamera):
 
         return image
 
+
+    def set_image(self, new_img):
+        """
+        Warning : Used only for unit tests
+        Args:
+            new_img: a new image with the light on
+        """
+        self._img = new_img
+
+
     def _simulate(self):
         """
         Processes the fake image based on the translation, resolution and

@@ -29,8 +29,9 @@ import cv2
 import logging
 import numpy
 from odemis import model
+from odemis.acq.align import light
 from odemis.model import InstantaneousFuture
-from odemis.util import executeAsyncTask, almost_equal
+from odemis.util import executeAsyncTask, almost_equal, TimeoutError, img
 from odemis.util.img import Subtract
 from scipy import ndimage
 import threading
@@ -599,10 +600,314 @@ def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     """
     return steps * estimateAcquisitionTime(detector, scanner)
 
+def _totalAutoFocusTime(spgr, dets):
+    ngs = len(spgr.axes["grating"].choices)
+    nds = len(dets)
+    et = estimateAutoFocusTime(dets[0], None) + 20
+
+    # 1 time for each grating/detector combination
+    move_et = ngs * 20 if ngs > 1 else 0  # extra 20 s for grating moves
+    move_et += nds * 5 if nds > 1 else 0  # extra 5 s for detector selector moves
+
+    return (ngs * nds) * et + move_et
+
+def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
+
+    """
+    It provides the ability to check the progress of the complete Sparc2 autofocus
+    procedure in a Future or even cancel it.
+        Pick the hardware components
+        Turn on the light and wait for it to be complete
+        Change the optical path (closing the slit)
+        Run AutoFocusSpectrometer
+        Acquire one last image
+        Turn off the light
+    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, temporal-spec-focus
+    opm: OpticalPathManager
+    streams: list of streams
+    return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
+          which will eventually return a map of grating/detector -> focus position, the same as AutoFocusSpectrometer
+    raises:
+            CancelledError if cancelled
+            LookupError if procedure failed
+    """
+    focuser = None
+    detector = None
+    if align_mode in ("spec-focus", "temporal-spec-focus"):
+        focuser = model.getComponent(role='focus')
+    elif align_mode == "spec-fiber-focus":
+        aligner = model.getComponent(role='fiber-aligner')
+        for r in ("ccd", "sp-ccd"):
+            try:
+                det = model.getComponent(role=r)
+            except LookupError:
+                logging.warning("No detector component found")
+                continue
+            if aligner is not None and det.name in aligner.affects.value:
+                detector = det
+        if detector is not None:
+            for f in ("focus", "spec-ded-focus"):
+                try:
+                    focus = model.getComponent(role=f)
+                except LookupError:
+                    logging.warning("No focus component found")
+                    continue
+                if focus is not None and detector.name in focus.affects.value:
+                    focuser = focus
+    else:
+        raise ValueError("Unknown align_mode %s", align_mode)
+
+    if streams is None:
+        streams = []
+
+    for s in streams:
+        if s.focuser == focuser:
+            logging.debug("The focuser of stream %s is the same as the one picked", s)
+        elif s.focuser is None:
+            logging.debug("Stream %s has no focuser, will assume it's fine", s)
+        else:
+            logging.warning("Stream %s used for focusing has no focuser", s)
+
+    # Get all the detectors, spectrograph and selectors affected by the focuser
+    try:
+        spgr, dets, selector = _getSpectrometerFocusingComponents(focuser)  # type: (object, List[Any], Optional[Any])
+    except LookupError as ex:
+        # TODO: just run the standard autofocus procedure instead?
+        raise LookupError("Failed to focus: %s", ex)
+
+    for s in streams:
+        if s.detector.role not in (d.role for d in dets):
+            logging.warning("The detector of the stream is not found to be one of the picked detectors %s")
+
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+
+    # Rough approximation of the times of each action:
+    # * 5 s to turn on the light
+    # * 5 s to close the slit
+    # * af_time s for the AutoFocusSpectrometer procedure to be completed
+    # * 0.2 s to acquire one last image
+    # * 0.1 s to turn off the light
+    if start_autofocus == True:
+        # calculate the time needed for the AutoFocusSpectrometer procedure to be completed
+        af_time = _totalAutoFocusTime(spgr, dets)
+        autofocus_loading_times = (5, 5, af_time, 0.2, 5) # a list with the time that each action needs
+    else:
+        autofocus_loading_times = (5,5)
+
+    f = model.ProgressiveFuture(start=est_start, end=est_start + sum(autofocus_loading_times))
+    f._autofocus_state = RUNNING
+    # Time for each action left
+    f._actions_time = list(autofocus_loading_times)
+    f.task_canceller = _CancelSparc2AutoFocus
+    f._autofocus_lock = threading.Lock()
+    f._running_subf = model.InstantaneousFuture()
+
+    # Run in separate thread
+    executeAsyncTask(f, _DoSparc2AutoFocus, args=(f, streams, align_mode, opm, dets, spgr, selector, focuser, start_autofocus))
+    return f
+
+
+def _getSpectrometerFocusingComponents(focuser):
+    """
+    Finds the different components needed to run auto-focusing with the
+    given focuser.
+    focuser (Actuator): the focuser that will be used to change focus
+    return:
+        * spectrograph (Actuator): component to move the grating and wavelength
+        * detectors (list of Detectors): the detectors attached on the
+          spectrograph, which can be used for focusing
+        * selector (Actuator or None): the component to switch detectors
+    raise LookupError: if not all the components could be found
+    """
+    # to adapt the code don't use main data model but just call model.getComponent() properly
+    try:
+        spectrograph = model.getComponent(role="spectrograph")
+    except LookupError as exp:
+        logging.warning("No spectrograph found")
+        spectrograph = None
+    try:
+        spectrograph_ded = model.getComponent(role="spectrograph-dedicated")
+    except LookupError:
+        logging.warning("No dedicated spectrograph found")
+        spectrograph_ded = None
+
+    dets = []
+    # "ccd", which is the detector of the stream, should be first, as it's
+    # normally on the "direct" output port (which the SR193 tends to prefer
+    # for focusing), and typically has a better performance for focus.
+    for r in ("ccd", "sp-ccd"):
+        try:
+            d = model.getComponent(role=r)
+        except LookupError:
+            continue
+        if r == "sp-ccd" and d.shape[1] == 1:
+            # Currently, the autofocus doesn't work correctly on spectrum
+            # (ie, resolution of X x 1), so skip it, and hope the focus is
+            # already correct.
+            # TODO: make the autofocus work also in such case.
+            logging.info("Will not focus on %s as it is 1D", d.name)
+            continue
+        if d.name in focuser.affects.value:
+            dets.append(d)
+
+    if not dets:
+        raise LookupError("Failed to find any detector for the spectrometer focusing")
+
+    # Get the spectrograph and selector based on the fact they affect the
+    # same detectors.
+    spgr = _findSameAffects([spectrograph, spectrograph_ded], dets)
+    if len(dets) <= 1:
+        selector = None  # we can keep it simple
+    else:
+        # TODO: make this code able to handle systems with multiple
+        # spectrographs (with a focus)
+        # Precisely, a selector would have multiple positions, with
+        # each position corresponding to one of the detectors
+        sels = [model.getComponent(role="spec-det-selector")]
+        selector = _findSameAffects(sels, dets)
+
+    return spgr, dets, selector
+
+
+def _findSameAffects(comps, affected):
+    """
+    Find a component that affects all the given components
+    comps (list of Component or None): set of components in which to look
+      for the "affecter"
+    affected (list of Component): set of affected components
+    return (Component): the first component that affects all the affected
+    raise LookupError: if no component found
+    """
+    naffected = set(c.name for c in affected)
+    for c in comps:
+        if c is not None and naffected <= set(c.affects.value):
+            return c
+    else:
+        raise LookupError("Failed to find a component that affects all %s" % (naffected,))
+
+
+def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, focuser, start_autofocus=True):
+    """
+        cf Sparc2AutoFocus
+        return dict((grating, detector) -> focus pos)
+    """
+    try:
+        if future._autofocus_state == CANCELLED:
+            logging.warning("Autofocus procedure is cancelled before the light is on")
+            raise CancelledError()
+
+        logging.debug("Turn on the light")
+        bl = model.getComponent(role="brightlight")
+        f = light.turnOnLight(bl, dets[0])
+        try:
+            f.result(timeout=60)
+        except TimeoutError:
+            f.cancel()
+            logging.warning("Light doesn't appear to turn on after 60s")
+        if future._autofocus_state == CANCELLED:
+            logging.warning("Autofocus procedure is cancelled after turning on the light")
+            raise CancelledError()
+        future._actions_time.pop(0)
+        future.set_progress(end=time.time() + sum(future._actions_time))
+
+        logging.debug("Adjust the optical path")
+        # Go to the special focus mode
+        if align_mode == "spec-focus" or align_mode == "temporal-spec-focus":
+            opath = "spec-focus"
+        elif align_mode == "spec-fiber-focus":
+            opath = "spec-fiber-focus"
+        # change the optical path
+        fopm = opm.setPath(opath)
+        fopm.result()
+        if future._autofocus_state == CANCELLED:
+            logging.warning("Autofocus procedure is cancelled after closing the slit")
+            raise CancelledError()
+        future._actions_time.pop(0)
+        future.set_progress(end=time.time() + sum(future._actions_time))
+
+        # In case autofocus is manual return
+        if not start_autofocus:
+            return None
+
+        # Configure each detector with good settings
+        for d in dets:
+            # The stream takes care of configuring its detector, so no need
+            # In case there is no streams for the detector, take the binning and exposureTime values as far as they exist
+            if not streams:
+                if model.hasVA(d, "binning"):
+                    d.binning.value = d.binning.clip((2, 2))
+                if model.hasVA(d, "exposureTime"):
+                    d.exposureTime.value = d.exposureTime.clip(0.2)
+        ret = {}
+        logging.debug("Run AutoFocusSpectrometer")
+        try:
+            future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
+            ret = future._running_subf.result(timeout=3*future._actions_time[0]+10)
+        except TimeoutError:
+            f.cancel()
+            logging.warning("Timeout error for autofocus spectrometer")
+        except IOError:
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
+            raise
+        if future._autofocus_state == CANCELLED:
+            logging.warning("Autofocus procedure is cancelled after the completion of the autofocus of the spectrometer")
+            raise CancelledError()
+        future._actions_time.pop(0)
+        future.set_progress(end=time.time() + sum(future._actions_time))
+
+        logging.debug("Acquiring the last image")
+        if streams[0]:
+            _playStream(streams[0].detector, streams)
+            # Ensure the latest image shows the slit focused
+            streams[0].detector.data.get(asap=False)
+            # pause the streams
+            streams[0].is_active.value = False
+        if future._autofocus_state == CANCELLED:
+            logging.warning("Autofocus procedure is cancelled after acquiring the last image")
+            raise CancelledError()
+        future._actions_time.pop(0)
+        future.set_progress(end=time.time() + sum(future._actions_time))
+
+        logging.debug("Turn off the light")
+        bl.power.value = bl.power.range[0]
+        if future._autofocus_state == CANCELLED:
+            logging.warning("Autofocus procedure is cancelled after turning off the light")
+            raise CancelledError()
+        future._actions_time.pop(0)
+        future.set_progress(end=time.time() + sum(future._actions_time))
+
+        return ret
+
+    except CancelledError:
+        logging.debug("DoSparc2AutoFocus cancelled")
+    finally:
+        with future._autofocus_lock:
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
+            future._autofocus_state = FINISHED
+
+
+def _CancelSparc2AutoFocus(future):
+    """
+    Canceller of _DoSparc2AutoFocus task.
+    """
+    logging.debug("Cancelling autofocus...")
+
+    with future._autofocus_lock:
+        if future._autofocus_state == FINISHED:
+            return False
+        future._autofocus_state = CANCELLED
+        future._running_subf.cancel()
+        logging.debug("Sparc2AutoFocus cancellation requested.")
+
+    return True
+
 
 def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None, method=MTD_BINARY):
     """
-    Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
+    Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus
     procedure or even cancel it.
     detector (model.DigitalCamera or model.Detector): Detector on which to
       improve the focus quality
@@ -643,7 +948,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
     return f
 
 
-def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
+def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, streams=None):
     """
     Run autofocus for a spectrograph. It will actually run autofocus on each
     gratings, and for each detectors. The input slit should already be in a
@@ -667,25 +972,21 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None):
     if len(detectors) > 1 and selector is None:
         raise ValueError("No selector provided, but multiple detectors")
 
+    if streams is None:
+        streams=[]
+
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    ngs = len(spectrograph.axes["grating"].choices)
-    nds = len(detectors)
-    et = estimateAutoFocusTime(detectors[0], None) + 20
-    # 1 time for each grating/detector combination
-    move_et = ngs * 20 if ngs > 1 else 0  # extra 20 s for grating moves
-    move_et += nds * 5 if nds > 1 else 0  # extra 5 s for detector selector moves
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + (ngs * nds) * et + move_et)
+    #calculate the time for the AutoFocusSpectrometer procedure to be completed
+    a_time = _totalAutoFocusTime(spectrograph, detectors)
+    f = model.ProgressiveFuture(start=est_start, end=est_start + a_time)
     f.task_canceller = _CancelAutoFocusSpectrometer
     # Extra info for the canceller
     f._autofocus_state = RUNNING
     f._autofocus_lock = threading.Lock()
     f._subfuture = InstantaneousFuture()
-
     # Run in separate thread
-    executeAsyncTask(f, _DoAutoFocusSpectrometer,
-                     args=(f, spectrograph, focuser, detectors, selector))
+    executeAsyncTask(f, _DoAutoFocusSpectrometer, args=(f, spectrograph, focuser, detectors, selector, streams))
     return f
 
 
@@ -734,7 +1035,22 @@ def _updateAFSProgress(future, last_dur, left):
     future.set_progress(end=time.time() + tleft)
 
 
-def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector):
+def _playStream(detector, streams):
+    """
+    It first pauses the streams and then plays only the stream related to the corresponding detector
+    detector : (model.DigitalCamera or model.Detector): detector from which the image is acquired
+    streams : list of streams
+    """
+    # First pause all the streams
+    for s in streams:
+        if s.detector.role != detector.role:
+            s.is_active.value = False
+    # After all the streams are paused, play only the steam that is related to the detector
+    for s in streams:
+        if s.detector.role == detector.role:
+            s.is_active.value = True
+
+def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector, streams):
     """
     cf AutoFocusSpectrometer
     return dict((grating, detector) -> focus pos)
@@ -747,6 +1063,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
     if selector:
         sel_orig = selector.position.value
         sel_axis, det_2_sel = _mapDetectorToSelector(selector, detectors)
+
 
     def is_current_det(d):
         """
@@ -803,7 +1120,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector)
                 # way off (eg, because it's a simulated detector, or there is
                 # something wrong with the grating), it might prevent this run
                 # from finding the correct value.
-
+                _playStream(d, streams)
                 future._subfuture = AutoFocus(d, None, focuser)
                 fp, flvl = future._subfuture.result()
                 ret[(g, d)] = fp
@@ -840,3 +1157,4 @@ def _CancelAutoFocusSpectrometer(future):
         logging.debug("AutofocusSpectrometer cancellation requested.")
 
     return True
+

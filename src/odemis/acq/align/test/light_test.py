@@ -19,7 +19,7 @@ from concurrent.futures._base import CancelledError
 import logging
 from odemis import model
 
-from odemis.acq.align import turnOnLightAndCheck
+from odemis.acq.align import turnOnLight
 from odemis.driver import simulated
 from odemis.dataio import tiff
 from odemis.util import mock, img
@@ -35,7 +35,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
 
-class TestTurnOnLightAndCheck(unittest.TestCase):
+class TestTurnOnLight(unittest.TestCase):
     """
     Test turnLightAndCheck functions
     """
@@ -61,7 +61,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         """
         bl = self.light
         ccd = mock.FakeCCD(self.img_spccd_loff)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         time.sleep(1)  # > exposureTime (=0.1 s)
         self.assertFalse(f.done())
 
@@ -79,7 +79,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         """
         bl = self.light
         ccd = mock.FakeCCD(self.img_ccd_loff)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         time.sleep(1)
         self.assertFalse(f.done())
 
@@ -98,7 +98,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         img_dark = numpy.ones((1, 1), dtype=numpy.uint16)  # type: ndarray
         da_dark = model.DataArray(img_dark)
         ccd = mock.FakeCCD(da_dark)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         time.sleep(1)
         self.assertFalse(f.done())
 
@@ -117,7 +117,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         """
         bl = self.light
         ccd = mock.FakeCCD(self.img_ccd_loff)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         # no change in the image
         time.sleep(1)
         self.assertFalse(f.done())
@@ -136,7 +136,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         """
         bl = self.light
         ccd = mock.FakeCCD(self.img_ccd_loff)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         time.sleep(1)
         cancelled = f.cancel()
 
@@ -155,7 +155,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         bl.power.value = 10
         # bright image - light is already on
         ccd = mock.FakeCCD(self.img_ccd_lon)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         time.sleep(1)
         self.assertTrue(f.done())
         f.result()
@@ -167,7 +167,7 @@ class TestTurnOnLightAndCheck(unittest.TestCase):
         """
         bl = self.light
         ccd = mock.FakeCCD(self.img_ccd_loff)
-        f = turnOnLightAndCheck(bl, ccd)
+        f = turnOnLight(bl, ccd)
         time.sleep(1)
         self.assertFalse(f.done())
 

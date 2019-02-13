@@ -28,18 +28,15 @@ from __future__ import division
 
 from collections import OrderedDict
 import collections
-from concurrent import futures
 from concurrent.futures import CancelledError
 import logging
-import math
+
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, SEMMDStream, SEMTemporalMDStream, \
     OverlayStream, OpticalStream, EMStream, ScannedFluoStream, ScannedFluoMDStream, \
     ScannedRemoteTCStream, ScannedTCSettingsStream
 from odemis.util import img, fluo, executeAsyncTask
-import sys
-import threading
 import time
 
 
