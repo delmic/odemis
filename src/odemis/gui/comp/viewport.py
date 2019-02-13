@@ -70,7 +70,7 @@ def get_original_stream(s_or_p):
     if s_or_p is None:
         return None
 
-    raise ValueError("%s is not a Stream nor a DataProjection", s_or_p)
+    raise ValueError("%s is not a Stream nor a DataProjection" % (s_or_p,))
 
 
 class ViewPort(wx.Panel):
