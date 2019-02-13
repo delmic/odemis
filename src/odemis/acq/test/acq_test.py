@@ -117,7 +117,7 @@ class SECOMTestCase(unittest.TestCase):
     def test_simple(self):
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         self.assertIsNone(e)
@@ -126,7 +126,7 @@ class SECOMTestCase(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
         self.assertIsNone(e)
@@ -147,7 +147,7 @@ class SECOMTestCase(unittest.TestCase):
         self.end = None
         self.updates = 0
 
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
 
         data, e = f.result()
@@ -169,7 +169,7 @@ class SECOMTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -253,7 +253,7 @@ class SPARCTestCase(unittest.TestCase):
         ars.repetition.value = (2, 3)
         num_ar = numpy.prod(ars.repetition.value)
 
-        est_time = acq.estimateTime(st.getStreams())
+        est_time = acq.estimateTime(st.getProjections())
 
         # prepare callbacks
         self.start = None
@@ -263,7 +263,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -312,7 +312,7 @@ class SPARCTestCase(unittest.TestCase):
         specs.repetition.value = (3, 2)
         num_ar = numpy.prod(ars.repetition.value)
 
-        est_time = acq.estimateTime(st.getStreams())
+        est_time = acq.estimateTime(st.getProjections())
 
         # prepare callbacks
         self.start = None
@@ -322,7 +322,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -379,7 +379,7 @@ class SPARCTestCase(unittest.TestCase):
 
         pca.period.value = 10  # Only at beginning and end
 
-        est_time = acq.estimateTime(st.getStreams())
+        est_time = acq.estimateTime(st.getProjections())
 
         # prepare callbacks
         self.start = None
@@ -389,7 +389,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acq.acquire(st.getStreams())
+        f = acq.acquire(st.getProjections())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 

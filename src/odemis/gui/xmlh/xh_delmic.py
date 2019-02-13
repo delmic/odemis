@@ -254,31 +254,26 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
         height = int(self.GetText('height')) if self.GetText('height') else None
 
         try:
+            kwargs = {
+                "icon": icon,
+                "icon_on": icon_on,
+                "pos": self.GetPosition(),
+                "size": self.GetSize(),
+                "style": self.GetStyle(),
+                "face_colour": self.GetText('face_colour'),
+                "height": height,
+            }
+
             if self.GetParamNode("label"):
-                w = self.klass(
-                    self.GetParentAsWindow(),
-                    self.GetID(),
-                    icon=icon,
-                    icon_on=icon_on,
-                    pos=self.GetPosition(),
-                    size=self.GetSize(),
-                    style=self.GetStyle(),
-                    label=self.GetText('label'),
-                    face_colour=self.GetText('face_colour'),
-                    height=height
-                )
-            else:
-                w = self.klass(
-                    self.GetParentAsWindow(),
-                    self.GetID(),
-                    icon=icon,
-                    icon_on=icon_on,
-                    pos=self.GetPosition(),
-                    size=self.GetSize(),
-                    style=self.GetStyle(),
-                    face_colour=self.GetText('face_colour'),
-                    height=height
-                )
+                kwargs["label"] = self.GetText('label')
+            if self.GetParamNode("active_colour"):
+                kwargs["active_colour"] = self.GetText('active_colour')
+
+            w = self.klass(
+                self.GetParentAsWindow(),
+                self.GetID(),
+                **kwargs)
+
         except ValueError:
             print("Failed to create ImageButton %s" % (self.GetName(),))
             raise
@@ -566,6 +561,27 @@ class SpatialSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
         return self.IsOfClass(node, "SpatialSpectrumViewport")
 HANDLER_CLASS_LIST.append(SpatialSpectrumViewportXmlHandler)
 
+
+class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.TemporalSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "TemporalSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
+
+
+class TimeSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.TimeSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "TimeSpectrumViewport")
+
+
+HANDLER_CLASS_LIST.append(TimeSpectrumViewportXmlHandler)
 
 ##################################
 # Sliders

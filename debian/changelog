@@ -1,3 +1,58 @@
+odemis (2.9.0-1) precise; urgency=medium
+
+  * New version: 2.9
+  * Main new features:
+    - Support for polarizer acquisition (SPARC)
+    - Support for FLIM acquisition (SECOM confocal)
+    - Option to see the metadata of the streams in the analysis tab
+    - New bug reporter, which can directly upload the reports
+    - Plugin to acquire Z-stack
+    - Ability to vizualise Z-stack data
+    - Support for Trinamic TMCM-3214 actuator
+    - Support for Newport ESP301 actuator
+  * Main improvements and bugs fixes:
+    - Migrated to wxPython 4
+    - More reliable stitching register based on global optimisation
+    - New stiching weaver "CollageReverse" which prefers the first image acquired
+    - Focus position of spectrometer was not properly remembered if the main detector was on the second port (SPARC)
+    - In the GUI, on arrow key, move 10% of HFW, instead of always 100px
+    - Fix updater and make it download faster (Viewer on Windows)
+    - New util grupdate: to extract and merge log
+    - New util axes-odometer: to measure the traveled distance based on the log
+    - New util piterminal: to connect directly to a PI controller
+    - When opening large data in pyramidal format, sometimes no image would be shown
+    - Do software binning if spectrometer CCD doesn't support full vertical binning (SPARC)
+    - Backend can restore properties and metadata at init (ie, persitent settings)
+    - Extented and clarified developer documentation
+  * Improvements and bug fixes already present in v2.8 branch:
+    - Fix live SPARC AR view not always centered if stage can be controlled
+    - Ensure the ebeam is positionned properly before acquiring a CCD image (SPARC)
+    - AR pole position was not immediately updated after the alignment (SPARC)
+    - Fix reading extra parameters of the TMCM in some cases (SPARC)
+    - On the first load after starting odemis, the optical focus wasn't set (DELPHI)
+    - ConvertStage wrapping a stage with canUpdate would fail if using the canUpdate feature
+    - On Windows, the new libtiff couldn't be loaded
+    - Tescan driver supports .external and .blanker (only manual)
+    - Tescan driver doesn't require a stage
+    - odemis-cli --position accepts negative floats and string as positions
+    - Way to override the order of the axes during SPARCv2 mirror parking: AXES_ORDER_REF
+    - Fix file association for OME-TIFF on Linux
+    - PI controllers in closed-loop could have large unexpected movements if not moved for a long time
+    - Tile acquisition plugin was overly optimistic on memory usage on the SECOM/DELPHI
+    - Windows viewer didn't build properly
+    - Fix metadata update from component with None role (DELPHI)
+    - Clarify some log messages
+    - plugin quickcl: support also monochromator
+    - ConvertStage could cause large unexpected move if requested absolute move with only one axis
+    - A monochromator placed on an external spectrograph could miss some metadata
+    - plugin quickcl: failed to show window
+    - plugin tileacq: failure during acquisition was not displayed
+  * Deprecation notes:
+    - This is the last version supporting Ubuntu 12.04 -> upgrade to Ubuntu 16.04
+    - This is the last version supporting wxPython 3 -> upgrade to wxPython 4
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 28 Nov 2018 11:02:37 +0100
+
 odemis (2.8.0-1) precise; urgency=medium
 
   * New version: 2.8

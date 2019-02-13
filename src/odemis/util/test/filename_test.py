@@ -35,6 +35,7 @@ timeshrt_colon = time.strftime("%H:%M")
 timelng = time.strftime("%H%M%S")
 date_sl = time.strftime("%Y/%m/%d")
 timelng_sl = time.strftime("%H/%M/%S")
+current_year = time.strftime("%Y")
 
 EXTS = ('.tiff', '.ome.tiff', '.0.ome.tiff', '.h5', '.hdf5')
 PATH = get_home_folder()
@@ -58,8 +59,8 @@ class TestFilenameSuggestions(unittest.TestCase):
                    'test2-45': ('test2-{cnt}', '45'),
                    'test': ('test-{cnt}', '001'),
                    'test%s' % timeshrt: ('test{timelng}', '001'),
-                   '2018-cell5': ('{year}-cell{cnt}', '5'),
-                   '2018-{cell}{cnt}': ('{year}-{{cell}}{{cnt}}', '001')
+                   '%s-cell5' % current_year: ('{year}-cell{cnt}', '5'),
+                   '%s-{cell}{cnt}' % current_year: ('{year}-{{cell}}{{cnt}}', '001')
                     }
 
         for fn, ptn in fn_ptns.items():

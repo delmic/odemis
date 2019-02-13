@@ -179,12 +179,6 @@ class LiveStream(Stream):
                 # sleep as much, to ensure we are not using too much CPU
                 tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
-
-                # If still nothing to do, update the RGB image with the new B/C.
-                if not ht_needs_recompute.is_set() and stream.auto_bc.value:
-                    # Note that this can cause the .image to be updated even after the
-                    # stream is not active (but that can happen even without this).
-                    stream._shouldUpdateImage()
         except Exception:
             logging.exception("histogram update thread failed")
 
@@ -719,7 +713,7 @@ class CameraCountStream(CameraStream):
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
-        self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
+        self.raw = [model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))]
         self.image.value = model.DataArray([]) # start with an empty array
 
         # time over which to accumulate the data. 0 indicates that only the last
@@ -747,30 +741,38 @@ class CameraCountStream(CameraStream):
         """
         Adds a new count and updates the window
         """
+        raw = self.raw[0]
         # delete all old data
         oldest = date - self.windowPeriod.value
-        first = numpy.searchsorted(self.raw[:, 1], oldest)
+        first = numpy.searchsorted(raw[:, 1], oldest)
 
         # We must update .raw atomically as _updateImage() can run simultaneously
         new = numpy.array([[count, date]], dtype=numpy.float64)
-        self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
+        self.raw = [model.DataArray(numpy.append(raw[first:], new, axis=0))]
 
     def _updateImage(self):
-        # convert the list into a DataArray
-        raw = self.raw  # read in one shot
-        count, date = raw[:, 0], raw[:, 1]
-        im = model.DataArray(count)
-        # save the relative time of each point as ACQ_DATE, unorthodox but should not
-        # cause much problems as the data is so special anyway.
-        if len(date) > 0:
-            age = date - date[-1]
-        else:
-            age = date  # empty
-        im.metadata[model.MD_ACQ_DATE] = age
-        assert len(im) == len(date)
-        assert im.ndim == 1
+        try:
+            if not self.raw:
+                return
 
-        self.image.value = im
+            # convert the list into a DataArray
+            raw = self.raw[0]  # read in one shot
+            count, date = raw[:, 0], raw[:, 1]
+            im = model.DataArray(count)
+            # save the relative time of each point as ACQ_DATE, unorthodox but should not
+            # cause much problems as the data is so special anyway.
+            if len(date) > 0:
+                age = date - date[-1]
+            else:
+                age = date  # empty
+            # TODO: use MD_TIME_LIST
+            im.metadata[model.MD_ACQ_DATE] = age
+            assert len(im) == len(date)
+            assert im.ndim == 1
+
+            self.image.value = im
+        except Exception:
+            logging.exception("Failed to generate chronogram")
 
     def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
@@ -922,6 +924,76 @@ class FluoStream(CameraStream):
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self)._onNewData(dataflow, data)
+
+
+class StreakCamStream(CameraStream):
+
+    def __init__(self, name, detector, dataflow,
+                 streak_unit, streak_delay, streak_unit_vas,
+                 emitter, emtvas=None, **kwargs):
+
+        # We use emission directly to control the emitter
+        if emtvas and "emission" in emtvas:
+            raise ValueError("emission VA cannot be made local")
+
+        super(StreakCamStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
+
+        # duplicate VAs for GUI except .timeRange VA (displayed on left for calibration)
+        streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas or set())
+        self._det_vas.update(streak_unit_vas)
+
+        self.streak_unit = streak_unit
+        self.streak_delay = streak_delay
+
+        # whenever .streakMode changes
+        # -> set .MCPGain = 0 and update .MCPGain.range
+        # This is important for HW safety reasons to not destroy the streak unit,
+        # when changing on of the VA while using a high MCPGain.
+        # While the stream is not active: range of possible values for MCPGain
+        # is limited to values <= current value to also prevent HW damage
+        # when starting to play the stream again.
+        try:
+            self.detStreakMode.subscribe(self._OnStreakSettings)
+            self.detMCPGain.subscribe(self._OnMCPGain)
+        except AttributeError:
+            raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
+
+    def _find_metadata(self, md):
+        md = super(LiveStream, self)._find_metadata(md)
+        if model.MD_TIME_LIST in self.raw[0].metadata:
+            md[model.MD_TIME_LIST] = self.raw[0].metadata[model.MD_TIME_LIST]
+        if model.MD_WL_LIST in self.raw[0].metadata:
+            md[model.MD_WL_LIST] = self.raw[0].metadata[model.MD_WL_LIST]
+        return md
+
+    # Override Stream._is_active_setter() in _base.py
+    def _is_active_setter(self, active):
+        self.active = super(StreakCamStream, self)._is_active_setter(active)
+        if self.active:
+            # make the full MCPGain range available when stream is active
+            self.detMCPGain.range = self.streak_unit.MCPGain.range
+        else:
+            self._resetMCPGainHW()
+            # only allow values <= current MCPGain value for HW safety reasons when stream inactive
+            self.detMCPGain.range = (0, self.detMCPGain.value)
+        return self.active
+
+    def _resetMCPGainHW(self):
+        """"Set HW MCPGain VA = 0, but keep GUI VA = previous value, when stream = inactive."""
+        self.streak_unit.MCPGain.value = 0
+
+    def _OnStreakSettings(self, value):
+        """Callback, which sets MCPGain GUI VA = 0,
+        if .timeRange and/or .streakMode GUI VAs have changed."""
+        self.detMCPGain.value = 0  # set GUI VA 0
+        self._OnMCPGain(value)  # update the .MCPGain VA
+
+    def _OnMCPGain(self, _=None):
+        """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
+        only values <= current value are allowed.
+        If stream is active the full range is available."""
+        if not self.active:
+            self.detMCPGain.range = (0, self.detMCPGain.value)
 
 
 class ScannerSettingsStream(Stream):
@@ -1151,13 +1223,7 @@ class RGBCameraStream(CameraStream):
         self.auto_bc.value = False  # Typically, it should be displayed as-is
 
     # TODO: handle brightness and contrast VAs
-    def _onAutoBC(self, enabled):
-        pass
-
-    def _onOutliers(self, outliers):
-        pass
-
-    def _onIntensityRange(self, irange):
+    def _recomputeIntensityRange(self):
         pass
 
     def _onActive(self, active):

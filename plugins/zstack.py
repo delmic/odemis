@@ -23,28 +23,27 @@ from __future__ import division
 
 from collections import OrderedDict
 from concurrent.futures import CancelledError
+import copy
 import logging
 import math
-import copy
-import numpy as np
+import numpy
 from odemis import model, dataio, acq
 from odemis.acq import stream
-from odemis.util import driver
 from odemis.acq.stream import MonochromatorSettingsStream, ARStream, \
     SpectrumStream, UNDEFINED_ROI, StaticStream
 import odemis.gui
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.util.dataio import splitext
+from odemis.model import DataArray
+from odemis.util import driver
 import os
 import time
 import wx
-from odemis.model._dataflow import DataArray
 
 
 class ZStackPlugin(Plugin):
     name = "Z Stack"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Anders Muskens"
     __license__ = "GPLv2"
 
@@ -93,10 +92,9 @@ class ZStackPlugin(Plugin):
         self.zstep.subscribe(self._update_exp_dur)
         self.numberofAcquisitions.subscribe(self._update_exp_dur)
         
-        self._acq_streams = None
-
+        self._acq_streams = None  # previously folded streams, for optimisation
         self._dlg = None
-        self.addMenu("Acquisition/ZStack...\tCtrl+T", self.start)
+        self.addMenu("Acquisition/ZStack...\tCtrl+B", self.start)
         
     def _acqRangeIsValid(self, acq_range):
         return self._zrange[0] <= acq_range <= self._zrange[1]
@@ -131,15 +129,12 @@ class ZStackPlugin(Plugin):
         nsteps = self.numberofAcquisitions.value
         speed = self.focus.speed.value['z']
         step_time = driver.estimateMoveDuration(abs(self.zstep.value), speed, 0.01)
-        ss, last_ss = self._get_acq_streams()
+        ss = self._get_acq_streams()
 
         sacqt = acq.estimateTime(ss)
         logging.debug("Estimating %g s acquisition for %d streams", sacqt, len(ss))
 
         dur = sacqt * nsteps + step_time * (nsteps - 1)
-        if last_ss:
-            dur += acq.estimateTime(ss + last_ss) - sacqt
-
         # Use _set_value as it's read only
         self.expectedDuration._set_value(math.ceil(dur), force_write=True)
 
@@ -166,7 +161,6 @@ class ZStackPlugin(Plugin):
         Return the streams that should be used for acquisition
         return:
            acq_st (list of streams): the streams to be acquired at every repetition
-           last_st (list of streamsintp): streams to be acquired at the end
         """
         if not self._dlg:
             return []
@@ -193,9 +187,8 @@ class ZStackPlugin(Plugin):
             # No special acquisition streams
             ss = live_st
 
-        last_ss = []
         self._acq_streams = acq.foldStreams(ss, self._acq_streams)
-        return self._acq_streams, last_ss
+        return self._acq_streams
 
     def start(self):
         # Fail if the live tab is not selected
@@ -255,6 +248,8 @@ class ZStackPlugin(Plugin):
         else:
             logging.warning("Got unknown return code %s", ans)
 
+        # Don't hold references
+        self._acq_streams = None
         if dlg:  # If dlg hasn't been destroyed yet
             dlg.Destroy()
 
@@ -262,8 +257,8 @@ class ZStackPlugin(Plugin):
         # images is a list of 3 dim data arrays.
         ret = []
         for image in images:
-            stack = np.dstack(image)
-            stack = np.swapaxes(stack, 1, 2)
+            stack = numpy.dstack(image)
+            stack = numpy.swapaxes(stack, 1, 2)
             ret.append(stack[0])
 
         # Add back metadata
@@ -279,7 +274,7 @@ class ZStackPlugin(Plugin):
 
         # For a negative pixel size, convert to a positive and flip the z axis
         if ps_z < 0:
-            ret = np.flipud(ret)
+            ret = numpy.flipud(ret)
             ps_z = -ps_z
 
         metadata3d[model.MD_PIXEL_SIZE] = (ps_x, ps_y, abs(ps_z))
@@ -347,7 +342,7 @@ class ZStackPlugin(Plugin):
         dlg.pauseSettings()
 
         nb = self.numberofAcquisitions.value
-        ss, last_ss = self._get_acq_streams()
+        ss = self._get_acq_streams()
 
         sacqt = acq.estimateTime(ss)
         

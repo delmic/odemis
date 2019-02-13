@@ -169,7 +169,7 @@ class TimelapsePlugin(Plugin):
            last_st (list of streams): streams to be acquired at the end
         """
         if not self._dlg:
-            return []
+            return [], []
 
         live_st = (self._dlg.view.getStreams() +
                    self._dlg.hidden_view.getStreams())

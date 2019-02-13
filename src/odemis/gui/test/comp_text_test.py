@@ -113,6 +113,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         test.gui_loop(0.1)
         sim.Char(ord('1'))
 
+        test.gui_loop(0.1)
         self.assertEqual(123456789, ctrl.GetValue())
         sim.Char(ord('\r'))
 
@@ -141,6 +142,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 1000000)
         self.assertEqual(ctrl.get_value_str(), u"1 Mm")
 
@@ -150,6 +152,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 44)
         self.assertEqual(ctrl.get_value_str(), u"44 m")
 
@@ -175,6 +178,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 1)
         self.assertEqual(ctrl.get_value_str(), u"1 px")
 
@@ -184,6 +188,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(ctrl.GetValue(), 44)
         self.assertEqual(ctrl.get_value_str(), u"44 px")
 
@@ -209,6 +214,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
         self.assertEqual(mctrl.get_value_str(), u"1 km")
 
@@ -219,6 +225,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), 1000)
         self.assertEqual(mctrl.get_value_str(), u"1 km")
 
@@ -228,8 +235,9 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Create illegal number
         for c in "e\r":
             sim.Char(ord(c))
-            test.gui_loop(0.1)
+            test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(mctrl.GetValue(), None)
         self.assertEqual(mctrl.get_value_str(), u"")
 
@@ -246,6 +254,7 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
+        test.gui_loop(0.1)
         self.assertEqual(wctrl.GetValue(), 44e-9)
         self.assertEqual(wctrl.get_value_str(), u"44 nW")
 

@@ -252,8 +252,10 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_lens = xrc.XRCCTRL(self, "btn_align_lens")
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
+        self.btn_align_streakcam = xrc.XRCCTRL(self, "btn_align_streakcam")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
+        self.btn_manualfocus = xrc.XRCCTRL(self, "btn_manualfocus")
         self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
         self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
@@ -273,6 +275,10 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
+        self.pnl_streak = xrc.XRCCTRL(self, "pnl_streak")
+        self.txt_StreakCalibFilename = xrc.XRCCTRL(self, "txt_StreakCalibFilename")
+        self.btn_open_streak_calib_file = xrc.XRCCTRL(self, "btn_open_streak_calib_file")
+        self.btn_save_streak_calib_file = xrc.XRCCTRL(self, "btn_save_streak_calib_file")
         self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
         self.slider_fibaligner = xrc.XRCCTRL(self, "slider_fibaligner")
         self.lbl_pfy = xrc.XRCCTRL(self, "lbl_pfy")
@@ -291,6 +297,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
         self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
+        self.vp_align_streak = xrc.XRCCTRL(self, "vp_align_streak")
         self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
@@ -380,6 +387,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
         self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
         self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
+        self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
         self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
@@ -442,6 +450,8 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
         self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
         self.vp_spatialspec = xrc.XRCCTRL(self, "vp_spatialspec")
+        self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
+        self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
         self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
@@ -597,8 +607,9 @@ class xrcfr_plugin(wx.Dialog):
         self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
         self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
-        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
+        self.pnl_info = xrc.XRCCTRL(self, "pnl_info")
         self.lbl_acquisition_info = xrc.XRCCTRL(self, "lbl_acquisition_info")
+        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
         self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -2635,7 +2646,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>5,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_mirror">
@@ -2659,7 +2670,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,2</cellpos>
+                        <cellpos>5,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_centering">
@@ -2682,7 +2693,30 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>5,2</cellpos>
+                        </object>&gt;
+                        <object class="sizeritem">
+                          <object class="GraphicRadioButton" name="btn_align_streakcam">
+                            <icon>img_icon_ico_fib_png</icon>
+                            <icon_on>img_icon_ico_fib_green_png</icon_on>
+                            <height>48</height>
+                            <face_colour>def</face_colour>
+                            <label>STREAK</label>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,3</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_fiber">
@@ -2705,7 +2739,7 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>5,4</cellpos>
                       </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
@@ -2744,13 +2778,31 @@ def __init_resources():
                   </object>
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
+                        <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_manualfocus">
+                          <hidden>1</hidden>
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <active_colour>#106090</active_colour>  <!-- TODO generic input -->
+                          <label>Manual focus</label>
+                          <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,0</cellpos>
+                        </object>
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>Position</label>
                         </object>
                         <flag>wxLEFT</flag>
                         <border>5</border>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>1,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitFloatSlider" name="slider_focus">
@@ -2767,9 +2819,9 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <option>1</option>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
                         <border>5</border>
-                        <cellpos>0,1</cellpos>
+                        <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_autofocus">
@@ -2785,7 +2837,7 @@ def __init_resources():
                         <flag>wxLEFT</flag>
                         <border>5</border>
                         <minsize>90,-1</minsize>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="wxGauge" name="gauge_autofocus">
@@ -2800,7 +2852,7 @@ def __init_resources():
                         <option>1</option>
                         <flag>wxALL|wxEXPAND</flag>
                         <border>7</border>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>2,1</cellpos>
                       </object>
                       <vgap>5</vgap>
                       <hgap>5</hgap>
@@ -3180,6 +3232,92 @@ def __init_resources():
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
             </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_streak">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Streak</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText">
+                              <label>Calibration File</label>
+                              <fg>#E5E5E5</fg>
+                              <font>
+                                <size>9</size>
+                                <style>normal</style>
+                                <weight>normal</weight>
+                                <underlined>0</underlined>
+                                <face>Ubuntu</face>
+                              </font>
+                            </object>
+                            <flag>wxALL|wxALIGN_CENTRE</flag>
+                            <border>5</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="wxTextCtrl" name="txt_StreakCalibFilename">
+                              <size>-1,-1</size>
+                              <value>Calibration not saved!</value>
+                              <fg>#2FA7D4</fg>
+                              <bg>#444444</bg>
+                              <style>wxBORDER_NONE|wxTE_READONLY</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>  <!-- ?? -->
+                              </XRCED>
+                            </object>
+                            <option>1</option>  <!-- ?? -->
+                            <flag>wxALL|wxEXPAND|wxALIGN_CENTRE</flag>
+                            <border>5</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_open_streak_calib_file">
+                              <height>16</height>
+                              <face_colour>def</face_colour>
+                              <label>Load...</label>
+                              <tooltip>Open a trigger calibration file.</tooltip>
+                            </object>
+                            <border>5</border>  <!-- distance to left side if flag wxLEFT-->
+                            <flag>wxLEFT|wxALIGN_CENTRE</flag>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_save_streak_calib_file">
+                              <height>16</height>
+                              <face_colour>def</face_colour>
+                              <label>Save...</label>
+                              <tooltip>Save the trigger calibration to a file.</tooltip>
+                            </object>
+                            <border>5</border>  <!-- distance to left side if flag wxLEFT-->
+                            <flag>wxLEFT|wxALIGN_CENTRE</flag>
+                          </object>
+                      </object>
+                      <flag>wxEXPAND|wxRIGHT</flag>
+                      <orient>wxHORIZONTAL</orient>
+                      <border>5</border>
+                  </object>
+                  <flag>wxALIGN_CENTRE</flag>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_fibaligner">
@@ -3480,6 +3618,12 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="ARLiveViewport" name="vp_align_center">
+            <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_align_streak">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
@@ -3981,6 +4125,11 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="PointSpectrumViewport" name="vp_sparc_bl">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -4508,6 +4657,18 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="SpatialSpectrumViewport" name="vp_spatialspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_temporalspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TimeSpectrumViewport" name="vp_timespec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
@@ -5632,7 +5793,7 @@ def __init_resources():
                 <flag>wxEXPAND</flag>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_gauge">
+                <object class="wxPanel" name="pnl_info">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxStaticText" name="lbl_acquisition_info">
@@ -5645,7 +5806,6 @@ def __init_resources():
                           <face>Ubuntu</face>
                           <encoding>UTF-8</encoding>
                         </font>
-                        <hidden>1</hidden>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -5654,6 +5814,19 @@ def __init_resources():
                       <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
                       <border>10</border>
                     </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <hidden>1</hidden>
+                  <bg>#4D4D4D</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel" name="pnl_gauge">
+                  <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
                         <size>-1,8</size>
@@ -5709,6 +5882,7 @@ def __init_resources():
                     </object>
                     <orient>wxVERTICAL</orient>
                   </object>
+                  <hidden>1</hidden>
                   <bg>#4D4D4D</bg>
                   <XRCED>
                     <assign_var>1</assign_var>

@@ -1,29 +1,32 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Jan 2014
 
-@author: Kimon Tsitsikas
+@author: Kimon Tsitsikas, Sabrina Rossberger
 
-Copyright © 2014 Kimon Tsitsikas, Delmic
+Copyright © 2014-2019 Kimon Tsitsikas, Sabrina Rossberger, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis.
+If not, see http://www.gnu.org/licenses/.
+"""
+
 from __future__ import division
 
 import math
 from scipy.spatial import Delaunay as DelaunayTriangulation
 from scipy.interpolate import LinearNDInterpolator
-from numpy import ma
 import numpy
 from odemis import model
 # import matplotlib.pyplot as plt
-
 
 # Functions to convert/manipulate Angle resolved image to polar projection
 # Based on matlab script created by Ernst Jan Vesseur (from AMOLF).
@@ -37,19 +40,18 @@ from odemis import model
 AR_XMAX = 13.25e-3  # m, the distance between the parabola origin and the cutoff position
 AR_HOLE_DIAMETER = 0.6e-3  # m, diameter of the hole in the mirror
 AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
-AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/(4f)
+AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/(4f): f: focal point of mirror (place of sample)
 
 
-def _extractAngleInformation(data, hole, dtype=None):
+def _ExtractAngleInformation(data, hole):
     """
     Calculates the corresponding theta and phi angles for each pixel in the input data.
     Calculates the corresponding intensity values for a given theta/phi combination
     for each pixel in the input data. Calculates a mask, which crops the data to angles,
     which are collectible by the system.
-    :param data (model.DataArray): The image that was projected on the CCD after being
+    :parameter data (model.DataArray): The image that was projected on the detector after being
       reflected on the parabolic mirror.
-    :param dtype (numpy dtype): intermediary dtype for computing the theta/phi data
-    :return:
+    :returns:
         theta_data: array containing theta values for each px in raw data
         phi_data: array containing phi values for each px in raw data
         intensity_data: array containing the measured intensity values for each px in raw data
@@ -58,7 +60,6 @@ def _extractAngleInformation(data, hole, dtype=None):
         circle_mask_dilated: mask used to crop the data for angles collectible by the system.
             Mask is dilated for visualization to avoid edge effects during triangulation
             and interpolation.
-
     """
 
     assert(len(data.shape) == 2)  # => 2D with greyscale
@@ -66,19 +67,15 @@ def _extractAngleInformation(data, hole, dtype=None):
     # Get the metadata
     try:
         pixel_size = data.metadata[model.MD_PIXEL_SIZE]
-        mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+        pole_x, pole_y = data.metadata[model.MD_AR_POLE]
         parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
     except KeyError:
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
-    if dtype is None:
-        dtype = numpy.float64
-
-    pol_pos = (mirror_x, mirror_y)
+    pole_pos = (pole_x, pole_y)
 
     # Crop the input image to half circle (set values outside of half circle zero)
-
-    cropped_image = _CropHalfCircle(data, pixel_size, pol_pos, hole=hole)
+    cropped_image = _CropHalfCircle(data, pixel_size, pole_pos, hole=hole)
 
     # return dilated circle_mask to crop input data
     # hole=False for dilated mask to avoid edge effects during interpolation
@@ -88,75 +85,112 @@ def _extractAngleInformation(data, hole, dtype=None):
     # should also not cause a problem when transforming to polar coordinates
     # (edge positions in mask are still edge positions after polar transform)
     offset_radius = 2
-    circle_mask_dilated = _CreateMirrorMask(data, pixel_size, pol_pos, offset_radius, hole=False)
-
-    theta_data = numpy.empty(shape=data.shape, dtype=dtype)
-    phi_data = numpy.empty(shape=data.shape, dtype=dtype)
-    intensity_data = numpy.empty(shape=data.shape)
+    circle_mask_dilated = _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius, hole=False)
 
     # For each pixel of the input ndarray, input metadata is used to
     # calculate the corresponding theta, phi and radiant intensity
-    image_x, image_y = data.shape
-    jj = numpy.linspace(0, image_y - 1, image_y)
-    xpix = mirror_x - jj  # x coordinates of the pixels
+    x_indices = numpy.linspace(0, data.shape[1] - 1, data.shape[1])  # list of px indices
+    # correct x coordinates to be 0 at the hole position
+    x_pos = x_indices - pole_pos[0]  # x coordinates of the pixels (horizontal)
 
-    # populate arrays with values
-    for i in xrange(image_x):
-        ypix = (i - mirror_y) + (2 * parabola_f) / pixel_size[1]  # y coordinates of the pixels
+    y_indices = numpy.linspace(0, data.shape[0] - 1, data.shape[0])  # list of px indices
+    # correct y coordinates to be 0 at the hole position
+    y_pos = (y_indices - pole_pos[1]) + (2 * parabola_f) / pixel_size[0]  # y coordinates of the pixels (vertical)
 
-        # TODO can we modify xpix and ypix so we only search for angles within half circle
-        # Finds the angles of emission by the sample for each px (x,y) in the raw data.
-        # These angles only depend on the mirror geometry.
-        # Each px in the raw data corresponds to a specific theta-phi combination
-        theta, phi, omega = _FindAngle(data, xpix, ypix, pixel_size)
+    # create two arrays with set of x and y coordinates and with same shape of data
+    x_array, y_array = numpy.meshgrid(x_pos, y_pos)
 
-        # theta_data: array containing theta values for each px in raw data
-        theta_data[i, :] = theta
-        # phi_data: array containing phi values for each px in raw data
-        phi_data[i, :] = phi
+    # TODO can we modify xpos and ypos so we only search for angles within half circle
+    # Finds the angles of emission by the sample for each px (x,y) in the raw data.
+    # These angles only depend on the mirror geometry.
+    # Each px in the raw data corresponds to a specific theta-phi combination
+    # theta_data: array containing theta values for each px in raw data
+    # phi_data: array containing phi values for each px in raw data
+    theta_data, phi_data, omega = _FindAngle(x_array, y_array, pixel_size, parabola_f)
 
-        # intensity_data contains the intensity values from raw data.
-        # It already reflects the shape of the mirror
-        # and is normalized by omega (solid angle:
-        # measure for photon collection efficiency depending on theta and phi)
-        intensity_data[i, :] = cropped_image[i] / omega
+    # intensity_data contains the intensity values from raw data.
+    # It already reflects the shape of the mirror
+    # and is normalized by omega (solid angle:
+    # measure for photon collection efficiency depending on theta and phi)
+    intensity_data = cropped_image / omega
 
     return theta_data, phi_data, intensity_data, circle_mask_dilated
 
 
-def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
+def _FindAngle(x_array, y_array, pixel_size, parabola_f):
+    """
+    For given pixels, finds the angle of the corresponding ray
+    :parameter x_array: (2D ndarray) x coordinates of the pixels
+    :parameter y_array: (2D ndarray) y coordinates of the pixel
+    :parameter pixel_size: (float, float) detector pixel size (X/Y)
+    :parameter parabola_f: (float) parabola_parameter=1/(4f): f: focal point of mirror (place of sample)
+    :returns: (2D ndarrays) theta, phi (the corresponding spherical coordinates for each pixel in detector)
+                              and omega (solid angle: angular range collected per px)
+    """
+
+    # TODO specify axis regarding parabolic mirror
+    x = x_array * pixel_size[0]
+    y = y_array * pixel_size[1]
+
+    r2 = x ** 2 + y ** 2
+    xfocus = (1 / (4 * parabola_f)) * r2 - parabola_f
+    xfocus2plusr2 = xfocus ** 2 + r2
+    sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
+
+    # theta
+    theta = numpy.arccos(y / sqrtxfocus2plusr2)
+
+    # phi
+    # negative xfocus to put phi0 and phi180 to match the raw data (convention we chose for display ar data)
+    # also map values from -pi to pi -> 0 to 2pi
+    phi = numpy.arctan2(x, -xfocus) % (2 * math.pi)
+
+    # omega
+    omega = (pixel_size[0] * pixel_size[1]) * \
+            ((1 / (4 * parabola_f)) * r2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+
+    # Note: the latest version of this function at AMOLF provides a 4th value:
+    # irp, the mirror reflectivity for different emission angles.
+    # However, it only has a small effect on final output and depends on the
+    # wavelength and polarisation of the light, which we do not know.
+
+    return theta, phi, omega
+
+
+def AngleResolved2Polar(data, output_size, hole=True):
     """
     Converts an angle resolved image to polar (aka azimuthal) projection
-    data (model.DataArray): The image that was projected on the CCD after being
+    :parameter data: (model.DataArray) The image that was projected on the detector after being
       reflected on the parabolic mirror. The flat line of the D shape is
       expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE
       metadata. Pixel size is the sensor pixel size * binning / magnification.
-    output_size (int): The size of the output DataArray (assumed to be square)
-    hole (boolean): Crop the pole if True
-    dtype (numpy dtype): intermediary dtype for computing the theta/phi data
-    returns (model.DataArray): converted image in polar view
+    :parameter output_size: (int) The size of the output DataArray (assumed to be square)
+    :parameter hole: (boolean) Crop the pole if True
+    :returns: (model.DataArray) converted image in polar view
     """
 
     # calculate the corresponding theta and phi angles based on the geometrical properties
     # of the mirror for each px on the raw data
-    theta_data, phi_data, intensity_data, circle_mask_dilated = \
-        _extractAngleInformation(data, hole, dtype)
+    # TODO the angles are all the same for a given mirror shape
+    # TODO runtime could be improved by calc mirror shape with pole pos at center and always move data to center
+    # TODO implement: if not theta, phi, intensity -> calc angles
+    theta_data, phi_data, intensity_data, circle_mask_dilated = _ExtractAngleInformation(data, hole)
 
     # Crop the raw input data based on the mirror mask (circle_mask) to save memory and improve runtime.
     # We use a dilated mask for cropping to avoid edge effects during triangulation and interpolation.
     # The additional data points (due to dilation) will be set to zero during the interpolation step by intensity_data.
-    theta_data_masked = theta_data[circle_mask_dilated]
-    phi_data_masked = phi_data[circle_mask_dilated]
-    intensity_data_masked = intensity_data[circle_mask_dilated]
+    theta_data_masked = theta_data[circle_mask_dilated]  # list of values for theta within mask
+    phi_data_masked = phi_data[circle_mask_dilated]  # list of values for phi within mask
+    intensity_data_masked = intensity_data[circle_mask_dilated]  # list of values for intensity within mask
 
     # Convert the spherical coordinates theta and phi into polar coordinates for display in GUI
-    # theta equals radial distance to center of whole (r) (0 - 90 degree)
-    # phi equals phi (0 - 360 degree)
-    h_output_size = output_size / 2
-    theta = theta_data_masked * (h_output_size / math.pi * 2)
-    phi = phi_data_masked
-    theta_data_polar = numpy.cos(phi) * theta
-    phi_data_polar = numpy.sin(phi) * theta
+    # theta equals radial distance r to center of whole (0 - 90 degree)
+    # phi equals angle (0 - 360 degree)
+    # map list of theta to r: map max theta (pi/2) to half the output_size of the final image
+    r = theta_data_masked * output_size / math.pi  # same as: theta_data_masked * (output_size/2) / (math.pi/2)
+    angle = phi_data_masked  # 0 - 2pi
+    x_data_polar = numpy.cos(angle) * r  # x = r * cos(angle)
+    y_data_polar = numpy.sin(angle) * r  # y = r * sin(angle)
 
     # Multiple theta-phi combinations will be mapped to the same px in the output image after polar-transformation.
     # Therefore, not all px in the output image are populated.
@@ -169,18 +203,24 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     # These intensity values are interpolated from the intensity values of the positions spanning the triangle they
     # are contained in (triangle from delaunay triangulation).
     # Grid positions located outside of any delaunay triangle are set to NaN.
-    triang = DelaunayTriangulation(numpy.array([theta_data_polar, phi_data_polar]).T)
+
+    # Note: delaunay triangulation input points: ndarray of floats, shape (npoints, ndim) -> transpose data for input
+    data_transposed = numpy.array([x_data_polar, y_data_polar]).T  # transpose moves angle orientation from CCW to CW
+    triang = DelaunayTriangulation(data_transposed)
     # create interpolation object
     interp = LinearNDInterpolator(triang, intensity_data_masked.flat)
-    # create grid of positions for interpolation
-    xi, yi = numpy.meshgrid(numpy.linspace(-h_output_size, h_output_size, output_size),
-                            numpy.linspace(-h_output_size, h_output_size, output_size))
+    # create grid of positions for interpolation: neg to pos as x/y data polar
+    # contain now values from -output_size/2 to +output_size/2
+    xi, yi = numpy.meshgrid(numpy.linspace(-output_size/2, output_size/2, output_size),
+                            numpy.linspace(-output_size/2, output_size/2, output_size))
+
     # interpolate
     qz = interp(xi, yi)
-    qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
+    # polar coordinate transformation starts with 0 at horizontal axis by definition
+    qz = numpy.rot90(qz)  # rotate by 90 degrees CCW so we start 0 at top (angles will be CW orientated)
     qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation
     assert numpy.all(qz > -1)  # there should be no negative values, some very small due to interpolation are possible
-    qz[qz < 0] = 0  # all negative values (due to interpolation) set to zero
+    qz[qz < 0] = 0  # all negative values (due to interpolation or wrong background subtraction) set to zero
 
     # plot the data
     # plt.figure()
@@ -199,25 +239,26 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     return result
 
 
-def AngleResolved2Rectangular(data, output_size, hole=True, dtype=None):
+def AngleResolved2Rectangular(data, output_size, hole=True):
     """
     Converts an angle resolved image to equirectangular (aka cylindrical)
       projection (ie, phi/theta axes)
-    data (model.DataArray): The image that was projected on the CCD after being
+      Note: Even if the input contains only positive values, there might be some small negative
+      values in the output due to interpolation. Also note, that NaNs occurring in the
+      interpolation step are set to 0.
+    :parameter data: (model.DataArray) The image that was projected on the detector after being
       reflected on the parabolic mirror. The flat line of the D shape is
       expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE
       metadata. Pixel size is the sensor pixel size * binning / magnification.
-    output_size (int, int): The size of the output DataArray (theta, phi),
+    :parameter output_size: (int, int) The size of the output DataArray (theta, phi),
       not including the theta/phi angles at the first row/column
-    hole (boolean): Crop the pole if True
-    dtype (numpy dtype): intermediary dtype for computing the theta/phi data
-    returns (model.DataArray): converted image in equirectangular view
+    :parameter hole: (boolean) Crop the pole if True
+    :returns: (model.DataArray) converted image in equirectangular view
     """
 
     # calculate the corresponding theta and phi angles based on the geometrical properties
     # of the mirror for each px on the raw data
-    theta_data, phi_data, intensity_data, circle_mask_dilated = \
-        _extractAngleInformation(data, hole, dtype)
+    theta_data, phi_data, intensity_data, circle_mask_dilated = _ExtractAngleInformation(data, hole)
 
     # extend the data range to take care of edge effects during interpolation step
     # extend the range of phi from 0 - 2pi to -2pi to 2pi to take care of periodicity of phi
@@ -233,19 +274,23 @@ def AngleResolved2Rectangular(data, output_size, hole=True, dtype=None):
     # circle_mask_dilated_2 = numpy.append(numpy.append(circle_mask_dilated[:, -num:], circle_mask_dilated, axis=1),
     #                                      circle_mask_dilated[:, :num], axis=1)
 
-    # So duplicating the image and shifting to [-pi:pi] later is already the minimum data that
-    # should be used for a sufficient interpolation.
-    phi_data_doubled = numpy.append((phi_data - 2 * math.pi), phi_data, axis=1)
-    theta_data_doubled = numpy.tile(theta_data, (1, 2))
-    intensity_data_doubled = numpy.tile(intensity_data, (1, 2))
-    # mirror mask
-    circle_mask_dilated_doubled = numpy.tile(circle_mask_dilated, (1, 2))
+    # So triple the data for theta, intensity and mask, and extend phi to cover the range from -2pi to +2pi
+    # for interpolation only use the data from -pi to +3pi, which is sufficient to take care of most edge effects
+    low_border = int(phi_data.shape[1] - phi_data.shape[1]/2 + 1)
+    high_border = int(phi_data.shape[1]*2 + phi_data.shape[1]/2 - 1)
+
+    phi_data_doubled = numpy.append(
+                       numpy.append(phi_data - 2 * math.pi, phi_data, axis=1),
+                       phi_data + 2 * math.pi, axis=1)[:, low_border: high_border]  # -pi to +3pi
+    theta_data_doubled = numpy.tile(theta_data, (1, 3))[:, low_border: high_border]
+    intensity_data_doubled = numpy.tile(intensity_data, (1, 3))[:, low_border: high_border]
+    circle_mask_dilated_doubled = numpy.tile(circle_mask_dilated, (1, 3))[:, low_border: high_border]
 
     # Crop the raw input data based on the mirror mask (circle_mask) to save memory and improve runtime.
     # We use a dilated mask for cropping to avoid edge effects during triangulation.
     # The additional data points (due to dilation) will be set to zero during the interpolation step by intensity_data.
-    theta_data_masked = theta_data_doubled[circle_mask_dilated_doubled]
-    phi_data_masked = phi_data_doubled[circle_mask_dilated_doubled]
+    theta_data_masked = theta_data_doubled[circle_mask_dilated_doubled]  # list containing values from 0 to +pi/2
+    phi_data_masked = phi_data_doubled[circle_mask_dilated_doubled]  # list containing values from -pi to + 3pi
     intensity_data_masked = intensity_data_doubled[circle_mask_dilated_doubled]
 
     # Multiple theta-phi combinations will be mapped to the same px in the output image after polar-transformation.
@@ -259,106 +304,34 @@ def AngleResolved2Rectangular(data, output_size, hole=True, dtype=None):
     # These intensity values are interpolated from the intensity values of the positions spanning the triangle they
     # are contained in (triangle from delaunay triangulation).
     # Grid positions located outside of any delaunay triangle are set to NaN.
-    triang = DelaunayTriangulation(numpy.array([theta_data_masked, phi_data_masked]).T)
+
+    # Note: delaunay triangulation input points: ndarray of floats, shape (npoints, ndim) -> transpose data for input
+    data_transposed = numpy.array([phi_data_masked, theta_data_masked]).T
+    triang = DelaunayTriangulation(data_transposed)
     # create interpolation object
     interp = LinearNDInterpolator(triang, intensity_data_masked.flat)
     # create grid of positions for interpolation
-    xi, yi = numpy.meshgrid(numpy.linspace(0, numpy.pi / 2, output_size[0]),
-                            numpy.linspace(-numpy.pi, numpy.pi, output_size[1]))
+    xi, yi = numpy.meshgrid(numpy.linspace(0, 2 * numpy.pi, output_size[1]),
+                            numpy.linspace(0, numpy.pi / 2, output_size[0]))
 
     # interpolate
     qz = interp(xi, yi)
-    qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
-    qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation
-    assert numpy.all(qz > -1)  # there should be no negative values, some very small due to interpolation are possible
-    qz[qz < 0] = 0  # all negative values (due to interpolation) set to zero
-
-    # plot optional
-    # plt.figure()
-    # plt.imshow(theta_data)
-    # plt.figure()
-    # plt.imshow(phi_data)
-    # plt.figure()
-    # plt.imshow(data)
-    # plt.figure()
-    # plt.imshow(mask)
-    # plt.figure()
-    # plt.imshow(intensity_data)
-    # plt.figure()
-    # plt.imshow(qz)
-
-    # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column
-    # add the phi and theta values as an extra line/column in order to be displayed in the csv-file
-    # attach theta as first column
-    theta_lin = numpy.linspace(0, math.pi / 2, output_size[0])
-    qz = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), qz, axis=1)
-    # attach phi as first row
-    phi_lin = numpy.linspace(0, 2 * math.pi, output_size[1])
-    phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
-    qz = numpy.append(phi_lin, qz, axis=0)
+    qz[numpy.isnan(qz)] = 0  # remove NaNs created during interpolation but keep negative values 
 
     result = model.DataArray(qz, data.metadata)
 
     return result
 
 
-def _FindAngle(data, xpix, ypix, pixel_size):
-    """
-    For given pixels, finds the angle of the corresponding ray
-    data (model.DataArray): The DataArray with the image
-    xpix (numpy.array): x coordinates of the pixels
-    ypix (float): y coordinate of the pixel
-    pixel_size (2 floats): CCD pixelsize (X/Y)
-    returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd)
-                              and omega (solid angle)
-    """
-    parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
-    y = xpix * pixel_size[0]
-    z = ypix * pixel_size[1]
-    r2 = y ** 2 + z ** 2
-    xfocus = (1 / (4 * parabola_f)) * r2 - parabola_f
-    xfocus2plusr2 = xfocus ** 2 + r2
-    sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
-
-    # theta
-    theta = numpy.arccos(z / sqrtxfocus2plusr2)
-
-    # phi
-    phi = numpy.arctan2(y, xfocus) % (2 * math.pi)
-
-    # omega
-    # omega = (pixel_size[0] * pixel_size[1]) * ((1 / (2 * parabola_f)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
-    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (4 * parabola_f)) * r2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
-
-    # Note: the latest version of this function at AMOLF provides a 4th value:
-    # irp, the mirror reflectivity for different emission angles.
-    # However, it only has a small effect on final output and depends on the
-    # wavelength and polarisation of the light, which we do not know.
-
-    return theta, phi, omega
-
-
-def _FindPxInRawImage(data, xpix, ypix, pixel_size):
-    """
-    # TODO qz will be still the return value
-    # reverse order for visualization
-    # initialize qz for display
-    # populate qz with values from raw data by finding correct angle
-    # need to know which px in raw data corresponds to final output
-    """
-    pass
-
-
 def ARBackgroundSubtract(data):
     """
     Subtracts the "baseline" (i.e. the average intensity of the background) from the data.
     This function can be called before AngleResolved2Polar in order to take a better data output.
-    data (model.DataArray): The DataArray with the data. Must be 2D.
+    :parameter data: (model.DataArray) The data array with the data. Must be 2D.
      Can have metadata MD_BASELINE to indicate the average 0 value. If not,
      it must have metadata MD_PIXEL_SIZE and MD_AR_POLE
-    returns (model.DataArray): Filtered data
+    :returns: (model.DataArray) background corrected data
     """
-    baseline = 0
     try:
         # If available, use the baseline from the metadata, as it's much faster
         baseline = data.metadata[model.MD_BASELINE]
@@ -371,7 +344,7 @@ def ARBackgroundSubtract(data):
         except KeyError:
             raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
         circle_mask = _CreateMirrorMask(data, pxs, pole_pos, hole=False)
-        masked_image = ma.array(data, mask=circle_mask)
+        masked_image = numpy.ma.array(data, mask=circle_mask)
 
         # Calculate the average value of the outside pixels
         baseline = masked_image.mean()
@@ -391,11 +364,13 @@ def _CropHalfCircle(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     """
     Crops the image to half circle shape based on focus_distance, xmax,
       parabola_f, and hole_diameter
-    data (model.DataArray): The DataArray with the image
-    pixel_size (float, float): effective pixel sie = sensor_pixel_size * binning / magnification
-    pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
-    hole (boolean): Crop the area around the pole if True
-    returns (model.DataArray): Cropped image
+    :parameter data: (model.DataArray) The data array with the image
+    :parameter pixel_size: (float, float) effective pixel sie = sensor_pixel_size * binning / magnification
+    :parameter pole_pos: (float, float) x/y coordinates of the pole (MD_AR_POLE)
+    :parameter offset_radius: (int) offset of the radius in px to dilate the mask (takes care of edge effects
+    during triangulation and interpolation steps)
+    :parameter hole: (boolean) Crop the area around the pole if True
+    :returns: (model.DataArray) Cropped image
     """
     # Create mirror mask and apply to the image
     circle_mask = _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius, hole)
@@ -407,13 +382,13 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     """
     Creates half circle mask (i.e. True inside half circle, False outside) based on
     parabola_f and focus_distance values in Cartesian coordinates.
-    data (model.DataArray): The DataArray with the image
-    pixel_size (float, float): effective pixel size = sensor_pixel_size * binning / magnification
-    pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
-    offset_radius (int): offset of the radius in px to dilate the mask (takes care of edge effects
+    :parameter data: (model.DataArray) The data array with the image
+    :parameter pixel_size: (float, float) effective pixel size = sensor_pixel_size * binning / magnification
+    :parameter pole_pos: (float, float) x/y coordinates of the pole (MD_AR_POLE)
+    :parameter offset_radius: (int) offset of the radius in px to dilate the mask (takes care of edge effects
     during triangulation and interpolation steps)
-    hole (boolean): Crop the area around the pole if True
-    returns (boolean ndarray): Mask
+    :parameter hole: (boolean) Crop the area around the pole if True
+    :returns: (boolean ndarray) Mask
     """
     xmax = data.metadata.get(model.MD_AR_XMAX, AR_XMAX)
     hole_diameter = data.metadata.get(model.MD_AR_HOLE_DIAMETER, AR_HOLE_DIAMETER)
@@ -447,5 +422,4 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
         circle_mask = numpy.where(circle_mask_hole, 0, circle_mask)
 
     return circle_mask
-
 

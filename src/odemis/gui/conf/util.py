@@ -684,6 +684,9 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                                      va_2_ctrl=set_ctrl, ctrl_2_va=text_get,
                                      events=wx.EVT_TEXT_ENTER)
 
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_TEXT_ENTER, change_callback)
+
     elif control_type in (odemis.gui.CONTROL_SAVE_FILE, odemis.gui.CONTROL_OPEN_FILE):
         val = va.value
         if not val:

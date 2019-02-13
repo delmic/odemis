@@ -529,6 +529,7 @@ the :py:attr:`Axis.choices` attribute (e.g., switch).
         is on going, the update argument will have no effect, and the new requested
         move will take place as a standard move.
 
+.. _data-and-metadata:
 
 Data and Metadata
 =================

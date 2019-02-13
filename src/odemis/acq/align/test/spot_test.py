@@ -26,7 +26,7 @@ import numpy
 from odemis import model
 import odemis
 from odemis.acq.align import spot
-from odemis.dataio import hdf5
+from odemis.dataio import hdf5, tiff
 from odemis.driver.actuator import ConvertStage
 from odemis.util import test, mock
 import os
@@ -41,6 +41,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"  # 4x4
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
+
 
 class TestSpotAlignment(unittest.TestCase):
     """
@@ -156,6 +157,70 @@ class FakeCCD(mock.FakeCCD):
             output = model.DataArray(abs(sim_img), self.fake_img.metadata)
             return output
 
+
+class TestFindGridSpots(unittest.TestCase):
+    """
+    Unit test class to test the behavior of FindGridSpots in odemis.util.spot.
+    """
+
+    def test_find_grid_close_to_image_edge(self):
+        """
+        Create an image with a grid of 8 by 8 spots near the edge of the image. Then test if the spots are found
+        in the correct coordinates.
+        """
+        # # set a grid of 8 by 8 points to 1 at the top left of the image
+        image = numpy.zeros((256, 256))
+        image[4:100:12, 4:100:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(4, 100, 12)
+        xx, yy = numpy.meshgrid(xv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=1)
+        # set a grid of 8 by 8 points to 1 at the bottom right of the image
+        image = numpy.zeros((256, 300))
+        image[168:253:12, 212:297:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(168, 253, 12)
+        yv = numpy.arange(212, 297, 12)
+        xx, yy = numpy.meshgrid(yv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1),
+                                                decimal=1)
+
+    def test_find_grid(self):
+        """
+        Create an image with a grid of 8 by 8 spots. Then test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct.
+        """
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(image, (8, 8))
+        self.assertAlmostEqual(rotation, 0, places=4)
+        # create a grid that contains the coordinates of the spots
+        xv = numpy.arange(54, 150, 12)
+        xx, yy = numpy.meshgrid(xv, xv)
+        grid = numpy.column_stack((xx.ravel(), yy.ravel()))
+        numpy.testing.assert_array_almost_equal(numpy.sort(spot_coordinates, axis=1), numpy.sort(grid, axis=1), decimal=2)
+        numpy.testing.assert_array_almost_equal(translation, numpy.array([96, 96]), decimal=3)
+        numpy.testing.assert_array_almost_equal(scaling, numpy.array([12, 12]), decimal=3)
+
+    def test_find_grid_on_image(self):
+        """
+        Load an image with known spot coordinates, test if the spots are found in the correct coordinates and
+        that the rotation, scaling and translation are correct.
+        """
+        grid_spots = numpy.load(os.path.join(TEST_IMAGE_PATH, "multiprobe01_grid_spots.npz"))
+        filename = os.path.join(TEST_IMAGE_PATH, "multiprobe01.tiff")
+        img = tiff.open_data(filename).content[0].getData()
+        spot_coordinates, translation, scaling, rotation = spot.FindGridSpots(img, (14, 14))
+        numpy.testing.assert_array_almost_equal(spot_coordinates, grid_spots['spot_coordinates'])
+        numpy.testing.assert_array_almost_equal(translation, grid_spots['translation'], decimal=3)
+        numpy.testing.assert_array_almost_equal(scaling, grid_spots['scaling'], decimal=3)
+        self.assertAlmostEqual(rotation, grid_spots['rotation'])
 
 
 if __name__ == '__main__':

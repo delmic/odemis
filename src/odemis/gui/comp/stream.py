@@ -29,7 +29,7 @@ from decorator import decorator
 import logging
 from odemis import acq, gui
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
-    FG_COLOUR_DIS
+    FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE
 from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
@@ -758,7 +758,7 @@ class StreamPanel(wx.Panel):
 
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                    icon=img.getBitmap("icon/ico_contrast.png"),
-                                                   label="Auto")
+                                                   label="Auto", active_colour=FG_COLOUR_RADIO_ACTIVE)
         btn_autobc.SetToolTip("Toggle image auto brightness/contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
@@ -806,7 +806,7 @@ class StreamPanel(wx.Panel):
         # accuracy to avoid rounding.
 
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
-        tooltip_txt = "Value mapped to black"
+        tooltip_txt = "Values below are mapped to black [cts/px]."
         lbl_lowi.SetToolTip(tooltip_txt)
 
         txt_lowi = FloatTextCtrl(self._panel, -1,
@@ -821,7 +821,7 @@ class StreamPanel(wx.Panel):
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
 
-        tooltip_txt = "Value mapped to white"
+        tooltip_txt = "Values above are mapped to white [cts/px]."
         lbl_highi.SetToolTip(tooltip_txt)
         txt_highi = FloatTextCtrl(self._panel, -1,
                                   self.stream.intensityRange.value[1],
@@ -1295,6 +1295,7 @@ class StreamBar(wx.Panel):
         acq.stream.CameraStream,
         acq.stream.ARSettingsStream,
         acq.stream.SpectrumSettingsStream,
+        acq.stream.TemporalSpectrumSettingsStream,
         acq.stream.MonochromatorSettingsStream,
         acq.stream.MomentOfInertiaLiveStream,
         acq.stream.CameraCountStream,

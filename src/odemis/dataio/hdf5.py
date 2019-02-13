@@ -424,14 +424,6 @@ def _read_image_info(group):
     except Exception:
         logging.warning("Failed to parse TOffset info", exc_info=True)
 
-    try:
-        toffset = float(group["TOffsetRelative"][()])
-        md[model.MD_TIME_OFFSET] = toffset
-    except KeyError:
-        pass
-    except Exception:
-        logging.warning("Failed to parse TOffsetRelative info", exc_info=True)
-
     # Scale pixel size
     try:
         px_x, px_y, px_z = None, None, None
@@ -459,55 +451,95 @@ def _read_image_info(group):
     except Exception:
         logging.warning("Failed to parse XY scale", exc_info=True)
 
-    # Time scale
+    # Time dimensions: If the data has a T dimension larger than 1, it has a list of
+    # time stamps (one per pixel).
+    # Odemis v2.8 (and earlier): For time correlator data, the T dimension was also of
+    # length 1, which is also the case for most other data sets. However, the difference
+    # is that the metadata includes MD_TIME_OFFSET (saved as "TOffsetRelative" in h5) and
+    # MD_PIXEL_DUR (saved as T dim). Based on pixel duration (time for one px) and the
+    # pixel offset (time of the 1.px), the time stamps for the following px are calculated.
     try:
-        for dim in dataset.dims:
+        for i, dim in enumerate(dataset.dims):
             if dim.label == "T" and dim:
-                state = _h5svi_get_state(dim[0])
-                if state != ST_REPORTED:
-                    # Only set as real metadata if it was actual information
-                    break
-                pxd = float(dim[0][()])
-                md[model.MD_PIXEL_DUR] = pxd
-    except Exception:
-        logging.warning("Failed to parse T scale", exc_info=True)
+                # add time list to metadata, containing info on time stamp per px if available
+                if dim[0].shape == (dataset.shape[i],):
+                    md[model.MD_TIME_LIST] = dim[0][...].tolist()
 
-    # Wavelength is only if the data has a C dimension and it has two numbers
-    # that represent the range of the monochromator bandwidth or the offset and
-    # scale (linear polynomial) or it has a list of wavelengths (one per pixel).
-    # To distinguish between polynomial and monochromator wavelength we just
-    # check if the shape of the dataset equals to 1, which implies single-pixel
-    # data coming from the monochromator.
+                # handle old data acquired with Odemis v2.8 and earlier,
+                # which still has pixel_duration and time_offset in MD
+                elif dim[0].shape == ():  # T has only one entry
+                    try:
+                        toffset = float(group["TOffsetRelative"][()])
+                    except KeyError:
+                        break
+                    state = _h5svi_get_state(dim[0])
+                    if state != ST_REPORTED:
+                        # Only set as real metadata if it was actual information
+                        break
+                    pxd = float(dim[0][()])
+                    # create TIME_LIST based on time_offset and pixel_dur
+                    md[model.MD_TIME_LIST] = numpy.arange(pxd, pxd * (dataset.shape[i] + 1),
+                                                          (toffset + pxd)).tolist()
+
+    except Exception:
+        logging.warning("Failed to parse T dimension.", exc_info=True)
+
+    # Color dimension: If the data has a C dimension larger than 1, it has a list of
+    # wavelength values (one per pixel).
+
+    # Odemis v2.2 (and earlier): For monochromator and spectrograph data, the C dimension
+    # is calculated based on the C offset (wl offset) and polynomial coefficients saved in the C dim.
+    # Theoretically, multiple coefficients (higher orders) can be contained in C dim.
+    # However, practically only data with first order coefficients "b" (linear) were recorded
+    # (wl = a + bx). As a result, C dim is always of length 1.
+
+    # Distinguishing between polynomial and monochromator data is done by checking the shape
+    # of the data set. For monochromator data the shape equals 1, which implies single-pixel data.
+
+    # Monochromator: The coefficient saved in C dim corresponds to the wavelength range covered by
+    # the pixel size (bandwidth) of the single px detector. The metadata includes MD_OUT_WL
+    # (bandwidth of the monochromator), which is a tuple of (wl offset, wl offset + bandwidth).
+
+    # Spectrograph: The metadata includes MD_WL_POLYNOMIAL (conversion from px to wl), where
+    # the first entry corresponds to the wl offset "a" and the second to the coefficient "b" for the
+    # polynomial of first order (wl = a + bx).
+    # Based on polynomial the wavelength values for all px can be calculated elsewhere
+    # (see odemis.util.spectrum.get_wavelength_per_pixel).
+
     # Note that not all data has information, for example RGB images, or
-    # fluorescence images have no scale (but the SVI flavour has several
-    # metadata related in the PhysicalData group).
+    # fluorescence images have no dimension scale (dim = None)
+    # (but the SVI flavour has several metadata related in the PhysicalData group).
     try:
         for i, dim in enumerate(dataset.dims):
             if dim.label == "C" and dim:
+                # add wl list to metadata, containing info on wavelength value per px if available
                 if dim[0].shape == (dataset.shape[i],):
-                    md[model.MD_WL_LIST] = map(float, dim[0][...].tolist())
-                elif dim[0].shape == ():
+                    md[model.MD_WL_LIST] = dim[0][...].tolist()
+
+                # handle old data acquired with Odemis v2.2 and earlier,
+                # which still has WL_POLYNOMIAL (spectrograph) or OUT_WL (monochromator) in MD
+                elif dim[0].shape == ():  # C has only one entry
                     if isinstance(group["COffset"], basestring):
                         # Only to support some files saved with Odemis 2.3-alpha
                         logging.warning("COffset is a string, not officially supported")
                         md[model.MD_OUT_WL] = group["COffset"]
                     else:
-                        pn = [float(group["COffset"][()]),
-                              float(dim[0][()])]
+                        # read polynomial: first is C offset, second coefficient polynomial first order (linear)
+                        pn = [float(group["COffset"][()]), float(dim[0][()])]
+                        # check if monochromator data (1-px detector)
                         if dataset.shape[i] == 1:
                             # To support some files saved with Odemis 2.2
                             # Now MD_OUT_WL is only mapped to EmissionWavelength
-                            logging.info("Updating MD_OUT_WL from DimensionScaleC, only supported in backward compatible mode")
+                            logging.info("Updating MD_OUT_WL from DimensionScaleC, "
+                                         "only supported in backward compatible mode")
+                            # monochromator bandwidth: (wl offset, wl offset + wl range covered by px)
                             md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
+                        # spectrograph etc. (wl offset, linear coefficient polynomial)
                         else:
                             md[model.MD_WL_POLYNOMIAL] = pn
 
-            elif dim.label == "T" and dim:
-                if dim[0].shape == (dataset.shape[i],):
-                    md[model.MD_TIME_LIST] = map(float, dim[0][...].tolist())
-
     except Exception:
-        logging.warning("Failed to parse C scale", exc_info=True)
+        logging.warning("Failed to parse C dimension.", exc_info=True)
 
     try:
         rot = group["Rotation"]
@@ -796,11 +828,11 @@ def _parse_physical_data(pdgroup, da):
 
         try:
             ds = pdgroup["MCPGain"]
-            MCPgain = float(ds[i])
+            MCPGain = float(ds[i])
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_STREAK_MCPGAIN] = MCPgain
+            md[model.MD_STREAK_MCPGAIN] = MCPGain
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -1158,8 +1190,8 @@ def _add_image_metadata(group, image, mds):
     # Streak camera info (only meaningful for SPARC with streak camera)
     # Streak unit: time range (float) for streaking
     timeRange, st_timeRange = [], []
-    # Streak unit: MCPgain (float)
-    MCPgain, st_MCPgain = [], []
+    # Streak unit: MCPGain (float)
+    MCPGain, st_MCPGain = [], []
     # Streak unit: streak mode (bool)
     streakMode, st_streakMode = [], []
     # Streak delay generator: trigger delay (float) for starting to streak
@@ -1227,11 +1259,11 @@ def _add_image_metadata(group, image, mds):
             timeRange.append("")
             st_timeRange.append(ST_INVALID)
         if model.MD_STREAK_MCPGAIN in md:
-            MCPgain.append(md[model.MD_STREAK_MCPGAIN])
-            st_MCPgain.append(ST_REPORTED)
+            MCPGain.append(md[model.MD_STREAK_MCPGAIN])
+            st_MCPGain.append(ST_REPORTED)
         else:
-            MCPgain.append("")
-            st_MCPgain.append(ST_INVALID)
+            MCPGain.append("")
+            st_MCPGain.append(ST_INVALID)
         if model.MD_STREAK_MODE in md:
             streakMode.append(md[model.MD_STREAK_MODE])
             st_streakMode.append(ST_REPORTED)
@@ -1282,9 +1314,9 @@ def _add_image_metadata(group, image, mds):
     if not all(st == ST_INVALID for st in st_timeRange):
         gp["TimeRange"] = timeRange
         _h5svi_set_state(gp["TimeRange"], st_timeRange)
-    if not all(st == ST_INVALID for st in st_MCPgain):
-        gp["MCPGain"] = MCPgain
-        _h5svi_set_state(gp["MCPGain"], st_MCPgain)
+    if not all(st == ST_INVALID for st in st_MCPGain):
+        gp["MCPGain"] = MCPGain
+        _h5svi_set_state(gp["MCPGain"], st_MCPGain)
     if not all(st == ST_INVALID for st in st_streakMode):
         gp["StreakMode"] = streakMode
         _h5svi_set_state(gp["StreakMode"], st_streakMode)

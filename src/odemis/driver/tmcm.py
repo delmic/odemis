@@ -354,11 +354,10 @@ class TMCLController(model.Actuator):
                 phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
                 self._ref_max_length[i] = phy_rng[1] - phy_rng[0]
             else:
-                # For safety, for referencing timeout, consider that the a range
-                # is not too long. If it times out, the user should specify a
-                # axis range.
-                # => 50 mm.
-                self._ref_max_length[i] = 50e-3  # m
+                # For safety, for referencing timeout, consider that the range
+                # is not too long (ie, 4M µsteps).
+                # If it times out, the user should specify an axis range.
+                self._ref_max_length[i] = sz * 4e6  # m
 
             if not isinstance(unit[i], basestring):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
@@ -1356,7 +1355,7 @@ class TMCLController(model.Actuator):
         # Guess the maximum duration based on the whole range (can't move more
         # than that) at the search speed, + 50% for estimating the switch
         # search. Then double it and add 1 s for margin.
-        # We could try to be even more clever, by check the referencing mode,
+        # We could try to be even more clever, by checking the referencing mode,
         # but that shouldn't affect the time by much.
         ref_speed = self._readSpeed(axis, 194)  # The fast speed
         d = self._ref_max_length[axis]
@@ -1955,6 +1954,13 @@ class TMCLController(model.Actuator):
         elif port == "/dev/fake6":
             return TMCMSimulator(timeout=0.1, naxes=6)
 
+        # write_timeout is only support in PySerial v3+
+        kwargs = {}
+        ser_maj_ver = int(serial.VERSION.split(".")[0])
+        if ser_maj_ver >= 3:
+            # should never be needed... excepted that sometimes write() blocks
+            kwargs["write_timeout"] = 1  # s
+
         try:
             ser = serial.Serial(
                 port=port,
@@ -1963,7 +1969,7 @@ class TMCLController(model.Actuator):
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
                 timeout=0.1,  # s
-                write_timeout=1,  # s (should never be needed... excepted that sometimes write() blocks)
+                **kwargs
             )
         except IOError:
             raise HwError("Failed to find a TMCM controller on port '%s'. "

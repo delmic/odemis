@@ -122,8 +122,11 @@ def _convertToTiffTag(metadata):
             # everything by 1 m, which should be enough as samples are typically
             # a few cm big. The most important is that the image positions are
             # correct relatively to each other (for a given sample).
-            tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
-            tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
+            pos_cm = [100 + v * 100 for v in val]
+            tiffmd[T.TIFFTAG_XPOSITION] = max(0, pos_cm[0])
+            tiffmd[T.TIFFTAG_YPOSITION] = max(0, pos_cm[1])
+            if [tiffmd[T.TIFFTAG_XPOSITION], tiffmd[T.TIFFTAG_YPOSITION]] != pos_cm:
+                logging.warning("Position metadata clipped to avoid negative position %s", pos_cm)
 
 #         elif key == model.MD_ROTATION:
             # TODO: should use the coarse grain rotation to update Orientation
@@ -867,8 +870,8 @@ def _updateMDFromOME(root, das):
         except (AttributeError, KeyError, ValueError):
             pass
         try:
-            MCPgain = int(streakCamData.attrib["MCPGain"])
-            md[model.MD_STREAK_MCPGAIN] = MCPgain
+            MCPGain = int(streakCamData.attrib["MCPGain"])
+            md[model.MD_STREAK_MCPGAIN] = MCPGain
         except (AttributeError, KeyError, ValueError):
             pass
         try:
@@ -1479,7 +1482,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             t = index[hdims.index("T")]
             deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
             plane.attrib["DeltaT"] = "%.15f" % deltat
-        if model.MD_TIME_LIST in da.metadata:
+        if time_list:
             plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
@@ -1746,7 +1749,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
             write_rgb = True
             hdim = data.shape[:-3]
-        # TODO: handle RGB for C at any posiion before and after XY, but iif TZ=11
+        # TODO: handle RGB for C at any position before and after XY, but iif TZ=11
         # for data > 2D: write as a sequence of 2D images or RGB images
         elif data.ndim == 5 and data.shape[0] == 3:  # RGB
             # Write an RGB image, instead of 3 images along C

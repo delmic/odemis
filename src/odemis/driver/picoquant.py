@@ -281,9 +281,8 @@ class PH300(model.Detector):
         tresbase, bs = self.GetBaseResolution()
         tres = self.GetResolution()
         pxd_ch = {2 ** i * tresbase * 1e-12 for i in range(BINSTEPSMAX)}
-        self.pixelDuration = model.FloatEnumerated(tres, pxd_ch, unit="s",
+        self.pixelDuration = model.FloatEnumerated(tres * 1e-12, pxd_ch, unit="s",
                                                    setter=self._setPixelDuration)
-        self._metadata[model.MD_PIXEL_DUR] = tres
 
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
@@ -577,8 +576,7 @@ class PH300(model.Detector):
         # Update metadata
         # pxd = tresbase * (2 ** bs)
         pxd = self.GetResolution() * 1e-12  # ps -> s
-        self._metadata[model.MD_PIXEL_DUR] = pxd
-
+        self._metadata[model.MD_TIME_LIST] = numpy.linspace(0, pxd, self._shape[-1]) + self.syncOffset.value
         return pxd
 
     def _setSyncDiv(self, div):
@@ -589,7 +587,7 @@ class PH300(model.Detector):
         offset_ps = int(offset * 1e12)
         self.SetSyncOffset(offset_ps)
         offset = offset_ps * 1e-12  # convert the round-down in ps back to s
-        self._metadata[model.MD_TIME_OFFSET] = offset
+        self._metadata[model.MD_TIME_LIST] = numpy.linspace(0, self.pixelDuration.value, self._shape[-1]) + offset
         return offset
 
     # Acquisition methods

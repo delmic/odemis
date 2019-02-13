@@ -26,7 +26,7 @@ from Pyro4.core import isasync
 import logging
 import numpy
 from odemis import model
-from odemis.model._components import DigitalCamera, Actuator, Axis
+from odemis.model import DigitalCamera, Actuator, Axis
 import unittest
 
 

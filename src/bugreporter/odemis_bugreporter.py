@@ -171,7 +171,7 @@ class OdemisBugreporter():
 
     def create_ticket(self, api_key, fields, files=None):
         """
-        Create ticket on osticket server.
+        Create ticket on osTicket server.
         :arg api_key: (String) API-Key
         :arg fields: (String --> String) dictionary containing keys name, email, subject, message
         :arg files: (None or list of Strings) pathname of zip files that should be attached
@@ -186,7 +186,7 @@ class OdemisBugreporter():
         for fn in files:
             with open(fn, "rb") as f:
                 encoded_data = base64.b64encode(f.read())
-            att_desc = {str(fn): "data:application/zip;base64,%s" % encoded_data}
+            att_desc = {os.path.basename(fn): "data:application/zip;base64,%s" % encoded_data}
             fields["attachments"].append(att_desc)
 
         description = json.dumps(fields)
@@ -201,12 +201,12 @@ class OdemisBugreporter():
         
     def search_api_key(self):
         """
-        Searches for a valid osticket key on the system. First, the customer key
+        Searches for a valid osTicket key on the system. First, the customer key
         is checked, then the fallback.
         """
         customer_key_path = os.path.join(os.path.expanduser(u"~"), '.local', 'share',
                                          'odemis', 'osticket.key')
-        fallback_key_path = os.path.join('usr', 'share', 'odemis', 'osticket.key')
+        fallback_key_path = '/usr/share/odemis/osticket.key'
         if os.path.isfile(customer_key_path):
             with open(customer_key_path, 'r') as key_file:
                 api_key = key_file.read().strip('\n')
@@ -214,8 +214,16 @@ class OdemisBugreporter():
             with open(fallback_key_path, 'r') as key_file:
                 api_key = key_file.read().strip('\n')
         else:
-            raise LookupError("Osticket key not found.")
+            raise LookupError("osTicket key not found.")
         return api_key
+
+    def _get_future_output(self, command):
+        """
+        Runs a external command in a future, which returns its output
+        command (list of str)
+        return Future returning a str, or raising the error
+        """
+        return self._executor.submit(subprocess.check_output, command)
 
     def compress_files(self):
         """
@@ -230,7 +238,8 @@ class OdemisBugreporter():
         logging.debug("Will store bug report in %s", self.zip_fn)
         files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
                  os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
-                 os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png']
+                 os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png',
+                 '/etc/odemis-settings.yaml']
 
         try:
             # Save yaml file, call MODEL_SELECTOR if needed
@@ -253,7 +262,8 @@ class OdemisBugreporter():
 
             if not models:
                 # just pick every potential microscope model
-                models = glob(os.path.join(odemis_config['CONFIGPATH'], '*/*.odm.yaml'))
+                models = glob(os.path.join(odemis_config['CONFIGPATH'], '*.odm.yaml'))
+
             files.extend(models)
 
             # Add the latest overlay-report if it's possibly related (ie, less than a day old)
@@ -274,20 +284,26 @@ class OdemisBugreporter():
             except Exception as ex:
                 logging.warning("Failed to run check backend status: %s", ex)
                 ret_code = BACKEND_STOPPED
+            outputs = {}
             if ret_code in (BACKEND_RUNNING, BACKEND_STARTING):
-                try:
-                    # subprocess doesn't have timeout argument in python 2.x, so use future instead
-                    f = self._executor.submit(subprocess.check_output, ['odemis-cli', '--list-prop', '*'])
-                    props = f.result(60)
-                    hwfn = "/tmp/odemis-hw-status.txt"
-                    with open(hwfn, 'w+') as f:
-                        f.write(props)
-                    files.append(hwfn)
-                except Exception as ex:
-                    logging.warning("Cannot save hw status: %s", ex)
+                # subprocess doesn't have timeout argument in python 2.x, so use future instead
+                outputs["odemis-hw-status.txt"] = self._get_future_output(['odemis-cli', '--list-prop', '*'])
+
+            # Save USB hardware, processes, kernel name, IP address
+            outputs["lsusb.txt"] = self._get_future_output(['/usr/bin/lsusb', '-v'])
+            outputs["ps.txt"] = self._get_future_output(['/bin/ps', 'aux'])
+            outputs["uname.txt"] = self._get_future_output(['/bin/uname', '-a'])
+            outputs["ip.txt"] = self._get_future_output(['/bin/ip', 'address'])
 
             # Compress files
             with zipfile.ZipFile(self.zip_fn, "w", zipfile.ZIP_DEFLATED) as archive:
+                for fn, ft in outputs.items():
+                    try:
+                        outp = ft.result(60)
+                        archive.writestr(fn, outp)
+                    except Exception as ex:
+                        logging.warning("Cannot save %s status: %s", fn, ex)
+
                 for f in files:
                     if os.path.isfile(f):
                         logging.debug("Adding file %s", f)
@@ -321,21 +337,21 @@ class OdemisBugreporter():
         if TEST_SUPPORT_TICKET:
             report_description['topicId'] = 12
 
-        with open('/tmp/description.txt', 'w+') as f:
-            f.write('Name: %s\n' % name.encode("utf-8"))
-            f.write('Email: %s\n' % email.encode("utf-8"))
-            f.write('Summary: %s\n\n' % subject.encode("utf-8"))
-            f.write('Description:\n%s' % message.encode("utf-8"))
+        description = (u'Name: %s\n' % name +
+                       u'Email: %s\n' % email +
+                       u'Summary: %s\n\n' % subject +
+                       u'Description:\n%s' % message
+                       )
 
-        with zipfile.ZipFile(self.zip_fn, "a") as archive:
-            archive.write('/tmp/description.txt', compress_type=zipfile.ZIP_DEFLATED)
+        with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('description.txt', description)
         wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
         try:
             api_key = self.search_api_key()
             self.create_ticket(api_key, report_description, [self.zip_fn])
             wx.CallAfter(self.gui.Destroy)
         except Exception as e:
-            logging.warning("Osticket upload failed with exception %s" % e)
+            logging.warning("osTicket upload failed: %s", e)
             wx.CallAfter(self.gui.open_failed_upload_dlg)
 
     def send_report(self, name, email, subject, message):
@@ -415,8 +431,8 @@ class BugreporterFrame(wx.Frame):
 
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.Centre()
-        self.Show()
         self.Layout()
+        self.Show()
 
         # Make these elements class attributes to easily access the contents
         self.panel = panel

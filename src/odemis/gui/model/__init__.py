@@ -166,7 +166,9 @@ class MainGUIData(object):
         "streak-ccd": "streak_ccd",
         "streak-unit": "streak_unit",
         "streak-delay": "streak_delay",
-        "streak-lens": "streak_lens"
+        "streak-lens": "streak_lens",
+        "tc-od-filter": "tc_od_filter",
+        "tc-filter": "tc_filter"
     }
 
     def __init__(self, microscope):
@@ -230,6 +232,8 @@ class MainGUIData(object):
         self.streak_unit = None  # streak unit of the streak camera
         self.streak_delay = None  # delay generator of the streak camera
         self.streak_lens = None  # input optics in front of the streak camera
+        self.tc_od_filter = None
+        self.tc_filter = None
 
         self.ebeamControlsMag = None
 
@@ -592,6 +596,9 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         # Whether to acquire the probe current (via a Leech)
         self.pcdActive = model.BooleanVA(False, readonly=(main.pcd is None))
 
+        # TODO: VA for autofocus procedure mode needs to be connected in the tab
+#         self.autofocus_active = BooleanVA(False)
+
 
 class ChamberGUIData(MicroscopyGUIData):
 
@@ -599,10 +606,10 @@ class ChamberGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
-        # VA for autofocus procedure mode
+        # TODO: VA for autofocus procedure mode needs to be connected in the tab.
         # It's not really recommended (and there is no toolbar button), but it's
         # possible to change the focus, and the menu is there, so why not.
-        self.autofocus_active = BooleanVA(False)
+#         self.autofocus_active = BooleanVA(False)
 
 
 class AnalysisGUIData(MicroscopyGUIData):
@@ -810,7 +817,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        amodes = ["lens-align", "mirror-align", "center-align", "fiber-align"]
+        amodes = ["lens-align", "mirror-align", "center-align", "streak-align", "fiber-align"]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -836,6 +843,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if main.fibaligner is None:
             amodes.remove("fiber-align")
+
+        if main.streak_ccd is None:
+            amodes.remove("streak-align")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
@@ -1014,7 +1024,7 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, zPos=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, projection_class=RGBSpatialProjection, zPos=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -1022,6 +1032,8 @@ class StreamView(View):
           streams in this view is allowed to show.
         :param fov_hw (None or Component): Component with a .horizontalFoV VA and
           a .shape. If not None, the view mpp (=mag) will be linked to that FoV.
+        :param projection_class (DataProjection):
+            Determines the projection used to display streams which have no .image
         :param zPos (None or Float VA): Global position in Z coordinate for the view.
           Used when a stream supports Z stack display, which is controlled by the focuser.
         """
@@ -1033,6 +1045,8 @@ class StreamView(View):
         else:
             self.stream_classes = stream_classes
         self._stage = stage
+        
+        self._projection_klass = projection_class
 
         # Two variations on adapting the content based on what the view shows.
         # They are only used as an _indication_ from the widgets, about what
@@ -1120,7 +1134,7 @@ class StreamView(View):
             self.view_pos.value[0] + half_fov[0],
             self.view_pos.value[1] - half_fov[1],
         )
-        streams = self.stream_tree.getStreams()
+        streams = self.stream_tree.getProjections()
         for stream in streams:
             if hasattr(stream, 'rect'): # the stream is probably pyramidal
                 stream.rect.value = stream.rect.clip(view_rect)
@@ -1385,10 +1399,20 @@ class StreamView(View):
         Do not modify directly, use addStream(), and removeStream().
         Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
         """
-        ss = self.stream_tree.getStreams()
+        ss = self.stream_tree.getProjections()
         # ss is a list of either Streams or DataProjections, so need to convert
         # back to only streams.
         return [s.stream if isinstance(s, DataProjection) else s for s in ss]
+
+    def getProjections(self):
+        """
+        :return: [Stream] list of streams that are displayed in the view
+
+        Do not modify directly, use addStream(), and removeStream().
+        Note: use .stream_tree for getting the raw StreamTree (with the DataProjection)
+        """
+        ss = self.stream_tree.getProjections()
+        return ss
 
     def addStream(self, stream):
         """
@@ -1407,9 +1431,8 @@ class StreamView(View):
             logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
         if not hasattr(stream, 'image'):
-            # if the stream is a StaticStream, create a RGBSpatialProjection for it
             logging.debug("Creating a projection for stream %s", stream)
-            stream = RGBSpatialProjection(stream)
+            stream = self._projection_klass(stream)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
@@ -1440,7 +1463,7 @@ class StreamView(View):
         """
 
         with self._streams_lock:
-            for node in self.stream_tree.getStreams():
+            for node in self.stream_tree.getProjections():
                 ostream = node.stream if isinstance(node, DataProjection) else node
 
                 # check if the stream is still present on the stream list

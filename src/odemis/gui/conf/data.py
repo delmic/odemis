@@ -329,6 +329,46 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "streak-ccd":
+        OrderedDict((
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (0.00001, 10.0),  # TODO GUI only accepts until 1sec error!
+                "type": "float",
+                "tooltip": u"Readout camera exposure time.",
+            }),
+            ("binning", {
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "tooltip": "Readout camera: number of pixels combined.",
+                # "choices": {(2, 2), (4, 4)},  # TODO only allow 2x2 and 4x4 as 1x1 does not make sense for res
+            }),
+            ("resolution", {
+                # Read-only it shouldn't be changed by the user
+                "control_type": odemis.gui.CONTROL_READONLY,
+                "accuracy": None,  # never simplify the numbers
+                "tooltip": u"Readout camera resolution: number of pixels.",
+            }),
+            # These ones are from the streak-unit (but also set as "det_vas" of the streams)
+            ("streakMode", {
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "label": "Streak mode",
+                "tooltip": u"If checked streak camera is in operate mode and streaking.\n"
+                           u"If not checked steak camera is in focus mode.",
+            }),
+            ("timeRange", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "label": "Time range",
+                "tooltip": u"Time needed by the streak unit for one sweep from\n"
+                           u"top to bottom of the readout camera chip.",
+            }),
+            ("MCPGain", {
+                "control_type": odemis.gui.CONTROL_INT,
+                "label": "MCP gain",
+                "tooltip": u"Microchannel plate gain of the streak unit.\n"
+                           u"Be careful when setting the gain while operating the camera in focus-mode.",
+            }),
+        )),
     "spectrometer":
         OrderedDict((
             ("exposureTime", {
@@ -523,6 +563,22 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Pinhole diameter",
             }),
         )),
+    "time-correlator":
+        OrderedDict((
+            ("dwellTime", {
+                "tooltip": "Time spent by the e-beam on each pixel",
+                "scale": "log",
+            }),
+            ("pixelDuration", {
+                "label": "Time resolution",
+            }),
+            ("syncOffset", {
+                "label": "Sync offset",
+            }),
+            ("syncDiv", {
+                "label": "Sync divider",
+            }),
+        )),
 }
 
 # Allows to override some values based on the microscope role
@@ -713,6 +769,37 @@ STREAM_SETTINGS_CONFIG = {
             ("slit-in", {
                 "label": "Input slit",
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+        )),
+    # For DEBUG
+#     stream.StaticSpectrumStream:
+#         OrderedDict((
+#             ("selected_time", {
+#                 "label": "Selected Time",
+#                 "tooltip": "Selected time of data",
+#                 "control_type": odemis.gui.CONTROL_SLIDER,
+#             }),
+#             ("selected_wavelength", {
+#                 "label": "Selected Wavelength",
+#                 "tooltip": "Selected wavelength of data",
+#                 "control_type": odemis.gui.CONTROL_SLIDER,
+#
+#             }),
+#         )),
+    stream.TemporalSpectrumSettingsStream:
+        OrderedDict((
+            ("wavelength", {
+                "tooltip": "Center wavelength of the spectrograph",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "range": (0.0, 1900e-9),
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+            ("band", {  # from filter
+                "label": "Filter",
             }),
         )),
     stream.MonochromatorSettingsStream:

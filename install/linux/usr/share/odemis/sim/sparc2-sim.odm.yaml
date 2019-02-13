@@ -263,7 +263,10 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"]
+    persistent: {
+        properties: [polePosition],
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -277,6 +280,7 @@ SPARC2: {
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values are adapted to make the simulator roughly the same speed
         ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
+        unit: ["m", "m", "m", "rad", "m"],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
@@ -373,12 +377,16 @@ SPARC2: {
         address: null,
         axes: ["s", "l"],
         ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
+        rng: [[-1.e-3, 1.e-3], [0, 51.e-3]],  # m, min/max
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
+        FAV_POS_ACTIVE: {"l": 48.e-3, "s": 1.e-3},  # m, m
+    },
+    persistent: {
+        metadata: [FAV_POS_ACTIVE],
     },
 }
 

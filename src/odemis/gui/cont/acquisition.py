@@ -36,7 +36,7 @@ import math
 from odemis import model, dataio, acq
 from odemis.acq import align
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries
@@ -58,7 +58,6 @@ import time
 import wx
 
 import odemis.gui.model as guimod
-from odemis.acq.stream._helper import ScannedTCSettingsStream
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 
 

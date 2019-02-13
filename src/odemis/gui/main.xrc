@@ -2017,7 +2017,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>5,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_mirror">
@@ -2041,7 +2041,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>0,2</cellpos>
+                        <cellpos>5,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_centering">
@@ -2064,7 +2064,30 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>5,2</cellpos>
+                        </object>>
+                        <object class="sizeritem">
+                          <object class="GraphicRadioButton" name="btn_align_streakcam">
+                            <icon>img/icon/ico_fib.png</icon>
+                            <icon_on>img/icon/ico_fib_green.png</icon_on>
+                            <height>48</height>
+                            <face_colour>def</face_colour>
+                            <label>STREAK</label>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,3</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="GraphicRadioButton" name="btn_align_fiber">
@@ -2087,7 +2110,7 @@
                           </XRCED>
                         </object>
                         <flag>wxEXPAND</flag>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>5,4</cellpos>
                       </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
@@ -2126,13 +2149,31 @@
                   </object>
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
+                        <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_manualfocus">
+                          <hidden>1</hidden>
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <active_colour>#106090</active_colour>  <!-- TODO generic input -->
+                          <label>Manual focus</label>
+                          <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,0</cellpos>
+                        </object>
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>Position</label>
                         </object>
                         <flag>wxLEFT</flag>
                         <border>5</border>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>1,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitFloatSlider" name="slider_focus">
@@ -2149,9 +2190,9 @@
                           </XRCED>
                         </object>
                         <option>1</option>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <flag>wxLEFT|wxRIGHT|wxBOTTOM|wxEXPAND</flag>
                         <border>5</border>
-                        <cellpos>0,1</cellpos>
+                        <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_autofocus">
@@ -2167,7 +2208,7 @@
                         <flag>wxLEFT</flag>
                         <border>5</border>
                         <minsize>90,-1</minsize>
-                        <cellpos>1,0</cellpos>
+                        <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="wxGauge" name="gauge_autofocus">
@@ -2182,7 +2223,7 @@
                         <option>1</option>
                         <flag>wxALL|wxEXPAND</flag>
                         <border>7</border>
-                        <cellpos>1,1</cellpos>
+                        <cellpos>2,1</cellpos>
                       </object>
                       <vgap>5</vgap>
                       <hgap>5</hgap>
@@ -2562,6 +2603,92 @@
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
             </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_streak">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Streak</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                      <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText">
+                              <label>Calibration File</label>
+                              <fg>#E5E5E5</fg>
+                              <font>
+                                <size>9</size>
+                                <style>normal</style>
+                                <weight>normal</weight>
+                                <underlined>0</underlined>
+                                <face>Ubuntu</face>
+                              </font>
+                            </object>
+                            <flag>wxALL|wxALIGN_CENTRE</flag>
+                            <border>5</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="wxTextCtrl" name="txt_StreakCalibFilename">
+                              <size>-1,-1</size>
+                              <value>Calibration not saved!</value>
+                              <fg>#2FA7D4</fg>
+                              <bg>#444444</bg>
+                              <style>wxBORDER_NONE|wxTE_READONLY</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>  <!-- ?? -->
+                              </XRCED>
+                            </object>
+                            <option>1</option>  <!-- ?? -->
+                            <flag>wxALL|wxEXPAND|wxALIGN_CENTRE</flag>
+                            <border>5</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_open_streak_calib_file">
+                              <height>16</height>
+                              <face_colour>def</face_colour>
+                              <label>Load...</label>
+                              <tooltip>Open a trigger calibration file.</tooltip>
+                            </object>
+                            <border>5</border>  <!-- distance to left side if flag wxLEFT-->
+                            <flag>wxLEFT|wxALIGN_CENTRE</flag>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_save_streak_calib_file">
+                              <height>16</height>
+                              <face_colour>def</face_colour>
+                              <label>Save...</label>
+                              <tooltip>Save the trigger calibration to a file.</tooltip>
+                            </object>
+                            <border>5</border>  <!-- distance to left side if flag wxLEFT-->
+                            <flag>wxLEFT|wxALIGN_CENTRE</flag>
+                          </object>
+                      </object>
+                      <flag>wxEXPAND|wxRIGHT</flag>
+                      <orient>wxHORIZONTAL</orient>
+                      <border>5</border>
+                  </object>
+                  <flag>wxALIGN_CENTRE</flag>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_fibaligner">
@@ -2862,6 +2989,12 @@
             </XRCED>
           </object>
           <object class="ARLiveViewport" name="vp_align_center">
+            <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_align_streak">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
@@ -3363,6 +3496,11 @@
             </XRCED>
           </object>
           <object class="PointSpectrumViewport" name="vp_sparc_bl">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -3890,6 +4028,18 @@
             </XRCED>
           </object>
           <object class="SpatialSpectrumViewport" name="vp_spatialspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_temporalspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TimeSpectrumViewport" name="vp_timespec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
@@ -5014,7 +5164,7 @@
                 <flag>wxEXPAND</flag>
               </object>
               <object class="sizeritem">
-                <object class="wxPanel" name="pnl_gauge">
+                <object class="wxPanel" name="pnl_info">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxStaticText" name="lbl_acquisition_info">
@@ -5027,7 +5177,6 @@
                           <face>Ubuntu</face>
                           <encoding>UTF-8</encoding>
                         </font>
-                        <hidden>1</hidden>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -5036,6 +5185,19 @@
                       <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxTOP|wxEXPAND</flag>
                       <border>10</border>
                     </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <hidden>1</hidden>
+                  <bg>#4D4D4D</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
+              </object>
+              <object class="sizeritem">
+                <object class="wxPanel" name="pnl_gauge">
+                  <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="wxGauge" name="gauge_progress">
                         <size>-1,8</size>
@@ -5091,6 +5253,7 @@
                     </object>
                     <orient>wxVERTICAL</orient>
                   </object>
+                  <hidden>1</hidden>
                   <bg>#4D4D4D</bg>
                   <XRCED>
                     <assign_var>1</assign_var>

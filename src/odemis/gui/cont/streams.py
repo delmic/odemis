@@ -51,6 +51,7 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
+from odemis.acq.stream import MeanSpectrumProjection
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -165,6 +166,8 @@ class StreamController(object):
 
         if hasattr(stream, "spectrumBandwidth"):
             self._add_wl_ctrls()
+            self.mean_spec_proj = MeanSpectrumProjection(self.stream)
+            self.mean_spec_proj.image.subscribe(self._on_new_spec_data, init=True)
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
                 
@@ -441,7 +444,10 @@ class StreamController(object):
         metadata = self.stream.getRawMetadata()[0]  # take the first only
         zcentre = metadata[model.MD_POS][2]
         zstep = metadata[model.MD_PIXEL_SIZE][2]
-        zstart = zcentre - (self.stream.zIndex.range[1] + 1) * zstep / 2
+        # The number of zIndexes is zIndex.range[1] + 1 (as it starts at 0).
+        # zstart is the *center* position of the first pixel, so we need
+        # len(zIndexes) - 1 ==  zIndex.range[1]
+        zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
         self.tab_data_model.zPos.value = zstart + zstep * zIndex
 
         self.tab_data_model.zPos.subscribe(self._on_z_pos)
@@ -455,9 +461,8 @@ class StreamController(object):
         metadata = self.stream.getRawMetadata()[0]  # take the first only
         zcentre = metadata[model.MD_POS][2]
         zstep = metadata[model.MD_PIXEL_SIZE][2]
-        zstart = zcentre - (self.stream.zIndex.range[1] + 1) * zstep / 2
+        zstart = zcentre - self.stream.zIndex.range[1] * zstep / 2
         val = int(round((zPos - zstart) / zstep))
-
         self.stream.zIndex.value = self.stream.zIndex.clip(val)
 
         self.stream.zIndex.subscribe(self._on_z_index)
@@ -495,36 +500,38 @@ class StreamController(object):
                                    self._dye_ewl, self.stream.emission.value)
 
     def _on_metadata_btn(self, evt):
-        text = ""
-        # Show empty window if no image present
-        if self.stream.raw:
-            r = self.stream.raw[0]
-        else:
-            r = None
+        text = u""
+        raw = [r for r in self.stream.raw if r is not None]
 
-        if r is not None:
+        for i, r in enumerate(raw):
+            if len(raw) > 1:
+                text += u"========= Array %d =========\n" % (i + 1,)
             shape = r.shape
             dtype = r.dtype
             md = r.metadata
 
-            text += "Shape: %s\n" % (" x ".join(str(s) for s in shape),)
-            text += "Data type: %s\n" % (dtype,)
+            text += u"Shape: %s\n" % (u" x ".join(str(s) for s in shape),)
+            text += u"Data type: %s\n" % (dtype,)
             for key in sorted(md):
                 v = md[key]
                 if key == model.MD_ACQ_DATE:  # display date in readable format
-                    text += "%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
+                    text += u"%s: %s\n" % (key, time.strftime(u"%c", time.localtime(v)))
                 else:
                     if isinstance(v, numpy.ndarray):
                         # Avoid ellipses (eg, [1, ..., 100 ])as we want _all_
                         # the data (unless it'd get really crazy).
                         # TODO: from numpy v1.14, the "threshold" argument can
                         # be directly used in array2string().
-                        numpy.set_printoptions(threshold=100000)
-                        v = numpy.array2string(v, max_line_width=100, separator=", ")
+                        numpy.set_printoptions(threshold=2500)
+                        v = numpy.array2string(v, max_line_width=100, separator=u", ")
                         numpy.set_printoptions(threshold=1000)
-                    text += "%s: %s\n" % (key, v)
+                    elif isinstance(v, list) and len(v) > 2500:
+                        v = u"[%s … %s]" % (u", ".join(str(a) for a in v[:20]), u", ".join(str(a) for a in v[-20:]))
+                    text += u"%s: %s\n" % (key, v)
 
-        md_frame = self.stream_panel.create_text_frame("Metadata of %s" % self.stream.name.value, text)
+        # Note: we show empty window even if no data present, to let the user know
+        # that there is no data, but the button worked fine.
+        md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
 
     # Panel state methods
@@ -703,18 +710,14 @@ class StreamController(object):
                           ctrl_2_va=_get_bandwidth)
         self.entries[se.name] = se
 
-        # TODO: should the stream have a way to know when the raw data has changed?
-        # => just a spectrum VA, like histogram VA
-        self.stream.image.subscribe(self._on_new_spec_data, init=True)
-
     @wxlimit_invocation(0.2)
-    def _on_new_spec_data(self, _):
-        if not self or not self._sld_spec:
+    def _on_new_spec_data(self, gspec):
+        if not self or not self._sld_spec or gspec is None:
+            # if no new calibration, or empty data
             return  # already deleted
 
         logging.debug("New spec data")
         # Display the global spectrum in the visual range slider
-        gspec = self.stream.getMeanSpectrum()
         if len(gspec) <= 1:
             logging.warning("Strange spectrum of len %d", len(gspec))
             return
@@ -2399,8 +2402,14 @@ class SparcStreamsController(StreamBarController):
             act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
             self.add_action(actname, act)
 
+        if main_data.streak_ccd:
+            self.add_action("Temporal spectrum", self.addTemporalSpectrum)
+
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
+
+        if main_data.time_correlator:
+            self.add_action("Time Correlator", self.addTimeCorrelator)
 
     def _on_streams(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
@@ -2488,8 +2497,6 @@ class SparcStreamsController(StreamBarController):
         Display and connect a new RepetitionStream to the GUI
         stream (RepetitionStream): freshly baked stream
         mdstream (MDStream): corresponding new stream for acquisition
-        vas (list of str): name of VAs entries to create (in addition to standard one,
-          such as local HW VAs and B/C control)
         axes (dict axis name -> Component): axis entries to create
         kwargs (dict): to be passed to _add_stream()
         return (StreamController): the new stream controller
@@ -2649,6 +2656,46 @@ class SparcStreamsController(StreamBarController):
                                   axes=axes,
                                   )
 
+    def addTemporalSpectrum(self):
+        """
+        Create a temporal spectrum stream and add to to all compatible viewports
+        """
+
+        main_data = self._main_data_model
+
+        ts_stream = acqstream.TemporalSpectrumSettingsStream(
+            "Temporal Spectrum",
+            main_data.streak_ccd,
+            main_data.streak_ccd.data,
+            main_data.ebeam,
+            main_data.streak_unit,
+            main_data.streak_delay,
+            sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm,
+            detvas=get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config),
+            streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_ts_stream = acqstream.SEMTemporalSpectrumMDStream("SEM TempSpec", [sem_stream, ts_stream])
+
+        spg = self._getAffectingSpectrograph(main_data.streak_ccd)
+
+        # TODO: all the axes, including the filter band should be local. The
+        # band should be set to the pass-through by default
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg}
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.streak_ccd.name in fw.affects.value:
+                axes["band"] = fw
+
+        return self._addRepStream(ts_stream, sem_ts_stream, axes=axes)
+
     def addMonochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
@@ -2686,6 +2733,30 @@ class SparcStreamsController(StreamBarController):
                 axes["band"] = fw
 
         return self._addRepStream(monoch_stream, sem_monoch_stream,
+                                  axes=axes,
+                                  play=False
+                                  )
+
+    def addTimeCorrelator(self):
+        """ Create a Time Correlator stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        tc_stream = acqstream.ScannedTemporalSettingsStream(
+            "Time Correlator",
+            main_data.time_correlator,
+            main_data.time_correlator.data,
+            main_data.ebeam,
+            detvas=get_local_vas(main_data.time_correlator, self._main_data_model.hw_settings_config)
+        )
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_tc_stream = acqstream.SEMTemporalMDStream("SEM Time Correlator",
+                                                  [sem_stream, tc_stream])
+        axes = {"tc-od-filter": main_data.tc_od_filter,
+               "tc-filter": main_data.tc_filter}
+        
+        return self._addRepStream(tc_stream, sem_tc_stream,
                                   axes=axes,
                                   play=False
                                   )

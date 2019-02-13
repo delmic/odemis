@@ -361,11 +361,13 @@ COLORMODE_JPEG = 8
 
 SENSOR_UI1545_M = 0x0028  # SXGA rolling shutter, monochrome, LE model
 SENSOR_UI1240LE_M = 0x0054  # SXGA global shutter, monochrome, single board
+SENSOR_UI527xSE_M = 0x238  # 3 MP global shutter, monochrome, GigE
 
 # Sensor IDs with which this driver was tested
 KNOWN_SENSORS = {
                  SENSOR_UI1545_M,
                  SENSOR_UI1240LE_M,
+                 SENSOR_UI527xSE_M,
 }
 
 
@@ -390,7 +392,7 @@ class UEyeDLL(CDLL):
         # TODO: also support loading the Windows DLL on Windows
         try:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libueye_api.so", RTLD_GLOBAL)
+            CDLL.__init__(self, "libueye_api.so.1", RTLD_GLOBAL)
         except OSError:
             logging.error("Check that IDS SDK is correctly installed")
             raise
@@ -636,6 +638,10 @@ class UEyeDLL(CDLL):
         204: "ERROR_CPU_IDLE_STATES_CONFIGURATION",
         205: "DEVICE_BUSY",
         206: "SENSOR_INITIALIZATION_FAILED",
+        207: "IMAGE_BUFFER_NOT_DWORD_ALIGNED",
+        208: "SEQ_BUFFER_IS_LOCKED",
+        209: "FILE_PATH_DOES_NOT_EXIST",
+        210: "INVALID_WINDOW_HANDLE",
     }
 
 
@@ -760,10 +766,13 @@ class Camera(model.DigitalCamera):
         # Note: for now the default pixel clock seems fine. Moreover, reducing
         # it reduces the minimum exposure time (but we don't care), and the
         # maximum exposure time is constant.
-
         # Auto black level = different black level per pixel (= more range?)
-        blmode = c_uint32(AUTO_BLACKLEVEL_ON)
-        self._dll.is_Blacklevel(self._hcam, BLACKLEVEL_CMD_SET_MODE, byref(blmode), sizeof(blmode))
+        try:
+            blmode = c_uint32(AUTO_BLACKLEVEL_ON)
+            self._dll.is_Blacklevel(self._hcam, BLACKLEVEL_CMD_SET_MODE, byref(blmode), sizeof(blmode))
+        except UEyeError as ex:
+            if ex.errno == 155:  # NOT_SUPPORTED
+                logging.debug("SetBlackLevel is not supported for this camera")
 
     # Direct mapping of the SDK functions
     def ExitCamera(self):
@@ -872,7 +881,7 @@ class Camera(model.DigitalCamera):
 
     def GetPixelClock(self):
         """
-        return (float): the pixel clock in MHz
+        return (0<int): the pixel clock in MHz
         """
         pc = c_uint32()
         self._dll.is_PixelClock(self._hcam, PIXELCLOCK_CMD_GET, byref(pc), sizeof(pc))
@@ -983,7 +992,6 @@ class Camera(model.DigitalCamera):
         return (list of 2-tuples): memory pointer, image ID
         """
         logging.debug("Allocating %d buffers of %dx%dx%d", num, width, height, bpp)
-        self._dll.is_InitImageQueue(self._hcam, None)  # None means standard copy to memory
         buf = []
         for i in range(num):
             mem = POINTER(c_uint8)()
@@ -994,6 +1002,7 @@ class Camera(model.DigitalCamera):
                                        byref(mem), byref(imid))
             self._dll.is_AddToSequence(self._hcam, mem, imid)
             buf.append((mem, imid))
+        self._dll.is_InitImageQueue(self._hcam, None)  # None means standard copy to memory
 
         return buf
 
@@ -1013,12 +1022,11 @@ class Camera(model.DigitalCamera):
         md (dict): metadata of the DataArray
         return (DataArray): a numpy array corresponding to the data pointed to
         """
-        self._dll.is_LockSeqBuf(self._hcam, IGNORE_PARAMETER, mem)
         res, dtype = self._buffers_props
         na = numpy.empty((res[1], res[0]), dtype=dtype)
         # TODO use GetImageMemPitch() if needed: if width is not multiple of 4
         # => create a na height x stride, and then return na[:, :size[0]]
-        assert(res[1] % 4 == 0)
+        assert(res[0] % 4 == 0)
         memmove(na.ctypes.data, mem, na.nbytes)
 
         # release the buffer

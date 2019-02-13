@@ -147,27 +147,37 @@ def rect_intersect(ra, rb):
 
 
 def perpendicular_distance(start, end, point):
-    """ Return the perpendicular distance between the line described by start and end, and point """
-
+    """
+    Computes the perpendicular distance between a line segment and a point (in 2D space).
+    start (float, float): beginning of the line segment
+    end (float, float): end of the line segment
+    point (float, float): point anywhere in space
+    return (0 <= float): distance
+    """
     x1, y1 = start
     x2, y2 = end
     x3, y3 = point
 
+    # Find the closest point on the segment
     px = x2 - x1
     py = y2 - y1
-
     v = px * px + py * py
-    u = ((x3 - x1) * px + (y3 - y1) * py) / float(v)
 
-    u = min(max(u, 0), 1)
+    if v == 0:
+        # If start and end are the same point => it's also the closest point
+        u = 0  # any value works
+    else:
+        u = ((x3 - x1) * px + (y3 - y1) * py) / v
+        u = min(max(u, 0), 1)
 
     x = x1 + u * px
     y = y1 + u * py
 
+    # Compute the distance between the external point and the closest point
     dx = x - x3
     dy = y - y3
+    return math.hypot(dx, dy)
 
-    return math.sqrt(dx*dx + dy*dy)
 
 INSIDE, LEFT, RIGHT, LOWER, UPPER = 0, 1, 2, 4, 8
 

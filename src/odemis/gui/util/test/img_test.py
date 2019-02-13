@@ -247,6 +247,10 @@ class TestARExport(unittest.TestCase):
 
         md0 = dict(md)
         data0 = model.DataArray(1500 + numpy.zeros((1080, 1024), dtype=numpy.uint16), md0)
+        md1 = dict(md)
+        md1[model.MD_POS] = (1.5e-3, -30e-3)
+        md1[model.MD_BASELINE] = 300  # AR background should take this into account
+        data1 = model.DataArray(500 + numpy.zeros((1080, 1024), dtype=numpy.uint16), md1)
 
         # Create AR stream
         ars = stream.StaticARStream("test", [data0])
@@ -287,6 +291,15 @@ class TestARExport(unittest.TestCase):
         exporter.export(self.FILENAME_RAW, exdata)
         st = os.stat(self.FILENAME_RAW)  # this test also that the file is created
         self.assertGreater(st.st_size, 100)
+
+        # Create AR stream with background image
+        ars.background.value = data1
+
+        # Convert to equirectangular (RAW) image
+        exdata = img.ar_to_export_data([ars], raw=True)
+        # shape = raw data + theta/phi axes values
+        self.assertGreater(exdata.shape[0], 50)
+        self.assertGreater(exdata.shape[1], 50)
 
 
 class TestSpectrumExport(unittest.TestCase):

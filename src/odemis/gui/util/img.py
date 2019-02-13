@@ -32,13 +32,15 @@ from odemis import model
 from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, conversion, polar, img, units
+from odemis.util import intersect, fluo, conversion, angleres, img, units
 import time
 import wx
 
 import odemis.acq.stream as acqstream
+from odemis.util import spectrum
 import odemis.gui.img as guiimg
-
+from odemis.acq.stream._projection import RGBSpatialSpectrumProjection, \
+    SinglePointTemporalProjection
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
@@ -709,20 +711,20 @@ def calculate_raw_ar(data, bg_data):
             small_shape = int(round(768 * y / x)), 768
         # resize
         data = img.rescale_hq(data, small_shape)
-        dtype = numpy.float16
-    else:
-        dtype = None  # just let the function use the best one
+        if bg_data is not None:
+            bg_data = img.rescale_hq(bg_data, small_shape)
 
     size = (90, 360)  # TODO: increase if data is high def
 
     if bg_data is None:
         # Simple version: remove the background value
-        data0 = polar.ARBackgroundSubtract(data)
+        data0 = angleres.ARBackgroundSubtract(data)
     else:
-        data0 = img.Subtract(data, bg_data)  # metadata from data
+        # subtract bg image, but don't clip (keep negative values for export)
+        data0 = (data.astype(numpy.float64) - bg_data.astype(numpy.float64))
 
     # calculate raw polar representation
-    polard = polar.AngleResolved2Rectangular(data0, size, hole=False, dtype=dtype)
+    polard = angleres.AngleResolved2Rectangular(data0, size, hole=False)
 
     return polard
 
@@ -749,17 +751,24 @@ def ar_to_export_data(streams, raw=False):
     s = streams[0]
 
     if raw:  # csv
-        pos = s.point.value
+        polpos = None
+        sempos = s.point.value  # ebeam pos selected
+        if hasattr(s, "polarization"):
+            polpos = s.polarization.value  # polarization pos selected
 
         # find positions of each acquisition
-        # tuple of 2 floats -> DataArray: position on SEM -> data
-        sempos = {}
+        # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
+        pos = {}
         for d in s.raw:
             try:
-                sempos[d.metadata[model.MD_POS]] = img.ensure2DImage(d)
+                pos[d.metadata[model.MD_POS] + (d.metadata.get(model.MD_POL_MODE, None),)] = img.ensure2DImage(d)
             except KeyError:
                 logging.info("Skipping DataArray without known position")
-        raw_ar = calculate_raw_ar(sempos[pos], s.background.value)
+
+        data = pos[sempos + (polpos,)]
+        data_bg = s._getBackground(pos[sempos + (polpos,)].metadata.get(model.MD_POL_MODE, model.MD_POL_NONE))
+
+        raw_ar = calculate_raw_ar(data, data_bg)
         raw_ar.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
         return raw_ar
     else:
@@ -826,8 +835,12 @@ def value_to_pixel(value, pixel_space, vtp_ratio, value_range, orientation):
     if pixel_space is None:
         return None
     elif None not in (vtp_ratio, value_range):
-        pixel = (value - value_range[0]) * vtp_ratio
-        pixel = int(round(pixel))
+        if value_range[0] < value_range[1]:
+            pixel = (value - value_range[0]) * vtp_ratio
+            pixel = int(round(pixel))
+        else:
+            pixel = (value_range[0] - value) * vtp_ratio
+            pixel = int(round(pixel))
     else:
         pixel = 0
     return pixel if orientation == wx.HORIZONTAL else pixel_space - pixel
@@ -862,7 +875,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         min_pixel = 10
 
     # Range width
-    value_space = max_val - min_val
+    value_space = abs(max_val - min_val)
     if value_space == 0:
         logging.info("Trying to compute legend tick with empty range %s", value_range)
         vtp_ratio = None
@@ -872,7 +885,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         tick_list = [(pixel, min_val)]
         return tick_list, vtp_ratio
 
-    vtp_ratio = pixel_space / value_space
+    vtp_ratio = abs(pixel_space / value_space)
 
     num_ticks = pixel_space // tick_spacing
     # Calculate the best step size in powers of 10, so it will cover at
@@ -881,13 +894,13 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
 
     # Increase the value step tenfold while it fits more than num_ticks times
     # in the range
-    while value_step and value_space / value_step > num_ticks:
+    while value_step and abs(value_space) / value_step > num_ticks:
         value_step *= 10
     # logging.debug("Value step is %s after first iteration with range %s",
     #               value_step, value_space)
 
     # Divide the value step by two,
-    while value_step and value_space / value_step < num_ticks:
+    while value_step and abs(value_space) / value_step < num_ticks:
         value_step /= 2
     # logging.debug("Value step is %s after second iteration with range %s",
     #               value_step, value_space)
@@ -898,9 +911,14 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     tick_values = [min_val]
     cur_val = first_val
 
-    while cur_val < max_val:
-        tick_values.append(cur_val)
-        cur_val += value_step
+    if min_val < max_val:
+        while cur_val < max_val:
+            tick_values.append(cur_val)
+            cur_val += value_step
+    else:
+        while cur_val > max_val:
+            tick_values.append(cur_val)
+            cur_val -= value_step
 
     ticks = []
     min_margin = (tick_spacing / 4)
@@ -944,6 +962,11 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
 
     if value_range is None:
         return
+
+    if value_range[0] > value_range[1]:
+        mirror = True
+        v = value_range
+        value_range = (v[1], v[0])
 
     tick_list, _ = calculate_ticks(value_range, client_size, orientation, tick_spacing)
     csize = client_size
@@ -1132,7 +1155,7 @@ def bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, 
     ctx.fill()
 
 
-def spectrum_to_export_data(stream, raw):
+def spectrum_to_export_data(proj, raw):
     """
     Creates either raw or WYSIWYG representation for the spectrum data plot
 
@@ -1141,19 +1164,19 @@ def spectrum_to_export_data(stream, raw):
 
     returns (model.DataArray)
     """
-    spectrum = stream.get_pixel_spectrum()
-    if spectrum is None:
+    spec = proj.image.value
+    if spec is None:
         raise LookupError("No pixel selected to pick a spectrum")
-    spectrum_range, unit = stream.get_spectrum_range()
+    spectrum_range, unit = spectrum.get_spectrum_range(spec)
 
     if raw:
         if unit == "m":
-            spectrum.metadata[model.MD_WL_LIST] = spectrum_range
-        spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
-        return spectrum
+            spec.metadata[model.MD_WL_LIST] = spectrum_range
+        spec.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        return spec
     else:
         # Draw spectrum bar plot
-        data = zip(spectrum_range, spectrum)
+        data = zip(spectrum_range, spec)
         fill_colour = BAR_PLOT_COLOUR
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         data_to_draw = numpy.empty((client_size.y, client_size.x, 4), dtype=numpy.uint8)
@@ -1180,7 +1203,7 @@ def spectrum_to_export_data(stream, raw):
         fill_colour = (0, 0, 0)
 
         # Draw bottom horizontal scale legend
-        value_range = (spectrum_range[0], spectrum_range[-1])
+        value_range = (spec[0], spec[-1])
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
         font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
@@ -1191,6 +1214,120 @@ def spectrum_to_export_data(stream, raw):
         ctx = cairo.Context(surface)
         draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
                    fill_colour, unit, SPEC_SCALE_HEIGHT, font_size, "Wavelength")
+        data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
+
+        # Draw top horizontal scale legend
+        scale_x_draw = numpy.empty((SMALL_SCALE_WIDTH, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SMALL_SCALE_WIDTH)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   fill_colour, unit, SMALL_SCALE_WIDTH, font_size, mirror=True)
+        data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
+
+        # Draw left vertical scale legend
+        orientation = wx.VERTICAL
+        tick_spacing = SPEC_PLOT_SIZE // 6
+        value_range = (min(spec), max(spec))
+        scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        scale_y_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   fill_colour, None, SPEC_SCALE_WIDTH, font_size, "Intensity")
+
+        # Extend y scale bar to fit the height of the bar plot with the x
+        # scale bars attached
+        extend = numpy.empty((SPEC_SCALE_HEIGHT, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        extend.fill(255)
+        scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
+
+        # Draw right vertical scale legend
+        scale_y_draw = numpy.empty((client_size.y, SMALL_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        scale_y_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_y_draw, cairo.FORMAT_ARGB32, SMALL_SCALE_WIDTH, client_size.y)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   fill_colour, None, SMALL_SCALE_WIDTH, font_size, mirror=True)
+
+        # Extend y scale bar to fit the height of the bar plot with the x
+        # scale bars attached
+        scale_y_draw = numpy.append(scale_y_draw, extend[:, :SMALL_SCALE_WIDTH], axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :SMALL_SCALE_WIDTH], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(data_with_legend, scale_y_draw, axis=1)
+
+        spec_plot = model.DataArray(data_with_legend)
+        spec_plot.metadata[model.MD_DIMS] = 'YXC'
+        return spec_plot
+
+
+def time_spectrum_to_export_data(proj, raw):
+    """
+    Creates either raw or WYSIWYG representation for the time spectrum data plot
+
+    stream (SpectrumStream): spectrum stream
+    raw (boolean): if True returns raw representation
+
+    returns (model.DataArray)
+    """
+    if not isinstance(proj, SinglePointTemporalProjection):
+        raise ValueError("Trying to export a time spectrum of an invalid projection")
+
+    spec = proj.image.value
+    if spec is None:
+        raise LookupError("No pixel selected to pick a spectrum")
+    time_range, unit = spectrum.get_time_range(spec)
+
+    if raw:
+        if unit == "s":
+            spec.metadata[model.MD_TIME_LIST] = time_range
+        spec.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        return spec
+    else:
+        # Draw spectrum bar plot
+        data = zip(time_range, spec)
+        fill_colour = BAR_PLOT_COLOUR
+        client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
+        data_to_draw = numpy.empty((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        data_to_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
+        ctx = cairo.Context(surface)
+        # calculate data characteristics
+        horz, vert = zip(*data)
+        min_x = min(horz)
+        max_x = max(horz)
+        min_y = min(vert)
+        max_y = max(vert)
+        range_x = (min_x, max_x)
+        data_width = max_x - min_x
+        range_y = (min_y, max_y)
+        data_height = max_y - min_y
+        if data_height == 0:
+            data_height = max_y
+        bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, fill_colour)
+
+        # Differentiate the scale bar colour so the user later on
+        # can easily change the bar plot or the scale bar colour
+        fill_colour = (0, 0, 0)
+
+        # Draw bottom horizontal scale legend
+        value_range = (time_range[0], time_range[-1])
+        orientation = wx.HORIZONTAL
+        tick_spacing = SPEC_PLOT_SIZE // 4
+        font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
+        scale_x_draw = numpy.empty((SPEC_SCALE_HEIGHT, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_HEIGHT)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   fill_colour, unit, SPEC_SCALE_HEIGHT, font_size, "Time")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
 
         # Draw top horizontal scale legend
@@ -1243,7 +1380,7 @@ def spectrum_to_export_data(stream, raw):
         return spec_plot
 
 
-def line_to_export_data(stream, raw):
+def line_to_export_data(proj, raw):
     """
     Creates either raw or WYSIWYG representation for the spectrum line data
 
@@ -1252,13 +1389,15 @@ def line_to_export_data(stream, raw):
 
     returns (model.DataArray)
     """
-    spectrum = stream.get_line_spectrum(raw)
-    if spectrum is None:
+
+    # Set the
+    spec = proj.image.value
+    if spec is None:
         raise LookupError("No line selected to pick a spectrum")
-    spectrum_range, unit = stream.get_spectrum_range()
+    spectrum_range, unit = spectrum.get_spectrum_range(spec)
 
     if raw:
-        data = spectrum.T  # switch axes
+        data = spec.T  # switch axes
         if unit == "m":
             data.metadata[model.MD_WL_LIST] = spectrum_range
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
@@ -1325,7 +1464,7 @@ def line_to_export_data(stream, raw):
         # Draw left vertical (distance) legend
         orientation = wx.VERTICAL
         tick_spacing = SPEC_PLOT_SIZE // 6
-        line_length = spectrum.shape[0] * spectrum.metadata[model.MD_PIXEL_SIZE][1]
+        line_length = spec.shape[0] * spec.metadata[model.MD_PIXEL_SIZE][1]
         value_range = (0, line_length)
         scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
@@ -1352,6 +1491,136 @@ def line_to_export_data(stream, raw):
         ctx = cairo.Context(surface)
         draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
                    text_colour, unit, SMALL_SCALE_WIDTH, font_size, mirror=True)
+
+        # Extend y scale bar to fit the height of the bar plot with the x
+        # scale bars attached
+        scale_y_draw = numpy.append(scale_y_draw, extend[:, :SMALL_SCALE_WIDTH], axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :SMALL_SCALE_WIDTH], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(data_with_legend, scale_y_draw, axis=1)
+
+        line_img = model.DataArray(data_with_legend)
+        line_img.metadata[model.MD_DIMS] = 'YXC'
+        return line_img
+
+
+def temporal_spectrum_to_export_data(proj, raw):
+    """
+    Creates either raw or WYSIWYG representation for the temporal spectrum data
+
+    proj (RGBSpatialSpectrumProjection)
+    raw (boolean): if True returns raw representation
+
+    returns (model.DataArray)
+    """
+
+    if not isinstance(proj, RGBSpatialSpectrumProjection):
+        raise ValueError("Cannot export temporal spectrum from non RGBSpatialSpectrumProjection")
+
+    data = proj.image.value
+
+    md = data.metadata
+    spec = numpy.swapaxes(data, 0, 1)  # Make sure the order is T vs C
+    spec = model.DataArray(img.DataArray2RGB(spec), md)
+
+    spectrum_range, unit_wl = spectrum.get_spectrum_range(data)
+    time_range, unit_tl = spectrum.get_time_range(data)
+
+    if raw:
+        data = spec.C  # switch axes
+        if unit_wl == "m":
+            data.metadata[model.MD_WL_LIST] = spectrum_range
+        if unit_tl == "s":
+            data.metadata[model.MD_TIME_LIST] = time_range
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_STREAK
+        return data
+    else:
+        images = set_images([(spec, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None, {})])
+        # TODO: just use a standard tuple, instead of wx.Size
+        client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
+        im = images[0]  # just one image
+        # adjust to viewport size
+        scale = (im.shape[1] / client_size.x, im.shape[0] / client_size.y)
+        # Make surface based on the maximum resolution
+        data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        data_to_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
+        ctx = cairo.Context(surface)
+
+        buffer_center = (0, 0)
+        buffer_scale = scale
+        buffer_size = client_size.x, client_size.y
+
+        draw_image(
+            ctx,
+            im,
+            im.metadata['dc_center'],
+            buffer_center,
+            buffer_scale,
+            buffer_size,
+            1.0,
+            im_scale=im.metadata['dc_scale'],
+            rotation=im.metadata['dc_rotation'],
+            shear=im.metadata['dc_shear'],
+            flip=im.metadata['dc_flip'],
+            blend_mode=im.metadata['blend_mode'],
+            interpolate_data=False
+        )
+
+        # Draw top/bottom horizontal (wavelength) legend
+        text_colour = (0, 0, 0)  # black
+        value_range = (spectrum_range[0], spectrum_range[-1])
+        orientation = wx.HORIZONTAL
+        tick_spacing = SPEC_PLOT_SIZE // 4
+        font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
+        scale_x_draw = numpy.empty((SPEC_SCALE_HEIGHT, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_HEIGHT)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   text_colour, unit_wl, SPEC_SCALE_HEIGHT, font_size, "Wavelength")
+        data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
+
+        # Top
+        scale_x_draw = numpy.empty((SMALL_SCALE_WIDTH, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SMALL_SCALE_WIDTH)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   text_colour, unit_wl, SMALL_SCALE_WIDTH, font_size, mirror=True)
+        data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
+
+        # Draw left vertical (time) legend
+        orientation = wx.VERTICAL
+        tick_spacing = SPEC_PLOT_SIZE // 6
+        line_length = spec.shape[0] * spec.metadata[model.MD_PIXEL_SIZE][1]
+        value_range = (0, line_length)
+        scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        scale_y_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   text_colour, unit_tl, SPEC_SCALE_WIDTH, font_size, "Time")
+
+        # Extend y scale bar to fit the height of the bar plot with the x
+        # scale bar attached
+        extend = numpy.empty((SPEC_SCALE_HEIGHT, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        extend.fill(255)
+        scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
+
+        # Right
+        scale_y_draw = numpy.empty((client_size.y, SMALL_SCALE_WIDTH, 4), dtype=numpy.uint8)
+        scale_y_draw.fill(255)
+        surface = cairo.ImageSurface.create_for_data(
+            scale_y_draw, cairo.FORMAT_ARGB32, SMALL_SCALE_WIDTH, client_size.y)
+        ctx = cairo.Context(surface)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
+                   text_colour, unit_tl, SMALL_SCALE_WIDTH, font_size, mirror=True)
 
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bars attached

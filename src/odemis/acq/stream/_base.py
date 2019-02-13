@@ -151,6 +151,7 @@ class Stream(object):
         self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
         self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
+        self._dRangeLock = threading.Lock()
         self._drange = None  # min/max data range, or None if unknown
         self._drange_unreliable = True  # if current values are a rough guess (based on detector)
 
@@ -170,12 +171,15 @@ class Stream(object):
 
         # TODO: move to the DataProjection class
         self.auto_bc = model.BooleanVA(True)
+        self.auto_bc.subscribe(self._onAutoBC)
 
         # % of values considered outliers discarded in auto BC detection
         # Note: 1/256th is a nice value because on RGB, it means in degenerated
         # cases (like flat histogram), you still loose only one value on each
         # side.
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
+        self.auto_bc_outliers.subscribe(self._onOutliers)
+
         self.tint = model.ListVA((255, 255, 255), unit="RGB")  # 3-int R,G,B
 
         # Used if auto_bc is False
@@ -188,9 +192,8 @@ class Stream(object):
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
+        self._updateDRange(drange_raw)  # sets intensityRange
         self._init_projection_vas()
-
-        self._updateDRange(drange_raw)
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
@@ -218,17 +221,11 @@ class Stream(object):
                 raw = self.raw
             self._onNewData(None, raw)
 
-        # When True, the projected tiles cache should be invalidated
-        self._projectedTilesInvalid = False
-
     def _init_projection_vas(self):
         """ Initialize the VAs related with image projection
         """
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
-
-        self.auto_bc.subscribe(self._onAutoBC)
-        self.auto_bc_outliers.subscribe(self._onOutliers)
 
         # Don't call at init, so don't set metadata if default value
         self.tint.subscribe(self.onTint)
@@ -417,7 +414,8 @@ class Stream(object):
     # Order in which VAs should be set to ensure the values are kept as-is.
     # This should be the behaviour of the hardware component... but the driver
     # might be buggy, so beware!
-    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation", "DwellTime")
+    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation", "DwellTime",
+                "TimeRange", "StreakMode", "MCPGain")
     def _index_in_va_order(self, va_entry):
         """
         return the position of the VA name in VA_ORDER
@@ -628,77 +626,83 @@ class Stream(object):
         # different 4th or 5th dimension). => just a generic version that tries
         # to handle all the cases.
 
-        if data is None and self.raw:
-            data = self.raw[0]
-            if isinstance(data, model.DataArrayShadow):
-                # if the image is pyramidal, use the smaller image
-                data = self._getMergedRawImage(data, data.maxzoom)
+        # Note: Add a lock to avoid calling this fct simultaneously. When starting
+        # Odemis, the image thread and the histogram thread call this method.
+        # It happened sometimes that self._drange_unreliable was already updated, while
+        # self._drange was not updated yet. This resulted in incorrectly updated min and max
+        # values for drange calc by the second thread as using the new
+        # self._drange_unreliable but the old self._drange values.
+        with self._dRangeLock:
+            if data is None and self.raw:
+                data = self.raw[0]
+                if isinstance(data, model.DataArrayShadow):
+                    # if the image is pyramidal, use the smaller image
+                    data = self._getMergedRawImage(data, data.maxzoom)
 
-        # 2 types of drange management:
-        # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
-        # * dtype is float -> data.max
-        if data is not None:
-            if data.dtype.kind in "biu":
-                try:
-                    depth = 2 ** data.metadata[model.MD_BPP]
-                    if depth <= 1:
-                        logging.warning("Data reports a BPP of %d",
-                                        data.metadata[model.MD_BPP])
-                        raise ValueError()
-                    drange = (0, depth - 1)
-                except (KeyError, ValueError):
-                    drange = self._guessDRangeFromDetector()
+            # 2 types of drange management:
+            # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
+            # * dtype is float -> data.max
+            if data is not None:
+                if data.dtype.kind in "biu":
+                    try:
+                        depth = 2 ** data.metadata[model.MD_BPP]
+                        if depth <= 1:
+                            logging.warning("Data reports a BPP of %d", data.metadata[model.MD_BPP])
+                            raise ValueError()
+                        drange = (0, depth - 1)
+                    except (KeyError, ValueError):
+                        drange = self._guessDRangeFromDetector()
 
-                if drange is None:
-                    idt = numpy.iinfo(data.dtype)
-                    drange = (idt.min, idt.max)
-                elif data.dtype.kind == "i":  # shift the range for signed data
-                    depth = drange[1] + 1
-                    drange = (-depth // 2, depth // 2 - 1)
+                    if drange is None:
+                        idt = numpy.iinfo(data.dtype)
+                        drange = (idt.min, idt.max)
+                    elif data.dtype.kind == "i":  # shift the range for signed data
+                        depth = drange[1] + 1
+                        drange = (-depth // 2, depth // 2 - 1)
 
-                # If range is too big to be used as is => look really at the data
-                if (drange[1] - drange[0] > 4095 and
-                    (self._drange is None or
-                     self._drange_unreliable or
-                     self._drange[1] - self._drange[0] < drange[1] - drange[0])):
-                    mn = int(data.view(numpy.ndarray).min())
-                    mx = int(data.view(numpy.ndarray).max())
+                    # If range is too big to be used as is => look really at the data
+                    if (drange[1] - drange[0] > 4095 and
+                        (self._drange is None or
+                         self._drange_unreliable or
+                         self._drange[1] - self._drange[0] < drange[1] - drange[0])):
+                        mn = int(data.view(numpy.ndarray).min())
+                        mx = int(data.view(numpy.ndarray).max())
+                        if self._drange is not None and not self._drange_unreliable:
+                            # Only allow the range to expand, to avoid it constantly moving
+                            mn = min(mn, self._drange[0])
+                            mx = max(mx, self._drange[1])
+                        # Try to find "round" values. Either:
+                        # * mn = 0, mx = max rounded to next power of 2  -1
+                        # * mn = min, width = width rounded to next power of 2
+                        # => pick the one which gives the smallest width
+                        diff = max(2, mx - mn + 1)
+                        diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
+                        width0 = max(2, mx + 1)
+                        width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
+                        if diffrd < width0rd:
+                            drange = (mn, mn + diffrd - 1)
+                        else:
+                            drange = (0, width0rd - 1)
+                else:  # float
+                    # cast to ndarray to ensure a scalar (instead of a DataArray)
+                    drange = (data.view(numpy.ndarray).min(),
+                              data.view(numpy.ndarray).max())
                     if self._drange is not None and not self._drange_unreliable:
-                        # Only allow the range to expand, to avoid it constantly moving
-                        mn = min(mn, self._drange[0])
-                        mx = max(mx, self._drange[1])
-                    # Try to find "round" values. Either:
-                    # * mn = 0, mx = max rounded to next power of 2  -1
-                    # * mn = min, width = width rounded to next power of 2
-                    # => pick the one which gives the smallest width
-                    diff = max(2, mx - mn + 1)
-                    diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
-                    width0 = max(2, mx + 1)
-                    width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
-                    if diffrd < width0rd:
-                        drange = (mn, mn + diffrd - 1)
-                    else:
-                        drange = (0, width0rd - 1)
-            else: # float
-                # cast to ndarray to ensure a scalar (instead of a DataArray)
-                drange = (data.view(numpy.ndarray).min(),
-                          data.view(numpy.ndarray).max())
-                if self._drange is not None and not self._drange_unreliable:
-                    drange = (min(drange[0], self._drange[0]),
-                              max(drange[1], self._drange[1]))
+                        drange = (min(drange[0], self._drange[0]),
+                                  max(drange[1], self._drange[1]))
+
+                if drange:
+                    self._drange_unreliable = False
+            else:
+                # no data, give a large estimate based on the detector
+                drange = self._guessDRangeFromDetector()
+                self._drange_unreliable = True
 
             if drange:
-                self._drange_unreliable = False
-        else:
-            # no data, give a large estimate based on the detector
-            drange = self._guessDRangeFromDetector()
-            self._drange_unreliable = True
-
-        if drange:
-            # This VA will clip its own value if it is out of range
-            self.intensityRange.range = ((drange[0], drange[0]),
-                                         (drange[1], drange[1]))
-        self._drange = drange
+                # This VA will clip its own value if it is out of range
+                self.intensityRange.range = ((drange[0], drange[0]),
+                                             (drange[1], drange[1]))
+            self._drange = drange
 
     def _guessDRangeFromDetector(self):
         try:
@@ -732,16 +736,8 @@ class Stream(object):
             # The main thing to pay attention is that the data range is identical
             if self.histogram._edges != self._drange:
                 self._updateHistogram()
-            irange = img.findOptimalRange(self.histogram._full_hist,
-                                          self.histogram._edges,
-                                          self.auto_bc_outliers.value / 100)
-            # clip is needed for some corner cases with floats
-            irange = self.intensityRange.clip(irange)
-            self.intensityRange.value = irange
-        else:
-            # just use the values requested by the user
-            irange = sorted(self.intensityRange.value)
 
+        irange = sorted(self.intensityRange.value)
         return irange
 
     def _find_metadata(self, md):
@@ -886,7 +882,7 @@ class Stream(object):
         """ Recomputes the image with all the raw data available
         """
         # logging.debug("Updating image")
-        if not self.raw and isinstance(self.raw, list):
+        if not self.raw:
             return
 
         try:
@@ -935,13 +931,19 @@ class Stream(object):
     def _onAutoBC(self, enabled):
         # if changing to auto: B/C might be different from the manual values
         if enabled:
-            self._shouldUpdateImage()
+            self._recomputeIntensityRange()
 
     def _onOutliers(self, outliers):
         if self.auto_bc.value:
-            # set projected tiles cache as invalid
-            self._projectedTilesInvalid = True
-            self._shouldUpdateImage()
+            self._recomputeIntensityRange()
+
+    def _recomputeIntensityRange(self):
+        irange = img.findOptimalRange(self.histogram._full_hist,
+                                      self.histogram._edges,
+                                      self.auto_bc_outliers.value / 100)
+        # clip is needed for some corner cases with floats
+        irange = self.intensityRange.clip(irange)
+        self.intensityRange.value = irange
 
     def _setIntensityRange(self, irange):
         # Not much to do, but force int if the data is int
@@ -953,17 +955,13 @@ class Stream(object):
         return irange
 
     def _onIntensityRange(self, irange):
-        # If auto_bc is active, it updates intensities (from _updateImage()),
-        # so no need to refresh image again.
-        if not self.auto_bc.value:
-            # set projected tiles cache as invalid
-            self._projectedTilesInvalid = True
-            self._shouldUpdateImage()
+        self._shouldUpdateImage()
 
     def _updateHistogram(self, data=None):
         """
         data (DataArray): the raw data to use, default to .raw[0] - background
           (if present).
+        If will also update the intensityRange if auto_bc is enabled.
         """
         # Compute histogram and compact version
         if data is None:
@@ -995,8 +993,13 @@ class Stream(object):
             chist = hist
         self.histogram._full_hist = hist
         self.histogram._edges = edges
-        # Read-only VA, so we need to go around...
+        # First update the value, before the intensityRange subscribers are called...
         self.histogram._value = chist
+
+        if self.auto_bc.value:
+            self._recomputeIntensityRange()
+
+        # Notify last, so intensityRange is correct when subscribers get the new histogram
         self.histogram.notify(chist)
 
     def _onNewData(self, dataflow, data):
