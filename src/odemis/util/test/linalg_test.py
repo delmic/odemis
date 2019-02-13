@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
 
+from __future__ import division
 import unittest
 import numpy
 from scipy.linalg.misc import LinAlgError
