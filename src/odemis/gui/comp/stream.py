@@ -813,7 +813,7 @@ class StreamPanel(wx.Panel):
                                  self.stream.intensityRange.value[0],
                                  style=wx.NO_BORDER, size=(-1, 14),
                                  min_val=hist_min, max_val=hist_max,
-                                 key_step=1, accuracy=6)
+                                 key_step_min=1, accuracy=6)
         txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
 
@@ -827,7 +827,7 @@ class StreamPanel(wx.Panel):
                                   self.stream.intensityRange.value[1],
                                   style=wx.NO_BORDER, size=(-1, 14),
                                   min_val=hist_min, max_val=hist_max,
-                                  key_step=1, accuracy=6)
+                                  key_step_min=1, accuracy=6)
         txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_highi.SetToolTip(tooltip_txt)
