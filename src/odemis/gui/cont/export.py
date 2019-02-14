@@ -31,7 +31,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, \
     images_to_export_data, line_to_export_data, temporal_spectrum_to_export_data, \
-    time_spectrum_to_export_data
+    chronogram_to_export_data
 import os
 import time
 import wx
@@ -205,7 +205,7 @@ class ExportController(object):
             export_type = 'spectrum-line'
         elif view_name == 'Temporal spectrum':
             export_type = 'spectrum-temporal'
-        elif view_name == 'Time spectrum':
+        elif view_name == 'Chronograph':
             export_type = 'spectrum-time'
         else:
             export_type = 'spatial'
@@ -215,7 +215,8 @@ class ExportController(object):
         """
         Returns the data to be exported with respect to the settings and options.
 
-        :param export_type (string): spatial, AR, spectrum or spectrum-line
+        :param export_type (string): spatial, AR, spectrum, spectrum-temporal,
+            spectrum-time, or spectrum-line
         :param raw (boolean): raw data format if True
         :param interpolate_data (boolean): apply interpolation on data if True
 
@@ -230,13 +231,13 @@ class ExportController(object):
         if export_type == 'AR':
             exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':
-            exported_data = spectrum_to_export_data(vp.stream, raw)
+            exported_data = spectrum_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-line':
-            exported_data = line_to_export_data(vp.stream, raw)
+            exported_data = line_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-temporal':
-            exported_data = temporal_spectrum_to_export_data(vp.stream, raw)
+            exported_data = temporal_spectrum_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-time':
-            exported_data = time_spectrum_to_export_data(vp.stream, raw)
+            exported_data = chronogram_to_export_data(streams[0], raw)
         else:
             view_px = tuple(vp.canvas.ClientSize)
             view_mpp = fview.mpp.value

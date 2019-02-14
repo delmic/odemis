@@ -1054,12 +1054,12 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
             lpos = pos + (lbl_height // 2)
             lpos = max(min(lpos, csize.y), 2)
 
-            if prev_lpos >= lpos + 20 or i == 0:
+            if prev_lpos >= lpos + 20 or i == 0 or i == len(tick_list):
                 if mirror:
-                    # ctx.move_to(9, lpos)
-                    # ctx.show_text(label)
-                    ctx.move_to(5, pos)
-                    ctx.line_to(0, pos)
+                    ctx.move_to(scale_width - lbl_width - 9, csize.y - lpos)
+                    ctx.show_text(label)
+                    ctx.move_to(scale_width - 5, csize.y - pos)
+                    ctx.line_to(scale_width, csize.y - pos)
                 else:
                     ctx.move_to(scale_width - lbl_width - 9, lpos)
                     ctx.show_text(label)
@@ -1159,12 +1159,12 @@ def spectrum_to_export_data(proj, raw):
     """
     Creates either raw or WYSIWYG representation for the spectrum data plot
 
-    stream (SpectrumStream): spectrum stream
+    proj (DataProjection): DataProjection of the spectrum to export
     raw (boolean): if True returns raw representation
 
     returns (model.DataArray)
     """
-    spec = proj.image.value
+    spec = proj.projectAsRaw()
     if spec is None:
         raise LookupError("No pixel selected to pick a spectrum")
     spectrum_range, unit = spectrum.get_spectrum_range(spec)
@@ -1266,7 +1266,7 @@ def spectrum_to_export_data(proj, raw):
         return spec_plot
 
 
-def time_spectrum_to_export_data(proj, raw):
+def chronogram_to_export_data(proj, raw):
     """
     Creates either raw or WYSIWYG representation for the time spectrum data plot
 
@@ -1278,14 +1278,12 @@ def time_spectrum_to_export_data(proj, raw):
     if not isinstance(proj, SinglePointTemporalProjection):
         raise ValueError("Trying to export a time spectrum of an invalid projection")
 
-    spec = proj.image.value
+    spec = proj.projectAsRaw()
     if spec is None:
         raise LookupError("No pixel selected to pick a spectrum")
     time_range, unit = spectrum.get_time_range(spec)
 
     if raw:
-        if unit == "s":
-            spec.metadata[model.MD_TIME_LIST] = time_range
         spec.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return spec
     else:
@@ -1343,7 +1341,7 @@ def time_spectrum_to_export_data(proj, raw):
         # Draw left vertical scale legend
         orientation = wx.VERTICAL
         tick_spacing = SPEC_PLOT_SIZE // 6
-        value_range = (min(spectrum), max(spectrum))
+        value_range = (min(spec), max(spec))
         scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
@@ -1390,20 +1388,19 @@ def line_to_export_data(proj, raw):
     returns (model.DataArray)
     """
 
-    # Set the
-    spec = proj.image.value
+    data = proj.projectAsRaw()
+    spec = model.DataArray(img.DataArray2RGB(data), data.metadata)
     if spec is None:
         raise LookupError("No line selected to pick a spectrum")
     spectrum_range, unit = spectrum.get_spectrum_range(spec)
 
     if raw:
-        data = spec.T  # switch axes
-        if unit == "m":
-            data.metadata[model.MD_WL_LIST] = spectrum_range
+        # Swap axes
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return data
     else:
-        images = set_images([(spectrum, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None, {})])
+        # TODO: Investigate why the vertical flip is needed to make it work properly
+        images = set_images([(spec, (0, 0), (1, 1), True, None, None, wx.VERTICAL, None, "Spatial Spectrum", None, None, {})])
         # TODO: just use a standard tuple, instead of wx.Size
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         im = images[0]  # just one image
@@ -1513,28 +1510,19 @@ def temporal_spectrum_to_export_data(proj, raw):
     returns (model.DataArray)
     """
 
-    if not isinstance(proj, RGBSpatialSpectrumProjection):
-        raise ValueError("Cannot export temporal spectrum from non RGBSpatialSpectrumProjection")
-
-    data = proj.image.value
+    data = proj.projectAsRaw()
 
     md = data.metadata
-    spec = numpy.swapaxes(data, 0, 1)  # Make sure the order is T vs C
-    spec = model.DataArray(img.DataArray2RGB(spec), md)
+    spec = model.DataArray(img.DataArray2RGB(data), md)
 
     spectrum_range, unit_wl = spectrum.get_spectrum_range(data)
     time_range, unit_tl = spectrum.get_time_range(data)
 
     if raw:
-        data = spec.C  # switch axes
-        if unit_wl == "m":
-            data.metadata[model.MD_WL_LIST] = spectrum_range
-        if unit_tl == "s":
-            data.metadata[model.MD_TIME_LIST] = time_range
-        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_STREAK
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_TEMPSPECTRUM
         return data
     else:
-        images = set_images([(spec, (0, 0), (1, 1), True, None, None, None, None, "Spatial Spectrum", None, None, {})])
+        images = set_images([(spec, (0, 0), (1, 1), True, None, None, wx.VERTICAL, None, "Spatial Spectrum", None, None, {})])
         # TODO: just use a standard tuple, instead of wx.Size
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         im = images[0]  # just one image
@@ -1595,8 +1583,7 @@ def temporal_spectrum_to_export_data(proj, raw):
         # Draw left vertical (time) legend
         orientation = wx.VERTICAL
         tick_spacing = SPEC_PLOT_SIZE // 6
-        line_length = spec.shape[0] * spec.metadata[model.MD_PIXEL_SIZE][1]
-        value_range = (0, line_length)
+        value_range = (time_range[-1], time_range[0])
         scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
@@ -1900,7 +1887,8 @@ def get_ordered_images(streams, raw=False):
             if data_raw.ndim > 2:
                 # It's not (just) spatial => need to project it
                 if isinstance(s, acqstream.SpectrumStream):
-                    data_raw = s.get_spatial_spectrum(raw=raw)
+                    proj = RGBSpatialSpectrumProjection(s)
+                    data_raw = proj.projectAsRaw()
                 else:
                     logging.warning("Doesn't know how to export data of %s spatial raw", s.name.value)
                     continue

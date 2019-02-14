@@ -766,13 +766,8 @@ class LineSpectrumProjection(RGBProjection):
             return None, None
 
         raw_md = self.stream.calibrated.value.metadata
-        md = {}
-        md[model.MD_DIMS] = "YXC"  # RGB format
-        if model.MD_WL_LIST in raw_md:
-            md[model.MD_WL_LIST] = raw_md[model.MD_WL_LIST]
-        elif model.MD_WL_POLYNOMIAL in raw_md:
-            md[model.MD_WL_POLYNOMIAL] = raw_md[model.MD_WL_POLYNOMIAL]
-
+        md = raw_md.copy()
+        md[model.MD_DIMS] = "XC"  # RGB format
         md[MD_PIXEL_SIZE] = (None, pxs)  # for the spectrum, use get_spectrum_range()
         return spec1d, md
 
@@ -916,6 +911,8 @@ class PixelTemporalSpectrumProjection(RGBProjection):
             data = self._computeSpec()
             if data is not None:
                 self.image.value = self._project2RGB(data)
+            else:
+                self.image.value = None
             
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
@@ -1041,9 +1038,7 @@ class SinglePointSpectrumProjection(DataProjection):
         pixel or None if no spectrum is selected.
         """
         try:
-            data = self._computeSpec()
-            if data is not None:
-                self.image.value = data
+            self.image.value = self._computeSpec()
             
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
@@ -1118,6 +1113,9 @@ class SinglePointTemporalProjection(DataProjection):
             mean = datasum / n
             return model.DataArray(mean.astype(chrono2d.dtype), md)
 
+    def projectAsRaw(self):
+        return self._computeSpec()
+
     def _updateImage(self):
         """
         Recomputes the image with all the raw data available
@@ -1126,9 +1124,7 @@ class SinglePointTemporalProjection(DataProjection):
          pixel or None if no spectrum is selected.
         """
         try:
-            data = self._computeSpec()
-            if data is not None:
-                self.image.value = data
+            self.image.value = self._computeSpec()
 
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
