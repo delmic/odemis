@@ -628,8 +628,13 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         self.readoutcam._updateWavelengthList()
         wll_mag = self.readoutcam._metadata[model.MD_WL_LIST]
 
+        # check wl lists are different
         with self.assertRaises(AssertionError):
             self.assertListEqual(wll, wll_mag)  # there is not assertListNotEqual...
+
+        # check that wl list for mag = 0.476 spans a larger wl range than for mag = 1
+        self.assertGreater(wll[0], wll_mag[0])  # first value for mag = 1 should be greater than for mag = 0.476
+        self.assertLess(wll[-1], wll_mag[-1])  # last value for mag = 1 should be less than for mag = 0.476
 
         mag = 1.0
         md = {model.MD_LENS_MAG: mag}

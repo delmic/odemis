@@ -129,7 +129,7 @@ class ReadoutCamera(model.DigitalCamera):
         """
         npixels = self._resolution[0]  # number of pixels, horizontal is wavelength
         # pixelsize VA is sensor px size without binning and magnification
-        pxs = self.pixelSize.value[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
+        pxs = self.pixelSize.value[0] * self._binning[0] / float(self._metadata.get(model.MD_LENS_MAG, 1.0))
         wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
         self._metadata[model.MD_WL_LIST] = wll
 
