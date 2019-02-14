@@ -611,262 +611,106 @@ def _parse_physical_data(pdgroup, da):
             except (KeyError, IndexError, UnicodeDecodeError):
                 pass
 
-        # MicroscopeMode helps us to find out the bandwidth of the wavelength
-        # and it's also a way to keep it stable, if saving the data again.
-        h_width = 1e-9  # 1 nm : default is to just almost keep the value
-        try:
-            mm = pdgroup["MicroscopeMode"][i]
-            if mm == MM_FLUORESCENCE:
-                h_width = 10e-9  # 10 nm => narrow band
-            if mm == MM_TRANSMISSION:  # we set it for brightfield
-                h_width = 100e-9  # 100 nm => large band
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["ExcitationWavelength"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            xwl = float(ds[i])  # in m
-            md[model.MD_IN_WL] = (xwl - h_width, xwl + h_width)
-        except (TypeError, KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["EmissionWavelength"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            if isinstance(ds[i], basestring):
-                md[model.MD_OUT_WL] = ds[i]
-            elif len(ds.shape) == 1:  # Only one value per channel
-                ewl = float(ds[i])  # in m
-                # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
-                # more precision in C scale (now explicitly saved as tuple here)
-                if model.MD_OUT_WL not in md:
-                    md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
-            else:  # full band for each channel
-                md[model.MD_OUT_WL] = tuple(ds[i])
-        except (TypeError, KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["Magnification"]
-            mag = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_LENS_MAG] = mag
-        except (KeyError, IndexError, ValueError):
-            pass
+        get_metadata(pdgroup, i, md, "ExcitationWavelength", model.MD_IN_WL)
+        get_metadata(pdgroup, i, md, "EmissionWavelength", model.MD_OUT_WL)
+        get_metadata(pdgroup, i, md, "Magnification", model.MD_LENS_MAG)
 
         # Our extended metadata
-        try:
-            ds = pdgroup["Baseline"]
-            oft = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_BASELINE] = oft
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["IntegrationTime"]
-            it = float(ds[i])  # s
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_EXP_TIME] = it
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["RefractiveIndexLensImmersionMedium"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            ri = float(ds[i])  # ratio
-            md[model.MD_LENS_RI] = ri
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["NumericalAperture"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            na = float(ds[i])  # ratio
-            md[model.MD_LENS_NA] = na
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["AccelerationVoltage"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            evolt = float(ds[i])  # V
-            md[model.MD_EBEAM_VOLTAGE] = evolt
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["EmissionCurrent"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            ecurrent = float(ds[i])  # A
-            md[model.MD_EBEAM_CURRENT] = ecurrent
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["EmissionCurrentOverTime"]
-            state = _h5svi_get_state(ds)
-            if state and state[i] in (ST_INVALID, ST_DEFAULT):
-                raise ValueError
-            # It should contain an array of float of Nx2, where the second dim
-            # contains time (s since epoch) & current (A)
-            cot = ds[i].tolist()  # A
-            md[model.MD_EBEAM_CURRENT_TIME] = cot
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["PolePosition"]
-            pp = tuple(ds[i])  # px
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_POLE] = pp
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["XMax"]
-            xm = float(ds[i])  # in m
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_XMAX] = xm
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["HoleDiameter"]
-            hd = float(ds[i])  # in m
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_HOLE_DIAMETER] = hd
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["FocusDistance"]
-            fd = float(ds[i])  # in m
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_FOCUS_DISTANCE] = fd
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["ParabolaF"]
-            pf = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_AR_PARABOLA_F] = pf
-        except (KeyError, IndexError, ValueError):
-            pass
-
+        get_metadata(pdgroup, i, md, "Baseline", model.MD_BASELINE)
+        get_metadata(pdgroup, i, md, "IntegrationTime", model.MD_EXP_TIME)
+        get_metadata(pdgroup, i, md, "RefractiveIndexLensImmersionMedium", model.MD_LENS_RI, default_status=True)
+        get_metadata(pdgroup, i, md, "NumericalAperture", model.MD_LENS_NA, default_status=True)
+        get_metadata(pdgroup, i, md, "AccelerationVoltage", model.MD_EBEAM_VOLTAGE, default_status=True)
+        get_metadata(pdgroup, i, md, "EmissionCurrent", model.MD_EBEAM_CURRENT, default_status=True)
+        get_metadata(pdgroup, i, md, "EmissionCurrentOverTime", model.MD_EBEAM_CURRENT_TIME, default_status=True)
+        # angle resolved
+        get_metadata(pdgroup, i, md, "PolePosition", model.MD_AR_POLE)
+        get_metadata(pdgroup, i, md, "XMax", model.MD_AR_XMAX)
+        get_metadata(pdgroup, i, md, "HoleDiameter", model.MD_AR_HOLE_DIAMETER)
+        get_metadata(pdgroup, i, md, "FocusDistance", model.MD_AR_FOCUS_DISTANCE)
+        get_metadata(pdgroup, i, md, "ParabolaF", model.MD_AR_PARABOLA_F)
         # polarization analyzer
-        try:
-            ds = pdgroup["Polarization"]
-            pol = str(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_POL_MODE] = pol
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["QuarterWavePlate"]
-            posqwp = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_POL_POS_QWP] = posqwp
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["LinearPolarizer"]
-            poslinpol = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_POL_POS_LINPOL] = poslinpol
-        except (KeyError, IndexError, ValueError):
-            pass
-
+        get_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE)
+        get_metadata(pdgroup, i, md, "QuarterWavePlate", model.MD_POL_POS_QWP)
+        get_metadata(pdgroup, i, md, "LinearPolarizer", model.MD_POL_POS_LINPOL)
         # streak camera
-        try:
-            ds = pdgroup["TimeRange"]
-            timeRange = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_STREAK_TIMERANGE] = timeRange
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["MCPGain"]
-            MCPGain = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_STREAK_MCPGAIN] = MCPGain
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["StreakMode"]
-            streakMode = bool(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_STREAK_MODE] = streakMode
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["TriggerDelay"]
-            triggerDelay = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_TRIGGER_DELAY] = triggerDelay
-        except (KeyError, IndexError, ValueError):
-            pass
-
-        try:
-            ds = pdgroup["TriggerRate"]
-            triggerRate = float(ds[i])
-            state = _h5svi_get_state(ds)
-            if state and state[i] == ST_INVALID:
-                raise ValueError
-            md[model.MD_TRIGGER_RATE] = triggerRate
-        except (KeyError, IndexError, ValueError):
-            pass
+        get_metadata(pdgroup, i, md, "TimeRange", model.MD_STREAK_TIMERANGE)
+        get_metadata(pdgroup, i, md, "MCPGain", model.MD_STREAK_MCPGAIN)
+        get_metadata(pdgroup, i, md, "StreakMode", model.MD_STREAK_MODE)
+        get_metadata(pdgroup, i, md, "TriggerDelay", model.MD_TRIGGER_DELAY)
+        get_metadata(pdgroup, i, md, "TriggerRate", model.MD_TRIGGER_RATE)
 
     return das
+
+
+# ("PolePosition": (tuple, model.MD_AR_POLE))
+# get_metadata("PolePosition": (tuple, model.MD_AR_POLE))
+
+def get_metadata(pdgroup, index, md, name, MD_key, default_status=False):
+    """
+
+    """
+    try:
+        ds = pdgroup[name]
+
+        state = _h5svi_get_state(ds)
+        if default_status:
+            states = (ST_INVALID, ST_DEFAULT)
+        else:
+            states = ST_INVALID
+
+        if state and state[index] == states:
+            raise ValueError
+
+        # special case
+        if MD_key is model.MD_EBEAM_CURRENT_TIME:
+            # It should contain an array of float of Nx2, where the second dim
+            # contains time (s since epoch) & current (A)
+            md[MD_key] = ds[index].tolist()  # A
+
+        elif MD_key in (model.MD_IN_WL,  model.MD_OUT_WL):
+
+            # MicroscopeMode helps us to find out the bandwidth of the wavelength
+            # and it's also a way to keep it stable, if saving the data again.
+            h_width = 1e-9  # 1 nm : default is to just almost keep the value
+            try:
+                mm = pdgroup["MicroscopeMode"][index]
+                if mm == MM_FLUORESCENCE:
+                    h_width = 10e-9  # 10 nm => narrow band
+                if mm == MM_TRANSMISSION:  # we set it for brightfield
+                    h_width = 100e-9  # 100 nm => large band
+            except Exception as ex:
+                raise ex  # TODO  does it now raise the exception below or do we also need a logging info here?
+                # TODO didn't know which data to use for testing
+
+            if MD_key is model.MD_IN_WL:
+                md[MD_key] = (float(ds[index]) - h_width, float(ds[index]) + h_width)  # in m
+            elif MD_key is model.MD_OUT_WL:
+                if isinstance(ds[index], basestring):
+                    md[model.MD_OUT_WL] = ds[index]
+                elif len(ds.shape) == 1:  # Only one value per channel
+                    ewl = float(ds[index])  # in m
+                    # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
+                    # more precision in C scale (now explicitly saved as tuple here)
+                    if MD_key not in md:
+                        md[MD_key] = (ewl - h_width, ewl + h_width)
+                else:  # full band for each channel
+                    md[MD_key] = tuple(ds[index])
+
+        else:
+            data_type = type(ds[index])
+
+            if data_type in (numpy.float64, numpy.int64):
+                md[MD_key] = float(ds[index])
+            elif data_type is numpy.bool_:
+                md[MD_key] = bool(ds[index])
+            elif data_type is numpy.ndarray:
+                md[MD_key] = tuple(ds[index])
+            elif data_type is numpy.string_:
+                md[MD_key] = str(ds[index])
+
+    except Exception as ex:
+        logging.info("Skip reading MD %s: %s" % (name, ex))
 
 # Enums used in SVI HDF5
 # State: how "trustable" is the value
@@ -1149,20 +993,6 @@ def _add_image_metadata(group, image, mds):
 
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
-    for md in mds:
-        if model.MD_DWELL_TIME in md:
-            its.append(md[model.MD_DWELL_TIME])
-            st_its.append(ST_REPORTED)
-        elif model.MD_EXP_TIME in md:
-            its.append(md[model.MD_EXP_TIME])
-            st_its.append(ST_REPORTED)
-        else:
-            its.append(0)
-            st_its.append(ST_INVALID)
-    if not all(st == ST_INVALID for st in st_its):
-        gp["IntegrationTime"] = its
-        _h5svi_set_state(gp["IntegrationTime"], st_its)
-
     # PolePosition: position (in floating px) of the pole in the image
     # (only meaningful for AR/SPARC)
     pp, st_pp = [], []
@@ -1200,132 +1030,72 @@ def _add_image_metadata(group, image, mds):
     triggerRate, st_triggerRate = [], []
 
     for md in mds:
-        if model.MD_AR_POLE in md:
-            pp.append(md[model.MD_AR_POLE])
-            st_pp.append(ST_REPORTED)
+        # dwell time ebeam or?? exposure time # TODO exposure time and dwell time same?
+        if model.MD_DWELL_TIME in md:
+            get_status(st_its, its, md, model.MD_DWELL_TIME, default=False)  # TODO only one of the two there??
         else:
-            pp.append((0, 0))
-            st_pp.append(ST_INVALID)
-        if model.MD_AR_XMAX in md:
-            xm.append(md[model.MD_AR_XMAX])
-            st_xm.append(ST_REPORTED)
-        else:
-            xm.append(0)
-            st_xm.append(ST_INVALID)
-        if model.MD_AR_HOLE_DIAMETER in md:
-            hd.append(md[model.MD_AR_HOLE_DIAMETER])
-            st_hd.append(ST_REPORTED)
-        else:
-            hd.append(0)
-            st_hd.append(ST_INVALID)
-        if model.MD_AR_FOCUS_DISTANCE in md:
-            fd.append(md[model.MD_AR_FOCUS_DISTANCE])
-            st_fd.append(ST_REPORTED)
-        else:
-            fd.append(0)
-            st_fd.append(ST_INVALID)
-        if model.MD_AR_PARABOLA_F in md:
-            pf.append(md[model.MD_AR_PARABOLA_F])
-            st_pf.append(ST_REPORTED)
-        else:
-            pf.append(0)
-            st_pf.append(ST_INVALID)
-
+            get_status(st_its, its, md, model.MD_EXP_TIME, default=False)  # if this also not there -> 0 and invalid
+        # angle resolved
+        get_status(st_pp, pp, md, model.MD_AR_POLE, default=False)  # TODO can those not also get an empty string?
+        get_status(st_xm, xm, md, model.MD_AR_XMAX, default=False)
+        get_status(st_hd, hd, md, model.MD_AR_HOLE_DIAMETER, default=False)
+        get_status(st_fd, fd, md, model.MD_AR_FOCUS_DISTANCE, default=False)
+        get_status(st_pf, pf, md, model.MD_AR_PARABOLA_F, default=False)
         # polarization analyzer
-        if model.MD_POL_MODE in md:
-            pol.append(md[model.MD_POL_MODE])
-            st_pol.append(ST_REPORTED)
-        else:
-            pol.append("")
-            st_pol.append(ST_INVALID)
-        if model.MD_POL_POS_QWP in md:
-            posqwp.append(md[model.MD_POL_POS_QWP])
-            st_posqwp.append(ST_REPORTED)
-        else:
-            posqwp.append(0)
-            st_posqwp.append(ST_INVALID)
-        if model.MD_POL_POS_LINPOL in md:
-            poslinpol.append(md[model.MD_POL_POS_LINPOL])
-            st_poslinpol.append(ST_REPORTED)
-        else:
-            poslinpol.append(0)
-            st_poslinpol.append(ST_INVALID)
-
+        get_status(st_pol, pol, md, model.MD_POL_MODE)
+        get_status(st_posqwp, posqwp, md, model.MD_POL_POS_QWP, default=False)
+        get_status(st_poslinpol, poslinpol, md, model.MD_POL_POS_LINPOL, default=False)
         # streak camera
-        if model.MD_STREAK_TIMERANGE in md:
-            timeRange.append(md[model.MD_STREAK_TIMERANGE])
-            st_timeRange.append(ST_REPORTED)
-        else:
-            timeRange.append("")
-            st_timeRange.append(ST_INVALID)
-        if model.MD_STREAK_MCPGAIN in md:
-            MCPGain.append(md[model.MD_STREAK_MCPGAIN])
-            st_MCPGain.append(ST_REPORTED)
-        else:
-            MCPGain.append("")
-            st_MCPGain.append(ST_INVALID)
-        if model.MD_STREAK_MODE in md:
-            streakMode.append(md[model.MD_STREAK_MODE])
-            st_streakMode.append(ST_REPORTED)
-        else:
-            streakMode.append("")
-            st_streakMode.append(ST_INVALID)
-        if model.MD_TRIGGER_DELAY in md:
-            triggerDelay.append(md[model.MD_TRIGGER_DELAY])
-            st_triggerDelay.append(ST_REPORTED)
-        else:
-            triggerDelay.append("")
-            st_triggerDelay.append(ST_INVALID)
-        if model.MD_TRIGGER_RATE in md:
-            triggerRate.append(md[model.MD_TRIGGER_RATE])
-            st_triggerRate.append(ST_REPORTED)
-        else:
-            triggerRate.append("")
-            st_triggerRate.append(ST_INVALID)
+        get_status(st_timeRange, timeRange, md, model.MD_STREAK_TIMERANGE)
+        get_status(st_MCPGain, MCPGain, md, model.MD_STREAK_MCPGAIN)
+        get_status(st_streakMode, streakMode, md, model.MD_STREAK_MODE)
+        get_status(st_triggerDelay, triggerDelay, md, model.MD_TRIGGER_DELAY)
+        get_status(st_triggerRate, triggerRate, md, model.MD_TRIGGER_RATE)
 
-    if not all(st == ST_INVALID for st in st_pp):
-        gp["PolePosition"] = pp
-        _h5svi_set_state(gp["PolePosition"], st_pp)
-    if not all(st == ST_INVALID for st in st_xm):
-        gp["XMax"] = xm
-        _h5svi_set_state(gp["XMax"], st_xm)
-    if not all(st == ST_INVALID for st in st_hd):
-        gp["HoleDiameter"] = hd
-        _h5svi_set_state(gp["HoleDiameter"], st_hd)
-    if not all(st == ST_INVALID for st in st_fd):
-        gp["FocusDistance"] = fd
-        _h5svi_set_state(gp["FocusDistance"], st_fd)
-    if not all(st == ST_INVALID for st in st_pf):
-        gp["ParabolaF"] = pf
-        _h5svi_set_state(gp["ParabolaF"], st_pf)
-
+    # integration time
+    set_status(gp, "IntegrationTime", st_its, its)
+    # angle resolved
+    set_status(gp, "PolePosition", st_pp, pp)
+    set_status(gp, "XMax", st_xm, xm)
+    set_status(gp, "HoleDiameter", st_hd, hd)
+    set_status(gp, "FocusDistance", st_fd, fd)
+    set_status(gp, "ParabolaF", st_pf, pf)
     # polarization analyzer
-    if not all(st == ST_INVALID for st in st_pol):
-        gp["Polarization"] = pol
-        _h5svi_set_state(gp["Polarization"], st_pol)
-    if not all(st == ST_INVALID for st in st_posqwp):
-        gp["QuarterWavePlate"] = posqwp
-        _h5svi_set_state(gp["QuarterWavePlate"], st_posqwp)
-    if not all(st == ST_INVALID for st in st_poslinpol):
-        gp["LinearPolarizer"] = poslinpol
-        _h5svi_set_state(gp["LinearPolarizer"], st_poslinpol)
-
+    set_status(gp, "Polarization", st_pol, pol)
+    set_status(gp, "QuarterWavePlate", st_posqwp, posqwp)
+    set_status(gp, "LinearPolarizer", st_poslinpol, poslinpol)
     # streak camera
-    if not all(st == ST_INVALID for st in st_timeRange):
-        gp["TimeRange"] = timeRange
-        _h5svi_set_state(gp["TimeRange"], st_timeRange)
-    if not all(st == ST_INVALID for st in st_MCPGain):
-        gp["MCPGain"] = MCPGain
-        _h5svi_set_state(gp["MCPGain"], st_MCPGain)
-    if not all(st == ST_INVALID for st in st_streakMode):
-        gp["StreakMode"] = streakMode
-        _h5svi_set_state(gp["StreakMode"], st_streakMode)
-    if not all(st == ST_INVALID for st in st_triggerDelay):
-        gp["TriggerDelay"] = triggerDelay
-        _h5svi_set_state(gp["TriggerDelay"], st_triggerDelay)
-    if not all(st == ST_INVALID for st in st_triggerRate):
-        gp["TriggerRate"] = triggerRate
-        _h5svi_set_state(gp["TriggerRate"], st_triggerRate)
+    set_status(gp, "TimeRange", st_timeRange, timeRange)
+    set_status(gp, "MCPGain", st_MCPGain, MCPGain)
+    set_status(gp, "StreakMode", st_streakMode, streakMode)
+    set_status(gp, "TriggerDelay", st_triggerDelay, triggerDelay)
+    set_status(gp, "TriggerRate", st_triggerRate, triggerRate)
+
+
+def get_status(status_list, value_list, md, MD_key, default=True):
+    """
+
+    """
+    if MD_key in md:
+        value_list.append(md[MD_key])
+        status_list.append(ST_REPORTED)
+    else:
+        if default:
+            value_list.append("")
+        else:
+            if MD_key is model.MD_AR_POLE:
+                value_list.append((0, 0))
+            else:
+                value_list.append(0)
+        status_list.append(ST_INVALID)
+
+
+def set_status(gp, name, status_list, value_list):
+    """
+    """
+    if not all(st == ST_INVALID for st in status_list):
+        gp[name] = value_list
+        _h5svi_set_state(gp[name], status_list)
 
 
 def _add_svi_info(group):
