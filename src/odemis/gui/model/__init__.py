@@ -168,7 +168,8 @@ class MainGUIData(object):
         "streak-delay": "streak_delay",
         "streak-lens": "streak_lens",
         "tc-od-filter": "tc_od_filter",
-        "tc-filter": "tc_filter"
+        "tc-filter": "tc_filter",
+        "slit-in-big": "slit_in_big"
     }
 
     def __init__(self, microscope):
@@ -234,6 +235,7 @@ class MainGUIData(object):
         self.streak_lens = None  # input optics in front of the streak camera
         self.tc_od_filter = None
         self.tc_filter = None
+        self.slit_in_big = None
 
         self.ebeamControlsMag = None
 
