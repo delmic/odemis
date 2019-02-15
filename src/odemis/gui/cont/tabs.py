@@ -1841,15 +1841,13 @@ class AnalysisTab(Tab):
             # FIXME: This temporary "fix" only binds the first spectrum stream to the pixel and
             # line overlays. This is done because in the PlotViewport only the first spectrum stream
             # gets connected. See connect_stream in viewport.py, line 812.
-            # We need a clean way to connect both the overlays and the PlotViewport to the right
-            # spectrum stream when the view/stream tree changes.
+            # We need a clean way to connect the overlays
 
             spec_stream = spec_streams[0]
-
             sraw = spec_stream.raw[0]
 
             # We need to get the dimensions so we can determine the
-            # resolution. Remember that in Matrix notation, the
+            # resolution. Remember that in numpy notation, the
             # number of rows (is vertical size), comes first. So we
             # need to 'swap' the values to get the (x,y) resolution.
             height, width = sraw.shape[-2], sraw.shape[-1]
@@ -1872,11 +1870,12 @@ class AnalysisTab(Tab):
                         spec_stream.selectionWidth,
                         spec_stream.selected_pixel
                     )
-                    
+
+            for s in spec_streams:
                 # Adjust the viewport layout (if needed) when a pixel or line is selected
-                spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-                if hasattr(spec_stream, "selected_line"):
-                    spec_stream.selected_line.subscribe(self._on_line_select, init=True)
+                s.selected_pixel.subscribe(self._on_pixel_select, init=True)
+                if hasattr(s, "selected_line"):
+                    s.selected_line.subscribe(self._on_line_select, init=True)
 
             # ########### Combined views and spectrum view visible
             if hasattr(spec_stream, "selected_time"):
