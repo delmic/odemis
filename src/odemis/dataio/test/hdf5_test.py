@@ -1249,12 +1249,8 @@ class TestHDF5IO(unittest.TestCase):
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
 
-            if model.MD_PIXEL_DUR in md:
-                pxd = md[model.MD_PIXEL_DUR]
-                self.assertEqual(im.metadata[model.MD_PIXEL_DUR], pxd)
-            if model.MD_TIME_OFFSET in md:
-                tof = md[model.MD_TIME_OFFSET]
-                self.assertEqual(im.metadata[model.MD_TIME_OFFSET], tof)
+            if model.MD_PIXEL_DUR in md:  # MD_PIXEL_DUR and MD_TIME_OFFSET are deprecated, so should find MD_TIME_LIST
+                self.assertIn(model.MD_TIME_LIST, im.metadata.keys())
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)
