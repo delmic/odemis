@@ -695,23 +695,24 @@ def read_metadata(pdgroup, c_index, md, name, md_key, converter, bad_states=(ST_
     """
     Reads the metadata associated to an image for a specific color channel.
     :parameter pdgroup: (HDF Group) the group "PhysicalData" associated to an image
-    :parameter name: (str) name of the pd group
     :parameter c_index: color channel index (C dim)
     :parameter md: (dict) metadata associated with the image data
-    :parameter md_key: (str) metadata key to read the data from
-    :parameter converter: (type) used to convert the read value
-    :parameter bad_states: (tuple) specifies bad states for a value
+    :parameter name: (str) name of the metadata in the HDF5 file
+    :parameter md_key: (str) metadata key to be stored
+    :parameter converter: (function(ndarray) -> value) used to convert from the value read 
+        from the file to standard metadata type.
+    :parameter bad_states: (tuple) specifies bad states for a value, in which case the value
+        will not be stored in the metadata.
     """
     try:
         ds = pdgroup[name]
 
         state = _h5svi_get_state(ds)
         if state and (state[c_index] in bad_states):
-            raise ValueError
+            raise ValueError("State %d indicate that metadata is not useful" % state[c_index])
 
         # special case
         if md_key in (model.MD_IN_WL, model.MD_OUT_WL):
-
             # MicroscopeMode helps us to find out the bandwidth of the wavelength
             # and it's also a way to keep it stable, if saving the data again.
             h_width = 1e-9  # 1 nm : default is to just almost keep the value
@@ -1064,12 +1065,12 @@ def _add_image_metadata(group, image, mds):
 
 def append_metadata(status_list, value_list, md, md_key, default_value=""):
     """
-    Fetches the md for an image for one color channel and appends it to the list of values for a specific md key.
+    Fetches the metadata of an image and appends it to the list of values.
     :parameter status_list: (list) containing the states of the values
     :parameter value_list: (list) containing the values of the specified metadata
-    :parameter md: (dict) metadata of the image data for one color channel
+    :parameter md: (dict) metadata of the DataArray
     :parameter md_key: (str) metadata key to read the value from
-    :parameter default_value: value that is appended to the list of values when the md key does not exist
+    :parameter default_value: value that is appended to the list of values when the md key is not present
     """
     if md_key in md:
         value_list.append(md[md_key])
