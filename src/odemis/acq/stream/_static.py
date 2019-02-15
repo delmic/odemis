@@ -690,14 +690,13 @@ class StaticSpectrumStream(StaticStream):
 
         # Is there time data?
         if image.shape[1] > 1:
-            # cached list of time stamps for each pixel pos
+            # cached list of timestamps for each position in the time dimension
             self._tl_px_values, unit_t = spectrum.get_time_range(image)
             min_t, max_t = self._tl_px_values[0], self._tl_px_values[-1]
-            ct = (max_t + min_t) / 2  # default value for VA
 
-            # Create temporal data VA's
-
-            self.selected_time = model.FloatContinuous(ct,
+            # Allow the select the time as any value within the range, and the
+            # setter will automatically "snap" it to the closest existing timestamp
+            self.selected_time = model.FloatContinuous(self._tl_px_values[0],
                                                    range=(min_t, max_t),
                                                    unit=unit_t,
                                                    setter=self._setTime)
