@@ -138,7 +138,11 @@ class TestPH300(unittest.TestCase):
 
             data = df.get()
             self.assertEqual(data.metadata[model.MD_DWELL_TIME], dt)
-            self.assertEqual(data.metadata[model.MD_PIXEL_DUR], pxd)
+            tl = data.metadata[model.MD_TIME_LIST]
+            self.assertAlmostEqual(tl[0], so)
+            self.assertAlmostEqual(tl[1] - tl[0], pxd)
+            self.assertEqual(len(tl), data.shape[1])
+            self.assertEqual(len(tl), self.dev.resolution.value[0])
 
         for i in self.dev.syncDiv.choices:
             self.dev.syncDiv.value = i

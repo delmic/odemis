@@ -576,7 +576,8 @@ class PH300(model.Detector):
         # Update metadata
         # pxd = tresbase * (2 ** bs)
         pxd = self.GetResolution() * 1e-12  # ps -> s
-        self._metadata[model.MD_TIME_LIST] = numpy.linspace(0, pxd, self._shape[-1]) + self.syncOffset.value
+        tl = numpy.arange(self._shape[0]) * pxd + self.syncOffset.value
+        self._metadata[model.MD_TIME_LIST] = tl
         return pxd
 
     def _setSyncDiv(self, div):
@@ -587,7 +588,8 @@ class PH300(model.Detector):
         offset_ps = int(offset * 1e12)
         self.SetSyncOffset(offset_ps)
         offset = offset_ps * 1e-12  # convert the round-down in ps back to s
-        self._metadata[model.MD_TIME_LIST] = numpy.linspace(0, self.pixelDuration.value, self._shape[-1]) + offset
+        tl = numpy.arange(self._shape[0]) * self.pixelDuration.value + offset
+        self._metadata[model.MD_TIME_LIST] = tl
         return offset
 
     # Acquisition methods
