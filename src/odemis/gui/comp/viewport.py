@@ -1378,24 +1378,12 @@ class TwoDViewPort(ViewPort):
         # Disconnect the old stream
         if self._projection:
             logging.debug("Disconnecting %s from TwoDViewPort", self._projection)
-            if hasattr(self._stream, "selected_line"):
-                self._stream.selected_line.unsubscribe(self._on_line_select)
-            if hasattr(self._stream, 'selected_pixel'):
-                self._stream.selected_pixel.unsubscribe(self._on_pixel_select)
             self._projection.image.unsubscribe(self._on_new_data)
 
         # Connect the new stream
         self._stream, self._projection = get_original_stream(proj), proj
         if proj:
             logging.debug("Connecting %s to TwoDViewPort", proj)
-
-            # If there is a DataProjection, selected_pixel and peak_method are
-            # still "global" on the Stream (shared between all the projections)
-
-            if hasattr(self._stream, "selected_line"):
-                self._stream.selected_line.subscribe(self._on_line_select, init=True)
-            if hasattr(self._stream, 'selected_pixel'):
-                self._stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
             self._projection.image.subscribe(self._on_new_data, init=True)
         else:
             logging.info("No stream to plot found")
@@ -1404,14 +1392,6 @@ class TwoDViewPort(ViewPort):
     @abstractmethod
     def _on_new_data(self, data):
         pass
-
-    def _on_pixel_select(self, pixel):
-        """ Called when stream.selected_pixel changes """
-        raise NotImplementedError("This plot doesn't support selected_pixel")
-
-    def _on_line_select(self, line):
-        """ Called when stream.selected_line changes """
-        raise NotImplementedError("This plot doesn't support selected_line")
 
 
 class TemporalSpectrumViewport(TwoDViewPort):
@@ -1428,6 +1408,21 @@ class TemporalSpectrumViewport(TwoDViewPort):
         super(TemporalSpectrumViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTip, "Time")
+
+    def connect_stream(self, projs):
+        super(TemporalSpectrumViewport, self).connect_stream(projs)
+        stream, proj = self._stream, self._projection
+
+        if hasattr(stream, "selected_time"):
+            # Connect markline
+            self.ol.connect_selection(stream.selected_time, stream.selected_wavelength)
+        else:
+            # No stream => disconnect the selection
+            self.ol.connect_selection(None, None)
+            # Normally, all the streams we connect to should have a .selected_time
+            # If not, it could be the sign of a bug
+            if stream is not None:
+                logging.warning("Connected to stream %s, which has no .selected_time", stream)
 
     def _on_new_data(self, data):
         # FIXME: it seems this viewport is connected even on streams without time dimension
@@ -1448,31 +1443,8 @@ class TemporalSpectrumViewport(TwoDViewPort):
             self.clear()
         self.Refresh()
 
-    def _on_pixel_select(self, pixel):
-        """
-        Pixel selection event handler.
-        Called when the user picks a new point to display on a 2D spectrum.
-        pixel (int, int): position of the point (in px, px) on the stream
-        """
-        if pixel == (None, None):
-            # TODO: handle more graciously when pixel is unselected?
-            logging.debug("No pixel selected")
-            # Remove legend ticks and clear plot
-            self.clear()
-            return
-        elif self._projection is None:
-            logging.warning("No Spectrum Stream present!")
-            return
 
-        # TODO: the image should automatically change, so no need to call on_new_data
-        # data = self._projection.image.value
-        # self._on_new_data(data)
-
-    def _on_line_select(self, line):
-        """ Called when stream.selected_line changes """
-        pass  # Nothing to do wrt the time
-
-
+# TODO: rename to LineSpectrumViewport
 class SpatialSpectrumViewport(TwoDViewPort):
     """
     A viewport for showing 1D spectrum: an image with wavelength horizontally and
@@ -1483,15 +1455,21 @@ class SpatialSpectrumViewport(TwoDViewPort):
         has been called.
         """
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.current_line = None
         self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
 
     def on_spectrum_motion(self, val):
+        """
+        Connects the .selected_pixel based on the vertical position of the overlay.
+        The goal is that when the user picks a different position along the line,
+        the corresponding pixel is selected, and eventually the spectrum will be
+        shown (in a separate viewport).
+        """
 
         if val and self._stream:
             rng = self.left_legend.range
             rat = (val[1] - rng[0]) / (rng[1] - rng[0])
-            line_pixels = rasterize_line(*self.current_line)
+            line = self._stream.selected_line.value
+            line_pixels = rasterize_line(*line)
             self._stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
     def setView(self, view, tab_data):
@@ -1514,26 +1492,5 @@ class SpatialSpectrumViewport(TwoDViewPort):
                                     self.bottom_legend.range, self.left_legend.range)
         else:
             self.clear()
-
-        self.Refresh()
-
-    def _on_pixel_select(self, pixel):
-        """ Clear the marking line when the selected pixel is cleared """
-        if None in pixel:
-            self.canvas.markline_overlay.clear_labels()
-
-    def _on_line_select(self, line):
-        """ Line selection event handler """
-
-        if (None, None) in line:
-            logging.debug("Line is not (fully) selected")
-            self.clear()
-            self.current_line = None
-            return
-        elif self._projection is None:
-            logging.warning("No Spectrum Stream present!")
-            return
-        
-        self.current_line = line
 
         self.Refresh()

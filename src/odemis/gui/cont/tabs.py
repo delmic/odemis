@@ -1863,6 +1863,7 @@ class AnalysisTab(Tab):
                     ol.set_data_properties(pixel_width, center_position, (width, height))
                     ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
 
+                # TODO: to be done by the MicroscopeViewport or DblMicroscopeCanvas (for each stream with a selected_line)
                 if hasattr(viewport.canvas, "line_overlay") and hasattr(spec_stream, "selected_line"):
                     ol = viewport.canvas.line_overlay
                     ol.set_data_properties(pixel_width, center_position, (width, height))
@@ -1883,14 +1884,6 @@ class AnalysisTab(Tab):
                 new_visible_views[1] = self.panel.vp_timespec.view
                 new_visible_views[2] = self.panel.vp_inspection_plot.view
                 new_visible_views[3] = self.panel.vp_temporalspec.view
-                # Only set a defulat value for testing.
-                # spec_stream.selected_pixel.value = (1, 1)
-                
-                # Connect markline
-                self.panel.vp_temporalspec.ol.connect_selection(
-                    spec_stream.selected_time,
-                    spec_stream.selected_wavelength
-                )
             else:
                 new_visible_views[0:2] = self._def_views[2:4]  # Combined
                 new_visible_views[2] = self.panel.vp_spatialspec.view
@@ -2086,19 +2079,25 @@ class AnalysisTab(Tab):
 
         return fn
 
-    def _on_point_select(self, _):
+    def _on_point_select(self, point):
         """ Bring the angular viewport to the front when a point is selected in the 1x1 view """
+        if None in point:
+            return  # No point selected => nothing to force
         # TODO: should we just switch to 2x2 as with the pixel and line selection?
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.focussedView.value = self.panel.vp_angular.view
 
-    def _on_pixel_select(self, _):
+    def _on_pixel_select(self, pixel):
         """ Switch the the 2x2 view when a pixel is selected """
+        if None in pixel:
+            return  # No pixel selected => nothing to force
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
-    def _on_line_select(self, _):
+    def _on_line_select(self, line):
         """ Switch the the 2x2 view when a line is selected """
+        if (None, None) in line:
+            return  # No line selected => nothing to force
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
