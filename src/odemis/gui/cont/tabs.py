@@ -39,13 +39,14 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
     RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
-    PixelTemporalSpectrumProjection, SinglePointTemporalProjection
+    PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
+    ScannedTemporalSettingsStream
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, TimeSpectrumViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings
@@ -931,7 +932,7 @@ class SparcAcquisitionTab(Tab):
         else:
             vpv[viewports[4]] = {
                 "name": "Monochromator",
-                "stream_classes": MonochromatorSettingsStream,
+                "stream_classes": (MonochromatorSettingsStream, ScannedTemporalSettingsStream),
             }
 
         # Add connection to SEM hFoV if possible
@@ -1606,7 +1607,7 @@ class AnalysisTab(Tab):
         assert(isinstance(viewports[5], PlotViewport))
         assert(isinstance(viewports[6], LineSpectrumViewport))
         assert(isinstance(viewports[7], TemporalSpectrumViewport))
-        assert(isinstance(viewports[8], TimeSpectrumViewport))
+        assert(isinstance(viewports[8], ChronographViewport))
 
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view

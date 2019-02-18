@@ -1153,37 +1153,6 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.Refresh()
 
 
-# TODO: rename to something without "Spectrum" -> PointTemporalViewport? ChronogramViewport?
-class TimeSpectrumViewport(PlotViewport):
-    """
-    Shows the time spectrum of a point -> bar plot + legend
-    Legend axes are time/intensity.
-    """
-
-    def setView(self, view, tab_data):
-        super(TimeSpectrumViewport, self).setView(view, tab_data)
-        wx.CallAfter(self.bottom_legend.SetToolTip, "Time")
-        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
-
-    def _on_new_data(self, data):
-        """
-        Called when a new data is available (in a live stream, or because the
-           selected pixel has changed)
-        data (1D DataArray)
-        """
-        if data is not None and data.size:
-            time_range, unit_x = spectrum.get_time_range(data)
-            self.canvas.set_1d_data(time_range, data, unit_x)
-
-            self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = (time_range[0], time_range[-1])
-            self.left_legend.range = (min(data), max(data))
-        else:
-            self.clear()
-        self.Refresh()
-
-
-# TODO: merge with PointTemporalViewport, which essentially does the same
 class ChronographViewport(PlotViewport):
     """
     Shows the chronograph of a 0D detector reading -> bar plot + legend
@@ -1191,22 +1160,32 @@ class ChronographViewport(PlotViewport):
     Intensity is between min/max of data.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(ChronographViewport, self).__init__(*args, **kwargs)
-        self.canvas.markline_overlay.hide_x_label()
-
     def setView(self, view, tab_data):
         super(ChronographViewport, self).setView(view, tab_data)
-        wx.CallAfter(self.bottom_legend.SetToolTip, "Time (s)")
-        wx.CallAfter(self.left_legend.SetToolTip, "Count per second")
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Time")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+
+    def connect_stream(self, projs):
+        super(ChronographViewport, self).connect_stream(projs)
+        stream, proj = self._stream, self._projection
+        if proj:
+            # Show "count / s" if we know the data is normalized
+            im = proj.image.value
+            if im is not None and im.metadata.get(model.MD_DET_TYPE) == model.MD_DT_NORMAL:
+                wx.CallAfter(self.left_legend.SetToolTip, "Count per second")
+            else:
+                wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
 
     def _on_new_data(self, data):
-        if data.size:
-            unit_x = 's'
+        if data is not None and data.size:
+            x, unit_x = spectrum.get_time_range(data)
+            # If there is a known period, use it
+            if hasattr(self._stream, "windowPeriod"):
+                range_x = (min(x[0], -self._stream.windowPeriod.value), x[-1])
+            else:
+                range_x = (x[0], x[-1])
 
-            x = data.metadata[model.MD_TIME_LIST]
-            y = data
-            range_x = (min(x[0], -self._stream.windowPeriod.value), x[-1])
             # Put the data axis with -5% of min and +5% of max:
             # the margin hints the user the display is not clipped
             extrema = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
@@ -1217,12 +1196,11 @@ class ChronographViewport(PlotViewport):
                 range_y = (max(0, extrema[0] - data_width * 0.05),
                            extrema[1] + data_width * 0.05)
 
-            self.canvas.set_data(zip(x, y), unit_x, range_x=range_x, range_y=range_y)
+            self.canvas.set_1d_data(x, data, unit_x, range_x=range_x, range_y=range_y)
 
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = range_x
             self.left_legend.range = range_y
-
         else:
             self.clear()
         self.Refresh()

@@ -4668,7 +4668,7 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="TimeSpectrumViewport" name="vp_timespec">
+          <object class="ChronographViewport" name="vp_timespec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
