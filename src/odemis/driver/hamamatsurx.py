@@ -155,9 +155,6 @@ class ReadoutCamera(model.DigitalCamera):
         # pixelsize VA is the sensor size, it does not include binning or magnification
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
 
-        # calculate effective pixel size (divide by magnification)
-        eff_pixelsize = sensor_pixelsize[0] * self._binning[0] / self._metadata.get(model.MD_LENS_MAG, 1.0)
-
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
         # Acquisition mode should be either "Live" (non-sync acq) or "SingleLive" (sync acq) for now.
