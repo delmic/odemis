@@ -580,7 +580,7 @@ class _NumberValidator(ValidatorClass):
 def _step_from_range(min_val, max_val):
     """ Dynamically create step size based on range """
     try:
-        step = (max_val - min_val) / 1000
+        step = (max_val - min_val) * 1e-9
         # To keep the inc/dec values 'clean', set the step
         # value to the nearest power of 10
         step = 10 ** round(math.log10(step))
@@ -603,7 +603,7 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     """
 
-    # _num_type = None  # type of the input widget
+    _num_type = None  # type of the input widget
 
     def __init__(self, *args, **kwargs):
         """
@@ -627,7 +627,6 @@ class _NumberTextCtrl(wx.TextCtrl):
         self.key_step = kwargs.pop('key_step', None)
         self.accuracy = kwargs.pop('accuracy', None)
         self.key_step_min = kwargs.pop('key_step_min', None)  # calculation based on min/max values
-        self._num_type = kwargs.pop('num_type', None)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER style needs to be set, but
         # setting it in XRC throws an error. A possible workaround is to include the style by hand
@@ -782,7 +781,7 @@ class _NumberTextCtrl(wx.TextCtrl):
             else:
                 k = 0.1  # default step size with one magnitude less than value
 
-            num = (num or 0)  # TODO why can num be None?
+            num = (num or 0)
 
             if key == wx.WXK_UP:
                 if self.key_step:
@@ -818,7 +817,7 @@ class _NumberTextCtrl(wx.TextCtrl):
             Is dependent on key combination pressed.
         :return: (float) Step by which the current value should be increased/decreased (already contains the sign).
         """
-        if k < 0:  # arrow done was pressed -> decrease of value requested
+        if k < 0:  # arrow down was pressed -> decrease of value requested
             # Up/down keys are not just "opposite" (down = -up). They must compensate each other so that in
             # (almost) all cases pressing up then down (or down then up) returns to the original value.
             # If down was just "-up", this wouldn't work on the magnitude transitions. For example 9->10.
@@ -827,13 +826,13 @@ class _NumberTextCtrl(wx.TextCtrl):
             value *= (1 + k / 10)
         try:
             magnitude = int(math.floor(math.log10(abs(value))))
-            if magnitude <= -15:
+            if magnitude <= -12:
                 raise ValueError("Value is so small, so set it zero.")
         except ValueError:
             return math.copysign(self.key_step_min, k)
         step = (10 ** magnitude) * k
-        if self._num_type is int and abs(step) < 1:  # if integer, change at least by 1
-            step = math.copysign(1, step)
+        if self.key_step_min and abs(step) < self.key_step_min:
+            step = math.copysign(self.key_step_min, step)
 
         return step
 
@@ -1048,7 +1047,6 @@ class FloatTextCtrl(_NumberTextCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
-        _num_type = kwargs.get('num_type', float)  # type of input
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
         if 'key_step' not in kwargs and 'key_step_min' not in kwargs and (min_val != max_val):
@@ -1063,7 +1061,6 @@ class UnitFloatCtrl(UnitNumberCtrl):
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
         unit = kwargs.get('unit', None)
-        _num_type = kwargs.get('num_type', float)  # type of input
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices, unit)
 
