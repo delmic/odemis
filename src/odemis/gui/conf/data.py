@@ -367,6 +367,7 @@ HW_SETTINGS_CONFIG = {
                 "label": "MCP gain",
                 "tooltip": u"Microchannel plate gain of the streak unit.\n"
                            u"Be careful when setting the gain while operating the camera in focus-mode.",
+                "key_step": 1,
             }),
         )),
     "spectrometer":
