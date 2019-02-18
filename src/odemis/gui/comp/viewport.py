@@ -1039,8 +1039,6 @@ class PlotViewport(ViewPort):
         # Disconnect the old stream
         if self._projection:
             logging.debug("Disconnecting %s from PlotViewPort", self._projection)
-            if hasattr(self._stream, 'selected_pixel'):
-                self._stream.selected_pixel.unsubscribe(self._on_pixel_select)
             if hasattr(self._stream, "peak_method"):
                 self._stream.peak_method.unsubscribe(self._on_peak_method)
             self._projection.image.unsubscribe(self._on_new_data)
@@ -1050,11 +1048,8 @@ class PlotViewport(ViewPort):
         if proj:
             logging.debug("Connecting %s to PlotViewPort", proj)
 
-            # If there is a DataProjection, selected_pixel and peak_method are
-            # still "global" on the Stream (shared between all the projections)
-
-            if hasattr(self._stream, 'selected_pixel'):
-                self._stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+            # If there is a DataProjection, peak_method is still "global" on the
+            # Stream (shared between all the projections)
             if hasattr(self._stream, "peak_method"):
                 self._stream.peak_method.subscribe(self._on_peak_method, init=True)
             self._projection.image.subscribe(self._on_new_data, init=True)
@@ -1066,11 +1061,8 @@ class PlotViewport(ViewPort):
     def _on_new_data(self, data):
         pass
 
-    def _on_pixel_select(self, pixel):
-        raise NotImplementedError("This viewport doesn't support streams with .selected_pixel")
-
     def _on_peak_method(self, state):
-        raise NotImplementedError("This viewport doesn't support streams with .peak_method")
+        pass
 
 
 class PointSpectrumViewport(PlotViewport):
@@ -1078,6 +1070,10 @@ class PointSpectrumViewport(PlotViewport):
     Shows the spectrum of a point -> bar plot + legend
     Legend axes are wavelength/intensity.
     """
+
+    def __init__(self, *args, **kwargs):
+        super(PointSpectrumViewport, self).__init__(*args, **kwargs)
+        self._curve_overlay = None
 
     def setView(self, view, tab_data):
         self._peak_fitter = peak.PeakFitter()
@@ -1090,14 +1086,15 @@ class PointSpectrumViewport(PlotViewport):
         wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
 
     def clear(self):
-        # Try to clear previous curve, if any
-        if hasattr(self, "_curve_overlay") and self._curve_overlay is not None:
+        # Try to clear previous curve (if already initialised)
+        if self._curve_overlay is not None:
             self._curve_overlay.clear_labels()
         super(PointSpectrumViewport, self).clear()
 
     def _on_new_data(self, data):
         """
-        Called when a new data is available (in a live stream)
+        Called when a new data is available (in a live stream, or because the
+           selected pixel has changed)
         data (1D DataArray)
         """
         if data is not None and data.size:
@@ -1123,22 +1120,6 @@ class PointSpectrumViewport(PlotViewport):
         else:
             self.clear()
         self.Refresh()
-
-    def _on_pixel_select(self, pixel):
-        """
-        Pixel selection event handler.
-        Called when the user picks a new point to display on a 2D spectrum.
-        pixel (int, int): position of the point (in px, px) on the stream
-        """
-        if pixel == (None, None):
-            # TODO: handle more graciously when pixel is unselected?
-            logging.debug("No pixel selected")
-            # Remove legend ticks and clear plot
-            self.clear()
-            return
-        elif self._projection is None:
-            logging.warning("No Spectrum Stream present!")
-            return
 
     def _on_peak_method(self, state):
         if state is not None:
@@ -1172,7 +1153,7 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.Refresh()
 
 
-# TODO: rename to something without "Spectrum" -> PointTemporalViewport
+# TODO: rename to something without "Spectrum" -> PointTemporalViewport? ChronogramViewport?
 class TimeSpectrumViewport(PlotViewport):
     """
     Shows the time spectrum of a point -> bar plot + legend
@@ -1186,7 +1167,8 @@ class TimeSpectrumViewport(PlotViewport):
 
     def _on_new_data(self, data):
         """
-        Called when a new data is available (in a live stream)
+        Called when a new data is available (in a live stream, or because the
+           selected pixel has changed)
         data (1D DataArray)
         """
         if data is not None and data.size:
@@ -1199,25 +1181,6 @@ class TimeSpectrumViewport(PlotViewport):
         else:
             self.clear()
         self.Refresh()
-
-    def _on_pixel_select(self, pixel):
-        """
-        Pixel selection event handler.
-        Called when the user picks a new point to display on a 2D spectrum.
-        pixel (int, int): position of the point (in px, px) on the stream
-        """
-        if pixel == (None, None):
-            # TODO: handle more graciously when pixel is unselected?
-            logging.debug("No pixel selected")
-            # Remove legend ticks and clear plot
-            self.clear()
-            return
-        elif self._projection is None:
-            logging.warning("No Spectrum Stream present!")
-            return
-
-    def _on_peak_method(self, state):
-        pass
 
 
 # TODO: merge with PointTemporalViewport, which essentially does the same
@@ -1263,9 +1226,6 @@ class ChronographViewport(PlotViewport):
         else:
             self.clear()
         self.Refresh()
-
-    def _on_pixel_select(self, pixel):
-        pass
 
 
 # TODO: share some code with PlotViewPort
