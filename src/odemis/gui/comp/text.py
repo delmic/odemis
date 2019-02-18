@@ -603,7 +603,7 @@ class _NumberTextCtrl(wx.TextCtrl):
 
     """
 
-    _num_type = None  # type of the input widget
+    # _num_type = None  # type of the input widget
 
     def __init__(self, *args, **kwargs):
         """
@@ -627,6 +627,7 @@ class _NumberTextCtrl(wx.TextCtrl):
         self.key_step = kwargs.pop('key_step', None)
         self.accuracy = kwargs.pop('accuracy', None)
         self.key_step_min = kwargs.pop('key_step_min', None)  # calculation based on min/max values
+        self._num_type = kwargs.pop('num_type', None)
 
         # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER style needs to be set, but
         # setting it in XRC throws an error. A possible workaround is to include the style by hand
@@ -775,13 +776,10 @@ class _NumberTextCtrl(wx.TextCtrl):
 
         if (key == wx.WXK_UP or key == wx.WXK_DOWN) and self.IsEditable():
             if evt.ShiftDown():
-                # p = -2  # decrease step size of one magnitude (two less then mag of value)
                 k = 0.01  # decrease step size of one magnitude (two less then mag of value)
             elif evt.ControlDown():
-                # p = 0  # increase step size of one magnitude (same mag as value)
                 k = 1  # increase step size of one magnitude (same mag as value)
             else:
-                # p = -1  # default step size with one magnitude less than value
                 k = 0.1  # default step size with one magnitude less than value
 
             num = (num or 0)  # TODO why can num be None?
@@ -798,32 +796,6 @@ class _NumberTextCtrl(wx.TextCtrl):
                     num -= self.key_step
                 else:
                     num += self.get_log_step(num, -k)
-
-            # if key == wx.WXK_UP:
-            #     if self.key_step:
-            #         # Note: If step size (key step) explicitly specified, only arrows needed to change value
-            #         num += self.key_step
-            #     else:
-            #         magnitude = self.magnitude(num)
-            #         step_order = magnitude + p
-            #         if self._num_type is int and step_order < 0:  # increase int type widgets by at least one
-            #             step_order = 0
-            #         num += 10 ** step_order
-            # elif key == wx.WXK_DOWN:
-            #     if self.key_step:
-            #         # Note: If step size (key step) explicitly specified, only arrows needed to change value
-            #         num -= self.key_step
-            #     else:
-            #         # Up/down keys are not just "opposite" (down = -up). They must compensate each other so that in
-            #         # (almost) all cases pressing up then down (or down then up) returns to the original value.
-            #         # If down was just "-up", this wouldn't work on the magnitude transitions. For example 9->10.
-            #         # So, instead, we compute the "retraction" of the "up function" (which is injective).
-            #         # In practice, this results in computing the magnitude of a "little bit" smaller value.
-            #         magnitude = self.magnitude(num * (1 - 10**(p - 1)))
-            #         step_order = magnitude + p
-            #         if self._num_type is int and step_order < 0:  # decrease int type widgets by at least one
-            #             step_order = 0
-            #         num -= 10 ** step_order
 
         else:
             # Skip the event, so it can be processed in the regular way
@@ -1076,6 +1048,7 @@ class FloatTextCtrl(_NumberTextCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
+        _num_type = kwargs.get('num_type', float)  # type of input
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
         if 'key_step' not in kwargs and 'key_step_min' not in kwargs and (min_val != max_val):
@@ -1090,6 +1063,7 @@ class UnitFloatCtrl(UnitNumberCtrl):
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
         unit = kwargs.get('unit', None)
+        _num_type = kwargs.get('num_type', float)  # type of input
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices, unit)
 
