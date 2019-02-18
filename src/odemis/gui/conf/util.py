@@ -768,6 +768,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             'choices': choices,
         }
 
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
+
         lbl_ctrl, value_ctrl = container.add_int_field(label_text, conf=ctrl_conf)
 
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
@@ -788,6 +793,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             'choices': choices,
             'accuracy': conf.get('accuracy', 5),
         }
+
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
 
         lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
 
