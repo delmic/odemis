@@ -1404,8 +1404,7 @@ class TemporalSpectrumViewport(TwoDViewPort):
         self.Refresh()
 
 
-# TODO: rename to LineSpectrumViewport
-class SpatialSpectrumViewport(TwoDViewPort):
+class LineSpectrumViewport(TwoDViewPort):
     """
     A viewport for showing 1D spectrum: an image with wavelength horizontally and
     space vertically.
@@ -1414,7 +1413,7 @@ class SpatialSpectrumViewport(TwoDViewPort):
         """Note: The MicroscopeViewport is not fully initialised until setView()
         has been called.
         """
-        super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
+        super(LineSpectrumViewport, self).__init__(*args, **kwargs)
         self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
 
     def on_spectrum_motion(self, val):
@@ -1433,7 +1432,7 @@ class SpatialSpectrumViewport(TwoDViewPort):
             self._stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
     def setView(self, view, tab_data):
-        super(SpatialSpectrumViewport, self).setView(view, tab_data)
+        super(LineSpectrumViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTip, "Distance from origin")
 

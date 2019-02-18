@@ -198,7 +198,7 @@ class ViewportTestCase(test.GuiTestCase):
             vwp.Refresh()
 
     def test_spatialspectrum_viewport(self):
-        vwp = viewport.SpatialSpectrumViewport(self.panel)
+        vwp = viewport.LineSpectrumViewport(self.panel)
 
         self.add_control(vwp, wx.EXPAND, proportion=1)
 

@@ -45,7 +45,7 @@ import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport, TemporalSpectrumViewport, TimeSpectrumViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, TimeSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings
@@ -1604,7 +1604,7 @@ class AnalysisTab(Tab):
             assert(isinstance(vp, MicroscopeViewport))
         assert(isinstance(viewports[4], AngularResolvedViewport))
         assert(isinstance(viewports[5], PlotViewport))
-        assert(isinstance(viewports[6], SpatialSpectrumViewport))
+        assert(isinstance(viewports[6], LineSpectrumViewport))
         assert(isinstance(viewports[7], TemporalSpectrumViewport))
         assert(isinstance(viewports[8], TimeSpectrumViewport))
 
@@ -1797,7 +1797,7 @@ class AnalysisTab(Tab):
             self._stream_bar_controller.clear()
             # Clear any old plots
             self.panel.vp_inspection_plot.clear()
-            self.panel.vp_spatialspec.clear()
+            self.panel.vp_linespec.clear()
             self.panel.vp_temporalspec.clear()
             self.panel.vp_timespec.clear()
             self.panel.vp_angular.clear()
@@ -1885,7 +1885,7 @@ class AnalysisTab(Tab):
                 new_visible_views[3] = self.panel.vp_temporalspec.view
             else:
                 new_visible_views[0:2] = self._def_views[2:4]  # Combined
-                new_visible_views[2] = self.panel.vp_spatialspec.view
+                new_visible_views[2] = self.panel.vp_linespec.view
                 self.tb.enable_button(TOOL_LINE, True)
                 new_visible_views[3] = self.panel.vp_inspection_plot.view
 

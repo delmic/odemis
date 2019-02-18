@@ -449,7 +449,7 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
         self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
         self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
-        self.vp_spatialspec = xrc.XRCCTRL(self, "vp_spatialspec")
+        self.vp_linespec = xrc.XRCCTRL(self, "vp_linespec")
         self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
         self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
         self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
@@ -4656,7 +4656,7 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <object class="SpatialSpectrumViewport" name="vp_spatialspec">
+          <object class="LineSpectrumViewport" name="vp_linespec">
             <hidden>1</hidden>
             <XRCED>
               <assign_var>1</assign_var>
