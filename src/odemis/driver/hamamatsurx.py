@@ -150,13 +150,13 @@ class ReadoutCamera(model.DigitalCamera):
 
         # physical pixel size is 6.5um x 6.5um
         sensor_pixelsize = (6.5e-06, 6.5e-06)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize   #self.pixelSize.value
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize
 
         # pixelsize VA is the sensor size, it does not include binning or magnification
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
 
-        # multiply with mag as we use the 1/M as input in yaml file!
-        eff_pixelsize = sensor_pixelsize[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
+        # calculate effective pixel size (divide by magnification)
+        eff_pixelsize = sensor_pixelsize[0] * self._binning[0] / self._metadata.get(model.MD_LENS_MAG, 1.0)
 
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
@@ -762,7 +762,7 @@ class StreakUnit(model.HwComponent):
         :parameter value: (float) conversion factor
         """
         if 1e-9 <= value < 1:
-            self.timeRangeFactor = 10 ** (int(math.floor(math.log10(abs(value))))//3 * 3)
+            self.timeRangeFactor = 10 ** (math.log10(abs(value)) // 3 * 3)
         else:
             raise ValueError("Cannot calculate time range conversion factor. "
                              "Time range of value %s not supported" % value)
@@ -2051,13 +2051,12 @@ class StreakCamera(model.HwComponent):
         """
         # Note: For CamParamSet it doesn't matter if value + unit includes a white space or not.
         # However, for DevParamSet it does matter!!!
-        units = ['s', 'ms', 'us', 'ns']
-
-        magnitude = int(math.floor(math.log10(abs(value)))) // 3
-        conversion = 10 ** (magnitude * -3)
-        unit_index = abs(magnitude)
 
         if 1e-9 <= value < 1:
+            units = ['s', 'ms', 'us', 'ns']
+            magnitude = math.log10(abs(value)) // 3
+            conversion = 10 ** (magnitude * -3)
+            unit_index = abs(magnitude)
             value_raw = str(int(round(value * conversion))) + " " + units[unit_index]
         elif 1 <= value <= 10:  # Note values > 10s are caught by VA as not in range of VA
             value_raw = "%.3f s" % (value,)  # only used for exposure time -> can be float
