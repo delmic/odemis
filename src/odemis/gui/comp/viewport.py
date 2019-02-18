@@ -1204,7 +1204,7 @@ class ChronographViewport(PlotViewport):
         if data.size:
             unit_x = 's'
 
-            x = data.metadata[model.MD_ACQ_DATE]  # TODO: use MD_TIME_LIST
+            x = data.metadata[model.MD_TIME_LIST]
             y = data
             range_x = (min(x[0], -self._stream.windowPeriod.value), x[-1])
             # Put the data axis with -5% of min and +5% of max:

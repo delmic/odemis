@@ -732,22 +732,24 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
 
     def _updateImage(self):
+        try:
+            # convert the list into a DataArray
+            raw = self.raw  # read in one shot
+            count, date = raw[:, 0], raw[:, 1]
+            im = model.DataArray(count)
+            # Save the relative time of each point into TIME_LIST, going from
+            # negative to 0 (now).
+            if len(date) > 0:
+                age = date - date[-1]
+            else:
+                age = date  # empty
+            im.metadata[model.MD_TIME_LIST] = age
+            assert len(im) == len(date)
+            assert im.ndim == 1
 
-        # convert the list into a DataArray
-        raw = self.raw  # read in one shot
-        count, date = raw[:, 0], raw[:, 1]
-        im = model.DataArray(count)
-        # save the relative time of each point as ACQ_DATE, unorthodox but should not
-        # cause much problems as the data is so special anyway.
-        if len(date) > 0:
-            age = date - date[-1]
-        else:
-            age = date  # empty
-        im.metadata[model.MD_ACQ_DATE] = age
-        assert len(im) == len(date)
-        assert im.ndim == 1
-
-        self.image.value = im
+            self.image.value = im
+        except Exception:
+            logging.exception("Failed to generate chronogram")
 
     def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
@@ -1368,22 +1370,24 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
 
     def _updateImage(self):
+        try:
+            # convert the list into a DataArray
+            raw = self.raw  # read in one shot
+            count, date = raw[:, 0], raw[:, 1]
+            im = model.DataArray(count)
+            # Save the relative time of each point into TIME_LIST, going from
+            # negative to 0 (now).
+            if len(date) > 0:
+                age = date - date[-1]
+            else:
+                age = date  # empty
+            im.metadata[model.MD_TIME_LIST] = age
+            assert len(im) == len(date)
+            assert im.ndim == 1
 
-        # convert the list into a DataArray
-        raw = self.raw  # read in one shot
-        count, date = raw[:, 0], raw[:, 1]
-        im = model.DataArray(count)
-        # save the relative time of each point as ACQ_DATE, unorthodox but should not
-        # cause much problems as the data is so special anyway.
-        if len(date) > 0:
-            age = date - date[-1]
-        else:
-            age = date  # empty
-        im.metadata[model.MD_ACQ_DATE] = age
-        assert len(im) == len(date)
-        assert im.ndim == 1
-
-        self.image.value = im
+            self.image.value = im
+        except Exception:
+            logging.exception("Failed to generate chronogram")
 
     def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time

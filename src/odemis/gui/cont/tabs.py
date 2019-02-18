@@ -2838,7 +2838,7 @@ class SparcAlignTab(Tab):
             disp = (scount - vmin) / b
 
             # insert 0s at the beginning if the window is not (yet) full
-            dates = scount.metadata[model.MD_ACQ_DATE]
+            dates = scount.metadata[model.MD_TIME_LIST]
             dur = dates[-1] - dates[0]
             if dur == 0:  # only one tick?
                 dur = 1  # => make it 1s large
