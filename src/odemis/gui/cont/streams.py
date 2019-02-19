@@ -2670,6 +2670,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             main_data.streak_unit,
             main_data.streak_delay,
+            main_data.spectrograph,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             detvas=get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config),

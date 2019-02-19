@@ -929,7 +929,7 @@ class FluoStream(CameraStream):
 class StreakCamStream(CameraStream):
 
     def __init__(self, name, detector, dataflow,
-                 streak_unit, streak_delay, streak_unit_vas,
+                 streak_unit, streak_delay, spectrograph, streak_unit_vas,
                  emitter, emtvas=None, **kwargs):
 
         # We use emission directly to control the emitter
@@ -938,12 +938,15 @@ class StreakCamStream(CameraStream):
 
         super(StreakCamStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
+        self.active = True  # variable keep track if stream is active/inactive
+
         # duplicate VAs for GUI except .timeRange VA (displayed on left for calibration)
         streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas or set())
         self._det_vas.update(streak_unit_vas)
 
         self.streak_unit = streak_unit
         self.streak_delay = streak_delay
+        self.spectrograph = spectrograph
 
         # whenever .streakMode changes
         # -> set .MCPGain = 0 and update .MCPGain.range
@@ -954,6 +957,7 @@ class StreakCamStream(CameraStream):
         # when starting to play the stream again.
         try:
             self.detStreakMode.subscribe(self._OnStreakSettings)
+            self.spectrograph.position.subscribe(self._OnStreakSettings, init=True)
             self.detMCPGain.subscribe(self._OnMCPGain)
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
@@ -983,10 +987,10 @@ class StreakCamStream(CameraStream):
         self.streak_unit.MCPGain.value = 0
 
     def _OnStreakSettings(self, value):
-        """Callback, which sets MCPGain GUI VA = 0,
-        if .timeRange and/or .streakMode GUI VAs have changed."""
-        self.detMCPGain.value = 0  # set GUI VA 0
-        self._OnMCPGain(value)  # update the .MCPGain VA
+        """Callback, which sets MCPGain GUI VA = 0, if .streakMode GUI VAs have changed."""
+        if value in (True, False) or self.spectrograph.position.value["grating"] == 2:  # TODO mirror fixed number?
+            self.detMCPGain.value = 0  # set GUI VA 0
+            self._OnMCPGain(value)  # update the .MCPGain VA
 
     def _OnMCPGain(self, _=None):
         """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:

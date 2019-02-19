@@ -3214,12 +3214,14 @@ class Sparc2AlignTab(Tab):
             # Don't show the time range, as it's done by the StreakCamAlignSettingsController
             streak_unit_vas = (get_local_vas(main_data.streak_unit, main_data.hw_settings_config)
                                -{"timeRange"})
+
             tsStream = acqstream.StreakCamStream(
                                 "Calibration trigger delay for streak camera",
                                 main_data.streak_ccd,
                                 main_data.streak_ccd.data,
                                 main_data.streak_unit,
                                 main_data.streak_delay,
+                                main_data.spectrograph,
                                 emitter=None,
                                 detvas=get_local_vas(main_data.streak_ccd, main_data.hw_settings_config),
                                 streak_unit_vas=streak_unit_vas,

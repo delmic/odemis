@@ -583,7 +583,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
     An streak camera stream, for a set of points (on the SEM).
     The live view is just the raw readout camera image.
     """
-    def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay,
+    def __init__(self, name, detector, dataflow, emitter, streak_unit, streak_delay, spectrograph,
                  streak_unit_vas, **kwargs):  # init of TemporalSpectrumSettingsSteam
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
@@ -597,6 +597,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
 
         self.streak_unit = streak_unit
         self.streak_delay = streak_delay
+        self.spectrograph = spectrograph
 
         # the VAs are used in SEMCCDMDStream (_sync.py)
         streak_unit_vas = self._duplicateVAs(streak_unit, "det", streak_unit_vas)
@@ -611,6 +612,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         # when starting to play the stream again.
         try:
             self.detStreakMode.subscribe(self._OnStreakSettings)
+            self.spectrograph.position.subscribe(self._OnStreakSettings, init=True)
             self.detMCPGain.subscribe(self._OnMCPGain)
         except AttributeError:
             raise ValueError("Necessary HW VAs streakMode and MCPGain for streak camera was not provided")
@@ -641,10 +643,10 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
         self.streak_unit.MCPGain.value = 0
 
     def _OnStreakSettings(self, value):
-        """Callback, which sets MCPGain GUI VA = 0,
-        if .timeRange and/or .streakMode GUI VAs have changed."""
-        self.detMCPGain.value = 0  # set GUI VA 0
-        self._OnMCPGain(value)  # update the .MCPGain VA
+        """Callback, which sets MCPGain GUI VA = 0, if .streakMode GUI VAs have changed."""
+        if value in (True, False) or self.spectrograph.position.value["grating"] == 2:  # TODO mirror fixed number?
+            self.detMCPGain.value = 0  # set GUI VA 0
+            self._OnMCPGain(value)  # update the .MCPGain VA
 
     def _OnMCPGain(self, _=None):
         """Callback, which updates the range of possible values for MCPGain GUI VA if stream is inactive:
