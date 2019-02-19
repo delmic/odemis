@@ -256,8 +256,8 @@ class ShiftRegistrar(object):
         return (2 tuples of 4 ints): left, top, right, bottom pixels in each tile
         """
         if (abs(shift[0]) >= self.size[1]) or (abs(shift[1]) >= self.size[0]):
-            raise ValueError(
-                "There is no overlap between tiles for the shift given %s", shift)
+            raise ValueError("There is no overlap between tiles for the shift given %s" %
+                             (shift,))
 
         # Tile size is given in YX coordinates, shift in XY
         max_x, max_y = self.size[1], self.size[0]
@@ -398,8 +398,9 @@ class ShiftRegistrar(object):
         raise ValueError: if the top or left tile hasn't been provided yet
         """
         if (row >= 1 and self.tiles[row - 1][col] is None) and (col >= 1 and self.tiles[row][col - 1] is None):
-            raise ValueError(
-                "Trying to stitch image at %d,%d, while its previous image hasn't been stitched yet")
+            raise ValueError("Trying to stitch image at %d,%d, "
+                             "while its previous image hasn't been stitched yet" %
+                             (row, col))
         # store the tile
         self.tiles[row][col] = tile
 
@@ -600,7 +601,7 @@ class GlobalShiftRegistrar(object):
 
         # Get the region of interest
         if abs(exp_shift[0]) >= tile.shape[1] or abs(exp_shift[1]) >= tile.shape[0]:
-            raise ValueError("There is no overlap between tiles for the shift given %s" % exp_shift)
+            raise ValueError("There is no overlap between tiles for the shift given %s" % (exp_shift,))
         if exp_shift[0] < 0:
             l1, r1 = 0, tile.shape[1] + int(exp_shift[0])
             l2, r2 = -int(exp_shift[0]), tile.shape[1]
