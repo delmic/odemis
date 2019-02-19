@@ -19,6 +19,8 @@ from __future__ import division
 
 import Queue
 import logging
+import math
+
 from odemis import model, util
 from odemis.model import oneway
 import threading
@@ -148,13 +150,10 @@ class ReadoutCamera(model.DigitalCamera):
 
         # physical pixel size is 6.5um x 6.5um
         sensor_pixelsize = (6.5e-06, 6.5e-06)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize   #self.pixelSize.value
+        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = sensor_pixelsize
 
         # pixelsize VA is the sensor size, it does not include binning or magnification
         self.pixelSize = model.VigilantAttribute(sensor_pixelsize, unit="m", readonly=True)
-
-        # multiply with mag as we use the 1/M as input in yaml file!
-        eff_pixelsize = sensor_pixelsize[0] * self._binning[0] * self._metadata.get(model.MD_LENS_MAG, 1.0)
 
         # Note: no function to get current acqMode.
         # Note: Acquisition mode, needs to be before exposureTime!
@@ -582,7 +581,7 @@ class StreakUnit(model.HwComponent):
         parent.DevParamSet(self.location, "Trig. level", 1)  # TODO check what value needed regarding HW
         parent.DevParamSet(self.location, "Trig. slope", "Rising")
 
-        parent.DevParamGet(self.location, "Trig. status")  # read only
+        # parent.DevParamGet(self.location, "Trig. status")  # read only
 
         # Ready: Is displayed when the system is ready to receive a trigger signal.
         # Fired: Is displayed when the system has received a trigger signal but the sweep has not
@@ -591,9 +590,9 @@ class StreakUnit(model.HwComponent):
         # Do Reset: Do Reset can be selected when the system is in trigger mode Fired. After selecting Do
         # Reset the trigger status changes to Ready.
 
-        self._metadata[model.MD_STREAK_TIMERANGE] = parent.DevParamGet(self.location, "Time Range")
-        self._metadata[model.MD_STREAK_MCPGAIN] = parent.DevParamGet(self.location, "MCP Gain")
-        self._metadata[model.MD_STREAK_MODE] = parent.DevParamGet(self.location, "Mode")
+        self._metadata[model.MD_STREAK_TIMERANGE] = self.GetTimeRange()
+        self._metadata[model.MD_STREAK_MCPGAIN] = self.GetMCPGain()
+        self._metadata[model.MD_STREAK_MODE] = self.GetStreakMode()
 
         # VAs
         mode = self.GetStreakMode()
@@ -717,7 +716,7 @@ class StreakUnit(model.HwComponent):
         Sets the time range for the streak unit.
         Converts the value in sec into a for RemoteEx readable format.
         :parameter location: (str) see DevParamGet
-        :parameter time range: (float) time range for one sweep in sec
+        :parameter time_range: (float) time range for one sweep in sec
         """
         try:
             time_range_raw = self.parent.convertTime2Unit(time_range)
@@ -759,14 +758,8 @@ class StreakUnit(model.HwComponent):
         scaling table (correlating of px positions with corresponding time values) to values only.
         :parameter value: (float) conversion factor
         """
-        # TODO make generic for possible units
-        # TODO elegant range fct for float? or itertools?
-        if 1e-9 <= value < 1e-6:
-            self.timeRangeFactor = 1e-9
-        elif 1e-6 <= value < 1e-3:
-            self.timeRangeFactor = 1e-6
-        elif 1e-3 <= value < 1:
-            self.timeRangeFactor = 1e-3
+        if 1e-9 <= value < 1:
+            self.timeRangeFactor = 10 ** (math.log10(abs(value)) // 3 * 3)
         else:
             raise ValueError("Cannot calculate time range conversion factor. "
                              "Time range of value %s not supported" % value)
@@ -798,9 +791,9 @@ class DelayGenerator(model.HwComponent):
         parent.DevParamSet(self.location, "Delay B", 0.00000002)
         parent.DevParamSet(self.location, "Burst Mode", "Off")
 
-        self._metadata[model.MD_TRIGGER_DELAY] = self.parent.DevParamGet(self.location, "Delay A")
+        self._metadata[model.MD_TRIGGER_DELAY] = self.GetTriggerDelay()
         # Note: trigger rate (repetition rate) corresponds to the ebeam blanking frequency (read only in RemoteEx)
-        self._metadata[model.MD_TRIGGER_RATE] = self.parent.DevParamGet(self.location, "Repetition Rate")
+        self._metadata[model.MD_TRIGGER_RATE] = int(self.parent.DevParamGet(self.location, "Repetition Rate")[0])
 
         triggerDelay = self.GetTriggerDelay()
         range_trigDelay = self._getTriggerDelayRange()
@@ -858,13 +851,14 @@ class DelayGenerator(model.HwComponent):
 
     def _updateTriggerRate(self):
         """
-        Get the trigger rate (repetition) rate from the delay generator and updates the VA.
+        Get the trigger rate (repetition) rate from the delay generator and updates the MD.
         The Trigger rate corresponds to the ebeam blanking frequency. As the delay
         generator is operated "external", the trigger rate is a read-only value.
         Called whenever an image arrives.
         """
-        value = self.parent.DevParamGet(self.location, "Repetition Rate")
-        self._metadata[model.MD_TRIGGER_RATE] = value
+        triggerRate_raw = self.parent.DevParamGet(self.location, "Repetition Rate")  # returns a list
+        triggerRate = int(triggerRate_raw[0])
+        self._metadata[model.MD_TRIGGER_RATE] = triggerRate
 
 
 class StreakCamera(model.HwComponent):
@@ -917,7 +911,6 @@ class StreakCamera(model.HwComponent):
         # TODO check if already running....otherwise start multiple apps
         # TODO  -> in acquisition mode it looks like it does not start a second app, but also does not report that
         # TODO -> in processing mode it is possible to start multiple apps....
-        # TODO find out where to ask for acq or processing mode
         # TODO is there a clever way for checking if app still running? Seems to be no command available to check
         # TODO appEnd only works for the last opened window
         # TODO want to check if we want to start app invisible (sVisible = False)
@@ -1744,7 +1737,7 @@ class StreakCamera(model.HwComponent):
                                 AutoMCP, AutoStreakDelay, AutoStreakShutter, DoStatusRegularly, AutoActionWaitTime
                                 Delaybox:
                                 AutoDelayDelay
-        :return: value of parameter"""
+        :return: (list) value of parameter"""
         return self.sendCommand("DevParamGet", location, parameter)
 
     def DevParamSet(self, location, parameter, value):
@@ -2039,16 +2032,10 @@ class StreakCamera(model.HwComponent):
         :param unit: (str) unit
         :return: (float) value
         """
-        # TODO make generic by searching list of possible units
-        if unit == "ns":
-            value = float(value) * 1e-9
-        elif unit == "us":
-            value = float(value) * 1e-6
-        elif unit == "ms":
-            value = float(value) * 1e-3
-        elif unit == "s":
-            value = float(value)
-        else:
+        units = ['s', 'ms', 'us', 'ns']
+        try:
+            value = float(value) * 10 ** (units.index(unit) * -3)
+        except ValueError:
             raise ValueError("Unit conversion %s for value %s not supported" % (unit, value))
 
         return value
@@ -2061,12 +2048,13 @@ class StreakCamera(model.HwComponent):
         """
         # Note: For CamParamSet it doesn't matter if value + unit includes a white space or not.
         # However, for DevParamSet it does matter!!!
-        if 1e-9 <= value < 1e-6:
-            value_raw = str(int(round(value * 1e9))) + " ns"
-        elif 1e-6 <= value < 1e-3:
-            value_raw = str(int(round(value * 1e6))) + " us"
-        elif 1e-3 <= value < 1:
-            value_raw = str(int(round(value * 1e3))) + " ms"
+
+        if 1e-9 <= value < 1:
+            units = ['s', 'ms', 'us', 'ns']
+            magnitude = math.log10(abs(value)) // 3
+            conversion = 10 ** (magnitude * -3)
+            unit_index = abs(magnitude)
+            value_raw = str(int(round(value * conversion))) + " " + units[unit_index]
         elif 1 <= value <= 10:  # Note values > 10s are caught by VA as not in range of VA
             value_raw = "%.3f s" % (value,)  # only used for exposure time -> can be float
         else:

@@ -334,7 +334,7 @@ HW_SETTINGS_CONFIG = {
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
-                "range": (0.00001, 10.0),  # TODO GUI only accepts until 1sec error!
+                "range": (0.00001, 10.0),
                 "type": "float",
                 "tooltip": u"Readout camera exposure time.",
             }),
