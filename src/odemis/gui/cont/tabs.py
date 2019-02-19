@@ -55,7 +55,7 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
     TOOL_NONE, TOOL_DICHO
-from odemis.gui.util import call_in_wx_main, get_picture_folder
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter
 from odemis.util import units, spot, limit_invocation
