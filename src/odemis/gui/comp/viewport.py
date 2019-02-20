@@ -1098,23 +1098,25 @@ class PointSpectrumViewport(PlotViewport):
         data (1D DataArray)
         """
         if data is not None and data.size:
-            spectrum_range, unit_x = spectrum.get_spectrum_range(data)
-            self.canvas.set_1d_data(spectrum_range, data, unit_x)
+            wll, unit_x = spectrum.get_spectrum_range(data)
+            wl_rng = wll[0], wll[-1]
+            data_rng = min(data), max(data)
+            self.canvas.set_1d_data(wll, data, unit_x, range_x=wl_rng, range_y=data_rng)
 
             self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-            self.left_legend.range = (min(data), max(data))
+            self.bottom_legend.range = wl_rng
+            self.left_legend.range = data_rng
 
             if hasattr(self._stream, "peak_method") and self._stream.peak_method.value is not None:
                 # cancel previous fitting if there is one in progress
                 self._peak_future.cancel()
                 self._curve_overlay.clear_labels()
-                self.spectrum_range = spectrum_range
+                self.spectrum_range = wll
                 self.unit_x = unit_x
                 # TODO: try to find more peaks (= small window) based on width?
                 # => so far not much success
                 # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
-                self._peak_future = self._peak_fitter.Fit(data, spectrum_range,
+                self._peak_future = self._peak_fitter.Fit(data, wll,
                                                           type=self._stream.peak_method.value)
                 self._peak_future.add_done_callback(self._update_peak)
         else:
@@ -1340,7 +1342,19 @@ class TemporalSpectrumViewport(TwoDViewPort):
 
     def __init__(self, *args, **kwargs):
         super(TemporalSpectrumViewport, self).__init__(*args, **kwargs)
-        self.ol = self.canvas.markline_overlay
+        self.canvas.markline_overlay.val.subscribe(self._on_overlay_selection)
+
+    def _on_overlay_selection(self, pos):
+        """
+        Called whenever the markline position of the overlay changes, to set
+        the selected wavelength & time in the stream (so that the SinglePoint
+        projections are updated).
+        """
+        if self._stream:
+            if hasattr(self._stream, "selected_wavelength"):
+                self._stream.selected_wavelength.value = pos[0]
+            if hasattr(self._stream, "selected_time"):
+                self._stream.selected_time.value = pos[1]
 
     def setView(self, view, tab_data):
         super(TemporalSpectrumViewport, self).setView(view, tab_data)
@@ -1352,15 +1366,8 @@ class TemporalSpectrumViewport(TwoDViewPort):
         stream, proj = self._stream, self._projection
 
         if hasattr(stream, "selected_time"):
-            # Connect markline
-            self.ol.connect_selection(stream.selected_time, stream.selected_wavelength)
-        else:
-            # No stream => disconnect the selection
-            self.ol.connect_selection(None, None)
-            # Normally, all the streams we connect to should have a .selected_time
-            # If not, it could be the sign of a bug
-            if stream is not None:
-                logging.warning("Connected to stream %s, which has no .selected_time", stream)
+            pos = self.canvas.markline_overlay.val
+            pos.value = (stream.selected_wavelength.value, stream.selected_time.value)
 
     def _on_new_data(self, data):
         # FIXME: it seems this viewport is connected even on streams without time dimension

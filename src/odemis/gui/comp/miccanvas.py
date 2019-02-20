@@ -1253,6 +1253,8 @@ class TwoDPlotCanvas(BitmapCanvas):
 
     def clear(self):
         super(TwoDPlotCanvas, self).clear()
+        self.range_x = None
+        self.range_y = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
