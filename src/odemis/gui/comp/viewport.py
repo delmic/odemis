@@ -1370,8 +1370,7 @@ class TemporalSpectrumViewport(TwoDViewPort):
             times, unit_y = spectrum.get_time_range(data)
             time_range = (max(times), min(times))  # inverted, to show the 0 at the top
 
-            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range,
-                                    flip=wx.VERTICAL)
+            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range)
 
             self.bottom_legend.unit = unit_x
             self.left_legend.unit = unit_y
