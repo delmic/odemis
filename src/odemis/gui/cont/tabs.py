@@ -1931,6 +1931,8 @@ class AnalysisTab(Tab):
         # Only show the panels that fit the current streams
         self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spec_streams) > 0)
 
+        self.tab_data_model.visible_views.value = new_visible_views
+
         # Load the Streams and their data into the model and views
         for s in streams:
             scont = self._stream_bar_controller.addStream(s, add_to_view=True)
@@ -1961,7 +1963,6 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.ar_cal.value)
                 self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
-        self.tab_data_model.visible_views.value = new_visible_views
         # TODO: if all the views are either empty or contain the same streams,
         # display in full screen by default (with the first view which has streams)
 

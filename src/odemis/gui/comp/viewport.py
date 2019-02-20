@@ -1430,7 +1430,6 @@ class TemporalSpectrumViewport(TwoDViewPort):
         wx.CallAfter(self.left_legend.SetToolTip, "Time")
 
     def _on_new_data(self, data):
-        # FIXME: it seems this viewport is connected even on streams without time dimension
         if data is not None and data.size:
             wl, unit_x = spectrum.get_spectrum_range(data)
             spectrum_range = (min(wl), max(wl))
