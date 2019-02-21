@@ -886,6 +886,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         return tick_list, vtp_ratio
 
     vtp_ratio = abs(pixel_space / value_space)
+    epsilon = vtp_ratio / 10  # "tiny" value: a 10th of a pixel
 
     num_ticks = pixel_space // tick_spacing
     # Calculate the best step size in powers of 10, so it will cover at
@@ -926,9 +927,12 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     for tick_value in tick_values:
         pixel = value_to_pixel(tick_value, pixel_space, vtp_ratio, value_range,
                                orientation)
+        # Round "almost 0" (due to floating point errors) to 0
+        if abs(tick_value) < epsilon:
+            tick_value = 0
         pix_val = (pixel, tick_value)
         if pix_val not in ticks:
-            if (tick_value not in [numpy.min(tick_values), numpy.max(tick_values)] and
+            if (tick_value not in (numpy.min(tick_values), numpy.max(tick_values)) and
                     abs(pixel - prev_pixel) < min_margin):
                 # keep a min distance between ticks
                 continue
