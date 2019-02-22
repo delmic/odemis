@@ -2053,7 +2053,7 @@ class StreakCamera(model.HwComponent):
             units = ['s', 'ms', 'us', 'ns']
             magnitude = math.log10(abs(value)) // 3
             conversion = 10 ** (magnitude * -3)
-            unit_index = abs(magnitude)
+            unit_index = int(abs(magnitude))
             value_raw = str(int(round(value * conversion))) + " " + units[unit_index]
         elif 1 <= value <= 10:  # Note values > 10s are caught by VA as not in range of VA
             value_raw = "%.3f s" % (value,)  # only used for exposure time -> can be float
