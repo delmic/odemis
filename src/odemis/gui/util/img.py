@@ -885,8 +885,8 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         tick_list = [(pixel, min_val)]
         return tick_list, vtp_ratio
 
-    vtp_ratio = abs(pixel_space / value_space)
-    epsilon = vtp_ratio / 10  # "tiny" value: a 10th of a pixel
+    vtp_ratio = abs(pixel_space / value_space)  # px/unit
+    epsilon = (1 / vtp_ratio) / 10  # "tiny" value: a 10th of a pixel
 
     num_ticks = pixel_space // tick_spacing
     # Calculate the best step size in powers of 10, so it will cover at
