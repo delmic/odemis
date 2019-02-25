@@ -1221,11 +1221,13 @@ def _adjustDimensions(da):
 
     # reorder dimensions so that they are in the expected order
     if dims != dim_goal:
+        # TODO: from numpy 1.11, it's possible to use numpy.moveaxis()
         # roll the axes until they fit
         for i, d in enumerate(dim_goal):
             p = dims.index(d)
             da = numpy.rollaxis(da, p, i)
-            dims[:i] + d + dims[i:p] + dims[p + 1:] # roll dims
+            dims = dims[:i] + d + dims[i:p] + dims[p + 1:]  # roll dims
+        assert dims == dim_goal
 
     md.update({model.MD_DIMS: dims})
     da = model.DataArray(da, md)
