@@ -290,11 +290,9 @@ def _add_image_info(group, dataset, image):
     # Moreover, in Odemis we store two types of time:
     # * MD_ACQ_DATE, which is the (absolute) time at which the acquisition
     #   was performed. It's stored in TOffset as a float of s since epoch.
-    # * MD_TIME_OFFSET, which is the (relative) time of the first element of
+    # * MD_TIME_LIST, which is the (relative) time of each element of
     #   the time dimension compared to the acquisition event (eg, energy
-    #   release on the sample). It's stored in the TOffsetRelative in s.
-    # Finally, there is MD_PIXEL_DUR which is the duration between each
-    # element on the time dimension scale.
+    #   release on the sample). It's stored in the DimensionScaleT in s.
     # TODO: in retrospective, it would have been more logical to store the
     # relative time in TOffset, and the acquisition date (which is not essential
     # to the data) in PhysicalData/AcquisitionDate.
@@ -310,11 +308,6 @@ def _add_image_info(group, dataset, image):
             group["TOffset"] = time.time()
             _h5svi_set_state(group["TOffset"], ST_DEFAULT)
         group["TOffset"].attrs["UNIT"] = "s"  # our extension
-
-        if model.MD_TIME_OFFSET in image.metadata:
-            group["TOffsetRelative"] = image.metadata[model.MD_TIME_OFFSET]
-            _h5svi_set_state(group["TOffsetRelative"], ST_REPORTED)
-            group["TOffsetRelative"].attrs["UNIT"] = "s"  # our extension
 
         # Scale
         if model.MD_PIXEL_SIZE in image.metadata:

@@ -83,6 +83,7 @@ MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float),
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
 MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
 
+# Deprecrated: use MD_TIME_LIST
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
 MD_TIME_OFFSET = "Time offset"  # Time of the first 'pixel' in the time dimension (added to ACQ_DATE), default is 0
 
