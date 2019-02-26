@@ -1163,7 +1163,7 @@ class TestHDF5IO(unittest.TestCase):
         """
         Checks that we can read back the metadata of an acquisition with time correlation
         """
-        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 5000)]
+        shapes = [(512, 256), (1, 5220, 1, 50, 40), (1, 65000)]
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -1182,8 +1182,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 16,
                      model.MD_BINNING: (1, 1),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-6),  # m/px
-                     model.MD_PIXEL_DUR: 1e-9,  # s
-                     model.MD_TIME_OFFSET:-20e-9,  # s, of the first time value
+                     model.MD_TIME_LIST: [1e-9 * i + 20e-9 for i in range(shapes[1][1])],
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_DWELL_TIME: 1.2,  # s
@@ -1195,8 +1194,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 16,
                      model.MD_BINNING: (1, 128),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
-                     model.MD_PIXEL_DUR: 10e-9,  # s
-                     model.MD_TIME_OFFSET:-500e-9,  # s, of the first time value
+                     model.MD_TIME_LIST: [10e-12 * i - 500e-12 for i in range(shapes[2][1])],
                      model.MD_OUT_WL: (500e-9, 600e-9),
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_DWELL_TIME: 1.2,  # s
@@ -1249,7 +1247,7 @@ class TestHDF5IO(unittest.TestCase):
             self.assertFalse(model.MD_IN_WL in im.metadata,
                              "Reporting excitation wavelength while there is none")
 
-            if model.MD_PIXEL_DUR in md:  # MD_PIXEL_DUR and MD_TIME_OFFSET are deprecated, so should find MD_TIME_LIST
+            if model.MD_TIME_LIST in md:
                 self.assertIn(model.MD_TIME_LIST, im.metadata.keys())
 
         # check thumbnail

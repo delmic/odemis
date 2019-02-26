@@ -290,11 +290,9 @@ def _add_image_info(group, dataset, image):
     # Moreover, in Odemis we store two types of time:
     # * MD_ACQ_DATE, which is the (absolute) time at which the acquisition
     #   was performed. It's stored in TOffset as a float of s since epoch.
-    # * MD_TIME_OFFSET, which is the (relative) time of the first element of
+    # * MD_TIME_LIST, which is the (relative) time of each element of
     #   the time dimension compared to the acquisition event (eg, energy
-    #   release on the sample). It's stored in the TOffsetRelative in s.
-    # Finally, there is MD_PIXEL_DUR which is the duration between each
-    # element on the time dimension scale.
+    #   release on the sample). It's stored in the DimensionScaleT in s.
     # TODO: in retrospective, it would have been more logical to store the
     # relative time in TOffset, and the acquisition date (which is not essential
     # to the data) in PhysicalData/AcquisitionDate.
@@ -310,11 +308,6 @@ def _add_image_info(group, dataset, image):
             group["TOffset"] = time.time()
             _h5svi_set_state(group["TOffset"], ST_DEFAULT)
         group["TOffset"].attrs["UNIT"] = "s"  # our extension
-
-        if model.MD_TIME_OFFSET in image.metadata:
-            group["TOffsetRelative"] = image.metadata[model.MD_TIME_OFFSET]
-            _h5svi_set_state(group["TOffsetRelative"], ST_REPORTED)
-            group["TOffsetRelative"].attrs["UNIT"] = "s"  # our extension
 
         # Scale
         if model.MD_PIXEL_SIZE in image.metadata:
@@ -363,26 +356,19 @@ def _add_image_info(group, dataset, image):
             group["SecondaryGlassMediumInterfacePosition"] = 1.0  # m?
             _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
-        if "T" in dims:
-            tpos = dims.index("T")
-
-            if model.MD_TIME_LIST in image.metadata:
-                v = image.metadata[model.MD_TIME_LIST]
-                s = ST_REPORTED
-            else:
-                try:
-                    v = image.metadata[model.MD_PIXEL_DUR]
-                    s = ST_REPORTED
-                except KeyError:
-                    # Just to put something
-                    v = 1.0  # s
-                    s = ST_DEFAULT
-
-            group["DimensionScaleT"] = v  # s
-            group["DimensionScaleT"].attrs["UNIT"] = "s"
-            dataset.dims.create_scale(group["DimensionScaleT"], "T")
-            _h5svi_set_state(group["DimensionScaleT"], s)
-            dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
+        if "T" in dims and model.MD_TIME_LIST in image.metadata:
+            try:
+                tpos = dims.index("T")
+                # A list of values in seconds, for each pixel in the T dim
+                group["DimensionScaleT"] = image.metadata[model.MD_TIME_LIST]
+                group["DimensionScaleT"].attrs["UNIT"] = "s"
+                dataset.dims.create_scale(group["DimensionScaleT"], "T")
+                # pass state as a numpy.uint, to force it being a single value (instead of a list)
+                _h5svi_set_state(group["DimensionScaleT"], numpy.uint(ST_REPORTED))
+                dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
+            except Exception as ex:
+                logging.warning("Failed to record time information, "
+                                "it will not be saved: %s", ex)
 
         # Wavelength (for spectrograms)
         if ("C" in dims and
@@ -404,12 +390,13 @@ def _add_image_info(group, dataset, image):
 
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
                 dataset.dims.create_scale(group["DimensionScaleC"], "C")
-                _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
+                # pass state as a numpy.uint, to force it being a single value (instead of a list)
+                _h5svi_set_state(group["DimensionScaleC"], numpy.uint(ST_REPORTED))
                 cpos = dims.index("C")
                 dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
-            except Exception:
+            except Exception as ex:
                 logging.warning("Failed to record wavelength information, "
-                                "it will not be saved.")
+                                "it will not be saved: %s", ex)
 
         # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
         # angle in radians (according to the right-hand rule)
@@ -503,6 +490,14 @@ def _read_image_info(group):
     try:
         for i, dim in enumerate(dataset.dims):
             if dim.label == "T" and dim:
+                state = _h5svi_get_state(dim[0])
+                # For a short while (in Odemis 2.10 alpha), the metadata was
+                # recorded with one state per value, in such case, let's assume
+                # it's interesting metadata.
+                if not isinstance(state, list) and state != ST_REPORTED:
+                    # Only set as real metadata if it was actual information
+                    break
+
                 # add time list to metadata, containing info on time stamp per px if available
                 if dim[0].shape == (dataset.shape[i],):
                     md[model.MD_TIME_LIST] = dim[0][...].tolist()
@@ -554,6 +549,13 @@ def _read_image_info(group):
     try:
         for i, dim in enumerate(dataset.dims):
             if dim.label == "C" and dim:
+                state = _h5svi_get_state(dim[0])
+                # Until Odemis 2.10, the metadata was recorded with one state per
+                # value, in such case, let's assume it's interesting metadata.
+                if not isinstance(state, list) and state != ST_REPORTED:
+                    # Only set as real metadata if it was actual information
+                    break
+
                 # add wl list to metadata, containing info on wavelength value per px if available
                 if dim[0].shape == (dataset.shape[i],):
                     md[model.MD_WL_LIST] = dim[0][...].tolist()
@@ -1221,11 +1223,13 @@ def _adjustDimensions(da):
 
     # reorder dimensions so that they are in the expected order
     if dims != dim_goal:
+        # TODO: from numpy 1.11, it's possible to use numpy.moveaxis()
         # roll the axes until they fit
         for i, d in enumerate(dim_goal):
             p = dims.index(d)
             da = numpy.rollaxis(da, p, i)
-            dims[:i] + d + dims[i:p] + dims[p + 1:] # roll dims
+            dims = dims[:i] + d + dims[i:p] + dims[p + 1:]  # roll dims
+        assert dims == dim_goal
 
     md.update({model.MD_DIMS: dims})
     da = model.DataArray(da, md)
