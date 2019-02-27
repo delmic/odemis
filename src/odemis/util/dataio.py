@@ -128,6 +128,10 @@ def data_to_static_streams(data):
                 subdas = _split_planes(d)
                 logging.info("Reprocessing data of shape %s into %d sub-data",
                              d.shape, len(subdas))
+                if len(subdas) > 30:
+                    logging.error("The data seems to have %d sub-data, limiting it to the first 10",
+                                  len(subdas))
+                    subdas = subdas[:10]
                 if len(subdas) > 1:
                     result_streams.extend(data_to_static_streams(subdas))
                     continue
