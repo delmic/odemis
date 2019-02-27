@@ -81,6 +81,15 @@ def data_to_static_streams(data):
             # Time data (with XY)
             name = d.metadata.get(model.MD_DESCRIPTION, "Time")
             klass = stream.StaticSpectrumStream
+
+            # For now, the viewport cannot display large datasets, so we have to crop the temporal data
+            # FIXME: remove once we can display more data
+            # We do "d = d[:, :1024, :, :, :]", in a generic way
+            cropped_t = [slice(None)] * d.ndim
+            cropped_t[ti] = slice(1024)
+            d = d[cropped_t]  # if T < 1024, it does nothing
+            d.metadata[model.MD_TIME_LIST] = d.metadata[model.MD_TIME_LIST][:1024]
+            logging.info("Cropping data of %s to %d pixels in T", name, d.shape[ti])
         elif model.MD_AR_POLE in d.metadata:
             # AR data
             ar_data.append(d)

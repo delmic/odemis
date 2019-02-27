@@ -1975,13 +1975,6 @@ class SEMTemporalMDStream(MultipleDetectorStream):
 
         md = raw_das[0].metadata.copy()
 
-        # For now, the viewport cannot display large datasets, so we have to crop the temporal data
-        # FIXME: remove once we can display more data
-        if n == 1:
-            for i, da in enumerate(raw_das):
-                raw_das[i] = da[:, :1024]
-        md[model.MD_TIME_LIST] = md[model.MD_TIME_LIST][:1024]
-
         # The time-correlator data is of shape 1, 65535 (XT). So the first
         # dimension can always be discarded and the second dimension is T.
         # All the data is scanned in Y(slow)/X(fast) order.
