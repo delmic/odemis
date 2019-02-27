@@ -692,7 +692,11 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
         self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
-        self.image.value = model.DataArray([]) # start with an empty array
+        md = {
+            model.MD_DIMS: "T",
+            model.MD_DET_TYPE: model.MD_DT_NORMAL,
+        }
+        self.image.value = model.DataArray([], md)  # start with an empty array
 
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
@@ -732,22 +736,26 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
 
     def _updateImage(self):
+        try:
+            # convert the list into a DataArray
+            raw = self.raw  # read in one shot
+            count, date = raw[:, 0], raw[:, 1]
+            im = model.DataArray(count)
+            # Save the relative time of each point into TIME_LIST, going from
+            # negative to 0 (now).
+            if len(date) > 0:
+                age = date - date[-1]
+            else:
+                age = date  # empty
+            im.metadata[model.MD_TIME_LIST] = age
+            im.metadata[model.MD_DIMS] = "T"
+            im.metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+            assert len(im) == len(date)
+            assert im.ndim == 1
 
-        # convert the list into a DataArray
-        raw = self.raw  # read in one shot
-        count, date = raw[:, 0], raw[:, 1]
-        im = model.DataArray(count)
-        # save the relative time of each point as ACQ_DATE, unorthodox but should not
-        # cause much problems as the data is so special anyway.
-        if len(date) > 0:
-            age = date - date[-1]
-        else:
-            age = date  # empty
-        im.metadata[model.MD_ACQ_DATE] = age
-        assert len(im) == len(date)
-        assert im.ndim == 1
-
-        self.image.value = im
+            self.image.value = im
+        except Exception:
+            logging.exception("Failed to generate chronogram")
 
     def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
@@ -1336,7 +1344,11 @@ class ScannedTCSettingsStream(RepetitionStream):
 
         # Raw: series of data (normalized)/acq date (s)
         self.raw = model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))
-        self.image.value = model.DataArray([])  # start with an empty array
+        md = {
+            model.MD_DIMS: "T",
+            model.MD_DET_TYPE: model.MD_DT_NORMAL,
+        }
+        self.image.value = model.DataArray([], md)  # start with an empty array
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
         self.windowPeriod = model.FloatContinuous(30.0, range=(0, 1e6), unit="s")
@@ -1368,22 +1380,26 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.raw = model.DataArray(numpy.append(self.raw[first:], new, axis=0))
 
     def _updateImage(self):
+        try:
+            # convert the list into a DataArray
+            raw = self.raw  # read in one shot
+            count, date = raw[:, 0], raw[:, 1]
+            im = model.DataArray(count)
+            # Save the relative time of each point into TIME_LIST, going from
+            # negative to 0 (now).
+            if len(date) > 0:
+                age = date - date[-1]
+            else:
+                age = date  # empty
+            im.metadata[model.MD_TIME_LIST] = age
+            im.metadata[model.MD_DIMS] = "T"
+            im.metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+            assert len(im) == len(date)
+            assert im.ndim == 1
 
-        # convert the list into a DataArray
-        raw = self.raw  # read in one shot
-        count, date = raw[:, 0], raw[:, 1]
-        im = model.DataArray(count)
-        # save the relative time of each point as ACQ_DATE, unorthodox but should not
-        # cause much problems as the data is so special anyway.
-        if len(date) > 0:
-            age = date - date[-1]
-        else:
-            age = date  # empty
-        im.metadata[model.MD_ACQ_DATE] = age
-        assert len(im) == len(date)
-        assert im.ndim == 1
-
-        self.image.value = im
+            self.image.value = im
+        except Exception:
+            logging.exception("Failed to generate chronogram")
 
     def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
@@ -1435,11 +1451,13 @@ class ScannedTCSettingsStream(RepetitionStream):
         RepetitionStream._onActive(self, active)
 
 
-class ScannedTemporalSettingsStream(SpectrumSettingsStream):
+class ScannedTemporalSettingsStream(CCDSettingsStream):
     """
     Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_TEMPORAL
         super(ScannedTemporalSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
     
         # typical user wants density much lower than SEM
@@ -1448,9 +1466,48 @@ class ScannedTemporalSettingsStream(SpectrumSettingsStream):
         # Fuzzing not supported (yet)
         del self.fuzzing
 
+        # scan stage is not (yet?) handled by SEMTemporalMDStreams
+        del self.useScanStage
+
+        # B/C and histogram are meaningless on a spectrum
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
+        # Contains one 1D spectrum (start with an empty array)
+        self.image.value = model.DataArray([])
+
+    def _updateImage(self):
+        if not self.raw:
+            return
+
+        # Just copy the raw data into the image, removing useless extra dimensions
+        # TODO: support data with different shape than XT
+        # tindex = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+        im = self.raw[0][0, :]
+        im.metadata = im.metadata.copy()
+        im.metadata[model.MD_DIMS] = "T"
+        self.image.value = im
+
+    # No histogram => no need to do anything to update it
+    @staticmethod
+    def _histogram_thread(wstream):
+        pass
+
     def _onNewData(self, dataflow, data):
         # For now, the viewport cannot display large datasets, so we have to crop the temporal data
         # TODO: remove cropping once PlotCanvas supports bigger data
         cropvalue = 1024
-        data = data[0][:cropvalue].reshape([1, cropvalue])
+        data = data[..., :cropvalue]
+        if model.MD_TIME_LIST in data.metadata:
+            data.metadata[model.MD_TIME_LIST] = data.metadata[model.MD_TIME_LIST][:cropvalue]
+
+        # Set POS and PIXEL_SIZE from the e-beam (which is in spot mode)
+        epxs = self.emitter.pixelSize.value
+        data.metadata[model.MD_PIXEL_SIZE] = epxs
+        emd = self.emitter.getMetadata()
+        pos = emd.get(model.MD_POS, (0, 0))
+        trans = self.emitter.translation.value
+        data.metadata[model.MD_POS] = (pos[0] + trans[0] * epxs[0],
+                                       pos[1] - trans[1] * epxs[1])  # Y is inverted
         super(ScannedTemporalSettingsStream, self)._onNewData(dataflow, data)

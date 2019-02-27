@@ -374,32 +374,6 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
         self.line_width = 2
 
-        self._horiz_va = None
-        self._vert_va = None
-
-    def connect_selection(self, x_va, y_va):
-        """
-        Connect vigilant attributes to the x,y lines
-        """
-        if self._horiz_va is not None:
-            self._horiz_va.unsubscribe(self._on_selection)
-        if self._vert_va is not None:
-            self._vert_va.unsubscribe(self._on_selection)
-
-        self._horiz_va = x_va
-        self._vert_va = y_va
-
-        if self._horiz_va is not None:
-            self._horiz_va.subscribe(self._on_selection, init=True)
-        if self._vert_va is not None:
-            self._vert_va.subscribe(self._on_selection, init=True)
-
-        wx.CallAfter(self.cnvs.request_drawing_update)
-
-    def _on_selection(self, _):
-        self.val.value = (self._vert_va.value, self._horiz_va.value)
-        wx.CallAfter(self.cnvs.request_drawing_update)
-
     @property
     def x_label(self):
         return self._x_label
@@ -463,20 +437,11 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
             y = max(1, min(self.view_height, y))
             val = self.cnvs.pos_to_val((x, y), snap=False)
 
-        if self._horiz_va:
-            self._horiz_va.value = val[1]
-        if self._vert_va:
-            self._vert_va.value = val[0]
         self.val.value = val
 
     def draw(self, ctx):
-        ctx.set_line_width(self.line_width)
-        ctx.set_dash([3])
-        ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        ctx.set_source_rgba(*self.colour)
-
-        if self.val.value is not None:
-            val = self.val.value
+        val = self.val.value
+        if val is not None and self.cnvs.range_x is not None and self.cnvs.range_y is not None:
             if self.map_y_from_x:
                 # Maps Y and also snap X to the closest X value in the data
                 val = self.cnvs.val_x_to_val(val[0])
@@ -500,6 +465,11 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                                               guess_sig(val[0], self.cnvs.range_x))
             self.y_label = units.readable_str(val[1], self.cnvs.unit_y,
                                               guess_sig(val[1], self.cnvs.range_x))
+
+            ctx.set_line_width(self.line_width)
+            ctx.set_dash([3])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(*self.colour)
 
             # v_posx, v_posy = self.v_pos.value
             if self.orientation & self.VERTICAL:

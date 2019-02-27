@@ -39,13 +39,14 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
     RGBCameraStream, BrightfieldStream, RGBStream, RGBUpdatableStream, \
     ScannedTCSettingsStream, SinglePointSpectrumProjection, LineSpectrumProjection, \
-    PixelTemporalSpectrumProjection, SinglePointTemporalProjection
+    PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
+    ScannedTemporalSettingsStream
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport, TemporalSpectrumViewport, TimeSpectrumViewport
+    PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings
@@ -931,7 +932,7 @@ class SparcAcquisitionTab(Tab):
         else:
             vpv[viewports[4]] = {
                 "name": "Monochromator",
-                "stream_classes": MonochromatorSettingsStream,
+                "stream_classes": (MonochromatorSettingsStream, ScannedTemporalSettingsStream),
             }
 
         # Add connection to SEM hFoV if possible
@@ -1604,9 +1605,9 @@ class AnalysisTab(Tab):
             assert(isinstance(vp, MicroscopeViewport))
         assert(isinstance(viewports[4], AngularResolvedViewport))
         assert(isinstance(viewports[5], PlotViewport))
-        assert(isinstance(viewports[6], SpatialSpectrumViewport))
+        assert(isinstance(viewports[6], LineSpectrumViewport))
         assert(isinstance(viewports[7], TemporalSpectrumViewport))
-        assert(isinstance(viewports[8], TimeSpectrumViewport))
+        assert(isinstance(viewports[8], ChronographViewport))
 
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
@@ -1797,7 +1798,7 @@ class AnalysisTab(Tab):
             self._stream_bar_controller.clear()
             # Clear any old plots
             self.panel.vp_inspection_plot.clear()
-            self.panel.vp_spatialspec.clear()
+            self.panel.vp_linespec.clear()
             self.panel.vp_temporalspec.clear()
             self.panel.vp_timespec.clear()
             self.panel.vp_angular.clear()
@@ -1841,15 +1842,13 @@ class AnalysisTab(Tab):
             # FIXME: This temporary "fix" only binds the first spectrum stream to the pixel and
             # line overlays. This is done because in the PlotViewport only the first spectrum stream
             # gets connected. See connect_stream in viewport.py, line 812.
-            # We need a clean way to connect both the overlays and the PlotViewport to the right
-            # spectrum stream when the view/stream tree changes.
+            # We need a clean way to connect the overlays
 
             spec_stream = spec_streams[0]
-
             sraw = spec_stream.raw[0]
 
             # We need to get the dimensions so we can determine the
-            # resolution. Remember that in Matrix notation, the
+            # resolution. Remember that in numpy notation, the
             # number of rows (is vertical size), comes first. So we
             # need to 'swap' the values to get the (x,y) resolution.
             height, width = sraw.shape[-2], sraw.shape[-1]
@@ -1863,6 +1862,7 @@ class AnalysisTab(Tab):
                     ol.set_data_properties(pixel_width, center_position, (width, height))
                     ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
 
+                # TODO: to be done by the MicroscopeViewport or DblMicroscopeCanvas (for each stream with a selected_line)
                 if hasattr(viewport.canvas, "line_overlay") and hasattr(spec_stream, "selected_line"):
                     ol = viewport.canvas.line_overlay
                     ol.set_data_properties(pixel_width, center_position, (width, height))
@@ -1871,11 +1871,12 @@ class AnalysisTab(Tab):
                         spec_stream.selectionWidth,
                         spec_stream.selected_pixel
                     )
-                    
+
+            for s in spec_streams:
                 # Adjust the viewport layout (if needed) when a pixel or line is selected
-                spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-                if hasattr(spec_stream, "selected_line"):
-                    spec_stream.selected_line.subscribe(self._on_line_select, init=True)
+                s.selected_pixel.subscribe(self._on_pixel_select, init=True)
+                if hasattr(s, "selected_line"):
+                    s.selected_line.subscribe(self._on_line_select, init=True)
 
             # ########### Combined views and spectrum view visible
             if hasattr(spec_stream, "selected_time"):
@@ -1883,17 +1884,9 @@ class AnalysisTab(Tab):
                 new_visible_views[1] = self.panel.vp_timespec.view
                 new_visible_views[2] = self.panel.vp_inspection_plot.view
                 new_visible_views[3] = self.panel.vp_temporalspec.view
-                # Only set a defulat value for testing.
-                # spec_stream.selected_pixel.value = (1, 1)
-                
-                # Connect markline
-                self.panel.vp_temporalspec.ol.connect_selection(
-                    spec_stream.selected_time,
-                    spec_stream.selected_wavelength
-                )
             else:
                 new_visible_views[0:2] = self._def_views[2:4]  # Combined
-                new_visible_views[2] = self.panel.vp_spatialspec.view
+                new_visible_views[2] = self.panel.vp_linespec.view
                 self.tb.enable_button(TOOL_LINE, True)
                 new_visible_views[3] = self.panel.vp_inspection_plot.view
 
@@ -2087,19 +2080,25 @@ class AnalysisTab(Tab):
 
         return fn
 
-    def _on_point_select(self, _):
+    def _on_point_select(self, point):
         """ Bring the angular viewport to the front when a point is selected in the 1x1 view """
+        if None in point:
+            return  # No point selected => nothing to force
         # TODO: should we just switch to 2x2 as with the pixel and line selection?
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.focussedView.value = self.panel.vp_angular.view
 
-    def _on_pixel_select(self, _):
+    def _on_pixel_select(self, pixel):
         """ Switch the the 2x2 view when a pixel is selected """
+        if None in pixel:
+            return  # No pixel selected => nothing to force
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
-    def _on_line_select(self, _):
+    def _on_line_select(self, line):
         """ Switch the the 2x2 view when a line is selected """
+        if (None, None) in line:
+            return  # No line selected => nothing to force
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
@@ -2841,7 +2840,7 @@ class SparcAlignTab(Tab):
             disp = (scount - vmin) / b
 
             # insert 0s at the beginning if the window is not (yet) full
-            dates = scount.metadata[model.MD_ACQ_DATE]
+            dates = scount.metadata[model.MD_TIME_LIST]
             dur = dates[-1] - dates[0]
             if dur == 0:  # only one tick?
                 dur = 1  # => make it 1s large

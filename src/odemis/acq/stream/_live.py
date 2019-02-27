@@ -714,7 +714,11 @@ class CameraCountStream(CameraStream):
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
         self.raw = [model.DataArray(numpy.empty((0, 2), dtype=numpy.float64))]
-        self.image.value = model.DataArray([]) # start with an empty array
+        md = {
+            model.MD_DIMS: "T",
+            model.MD_DET_TYPE: model.MD_DT_NORMAL,
+        }
+        self.image.value = model.DataArray([], md)  # start with an empty array
 
         # time over which to accumulate the data. 0 indicates that only the last
         # value should be included
@@ -759,14 +763,15 @@ class CameraCountStream(CameraStream):
             raw = self.raw[0]  # read in one shot
             count, date = raw[:, 0], raw[:, 1]
             im = model.DataArray(count)
-            # save the relative time of each point as ACQ_DATE, unorthodox but should not
-            # cause much problems as the data is so special anyway.
+            # Save the relative time of each point into TIME_LIST, going from
+            # negative to 0 (now).
             if len(date) > 0:
                 age = date - date[-1]
             else:
                 age = date  # empty
-            # TODO: use MD_TIME_LIST
-            im.metadata[model.MD_ACQ_DATE] = age
+            im.metadata[model.MD_TIME_LIST] = age
+            im.metadata[model.MD_DIMS] = "T"
+            im.metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
             assert len(im) == len(date)
             assert im.ndim == 1
 

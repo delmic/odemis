@@ -553,13 +553,13 @@ class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(AngularResolvedViewportXmlHandler)
 
 
-class SpatialSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+class LineSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.SpatialSpectrumViewport
+    klass = vport.LineSpectrumViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "SpatialSpectrumViewport")
-HANDLER_CLASS_LIST.append(SpatialSpectrumViewportXmlHandler)
+        return self.IsOfClass(node, "LineSpectrumViewport")
+HANDLER_CLASS_LIST.append(LineSpectrumViewportXmlHandler)
 
 
 class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
@@ -572,16 +572,6 @@ class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
 HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
 
-
-class TimeSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.TimeSpectrumViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "TimeSpectrumViewport")
-
-
-HANDLER_CLASS_LIST.append(TimeSpectrumViewportXmlHandler)
 
 ##################################
 # Sliders

@@ -823,7 +823,7 @@ class LineSpectrumProjection(RGBProjection):
 class PixelTemporalSpectrumProjection(RGBProjection):
     """
     Project a temporal spectrum (typically from streak camera data) as a 2D
-    RGB image of time vs. wavelength
+    RGB image of time vs. wavelength, for a given "selected_pixel".
     """
     def __init__(self, stream):
 
@@ -850,8 +850,9 @@ class PixelTemporalSpectrumProjection(RGBProjection):
         """
         Compute the temporal spectrum data array
 
-        return (DataArray of shape TC, or None): The array if successful, None in
-        case of failure or no selected_pixel
+        return (DataArray of shape TC, or None): The array, with the minimum time
+          and wavelength at pixel 0,0 (ie, top-left).
+          In case of failure or no selected_pixel, it returns None.
         """
         data = self.stream.calibrated.value
 
