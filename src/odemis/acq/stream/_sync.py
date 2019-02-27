@@ -1897,18 +1897,24 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 idt = numpy.iinfo(dtype)
                 pxsum = numpy.sum(tc_px_data, 0)
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
-                pxsum = model.DataArray(pxsum.astype(dtype), tc_px_data[0].metadata)
+                tc_md = tc_px_data[0].metadata.copy()
+                try:
+                    tc_md[model.MD_DWELL_TIME] *= px_iters
+                except KeyError:
+                    logging.warning("No dwell time metadata in time-correlator data")
+                pxsum = model.DataArray(pxsum.astype(dtype), tc_md)
                 tc_data.append(pxsum)
 
                 pxsum = numpy.sum(se_px_data, 0)
                 pxsum = numpy.minimum(pxsum, idt.max * numpy.ones(pxsum.shape))
-                s = model.DataArray(pxsum, se_px_data[0].metadata)
+                se_md = se_px_data[0].metadata.copy()
+                try:
+                    se_md[model.MD_DWELL_TIME] *= px_iters
+                except KeyError:
+                    logging.warning("No dwell time metadata in SEM data")
+                s = model.DataArray(pxsum, se_md)
                 se_data.append(s)
 
-            # Add missing metadata to first tile of tc data, needed for get_center_pxs
-            tc_data[0].metadata[model.MD_POS] = se_data[0].metadata[model.MD_POS]
-            tc_data[0].metadata[model.MD_PIXEL_SIZE] = (self._tc_stream.pixelSize.value,
-                                                        self._tc_stream.pixelSize.value)
             self._onCompletedData(0, se_data)
             self._onCompletedData(1, tc_data)
 
@@ -1964,29 +1970,36 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                 s._dataflow.unsubscribe(sub)
 
     def _onCompletedData(self, n, raw_das):
+        if n != 1:  # It's SEM data => no special way to treat it
+            return super(SEMTemporalMDStream, self)._onCompletedData(n, raw_das)
+
         md = raw_das[0].metadata.copy()
-        md[MD_DESCRIPTION] = self._streams[n].name.value
-        md[model.MD_PIXEL_SIZE] = (self._tc_stream.pixelSize.value, self._tc_stream.pixelSize.value)
-        md[model.MD_DWELL_TIME] = self._tc_stream._getDetectorVA("dwellTime").value
-        md[model.MD_DIMS] = "CTZYX"
+
         # For now, the viewport cannot display large datasets, so we have to crop the temporal data
         # FIXME: remove once we can display more data
         if n == 1:
             for i, da in enumerate(raw_das):
                 raw_das[i] = da[:, :1024]
+        md[model.MD_TIME_LIST] = md[model.MD_TIME_LIST][:1024]
 
-        shape = numpy.array(raw_das).shape
-        rep = self._tc_stream.repetition.value
-
-        # The SEM data is of shape 1,1 (YX), while the time-correlator data is of shape 1, 65535 (XT).
-        # So the first dimension can always be discarded and the second dimension can be considered T.
+        # The time-correlator data is of shape 1, 65535 (XT). So the first
+        # dimension can always be discarded and the second dimension is T.
+        # All the data is scanned in Y(slow)/X(fast) order.
         # This will not work anymore if we include fuzzing.
-        das = numpy.reshape(raw_das, [shape[2], 1, 1, rep[1], rep[0]])
+        rep = self.repetition.value
+        das = numpy.array(raw_das)
+        shape = das.shape  # N1T = rep[1] * rep[0], 1, detector.resolution[0]
+        das.shape = (1, 1, rep[1], rep[0], shape[-1])  # Add CZ == 11 + separate YX
+        das = numpy.rollaxis(das, 4, 1)  # Move T: CZYXT -> CTZYX
+        md[model.MD_DIMS] = "CTZYX"
+
+        # Compute metadata based on SEM metadata
+        sem_md = self._raw[0].metadata  # _onCompletedData() should be called in order
+        md[MD_POS] = sem_md[MD_POS]
+        md[MD_PIXEL_SIZE] = sem_md[MD_PIXEL_SIZE]
+        md[MD_DESCRIPTION] = self._streams[n].name.value
+
         das = model.DataArray(das, md)
-
-        pos, _ = self._get_center_pxs(self._tc_stream.repetition.value, (1, 1), das[0])
-        das.metadata[model.MD_POS] = pos
-
         self._raw.append(das)
 
     def _getNumDriftCors(self):
