@@ -1608,6 +1608,10 @@ class TMCLController(model.Actuator):
     reference.__doc__ = model.Actuator.reference.__doc__
 
     def stop(self, axes=None):
+        # TODO: only cancel the move related to the specified axes. That said,
+        # it should be clear that this call might cause other axes to stop.
+        # Especially, some hardware don't support per axis stop, and for now,
+        # all the other drivers cancel all the axes all the time too.
         self._executor.cancel()
 
         # For safety, just force stop every axis

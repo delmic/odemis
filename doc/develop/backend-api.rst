@@ -450,6 +450,9 @@ whether the stage passed by position *x=1* is unknown (to the client).
         cancelled.
 
         :param axes: Axes which must be stopped, otherwise all the axes are stopped.
+           Note that if this is specified, some other axes might also be stopped
+           anyway (eg, because the hardware only supports stopping all the axes
+           simultaneously).
         :type axes: set of str
 
     .. py:method:: getOpeningToWavelength(width)
