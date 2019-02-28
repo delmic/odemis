@@ -322,6 +322,8 @@ class OdemisBugreporter():
         # Create ticket with special id when testing
         if TEST_SUPPORT_TICKET:
             report_description['topicId'] = 12
+        else:
+            report_description['topicId'] = 10  # "Report a problem"
 
         description = ('Name: %s\n' % name.encode("utf-8") +
                        'Email: %s\n' % email.encode("utf-8") +
