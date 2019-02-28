@@ -1227,6 +1227,12 @@ class TwoDViewPort(ViewPort):
         self._projection = None  # Might be the same as _stream, if it has its own .image
         self._stream = None
 
+        # TODO: the image from the projection (both LineSpectrum and TemporalSpectrum)
+        # are currently shown as one pixel per original pixel. However, the
+        # original pixels are *not* linearly spaced. So either the projection
+        # should compensate for this (difficult), or the axis legends should be
+        # non linear (easier).
+
     def Refresh(self, *args, **kwargs):
         """
         Refresh the ViewPort while making sure the legends get redrawn as well
