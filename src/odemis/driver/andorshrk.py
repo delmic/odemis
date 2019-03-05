@@ -268,7 +268,7 @@ class Shamrock(model.Actuator):
     Note: we don't handle changing turret (live).
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
-                 slitleds_settle_time=1e-3, slits=None, bands=None,
+                 slitleds_settle_time=1e-3, slits=None, bands=None, rng=None,
                  fstepsize=1e-6, drives_shutter=None, children=None, **kwargs):
         """
         device (0<=int or str): if int, device number, if str serial number or
@@ -289,6 +289,10 @@ class Shamrock(model.Actuator):
         fstepsize (0<float): size of one step on the focus actuator. Not very
           important, mostly useful for providing to the user a rough idea of how
           much the image will change after a move.
+        rng (dict str -> (float, float)): the min/max values for each axis.
+          They should within the standard hardware limits. If an axis is not
+          specified, the standard hardware limits are used.
+          For now it *only* works for the focus axis.
         drives_shutter (list of float): flip-out angles for which the shutter
           should be set to BNC (external) mode. Otherwise, the shutter is left
           opened.
@@ -317,6 +321,7 @@ class Shamrock(model.Actuator):
         self._is_via_camera = (camera is not None)
 
         children = children or {}
+        rng = rng or {}
 
         slits = slits or {}
         for i in slits:
@@ -393,8 +398,13 @@ class Shamrock(model.Actuator):
                     raise ValueError("fstepsize is %f but should be between 0 and 0.1m" % (fstepsize,))
                 self._focus_step_size = fstepsize
                 mx = self.GetFocusMirrorMaxSteps() * fstepsize
-                axes["focus"] = model.Axis(unit="m",
-                                           range=(fstepsize, mx))
+                frng = (fstepsize, mx)
+                if "focus" in rng:
+                    sw_frng = rng.pop("focus")
+                    if not (frng[0] <= sw_frng[0] < sw_frng[1] <= frng[1]):
+                        raise ValueError("rng focus should be within %s", frng)
+                    frng = sw_frng
+                axes["focus"] = model.Axis(unit="m", range=frng)
                 logging.info("Focus actuator added as 'focus'")
 
                 # Store the focus position for each grating/output port combination.
