@@ -515,7 +515,7 @@ class AndorCam3(model.DigitalCamera):
                 f = open(sys_path + "/version")
                 usbv = float(f.read().strip())
             except Exception:
-                logging.info("Failed to check USB version for device %s", self.name, ex_info=True)
+                logging.info("Failed to check USB version for device %s", self.name, exc_info=True)
                 return
 
             if usbv < 3:
