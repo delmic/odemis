@@ -99,20 +99,16 @@ class ReadoutCamera(model.DigitalCamera):
         if not spectrograph:
             logging.warning("No spectrograph specified. No wavelength metadata will be attached.")
 
-        # Set parameters readout camera
-        parent.CamParamSet("Setup", "TimingMode", "Internal timing")  # TODO external check displayed command in GUI
-        parent.CamParamSet("Setup", "TriggerMode", 'Edge trigger')
-        parent.CamParamSet("Setup", "TriggerSource", 'BNC')
-        parent.CamParamSet("Setup", "TriggerPolarity", 'neg.')
-        parent.CamParamSet("Setup", "ScanMode", 'Subarray')
-        parent.CamParamSet("Setup", "Binning", '2 x 2')
-        parent.CamParamSet("Setup", "VWidth", '1016')
-        parent.CamParamSet("Setup", "HWidth", '1344')
-        parent.CamParamSet("Setup", "ShowGainOffset", 'True')
+        try:
+            # TODO make nice!
+            self.parent._getReadoutCamInfo = True
+            cam_info = parent.CamParamGet("Setup", "CameraInfo")
+        except IOError:
+            logging.exception("Failed to get readout camera info")
+            # Might be due to the frame grabber failing to initialise (sometimes happens),
+            # or the camera not being turned on.
+            raise model.HwError("Failed to find readout camera, check it is powered. If powered, restart the Hamamatsu PC")
 
-        # TODO make nice!
-        self.parent._getReadoutCamInfo = True
-        cam_info = parent.CamParamGet("Setup", "CameraInfo")
         try:
             self._hwVersion = cam_info[0][0] + ", " + cam_info[0][1] + ", " + cam_info[0][2]   # needs to be a string
         except:
@@ -126,6 +122,17 @@ class ReadoutCamera(model.DigitalCamera):
             logging.debug("Could not get software information for streak readout camera.")
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+
+        # Set parameters readout camera
+        parent.CamParamSet("Setup", "TimingMode", "Internal timing")  # TODO external check displayed command in GUI
+        # parent.CamParamSet("Setup", "TriggerMode", 'Edge trigger')
+        # parent.CamParamSet("Setup", "TriggerSource", 'BNC')
+        # parent.CamParamSet("Setup", "TriggerPolarity", 'neg.')
+        parent.CamParamSet("Setup", "ScanMode", 'Subarray')
+        parent.CamParamSet("Setup", "Binning", '2 x 2')
+        parent.CamParamSet("Setup", "VWidth", '1016')
+        parent.CamParamSet("Setup", "HWidth", '1344')
+        parent.CamParamSet("Setup", "ShowGainOffset", 'True')
 
         # sensor size (resolution)
         # Note: sensor size of OrcaFlash is actually much larger (2048px x 2048px)
@@ -999,6 +1006,11 @@ class StreakCamera(model.HwComponent):
         # terminate children
         for child in self.children.value:
             child.terminate()
+
+        try:
+            self.AppEnd()
+        except:
+            logging.info("Failed to stop the HPDTA App (Hamamatsu streak camera)", exc_info=True)
 
         self.should_listen = False  # terminates receiver thread
         if self.t_receiver.isAlive():
