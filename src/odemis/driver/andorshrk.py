@@ -912,6 +912,17 @@ class Shamrock(model.Actuator):
             logging.debug("Moving focus mirror by %d stp", steps)
             self._dll.ShamrockSetFocusMirror(self._device, steps)
 
+    def FocusMirrorReset(self):
+        """
+        Resets the filter to its default position. It references the focus.
+        Note: it's unknown (yet) what is the effect on the focus position recording,
+        but one could hope that it's equivalent to calling SetFocusMirror on that
+        position.
+        """
+        with self._hw_access:
+            logging.debug("Resetting focus mirror position")
+            self._dll.ShamrockFocusMirrorReset(self._device)
+
     def GetFocusMirror(self):
         """
         Get the current position of the focus
