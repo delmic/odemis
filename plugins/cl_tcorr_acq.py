@@ -870,21 +870,6 @@ class Correlator2D(Plugin):
 
         dlg.Destroy()
 
-    def crop_time_dim(self, das):
-        """
-        For each DataArray, crop the time dimension to some "manageable" size
-        das (list of DataArray)
-        return (list DataArray)
-        """
-        ret = []
-        for da in das:
-            dims = da.metadata.get(model.MD_DIMS, "CTZYX"[:-da.ndim])
-            if dims == "CTZYX":
-                da = da[:, :self.cropvalue.value, :, :, :]
-            ret.append(da)
-
-        return ret
-
     def acquire(self, dlg):
         # Stop the spot stream and any other stream playing to not interfere with the acquisition
         try:
@@ -920,11 +905,7 @@ class Correlator2D(Plugin):
             logging.debug("Going to export data: %s", das)
             exporter.export(fn, das)
 
-            # Save also a cropped version, which is easier to see in Odemis GUI
-            basefn, ext = os.path.splitext(fn)
-            cfn = basefn + "-cropped" + ext
-            exporter.export(cfn, self.crop_time_dim(das))
-            self.showAcquisition(cfn)
+            self.showAcquisition(fn)
 
         if not f.cancelled():
             dlg.Close()

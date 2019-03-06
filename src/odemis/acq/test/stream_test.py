@@ -30,6 +30,10 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
+from odemis.acq.stream import POL_POSITIONS
+from odemis.acq.stream import RGBSpatialSpectrumProjection, \
+    SinglePointSpectrumProjection, SinglePointTemporalProjection, \
+    LineSpectrumProjection, MeanSpectrumProjection
 from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.util import test, conversion, img, spectrum, find_closest
@@ -39,10 +43,6 @@ import time
 import unittest
 from unittest.case import skip
 import weakref
-from odemis.acq.stream import POL_POSITIONS
-from odemis.acq.stream import RGBSpatialSpectrumProjection, \
-    SinglePointSpectrumProjection, SinglePointTemporalProjection, \
-    LineSpectrumProjection, MeanSpectrumProjection
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -2888,9 +2888,24 @@ class TimeCorrelatorTestCase(unittest.TestCase):
 
         self.assertEqual(len(data), 2)  # 1 array for se, the other for tc data
         for d in data:
+            md = d.metadata
             # Last two dimensions correspond to y, x repetition value
             self.assertEqual(d.shape[-1], 5)
             self.assertEqual(d.shape[-2], 10)
+
+            if d.ndim >= 3:
+                self.assertEqual(d.shape[-3], 1)  # Z
+                # T should be the length of the time-correlator
+                if model.MD_TIME_LIST in md:
+                    self.assertGreater(d.shape[-4], 100)
+                    self.assertEqual(d.shape[-4], len(md[model.MD_TIME_LIST]))
+                else:
+                    self.assertEqual(d.shape[-4], 1)
+                self.assertEqual(d.shape[-5], 1)  # C
+
+            self.assertAlmostEqual(md[model.MD_PIXEL_SIZE][0], tc_stream.pixelSize.value)
+            self.assertAlmostEqual(md[model.MD_PIXEL_SIZE][1], tc_stream.pixelSize.value)
+            self.assertAlmostEqual(md[model.MD_DWELL_TIME], self.time_correlator.dwellTime.value)
 
         # Sub-pixel drift correction
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
@@ -2906,11 +2921,11 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         f = sem_tc_stream.acquire()
         time.sleep(0.1)
         # Dwell time on detector and emitter should be reduced by 1/2
-        self.assertEqual(sem_tc_stream._tc_stream._detector.dwellTime.value, 1)
+        self.assertEqual(self.time_correlator.dwellTime.value, 1)
         self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 1)
         data = f.result()
         # Dwell time on detector and emitter should be back to normal
-        self.assertEqual(sem_tc_stream._tc_stream._detector.dwellTime.value, 2)
+        self.assertEqual(self.time_correlator.dwellTime.value, 2)
         self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 2)
         
         self.assertEqual(len(data), 3)  # additional anchor region data array
@@ -2918,6 +2933,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         self.assertEqual(data[0].shape[-2], 2)
         self.assertEqual(data[1].shape[-1], 1)
         self.assertEqual(data[1].shape[-2], 2)
+
 
 # @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):
