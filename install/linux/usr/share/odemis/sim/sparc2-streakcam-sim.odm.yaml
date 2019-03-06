@@ -30,7 +30,7 @@ SPARC2: {
                   "Camera": 4, "Spectrograph": 6,
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
-            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "Calibration Light": 3, # s, the light takes some time to actually turn on
             "CL PMT control unit": 0,
             "Camera": 1,
             "Spectrograph": 1,

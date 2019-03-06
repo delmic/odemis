@@ -152,4 +152,6 @@ if [ -d "$ODMPATH" ]; then
     "$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/ >> "$TESTLOG" 2>&1
 fi
 
+# TODO: run GUI standalone tests by trying to load every test data file that we have.
+
 kill %1 # Stops the "tail -f"
