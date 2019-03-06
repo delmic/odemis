@@ -128,7 +128,11 @@ def _FindAngle(x_array, y_array, pixel_size, parabola_f):
                               and omega (solid angle: angular range collected per px)
     """
 
-    # TODO specify axis regarding parabolic mirror
+    # Moving from 2D xy coordinate system describing the detector plane to a
+    # 3D coordinate system describing the mirror: z is orientated along the optical axis of the
+    # parabolic mirror. xz describe the horizontal/sample plane when looking at the mirror in top view
+    # and y is normal to the sample plane (heights).
+    # Thus, the camera is imaging the xy plane (which corresponds to the x_array, y_array input for this method).
     x = x_array * pixel_size[0]
     y = y_array * pixel_size[1]
 
