@@ -1670,7 +1670,7 @@ class StreamBarController(object):
         fview = self._tab_data_model.focussedView.value
 
         if add_to_view is True:
-            for v in self._tab_data_model.views.value:
+            for v in self._tab_data_model.visible_views.value:
                 if hasattr(v, "stream_classes") and isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
