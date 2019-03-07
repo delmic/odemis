@@ -54,7 +54,7 @@ class ManualOverlayPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(ManualOverlayPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Overlay/Manual corrections...", self.start)
+        self.addMenu("Data correction/Overlay corrections...", self.start)
         self._dlg = None
 
     def start(self):

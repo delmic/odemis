@@ -171,7 +171,7 @@ class AutomaticOverlayPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super(AutomaticOverlayPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Overlay/Add && Align EM...", self.start)
+        self.addMenu("Data correction/Add && Align EM...", self.start)
 
         self._dlg = None
 
