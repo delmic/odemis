@@ -21,9 +21,10 @@ from itertools import izip
 import logging
 import numpy
 from odemis import model
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, OptimizeWarning
 import threading
 import time
+import warnings
 
 # TODO: this code is full of reliance on numpy being quite lax with wrong
 # computation, and easily triggers numpy warnings. To force numpy to be
@@ -264,8 +265,13 @@ class PeakFitter(object):
                     raise CancelledError()
 
                 try:
-                    # => in scipy 0.17, curve_fit() supports the 'bounds' parameter
-                    params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
+                    with warnings.catch_warnings():
+                        # Hide scipy/optimize/minpack.py:690: OptimizeWarning: Covariance of the parameters could not be estimated
+                        warnings.filterwarnings("ignore", "", OptimizeWarning)
+                        # TODO, from scipy 0.17, curve_fit() supports the 'bounds' parameter.
+                        # It could be used to ensure the peaks params are positives.
+                        # (Once we don't support Ubuntu 12.04)
+                        params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
                     window_size = int(round(window_size * 1.2))
