@@ -39,6 +39,7 @@ import threading
 import traceback
 import wx
 from wx.lib.pubsub import pub
+import warnings
 
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.model as guimodel
@@ -381,6 +382,15 @@ class OdemisGUIApp(wx.App):
         else:
             print("%s: %s\n%s" % (etype, value, trace))
 
+    def showwarning(self, message, category, filename, lineno, file=None, line=None):
+        """
+        Called when a warning is generated.
+        The default behaviour is to write it on stderr, which would lead to it
+        being shown as an error.
+        """
+        warn = warnings.formatwarning(message, category, filename, lineno, line)
+        logging.warning(warn)
+
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
@@ -486,9 +496,10 @@ def main(args):
     # Create application
     app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name)
 
-    # Change exception hook so unexpected exception
-    # get caught by the logger
+    # Change exception hook so unexpected exception get caught by the logger,
+    # and warnings are shown as warnings in the log.
     backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
+    warnings.showwarning = app.showwarning
 
     # Start the application
     app.MainLoop()
