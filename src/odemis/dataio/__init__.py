@@ -28,7 +28,7 @@ import logging
 import os
 
 from ._base import *
-from odemis.dataio import tiff, catmaid
+from odemis.dataio import tiff
 
 # The interface of a "format manager" is as follows:
 #  * one module
