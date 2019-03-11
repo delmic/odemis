@@ -283,6 +283,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             focus_levels[current_pos] = fm_current
 
             focus.moveAbsSync({"z": good_focus})
+            good_focus = focus.position.value["z"]
             image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_good = Measure(image)
             logging.debug("Focus level at %f is %f", good_focus, fm_good)
@@ -325,6 +326,8 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 logging.debug("Focus level (center) at %f is %f", center, fm_center)
                 focus_levels[center] = fm_center
 
+            last_pos = center
+
             # Move to right position
             right = center + step_factor * min_step
             right = max(rng[0], min(right, rng[1]))  # clip
@@ -333,6 +336,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             else:
                 focus.moveAbsSync({"z": right})
                 right = focus.position.value["z"]
+                last_pos = right
                 image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_right = Measure(image)
                 logging.debug("Focus level (right) at %f is %f", right, fm_right)
@@ -346,11 +350,11 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             else:
                 focus.moveAbsSync({"z": left})
                 left = focus.position.value["z"]
+                last_pos = left
                 image = AcquireNoBackground(detector, dfbkg, timeout)
                 fm_left = Measure(image)
                 logging.debug("Focus level (left) at %f is %f", left, fm_left)
                 focus_levels[left] = fm_left
-                last_pos = left
 
             fm_range = (fm_left, fm_center, fm_right)
             if all(almost_equal(fm_left, fm, rtol=1e-6) for fm in fm_range[1:]):
@@ -370,6 +374,10 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
 
+            if left == right:
+                logging.info("Seems to have reached minimum step size (at %g m)", 2 * step_factor * min_step)
+                break
+
             # if best focus was found at the center
             if i_max == 1:
                 step_factor /= 2
@@ -387,10 +395,14 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             focus.moveAbsSync({"z": best_pos})
             step_cntr += 1
 
+        worst_fm = min(focus_levels.values())
         if step_cntr == MAX_STEPS_NUMBER:
             logging.info("Auto focus gave up after %d steps @ %g m", step_cntr, best_pos)
-        elif len(focus_levels) >= 10 and not AssessFocus(focus_levels.values(), 2):
-            logging.info("Auto focus indecisive but picking level %g @ %g m", best_fm, best_pos)
+        elif (best_fm - worst_fm) < best_fm * 0.5:
+            # We can be confident of the data if there is a "big" (50%) difference
+            # between the focus levels.
+            logging.info("Auto focus indecisive but picking level %g @ %g m (lowest = %g)",
+                         best_fm, best_pos, worst_fm)
         else:
             logging.info("Auto focus found best level %g @ %g m", best_fm, best_pos)
 
