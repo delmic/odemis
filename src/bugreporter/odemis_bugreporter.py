@@ -23,25 +23,26 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division, absolute_import
 
+import base64
+from collections import OrderedDict
+from concurrent import futures
+import csv
+from datetime import datetime
+from glob import glob
+import json
 import logging
+import notify2
 import os
+import platform
 import re
 import shlex
-import time
-import wx
-import csv
-import zipfile
 import socket
-from datetime import datetime
-from concurrent import futures
-import platform
-from glob import glob
 import subprocess
-import json
-import base64
+import time
 import urllib2
-from collections import OrderedDict
 import webbrowser
+import wx
+import zipfile
 
 logging.getLogger().setLevel(logging.DEBUG)
 DEFAULT_CONFIG = {"LOGLEVEL": "1",
@@ -336,6 +337,8 @@ class OdemisBugreporter():
         # Create ticket with special id when testing
         if TEST_SUPPORT_TICKET:
             report_description['topicId'] = 12
+        else:
+            report_description['topicId'] = 10  # "Report a problem"
 
         description = (u'Name: %s\n' % name +
                        u'Email: %s\n' % email +
@@ -346,21 +349,17 @@ class OdemisBugreporter():
         with zipfile.ZipFile(self.zip_fn, "a", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr('description.txt', description)
         wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
-        try:
-            api_key = self.search_api_key()
-            self.create_ticket(api_key, report_description, [self.zip_fn])
-            wx.CallAfter(self.gui.Destroy)
-        except Exception as e:
-            logging.warning("osTicket upload failed: %s", e)
-            wx.CallAfter(self.gui.open_failed_upload_dlg)
+        api_key = self.search_api_key()
+        self.create_ticket(api_key, report_description, [self.zip_fn])
 
     def send_report(self, name, email, subject, message):
         """
         Calls _set_description in a thread.
         :arg name, email, summary, description: (String) arguments for corresponding dictionary
         keys
+        return Future (-> None): the handle to follow the report upload
         """
-        self._executor.submit(self._set_description, name, email, subject, message)
+        return self._executor.submit(self._set_description, name, email, subject, message)
 
 
 class BugreporterFrame(wx.Frame):
@@ -542,7 +541,7 @@ class BugreporterFrame(wx.Frame):
         email = self.email_ctrl.GetValue()
         summary = self.summary_ctrl.GetValue()
         description = self.description_ctrl.GetValue()
-        
+
         if not name or not email or not summary or description == DESCRIPTION_DEFAULT_TXT:
             dlg = wx.MessageDialog(self, 'Please fill in all the fields.', '', wx.OK)
             val = dlg.ShowModal()
@@ -560,11 +559,20 @@ class BugreporterFrame(wx.Frame):
 
         # Store user info and pass description to bugreporter
         self.store_user_info(name, email)
-        self.bugreporter.send_report(name, email, summary, description)
+        f = self.bugreporter.send_report(name, email, summary, description)
+        f.add_done_callback(self._on_report_sent)
+
+    def _on_report_sent(self, future):
+        try:
+            future.result()
+            wx.CallAfter(self._on_report_sent_successful)
+        except Exception as e:
+            logging.warning("osTicket upload failed: %s", e)
+            wx.CallAfter(self.open_failed_upload_dlg)
 
     def on_close(self, _):
         """
-        Ask user for confirmation if window was opened more than 30 seconds.
+        Ask user for confirmation before closing the window
         """
         # Ask for confirmation if the user has already filled in a summary or description
         if self.summary_ctrl.GetValue() or self.description_ctrl.GetValue() != DESCRIPTION_DEFAULT_TXT:
@@ -581,11 +589,25 @@ class BugreporterFrame(wx.Frame):
         else:
             self.Destroy()
 
+    def _on_report_sent_successful(self):
+        """
+        Called when the report was successfully uploaded.
+        It will show a pop-up to confirm to the user, and close the window
+        """
+        notify2.init("Odemis")
+        notif = notify2.Notification("")
+        notif.update("Odemis bug-report successfully uploaded",
+                     "You will shortly receive a confirmation by email.",
+                     "dialog-info")
+        notif.show()
+
+        self.Destroy()
+
     def open_failed_upload_dlg(self):
         """
         Ask the user to user wetransfer in case the upload to osticket failed.
         """
-        txt = ('The bugreport could not be uploaded to osticket. Please finish the report ' +
+        txt = ('The bug-report could not be uploaded to osticket. Please finish the report ' +
                'by filling in the form on https://support.delmic.com and attaching the report ' +
                'file "%s" on the Desktop.\n\n' % self.bugreporter.zip_fn +
                'After closing this window, the form will automatically open in your web browser.')
