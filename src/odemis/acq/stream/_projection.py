@@ -618,7 +618,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
 
             irange = self.stream._getDisplayIRange()  # will update histogram if not yet present
 
-            if not hasattr(self, "fitToRGB") or not self.stream.fitToRGB.value:
+            if not hasattr(self.stream, "fitToRGB") or not self.stream.fitToRGB.value:
                 # TODO: use better intermediary type if possible?, cf semcomedi
                 av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
                 av_data = img.ensure2DImage(av_data)
