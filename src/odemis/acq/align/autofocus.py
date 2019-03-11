@@ -371,7 +371,6 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 i_max = fm_range.index(best_fm)
                 best_pos = pos_range[i_max]
 
-
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
 
@@ -396,14 +395,14 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             focus.moveAbsSync({"z": best_pos})
             step_cntr += 1
 
-        worse_fm = min(focus_levels.values())
+        worst_fm = min(focus_levels.values())
         if step_cntr == MAX_STEPS_NUMBER:
             logging.info("Auto focus gave up after %d steps @ %g m", step_cntr, best_pos)
-        elif (best_fm - worse_fm) < best_fm * 0.5:
+        elif (best_fm - worst_fm) < best_fm * 0.5:
             # We can be confident of the data if there is a "big" (50%) difference
             # between the focus levels.
             logging.info("Auto focus indecisive but picking level %g @ %g m (lowest = %g)",
-                         best_fm, best_pos, worse_fm)
+                         best_fm, best_pos, worst_fm)
         else:
             logging.info("Auto focus found best level %g @ %g m", best_fm, best_pos)
 
