@@ -1008,7 +1008,7 @@ class VAEnumerated(VigilantAttribute, Enumerated):
             if not ls:
                 return self.value  # in case of all choices of type tuple and not containing only numbers
 
-            return min(ls, key=lambda (choice, distance): distance)[0]
+            return min(ls, key=lambda choice, distance: distance)[0]
 
         else:
             # if not possible to set the requested value, return the current value

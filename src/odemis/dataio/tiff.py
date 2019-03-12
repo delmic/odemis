@@ -812,7 +812,7 @@ def _updateMDFromOME(root, das):
 
         # Update metadata of each da, so that they will be merged
         if deltats:
-            time_list = [v for k, v in sorted(deltats.items(), key=lambda (k, v): k)]
+            time_list = [v for k, v in sorted(deltats.items(), key=lambda k, v: k)]
             if len(time_list) != len(deltats.keys()):
                 logging.warning("TIME_LIST has length %d, while expected %d",
                                 len(time_list), len(deltats.keys()))
