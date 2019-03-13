@@ -29,28 +29,29 @@ from __future__ import division
 
 from abc import ABCMeta
 import collections
+import csv
 import logging
 from odemis import model, util
+from odemis.acq import calibration
 import odemis.dataio
 from odemis.gui import img
 from odemis.gui.comp import hist
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS
+from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS, \
+    get_hw_config
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
+from odemis.gui.util import get_picture_folder
 from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.units import readable_str
+import os
 import time
 import wx
-import csv
-import os
-from odemis.gui.util import get_picture_folder
-from odemis.acq import calibration
 
 import odemis.gui.conf as guiconf
 
@@ -357,7 +358,7 @@ class SettingsBarController(object):
         # and it avoids pausing the settings controllers from other tabs.
 
         # build the default config value based on the global one + the role
-        self._va_config = get_hw_settings_config(tab_data.main.role)
+        self._hw_settings_config = tab_data.main.hw_settings_config
 
         # disable settings while there is a preparation process running
         self._tab_data_model.main.is_preparing.subscribe(self.on_preparation)
@@ -405,7 +406,7 @@ class SettingsBarController(object):
         self.setting_controllers.append(setting_controller)
 
         vas_comp = getVAs(hw_comp)
-        vas_config = self._va_config.get(hw_comp.role, {}) # OrderedDict or dict
+        vas_config = get_hw_config(hw_comp, self._hw_settings_config)  # OrderedDict or dict
 
         # Re-order the VAs of the component in the same order as in the config
         vas_names = util.sorted_according_to(vas_comp.keys(), vas_config.keys())
@@ -488,11 +489,11 @@ class SecomSettingsController(SettingsBarController):
         # the user wouldn't want to have separate values... and also because
         # anyway we don't currently support local stream axes.
         if main_data.pinhole:
+            conf = get_hw_config(main_data.pinhole, self._hw_settings_config)
             for a in ("d",):
                 if a not in main_data.pinhole.axes:
                     continue
-                conf = self._va_config["pinhole"].get(a)
-                self._optical_panel.add_axis(a, main_data.pinhole, conf)
+                self._optical_panel.add_axis(a, main_data.pinhole, conf.get(a))
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)
@@ -716,13 +717,13 @@ class SparcAlignSettingsController(SettingsBarController):
 
         if main_data.spectrograph:
             comp = main_data.spectrograph
+            conf = get_hw_config(comp, self._hw_settings_config)
             for a in ("wavelength", "grating", "slit-in"):
                 if a not in comp.axes:
                     logging.debug("Skipping non existent axis %s on component %s",
                                   a, comp.name)
                     continue
-                conf = self._va_config[comp.role].get(a)
-                self._spect_setting_cont.add_axis(a, comp, conf)
+                self._spect_setting_cont.add_axis(a, comp, conf.get(a))
 
 
 # constants defining the displayed status in the GUI

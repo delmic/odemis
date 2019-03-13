@@ -165,7 +165,8 @@ class MetadataUpdater(model.Component):
         return True
 
     def observeLens(self, lens, comp_affected):
-        if comp_affected.role not in ("ccd", "sp-ccd", "laser-mirror"):
+        # Only update components with roles of ccd*, sp-ccd*, or laser-mirror*
+        if not any(comp_affected.role.startswith(r) for r in ("ccd", "sp-ccd", "laser-mirror")):
             return False
 
         # update static information

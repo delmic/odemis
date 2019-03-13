@@ -119,6 +119,7 @@ class MainGUIData(object):
     # Mapping between the component role and the attribute name on the MainGUIData
     _ROLE_TO_ATTR = {
         "ccd": "ccd",
+        # ccd* -> ccds[]
         "se-detector": "sed",
         "bs-detector": "bsd",
         "ebic-detector": "ebic",
@@ -131,8 +132,10 @@ class MainGUIData(object):
         "tc-detector": "tc_detector",
         "tc-detector-live": "tc_detector_live",
         "spectrometer": "spectrometer",
-        "sp-ccd": "sp_ccd",
         "spectrometer-integrated": "spectrometer_int",
+        # spectrometer* -> spectrometers[]
+        "sp-ccd": "sp_ccd",  # Only used for a hack in the Sparc2 align tab
+        # sp-ccd* -> sp_ccds[]
         "spectrograph": "spectrograph",
         "spectrograph-dedicated": "spectrograph_ded",
         "monochromator": "monochromator",
@@ -191,7 +194,6 @@ class MainGUIData(object):
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.laser_mirror = None  # the scanner on confocal SECOM
-        self.photo_ds = []  # List of all the photo detectors on confocal SECOM
         self.time_correlator = None  # life-time measurement on SECOM-FLIM or SPARC
         self.tc_detector = None  # the raw detector of the time-correlator (for settings & rough 2D acquisition)
         self.tc_detector_live = None  # APD count live detector, for better data in FLIM live (optional)
@@ -237,7 +239,13 @@ class MainGUIData(object):
         self.tc_filter = None
         self.slit_in_big = None
 
-        self.ebeamControlsMag = None
+        # Lists of detectors
+        self.ccds = []  # All the cameras which could be used for AR (SPARC)
+        self.sp_ccds = []  # All the cameras, which are only used for spectrometry (SPARC)
+        self.spectrometers = []  # All the spectrometers (SPARC)
+        self.photo_ds = []  # All the photo detectors on confocal SECOM or SPARC with time-resolved
+
+        self.ebeamControlsMag = None  # None (if no ebeam) or bool
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
@@ -250,13 +258,37 @@ class MainGUIData(object):
             self.role = microscope.role
 
             for c in microscope.children.value:
+                if c.role is None:
+                    continue
                 try:
                     attrname = self._ROLE_TO_ATTR[c.role]
                     setattr(self, attrname, c)
                 except KeyError:
-                    if c.role and c.role.startswith("photo-detector"):
-                        self.photo_ds.append(c)
-                    # Otherwise, just not interested by this component
+                    pass
+
+                # (also) add it to the detectors lists
+                if c.role.startswith("ccd"):
+                    self.ccds.append(c)
+                elif c.role.startswith("sp-ccd"):
+                    self.sp_ccds.append(c)
+                elif c.role.startswith("spectrometer"):
+                    self.spectrometers.append(c)
+                elif c.role.startswith("photo-detector"):
+                    self.photo_ds.append(c)
+
+                # Otherwise, just not interested by this component
+
+            # Sort the list of detectors by role in alphabetical order, to keep behaviour constant
+            for l in (self.photo_ds, self.ccds, self.sp_ccds, self.spectrometers):
+                l.sort(key=lambda c: c.role)
+
+            # Automatically pick the first of each list as the "main" detector
+            if self.ccd is None and self.ccds:
+                self.ccd = self.ccds[0]
+            if self.sp_ccd is None and self.sp_ccds:
+                self.sp_ccd = self.sp_ccds[0]
+            if self.spectrometer is None and self.spectrometers:
+                self.spectrometer = self.spectrometers[0]
 
             # Spectrograph is not directly a child, but a sub-comp of spectrometer
             # TODO: now it's also a direct child. Code can be removed once all installs have been updated

@@ -30,6 +30,7 @@ import gc
 import logging
 import numpy
 from odemis import model, util
+from odemis.acq.stream import MeanSpectrumProjection
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
     CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -37,7 +38,7 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
     OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
-from odemis.gui.conf.data import get_local_vas
+from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
@@ -51,7 +52,6 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
-from odemis.acq.stream import MeanSpectrumProjection
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -254,12 +254,12 @@ class StreamController(object):
         # Get the emitter and detector configurations if they exist
         hw_settings = self.tab_data_model.main.hw_settings_config
         if self.stream.emitter:
-            emitter_conf = hw_settings.get(self.stream.emitter.role, {})
+            emitter_conf = get_hw_config(self.stream.emitter, hw_settings)
         else:
             emitter_conf = {}
 
         if self.stream.detector:
-            detector_conf = hw_settings.get(self.stream.detector.role, {})
+            detector_conf = get_hw_config(self.stream.detector, hw_settings)
         else:
             detector_conf = {}
 
@@ -2383,6 +2383,8 @@ class SparcStreamsController(StreamBarController):
             self.add_action("EBIC", self.addEBIC)
         if main_data.cld:
             self.add_action("CL intensity", self.addCLIntensity)
+
+        # TODO: support every component in .ccds
         if main_data.ccd and main_data.lens and model.hasVA(main_data.lens, "polePosition"):
             # Some simple SPARC have a CCD which can only do rough chamber view,
             # but no actual AR acquisition. This is indicate by not having any
@@ -2390,12 +2392,9 @@ class SparcStreamsController(StreamBarController):
             self.add_action("Angle-resolved", self.addAR)
 
         # On the SPARCv2, there is potentially 4 different ways to acquire a
-        # spectrum: two spectrographs, with each two ports. In practice, there
-        # are never more than 2 at the same time.
-        sptms = [main_data.spectrometer, main_data.spectrometer_int]
-        sptms = [s for s in sptms if s is not None]
-        for sptm in sptms:
-            if len(sptms) == 1:
+        # spectrum: two spectrographs, each with two ports.
+        for sptm in main_data.spectrometers:
+            if len(main_data.spectrometers) == 1:
                 actname = "Spectrum"
             else:
                 actname = "Spectrum with %s" % (sptm.name,)

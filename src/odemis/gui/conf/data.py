@@ -26,6 +26,7 @@ from odemis.acq import stream
 import odemis.gui
 from odemis.model import getVAs
 from odemis.util import recursive_dict_update
+import re
 import wx
 
 import odemis.gui.conf.util as util
@@ -60,7 +61,7 @@ HIDDEN_VAS = {"children", "affects", "state", "powerSupply"}
 # This is the default global settings, with ordered dict, to specify the order
 # on which they are displayed.
 HW_SETTINGS_CONFIG = {
-    "ccd":
+    r"ccd.*":
         OrderedDict((
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
@@ -264,7 +265,7 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
-    "sp-ccd":
+    r"sp-ccd.*":
         OrderedDict((
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
@@ -370,7 +371,7 @@ HW_SETTINGS_CONFIG = {
                 "key_step": 1,
             }),
         )),
-    "spectrometer":
+    r"spectrometer.*":
         OrderedDict((
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
@@ -385,69 +386,6 @@ HW_SETTINGS_CONFIG = {
                 "choices": util.binning_firstd_only,
             }),
             ("resolution", {
-                "accuracy": None,  # never simplify the numbers
-            }),
-            ("gain", {}),
-            ("readoutRate", {}),
-            ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
-                "control_type": odemis.gui.CONTROL_NONE,
-                "scale": "cubic",
-                "range": (0, 500.0),
-                "accuracy": 2,
-                "tooltip": (u"Minimum exposure time at which the shutter will be used.\n"
-                            u"Lower exposure times will force the shutter to stay open."),
-            }),
-            ("temperature", {}),
-            # what we don't want to display:
-            ("translation", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("targetTemperature", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("fanSpeed", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("depthOfField", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            # Advanced settings for andorcam2
-            ("verticalReadoutRate", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("verticalClockVoltage", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("emGain", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("countConvert", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("countConvertWavelength", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-        )),
-    "spectrometer-integrated":
-        OrderedDict((
-            ("exposureTime", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "scale": "log",
-                "range": (0.01, 500.0),
-                "type": "float",
-                "accuracy": 2,
-            }),
-            ("binning", {
-                "control_type": odemis.gui.CONTROL_RADIO,
-                # means only 1st dimension can change
-                "choices": util.binning_firstd_only,
-            }),
-            ("resolution", {
-                # Read-only it shouldn't be changed by the user
-                "control_type": odemis.gui.CONTROL_READONLY,
                 "accuracy": None,  # never simplify the numbers
             }),
             ("gain", {}),
@@ -512,7 +450,7 @@ HW_SETTINGS_CONFIG = {
                 "accuracy": 3,
             },
         },
-    "photo-detector0":  # TODO: for every photo-detector* => make it a regex
+    r"photo-detector.*":
         OrderedDict((
             ("gain", {
                 "accuracy": 3,
@@ -527,34 +465,6 @@ HW_SETTINGS_CONFIG = {
             ("protection", {
                 "tooltip": "PMT over-current protection",
                 #"control_type": odemis.gui.CONTROL_NONE,
-            }),
-        )),
-    "photo-detector1":
-        OrderedDict((
-            ("gain", {
-                "accuracy": 3,
-                "tooltip": "Reducing the gain also reset the over-current protection",
-            }),
-            ("offset", {
-                "accuracy": 3,
-            }),
-            ("protection", {
-                "tooltip": "PMT over-current protection",
-                # "control_type": odemis.gui.CONTROL_NONE,
-            }),
-        )),
-    "photo-detector3":
-        OrderedDict((
-            ("gain", {
-                "accuracy": 3,
-                "tooltip": "Reducing the gain also reset the over-current protection",
-            }),
-            ("offset", {
-                "accuracy": 3,
-            }),
-            ("protection", {
-                "tooltip": "PMT over-current protection",
-                # "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
     "pinhole":
@@ -585,7 +495,7 @@ HW_SETTINGS_CONFIG = {
 # Allows to override some values based on the microscope role
 HW_SETTINGS_CONFIG_PER_ROLE = {
     "sparc": {
-        "ccd":
+        r"ccd.*":
         {
             "exposureTime":
             {
@@ -612,7 +522,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
         },
-        "spectrometer":
+        r"spectrometer.*":
         {
             "resolution":  # Read-only it shouldn't be changed by the user
             {
@@ -624,7 +534,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         },
     },
     "sparc2": {
-        "ccd":
+        r"ccd.*":
         {
             "exposureTime":
             {
@@ -651,18 +561,12 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
         },
-        "spectrometer":
+        r"spectrometer.*":
         {
             "resolution":  # Read-only it shouldn't be changed by the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
-            "shutterMinimumPeriod": {  # Only on the SPARC
-                "control_type": odemis.gui.CONTROL_SLIDER,
-            },
-        },
-        "spectrometer-integrated":
-        {
             "shutterMinimumPeriod": {  # Only on the SPARC
                 "control_type": odemis.gui.CONTROL_SLIDER,
             },
@@ -696,7 +600,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
         },
         # what we don't want to display:
-        "ccd":
+        r"ccd.*":
         {
             "gain":  # Default value is good for all the standard cases
             {
@@ -907,6 +811,29 @@ def get_stream_settings_config():
     return STREAM_SETTINGS_CONFIG
 
 
+def get_hw_config(hw_comp, hw_settings):
+    """
+    Find the VA config for the given component.
+
+    hw_comp (HwComponent): The component to look at
+    hw_settings (dict): The hardware settings, as received from get_hw_settings_config()
+    return ((ordered) dict): The config for the given role. If nothing is defined,
+      it will return an empty dictionary.
+    """
+    role = hw_comp.role
+    try:
+        # fast path: try to directly find the role
+        return hw_settings[role]
+    except KeyError:
+        # Use regex matching
+        for role_re, hw_conf in hw_settings.items():
+            if re.match(role_re, role):
+                return hw_conf
+
+    # No match
+    return {}
+
+
 def get_local_vas(hw_comp, hw_settings):
     """
     Find all the VAs of a component which are worthy to become local VAs.
@@ -917,7 +844,7 @@ def get_local_vas(hw_comp, hw_settings):
     return (set of str): all the names for the given comp
     """
     comp_vas = getVAs(hw_comp)
-    config_vas = hw_settings.get(hw_comp.role, {})  # OrderedDict or dict
+    config_vas = get_hw_config(hw_comp, hw_settings)
 
     settings = set()
     for name, va in comp_vas.items():

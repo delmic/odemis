@@ -88,7 +88,7 @@ SPARC_MODES = {'ar': ("ccd",
 # It's still important to have every possible detector roles listed, for the
 # guessing methods to know which detector is optical.
 SPARC2_MODES = {
-            'ar': ("ccd",
+            'ar': (r"ccd.*",
                 {'lens-switch': {'x': 'on'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened
@@ -107,7 +107,7 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spectral': ("spectrometer",
+            'spectral': (r"spectrometer.*",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
@@ -176,7 +176,7 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'mirror-align': ("ccd",  # Also used for lens alignment
+            'mirror-align': (r"ccd.*",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
@@ -188,7 +188,7 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
+            'chamber-view': (r"ccd.*",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
@@ -201,7 +201,7 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'on'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spec-focus': ("ccd",  # TODO: only use "focus" as target?
+            'spec-focus': (r"ccd.*",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
@@ -251,7 +251,7 @@ SECOM_MODES = {
             'fluo': ("ccd",
                 {'ccd': {'fanSpeed': 1},
                 }),
-            'confocal': (r"photo-detector(\d*)",
+            'confocal': (r"photo-detector(\d*)$",
                 {
                 }),
             'overlay': ("ccd",
@@ -441,7 +441,7 @@ class OpticalPathManager(object):
         """
         # if we have not returned raise an exception
         for comp in self._cached_components:
-            if comp.role is not None and re.match(role + '$', comp.role):
+            if comp.role is not None and re.match(role, comp.role):
                 return comp
         # if not found...
         raise LookupError("No component with the role %s" % (role,))
