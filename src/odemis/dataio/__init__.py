@@ -50,7 +50,7 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
     mode (os.O_RDONLY, os.O_WRONLY, or os.O_RDWR): whether only list
         formats which can be read, which can be written, or all of them.
     allowlossy (bool): If True, will also return the formats that can lose some
-      of the original information (when writting the data to a file)
+      of the original information (when writing the data to a file)
     return (dict string -> list of strings): name of each format -> list of
         extensions
     """
@@ -65,8 +65,10 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
         if not allowlossy and exporter.LOSSY:
             logging.debug("Skipping exporter %s as it is lossy", module_name)
             continue
-        if ((mode == os.O_RDONLY and (hasattr(exporter, "read_data") or hasattr(exporter, "open_data"))) or
-                (mode == os.O_WRONLY and hasattr(exporter, "export"))):
+        if ((mode == os.O_RDWR) or
+            (mode == os.O_RDONLY and (hasattr(exporter, "read_data") or hasattr(exporter, "open_data"))) or
+            (mode == os.O_WRONLY and hasattr(exporter, "export"))
+           ):
             formats[exporter.FORMAT] = exporter.EXTENSIONS
 
     if not formats:
