@@ -136,7 +136,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     init: {
        device: "fake",
-       image: "sparc-ar-mirror-align.h5", # only for simulator
+       image: "sparc-ar.h5", # only for simulator
     },
 }
 
@@ -170,6 +170,7 @@ SPARC2: {
     init: {
        device: "fake",
        transp: [-1, 2], # if mirrored on X axis
+       image: "sparc-spec-sim.h5", # only for simulator
     },
     properties: {
         targetTemperature: -60, # °C
@@ -181,7 +182,7 @@ SPARC2: {
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
-        binning: [4, 16],
+        binning: [4, 100],
     },
 }
 
