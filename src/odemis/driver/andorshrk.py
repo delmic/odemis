@@ -677,9 +677,9 @@ class Shamrock(model.Actuator):
     def SetGrating(self, grating):
         """
         Note: it will update the focus position (if there is a focus)
-        grating (0<int<=3)
+        grating (1<=int<=4)
         """
-        assert 1 <= grating <= 3
+        assert 1 <= grating <= 4
 
         # Seems currently the SDK sometimes fail with SHAMROCK_COMMUNICATION_ERROR
         # as in SetWavelength()
@@ -701,7 +701,7 @@ class Shamrock(model.Actuator):
 
     def GetGrating(self):
         """
-        return (0<int<=3): current grating
+        return (1<=int<=4): current grating
         """
         grating = c_int()
         with self._hw_access:
@@ -710,7 +710,7 @@ class Shamrock(model.Actuator):
 
     def GetNumberGratings(self):
         """
-        return (0<int<=3): number of gratings present
+        return (1<=int<=4): number of gratings present
         """
         noGratings = c_int()
         with self._hw_access:
@@ -731,7 +731,7 @@ class Shamrock(model.Actuator):
 
     def GetGratingInfo(self, grating):
         """
-        grating (0<int<=3)
+        grating (1<=int<=4)
         return:
               lines (float): number of lines / m
               blaze (str): wavelength or mirror info, as reported by the device
@@ -740,7 +740,7 @@ class Shamrock(model.Actuator):
               home (int): beginning of the grating in steps
               offset (int): offset to the grating in steps
         """
-        assert 1 <= grating <= 3
+        assert 1 <= grating <= 4
         Lines = c_float() # in l/mm
         Blaze = create_string_buffer(64) # decimal of wavelength in nm
         Home = c_int()
@@ -793,10 +793,10 @@ class Shamrock(model.Actuator):
 
     def GetWavelengthLimits(self, grating):
         """
-        grating (0<int<=3)
+        grating (1<=int<=4)
         return (0<=float< float): min, max wavelength in m
         """
-        assert 1 <= grating <= 3
+        assert 1 <= grating <= 4
         Min, Max = c_float(), c_float() # in nm
         with self._hw_access:
             self._dll.ShamrockGetWavelengthLimits(self._device, grating,
