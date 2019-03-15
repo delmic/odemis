@@ -31,7 +31,6 @@ import numpy
 from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
-from types import NoneType
 import types
 import zmq
 from scipy.spatial import distance
@@ -782,7 +781,7 @@ class TupleVA(VigilantAttribute):
 
     def _check(self, value):
         # only accept tuple and None, to avoid hidden data changes, as can occur in lists
-        if not isinstance(value, (tuple, NoneType)):
+        if not (isinstance(value, tuple) or value is None):
             raise TypeError("Value '%r' is not a tuple." % value)
 
 

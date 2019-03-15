@@ -49,7 +49,6 @@ import serial
 import struct
 import threading
 import time
-from types import NoneType
 
 
 class TMCLError(Exception):
@@ -344,7 +343,7 @@ class TMCLController(model.Actuator):
                 continue
 
             self._abs_encoder[i] = abs_encoder[i]
-            if not isinstance(abs_encoder[i], (bool, NoneType)):
+            if not abs_encoder[i] in {True, False, None}:
                 raise ValueError("abs_encoder argument must only contain True, False, or None")
             # If abs_encoder is False (ie, there is a encoder, but it's not absolute),
             # it might be referenced or not, and it might be the same as the
