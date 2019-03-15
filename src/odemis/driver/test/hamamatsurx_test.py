@@ -19,13 +19,14 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
+import os
+
 from odemis import model, util
 from odemis.driver import hamamatsurx
 import time
 from odemis.driver import andorshrk
 
 import unittest
-from unittest.case import skip
 
 from cam_test_abs import VirtualTestCam, VirtualTestSynchronized
 
@@ -48,9 +49,10 @@ KWARGS_SPECTROGRAPH = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: "slit-in", 3: "slit-monochromator"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
 
+# Export TEST_NOHW = 1 to prevent using the real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
 class TestHamamatsurxCamGenericCam(VirtualTestCam, unittest.TestCase):
     """
     Test directly the Hamamatsu streak camera class.
@@ -61,6 +63,9 @@ class TestHamamatsurxCamGenericCam(VirtualTestCam, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+
+        if TEST_NOHW:
+            raise unittest.SkipTest('No streak camera HW present. Skipping tests.')
 
         super(TestHamamatsurxCamGenericCam, cls).setUpClass()
 
@@ -76,7 +81,6 @@ class TestHamamatsurxCamGenericCam(VirtualTestCam, unittest.TestCase):
         cls.streakcam.terminate()
 
 
-#@skip("simple")
 class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface with real streak camera HW, using the fake SEM.
@@ -87,6 +91,9 @@ class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest
 
     @classmethod
     def setUpClass(cls):
+
+        if TEST_NOHW:
+            raise unittest.SkipTest('No streak camera HW present. Skipping tests.')
 
         super(TestHamamatsurxCamGenericCamSynchronized, cls).setUpClass()
 
@@ -107,6 +114,9 @@ class TestHamamatsurxCam(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+
+        if TEST_NOHW:
+            raise unittest.SkipTest('No streak camera HW present. Skipping tests.')
 
         cls.streakcam = CLASS_STREAKCAM(**KWARGS_STREAKCAM)
 
@@ -565,6 +575,9 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+
+        if TEST_NOHW:
+            raise unittest.SkipTest('No streak camera HW present. Skipping tests.')
 
         cls.spectrograph = CLASS_SPECTROGRAPH(**KWARGS_SPECTROGRAPH)
 
