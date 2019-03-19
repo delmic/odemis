@@ -2752,8 +2752,8 @@ class SparcStreamsController(StreamBarController):
         sem_stream = self._tab_data_model.semStream
         sem_tc_stream = acqstream.SEMTemporalMDStream("SEM Time Correlator",
                                                   [sem_stream, tc_stream])
-        axes = {"tc-od-filter": main_data.tc_od_filter,
-               "tc-filter": main_data.tc_filter}
+        axes = {"density": main_data.tc_od_filter,
+                "band": main_data.tc_filter}
         
         return self._addRepStream(tc_stream, sem_tc_stream,
                                   axes=axes,

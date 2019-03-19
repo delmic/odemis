@@ -90,13 +90,14 @@
     class: picoquant.PH300,
     role: time-correlator,
     init: {
+#        device: null,
         device: "fake",
         disc_volt: [0.1, 0.1], # V, discriminator for APD 1/2
         zero_cross: [1.e-3, 1.e-3], # V
         shutter_axes: {
-            # internal name det-> internal name dependency, axis name, position closed, position opened
-            "detector0": ["shutter0", "x", 0, 1],
-            "detector1": ["shutter1", "x", 0, 1],
+        # internal child role of the photo-detector -> internal child role of the actuator, axis name, position when shutter is closed (ie, protected), position when opened (receiving light)
+            "shutter0": ["x", 0, 1],
+            "shutter1": ["x", 0, 1],
         },
     },
     # These children allow to have access to the raw data on the APDs
@@ -371,15 +372,16 @@
     class: tmcm.TMCLController,
     role: null,
     init: {
-        port: "/dev/fake6",
-        address: null,
-        axes: ["fw", "od"],
+        port: "/dev/ttyTMCM*",
+        address: 6,
+        axes: ["od", "fw"],
+        #rng: [(0, 4), None],
         # These values only need to be roughly correct
-        ustepsize: [3.392e-5, 3.272e-5], # rad/µstep
-        unit: ["rad", "rad"],
+        ustepsize: [2.752e-5, 3.272e-5], # rad/µstep # [3.392e-5, 3.272e-5]
+        unit: ["od", "rad"],
         refproc: "Standard",
         refswitch: {"fw": 0, "od": 0},
-        #inverted: ["fw"], # TODO
+        inverted: ["od"],
         do_axes: {
             4: ["shutter0", 0, 1, 1],  # axis: [position when enabled (closed), position when disabled (open), transition period (s)]
             5: ["shutter1", 0, 1, 1],
@@ -402,14 +404,14 @@
         # It supports up to 8 filters
         positions: {
             # pos (rad) -> m,m
-            0.3392:  "pass-through",           # 1
-            1.1245981634:  [0, 400.e-9],       # 2
-            1.90999632679: [425.e-9, 475.e-9], # 3
-            2.69539:       "Blue",             # 4
-            3.48079:       "Green",            # 5
-            4.26619081699: "Red",              # 6
-            5.05159:       [625.e-9, 675.e-9], # 7
-            5.83699:       [675.e-9, 725.e-9], # 8
+            0.027484197:       "pass-through",     # 1
+            0.81288236:        [375.e-9, 425.e-9], # 2
+            1.598280523:       [425.e-9, 475.e-9], # 3
+            2.383674197:       [475.e-9, 525.e-9], # 4
+            3.169074197:       [525.e-9, 575.e-9], # 5
+            3.954475014:       [575.e-9, 625.e-9], # 6
+            4.739874197:       [625.e-9, 675.e-9], # 7
+            5.525274197:       [675.e-9, 725.e-9], # 8
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
@@ -423,10 +425,12 @@
     children: {"density": "Time-Correlator Actuators"},
     init: {
         axis_name: "od",
+        #offset: -3
+        cycle: 5.28, #4,  #6.283185,
     },
-    metadata: {
-        POS_COR: -1.553,
-    },
+    #metadata: {
+    #    POS_COR: 2.28,  # it's at ~3 at reference position (=> 5.28-3)
+    #},
     affects: ["Time Correlator", "APD 1", "APD 2"],
 }
 

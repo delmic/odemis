@@ -29,7 +29,7 @@ import random
 import threading
 import time
 from decorator import decorator
-
+from concurrent import futures
 
 # Based on phdefin.h
 MAXDEVNUM = 8
@@ -207,7 +207,7 @@ class PH300(model.Detector):
     """
 
     def __init__(self, name, role, device=None, children=None, daemon=None,
-                 disc_volt=None, zero_cross=None, **kwargs):
+                 disc_volt=None, zero_cross=None, shutter_axes=None, **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
@@ -215,6 +215,8 @@ class PH300(model.Detector):
          detector1 are valid) to the arguments.
         disc_volt (2 (0 <= float <= 0.8)): discriminator voltage for the APD 0 and 1 (in V)
         zero_cross (2 (0 <= float <= 2e-3)): zero cross voltage for the APD0 and 1 (in V)
+        shutter_axes (dict str -> str, value, value): internal child role of the photo-detector ->
+          axis name, position when shutter is closed (ie protected), position when opened (receiving light).
         """
         if children is None:
             children = {}
@@ -256,15 +258,33 @@ class PH300(model.Detector):
         # It could also go into just separate DataFlow, but then it's difficult
         # to allow using these DataFlows in a standard way.
         self._detectors = {}
+        self._shutters = {}
+        self._shutter_axes = shutter_axes or {}
         for name, ckwargs in children.items():
             if name == "detector0":
-                i = 0
+                if "shutter0" in children:
+                    shutter_name = "shutter0"
+                else:
+                    shutter_name = None
+                self._detectors[name] = PH300RawDetector(channel=0, parent=self, shutter_name=shutter_name, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
             elif name == "detector1":
-                i = 1
+                if "shutter1" in children:
+                    shutter_name = "shutter1"
+                else:
+                    shutter_name = None
+                self._detectors[name] = PH300RawDetector(channel=1, parent=self, shutter_name=shutter_name, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
+            elif name == "shutter0":
+                if "shutter0" not in shutter_axes.keys():
+                    raise ValueError("'shutter0' not found in shutter_axes")
+                self._shutters['shutter0'] = ckwargs  # ckwargs = The component
+            elif name == "shutter1":
+                if "shutter1" not in shutter_axes.keys():
+                    raise ValueError("'shutter1' not found in shutter_axes")
+                self._shutters['shutter1'] = ckwargs  # ckwargs = The component
             else:
-                raise ValueError("")
-            self._detectors[name] = PH300RawDetector(channel=i, parent=self, daemon=daemon, **ckwargs)
-            self.children.value.add(self._detectors[name])
+                raise ValueError("Child %s not recognized, should be detector0, detector1, shutter0, or shutter1.")
 
         # dwellTime = measurement duration
         dt_rng = (ACQTMIN * 1e-3, ACQTMAX * 1e-3)  # s
@@ -660,6 +680,28 @@ class PH300(model.Detector):
             pass
         return False
 
+    def _toggle_shutters(self, shutters, open):
+        """
+        Open/ close protection shutters.
+        shutters (list of string): the names of the shutters
+        open (boolean): True if shutters should open, False if they should close
+        """
+        axes = {}
+        fs = []
+        for sn in shutters:
+            logging.debug("Setting shutter %s to %s.", sn, open)
+            ax_name, closed_pos, open_pos = self._shutter_axes[sn]
+            shutter = self._shutters[sn]
+            if open:
+                axes[ax_name] = open_pos
+            else:
+                axes[ax_name] = closed_pos
+            try:
+                fs.append(shutter.moveAbs(axes))
+            except Exception as e:
+                logging.error("Toggling shutters failed with exception %s", e)
+        futures.wait(fs)
+
     def _acquire(self):
         """
         Acquisition thread
@@ -669,6 +711,9 @@ class PH300(model.Detector):
             while True:
                 # Wait until we have a start (or terminate) message
                 self._acq_wait_start()
+
+                # Open protection shutters
+                self._toggle_shutters(self._shutters.keys(), True)
 
                 # Keep acquiring
                 while True:
@@ -685,7 +730,6 @@ class PH300(model.Detector):
                     logging.debug("Starting new acquisition")
                     # check if any message received before starting again
                     if self._acq_should_stop():
-                        logging.debug("Acquisition stopped")
                         break
 
                     self.ClearHistMem()
@@ -717,7 +761,6 @@ class PH300(model.Detector):
                         self.StopMeas()
 
                     if must_stop:
-                        logging.debug("Acquisition stopped")
                         break
 
                     # Read data and pass it
@@ -725,12 +768,17 @@ class PH300(model.Detector):
                     da = model.DataArray(data, md)
                     self.data.notify(da)
 
+                logging.debug("Acquisition stopped")
+                self._toggle_shutters(self._shutters.keys(), False)
+
         except StopIteration:
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
         else:
             logging.error("Acquisition thread ended without exception")
+        finally:
+            self._toggle_shutters(self._shutters.keys(), False)
 
         logging.debug("Acquisition thread ended")
 
@@ -764,7 +812,7 @@ class PH300RawDetector(model.Detector):
     Cannot be directly created. It must be done via PH300 child.
     """
 
-    def __init__(self, name, role, channel, parent, **kwargs):
+    def __init__(self, name, role, channel, parent, shutter_name=None, **kwargs):
         """
         channel (0 or 1): detector ID of the detector
         """
@@ -777,6 +825,8 @@ class PH300RawDetector(model.Detector):
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
         self._generator = None
 
+        self._shutter_name = shutter_name
+
     def terminate(self):
         self.stop_generate()
 
@@ -784,6 +834,11 @@ class PH300RawDetector(model.Detector):
         if self._generator is not None:
             logging.warning("Generator already running")
             return
+        # In principle, toggling the shutter values here might interfere with the
+        # shutter values set by the acquisition. However, in odemis, we never
+        # do both things at the same time, so it is not an issue.
+        if self._shutter_name:
+            self.parent._toggle_shutters([self._shutter_name], True)
         self._generator = util.RepeatingTimer(100e-3,  # Fixed rate at 100ms
                                               self._generate,
                                               "Raw detector reading")
@@ -791,6 +846,8 @@ class PH300RawDetector(model.Detector):
 
     def stop_generate(self):
         if self._generator is not None:
+            if self._shutter_name:
+                self.parent._toggle_shutters([self._shutter_name], False)
             self._generator.cancel()
             self._generator = None
 
