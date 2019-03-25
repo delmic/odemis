@@ -106,6 +106,18 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
         path = conf.get("calibration", "ar_file")
         self.assertEqual(path, u"booo")
 
+    def test_save_unicode(self):
+        conf = gui.conf.get_general_conf()
+        conf.set("calibration", "ar_file", u"booµ")
+
+        # reset
+        del conf
+        gui.conf.CONF_GENERAL = None
+
+        conf = gui.conf.get_general_conf()
+        path = conf.get("calibration", "ar_file")
+        self.assertEqual(path, u"booµ")
+
     def test_default(self):
         try:
             os.remove(self.filename)
@@ -134,10 +146,19 @@ class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
         self.assertLess(len(conf.last_extension), 12)
 
     def test_save(self):
+        # Will fail if setting the properties goes wrong
         conf = gui.conf.get_acqui_conf()
         conf.last_path = u"/home/booo/"
         conf.last_format = "HDF5"
         conf.last_extension = ".h5"
+        conf.fn_ptn = u"{timelng}-test {cnt}"
+
+    def test_save_unicode(self):
+        conf = gui.conf.get_acqui_conf()
+        conf.last_path = u"/home/boooµ/"
+        conf.last_format = "HDF5"
+        conf.last_extension = ".h5"
+        conf.fn_ptn = u"{timelng}-test {cnt} µm value"
 
 
 class CalibrationConfigTest(ConfigTest, unittest.TestCase):
