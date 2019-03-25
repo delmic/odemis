@@ -25,7 +25,6 @@ import ConfigParser
 import logging
 import math
 import os.path
-import time
 
 from odemis.dataio import tiff
 from odemis.acq.align import delphi
@@ -73,9 +72,9 @@ class Config(object):
         if os.path.exists(self.file_path):
             self.config.read(self.file_path)
         else:
-            logging.warn(u"Using default %s configuration",
+            logging.info(u"Using default %s configuration",
                          self.__class__.__name__)
-            self.use_default()
+            self.config = self.default
 
             # Create the file and save the default configuration, so the user
             # will be able to see the option exists. The drawback is that if we
@@ -98,30 +97,45 @@ class Config(object):
         self.config.write(f)
         f.close()
 
-    def use_default(self):
-        """ Assign the default configuration to the main one """
-        self.config = self.default
-
     def set(self, section, option, value):
-        """ Set the value of an option """
+        """ Set the value of an option in the given section
+        section (string)
+        option (string)
+        value (string or unicode): if unicode, it's encoded as UTF-8
+        """
         if not self.config.has_section(section):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
+        if isinstance(value, unicode):
+            value = value.encode("utf-8")
         self.config.set(section, option, value)
         self.write()
 
     def set_many(self, section, option_value_list):
+        """ Set the values of options in the given section
+        section (string)
+        option_value_list (dict string->string or unicode): option name -> value
+          (if the value is unicode, it's encoded as UTF-8)
+        """
         if not self.config.has_section(section):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
         for option, value in option_value_list:
+            if isinstance(value, unicode):
+                value = value.encode("utf-8")
             self.config.set(section, option, value)
         self.write()
 
     def get(self, section, option):
-        """ Get the value of an option """
+        """ Get the value of an option in the given section
+        section (string)
+        option (string)
+        returns (unicode): the value is converted from UTF-8
+        """
         try:
-            return self.config.get(section, option)
+            # Try to convert back from UTF-8 (and if it's not working, don't fail
+            # but replace it by U+FFFD)
+            return self.config.get(section, option).decode("utf-8", "replace")
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             return self.default.get(section, option)
 
@@ -207,7 +221,7 @@ class AcquisitionConfig(Config):
         self.default.set("acquisition", "last_format", tiff.FORMAT)
         self.default.set("acquisition", "last_extension", tiff.EXTENSIONS[0])
 
-        # fn_ptn is a string representing a filename pattern. It may contain placeholders
+        # fn_ptn is a (unicode) string representing a filename pattern. It may contain placeholders
         # surrounded by curly braces such as {datelng}, {daterev}, {count}, ...
         # These placeholders are replaced by the actual date/time/count when a filename is
         # generated. The placeholder options and the related code can be found in
@@ -217,7 +231,7 @@ class AcquisitionConfig(Config):
         # 'test-{datelng}-{cnt}' will be generated and fn_count will be set to '05'. This
         # pattern is used to suggest a new filename after the acquisition
         # is completed.
-        self.default.set("acquisition", "fn_ptn", "{datelng}-{timelng}")
+        self.default.set("acquisition", "fn_ptn", u"{datelng}-{timelng}")
         self.default.set("acquisition", "fn_count", "0")
 
         self.default.add_section("export")
@@ -236,6 +250,8 @@ class AcquisitionConfig(Config):
 
     @last_path.setter
     def last_path(self, last_path):
+        # Note that paths (or filenames) which end with a space have their name
+        # trimmed when read back, so they will not be recorded properly.
         self.set("acquisition", "last_path", last_path)
 
     @property
