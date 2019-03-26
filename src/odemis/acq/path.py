@@ -625,11 +625,23 @@ class OpticalPathManager(object):
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
+            # To do an absolute move, an axis should be referenced (if it
+            # supports referencing). If not, that's an error (but for now we
+            # still try, just in case it might work anyway).
+            for a in mv.keys():
+                try:
+                    if (model.hasVA(comp, "referenced") and 
+                        not comp.referenced.value.get(a, True)):
+                        logging.error("%s.%s is not referenced, it might be a sign of a hardware issue",
+                                      comp.name, a)
+                except Exception:
+                    logging.exception("Failed to check %s.%s is referenced", comp.name, a)
+
             try:
                 # move actuator
                 fmoves.append(comp.moveAbs(mv))
             except AttributeError:
-                logging.debug("%s not an actuator", comp_role)
+                logging.warning("%s not an actuator", comp_role)
 
         # Now take care of the selectors based on the target detector
         fmoves.extend(self.selectorsToPath(target.name))
