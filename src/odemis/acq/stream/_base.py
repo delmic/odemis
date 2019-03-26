@@ -348,11 +348,11 @@ class Stream(object):
         return: the real new value (as accepted by the original VA)
         """
         if self.is_active.value:  # only synchronised when the stream is active
-            logging.debug(u"updating VA (%s) to %s", origva, v)
+            logging.debug(u"Updating VA (%s) to %s", origva, v)
             origva.value = v
             return origva.value
         else:
-            logging.debug(u"not updating VA (%s) to %s", origva, v)
+            logging.debug(u"Not updating VA (%s) to %s", origva, v)
             return v
 
     def _va_sync_from_hw(self, lva, v):
@@ -364,7 +364,7 @@ class Stream(object):
         # Don't use the setter, directly put the value as-is. That avoids the
         # setter to again set the Hw VA, and ensure we always accept the Hw
         # value
-        logging.debug(u"updating local VA (%s) to %s", lva, v)
+        logging.debug(u"Updating local VA (%s) to %s", lva, v)
         if lva._value != v:
             lva._value = v  # TODO: works with ListVA?
             lva.notify(v)
@@ -850,7 +850,7 @@ class Stream(object):
                 im_needs_recompute.clear()
                 stream._updateImage()
         except Exception:
-            logging.exception("image update thread failed")
+            logging.exception("Image update thread failed")
 
         gc.collect()
 
