@@ -93,14 +93,6 @@ Spectra: {
     children: {focus: "OpticalZ actuator"}
 }
 
-# Axis Z: (Physical) bottom->top when looking at the door
-#         (On screen) bottom->top (so distance to sample is smaller when going up)    
-"OpticalZ actuator": {
-    role: focus,
-    # hard-coded: good focus level is at 0.006 (default pos)
-    affects: ["SimCam"],
-}
-
 "OLStage": {
     class: simulated.Stage,
     role: stage,
@@ -126,6 +118,20 @@ Spectra: {
     }
 }
 
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)    
+"OpticalZ actuator": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    affects: ["SimCam"],
+    children: {"z": PIGCS},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
 
 # USB should be connected to a E-861 or C-867
 # PI E-861/C-867 jumpers (. = off):

@@ -25,7 +25,7 @@ import Queue
 import logging
 import numpy
 from odemis import model, util, dataio
-from odemis.model import isasync, oneway
+from odemis.model import oneway
 import os
 from scipy import ndimage
 import time
@@ -40,9 +40,9 @@ class Camera(model.DigitalCamera):
 
     def __init__(self, name, role, image, children=None, daemon=None, **kwargs):
         '''
-        children (dict string->kwargs): parameters setting for the children.
-            The only possible child is "focus".
-            They will be provided back in the .children VA
+        children (dict string->Component): If "focus" is passed, and it's an
+            actuator with a z axis, the image will be blurred based on the
+            position, to simulate a focus axis.
         image (str or None): path to a file to use as fake image (relative to
          the directory of this class)
         '''
@@ -115,13 +115,20 @@ class Camera(model.DigitalCamera):
                           model.MD_DET_TYPE: model.MD_DT_INTEGRATING}
 
         try:
-            kwargs = children["focus"]
-        except (KeyError, TypeError):
+            focuser = children["focus"]
+            if (not isinstance(focuser, model.ComponentBase) or
+                not hasattr(focuser, "axes") or not isinstance(focuser.axes, dict) or
+                "z" not in focuser.axes
+               ):
+                raise ValueError("focus %s must be a Actuator with a 'z' axis", focuser)
+            self._focus = focuser
+
+            # The "good" focus is at the current position
+            self._good_focus = self._focus.position.value["z"]
+            logging.debug("Simulating focus, with good focus at %g m", self._good_focus)
+        except KeyError:
             logging.info("Will not simulate focus")
             self._focus = None
-        else:
-            self._focus = CamFocus(parent=self, daemon=daemon, **kwargs)
-            self.children.value = self.children.value | {self._focus}
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
@@ -229,7 +236,8 @@ class Camera(model.DigitalCamera):
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
-            dist = abs(pos - self._focus._good_focus) * 1e4
+            dist = abs(pos - self._good_focus) * 1e4
+            logging.debug("Focus dist = %g", dist)
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
             img = gen_img
@@ -332,65 +340,3 @@ class SimpleDataFlow(model.DataFlow):
         if self._sync_event:
             self._evtq.get()
 
-
-class CamFocus(model.Actuator):
-    """
-    Simulated focus component.
-    Just pretends to be able to move Z (instantaneously).
-    """
-    # Duplicate of simsem.EbeamFocus
-    def __init__(self, name, role, **kwargs):
-        self._good_focus = 0.006
-        axes_def = {"z": model.Axis(unit="m", range=(-0.01, 0.01))}
-        self._position = {"z": self._good_focus}
-
-        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversion(self._position),
-                                    unit="m", readonly=True)
-
-    def _updatePosition(self):
-        """
-        update the position VA
-        """
-        # it's read-only, so we change it via _value
-        self.position._value = self._applyInversion(self._position)
-        self.position.notify(self.position.value)
-
-    @isasync
-    def moveRel(self, shift):
-        if not shift:
-            return model.InstantaneousFuture()
-        self._checkMoveRel(shift)
-        shift = self._applyInversion(shift)
-
-        for axis, change in shift.items():
-            self._position[axis] += change
-            rng = self.axes[axis].range
-            if not rng[0] < self._position[axis] < rng[1]:
-                logging.warning("moving axis %s to %f, outside of range %r",
-                                axis, self._position[axis], rng)
-            else:
-                logging.info("moving axis %s to %f", axis, self._position[axis])
-
-        self._updatePosition()
-        return model.InstantaneousFuture()
-
-    @isasync
-    def moveAbs(self, pos):
-        if not pos:
-            return model.InstantaneousFuture()
-        self._checkMoveAbs(pos)
-        pos = self._applyInversion(pos)
-
-        for axis, new_pos in pos.items():
-            self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-
-        self._updatePosition()
-        return model.InstantaneousFuture()
-
-    def stop(self, axes=None):
-        logging.warning("Stopping z axis")

@@ -75,17 +75,10 @@ SPARC2: {
 "Camera": {
     class: simcam.Camera,
     role: ccd,
-    init: {image: "sparc-spec-sim.h5",
+    init: {
+        image: "sparc-spec-sim.h5",
     },
     children: {focus: "Spectrograph focus"}
-}
-
-# Normally this is a child of the spectrograph, but for simulation, it's from the
-# SimCam    
-"Spectrograph focus": {
-    role: focus,
-    # hard-coded: good focus level is at 0.006 (default pos)
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 "Spectrometer Vis-NIR": {
@@ -104,8 +97,8 @@ SPARC2: {
     role: sp-ccd,
     power_supplier: "Power Control Unit",
     init: {
-       device: "fake",
-       transp: [-1, 2], # if mirrored on X axis
+        device: "fake",
+        transp: [-1, 2], # if mirrored on X axis
     },
     properties: {
         targetTemperature: -60, # °C
@@ -130,6 +123,16 @@ SPARC2: {
         slits: {1: "slit-in", # INPUT_SIDE
         },
         fstepsize: 10.9e-6, # m, size of one focus step
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+"Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: "focus",
+    children: {"z": "Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }

@@ -87,8 +87,12 @@ DELPHI: {
 }
 
 "NavCam focus": {
-    # child of NavCam
+    class: simulated.Stage,
     role: overview-focus,
+    init: {
+        axes: ["z"],
+        ranges: {"z": [0, 0.012]} # m (center, at 0.006m, is focused)
+    },
     affects: ["NavCam"],
 }
 
@@ -129,8 +133,8 @@ DELPHI: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
-           transp: [-2, -1],
-           image: "andorcam2-fake-clara.tiff", # only for simulator
+        transp: [-2, -1],
+        image: "andorcam2-fake-clara.tiff", # only for simulator
     },
     properties: {
         resolution: [1040, 1040],  # Crop Y axis which doesn't receive light anyway
