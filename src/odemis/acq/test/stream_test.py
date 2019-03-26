@@ -1424,7 +1424,7 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("%s", window)
         self.assertTrue(2 <= len(window) <= 5, len(window))
         self.assertEqual(window.ndim, 1)
-        dates = window.metadata[model.MD_ACQ_DATE]
+        dates = window.metadata[model.MD_TIME_LIST]
         self.assertLess(-cs.windowPeriod.value - dur, dates[0])
         numpy.testing.assert_array_equal(dates, sorted(dates))
 
@@ -1439,7 +1439,7 @@ class SPARCTestCase(unittest.TestCase):
         window = cs.image.value
         logging.debug("%s", window)
         self.assertTrue(10 <= len(window) <= 16, len(window))
-        dates = window.metadata[model.MD_ACQ_DATE]
+        dates = window.metadata[model.MD_TIME_LIST]
         self.assertLess(-cs.windowPeriod.value - dur, dates[0])
         numpy.testing.assert_array_equal(dates, sorted(dates))
 
@@ -3102,7 +3102,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         mcs.emtDwellTime.value = 0.01 # s
         mcs.windowPeriod.value = 10 # s
 
-        # Start acquisition
+        # Start live acquisition
         mcs.should_update.value = True
         mcs.is_active.value = True
 
@@ -3114,10 +3114,13 @@ class SettingsStreamsTestCase(unittest.TestCase):
         time.sleep(1)
         mcs.is_active.value = False
 
-        self.assertIsNotNone(self._image, "No data received after 2s")
+        self.assertIsNotNone(self._image, "No data received after 1.4s")
         self.assertIsInstance(self._image, model.DataArray)
         self.assertEqual(self._image.ndim, 1)
         self.assertGreater(self._image.shape[0], 50) # we could hope 200 samples
+        dates = self._image.metadata[model.MD_TIME_LIST]
+        self.assertGreater(dates[0] + mcs.windowPeriod.value, dates[-1])
+        numpy.testing.assert_array_equal(dates, sorted(dates))
 
         # TODO: run a SpotStream and try again
         spots.is_active.value = False
