@@ -269,7 +269,7 @@ class Stream(object):
 
     def _getVAs(self, comp, va_names):
         if not isinstance(va_names, set):
-            raise ValueError("vas should be a set but got %s" % (va_names,))
+            raise ValueError(u"vas should be a set but got %s" % (va_names,))
 
         vas = {}
 
@@ -277,10 +277,10 @@ class Stream(object):
             try:
                 va = getattr(comp, vaname)
             except AttributeError:
-                raise LookupError("Component %s has not attribute %s" %
+                raise LookupError(u"Component %s has not attribute %s" %
                                   (comp.name, vaname))
             if not isinstance(va, VigilantAttributeBase):
-                raise LookupError("Component %s attribute %s is not a VA: %s" %
+                raise LookupError(u"Component %s attribute %s is not a VA: %s" %
                                   (comp.name, vaname, va.__class__.__name__))
 
             setattr(self, vaname, va)
@@ -315,17 +315,17 @@ class Stream(object):
             try:
                 va = getattr(comp, vaname)
             except AttributeError:
-                raise LookupError("Component %s has not attribute %s" %
+                raise LookupError(u"Component %s has not attribute %s" %
                                   (comp.name, vaname))
             if not isinstance(va, VigilantAttributeBase):
-                raise LookupError("Component %s attribute %s is not a VA: %s" %
+                raise LookupError(u"Component %s attribute %s is not a VA: %s" %
                                   (comp.name, vaname, va.__class__.__name__))
 
             # TODO: add a setter/listener that will automatically synchronise the VA value
             # as long as the stream is active
             vasetter = functools.partial(self._va_sync_setter, va)
             dupva = self._duplicateVA(va, setter=vasetter)
-            logging.debug("Duplicated VA '%s' with value %s", vaname, va.value)
+            logging.debug(u"Duplicated VA '%s' with value %s", vaname, va.value)
             # Collect the vas, so we can return them at the end of the method
             dup_vas[vaname] = dupva
 
@@ -348,11 +348,11 @@ class Stream(object):
         return: the real new value (as accepted by the original VA)
         """
         if self.is_active.value:  # only synchronised when the stream is active
-            logging.debug("updating VA (%s) to %s", origva, v)
+            logging.debug(u"Updating VA (%s) to %s", origva, v)
             origva.value = v
             return origva.value
         else:
-            logging.debug("not updating VA (%s) to %s", origva, v)
+            logging.debug(u"Not updating VA (%s) to %s", origva, v)
             return v
 
     def _va_sync_from_hw(self, lva, v):
@@ -364,7 +364,7 @@ class Stream(object):
         # Don't use the setter, directly put the value as-is. That avoids the
         # setter to again set the Hw VA, and ensure we always accept the Hw
         # value
-        logging.debug("updating local VA (%s) to %s", lva, v)
+        logging.debug(u"Updating local VA (%s) to %s", lva, v)
         if lva._value != v:
             lva._value = v  # TODO: works with ListVA?
             lva.notify(v)
@@ -400,7 +400,7 @@ class Stream(object):
                 # TODO: distinguish model.IntContinuous, how?
                 vacls = model.FloatContinuous
             else:
-                raise NotImplementedError("Doesn't know how to duplicate VA %s"
+                raise NotImplementedError(u"Doesn't know how to duplicate VA %s"
                                           % (va,))
             kwargs["range"] = va.range
         else:
@@ -437,7 +437,7 @@ class Stream(object):
           VA will be set to the hardware value.
         """
         if self._lvaupdaters:
-            logging.warning("Going to link Hw VAs, while already linked")
+            logging.warning(u"Going to link Hw VAs, while already linked")
 
         # Make sure the VAs are set in the right order to keep values
         hwvas = self._hwvas.items()  # must be a list
@@ -450,7 +450,7 @@ class Stream(object):
             try:
                 hwva.value = lva.value
             except Exception:
-                logging.debug("Failed to set VA %s to value %s on hardware",
+                logging.debug(u"Failed to set VA %s to value %s on hardware",
                               vaname, lva.value)
 
         # Immediately read the VAs back, to read the actual values accepted by the hardware
@@ -461,7 +461,7 @@ class Stream(object):
             try:
                 lva.value = hwva.value
             except Exception:
-                logging.debug("Failed to update VA %s to value %s from hardware",
+                logging.debug(u"Failed to update VA %s to value %s from hardware",
                               vaname, hwva.value)
 
             # Hack: There shouldn't be a resolution local VA, but for now there is.
@@ -504,7 +504,7 @@ class Stream(object):
         except AttributeError:
             hwva = getattr(self._emitter, vaname)
             if not isinstance(hwva, VigilantAttributeBase):
-                raise AttributeError("Emitter has not VA %s" % (vaname,))
+                raise AttributeError(u"Emitter has not VA %s" % (vaname,))
             return hwva
 
     def _getDetectorVA(self, vaname):
@@ -522,7 +522,7 @@ class Stream(object):
         except AttributeError:
             hwva = getattr(self._detector, vaname)
             if not isinstance(hwva, VigilantAttributeBase):
-                raise AttributeError("Detector has not VA %s" % (vaname,))
+                raise AttributeError(u"Detector has not VA %s" % (vaname,))
             return hwva
 
     def prepare(self):
@@ -547,7 +547,7 @@ class Stream(object):
 
         returns (model.ProgressiveFuture): Progress of preparation
         """
-        logging.debug("Preparing stream %s ...", self.name.value)
+        logging.debug(u"Preparing stream %s ...", self.name.value)
         # actually indicate that preparation has been triggered, don't wait for
         # it to be completed
         self._prepared = True
@@ -557,7 +557,7 @@ class Stream(object):
         if self._opm is None:
             return model.InstantaneousFuture()
 
-        logging.debug("Setting optical path for %s", self.name.value)
+        logging.debug(u"Setting optical path for %s", self.name.value)
         f = self._opm.setPath(self)
         return f
 
@@ -581,7 +581,7 @@ class Stream(object):
         message (str or None): the status message
         """
         if level is None and message is not None:
-            logging.warning("Setting status with no level and message %s", message)
+            logging.warning(u"Setting status with no level and message %s", message)
 
         self.status._value = (level, message)
         self.status.notify(self.status.value)
@@ -850,7 +850,7 @@ class Stream(object):
                 im_needs_recompute.clear()
                 stream._updateImage()
         except Exception:
-            logging.exception("image update thread failed")
+            logging.exception("Image update thread failed")
 
         gc.collect()
 

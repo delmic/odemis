@@ -180,7 +180,7 @@ class LiveStream(Stream):
                 tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
         except Exception:
-            logging.exception("histogram update thread failed")
+            logging.exception("Histogram update thread failed")
 
         gc.collect()
 

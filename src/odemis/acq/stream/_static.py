@@ -31,7 +31,7 @@ import gc
 import math
 import numpy
 import copy
-from odemis import model, util
+from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_POL_MODE, MD_POL_NONE, VigilantAttribute
 from odemis.util import img, conversion, angleres, spectrum, find_closest, almost_equal
@@ -104,7 +104,7 @@ class StaticStream(Stream):
                 tsleep = max(0.25, tend - tstart)  # max 4 Hz
                 time.sleep(tsleep)
         except Exception:
-            logging.exception("histogram update thread failed")
+            logging.exception("Histogram update thread failed")
 
         gc.collect()
 
