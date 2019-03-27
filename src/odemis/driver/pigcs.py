@@ -315,7 +315,12 @@ class PIGCSError(StandardError):
         5103: "RNP cannot be executed if axis is in closed loop",
         5104: "Relax procedure (RNP) needed",
         5200: "Axis must be configured for this action",
-        - 1024: "Motion error: position error too large, servo is switched off automatically",
+        -1001: "Unknown axis identifier",
+        -1008: "Controller is busy with some lengthy operation",
+        -1015: "One or more arguments given to function is invalid",
+        -1024: "Motion error: position error too large, servo is switched off automatically",
+        -1025: "Controller is already running a macro",
+        -1041: "Parameter could not be set with SPA--parameter not defined for this controller",
     }
 
 # constants for model number
@@ -1824,12 +1829,18 @@ class CLRelController(Controller):
 #           For supporting absolute moves, we need to add querying and requesting
 #           "homing" procedure. Then the position would reset to 0 (and that's it
 #           from the user's point of view).
-    def __init__(self, busacc, address=None, axes=None, auto_suspend=10):
+    def __init__(self, busacc, address=None, axes=None, auto_suspend=10, suspend_mode="read"):
         """
-        auto_suspend (False or 0 < float): delay before turning off the servo
-          and encoder after a normal move. Useful as the encoder might cause
-          some warm up, and also ensures that no vibrations are caused by trying
-          to stay on target.
+        auto_suspend (False or 0 < float): delay before stopping the servo (and
+          encoder if possible). Useful as the encoder might cause some warm up,
+          and also ensures that no vibrations are caused by trying to stay on target.
+          If False, it will never turn the servo off between nornal moves.
+        suspend_mode ("read" or "full"): How to suspend the servo.
+          "full" will stop the servo and turn off the encoder. The main advantage
+            is that it avoids heating up while not moving (ie, reduce drift).
+            Only possible if sensor can be turned off (param 0x56).
+          "read" will pause the servo, and keep reading the sensor. This allows
+            to monitor the drift even when not moving. Default is "read".
         """
         super(CLRelController, self).__init__(busacc, address, axes)
         self._upm = {} # ratio to convert values in user units to meters
@@ -1873,21 +1884,23 @@ class CLRelController(Controller):
             # To be taken when reading position or affecting encoder reading
             self._pos_lock[a] = threading.RLock()
 
-            # TODO: allow to force servo_suspend off on E861 with encoder off support
             # We have two modes for auto_suspend:
-            #  * Servo and encoder off: used when encoders can be turned off.
+            #  * full: Servo and encoder off.
             #    That typically happens with the C-867. It allows to reduce heat
             #    due to encoder using infra-red light (and ensures the motor
-            #    doesn't move.
-            #  * PID values set to 0,0,0: used when encoders cannot be turned off.
+            #    doesn't move).
+            #  * read: PID values set to 0,0,0.
             #    That typically happens with the E-861. It avoids going through
             #    the piezo "relax" procedure that takes time (4 x slew rate) and
-            #    causes up to 100 nm move.
-            if 0x56 in self._avail_params:  # Parameter to control encoder power
+            #    causes up to 100 nm move. It also allows to monitor the position.
+            if suspend_mode == "full":
                 self._servo_suspend = True
                 if self._auto_suspend:
                     logging.info("Will turn off servo when axis not in use")
-            else:
+                    if 0x56 not in self._avail_params:  # Parameter to control encoder power
+                        logging.warning("Controller %d cannot turn off sensor so suspend_mode full is not useful",
+                                        address)
+            elif suspend_mode == "read":
                 self._servo_suspend = False
                 # Save the "real" PID values, from the EEPROM, so that even if
                 # the driver catastrophically finished with PID set to 0,0,0 ,
@@ -1898,8 +1911,10 @@ class CLRelController(Controller):
 
                 if self._auto_suspend:
                     logging.info("Will use PID = 0,0,0 when axis not in use")
+            else:
+                raise ValueError("Unexpected suspend_mode '%s' (should be read or full)" % (suspend_mode,))
 
-            try:  # Only exists on E-861 (and only used when _servo_suspend == True)
+            try:  # Only exists on E-861 (to know how long it takes to start the servo)
                 # slew rate is stored in ms
                 self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) / 1000
             except ValueError:  # param doesn't exist => no problem
@@ -1959,10 +1974,13 @@ class CLRelController(Controller):
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
             self._suspend_req[a].put(MNG_TERMINATE)
+            self._stopServo(a)
             if not self._servo_suspend:
                 # Make sure the PID values are back to the normal move
-                self._resumeAxis(a)
-            self._stopServo(a)
+                P, I, D = self._pid
+                self.SetParameter(a, 1, P, check=False)  # P
+                self.SetParameter(a, 2, I, check=False)  # I
+                self.SetParameter(a, 3, D, check=False)  # D
 
     def recoverTimeout(self):
         ret = Controller.recoverTimeout(self)
@@ -2086,6 +2104,11 @@ class CLRelController(Controller):
     def _resumeAxis(self, axis):
         if self._servo_suspend:
             self._startServo(axis)
+            try:
+                self.checkError()
+            except PIGCSError as ex:
+                logging.error("Axis %s/%s failed during resume: %s",
+                                self.address, axis, ex)
         else:
             # The servo should be on all the time, but if for some reason there
             # was an error, the servo might have been disabled => need to put
@@ -2779,6 +2802,7 @@ class Bus(model.Actuator):
     def __init__(self, name, role, port, axes, baudrate=38400,
                  dist_to_steps=None, min_dist=None,
                  vmin=None, speed_base=None, auto_suspend=None,
+                 suspend_mode=None,
                  _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
@@ -2791,10 +2815,10 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         baudrate (int): baudrate of the serial port (default is the recommended
           38400). Use .scan() to detect it.
-        auto_suspend (dict str -> (False or 0 < float)): delay before turning
-          off the servo (and encoder if possible) for closed-loop controllers
-          If False, it will never turn the servo off between nornal moves.
+        auto_suspend (dict str -> (False or 0 < float)): see CLRelController.
           Default is 10 s.
+        suspend_mode (dict str -> "read" or "full"): see CLRelController.
+          Default is "read".
         Next 3 parameters are for calibration, see Controller for definition
         dist_to_steps (dict string -> (0 < float)): axis name -> value
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
@@ -2805,6 +2829,7 @@ class Bus(model.Actuator):
         vmin = vmin or {}
         speed_base = speed_base or {}
         auto_suspend = auto_suspend or {}
+        suspend_mode = suspend_mode or {}
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
@@ -2828,6 +2853,8 @@ class Bus(model.Actuator):
                 kwc["speed_base"] = speed_base[axis]
             if axis in auto_suspend:
                 kwc["auto_suspend"] = auto_suspend[axis]
+            if axis in suspend_mode:
+                kwc["suspend_mode"] = suspend_mode[axis]
 
         # Special support for no address
         if len(controllers) == 1 and None in controllers:
