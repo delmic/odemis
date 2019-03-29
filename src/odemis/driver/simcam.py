@@ -126,7 +126,7 @@ class Camera(model.DigitalCamera):
             # The "good" focus is at the current position
             self._good_focus = self._focus.position.value["z"]
             logging.debug("Simulating focus, with good focus at %g m", self._good_focus)
-        except KeyError:
+        except (TypeError, KeyError):
             logging.info("Will not simulate focus")
             self._focus = None
 
