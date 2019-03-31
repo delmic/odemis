@@ -23,13 +23,21 @@ see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-import ConfigParser
+try:
+    import ConfigParser
+except ImportError:  # Python 3 naming
+    import configparser as ConfigParser
+
 import logging
 import math
 import numpy
 import re
 import requests
-import urlparse
+try:
+    import urlparse
+except ImportError:  # Python 3 naming
+    import urllib.parse as urlparse
+
 from PIL import Image
 from io import BytesIO
 from requests import HTTPError
