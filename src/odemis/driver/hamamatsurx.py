@@ -52,16 +52,16 @@ PARAM_TYPE_EXPTIME = 4
 PARAM_TYPE_DISPLAY = 5
 
 
-class RemoteExError(StandardError):
+class RemoteExError(IOError):
 
-    def __init__(self, errnum, *args, **kwargs):
+    def __init__(self, errno, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
-        StandardError.__init__(self, errnum, *args, **kwargs)
-        self.errnum = errnum
+        desc = self._errordict.get(errno, "Unknown RemoteEx error.")
+        strerror = "RemoteEx error %d: %s" % (errno, desc)
+        IOError.__init__(self, errno, strerror, *args, **kwargs)
 
     def __str__(self):
-        errmsg = self._errordict.get(self.errnum, "Unknown RemoteEx error.")
-        return "Hamamatsu streak camera RemoteEx error %d: %s" % (self.errnum, errmsg)
+        return self.strerror
 
     _errordict = {
             0: "Command successfully executed.",
@@ -1185,7 +1185,7 @@ class StreakCamera(model.HwComponent):
         try:
             self.AcqStart(AcqMode)
         except RemoteExError as ex:
-            if ex.errnum != 7:  # 7 = command already running
+            if ex.errno != 7:  # 7 = command already running
                 raise
             logging.debug("Starting acquisition currently not possible. An acquisition or live mode might be still "
                           "running. Will stop and restart live mode.")
