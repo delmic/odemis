@@ -55,7 +55,7 @@ def hextof(s):
         for c in s.split(","):
             d += chr(int(c, 16))
         return struct.unpack("<d", d)[0]
-    except ValueError, struct.error:
+    except (ValueError, struct.error):
         raise ValueError("Cannot convert %s to a float" % (s,))
 
 

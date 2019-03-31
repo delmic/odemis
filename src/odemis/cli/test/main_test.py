@@ -80,7 +80,7 @@ class TestWithoutBackend(unittest.TestCase):
         try:
             cmdline = "cli --set-attr light power"
             ret = main.main(cmdline.split())
-        except SystemExit, exc: # because it's handled by argparse
+        except SystemExit as exc: # because it's handled by argparse
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
 
@@ -107,7 +107,7 @@ class TestWithoutBackend(unittest.TestCase):
         try:
             cmdline = "cli --scan bar.foo"
             ret = main.main(cmdline.split())
-        except SystemExit, exc: # because it's handled by argparse
+        except SystemExit as exc: # because it's handled by argparse
             ret = exc.code
         self.assertNotEqual(ret, 0, "Wrongly succeeded trying to run scan with unknown class: '%s'" % cmdline)
 

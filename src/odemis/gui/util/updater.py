@@ -195,8 +195,8 @@ class WindowsUpdater:
     def run_installer(local_path):
         try:
             subprocess.call(local_path)
-        except WindowsError, (err_nr, _):
-            if err_nr == 740:
+        except WindowsError as ex:
+            if ex.winerror == 740:
                 os.startfile(local_path, "runas")
             else:
                 raise

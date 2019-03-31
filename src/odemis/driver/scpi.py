@@ -296,7 +296,7 @@ class Ammeter(model.Detector):
 
         try:
             val, ts, err = float(values[0][:-1]), float(values[1]), int(float(values[2]))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             raise IOError("Failed to read measurement (got %s)" % (res,))
 
         return val, ts, err

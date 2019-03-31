@@ -135,7 +135,7 @@ class TestCommandLine(unittest.TestCase):
         try:
             cmdline = "odemisd --validate"
             ret = main.main(cmdline.split())
-        except SystemExit, exc: # because it's handled by argparse
+        except SystemExit as exc: # because it's handled by argparse
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
 
@@ -160,7 +160,7 @@ class TestCommandLine(unittest.TestCase):
 
             cmdline = "odemisd --help"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 

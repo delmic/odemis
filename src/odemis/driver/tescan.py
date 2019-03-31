@@ -271,7 +271,7 @@ class SEM(model.HwComponent):
                     # write and read the raw data
                     try:
                         rdas = self._acquire_detectors(detectors)
-                    except CancelledError, e:
+                    except CancelledError as e:
                         # either because must terminate or just need to rest
                         logging.debug("Acquisition was cancelled %s", e)
                         continue
