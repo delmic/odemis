@@ -167,10 +167,10 @@ def decompose_si_prefix(str_val, unit=None):
     """
 
     if unit:
-        match = re.match(ur"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
+        match = re.match(u"([+-]?[\\d.]+(?:[eE][+-]?[\\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
                          str_val.strip())
     else:  # Look for any unit
-        match = re.match(ur"([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
+        match = re.match(u"([+-]?[\\d.]+(?:[eE][+-]?[\\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
                          str_val.strip())
 
     if match:
