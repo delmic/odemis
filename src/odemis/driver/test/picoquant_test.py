@@ -46,7 +46,6 @@ CONFIG_PH = {"name": "HP300", "role": "time-correlator", "device": None,
 
 if TEST_NOHW:
     CONFIG_PH["device"] = "fake"
-CONFIG_PH["device"] = "fake"
 
 
 class TestPH300Static(unittest.TestCase):
@@ -113,7 +112,7 @@ class TestPH300(unittest.TestCase):
         self._cnt = 0
         self._lastdata = None
         df.subscribe(self._on_det)
-        time.sleep(8)
+        time.sleep(5)
         df.unsubscribe(self._on_det)
         self.assertGreater(self._cnt, 3)
         self.assertEqual(self._lastdata.shape, exp_shape)

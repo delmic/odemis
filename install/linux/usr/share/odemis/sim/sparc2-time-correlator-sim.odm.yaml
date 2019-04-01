@@ -1,14 +1,14 @@
 # Configuration for the SPARC v2 system with plates:
-# 1. IR
+# 1. Vis-NIR
 # 2. Fiber module (to time correlator)
-"SPARC2 Time-Correlator": {
+SPARC2-VisNIR-TR: {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",
                "Optical Path Properties", "Spectrometer Selector",
-               "Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer",
+               "AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer",
                "Spectrograph", "Fiber align",
-               "Time Correlator", "APD 1", "APD 2",
+               "Time Correlator", "Photon counter 1", "Photon counter 2",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
                "Lens1 Mover", "Lens2 Switch",
@@ -20,7 +20,7 @@
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer", "Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 "Power Control Unit": {
@@ -29,24 +29,20 @@
     init: {
         port: "/dev/fake", # for simulator
         pin_map: {
-            "Calibration Light": 0,
-            "Camera": 4,
-            "Spectral Camera": 5, # TODO: check this is correct
-            "Spectrograph": 6,
-            "Optical Actuators": 2,
+            "Calibration Light": 6,
+            "AR Camera": 0,
+            "Spectrograph": 2,
+            "Optical Actuators": 4,
         },
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
-            "CL PMT control unit": 0, # Actually just provide power to the  PMT
-            "Camera": 4,
-            "Spectral Camera": 4,
-            "Spectrograph": 5, # SR-193 needs a looong time to initialise
-            "Optical Actuators": 3,
+            "AR Camera": 2,
+            "Spectrograph": 9, # SR-193 needs a looong time to initialise  # TODO-> back to 90
+            "Optical Actuators": 1,
         },
         init: { # Which component to power on from the very beginning (to save time)
             "Calibration Light": True, # turn if on initially, to warm up. It will automatically be off when the component starts
-            "Camera": True,
-            "Spectral Camera": True,
+            "AR Camera": True,
             "Spectrograph": True,
             "Optical Actuators": True,
         },
@@ -56,34 +52,56 @@
     }
 }
 
-# This is a more realistic SEM simulator (image-wise, but less realistic HW-wise)
+# Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
-    class: simsem.SimSEM,
+    class: semcomedi.SEMComedi,
     role: null,
-    init: {
-           drift_period: 2, # s  (disable to get a the whole resolution of the image)
-           image: "sparc-etd-gold-balls.h5",
-    },
+    init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
-    children: {scanner: "SEM E-beam",
-               detector0: "SEM Detector"
+    children: {
+       scanner: "SEM E-beam",
+       detector0: "SEM Detector",
     }
 }
 
+# Connect:
+# X -> AO 0
+# Y -> AO 1
+# Ground -> AO GND
 "SEM E-beam": {
-    # Internal child of SimSEM, so no class
+    # Internal child of SEM ExtXY, so no class
+    creator: "SEM Scan Interface",
     role: e-beam,
-    init: {},
-    properties: {
-        dwellTime: 10.e-6, # s
+    init: {
+        channels: [1, 0],
+        limits: [[0, 5], [0, 5]],  # V
+        park: [0, 0], # V
+        # Digital output port mapping on the Delmic scanning box v2:
+        # 0 = Relay
+        # 1 = Open drain output (Y0.0)
+        # 2 = Digital Out 1
+        # 3 = Digital Out 0
+        # 4 = Status led
+        scanning_ttl: {4: True}, # output ports -> True (indicate scanning) or False (indicate parked)
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.14, # m
     },
-    affects: ["SEM Detector", "Spectrometer", "Camera", "Time Correlator", "APD 1", "APD 2"] # affects the CCD in case of cathodoluminescence
+    properties: {
+        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        dwellTime: 10.e-6, # s
+        magnification: 100, # (ratio)
+    },
+    affects: ["SEM Detector", "VisNIR Int Spectrometer", "AR Camera","Newton Camera", "UV Int Spectrometer", "Time Correlator", "Photon counter 1", "Photon counter 2"] # affects the CCD in case of cathodoluminescence
 }
 
+# Must be connected on AI1/AI9 (differential)
 "SEM Detector": { # aka ETD
-    # Internal child of SimSEM, so no class
+    # Internal child of SEM Scan Interface, so no class
     role: se-detector,
-    init: {},
+    init: {
+        channel: 0, # 0-> sawtooth waves, 1-> square waves
+        limits: [-3, 3], # V
+    },
 }
 
 "Time Correlator": {
@@ -91,30 +109,30 @@
     role: time-correlator,
     init: {
         device: "fake",
-        disc_volt: [0.1, 0.1], # V, discriminator for APD 1/2
-        zero_cross: [1.e-3, 1.e-3], # V
+        #device: null, # put serial number, or it will pick the first one found
+        disc_volt: [50.e-3, 50.e-3], # V, discriminator for detectors 0/1 (< 0.8 V)
+        zero_cross: [10.e-3, 10.e-3], # V (< 20 mV)
         shutter_axes: {
-            # internal name det-> internal name dependency, axis name, position closed, position opened
+        # internal child role of the actuator -> axis name, position when shutter is closed (ie, protected), position when opened (receiving light)
             "shutter0": ["x", 0, 1],
             "shutter1": ["x", 0, 1],
         },
     },
-    # These children allow to have access to the raw data on the APDs
+    # These children allow to have access to the raw data on the PMTs
     children: {
-        "detector0": "APD 1",
-        "detector1": "APD 2",
+        "detector0": "Photon counter 1",
+        "detector1": "Photon counter 2",
         "shutter0": "Shutter 0",
         "shutter1": "Shutter 1",
     },
-
 }
 
-"APD 1": {
+"Photon counter 1": {
     # Internal child of "Time Correlator", so no class
     role: photo-detector0,
 }
 
-"APD 2": {
+"Photon counter 2": {
     # Internal child of "Time Correlator", so no class
     role: photo-detector1,
 }
@@ -125,9 +143,8 @@
     children: {"x": "Time-Correlator Actuators"},
     init: {
         axes_map: {"x": "shutter0"},
-        #axis_name: "shutter0",
     },
-    affects: ["Time Correlator", "APD 1"],
+    affects: ["Time Correlator", "Photon counter 1"],
 }
 
 "Shutter 1": {
@@ -136,13 +153,13 @@
     children: {"x": "Time-Correlator Actuators"},
     init: {
         axes_map: {"x": "shutter1"},
-        #axis_name: "shutter1",
     },
-    affects: ["Time Correlator", "APD 2"],
+    affects: ["Time Correlator", "Photon counter 2"],
 }
 
 # Depending exactly on the configuration, it might also be used for spectrometer
-"Camera": {
+# Zyla
+"AR Camera": {
     class: andorcam2.AndorCam2,
     role: ccd,
     power_supplier: "Power Control Unit",
@@ -151,26 +168,29 @@
         transp: [-1, -2],
         image: "sparc-ar-mirror-align.h5", # only for simulator
     },
+    properties: {
+        targetTemperature: -10, # °C
+    },
 }
 
 # Spectrometer = Andor Zyla + Shamrock SR193 (connected via USB)
-"Integrated Spectrometer": {
+"VisNIR Int Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
-    role: spectrometer-integrated,
-    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    role: spectrometer0,
+    children: {detector: "AR Camera", spectrograph: "Spectrograph"},
     init: {
-        transp: [-1, 2], # only applied to the spectrometer data (not raw CCD)
+        transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
     properties: {
         binning: [4, 512], #to acquire only on half of the CCD
     },
 }
 
-# Dedicated Andor Newton camera for spectrum acquisition
-"Spectral Camera": {
+
+# Newton DU920P, mostly for UV (1024 x 255)
+"Newton Camera": {
     class: andorcam2.AndorCam2,
-    role: sp-ccd,
-    power_supplier: "Power Control Unit",
+    role: sp-ccd1,
     init: {
         device: "fake",
         transp: [1, 2], # if mirrored on X axis, change 1 to -1
@@ -178,21 +198,24 @@
         image: "sparc-spec-sim.h5",
     },
     properties: {
-        shutterMinimumPeriod: 0.1, # s  = Max 10Hz frequency # TODO: put the right value for the shutter
-        targetTemperature: -65, # °C  # TODO: might be possible to go a bit further below
+        targetTemperature: -65, # °C
     },
 }
 
-# Spectrometer = Andor iVac 316 + Shamrock SR193 (connected via USB)
-"Spectrometer": {
+"UV Int Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    role: spectrometer1,
+    children: {detector: "Newton Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
+    },
     properties: {
         binning: [2, 100],
     },
 }
 
+
+# Internal Spectrograph = Kymera 193 (+ 2 cameras)
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
@@ -202,17 +225,16 @@
         slits: {1: "slit-in", # INPUT_SIDE
         },
         bands: { # The filters in the filter-wheel
-            1: "pass-through", # pos -> m,m
-            2: [375.e-9, 425.e-9],
-            3: [425.e-9, 475.e-9],
-            4: [525.e-9, 575.e-9],
-            5: [625.e-9, 675.e-9],
-            6: [675.e-9, 725.e-9],
+            1: "pass-through",
+            6: [430.e-9, 470.e-9], # pos -> m,m
+            3: [530.e-9, 570.e-9],
+            4: [580.e-9, 620.e-9],
+            5: [630.e-9, 670.e-9],
+            2: [780.e-9, 820.e-9],
         },
-        fstepsize: 10.9e-6, # m, size of one focus step
-        drives_shutter: [1.5707963267948966] # flipper positions: the Spectral Camera drives the shutter
+        fstepsize: 30.e-6, # m, size of one focus step  (Note: it used to be set at 10µm, but from physical inspection 30µm seems more correct)
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer"],
 }
 
 "Spectrograph focus": {
@@ -222,7 +244,7 @@
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer"],
 }
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
@@ -235,11 +257,11 @@
     init: {
         axis_name: "flip-out",
         positions: {
-            0: ["Camera", "Integrated Spectrometer"],
-            1.5707963267948966: ["Spectral Camera", "Spectrometer"],
+            0: ["AR Camera", "VisNIR Int Spectrometer"],
+            1.5707963267948966: ["Newton Camera", "UV Int Spectrometer"],
         },
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -250,7 +272,7 @@
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "Spectrometer"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer"],
 }
 
 "Optical Path Properties": {
@@ -269,7 +291,7 @@
        # TODO: update for the Quanta
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"]
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer", "Time Correlator", "Photon counter 1", "Photon counter 2"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -283,9 +305,9 @@
         address: null,
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
         # These values only need to be roughly correct
-        ustepsize: [25.1e-9, 25.1e-9, 24.6e-9, 5.86e-9, 5.e-9], # m/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 25.1e-9, 5.86e-9, 5.e-9], # m/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4}, # fiby has no ref swich
+        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4, "fiby": 4}, 
         inverted: ["l2"],
     },
 }
@@ -301,9 +323,9 @@
     },
     metadata: {
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 0.0199141141} # m
+        FAV_POS_ACTIVE: {"x": 0.02637} # m
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer", "Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -314,11 +336,11 @@
     init: {
         axis_name: "l2",
         positions: {
-            -0.0019875686: "on",
-            -0.0048192: "off", # completely out of the path
+            -0.0513: "on",
+            -0.0: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer", "Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -333,7 +355,7 @@
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer"],
 }
 
 # Note that the next two components actually move the _same_ axis!
@@ -345,7 +367,7 @@
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"},
     },
-    affects: ["Time Correlator", "APD 1", "APD 2"],
+    affects: ["Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and external optics (time-correlator)
@@ -360,11 +382,11 @@
     metadata: {
         # Position of the mirror to select the external spectrometer (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.0116214336}, # m
-        FAV_POS_ACTIVE_DEST: ["Fiber align", "Time Correlator", "APD 1", "APD 2"],
+        FAV_POS_ACTIVE_DEST: ["Fiber align", "Time Correlator", "Photon counter 1", "Photon counter 2"],
         FAV_POS_DEACTIVE: {"x": 0.013419}, # m
         FAV_POS_DEACTIVE_DEST: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer"], # m
     },
-    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Spectrometer", "Time Correlator", "APD 1", "APD 2"],
+    affects: ["AR Camera", "VisNIR Int Spectrometer", "Newton Camera", "UV Int Spectrometer", "Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 "Time-Correlator Actuators": {
@@ -375,8 +397,8 @@
         address: null,
         axes: ["od", "fw"],
         rng: [[-1, 3], null],
-        # These values only need to be roughly correct
-        ustepsize: [2.752e-5, 3.272e-5], # od/rad per µstep # [3.392e-5, 3.272e-5]
+        # od: 3.272e-5 rad/ustep * 360/(2pi) deg/rad * 3.96/270 od/deg = 2.75e-5 od/ustep
+        ustepsize: [2.75e-05, 3.392e-5], # od/µstep, rad/µstep 
         unit: ["od", "rad"],
         refproc: "Standard",
         refswitch: {"fw": 0, "od": 0},
@@ -384,13 +406,13 @@
         do_axes: {
             4: ["shutter0", 0, 1, 1],  # axis: [position when enabled (closed), position when disabled (open), transition period (s)]
             5: ["shutter1", 0, 1, 1],
-         },
-         # LED protection for digital output channels
-         led_prot_do: {
+        },
+        # LED protection for digital output channels
+        led_prot_do: {
             # VERY IMPORTANT TO GET THIS RIGHT, WRONG VALUE WILL DAMAGE INSTRUMENT!
             4: 0,  # output when leds are on (0 = shutter closed)
             5: 0
-         },
+        },
     },
 }
 
@@ -414,7 +436,7 @@
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },
-    affects: ["Time Correlator", "APD 1", "APD 2"],
+    affects: ["Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 # TODO: update when the rotation -> linear position actuator exists
@@ -424,12 +446,10 @@
     children: {"density": "Time-Correlator Actuators"},
     init: {
         axis_name: "od",
-        offset: -3,
+        # position when referenced (adjusted to be a multiple of the actuator stepsize)
+        offset: -3.0000025, # od
     },
-    #metadata: {
-    #    POS_COR: 2.28,  # it's at ~3 at reference position (=> 5.28-3)
-    #},
-    affects: ["Time Correlator", "APD 1", "APD 2"],
+    affects: ["Time Correlator", "Photon counter 1", "Photon counter 2"],
 }
 
 

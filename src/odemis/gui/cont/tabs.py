@@ -56,7 +56,7 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
     TOOL_POINT, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS, \
     TOOL_NONE, TOOL_DICHO
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter
 from odemis.util import units, spot, limit_invocation
@@ -3312,14 +3312,15 @@ class Sparc2AlignTab(Tab):
         self._speccnt_stream = None
         if "fiber-align" in tab_data.align_mode.choices:
             # Need to pick the right/best component which receives light via the fiber
-            fbdet = None
+            photods = []
+            self._fbdet2 = None
             fbaffects = main_data.fibaligner.affects.value
             # First try some known, good and reliable detectors
             for d in (main_data.spectrometers + main_data.photo_ds):
                 if d is not None and d.name in fbaffects:
-                    fbdet = d
-                    break
-            else:
+                    photods.append(d)
+
+            if not photods:
                 # Take the first detector
                 for dname in fbaffects:
                     try:
@@ -3327,25 +3328,32 @@ class Sparc2AlignTab(Tab):
                     except LookupError:
                         logging.warning("Failed to find component %s affected by fiber-aligner", dname)
                         continue
-
                     if hasattr(d, "data") and isinstance(d.data, model.DataFlowBase):
-                        fbdet = d
-                        break
+                        photods.append(d)
 
-            if fbdet is not None:
-                logging.debug("Using %s as fiber alignment detector", fbdet.name)
-
+            if photods:
+                logging.debug("Using %s as fiber alignment detector", photods[0].name)
                 speccnts = acqstream.CameraCountStream("Spectrum average",
-                                       fbdet,
-                                       fbdet.data,
+                                       photods[0],
+                                       photods[0].data,
                                        emitter=None,
-                                       detvas=get_local_vas(fbdet, main_data.hw_settings_config),
+                                       detvas=get_local_vas(photods[0], main_data.hw_settings_config),
                                        )
                 speccnt_spe = self._stream_controller.addStream(speccnts,
                                     add_to_view=self.panel.vp_align_fiber.view)
+                if main_data.tc_od_filter:
+                    speccnt_spe.add_axis_entry("density", main_data.tc_od_filter)
+                    speccnt_spe.add_axis_entry("band", main_data.tc_filter)
                 speccnt_spe.stream_panel.flatten()
                 self._speccnt_stream = speccnts
                 speccnts.should_update.subscribe(self._on_ccd_stream_play)
+
+                if len(photods) > 1:
+                    self._fbdet2 = photods[1]
+                    _, self._det2_cnt_ctrl = speccnt_spe.stream_panel.add_text_field("Detector 2", "")
+                    f = self._det2_cnt_ctrl.GetFont()
+                    f.PointSize = 12
+                    self._det2_cnt_ctrl.SetFont(f)
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
@@ -3408,6 +3416,10 @@ class Sparc2AlignTab(Tab):
         # Force MoI view fit to content when magnification is updated
         if not main_data.ebeamControlsMag:
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
+
+    @wxlimit_invocation(0.5)
+    def _on_fbdet2_data(self, df, data):
+        self._det2_cnt_ctrl.SetValue("%s" % data[-1])
 
     def _layoutModeButtons(self):
         """
@@ -3543,6 +3555,10 @@ class Sparc2AlignTab(Tab):
         if mode != "fiber-align" and main.spec_sel:
             main.spec_sel.position.unsubscribe(self._onFiberPos)
 
+        if mode != "fiber-align":
+            # Unsubscribe from data of photo-detector 2
+            if self._fbdet2:
+                self._fbdet2.data.unsubscribe(self._on_fbdet2_data)
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
         f = main.opm.setPath(op_mode)
@@ -3602,6 +3618,9 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            # Subscribe to data of photo-detector 2
+            if self._fbdet2:
+                self._fbdet2.data.subscribe(self._on_fbdet2_data)
             # Note: it's OK to leave autofocus enabled, as it will wait by itself
             # for the fiber-aligner to be in place
             f.add_done_callback(self._on_fibalign_done)
@@ -4091,6 +4110,9 @@ class Sparc2AlignTab(Tab):
             self._stream_controller.pauseStreams()
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
+            # Unsubscribe from data of photo-detector 2
+            if self._fbdet2:
+                self._fbdet2.data.unsubscribe(self._on_fbdet2_data)
 
             if main.lens_mover:
                 main.lens_mover.position.unsubscribe(self._onLensPos)
