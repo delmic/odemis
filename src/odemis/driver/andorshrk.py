@@ -79,15 +79,12 @@ SHUTTER_OPEN = 1
 SHUTTER_BNC = 2  # = driven by external signal
 
 
-class ShamrockError(Exception):
+class ShamrockError(IOError):
     def __init__(self, errno, strerror, *args, **kwargs):
         super(ShamrockError, self).__init__(errno, strerror, *args, **kwargs)
-        self.args = (errno, strerror)
-        self.errno = errno
-        self.strerror = strerror
 
     def __str__(self):
-        return self.args[1]
+        return self.strerror
 
 
 class ShamrockDLL(CDLL):
@@ -694,8 +691,8 @@ class Shamrock(model.Actuator):
             while True:
                 try:
                     self._dll.ShamrockSetGrating(self._device, grating)
-                except ShamrockError as (errno, strerr):
-                    if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                except ShamrockError as ex:
+                    if ex.errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
                         raise
                     # just try again
                     retry += 1
@@ -776,8 +773,8 @@ class Shamrock(model.Actuator):
                 try:
                     # set in nm
                     self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
-                except ShamrockError as (errno, strerr):
-                    if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                except ShamrockError as ex:
+                    if ex.errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
                         raise
                     # just try again
                     retry += 1
