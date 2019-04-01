@@ -830,7 +830,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         if not main.spectrograph or not main.lens_mover:
             amodes.remove("lens-align")
 
-        if main.lens and model.hasVA(main.lens, "polePosition"):
+        if main.lens and main.ccd and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
             # pixels from the top-left corner of the AR image.
