@@ -20,8 +20,12 @@ This file is part of Odemis.
 from __future__ import division
 
 from abc import ABCMeta, abstractproperty
-from ConfigParser import NoOptionError
-import ConfigParser
+try:
+    import ConfigParser
+    from ConfigParser import NoOptionError
+except ImportError:  # Python 3 naming
+    import configparser as ConfigParser
+    from configparser import NoOptionError
 import logging
 import math
 import os.path

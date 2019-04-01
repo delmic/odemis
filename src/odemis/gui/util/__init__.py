@@ -22,7 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import Queue
+try:
+    import Queue
+except ImportError:  # Python 3 naming
+    import queue as Queue
 from decorator import decorator
 from functools import wraps
 import inspect

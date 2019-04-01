@@ -17,7 +17,10 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-import Queue
+try:
+    import Queue
+except ImportError:  # Python 3 naming
+    import queue as Queue
 import logging
 from odemis import model, util, dataio
 from odemis.model import oneway
