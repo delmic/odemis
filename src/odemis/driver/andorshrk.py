@@ -1700,9 +1700,12 @@ class Shamrock(model.Actuator):
         dll.ShamrockGetNumberDevices(byref(nodevices))
         logging.info("Scanning %d Andor Shamrock devices", nodevices.value)
         dev = []
+        serial = create_string_buffer(64)
         for i in range(nodevices.value):
-            dev.append(("Andor Shamrock", # TODO: add serial number
-                        {"device": i})
+            dll.ShamrockGetSerialNumber(i, serial)
+            logging.debug("Found Shamrock %d with SN %s", i, serial.value)
+            dev.append(("Andor Shamrock",
+                        {"device": serial.value})
                       )
 
         return dev
