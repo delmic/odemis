@@ -4,7 +4,7 @@ Created on 17 Feb 2014
 
 @author: Éric Piel
 
-Copyright © 2014-2015 Éric Piel, Delmic
+Copyright © 2014-2019 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -14,6 +14,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+# This is a driver for the Andor Shamrock & Kymera spectographs.
+
 from __future__ import division
 
 from ctypes import *
@@ -253,16 +255,17 @@ SLIT_NAMES = {INPUT_SLIT_SIDE: "slit-in-side",  # Note: previously it was called
 FLIPPER_TO_PORT = {0: DIRECT_PORT,
                    math.radians(90): SIDE_PORT}
 
-MODEL_SR193 = "SR-193i"
+MODEL_KY193 = "KY-193i"
 MODEL_SR303 = "SR-303"
+MODEL_KY328 = "KY-328i"
 
 
 class Shamrock(model.Actuator):
     """
-    Component representing the spectrograph part of the Andor Shamrock
+    Component representing the spectrograph part of the Andor Shamrock/Kymera
     spectrometers.
     On Linux, the SR303i is supported since SDK 2.97, and the other ones,
-    including the SR193i since SDK 2.99.
+    including the KY193i since SDK 2.99. The KY328 is supported since SDK 2.103.
     The SR303i must be connected via the I²C cable on the iDus. With SDK 2.100+,
     it also work via the direct USB connection.
     Note: we don't handle changing turret (live).
@@ -343,10 +346,12 @@ class Shamrock(model.Actuator):
 
             # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
             fl, ad, ft = self.EepromGetOpticalParams()
-            if 0.19 <= fl <= 0.2:
-                self._model = MODEL_SR193
-            elif 0.3 <= fl <= 0.31:
+            if 0.190 <= fl <= 0.200:
+                self._model = MODEL_KY193
+            elif 0.300 <= fl <= 0.310:
                 self._model = MODEL_SR303
+            elif 0.326 <= fl <= 0.330:
+                self._model = MODEL_KY328
             else:
                 self._model = None
                 logging.warning("Untested spectrograph with focus length %d mm", fl * 1000)
@@ -498,7 +503,7 @@ class Shamrock(model.Actuator):
                                      pos, allowed_pos))
 
             if self.ShutterIsPresent():
-                if drives_shutter and not self._model == MODEL_SR193:
+                if drives_shutter and not self._model == MODEL_KY193:
                     raise ValueError("Device doesn't support BNC mode for shutter")
                 if "flip-out" in axes:
                     val = self.GetFlipperMirror(OUTPUT_FLIPPER)
@@ -551,7 +556,14 @@ class Shamrock(model.Actuator):
         """
         # Some hardware don't have a working mirror position detector, and the
         # only way to make sure it's at the right position is to ask to go there.
-        # Also there is a double firmware bug (as of 20160801/SDK 2.101.30001):
+
+        assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
+
+        port = c_int()
+        with self._hw_access:
+            self._dll.ShamrockGetFlipperMirror(self._device, flipper, byref(port))
+
+        # On the Kymera 193, there is a double firmware bug (as of 20160801/SDK 2.101.30001):
         # * When requesting a flipper move from the current position to the
         #  _same_ position, the focus offset is applied anyway.
         # * When opening the device via the SDK, the focus is moved by the
@@ -561,14 +573,7 @@ class Shamrock(model.Actuator):
         # => workaround that second bug by 'taking advantage' of the first bug.
         # Since firmware 1.2 (ie 201611), both bugs are fixed, so both actions
         # are a no-op.
-
-        assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
-
-        port = c_int()
-        with self._hw_access:
-            self._dll.ShamrockGetFlipperMirror(self._device, flipper, byref(port))
-
-        if self.FocusMirrorIsPresent():
+        if self._model == MODEL_KY193 and self.FocusMirrorIsPresent():
             with self._hw_access:
                 # Init has already moved focus by +Foffset (cf bug #2)
                 focus_init = c_int()
