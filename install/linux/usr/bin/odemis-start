@@ -225,6 +225,36 @@ class BackendStarter(object):
         self._notif.update(summary, message, icon)
         self._notif.show()
 
+    def proc_communicate(self, p):
+        """
+        Does the same as "out, err = p.communicate()", but (almost) immediately
+        returns when the process ends.
+        returns (list of strings, list of strings): out, err
+        """
+        def read_file(f, store):
+            try:
+                for l in f:
+                    store.append(l)
+                    # logging.debug("Read %d bytes", len(l))
+                    print(l, end="")
+            except Exception:
+                logging.exception("failed to read")
+            finally:
+                logging.info("readed ended")
+
+        out = []
+        err = []
+        tout = threading.Thread(target=read_file, args=(p.stdout, out))
+        tout.daemon = True
+        tout.start()
+        terr = threading.Thread(target=read_file, args=(p.stderr, err))
+        terr.daemon = True
+        terr.start()
+
+        p.wait()
+        time.sleep(0.1)  # Make sure we got all the data from the pipes
+        return out, err
+
     def start_backend(self, modelfile):
         """ Start the backend and returns when it's fully instantiated or has failed to do so
 
@@ -243,28 +273,32 @@ class BackendStarter(object):
             subprocess.call(["sudo", "/usr/bin/cgcreate", "-a", ":odemis", "-g", "memory:odemisd"])
 
         logging.info("Starting back-end...")
+        odemisd_cmd = ["sudo", "odemisd", "--daemonize",
+                 "--log-level", self._config["LOGLEVEL"],
+                 "--log-target", self._config["LOGFILE"],
+                 modelfile]
+        logging.debug("Running: %s", " ".join(odemisd_cmd))
 
         # odemisd likes to start as root to be able to create /var/run files, but then
         # drop its privileges to the odemis group
         # Note: sudo drops all the env variables, so /etc/odemis.conf might be
         # interpreted differently in odemisd than what we've just read
-        try:
-            subprocess.check_call(
-                ["sudo", "odemisd", "--daemonize",
-                 "--log-level", self._config["LOGLEVEL"],
-                 "--log-target", self._config["LOGFILE"],
-                 modelfile]
-            )
-        except subprocess.CalledProcessError as ex:
+        p = subprocess.Popen(odemisd_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # block until the backend returns (typically because it forks a daemon)
+        out, err = self.proc_communicate(p)
+        if p.returncode != 0:
             # If it immediately fails, it's easy
+            logging.error("Backend returned code %s", p.returncode)
             self.show_popup("Odemis back-end failed to start",
                             "For more information type odemis-start in a terminal.",
                             "dialog-warning")
             show_error_box("Error starting Odemis back-end",
-                           "Unexpected error while starting Odemis back-end:\n"
-                           "%s\n\n"
+                           "Unexpected error (%d) while starting Odemis back-end:\n"
+                           "%s\n"
                            "Try starting Odemis again, and use the \"Report a "
-                           "problem\" function if the issue continues." % ex)
+                           "problem\" function if the issue continues.\n\n"
+                           "The full message is the following:\n %s" %
+                           (p.returncode, err[-1], "".join(err)))
             raise ValueError("Starting back-end failed")
 
     # def _on_sigint(self, signum, frame):
