@@ -62,7 +62,8 @@ else:
 
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 #KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC, "vmin":{"x": 2.4}}
-KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL, "auto_suspend": {"x": 1}}
+KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL,
+             "auto_suspend": {"x": 1}, "suspend_mode": {"x": "full"}}
 
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL,
