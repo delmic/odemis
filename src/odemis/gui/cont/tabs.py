@@ -3315,7 +3315,7 @@ class Sparc2AlignTab(Tab):
             fbdet = None
             fbaffects = main_data.fibaligner.affects.value
             # First try some known, good and reliable detectors
-            for d in (main_data.spectrometer, main_data.cld):
+            for d in (main_data.spectrometers + main_data.photo_ds):
                 if d is not None and d.name in fbaffects:
                     fbdet = d
                     break
