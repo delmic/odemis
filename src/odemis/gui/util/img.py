@@ -29,7 +29,6 @@ import logging
 import math
 import numpy
 from odemis import model
-from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 from odemis.util import intersect, fluo, conversion, angleres, img, units
@@ -39,8 +38,8 @@ import wx
 import odemis.acq.stream as acqstream
 from odemis.util import spectrum
 import odemis.gui.img as guiimg
-from odemis.acq.stream._projection import RGBSpatialSpectrumProjection, \
-    SinglePointTemporalProjection
+from odemis.acq.stream import RGBProjection, \
+    SinglePointTemporalProjection, DataProjection
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
@@ -1391,15 +1390,14 @@ def line_to_export_data(proj, raw):
 
     returns (model.DataArray)
     """
-
     data = proj.projectAsRaw()
+
     spec = model.DataArray(img.DataArray2RGB(data), data.metadata)
     if spec is None:
         raise LookupError("No line selected to pick a spectrum")
     spectrum_range, unit = spectrum.get_spectrum_range(spec)
 
     if raw:
-        # Swap axes
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return data
     else:
@@ -1876,26 +1874,18 @@ def get_ordered_images(streams, raw=False):
             if isinstance(data, tuple): # 2D tuple = tiles
                 data = img.mergeTiles(data)
         else:
-            if isinstance(s.raw, tuple): # 2D tuple = tiles
+            if isinstance(s, RGBProjection):
+                data_raw = s.projectAsRaw()
+            elif isinstance(s.raw, tuple):  # 2D tuple = tiles
                 data_raw = img.mergeTiles(s.raw)
+            elif model.hasVA(s, "zIndex"):
+                data_raw = img.getYXFromZYX(s.raw[0], s.zIndex.value)
             else:
                 data_raw = s.raw[0]
-
-            if model.hasVA(s, "zIndex"):
-                data_raw = img.getYXFromZYX(s.raw[0], s.zIndex.value)
 
             # Pretend to be RGB for the drawing by cairo
             if numpy.can_cast(im_min_type, min_type(data_raw)):
                 im_min_type = min_type(data_raw)
-
-            if data_raw.ndim > 2:
-                # It's not (just) spatial => need to project it
-                if isinstance(s, acqstream.SpectrumStream):
-                    proj = RGBSpatialSpectrumProjection(s)
-                    data_raw = proj.projectAsRaw()
-                else:
-                    logging.warning("Doesn't know how to export data of %s spatial raw", s.name.value)
-                    continue
 
             # Split the bits in R,G,B,A
             data = _pack_data_into_rgba(data_raw)

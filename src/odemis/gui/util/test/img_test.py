@@ -35,8 +35,8 @@ from odemis.gui.util import img
 from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile_to_image, merge_screen
 from odemis.dataio import tiff
 from odemis.acq.stream import SinglePointSpectrumProjection, \
-    RGBSpatialSpectrumProjection, LineSpectrumProjection, \
-    SinglePointTemporalProjection, PixelTemporalSpectrumProjection
+    RGBSpatialProjection, LineSpectrumProjection, \
+    SinglePointTemporalProjection
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -569,7 +569,7 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (0.00025158414075691866, 0.00017445320835792754)
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
-        proj = RGBSpatialSpectrumProjection(self.spec_stream)
+        proj = RGBSpatialProjection(self.spec_stream)
         streams = [self.streams[1], proj]
         orig_md = [s.raw[0].metadata.copy() for s in streams]
         exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, False)
@@ -581,7 +581,8 @@ class TestSpatialExport(unittest.TestCase):
         view_hfw = (0.00025158414075691866, 0.00017445320835792754)
         view_pos = [-0.001211588332679978, -0.00028726176273402186]
         draw_merge_ratio = 0.3
-        streams = [self.streams[1], self.spec_stream]
+        proj = RGBSpatialProjection(self.spec_stream)
+        streams = [self.streams[1], proj]
         orig_md = [s.raw[0].metadata.copy() for s in streams]
         exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, True)
         self.assertEqual(exp_data[0].shape, (3379, 4199))  # greyscale

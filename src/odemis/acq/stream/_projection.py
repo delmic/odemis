@@ -202,6 +202,13 @@ class RGBProjection(DataProjection):
         md[model.MD_DIMS] = "YXC"  # RGB format
         return model.DataArray(rgbim, md)
 
+    def projectAsRaw(self):
+        """ Project a raw image without converting to RGB
+        """
+        raw = img.ensure2DImage(self.stream.raw[0])
+        md = self._find_metadata(raw.metadata)
+        return model.DataArray(raw, md)
+
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
         """
@@ -526,6 +533,20 @@ class RGBSpatialProjection(RGBProjection):
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
+    def projectAsRaw(self):
+        """ Project a raw image without converting to RGB
+
+        Handles tiles as well as regular DataArray's
+        """
+        raw = self.stream.raw
+
+        if isinstance(raw[0], model.DataArrayShadow):
+            raw_tiles, _ = self._getTilesFromSelectedArea()
+            raw = img.mergeTiles(raw_tiles)
+            return raw
+        else:
+            return super(RGBSpatialProjection, self).projectAsRaw()
+
 
 class RGBSpatialSpectrumProjection(RGBSpatialProjection):
     """
@@ -773,7 +794,6 @@ class LineSpectrumProjection(RGBProjection):
 
     def projectAsRaw(self):
         try:
-
             spec1d, md = self._computeSpec()
 
             if spec1d is None:

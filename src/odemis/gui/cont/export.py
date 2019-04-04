@@ -201,7 +201,7 @@ class ExportController(object):
             export_type = 'AR'
         elif view_name == 'Spectrum plot':
             export_type = 'spectrum'
-        elif view_name == 'Spatial spectrum':
+        elif view_name == 'Spectrum cross-section':
             export_type = 'spectrum-line'
         elif view_name == 'Temporal spectrum':
             export_type = 'spectrum-temporal'
