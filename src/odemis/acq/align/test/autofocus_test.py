@@ -194,7 +194,7 @@ class TestAutofocusSpectrometer(unittest.TestCase):
         """
         Test AutoFocus Spectrometer on CCD
         """
-        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
         f = align.AutoFocusSpectrometer(self.spgr, self.focus, self.ccd)
         res = f.result(timeout=900)
         for (g, d), fpos in res.items():
@@ -208,7 +208,7 @@ class TestAutofocusSpectrometer(unittest.TestCase):
         """
         Test cancelling does cancel (relatively quickly)
         """
-        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        self.focus.moveAbs({"z": self._good_focus + 400e-6}).result()
         f = align.AutoFocusSpectrometer(self.spgr, self.focus, [self.ccd])
         time.sleep(2)
         f.cancel()
