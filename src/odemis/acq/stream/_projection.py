@@ -164,15 +164,10 @@ class RGBProjection(DataProjection):
         self._shouldUpdateImage()
 
     def onTint(self, value):
-        if isinstance(self.raw, list):
-            if len(self.stream.raw) > 0:
-                raw = self.stream.raw[0]
-            else:
-                raw = None
-        elif isinstance(self.stream.raw, tuple):
-            raw = self.stream._das
+        if len(self.stream.raw) > 0:
+            raw = self.stream.raw[0]
         else:
-            raise AttributeError(".raw must be a list of DA/DAS or a tuple of tuple of DA")
+            raw = None
 
         if raw is not None:
             # If the image is pyramidal, the exported image is based on tiles from .raw.
@@ -213,17 +208,12 @@ class RGBProjection(DataProjection):
         """ Recomputes the image with all the raw data available
         """
         # logging.debug("Updating image")
-        if not self.stream.raw and isinstance(self.stream.raw, list):
+        if not self.stream.raw:
             return
 
         try:
-            # if .raw is a list of DataArray, .image is a complete image
-            if isinstance(self.stream.raw, list):
-                raw = self.stream.raw[0]
-
-            raw = img.ensure2DImage(raw)
+            raw = img.ensure2DImage(self.stream.raw[0])
             self.image.value = self._project2RGB(raw, self.stream.tint.value)
-
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
@@ -1060,7 +1050,6 @@ class SinglePointSpectrumProjection(DataProjection):
         """
         try:
             self.image.value = self._computeSpec()
-            
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
@@ -1093,46 +1082,44 @@ class SinglePointTemporalProjection(DataProjection):
         
     def _computeSpec(self):
         
-        if self.stream.selected_pixel.value == (None, None) or self.stream.calibrated.value.shape[1] == 1 :
+        if self.stream.selected_pixel.value == (None, None) or self.stream.calibrated.value.shape[1] == 1:
             return None
         
-        # if .raw is a list of DataArray, .image is a complete image
-        if isinstance(self.stream.raw, list):
-            x, y = self.stream.selected_pixel.value
-            c = self.stream._wl_px_values.index(self.stream.selected_wavelength.value)
-            chrono2d = self.stream.calibrated.value[c, :, 0, :, :]  # same data but remove useless dims
+        x, y = self.stream.selected_pixel.value
+        c = self.stream._wl_px_values.index(self.stream.selected_wavelength.value)
+        chrono2d = self.stream.calibrated.value[c, :, 0, :, :]  # same data but remove useless dims
 
-            md = {}
-            md[model.MD_DIMS] = "T"
-            if model.MD_TIME_LIST in chrono2d.metadata:
-                md[model.MD_TIME_LIST] = chrono2d.metadata[model.MD_TIME_LIST]
+        md = {}
+        md[model.MD_DIMS] = "T"
+        if model.MD_TIME_LIST in chrono2d.metadata:
+            md[model.MD_TIME_LIST] = chrono2d.metadata[model.MD_TIME_LIST]
 
-            # We treat width as the diameter of the circle which contains the center
-            # of the pixels to be taken into account
-            width = self.stream.selectionWidth.value
-            if width == 1:  # short-cut for simple case
-                data = chrono2d[:, y, x]
-                return model.DataArray(data, md)
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.stream.selectionWidth.value
+        if width == 1:  # short-cut for simple case
+            data = chrono2d[:, y, x]
+            return model.DataArray(data, md)
 
-            # There are various ways to do it with numpy. As typically the spectrum
-            # dimension is big, and the number of pixels to sum is small, it seems
-            # the easiest way is to just do some kind of "clever" mean. Using a
-            # masked array would also work, but that'd imply having a huge mask.
-            radius = width / 2
-            n = 0
-            # TODO: use same cleverness as mean() for dtype?
-            datasum = numpy.zeros(chrono2d.shape[0], dtype=numpy.float64)
-            # Scan the square around the point, and only pick the points in the circle
-            for px in range(max(0, int(x - radius)),
-                            min(int(x + radius) + 1, chrono2d.shape[-1])):
-                for py in range(max(0, int(y - radius)),
-                                min(int(y + radius) + 1, chrono2d.shape[-2])):
-                    if math.hypot(x - px, y - py) <= radius:
-                        n += 1
-                        datasum += chrono2d[:, py, px]
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(chrono2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, chrono2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, chrono2d.shape[-2])):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += chrono2d[:, py, px]
 
-            mean = datasum / n
-            return model.DataArray(mean.astype(chrono2d.dtype), md)
+        mean = datasum / n
+        return model.DataArray(mean.astype(chrono2d.dtype), md)
 
     def projectAsRaw(self):
         return self._computeSpec()
