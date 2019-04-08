@@ -29,13 +29,13 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0) # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 if os.name == "nt":
     PORT = "COM1"
 else:
     # that will catch pretty much any TMCM controller connected to the computer
-    PORT = "/dev/ttyTMCM*"  # "/dev/ttyACM0"
+    PORT = "/dev/ttyTMCM*"
 
 CLASS = tmcm.TMCLController
 KWARGS = dict(name="test", role="stage", port=PORT,
@@ -47,9 +47,11 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               # temp=True,
               # For the more standard configurations:
               refproc="Standard",
-              # refswitch={"x": 0},
+              refswitch={"x": 0},
               # minpower=1.3,  # For working without external power supply
-              inverted=["x"])
+              inverted=["x"],
+              do_axes={4: ["shutter0", 0, 1, 1], 5: ["shutter1", 0, 1, 1]},
+              led_prot_do={4: 0, 5: 0})
 
 # For testing encoder
 KWARGS_AENC = dict(name="test", role="selector", port=PORT,
@@ -113,8 +115,10 @@ class TestStatic(unittest.TestCase):
 
         self.assertGreater(len(dev.axes), 0)
         for axis in dev.axes:
-            dev.moveAbs({axis:-1e-3})
-
+            if hasattr(axis, 'range'):
+                dev.moveAbs({axis:-1e-3})
+            elif hasattr(axis, 'choices'):
+                dev.moveAbs({axis: 0})
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
@@ -398,10 +402,11 @@ class TestActuator(unittest.TestCase):
         """
         Try referencing each axis
         """
-        axes = set(self.dev.axes.keys())
+        axes = set(self.dev.referenced.value.keys())  # don't reference do axes (raises error)
 
         # first try one by one
         for a in axes:
+            print(a)
             self.dev.moveRel({a: -1e-3}) # move a bit to make it a bit harder
             f = self.dev.reference({a})
             f.result()
@@ -421,7 +426,7 @@ class TestActuator(unittest.TestCase):
         """
         Try cancelling referencing
         """
-        axes = set(self.dev.axes.keys())
+        axes = set(self.dev.referenced.value.keys())
 
         # first try one by one => cancel during ref
         for a in axes:
@@ -452,6 +457,71 @@ class TestActuator(unittest.TestCase):
         # Some axes might have had time to be referenced, but not all
         self.assertFalse(all(self.dev.referenced.value.values()))
 
+    def test_close_shutter(self):
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+            self.dev.moveAbsSync({axis: 0})
+            self.assertEqual(0, self.dev.GetIO(2, port))
+
+    def test_open_shutter(self):
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+            self.dev.moveAbsSync({axis: 1})
+            self.assertEqual(1, self.dev.GetIO(2, port))
+
+    def test_led_protection_referencing(self):
+        """
+        When a referencing switch is active, the shutters should always close, and restore
+        to their previous position afterwards.
+        """
+        # First open shutters
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+            self.dev.moveAbsSync({axis: 1})
+            self.assertEqual(self.dev.position.value[axis], 1)
+        # Now start referencing
+        self.dev.moveRelSync({'x':-1e-3})  # move a bit to make it a bit harder
+        f = self.dev.reference({'x'})
+        # Shutters should close automatically
+        time.sleep(2)
+        self.assertEqual(self.dev.position.value['shutter0'], 0)
+        self.assertEqual(self.dev.position.value['shutter1'], 0)
+        # Protection should be on during referencing
+        self.assertEqual(self.dev._leds_on, 1)
+        # Check shutter state directly on hardware
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+        f.result()
+        # After referencing, we should re-open the shutters
+        self.assertEqual(self.dev._leds_on, 0)
+        self.assertEqual(self.dev.position.value['shutter0'], 1)
+        self.assertEqual(self.dev.position.value['shutter1'], 1)
+
+        # Now do it the other way around, start referencing and then try to open the
+        # shutters -> shutters should remain closed
+        self.dev.moveRelSync({'x':-1e-3})  # move a bit to make it a bit harder
+        f = self.dev.reference({'x'})
+        time.sleep(1)
+        self.assertEqual(self.dev._leds_on, 1)
+        move = {}
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+            move[axis] = 1
+        self.dev.moveAbsSync(move)
+        self.assertEqual(self.dev.position.value['shutter0'], 0)
+        self.assertEqual(self.dev.position.value['shutter1'], 0)
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+            self.assertEqual(0, self.dev.GetIO(2, port))
+        f.result()
+        # Now that the referencing is done, the shutters should open
+        self.assertEqual(self.dev.position.value['shutter0'], 1)
+        self.assertEqual(self.dev.position.value['shutter1'], 1)
+        # Close shutters
+        for port, vals in KWARGS["do_axes"].items():
+            axis, off_val, on_val, t = vals
+            self.dev.moveAbsSync({axis: 0})
+
 
 class TestActuatorAbsEnc(TestActuator):
 
@@ -473,13 +543,23 @@ class TestActuatorAbsEnc(TestActuator):
         """
         # Much "simpler" than the standard version as it doesn't actually run
         # any referencing.
-        axes = set(self.dev.axes.keys())
+        axes = set(self.dev.referenced.value.keys())
 
         for a in axes:
             f = self.dev.reference({a})
             f.result()
             self.assertTrue(self.dev.referenced.value[a])
             # position is not 0, as it's not really referenced!
+
+    def test_led_protection_referencing(self):
+        # don't test led protection on abs enc
+        pass
+
+    def test_close_shutter(self):
+        pass
+
+    def test_open_shutter(self):
+        pass
 
 
 class TestActuatorRelEnc(TestActuator):
@@ -488,6 +568,15 @@ class TestActuatorRelEnc(TestActuator):
         self.dev = CLASS(**KWARGS_RENC)
         self.orig_pos = dict(self.dev.position.value)
 
+    def test_led_protection_referencing(self):
+        # don't test led protection on rel enc
+        pass
+
+    def test_close_shutter(self):
+        pass
+
+    def test_open_shutter(self):
+        pass
 
 
 if __name__ == "__main__":

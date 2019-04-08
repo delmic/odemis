@@ -161,7 +161,8 @@ class TMCLController(model.Actuator):
     def __init__(self, name, role, port, axes, ustepsize, address=None,
                  rng=None, unit=None, abs_encoder=None,
                  refproc=None, refswitch=None, temp=False,
-                 minpower=10.8, param_file=None, **kwargs):
+                 minpower=10.8, param_file=None, do_axes=None,
+                 led_prot_do=None, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
@@ -200,6 +201,12 @@ class TMCLController(model.Actuator):
           be used to initialise the axis parameters (and IO).
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
+        do_axes (dict int -> str, value, value, float): the digital output channel
+         -> axis name, reported position when enabled (high),
+         reported position when disabled (low), transition period (s).
+         The axes created can only be moved via moveAbs(), and do not support referencing.
+        led_prot_do (dict int -> bool): Digital output channel -> 
+         value to set (True = high). Active when the leds (of the refswitch) are on.
         """
         # If DIP is set to 0, it will be using the value from global param 66
         if not (address is None or 1 <= address <= 255):
@@ -212,6 +219,7 @@ class TMCLController(model.Actuator):
         # TODO: allow to specify the unit of the axis
 
         self._name_to_axis = {}  # str -> int: name -> axis number
+        self._name_to_do_axis = {}  # str -> int: name -> digital output port
         if rng is None:
             rng = [None] * len(axes)
         rng += [None] * (len(axes) - len(rng)) # ensure it's long enough
@@ -368,6 +376,27 @@ class TMCLController(model.Actuator):
             except HwError as ex:
                 # Probably some old error left-over, no need to worry too much
                 logging.warning(str(ex))
+
+        # Add digital output axes
+        self._do_axes = do_axes or {}
+        self._led_prot_do = led_prot_do or {}
+        for port, vals in self._do_axes.items():
+            ax_name, high_pos, low_pos, dur = vals
+            axes_def[ax_name] = model.Axis(choices={low_pos, high_pos})
+            self._name_to_do_axis[ax_name] = port
+
+        for channel in self._led_prot_do:
+            if channel not in self._do_axes:
+                raise ValueError("led_prot_do channel %s is not specified as a do-axis" % channel)
+
+        # Check state of refswitch on startup
+        self._leds_on = any(self.GetIO(2, rs) for rs in self._refswitch)
+        if self._leds_on:
+            logging.debug("Refswitch is on during initialization, releasing refswitch for all axes.")
+            for ax in self._name_to_axis.values():
+                self._releaseRefSwitch(ax)
+        self._expected_do_pos = {}  # do positions before referencing, will be reset after refswitch is released 
+
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         driver_name = driver.getSerialDriver(self._port)
@@ -1278,6 +1307,22 @@ class TMCLController(model.Actuator):
             return
 
         with self._refswitch_lock:
+            # Set _leds_on attribute before closing shutters to make sure they are not
+            # opened again in a concurrent thread
+            self._leds_on = True  # do this before closing shutters
+            # Close shutters
+            tsleep = 0  # max transition period for all shutters
+            for channel, val in self._led_prot_do.items():
+                do_an = self._do_axes[channel][0]
+                if self.position.value[do_an] == val:
+                    logging.debug("Shutters already closed, no need to close them again.")
+                else:
+                    self._expected_do_pos[do_an] = self.position.value[do_an]
+                    self.SetIO(2, channel, val)
+                    tsleep = max(tsleep, self._do_axes[channel][3])
+            time.sleep(tsleep)
+            self._updatePosition()
+
             self._active_refswitchs.add(axis)
             logging.debug("Activating ref switch power line %d (for axis %d)", refswitch, axis)
             # Turn on the ref switch (even if it was already on)
@@ -1308,8 +1353,20 @@ class TMCLController(model.Actuator):
             if not active:
                 logging.debug("Disabling ref switch power line %d", refswitch)
                 self.SetIO(2, refswitch, 0)
+                self._leds_on = bool(self._active_refswitchs)
             else:
                 logging.debug("Leaving ref switch power line %d active", refswitch)
+                
+            # Set digital axis outputs to latest requested value
+            if not self._leds_on and self._expected_do_pos:
+                tsleep = 0  # max transition period for all shutters
+                for an, v in self._expected_do_pos.items():
+                    channel = self._name_to_do_axis[an]
+                    val = (v == self._do_axes[channel][2])  # True if high position set
+                    self.SetIO(2, channel, val)
+                    tsleep = max(tsleep, self._do_axes[channel][3])
+                time.sleep(tsleep)
+                self._updatePosition()
 
     def _startReferencingStd(self, axis):
         """
@@ -1406,7 +1463,7 @@ class TMCLController(model.Actuator):
             logging.warning("Referencing on axis %d still happening after cancelling it", axis)
 
     # high-level methods (interface)
-    def _updatePosition(self, axes=None):
+    def _updatePosition(self, axes=None, do_axes=None):
         """
         update the position VA
         axes (set of str): names of the axes to update or None if all should be
@@ -1425,6 +1482,13 @@ class TMCLController(model.Actuator):
                     # as long as the controller is turned on, it will remember
                     # multiple rotations.
                     pos[n] = self.GetAxisParam(i, 209) * self._ustepsize[i]
+
+        for n, i in self._name_to_do_axis.items():
+            if do_axes is None or n in do_axes:
+                if self.GetIO(2, i):
+                    pos[n] = self._do_axes[i][2]
+                else:
+                    pos[n] = self._do_axes[i][1]
 
         pos = self._applyInversion(pos)
 
@@ -1524,9 +1588,9 @@ class TMCLController(model.Actuator):
         Return (CancellableFuture): a future that can be used to manage a move
         """
         f = CancellableFuture()
-        f._moving_lock = threading.Lock() # taken while moving
-        f._must_stop = threading.Event() # cancel of the current future requested
-        f._was_stopped = False # if cancel was successful
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
         f.task_canceller = self._cancelCurrentMove
         return f
 
@@ -1538,6 +1602,9 @@ class TMCLController(model.Actuator):
 
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
+            if an in self._name_to_do_axis:
+                raise NotImplementedError("Relative move on digital output axis not supported " +
+                                          "(requested on axis %s)" % an)
             aid = self._name_to_axis[an]
             if abs(v) < self._ustepsize[aid]:
                 # TODO: store and accumulate all the small moves instead of dropping them?
@@ -1559,7 +1626,7 @@ class TMCLController(model.Actuator):
         self._checkMoveAbs(pos)
 
         for a, p in pos.items():
-            if not self.referenced.value.get(a, False) and p != self.position.value[a]:
+            if not self.referenced.value.get(a, True) and p != self.position.value[a]:
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
         pos = self._applyInversion(pos)
@@ -1588,6 +1655,8 @@ class TMCLController(model.Actuator):
 
         refaxes = set(axes)
         for an in axes:
+            if an in self._name_to_do_axis:
+                raise ValueError("Cannot reference digital output axis %s." % an)
             if self._abs_encoder[self._name_to_axis[an]]:
                 # Absolute axes never need to be referenced
                 logging.debug("Attempted to reference absolute axis %s", an)
@@ -1709,7 +1778,7 @@ class TMCLController(model.Actuator):
                     dur = 60
                 end = max(time.time() + dur, end)
 
-            self._waitEndMove(future, moving_axes, end)
+            self._waitEndMove(future, moving_axes, None, end)
         logging.debug("move successfully completed")
 
     def _doMoveAbs(self, future, pos):
@@ -1725,40 +1794,66 @@ class TMCLController(model.Actuator):
             end = 0 # expected end
             old_pos = self._applyInversion(self.position.value)
             moving_axes = set()
+            moving_do_axes = set()
             for an, v in pos.items():
-                aid = self._name_to_axis[an]
-                moving_axes.add(aid)
-                usteps = int(round(v / self._ustepsize[aid]))
-                # Actual position is the one used for absolute move, so need to
-                # always reset it when there is an encoder
-                self._resetEncoderDeviation(aid, always=True)
-                self.MoveAbsPos(aid, usteps)
-                # compute expected end
-                try:
-                    d = abs(v - old_pos[an])
-                    dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
-                except Exception: # Can happen if config is wrong and report speed or accel == 0
-                    logging.exception("Failed to estimate move duration")
-                    dur = 60
-                end = max(time.time() + dur, end)
-
-            self._waitEndMove(future, moving_axes, end)
+                # Check if it's a digital output
+                if an in self._name_to_do_axis:
+                    port = self._name_to_do_axis[an]
+                    with self._refswitch_lock:  # don't start do move at the same time as referencing
+                        if self._leds_on and port in self._led_prot_do:
+                            # don't move protected do axis now if leds are on, schedule for later
+                            self._expected_do_pos[an] = v
+                            if v is not self._led_prot_do[port]:
+                                logging.info("Referencing LEDs are on, do move on axis %s will be delayed.", an)
+                        else:
+                            # otherwise allow change
+                            logging.info("Setting digital output on channel %s to %s." % (port, v))
+                            if v == self._do_axes[port][1]:
+                                val = False
+                            elif v == self._do_axes[port][2]:
+                                val = True
+                            else:
+                                raise ValueError("Invalid move to position %s on digital output axis %s." % (v, an))
+                            self.SetIO(2, port, val)
+                            moving_do_axes.add(port)
+                            end = max(end, time.time() + self._do_axes[port][3])
+                else:
+                    # it's a regular move
+                    aid = self._name_to_axis[an]
+                    moving_axes.add(aid)
+                    usteps = int(round(v / self._ustepsize[aid]))
+                    # Actual position is the one used for absolute move, so need to
+                    # always reset it when there is an encoder
+                    self._resetEncoderDeviation(aid, always=True)
+                    self.MoveAbsPos(aid, usteps)
+                    # compute expected end
+                    try:
+                        d = abs(v - old_pos[an])
+                        dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
+                    except Exception:  # Can happen if config is wrong and report speed or accel == 0
+                        logging.exception("Failed to estimate move duration")
+                        dur = 60
+                    end = max(time.time() + dur, end)
+            self._waitEndMove(future, moving_axes, moving_do_axes, end)
         logging.debug("move successfully completed")
 
-    def _waitEndMove(self, future, axes, end=0):
+    def _waitEndMove(self, future, axes, do_axes=None, end=0):
         """
         Wait until all the given axes are finished moving, or a request to
         stop has been received.
         future (Future): the future it handles
         axes (set of int): the axes IDs to check
+        do_axes (set of int): channel numbers of moves on digital output axes
         end (float): expected end time
         raise:
             TimeoutError: if took too long to finish the move
             CancelledError: if cancelled before the end of the move
         """
+        do_axes = do_axes or {}
         moving_axes = set(axes)
-
+        moving_do_axes = set(do_axes)
         last_upd = time.time()
+        startt = time.time()
         dur = max(0.01, min(end - last_upd, 100))
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
@@ -1772,11 +1867,16 @@ class TMCLController(model.Actuator):
                     # Check whether the move has stopped due to an error
                     self._checkErrorFlag(aid)
 
-                if not moving_axes:
+                now = time.time()
+                for ch in moving_do_axes.copy():
+                    if now > startt + self._do_axes[ch][3]:
+                        # finished waiting for do channel
+                        moving_do_axes.discard(ch)
+
+                if not moving_axes and not moving_do_axes:
                     # no more axes to wait for
                     break
 
-                now = time.time()
                 if now > timeout:
                     logging.warning("Stopping move due to timeout after %g s.", max_dur)
                     for i in moving_axes:
@@ -1797,7 +1897,7 @@ class TMCLController(model.Actuator):
                 sleept = max(0.001, min(left / 2, 0.1))
                 future._must_stop.wait(sleept)
             else:
-                logging.debug("Move of axes %s cancelled before the end", axes)
+                logging.debug("Move of axes %s, %s cancelled before the end", axes, do_axes)
                 # stop all axes still moving them
                 for i in moving_axes:
                     self.MotorStop(i)
@@ -2038,6 +2138,7 @@ class TMCMSimulator(object):
     Simulates a TMCM-3110 or -6110 (+ serial port). Only used for testing.
     Same interface as the serial port
     """
+
     def __init__(self, timeout=0, naxes=3, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
@@ -2069,6 +2170,7 @@ class TMCMSimulator(object):
                            197: 10,  # previous position before referencing (unused directly)
         }
         self._astates = [dict(self._orig_axis_state) for i in range(self._naxes)]
+        self._do_states = [0] * 8  # state of digital outputs on bank 2 (0 or 1)
 
         # (float, float, int) for each axis
         # start, end, start position of a move
@@ -2192,7 +2294,7 @@ class TMCMSimulator(object):
                 self._sendReply(inst, status=4) # invalid value
                 return
             if not 0 <= typ <= 255:
-                self._sendReply(inst, status=3) # wrong type
+                self._sendReply(inst, status=3)  # wrong type
                 return
             # Warning: we don't handle special addresses
             if typ == 1: # actual position
@@ -2272,7 +2374,9 @@ class TMCMSimulator(object):
             if not 0 <= typ <= 7:
                 self._sendReply(inst, status=3)  # wrong type
                 return
-            # Nothing actually to do
+            # Change internal do value
+            if mot == 2:
+                self._do_states[typ] = val
             self._sendReply(inst)
         elif inst == 15: # Get IO
             if not 0 <= mot <= 2:
@@ -2292,7 +2396,7 @@ class TMCMSimulator(object):
                 if not 0 <= typ <= 7:
                     self._sendReply(inst, status=3)  # wrong type
                     return
-                rval = 0 # between 0..1
+                rval = self._do_states[typ]  # between 0..1
             self._sendReply(inst, val=rval)
         elif inst == 136: # Get firmware version
             if typ == 0: # string

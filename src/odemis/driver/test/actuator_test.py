@@ -29,7 +29,7 @@ from odemis import model
 import odemis
 from odemis.driver import simulated, tmcm
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
-    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator
+    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator
 from odemis.util import test
 import os
 import time
@@ -86,6 +86,54 @@ class MultiplexOneTest(unittest.TestCase, simulated_test.ActuatorTest):
                                     )
         # Wait for the init move to be over
         self.dev.moveRel({"x": 1e-8, "y": 1e-8}).result()
+
+
+class LinearActuatorTest(unittest.TestCase):
+
+    actuator_type = LinearActuator
+
+    def setUp(self):
+        # create 2 children and then combine one axis each with MultiplexActuator
+        kwargs = dict(name="test", role="stage", port="/dev/fake6",
+                      axes=["od", "fw"],
+                      ustepsize=[2.752e-5, 3.272e-5],
+                      rng=[[-1, 3], None],  # m, min/max
+                      refproc="Standard",
+                      refswitch={"od": 0, "fw": 0},
+                      inverted=["od"],
+                      do_axes={4: ["shutter0", 0, 1, 1], 5: ["shutter1", 0, 1, 1]},
+                      led_prot_do={4: 0, 5: 0})
+        self.child = tmcm.TMCLController(**kwargs)
+        self.dev = self.actuator_type("OD Filter", "tc-od-filter", {"density": self.child}, "od", offset=-3)
+
+    def test_normal_moveAbs(self):
+        move = {}
+        move["density"] = 1
+        f = self.dev.moveAbs(move)
+        f.result()  # wait
+        self.assertAlmostEqual(self.dev.position.value["density"], 1, places=4)
+
+    def test_unsupported_position(self):
+        move = {}
+        move["density"] = 5
+        with self.assertRaises(ValueError):
+            f = self.dev.moveAbs(move)
+            f.result()  # wait
+
+    def test_move_rel(self):
+        pos = self.dev.position.value
+        f = self.dev.moveRel({"density": 0.5})
+        f.result()
+        self.assertAlmostEqual(self.dev.position.value["density"], pos["density"] + 0.5, places=4)
+
+    def test_reference(self):
+        f = self.dev.reference({"density"})
+        f.result()
+        self.assertAlmostEqual(self.dev.position.value["density"], 3, places=4)
+
+    # force to not use the default method from TestCase
+    def tearDown(self):
+        super(LinearActuatorTest, self).tearDown()
 
 
 class FixedPositionsTest(unittest.TestCase):

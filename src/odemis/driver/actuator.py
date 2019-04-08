@@ -940,6 +940,188 @@ class AntiBacklashActuator(model.Actuator):
         return f
 
 
+class LinearActuator(model.Actuator):
+    """
+    A generic actuator component which allows moving on a linear axis. It is actually a
+    wrapper to just one axis/actuator. The actuator is referenced after n moves (can
+    be specified in constructor).
+    """
+
+    def __init__(self, name, role, children, axis_name, offset=0,
+                 ref_start=None, ref_period=10, inverted=None, **kwargs):
+        """
+        name (string)
+        role (string)
+        children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
+        axis_name (str): axis name in the child actuator
+        offset (float): axis offset (negative of reference position value)
+        ref_start (float or None): Value usually chosen close to reference switch from where to start
+         referencing. Used to optimize runtime for referencing. If None, value will be 5% of value of cycle.
+        ref_period (int or None): number of moves before referencing axis, None to disable
+         automatic referencing
+        """
+        if inverted:
+            raise ValueError("Axes shouldn't be inverted")
+
+        if len(children) != 1:
+            raise ValueError("LinearActuator needs precisely one child")
+
+        axis, child = children.items()[0]
+        self._axis = axis
+        self._child = child
+        self._caxis = axis_name
+        self._offset = offset
+        self._ref_start = ref_start
+        self._ref_period = ref_period  # number of moves before automatic referencing
+        self._move_num = 0  # current number of moves after last referencing
+
+        # Executor used to reference and move to nearest position
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        if not isinstance(child, model.ComponentBase):
+            raise ValueError("Child %s is not a component." % (child,))
+        if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+            raise ValueError("Child %s is not an actuator." % child.name)
+
+        ac = child.axes[axis_name]
+        rng = (ac.range[0] - self._offset, ac.range[1] - self._offset)
+        axes = {axis: model.Axis(range=rng, unit=ac.unit)}
+        model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
+
+        # Offset from which to start referencing
+        if self._ref_start is None:
+            self._ref_start = abs(rng[1] - rng[0]) * 0.05
+        if not rng[0] <= self._ref_start <= rng[1]:
+            raise ValueError("Reference start needs to be between %s and %s. " % (rng[0], rng[1]) +
+                             "Got value %s." % self._ref_start)
+
+        self.position = model.VigilantAttribute({}, readonly=True)
+        logging.debug("Subscribing to position of child %s", child.name)
+        child.position.subscribe(self._update_child_position, init=True)
+
+        referenced = False
+        if model.hasVA(child, "referenced") and axis_name in child.referenced.value:
+            referenced = child.referenced.value[axis_name]
+            self.referenced = model.VigilantAttribute({self._axis: referenced}, readonly=True)
+            child.referenced.subscribe(self._update_child_ref)
+        if not referenced:
+            # The initialisation will not fail if the referencing fails
+            f = self.reference({axis})
+            f.add_done_callback(self._on_referenced)
+        else:
+            self.moveAbs({self._axis: self._child.position.value[self._caxis]}).result()
+
+    def _on_referenced(self, future):
+        try:
+            future.result()
+        except Exception as e:
+            self._child.stop({self._caxis})  # prevent any move queued
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
+
+    def _update_child_position(self, value):
+        pos = value[self._caxis] - self._offset
+        self.position._set_value({self._axis: pos}, force_write=True)
+
+    def _update_child_ref(self, value):
+        referenced = value[self._caxis]
+        self.referenced._set_value({self._axis: referenced}, force_write=True)
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        Move the rotation actuator by a defined shift.
+        shift dict(string-> float): name of the axis and shift
+        """
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        f = self._executor.submit(self._doMoveRel, shift)
+
+        return f
+
+    def _doMoveRel(self, shift):
+        """
+        shift dict(string-> float): name of the axis and shift
+        """
+        cur_pos = self._child.position.value[self._caxis] - self._offset
+        pos = cur_pos + shift[self._axis]
+
+        # Reference from time to time
+        self._move_num += 1
+        if self._ref_period and self._move_num >= self._ref_period:
+            logging.debug("Referencing axis %s after %s moves." % self._caxis, self._ref_period)
+            self._child.reference({self._caxis}).result()
+            self._move_num = 0
+
+        self._doMoveAbs({self._axis: pos})
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the actuator to the defined position in m for each axis given.
+        pos dict(string-> float): name of the axis and position in m
+        """
+
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversion(pos)
+        f = self._executor.submit(self._doMoveAbs, pos)
+
+        return f
+
+    def _doMoveAbs(self, pos):
+        axis, distance = pos.items()[0]
+
+        # Reference from time to time
+        self._move_num += 1
+        if self._ref_period and self._move_num >= self._ref_period:
+            # Axis might always go towards negative direction during referencing. Make
+            # sure that the referencing works properly in case of a negative position (especially
+            # important if the actuator is cyclic).
+            logging.debug("Moving to reference starting position %s", self._ref_start)
+            self._doMoveAbs({self._axis: self._ref_start})
+            logging.debug("Referencing axis %s (-> %s) after %s moves." % self._axis, self._caxis, self._ref_period)
+            self._child.reference({self._caxis}).result()
+            self._move_num = 0
+
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
+        move = {self._caxis: distance + self._offset}
+        self._child.moveAbs(move).result()
+
+    def _doReference(self, axes):
+        logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
+        # Reset reference counter
+        self._move_num = 0
+        f = self._child.reference({self._caxis})
+        f.result()
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+
+        f = self._executor.submit(self._doReference, axes)
+        return f
+
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def stop(self):
+        self._child.stop({self._caxis})
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+        self._child.position.unsubscribe(self._update_child_position)
+        if hasattr(self, "referenced"):
+            self._child.referenced.subscribe(self._update_child_ref)
+
+
 class FixedPositionsActuator(model.Actuator):
     """
     A generic actuator component which only allows moving to fixed positions

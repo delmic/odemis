@@ -27,7 +27,8 @@ SPARC2-VisNIR-TR: {
     class: powerctrl.PowerControlUnit,
     role: "power-control",
     init: {
-        port: "/dev/fake", # for simulator
+#        port: "/dev/fake", # for simulator
+        port: "/dev/ttyPMT*",
         pin_map: {
             "Calibration Light": 6,
             "AR Camera": 0,
@@ -108,8 +109,8 @@ SPARC2-VisNIR-TR: {
     class: picoquant.PH300,
     role: time-correlator,
     init: {
-        device: "fake",
-        #device: null, # put serial number, or it will pick the first one found
+        #device: "fake",
+        device: null, # put serial number, or it will pick the first one found
         disc_volt: [50.e-3, 50.e-3], # V, discriminator for detectors 0/1 (< 0.8 V)
         zero_cross: [10.e-3, 10.e-3], # V (< 20 mV)
         shutter_axes: {
@@ -160,13 +161,11 @@ SPARC2-VisNIR-TR: {
 # Depending exactly on the configuration, it might also be used for spectrometer
 # Zyla
 "AR Camera": {
-    class: andorcam2.AndorCam2,
-    role: ccd,
+    class: andorcam3.AndorCam3,
+    role: ccd0,
     power_supplier: "Power Control Unit",
     init: {
-        device: "fake",
-        transp: [-1, -2],
-        image: "sparc-ar-mirror-align.h5", # only for simulator
+        device: 0,  # The first Andor 3 available (there is only one)
     },
     properties: {
         targetTemperature: -10, # °C
@@ -182,7 +181,7 @@ SPARC2-VisNIR-TR: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
     properties: {
-        binning: [4, 512], #to acquire only on half of the CCD
+        #binning: [4, 512], #Only the center TODO
     },
 }
 
@@ -192,10 +191,9 @@ SPARC2-VisNIR-TR: {
     class: andorcam2.AndorCam2,
     role: sp-ccd1,
     init: {
+        #device: "23195",
         device: "fake",
-        transp: [1, 2], # if mirrored on X axis, change 1 to -1
-        shutter_times: [50.e-3, 50.e-3], # s, opening/closing times of the shutter  # TODO: put the right values
-        image: "sparc-spec-sim.h5",
+        image: "sparc-spec-sim.h5", # only for simulator
     },
     properties: {
         targetTemperature: -65, # °C
@@ -210,7 +208,7 @@ SPARC2-VisNIR-TR: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
     properties: {
-        binning: [2, 100],
+        #binning: [4, 255],
     },
 }
 
@@ -221,7 +219,8 @@ SPARC2-VisNIR-TR: {
     role: spectrograph,
     power_supplier: "Power Control Unit",
     init: {
-        device: "fake",
+        device: "KY-3595",  # Note: as of libandor2.103.30022, if 2 Kymera are connected, only one serial number can be read -> turn off the second one
+        #device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
         },
         bands: { # The filters in the filter-wheel
@@ -301,8 +300,10 @@ SPARC2-VisNIR-TR: {
     role: null,
     power_supplier: "Power Control Unit",
     init: {
-        port: "/dev/fake6",
-        address: null,
+        #port: "/dev/fake6",
+        #address: null,
+        port: "/dev/ttyTMCM*",
+        address: 2,
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
         # These values only need to be roughly correct
         ustepsize: [25.1e-9, 25.1e-9, 25.1e-9, 5.86e-9, 5.e-9], # m/µstep
@@ -393,8 +394,8 @@ SPARC2-VisNIR-TR: {
     class: tmcm.TMCLController,
     role: null,
     init: {
-        port: "/dev/fake6",
-        address: null,
+        port: "/dev/ttyTMCM*",
+        address: 6,
         axes: ["od", "fw"],
         rng: [[-1, 3], null],
         # od: 3.272e-5 rad/ustep * 360/(2pi) deg/rad * 3.96/270 od/deg = 2.75e-5 od/ustep
