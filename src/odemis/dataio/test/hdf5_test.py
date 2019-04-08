@@ -45,6 +45,7 @@ class TestHDF5IO(unittest.TestCase):
     def tearDown(self):
         # clean up
         try:
+            pass
             os.remove(FILENAME)
         except Exception:
             pass
@@ -238,8 +239,8 @@ class TestHDF5IO(unittest.TestCase):
         im = f["Acquisition0/ImageData/Image"]
         self.assertEqual(im[1, 0, 0, 1, 1], step)
         self.assertEqual(im.shape, data3d.shape)
-        self.assertEqual(im.attrs["CLASS"], "IMAGE")
-        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
+        self.assertEqual(im.attrs["CLASS"], b"IMAGE")
+        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], b"IMAGE_GRAYSCALE")
 
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
@@ -400,7 +401,7 @@ class TestHDF5IO(unittest.TestCase):
 
         # check format
         im = f["Acquisition0/ImageData/Image"]
-        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], "IMAGE_GRAYSCALE")
+        self.assertEqual(im.attrs["IMAGE_SUBCLASS"], b"IMAGE_GRAYSCALE")
 
         # check basic metadata
         self.assertEqual(im.dims[4].label, "X")
