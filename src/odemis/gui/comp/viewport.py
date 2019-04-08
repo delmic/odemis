@@ -977,16 +977,15 @@ class PlotViewport(ViewPort):
 
         # For the play/pause icon
         view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
-        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+        view.stream_tree.flat.subscribe(self._on_stream_update, init=True)
 
-    def _on_stream_update(self, _):
+    def _on_stream_update(self, projs):
         """
         Hide the play icon overlay if no stream are present (or they are all static)
         """
-        ss = self._view.getStreams()
-        if len(ss) > 0:
+        if len(projs) > 0:
             # Any stream not static?
-            show = any(not isinstance(s, (StaticStream, DataProjection)) for s in ss)
+            show = any(not isinstance(get_original_stream(o), StaticStream) for o in projs)
         else:
             show = False
         self.canvas.play_overlay.show = show
