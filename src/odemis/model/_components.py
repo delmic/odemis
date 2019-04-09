@@ -21,11 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from past.builtins import basestring
+
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
 import inspect
 import logging
+import math
 import odemis
 import urllib
 import weakref
@@ -579,7 +582,7 @@ class Detector(HwComponent):
                 raise ValueError("Cannot specify transp and transpose simultaneously")
             # Convert transpose to trans
             transp = [abs(v) for v in transpose]
-            transp = [v * cmp(s, 0) for v, s in zip(transp, reversed(transpose))]
+            transp = [int(math.copysign(v, s)) for v, s in zip(transp, reversed(transpose))]
 
         HwComponent.__init__(self, name, role, transp=transp, **kwargs)
 
