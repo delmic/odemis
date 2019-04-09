@@ -407,7 +407,7 @@ class Shamrock(model.Actuator):
                 if "focus" in rng:
                     sw_frng = rng.pop("focus")
                     if not (frng[0] <= sw_frng[0] < sw_frng[1] <= frng[1]):
-                        raise ValueError("rng focus should be within %s", frng)
+                        raise ValueError("rng focus should be within %s" % (frng,))
                     frng = sw_frng
                 axes["focus"] = model.Axis(unit="m", range=frng)
                 logging.info("Focus actuator added as 'focus'")

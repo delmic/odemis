@@ -120,7 +120,7 @@ class Camera(model.DigitalCamera):
                 not hasattr(focuser, "axes") or not isinstance(focuser.axes, dict) or
                 "z" not in focuser.axes
                ):
-                raise ValueError("focus %s must be a Actuator with a 'z' axis", focuser)
+                raise ValueError("focus %s must be a Actuator with a 'z' axis" % (focuser,))
             self._focus = focuser
 
             # The "good" focus is at the current position
