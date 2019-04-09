@@ -146,18 +146,6 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                  }),
-            'spectral-integrated': ("spectrometer-integrated",
-                {'lens-switch': {'x': 'off'},
-                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'slit-in-big': {'x': 'off'},  # closed
-                 # TODO: need to restore slit-in to the current position?
-                 # 'cl-det-selector': {'x': 'off'},
-                 # 'spec-det-selector': {'rx': 0},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
-                 'chamber-light': {'power': 'off'},
-                 'pol-analyzer': {'pol': 'pass-through'},
-                }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -441,7 +429,7 @@ class OpticalPathManager(object):
         """
         # if we have not returned raise an exception
         for comp in self._cached_components:
-            if comp.role is not None and re.match(role, comp.role):
+            if comp.role is not None and re.match(role + "$", comp.role):
                 return comp
         # if not found...
         raise LookupError("No component with the role %s" % (role,))
@@ -492,6 +480,7 @@ class OpticalPathManager(object):
                 return
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
+            logging.debug("Looking for detector of %s", path)
             target = self.getStreamDetector(path)  # target detector
         else:
             mode = path
@@ -760,14 +749,14 @@ class OpticalPathManager(object):
     def getStreamDetector(self, path_stream):
         """
         Given a stream find the optical detector.
-        path_stream (object): The given stream
+        path_stream (Stream): The given stream
         returns (HwComponent): detector
         raises:
-                IOError if given object is not a stream
+                ValueError if given object is not a stream
                 LookupError: if stream has no detector
         """
         if not isinstance(path_stream, stream.Stream):
-            raise IOError("Given object is not a stream")
+            raise ValueError("Given object is not a stream")
 
         # Handle multiple detector streams
         if isinstance(path_stream, stream.MultipleDetectorStream):
@@ -779,7 +768,7 @@ class OpticalPathManager(object):
                     # TODO: handle setting multiple optical paths? => return all the detectors
                     role = st.detector.role
                     for conf in self.guessed.values():
-                        if conf[0] == role:
+                        if re.match(conf[0] + '$', role):
                             return st.detector
                     dets.append(st.detector)
                 except AttributeError:
