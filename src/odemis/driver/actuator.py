@@ -990,7 +990,7 @@ class LinearActuator(model.Actuator):
 
         # Offset from which to start referencing
         if self._ref_start is None:
-            self._ref_start = abs(rng[1] - rng[0]) * 0.05
+            self._ref_start = abs(rng[1] - rng[0]) * 0.05 - self._offset
         if not rng[0] <= self._ref_start <= rng[1]:
             raise ValueError("Reference start needs to be between %s and %s. " % (rng[0], rng[1]) +
                              "Got value %s." % self._ref_start)
@@ -1040,22 +1040,6 @@ class LinearActuator(model.Actuator):
 
         return f
 
-    def _doMoveRel(self, shift):
-        """
-        shift dict(string-> float): name of the axis and shift
-        """
-        cur_pos = self._child.position.value[self._caxis] - self._offset
-        pos = cur_pos + shift[self._axis]
-
-        # Reference from time to time
-        self._move_num += 1
-        if self._ref_period and self._move_num >= self._ref_period:
-            logging.debug("Referencing axis %s after %s moves." % self._caxis, self._ref_period)
-            self._child.reference({self._caxis}).result()
-            self._move_num = 0
-
-        self._doMoveAbs({self._axis: pos})
-
     @isasync
     def moveAbs(self, pos):
         """
@@ -1071,21 +1055,33 @@ class LinearActuator(model.Actuator):
 
         return f
 
-    def _doMoveAbs(self, pos):
-        axis, distance = pos.items()[0]
-
+    def _referenceIfNeeded(self):
+        """
+        Force a referencing if it has moved a certain number of times
+        """
         # Reference from time to time
         self._move_num += 1
-        if self._ref_period and self._move_num >= self._ref_period:
+        if self._ref_period and self._move_num > self._ref_period:
             # Axis might always go towards negative direction during referencing. Make
             # sure that the referencing works properly in case of a negative position (especially
             # important if the actuator is cyclic).
             logging.debug("Moving to reference starting position %s", self._ref_start)
-            self._doMoveAbs({self._axis: self._ref_start})
-            logging.debug("Referencing axis %s (-> %s) after %s moves." % self._axis, self._caxis, self._ref_period)
+            self._child.moveAbsSync({self._caxis: self._ref_start + self._offset})
+            logging.debug("Referencing axis %s (-> %s) after %s moves", self._axis, self._caxis, self._move_num)
             self._child.reference({self._caxis}).result()
             self._move_num = 0
 
+    def _doMoveRel(self, shift):
+        """
+        shift dict(string-> float): name of the axis and shift
+        """
+        self._referenceIfNeeded()
+        self._child.moveRel({self._caxis: shift[self._axis]}).result()
+
+    def _doMoveAbs(self, pos):
+        self._referenceIfNeeded()
+
+        axis, distance = pos.items()[0]
         logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
         move = {self._caxis: distance + self._offset}
         self._child.moveAbs(move).result()
