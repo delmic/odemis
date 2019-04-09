@@ -22,7 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import absolute_import, division
 
-import Queue
+try:
+    import Queue
+except ImportError:  # Python 3 naming
+    import queue as Queue
 import gc
 import logging
 import math
@@ -271,7 +274,7 @@ class SEM(model.HwComponent):
                     # write and read the raw data
                     try:
                         rdas = self._acquire_detectors(detectors)
-                    except CancelledError, e:
+                    except CancelledError as e:
                         # either because must terminate or just need to rest
                         logging.debug("Acquisition was cancelled %s", e)
                         continue

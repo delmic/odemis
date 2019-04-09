@@ -22,7 +22,10 @@ This file is part of Odemis.
 """
 from __future__ import division
 
-import Queue
+try:
+    import Queue
+except ImportError:  # Python 3 naming
+    import queue as Queue
 from abc import ABCMeta
 import collections
 import logging

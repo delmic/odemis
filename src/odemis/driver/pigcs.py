@@ -21,7 +21,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-import Queue
+try:
+    import Queue
+except ImportError:  # Python 3 naming
+    import queue as Queue
 from concurrent.futures import CancelledError
 import glob
 import logging
@@ -131,16 +134,16 @@ import time
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
 
-class PIGCSError(StandardError):
+class PIGCSError(IOError):
 
     def __init__(self, errno, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
-        StandardError.__init__(self, errno, *args, **kwargs)
-        self.errno = errno
+        desc = self._errordict.get(errno, "Unknown error")
+        strerror = "PIGCS error %d: %s" % (errno, desc)
+        IOError.__init__(self, errno, strerror, *args, **kwargs)
 
     def __str__(self):
-        desc = self._errordict.get(self.errno, "Unknown error")
-        return "PIGCS error %d: %s" % (self.errno, desc)
+        return self.strerror
 
     _errordict = {
         0: "No error",

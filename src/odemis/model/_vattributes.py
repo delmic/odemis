@@ -31,8 +31,8 @@ import numpy
 from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
-from types import NoneType
 import types
+import sys
 import zmq
 from scipy.spatial import distance
 
@@ -693,9 +693,11 @@ class _NotifyingList(list):
     __iadd__ = _call_with_notifier(list.__iadd__)
     __imul__ = _call_with_notifier(list.__imul__)
     __setitem__ = _call_with_notifier(list.__setitem__)
-    __setslice__ = _call_with_notifier(list.__setslice__)
     __delitem__ = _call_with_notifier(list.__delitem__)
-    __delslice__ = _call_with_notifier(list.__delslice__)
+    if sys.version_info[0] < 3:
+        # unused since Python 3 (setitem and delitem are used)
+        __setslice__ = _call_with_notifier(list.__setslice__)
+        __delslice__ = _call_with_notifier(list.__delslice__)
 
     append = _call_with_notifier(list.append)
     extend = _call_with_notifier(list.extend)
@@ -782,7 +784,7 @@ class TupleVA(VigilantAttribute):
 
     def _check(self, value):
         # only accept tuple and None, to avoid hidden data changes, as can occur in lists
-        if not isinstance(value, (tuple, NoneType)):
+        if not (isinstance(value, tuple) or value is None):
             raise TypeError("Value '%r' is not a tuple." % value)
 
 
@@ -1008,7 +1010,7 @@ class VAEnumerated(VigilantAttribute, Enumerated):
             if not ls:
                 return self.value  # in case of all choices of type tuple and not containing only numbers
 
-            return min(ls, key=lambda (choice, distance): distance)[0]
+            return min(ls, key=lambda choice, distance: distance)[0]
 
         else:
             # if not possible to set the requested value, return the current value

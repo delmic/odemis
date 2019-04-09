@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+from past.builtins import basestring, unicode
 
 import collections
 import h5py
@@ -174,16 +175,16 @@ def _read_image_dataset(dataset):
     if len(dataset.shape) < 2:
         raise IOError("Image has a shape of %s" % (dataset.shape,))
 
-    if dataset.attrs.get("IMAGE_VERSION") != "1.2":
+    if dataset.attrs.get("IMAGE_VERSION") != b"1.2":
         logging.info("Trying to read an HDF5 image of unsupported version")
 
     # conversion is almost entirely different depending on subclass
-    subclass = dataset.attrs.get("IMAGE_SUBCLASS", "IMAGE_GRAYSCALE")
+    subclass = dataset.attrs.get("IMAGE_SUBCLASS", b"IMAGE_GRAYSCALE")
 
     image = model.DataArray(dataset[...])
-    if subclass == "IMAGE_GRAYSCALE":
+    if subclass == b"IMAGE_GRAYSCALE":
         pass
-    elif subclass == "IMAGE_TRUECOLOR":
+    elif subclass == b"IMAGE_TRUECOLOR":
         if len(dataset.shape) != 3:
             raise IOError("Truecolor image has a shape of %s" % (dataset.shape,))
 
@@ -193,14 +194,14 @@ def _read_image_dataset(dataset):
             # TODO: guess il_mode from the shape
             raise IOError("Interlace mode missing")
 
-        cm = dataset.attrs.get("IMAGE_COLORMODEL", "RGB") # optional attr
-        if cm != "RGB":
+        cm = dataset.attrs.get("IMAGE_COLORMODEL", b"RGB") # optional attr
+        if cm != b"RGB":
             raise NotImplementedError("Unable to handle images of colormodel '%s'" % cm)
 
-        if il_mode == "INTERLACE_PLANE":
+        if il_mode == b"INTERLACE_PLANE":
             # colour is first dim
             image.metadata[model.MD_DIMS] = "CYX"
-        elif il_mode == "INTERLACE_PIXEL":
+        elif il_mode == b"INTERLACE_PIXEL":
             image.metadata[model.MD_DIMS] = "YXC"
         else:
             raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
@@ -209,9 +210,9 @@ def _read_image_dataset(dataset):
         raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
     # TODO: support DISPLAY_ORIGIN
-    dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL")
-    if dorig != "UL":
-        logging.warning("Image rotation %d not handled", dorig)
+    dorig = dataset.attrs.get("DISPLAY_ORIGIN", b"UL")
+    if dorig != b"UL":
+        logging.warning("Image rotation %s not handled", dorig)
 
     return image
 
@@ -566,7 +567,10 @@ def _read_image_info(group):
                     if isinstance(group["COffset"], basestring):
                         # Only to support some files saved with Odemis 2.3-alpha
                         logging.warning("COffset is a string, not officially supported")
-                        md[model.MD_OUT_WL] = group["COffset"]
+                        out_wl = group["COffset"]
+                        if not isinstance(out_wl, unicode):
+                            out_wl = out_wl.decode("utf-8", "replace")
+                        md[model.MD_OUT_WL] = out_wl
                     else:
                         # read polynomial: first is C offset, second coefficient polynomial first order (linear)
                         pn = [float(group["COffset"][()]), float(dim[0][()])]
@@ -646,12 +650,17 @@ def _parse_physical_data(pdgroup, da):
         md = d.metadata
         try:
             cd = pdgroup["ChannelDescription"][i]
-            md[model.MD_DESCRIPTION] = cd.decode("utf-8", "replace")
+            # For Python 2, where it returns a "str", which are actually UTF-8 encoded bytes
+            if not isinstance(cd, unicode):
+                cd = cd.decode("utf-8", "replace")
+            md[model.MD_DESCRIPTION] = cd
         except (KeyError, IndexError, UnicodeDecodeError):
             # maybe Title is more informative... but it's not per channel
             try:
                 title = pdgroup["Title"][()]
-                md[model.MD_DESCRIPTION] = title.decode("utf-8", "replace")
+                if not isinstance(cd, unicode):
+                    title = title.decode("utf-8", "replace")
+                md[model.MD_DESCRIPTION] = title
             except (KeyError, IndexError, UnicodeDecodeError):
                 pass
 
@@ -795,7 +804,6 @@ def _h5py_enum_commit(group, name, dtype):
     enum_type.commit(group.id, name)
     # TODO: return the TypeEnumID created?
 
-
 def _add_image_metadata(group, image, mds):
     """
     Adds the basic metadata information about an image (scale and offset)
@@ -861,6 +869,8 @@ def _add_image_metadata(group, image, mds):
         elif not isinstance(ewl, collections.Iterable) and typ > 1:
             ewls[i] = (ewl,) * typ
 
+    if isinstance(ewls[0], basestring):
+        ewls = numpy.array(ewls, dtype=dtvlen_str)
     gp["EmissionWavelength"] = ewls  # in m
     _h5svi_set_state(gp["EmissionWavelength"], state)
 
@@ -875,11 +885,11 @@ def _add_image_metadata(group, image, mds):
     _h5svi_set_state(gp["Baseline"], state)
 
     # MicroscopeMode
-    _h5py_enum_commit(gp, "MicroscopeModeEnumeration", _dtmm)
+    _h5py_enum_commit(gp, b"MicroscopeModeEnumeration", _dtmm)
     # MicroscopeType
-    _h5py_enum_commit(gp, "MicroscopeTypeEnumeration", _dtmt)
+    _h5py_enum_commit(gp, b"MicroscopeTypeEnumeration", _dtmt)
     # ImagingDirection
-    _h5py_enum_commit(gp, "ImagingDirectionEnumeration", _dtid)
+    _h5py_enum_commit(gp, b"ImagingDirectionEnumeration", _dtid)
     mm, mt, id = [], [], []
     # MicroscopeMode: if IN_WL => fluorescence/brightfield, otherwise SEM (=Reflection?)
     for md in mds:
@@ -1092,6 +1102,9 @@ def set_metadata(gp, name, status_list, value_list):
     :parameter value_list: (list) containing the values of the specified metadata
     """
     if not all(st == ST_INVALID for st in status_list):
+        if isinstance(value_list[0], basestring):
+            dtvlen_str = h5py.special_dtype(vlen=str)
+            value_list = numpy.array(value_list, dtype=dtvlen_str)
         gp[name] = value_list
         _h5svi_set_state(gp[name], status_list)
 
@@ -1121,7 +1134,7 @@ def _add_acquistion_svi(group, data, mds, **kwargs):
 
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
-    _h5py_enum_commit(group, "StateEnumeration", _dtstate)
+    _h5py_enum_commit(group, b"StateEnumeration", _dtstate)
 
     # TODO: use scaleoffset to store the number of bits used (MD_BPP)
     ids = _create_image_dataset(gi, "Image", data, **kwargs)
@@ -1270,6 +1283,7 @@ def _groupImages(das):
             # TODO: might need to be more clever for some metadata (eg, ACQ_DATE)
             gmd = {}
             map(gmd.update, md)
+
             gdata = model.DataArray(gdata, gmd)
 
             acq.append(gdata)
@@ -1315,7 +1329,7 @@ def _thumbFromHDF5(filename):
     # scan for images
     for name, ds in grp.items():
         # an image? (== has the attribute CLASS: IMAGE)
-        if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == "IMAGE":
+        if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == b"IMAGE":
             try:
                 da = _read_image_dataset(ds)
             except Exception:

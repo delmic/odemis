@@ -34,11 +34,17 @@ from ._static import *
 from ._sync import *
 from ._projection import *
 
-from abc import ABCMeta
+import sys
+import abc
+
+if sys.version_info >= (3, 4):
+    ABC = abc.ABC
+else:
+    ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
 
 # Generic cross-cut types
-class OpticalStream:
-    __metaclass__ = ABCMeta
+class OpticalStream(ABC):
+    pass
 
 OpticalStream.register(CameraStream)
 OpticalStream.register(StaticFluoStream)
@@ -46,44 +52,44 @@ OpticalStream.register(StaticBrightfieldStream)
 OpticalStream.register(ScannedFluoMDStream)
 
 
-class EMStream:
+class EMStream(ABC):
     """All the stream types related to electron microscope"""
-    __metaclass__ = ABCMeta
+    pass
 
 EMStream.register(SEMStream)
 EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
 
 
-class CLStream:
+class CLStream(ABC):
     """
     All the stream types related to cathodoluminescence with one C dimension
     (otherwise, it's a SpectrumStream)
     """
-    __metaclass__ = ABCMeta
+    pass
 
 CLStream.register(CLSettingsStream)
 CLStream.register(StaticCLStream)
 # TODO, also include MonochromatorSettingsStream and SEMMDStream?
 
 
-class SpectrumStream:
-    __metaclass__ = ABCMeta
+class SpectrumStream(ABC):
+    pass
 
 SpectrumStream.register(SpectrumSettingsStream)
 SpectrumStream.register(StaticSpectrumStream)
 SpectrumStream.register(SEMSpectrumMDStream)
 
 
-class TemporalSpectrumStream:
-    __metaclass__ = ABCMeta
+class TemporalSpectrumStream(ABC):
+    pass
 
 TemporalSpectrumStream.register(TemporalSpectrumSettingsStream)
 TemporalSpectrumStream.register(SEMTemporalSpectrumMDStream)
 
 
-class ARStream:
-    __metaclass__ = ABCMeta
+class ARStream(ABC):
+    pass
 
 ARStream.register(ARSettingsStream)
 ARStream.register(StaticARStream)

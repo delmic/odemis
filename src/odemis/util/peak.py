@@ -17,7 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
-from itertools import izip
 import logging
 import numpy
 from odemis import model
@@ -352,7 +351,7 @@ def _Grouped(iterable, n):
     """
     Iterate over the iterable, n elements at a time
     """
-    return izip(*[iter(iterable)] * n)
+    return zip(*[iter(iterable)] * n)
 
 
 def _Normalize(vector):

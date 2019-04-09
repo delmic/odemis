@@ -22,7 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import Queue
+try:
+    import Queue
+except ImportError:  # Python 3 naming
+    import queue as Queue
 import logging
 import math
 import numpy

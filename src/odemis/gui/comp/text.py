@@ -26,6 +26,7 @@ Content:
 
 """
 from __future__ import division
+from builtins import str, chr # For Python 2 & 3
 
 import locale
 import logging
@@ -278,7 +279,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._updateDataList(self._choices)
         self.dropdownlistbox.InsertColumn(0, "")
         for num, colVal in enumerate(self._choices):
-            index = self.dropdownlistbox.InsertItem(sys.maxint, colVal, -1)
+            index = self.dropdownlistbox.InsertItem(sys.maxsize, colVal, -1)
             self.dropdownlistbox.SetItem(index, 0, colVal)
             self.dropdownlistbox.SetItemData(index, num)
         self._setListSize()
@@ -314,7 +315,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
             if self._select_callback:
                 dd = self.dropdownlistbox
                 values = [dd.GetItem(sel, x).GetText()
-                          for x in xrange(dd.GetColumnCount())]
+                          for x in range(dd.GetColumnCount())]
                 self._select_callback(values)
             self.SetValue(itemtext)
             self.SetToolTip(itemtext)
@@ -497,9 +498,9 @@ class _NumberValidator(ValidatorClass):
             event.Skip()
             return
 
-        field_val = unicode(self._get_str_value())
+        field_val = str(self._get_str_value())
         start, end = self.GetWindow().GetSelection()
-        field_val = field_val[:start] + unichr(ukey) + field_val[end:]
+        field_val = field_val[:start] + chr(ukey) + field_val[end:]
 
         if not field_val or self.entry_pattern.match(field_val):
             # logging.debug("Field value %s accepted using %s", "field_val", self.entry_regex)
