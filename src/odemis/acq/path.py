@@ -480,7 +480,6 @@ class OpticalPathManager(object):
                 return
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
-            logging.debug("Looking for detector of %s", path)
             target = self.getStreamDetector(path)  # target detector
         else:
             mode = path
