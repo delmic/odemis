@@ -3310,10 +3310,10 @@ class Sparc2AlignTab(Tab):
 
         # chronograph of spectrometer if "fiber-align" mode is present
         self._speccnt_stream = None
+        self._fbdet2 = None
         if "fiber-align" in tab_data.align_mode.choices:
             # Need to pick the right/best component which receives light via the fiber
             photods = []
-            self._fbdet2 = None
             fbaffects = main_data.fibaligner.affects.value
             # First try some known, good and reliable detectors
             for d in (main_data.spectrometers + main_data.photo_ds):
