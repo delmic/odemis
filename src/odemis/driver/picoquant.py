@@ -231,6 +231,9 @@ class PH300(model.Detector):
             self._dll = PHDLL()
         self._idx = self._openDevice(device)
 
+        # Lock to be taken to avoid multi-threaded access to the hardware
+        self._hw_access = threading.Lock()
+
         if disc_volt is None:
             disc_volt = [0, 0]
         if zero_cross is None:
@@ -502,7 +505,8 @@ class PH300(model.Detector):
         """
         # TODO: check if we need a lock (to avoid multithread access)
         rate = c_int()
-        self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
+        with self._hw_access:
+            self._dll.PH_GetCountRate(self._idx, channel, byref(rate))
         return rate.value
 
     @autoretry
