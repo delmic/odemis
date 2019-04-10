@@ -506,7 +506,6 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.lenswitch, "spectral")
         self.assert_pos_as_in_mode(self.slit, "spectral")
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
-        # self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
@@ -960,7 +959,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # Check that specgraph (not -dedicated) should _not_ move (as it's not
         # affecting the spectrometer)
         self.assertEqual(spgph_pos, self.specgraph.position.value)
-        # self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
