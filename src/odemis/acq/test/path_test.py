@@ -506,22 +506,8 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.lenswitch, "spectral")
         self.assert_pos_as_in_mode(self.slit, "spectral")
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
-        self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
-        self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
-
-#         self.optmngr.setPath("spectral-dedicated").result()
-#         # Assert that actuator was moved according to mode given
-#         self.assertEqual(self.lenswitch.position.value,
-#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-
-#         # spectral should be a shortcut to spectral-dedicated
-#         self.optmngr.setPath("spectral").result()
-#         # Assert that actuator was moved according to mode given
-#         self.assertEqual(self.lenswitch.position.value,
-#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-#         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
@@ -647,7 +633,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
 
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        specs = stream.SpectrumSettingsStream("test spec", self.spec_integrated, self.spec_integrated.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec int", self.spec_integrated, self.spec_integrated.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         # Change positions back
@@ -656,9 +642,9 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral-integrated")
-        self.assert_pos_as_in_mode(self.slit, "spectral-integrated")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral-integrated")
+        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        self.assert_pos_as_in_mode(self.slit, "spectral")
+        self.assert_pos_as_in_mode(self.specgraph, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
@@ -794,7 +780,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.slit, "spectral")
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
-        self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
         assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # setting chamber-view
@@ -842,6 +827,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
 
         # Change positions
         self.optmngr.setPath("chamber-view").result()
@@ -973,20 +959,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # Check that specgraph (not -dedicated) should _not_ move (as it's not
         # affecting the spectrometer)
         self.assertEqual(spgph_pos, self.specgraph.position.value)
-        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
-
-        self.optmngr.setPath("spectral-integrated").result()
-        # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral-integrated")
-        self.assert_pos_as_in_mode(self.slit, "spectral-integrated")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral-integrated")
-        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
-
-#         # spectral should be a shortcut to spectral-dedicated
-#         self.optmngr.setPath("spectral-dedicated").result()
-#         # Assert that actuator was moved according to mode given
-#         self.assertEqual(self.lenswitch.position.value,
-#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
