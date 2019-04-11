@@ -988,9 +988,11 @@ class VAEnumerated(VigilantAttribute, Enumerated):
 
     def clip(self, val):
         """ Clip the given value to fit within the choices.
-
-        If the range contains vectors of length n, each element of val will be
-        clipped separately by position for positions 0..n-1
+          If the value is not within the choices, the closest choice will be used.
+          If no "close" choice can be found, the current value of the VA is returned.
+          Note that "closest" is loosely defined. Currently, for numbers and
+          vectors, the Euclidean distance is used, but this might change.
+        val (any): requested value
         return (same type as val): value clipped
         """
         if val in self.choices:
@@ -1011,7 +1013,7 @@ class VAEnumerated(VigilantAttribute, Enumerated):
             if not ls:
                 return self.value  # in case of all choices of type tuple and not containing only numbers
 
-            return min(ls, key=lambda choice, distance: distance)[0]
+            return min(ls, key=lambda cd: cd[1])[0]
 
         else:
             # if not possible to set the requested value, return the current value
