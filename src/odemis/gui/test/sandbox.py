@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
+from __future__ import division, print_function
 import array
 import random
 import numpy
@@ -283,4 +283,4 @@ if haveCairo:
     theFrame = MyFrame(None, 'Barebones Cairo Example')
     app.MainLoop()
 else:
-    print "Error! PyCairo or a related dependency was not found"
+    print("Error! PyCairo or a related dependency was not found")

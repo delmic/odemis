@@ -20,7 +20,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import Pyro4
 from concurrent import futures
@@ -271,7 +271,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         time.sleep(0.5)
         comp_indir.data.unsubscribe(self.receive_data)
         count_end = self.count
-        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -353,7 +353,7 @@ class RemoteTest(unittest.TestCase):
 
         if self.server.is_alive():
             if not USE_THREADS:
-                print "Warning: killing server still alive"
+                print("Warning: killing server still alive")
                 self.server.terminate()
 
 #    @unittest.skip("simple")
@@ -528,7 +528,7 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.5)
         self.comp.data.unsubscribe(self.receive_data)
         count_end = self.count
-        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -565,10 +565,10 @@ class RemoteTest(unittest.TestCase):
 
         self.assertEqual(0, self.left)
         self.assertEqual(number, self.count)
-        print "received %d arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d arrays over %d" % (self.count, self.data_arrays_sent))
         max_lat = dfs.get_max_lat()
         if max_lat:
-            print "latency: %r, max= %f, avg= %f" % (max_lat, max(max_lat), sum(max_lat)/len(max_lat))
+            print("latency: %r, max= %f, avg= %f" % (max_lat, max(max_lat), sum(max_lat)/len(max_lat)))
 
         time.sleep(0.1)
         self.assertEqual(number, self.count)
@@ -591,7 +591,7 @@ class RemoteTest(unittest.TestCase):
         self.comp.data.unsubscribe(self.receive_data)
         self.comp.cut.value = 0 # put it back
         count_end = self.count
-        print "received %d stridden arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d stridden arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
@@ -610,7 +610,7 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.5)
         self.comp.data.unsubscribe(self.receive_data)
         count_end = self.count
-        print "received %d stridden arrays over %d" % (self.count, self.data_arrays_sent)
+        print("received %d stridden arrays over %d" % (self.count, self.data_arrays_sent))
 
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)

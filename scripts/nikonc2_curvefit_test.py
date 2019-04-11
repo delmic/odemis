@@ -111,7 +111,7 @@ def main(args):
                 continue
 
             xdata = np.linspace(0.00000096, 0.00004, 100)
-            print zoom
+            print(zoom)
             plt.plot(xdata, arctan_func(xdata, *popt))
             plt.plot(td, s, 'r-')
             plt.show()

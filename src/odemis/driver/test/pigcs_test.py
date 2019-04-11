@@ -21,7 +21,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 import logging
@@ -182,7 +182,7 @@ class TestActuator(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("opening ", name)
             stage = CLASS("test", "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
             stage.terminate()
@@ -256,7 +256,7 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.01)
         pos = stage.position.value['x']
         act_speed = abs(pos - prev_pos) / dur_fast
-        print "took %f s => actual speed=%g" % (dur_fast, act_speed)
+        print("took %f s => actual speed=%g" % (dur_fast, act_speed))
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio / 2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
@@ -272,14 +272,14 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.01)
         pos = stage.position.value['x']
         act_speed = abs(pos - prev_pos) / dur_slow
-        print "took %f s => actual speed=%g" % (dur_slow, act_speed)
+        print("took %f s => actual speed=%g" % (dur_slow, act_speed))
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio / 2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
                       (act_speed, stage.speed.value['x']))
 
         ratio = dur_slow / dur_fast
-        print "ratio of %f while expected %f" % (ratio, expected_ratio)
+        print("ratio of %f while expected %f" % (ratio, expected_ratio))
         if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
             self.fail("Speed not consistent: ratio of " + str(ratio) +
                          " instead of " + str(expected_ratio) + ".")
@@ -533,7 +533,7 @@ class TestActuator(unittest.TestCase):
                         radius * math.sin(2 * math.pi * float(i) / steps))
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
-            print next_pos, move
+            print(next_pos, move)
             f = stage.moveRel(move)
             f.result() # wait
             cur_pos = next_pos

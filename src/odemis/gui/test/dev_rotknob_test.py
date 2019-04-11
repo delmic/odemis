@@ -20,7 +20,7 @@
 
 """
 
-from __future__ import division
+from __future__ import division, print_function
 
 import os
 import unittest
@@ -55,12 +55,12 @@ class RotationKnobTestCase(test.GuiTestCase):
             if evt.direction == wx.RIGHT:
                 old = cnvs.scale
                 cnvs.scale *= 1.1 ** abs_val
-                print "bigger %0.2f > %0.2f" % (old, cnvs.scale)
+                print("bigger %0.2f > %0.2f" % (old, cnvs.scale))
 
                 if not mi <= cnvs.scale <= ma:
                     cnvs.scale = ma
             else:
-                print "smaller"
+                print("smaller")
                 cnvs.scale *= 0.9 ** abs_val
                 if not mi <= cnvs.scale <= ma:
                     cnvs.scale = mi

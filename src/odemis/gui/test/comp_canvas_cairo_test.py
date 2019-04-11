@@ -9,7 +9,7 @@ Cairo has been fully integrated.
 
 """
 
-from __future__ import division
+from __future__ import division, print_function
 
 import unittest
 import logging
@@ -359,7 +359,7 @@ class TestCanvas(test.GuiTestCase):
 
         darray_one = generate_img_data(250, 250, 4, color=(255, 0, 0))
         darray_two = generate_img_data(50, 50, 4, color=(0, 0, 255))
-        print darray_two
+        print(darray_two)
 
         images = [
             (darray_one, (0.0, 0.0), (0.0000003, 0.0000003), True, None, 0.1, None, None, 'one'),

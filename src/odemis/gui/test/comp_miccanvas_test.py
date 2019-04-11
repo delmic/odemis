@@ -25,7 +25,7 @@
 #===============================================================================
 # Test module for Odemis' gui.comp.canvas module
 #===============================================================================
-from __future__ import division
+from __future__ import division, print_function
 
 from collections import deque
 import threading
@@ -156,7 +156,7 @@ def gen_test_data():
                 start += randrange(20)
                 x_axis.append(j)
                 y_axis.append(start)
-            print "(%s, %s)," % (x_axis, y_axis)
+            print("(%s, %s)," % (x_axis, y_axis))
 
             x = 0
             x_axis = []
@@ -164,8 +164,8 @@ def gen_test_data():
                 x += randrange(20)
                 x_axis.append(x)
             y_axis = [abs(math.sin(i / (10 * math.pi))) * 20 for i in xrange(s)]
-            print "\n(%s, %s)," % (x_axis, y_axis)
-        print "\n"
+            print("\n(%s, %s)," % (x_axis, y_axis))
+        print("\n")
 
 
 class PlotCanvasTestCase(test.GuiTestCase):

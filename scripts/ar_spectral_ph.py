@@ -33,7 +33,7 @@ odemis-cli --set-attr "Spec10" exposureTime 0.1 # in s
 odemis-cli --position "SP2300i" wavelength 500e-3 # in µm
 '''
 
-from __future__ import division
+from __future__ import division, print_function
 
 import argparse
 import logging
