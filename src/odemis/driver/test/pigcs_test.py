@@ -47,8 +47,8 @@ else:
 
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
-CONFIG_CTRL_BASIC = (1, {1: False})
-CONFIG_CTRL_CL = (1, {1: True})
+CONFIG_CTRL_BASIC = (1, {'1': False})
+CONFIG_CTRL_CL = (1, {'1': True})
 CONFIG_BUS_CL = {"x":(1, 1, True)}
 CONFIG_BUS_TWO_CL = {"x":(1, 1, True), "y":(2, 1, True)}
 
@@ -74,6 +74,7 @@ KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CO
 
 KWARGS_E725 = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_BUS_E725}
 
+
 # @skip("faster")
 class TestController(unittest.TestCase):
     """
@@ -95,17 +96,17 @@ class TestController(unittest.TestCase):
         so test failure might not indicate software bug.
         """
         ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
-        speed_rng = ctrl.speed_rng[1]
+        speed_rng = ctrl.speed_rng['1']
         speed = max(speed_rng[0], speed_rng[1] / 10)
         self.assertGreater(speed_rng[1], 100e-6, "Maximum speed is expected to be more than 100μm/s")
-        ctrl.setSpeed(1, speed)
-        distance = -ctrl.moveRel(1, -speed / 2) # should take 0.5s
+        ctrl.setSpeed('1', speed)
+        distance = -ctrl.moveRel('1', -speed / 2)  # should take 0.5s
         self.assertGreater(distance, 0)
-        self.assertTrue(ctrl.isMoving(set([1])))
+        self.assertTrue(ctrl.isMoving(set(['1'])))
         self.assertEqual(ctrl.GetErrorNum(), 0)
         status = ctrl.GetStatus()
         ts = time.time()
-        while ctrl.isMoving(set([1])):
+        while ctrl.isMoving(set(['1'])):
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
@@ -113,13 +114,13 @@ class TestController(unittest.TestCase):
         self.assertLess(dur, 1.5)
 
         # now the same thing but with a stop
-        distance = -ctrl.moveRel(1, -speed) # should take one second
+        distance = -ctrl.moveRel('1', -speed) # should take one second
         time.sleep(0.01) # wait a bit that it's surely running
         self.assertGreater(distance, 0)
         ctrl.stopMotion()
 
         ts = time.time()
-        while ctrl.isMoving(set([1])):
+        while ctrl.isMoving(set(['1'])):
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
