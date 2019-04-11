@@ -207,7 +207,7 @@ def main(args):
     for carg in options.config:
         if len(carg) == 1:
             raise ValueError("Config argument must at least have one ID specified, "
-                             "but got none for %s" (carg[0],))
+                             "but got none for %s" % (carg[0],))
         c = ConfigMatcher(carg[0])
         for idc in carg[1:]:
             if idc.endswith("tmcm.tsv"):
