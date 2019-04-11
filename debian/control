@@ -21,6 +21,7 @@ Architecture: any
 Depends: python (>= 2.7.1),
          python-wxgtk3.0,
          python-pkg-resources,
+         python-future,
          python-decorator,
          python-yaml,
          python-serial,
