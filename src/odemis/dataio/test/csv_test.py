@@ -108,6 +108,29 @@ class TestCSVIO(unittest.TestCase):
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
 
+    def testExportChronogram(self):
+        """Try simple chronogram export"""
+        size = (150,)
+        dtype = numpy.uint16
+        md = {model.MD_TIME_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "T"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 150)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
     def testExportSpectrumNoWL(self):
         """Try simple spectrum export"""
         size = (10,)
