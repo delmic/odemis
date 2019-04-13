@@ -106,7 +106,7 @@ def main(args):
             # plt.show()
             try:
                 popt, pcov = curve_fit(arctan_func, td, s)
-            except RuntimeError, TypeError:
+            except RuntimeError as TypeError:
                 popt = None
                 continue
 
