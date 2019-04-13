@@ -303,9 +303,9 @@ class Matcher(object):
         """
         Try to match a single stored value (dv) with a supplied value (v).
         """
-        if type(v) != type(dv):
+        if not isinstance(v, type(dv)):
             result = False
-        elif type(dv) is not str or k not in self._partial_matches:
+        elif not isinstance(dv, str) or k not in self._partial_matches:
             result = (v == dv)
         else:
             result = dv.find(v) >= 0

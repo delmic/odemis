@@ -1603,7 +1603,7 @@ class CombinedFixedPositionActuator(model.Actuator):
             raise ValueError("CombinedFixedPositionActuator needs list of "
                              "precisely two values for tolerance in position")
         for key, pos in positions.items():
-            if not (len(pos) == 2 or type(pos) == str):
+            if not (len(pos) == 2 or isinstance(pos, str)):
                 raise ValueError("Position %s needs to be of format list with exactly two entries. "
                                  "Got instead position %s." % (key, pos))
 

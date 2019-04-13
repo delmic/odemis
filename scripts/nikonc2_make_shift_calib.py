@@ -79,8 +79,7 @@ def get_shift_calibration(data):
 
     for res in data.keys():
         for zoom in data[res].keys():
-            td = np.array(data[res][zoom].keys())
-            td.sort()
+            td = sorted(np.array(data[res][zoom].keys()))
             s = np.array([data[res][zoom][x] for x in td])
             try:
                 popt, pcov = curve_fit(arctan_func, td, s)
@@ -120,8 +119,7 @@ def get_shift(res, zoom, td, calib):
         return arctan_func(td, *popt)
     except KeyError:
         # No zoom for this position. Interpolate.
-        zooms = calib[res].keys()
-        zooms.sort()
+        zooms = sorted(calib[res].keys())
 
         try:
 

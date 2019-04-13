@@ -322,8 +322,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                           (max_diff, max_allowed_diff))
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
-    ordered_coordinates_index = zip(index1, electron_coordinates)
-    ordered_coordinates_index.sort()
+    ordered_coordinates_index = sorted(zip(index1, electron_coordinates))
     ordered_coordinates = []
     for i in xrange(len(ordered_coordinates_index)):
         ordered_coordinates.append(ordered_coordinates_index[i][1])
