@@ -379,14 +379,19 @@ class TMCLController(model.Actuator):
         # Add digital output axes
         self._do_axes = do_axes or {}
         self._led_prot_do = led_prot_do or {}
-        for port, vals in self._do_axes.items():
-            ax_name, high_pos, low_pos, dur = vals
-            axes_def[ax_name] = model.Axis(choices={low_pos, high_pos})
-            self._name_to_do_axis[ax_name] = port
+        for channel, (an, hpos, lpos, dur) in self._do_axes.items():
+            if an in self._name_to_axis or an in self._name_to_do_axis:
+                raise ValueError("Axis %s specified multiple times" % an)
+            if not 0 <= dur < 1000:
+                raise ValueError("Axis %s duration %s should be in seconds" % (an, dur))
+            axes_def[an] = model.Axis(choices={lpos, hpos})
+            self._name_to_do_axis[an] = channel
 
-        for channel in self._led_prot_do:
+        for channel, pos in self._led_prot_do.items():
             if channel not in self._do_axes:
                 raise ValueError("led_prot_do channel %s is not specified as a do-axis" % channel)
+            if pos not in self._do_axes[channel][1:3]:
+                raise ValueError("led_prot_do of channel %d has position %s, not in do_axes" % (channel, pos))
 
         # Check state of refswitch on startup
         self._leds_on = any(self.GetIO(2, rs) for rs in self._refswitch)
@@ -1308,17 +1313,20 @@ class TMCLController(model.Actuator):
         with self._refswitch_lock:
             # Set _leds_on attribute before closing shutters to make sure they are not
             # opened again in a concurrent thread
+            leds_were_on = self._leds_on
             self._leds_on = True  # do this before closing shutters
             # Close shutters
             tsleep = 0  # max transition period for all shutters
             for channel, val in self._led_prot_do.items():
-                do_an = self._do_axes[channel][0]
-                if self.position.value[do_an] == val:
-                    logging.debug("Shutters already closed, no need to close them again.")
-                else:
+                do_an, hpos, lpos, dur = self._do_axes[channel]
+                if not leds_were_on:
                     self._expected_do_pos[do_an] = self.position.value[do_an]
-                    self.SetIO(2, channel, val)
-                    tsleep = max(tsleep, self._do_axes[channel][3])
+                # TODO: ideally, for each DO, we should know when was the last time it
+                # was set, and if it's been set to the requested value for long
+                # enough, we don't need to do the extra sleep
+                self.SetIO(2, channel, val == hpos)
+                tsleep = max(tsleep, dur)
+
             time.sleep(tsleep)
             self._updatePosition()
 
@@ -1357,13 +1365,13 @@ class TMCLController(model.Actuator):
                 logging.debug("Leaving ref switch power line %d active", refswitch)
                 
             # Set digital axis outputs to latest requested value
-            if not self._leds_on and self._expected_do_pos:
+            if not self._leds_on:
                 tsleep = 0  # max transition period for all shutters
-                for an, v in self._expected_do_pos.items():
+                for an, val in self._expected_do_pos.items():
                     channel = self._name_to_do_axis[an]
-                    val = (v == self._do_axes[channel][2])  # True if high position set
-                    self.SetIO(2, channel, val)
-                    tsleep = max(tsleep, self._do_axes[channel][3])
+                    _, hpos, lpos, dur = self._do_axes[channel]
+                    self.SetIO(2, channel, val == hpos)
+                    tsleep = max(tsleep, dur)
                 time.sleep(tsleep)
                 self._updatePosition()
 
@@ -1482,12 +1490,12 @@ class TMCLController(model.Actuator):
                     # multiple rotations.
                     pos[n] = self.GetAxisParam(i, 209) * self._ustepsize[i]
 
-        for n, i in self._name_to_do_axis.items():
+        for i, (n, hpos, lpos, _) in self._do_axes.items():
             if do_axes is None or n in do_axes:
                 if self.GetIO(2, i):
-                    pos[n] = self._do_axes[i][2]
+                    pos[n] = hpos
                 else:
-                    pos[n] = self._do_axes[i][1]
+                    pos[n] = lpos
 
         pos = self._applyInversion(pos)
 
@@ -1797,25 +1805,20 @@ class TMCLController(model.Actuator):
             for an, v in pos.items():
                 # Check if it's a digital output
                 if an in self._name_to_do_axis:
-                    port = self._name_to_do_axis[an]
+                    channel = self._name_to_do_axis[an]
+                    _, hpos, lpos, dur = self._do_axes[channel]
                     with self._refswitch_lock:  # don't start do move at the same time as referencing
-                        if self._leds_on and port in self._led_prot_do:
+                        if self._leds_on and channel in self._led_prot_do:
                             # don't move protected do axis now if leds are on, schedule for later
                             self._expected_do_pos[an] = v
-                            if v is not self._led_prot_do[port]:
-                                logging.info("Referencing LEDs are on, do move on axis %s will be delayed.", an)
+                            if v != self._led_prot_do[channel]:
+                                logging.info("Referencing LEDs are on, move on axis %s to %s will be delayed.", an, v)
                         else:
                             # otherwise allow change
-                            logging.info("Setting digital output on channel %s to %s." % (port, v))
-                            if v == self._do_axes[port][1]:
-                                val = False
-                            elif v == self._do_axes[port][2]:
-                                val = True
-                            else:
-                                raise ValueError("Invalid move to position %s on digital output axis %s." % (v, an))
-                            self.SetIO(2, port, val)
-                            moving_do_axes.add(port)
-                            end = max(end, time.time() + self._do_axes[port][3])
+                            logging.info("Setting digital output on channel %s to %s." % (channel, v == hpos))
+                            self.SetIO(2, channel, v == hpos)
+                            moving_do_axes.add(channel)
+                            end = max(end, time.time() + dur)
                 else:
                     # it's a regular move
                     aid = self._name_to_axis[an]

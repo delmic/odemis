@@ -50,8 +50,8 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               refswitch={"x": 0},
               # minpower=1.3,  # For working without external power supply
               inverted=["x"],
-              do_axes={4: ["shutter0", 0, 1, 1], 5: ["shutter1", 0, 1, 1]},
-              led_prot_do={4: 0, 5: 0})
+              do_axes={4: ["shutter0", 0, 1, 0.5], 5: ["shutter1", 10, 5, 1]},
+              led_prot_do={4: 0, 5: 10})
 
 # For testing encoder
 KWARGS_AENC = dict(name="test", role="selector", port=PORT,
@@ -459,68 +459,69 @@ class TestActuator(unittest.TestCase):
 
     def test_close_shutter(self):
         for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
-            self.dev.moveAbsSync({axis: 0})
-            self.assertEqual(0, self.dev.GetIO(2, port))
+            axis, hval, lval, t = vals
+            self.dev.moveAbsSync({axis: lval})
+            self.assertEqual(False, self.dev.GetIO(2, port))
 
     def test_open_shutter(self):
         for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
-            self.dev.moveAbsSync({axis: 1})
-            self.assertEqual(1, self.dev.GetIO(2, port))
+            axis, hval, lval, t = vals
+            self.dev.moveAbsSync({axis: hval})
+            self.assertEqual(True, self.dev.GetIO(2, port))
 
     def test_led_protection_referencing(self):
         """
         When a referencing switch is active, the shutters should always close, and restore
         to their previous position afterwards.
         """
+        # We imagine a system, where the shutters position are the following:
+        # * closed: shutter0 = 0, shutter1 = 10 (signal is high)
+        # * open: shutter0 = 1, shutter1 = 5 (signal is low)
+        # during referencing, the shutters should be closed (ie, signal is HIGH)
+
         # First open shutters
-        for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
-            self.dev.moveAbsSync({axis: 1})
-            self.assertEqual(self.dev.position.value[axis], 1)
+        self.dev.moveAbsSync({"shutter0": 1, "shutter1": 5})
         # Now start referencing
         self.dev.moveRelSync({'x':-1e-3})  # move a bit to make it a bit harder
         f = self.dev.reference({'x'})
         # Shutters should close automatically
-        time.sleep(2)
+        time.sleep(1.5)
         self.assertEqual(self.dev.position.value['shutter0'], 0)
-        self.assertEqual(self.dev.position.value['shutter1'], 0)
+        self.assertEqual(self.dev.position.value['shutter1'], 10)
         # Protection should be on during referencing
-        self.assertEqual(self.dev._leds_on, 1)
-        # Check shutter state directly on hardware
-        for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
+        self.assertEqual(self.dev._leds_on, True)
+        # Check channel state directly on hardware (ie, high for both)
+        for channel in KWARGS["do_axes"]:
+            self.assertEqual(True, self.dev.GetIO(2, channel))
         f.result()
         # After referencing, we should re-open the shutters
-        self.assertEqual(self.dev._leds_on, 0)
+        self.assertEqual(self.dev._leds_on, False)
         self.assertEqual(self.dev.position.value['shutter0'], 1)
-        self.assertEqual(self.dev.position.value['shutter1'], 1)
+        self.assertEqual(self.dev.position.value['shutter1'], 5)
 
         # Now do it the other way around, start referencing and then try to open the
         # shutters -> shutters should remain closed
         self.dev.moveRelSync({'x':-1e-3})  # move a bit to make it a bit harder
         f = self.dev.reference({'x'})
         time.sleep(1)
-        self.assertEqual(self.dev._leds_on, 1)
-        move = {}
-        for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
-            move[axis] = 1
-        self.dev.moveAbsSync(move)
+        self.assertEqual(self.dev._leds_on, True)
+        # Try to open the shutters (it shouldn't work)
+        self.dev.moveAbsSync({"shutter0": 1, "shutter1": 5})
         self.assertEqual(self.dev.position.value['shutter0'], 0)
-        self.assertEqual(self.dev.position.value['shutter1'], 0)
+        self.assertEqual(self.dev.position.value['shutter1'], 10)
+        # Check channel state directly on hardware (ie, high for both)
         for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
-            self.assertEqual(0, self.dev.GetIO(2, port))
+            self.assertEqual(True, self.dev.GetIO(2, port))
         f.result()
         # Now that the referencing is done, the shutters should open
         self.assertEqual(self.dev.position.value['shutter0'], 1)
-        self.assertEqual(self.dev.position.value['shutter1'], 1)
-        # Close shutters
+        self.assertEqual(self.dev.position.value['shutter1'], 5)
+        # Check channel state directly on hardware (ie, low for both)
         for port, vals in KWARGS["do_axes"].items():
-            axis, off_val, on_val, t = vals
-            self.dev.moveAbsSync({axis: 0})
+            self.assertEqual(False, self.dev.GetIO(2, port))
+
+        # Close shutters
+        self.dev.moveAbsSync({"shutter0": 0, "shutter1": 10})
 
 
 class TestActuatorAbsEnc(TestActuator):
