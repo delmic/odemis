@@ -3348,7 +3348,7 @@ class Sparc2AlignTab(Tab):
                 self._speccnt_stream = speccnts
                 speccnts.should_update.subscribe(self._on_ccd_stream_play)
 
-                if len(photods) > 1:
+                if len(photods) > 1 and photods[0] in main_data.photo_ds and photods[1] in main_data.photo_ds:
                     self._fbdet2 = photods[1]
                     _, self._det2_cnt_ctrl = speccnt_spe.stream_panel.add_text_field("Detector 2", "")
                     f = self._det2_cnt_ctrl.GetFont()
