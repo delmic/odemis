@@ -32,7 +32,8 @@ import math
 from odemis import model
 from odemis.acq import path, leech
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection
+from odemis.acq.stream import Stream, StreamTree, StaticStream, RGBSpatialProjection, DataProjection, \
+    ARPolarimetryProjection
 from odemis.gui.conf import get_general_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
@@ -1482,7 +1483,6 @@ class StreamView(View):
         if isinstance(stream, DataProjection):
             # sets the current mpp and viewport to the projection
             self._updateStreamsViewParams()
-
 
     def removeStream(self, stream):
         """

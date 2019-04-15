@@ -26,6 +26,7 @@ Created on 8 Feb 2012
 from __future__ import division
 
 from abc import abstractmethod
+import collections
 from concurrent.futures._base import CancelledError
 from functools import partial
 import logging
@@ -42,6 +43,11 @@ from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
+
+from odemis.model import MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_S0, MD_POL_S1, \
+    MD_POL_S2, MD_POL_S3, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_EPHI, MD_POL_DOLP, MD_POL_DOP, \
+    MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N, MD_POL_S3N, MD_POL_S2N, MD_POL_S1N
+
 from odemis.util import units, spectrum, peak
 import wx
 
@@ -841,6 +847,9 @@ class AngularResolvedViewport(ViewPort):
     def __init__(self, *args, **kwargs):
         super(AngularResolvedViewport, self).__init__(*args, **kwargs)
 
+        self._projection = None  # Might be the same as _stream, if it has its own .image
+        self._stream = None
+
     def setView(self, view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
@@ -853,84 +862,126 @@ class AngularResolvedViewport(ViewPort):
 
         self._view = view
         self._tab_data_model = tab_data
-        # current stream displayed (or None)
-        self.stream = None
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
         view.stream_tree.flat.subscribe(self.connect_stream)
 
-        self.bottom_legend.set_pol_callback(self.on_legend_pol_change)
+        self.bottom_legend.set_callback(self.on_legend_change)
 
-    def connect_stream(self, streams):
-        """ Find the most appropriate stream in the view to be displayed, and make sure the display
-        is updated when the stream is updated.
-
+    def connect_stream(self, projs):
         """
-        if not streams:
-            stream = None
-        elif len(streams) > 1:
-            logging.warning("Found %d streams, will pick one randomly", len(streams))
-            if self.stream in streams:
-                stream = self.stream  # don't change
-            else:
-                stream = streams[0]
+        Called when the stream_tree is changed.
+        :param projs: (list of Streams or Projections)
+        Find the most appropriate stream in the view to be displayed, and make
+        sure the display is updated when the stream is updated.
+        """
+        if not projs:
+            proj = None
+        elif len(projs) > 1:
+            # => pick the first one playing
+            for o in projs:
+                s = get_original_stream(o)
+                if s.should_update.value:
+                    proj = o
+                    break
+            else:  # no stream playing
+                logging.warning("Found %d streams, will pick one randomly", len(projs))
+                if self._projection in projs:
+                    proj = self._projection  # don't change
+                else:
+                    proj = projs[0]
         else:
-            stream = streams[0]
+            proj = projs[0]
 
-        if self.stream is stream:
-            logging.debug("Not reconnecting to stream as it's already connected")
+        if self._projection is proj:
+            # logging.debug("not reconnecting to stream as it's already connected")
             return
 
         # Disconnect from the old VAs
-        if self.stream:
-            if hasattr(self.stream, 'polarization'):
-                logging.debug("Disconnecting %s from polarization VA", stream)
-                self.stream.polarization.unsubscribe(self.on_va_pol_change)
+        if self._projection:
+            logging.debug("Disconnecting %s from ARRawViewport", self._projection)
+            if hasattr(self._projection, 'polarization'):
+                logging.debug("Disconnecting %s from polarization VA", proj)
+                self._stream.polarization.unsubscribe(self.on_va_change)
+            if hasattr(self._projection, 'polarimetry'):
+                logging.debug("Disconnecting %s from polarimetry VA", proj)
+                self._stream.polarimetry.unsubscribe(self.on_va_change)
 
-        # Connect to the new VA
-        self.stream = stream
-
-        # get polarization positions and set callback function
-        if hasattr(self.stream, "polarization"):
-            logging.debug("Connecting %s to polarization VA", stream)
-            self.update_legend_pol_choices()
-            self.stream.polarization.subscribe(self.on_va_pol_change)
-            self.bottom_legend.Show(True)
-        # if no polarization VA or if no stream (= None)
+        # Connect the new stream
+        self._stream, self._projection = get_original_stream(proj), proj
+        if proj:
+            logging.debug("Connecting %s to ARRawViewport", proj)
+            # get polarization/polarimetry positions and set callback function
+            # viewport associated to the projection should have only polarization or polarimetry VA
+            if hasattr(proj, "polarization"):
+                logging.debug("Connecting %s to polarization VA", proj)
+                name = "Polarization"
+                choices = self._stream.polarization.choices
+                if choices == frozenset(POL_POSITIONS):
+                    choices = POL_POSITIONS  # use the ordered tuple to keep legend ordered later
+                cur_value = self._stream.polarization.value
+                self.update_legend_choices(choices, cur_value, name)
+                self._projection.polarization.subscribe(self.on_va_change)
+                self.bottom_legend.Show(True)
+            elif hasattr(proj, "polarimetry"):
+                logging.debug("Connecting %s to polarimetry VA", proj)
+                name = "Polarimetry"
+                cur_value = self._stream.polarimetry.value
+                choices = collections.OrderedDict((
+                    ("Stokes parameters detector plane", (MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3)),
+                    ("Normalized stokes parameters detector plane", (MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N)),
+                    ("Stokes parameters sample plane", (MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3)),
+                    ("Normalized stokes parameters sample plane", (MD_POL_S1N, MD_POL_S2N, MD_POL_S3N)),
+                    ("Electrical field amplitudes", (MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX, MD_POL_EY, MD_POL_EZ)),
+                    ("Degrees of polarization", (MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP)),
+                ))
+                self.update_legend_choices(choices, cur_value, name)
+                self._projection.polarimetry.subscribe(self.on_va_change)
+                self.bottom_legend.Show(True)
+            # if no polarization/polarimetry VA or if no stream (= None)
+            else:
+                # clear legend and also automatically drop callback
+                self.bottom_legend.clear()
+                self.bottom_legend.Show(False)
+            self.Layout()
         else:
-            # clear legend and also automatically drop callback
-            self.bottom_legend.clear()
-            self.bottom_legend.Show(False)
-        self.Layout()
+            logging.info("No stream to show found")
+            self.clear()  # Remove legend ticks and clear plot
 
-    def on_legend_pol_change(self, pol):
+    def on_legend_change(self, pos):
         """
-        Called when the user changes the polarization in the legend.
-        Changes the polarization VA.
+        Called when the user changes the value of the VA displayed in the legend.
+        Changes the VA connected to legend.
+        :param pos: (str) The position to be set on the VA.
         """
-        self.stream.polarization.value = pol
+        if hasattr(self._projection, "polarization"):
+            self._stream.polarization.value = pos
+        elif hasattr(self._projection, "polarimetry"):
+            self._stream.polarimetry.value = pos
 
-    def on_va_pol_change(self, pol):
+    def on_va_change(self, pos):
         """
-        Called when the .polarization VA value has changed.
-        Sets the correct polarization in the legend if the polarization VA was
-        changed via the dropdown menu within the stream settings.
+        Called when the VA value has changed.
+        Sets the correct selection in the legend if the VA was
+        changed via the dropdown menu within the stream settings. TODO seems to be also called when changing pos in legend in viewport
+        :param pos: (str) The position to be set in the legend.
         """
-        self.bottom_legend.set_pol_value(pol)
+        self.bottom_legend.set_value(pos)
 
-    def update_legend_pol_choices(self):
+    def update_legend_choices(self, choices, value, name):
         """
-        Get the choices of the polarization VA.
-        Set the callback function in the legend, which should be called when a different
-        polarization position is requested.
+        Sets the callback function in the legend, which should be called when a different
+        position is requested.
+        :param choices: (set or dict -> tuple or dict) Positions found in data. If too many choices,
+                        it is possible to sort them in a dict and pass it to the radio legend.
+                        Radio legend will then create a legend consisting of a drop down menu/combo box
+                        (keys of dict) combined with radio buttons (values of dict).
+        :param value: (str) Value that should be active.
+        :param name: (str) Text to be displayed describing the legend.
         """
-        choices = self.stream.polarization.choices
-        if choices == frozenset(POL_POSITIONS):
-            choices = POL_POSITIONS  # use the ordered tuple to keep legend ordered later
-        default = self.stream.polarization.value
-        self.bottom_legend.set_pol_entries(choices, default)
+        self.bottom_legend.set_pos_entries(choices, value, name)
 
 
 class PlotViewport(ViewPort):
@@ -1053,7 +1104,7 @@ class PlotViewport(ViewPort):
         Adjust the viewport to show the given projection (of a stream)
         """
         if self._projection is proj:
-            # logging.debug("not reconnecting to stream as it's already connected")
+            logging.debug("Not reconnecting to stream as it's already connected")
             return
 
         # Disconnect the old stream

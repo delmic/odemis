@@ -785,6 +785,8 @@ STREAM_SETTINGS_CONFIG = {
         OrderedDict((
             ("polarization", {
             }),
+            ("polarimetry", {
+            }),
         )),
     stream.StaticFluoStream:
         OrderedDict((
