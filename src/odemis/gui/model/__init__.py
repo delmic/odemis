@@ -1478,19 +1478,20 @@ class StreamView(View):
         with self._streams_lock:
             self.stream_tree.add_stream(stream)
 
+            # subscribe to the stream's image
+            if hasattr(stream, "image"):
+                stream.image.subscribe(self._onNewImage)
+
+                # if the stream already has an image, update now
+                if stream.image.value is not None:
+                    self._onNewImage(stream.image.value)
+            else:
+                logging.debug("No image found for stream %s", type(stream))
+
         if isinstance(stream, DataProjection):
             # sets the current mpp and viewport to the projection
             self._updateStreamsViewParams()
 
-        # subscribe to the stream's image
-        if hasattr(stream, "image"):
-            stream.image.subscribe(self._onNewImage)
-
-            # if the stream already has an image, update now
-            if stream.image.value is not None:
-                self._onNewImage(stream.image.value)
-        else:
-            logging.debug("No image found for stream %s", type(stream))
 
     def removeStream(self, stream):
         """
