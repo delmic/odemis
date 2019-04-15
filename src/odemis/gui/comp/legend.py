@@ -25,14 +25,17 @@
 from __future__ import division
 
 import cairo
+import collections
 import logging
 import math
+
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui import img
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.buttons import ImageToggleButton
+from odemis.gui.comp.combo import ComboBox
 from odemis.gui.util import wxlimit_invocation, call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks
@@ -489,6 +492,10 @@ class RadioLegend(wx.Panel):
     """
     This class describes a legend containing radio buttons,
     where each button represents a possible selection of a VA.
+    Optionally, for a larger selection of possible VA values,
+    the VA values can be sorted according to functionality in
+    a dict and the legend will represent grouped values in
+    a combination of a drop down menu and radio buttons.
     """
 
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize, style=wx.NO_BORDER):
@@ -503,14 +510,15 @@ class RadioLegend(wx.Panel):
         self.SetForegroundColour(self.fg_color)
 
         # descriptive VA text
-        self.text = wx.TextCtrl(self, value="Polarization", style=wx.NO_BORDER | wx.CB_READONLY)
+        self.text = wx.TextCtrl(self, value="", style=wx.NO_BORDER | wx.CB_READONLY)
         self.text.SetBackgroundColour(self.bg_color)
         self.text.SetForegroundColour(self.fg_color)
-        self.text.SetToolTip("Polarization direction currently displayed")
+        self.text.SetToolTip("Position currently displayed")
 
-        # current polarization displayed in the legend (or None)
-        # can be radio buttons or text only depending on the number of polarization directions
-        self.pol_display = None
+        # current position displayed in the legend (or None)
+        # can be radio buttons or text only depending on the number of positions
+        self.pos_display = None
+        self.pos_display_combo = None
         self.control_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # border_sizer is needed to add a border around the legend
@@ -519,62 +527,194 @@ class RadioLegend(wx.Panel):
 
         self.SetSizer(self.border_sizer)
 
+        # dict used if legend consists of combo box (keys) plus radio buttons (values)
+        self._choices_dict = None  # (dict str -> tuple of str)
+        self._legend_on = False  # keeps track of, if a new value was requested via the legend or the stream panel
+        self._callback = None  # (callable): function called when the value of the legend changes
+
     def clear(self):
-        """Remove the display widget, to not show anything.
-        It will be added again next time the polarization entries are set."""
+        """
+        Remove the display widget, to not show anything.
+        It will be added again next time the entries are set.
+        """
         self.control_sizer.Clear()
         # destroy the old widgets (otherwise they are still displayed in the GUI)
-        if self.pol_display:
-            self.pol_display.Destroy()
+        if self.pos_display:
+            self.pos_display.Destroy()
+        if self.pos_display_combo:
+            self.pos_display_combo.Destroy()
         self.Refresh()
 
     @wxlimit_invocation(0.2)
     def Refresh(self):
         """
-        Refresh, which can be called safely from other threads
+        Refresh, which can be called safely from other threads.
         """
         if self:
             wx.Panel.Refresh(self)
 
-    def OnPolarizationButton(self, event):
+    def OnGroupSelectionCombo(self, evt=None):
+        """
+        The combo box selection is requested and the corresponding radio buttons are
+        created. The callback function, which changes the position VA on the
+        stream/projection is called. The _callback function can be overwritten by the viewport.
+        In the case of an event, this method was called by selecting a new position in the
+        combo box (dropdown menu).
+        :param evt: (wx.EVT_COMBOBOX or None) If event, the method was triggered via changing
+                    the current value of the combo box.
+        """
+        if self.pos_display:
+            self.pos_display.Destroy()
+
+        key = self.pos_display_combo.GetValue()
+        choices_radio = self._choices_dict[key]
+        self.createRadioButtons(choices_radio)
+        if self._legend_on:  # only call callback fct when change requested via legend (and not e.g. settings panel)
+            self._callback(choices_radio[0])  # set first value as default when combo box value was changed via legend
+
+        self.control_sizer.Add(self.pos_display, 2, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+
+        # refresh layout
+        self.border_sizer.Layout()
+        self.Parent.Layout()  # need to be called as method is called after self.Layout im main thread
+
+    def OnPositionButton(self, event):
         """
         In the case of an event (select a button), the radio button selection is
         requested and the callback function, which changes the position is called.
         The _callback function can be overwritten by the viewport.
+        :param event: (wx.EVT_BUTTON) Event triggered by selecting a radio button in the legend.
         """
-        pol = self.pol_display.GetValue()
-        self._callback(pol)
+        pos = self.pos_display.GetValue()
+        self._callback(pos)
 
-    def set_pol_callback(self, func):
+    def set_callback(self, func):
+        """
+        Sets the callback function that is executed when a new radio button selection
+        is requested (in OnPositionButton). The _callback function can be overwritten by the viewport.
+        :param func: (callable) Callback function that is called when a new pos is requested.
+                     Function param is "pos" (string): The position to be set in the legend.
+        """
         self._callback = func
 
-    def set_pol_value(self, pol):
-        self.pol_display.SetValue(pol)
+    def set_value(self, pos):
+        """
+        Sets the new position requested in the legend. Method should be called from the main
+        GUI thread only.
+        :param pos: (str) New radio button selection to be set active.
+        """
+        # Only called when the position is changed externally to update the widgets state.
+
+        # Changing the value via the settings panel widgets, needs a bit special handling.
+        # Note: No need to call the callback function as the stream VA is connected to settings panel widget.
+        if self.pos_display_combo and pos not in self.pos_display.choices:
+            self._legend_on = False
+            # Get the matching combo box pos for the requested pos via the settings panel.
+            # This is also the pos that needs to be active in the radio buttons.
+            pos_combo, _ = self._matchRadioPosWithComboPos(self._choices_dict, pos)
+            self.pos_display_combo.SetValue(pos_combo)  # set the value on the combo box
+            self.OnGroupSelectionCombo()  # create the corresponding radio buttons
+            self.pos_display.SetValue(pos)  # set the value on the radio button explicitly
+            self._legend_on = True
+        else:
+            self.pos_display.SetValue(pos)
+
+    def createRadioButtons(self, choices, value=None):
+        """
+        Creates the radio buttons in the legend.
+        :param choices: (list or tuple) Choices to be set for the radio buttons.
+        :param value: (str or None) Radio button that should be active.
+        """
+        self.pos_display = GraphicalRadioButtonControl(self, choices=choices, labels=choices)
+        self.pos_display.SetToolTip("Select a position for display.")
+        self.pos_display.Bind(wx.EVT_BUTTON, self.OnPositionButton)
+        if value:
+            self.pos_display.SetValue(value)  # set the value
+
+    def createComboBox(self, choices, value):
+        """
+        Creates the combo box in the legend.
+        :param choices: (list or tuple) Choices to be set for the combo box.
+        :param value: (str) Combo box value that should be selected.
+        :returns: (tuple) Choices for creating the corresponding radio buttons.
+        """
+        choices_combo = choices.keys()
+        self.pos_display_combo = ComboBox(self, wx.ID_ANY, choices=choices_combo, labels=choices_combo,
+                                          style=wx.NO_BORDER | wx.TE_PROCESS_ENTER | wx.CB_READONLY,
+                                          pos=(0, 0), size=(290, 16))
+        self.pos_display_combo.SetToolTip("Select a position for display.")
+        self.pos_display_combo.Bind(wx.EVT_COMBOBOX, self.OnGroupSelectionCombo)
+
+        pos_combo, choices_radio = self._matchRadioPosWithComboPos(choices, value)
+        self.pos_display_combo.SetValue(pos_combo)  # set value
+
+        return choices_radio
+
+    def _matchRadioPosWithComboPos(self, choices, value):
+        """
+        Match the value for the radio button with the value to be set on the combo box.
+        :param choices: (dict) Dictionary, whose keys are the choices for the combo box, and
+                        whose values are the choices for the radio buttons.
+        :param value: (str) Combo box value that should be selected.
+        :returns: pos_combo (str) Value to be selected on the combo box.
+                  choices_radio (tuple): Choices used to create the corresponding radio buttons.
+        """
+        for pos_combo, choices_radio in choices.items():
+            if value in choices_radio:
+                return pos_combo, choices_radio
+
+    def createStaticText(self, value):
+        """
+        Creates the static text in the legend.
+        Used, if only one choice (aka one image) needs to be displayed.
+        :param value: (str) Value that should be displayed in the text.
+        """
+        self.pos_display = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
+        self.pos_display.SetBackgroundColour(self.bg_color)
+        self.pos_display.SetForegroundColour(self.fg_color)
+        self.pos_display.SetValue(value)
 
     @call_in_wx_main
-    def set_pol_entries(self, choices, default):
+    def set_pos_entries(self, choices, default_value, name):
         """
-        Create radio buttons to switch between pol positions within legend.
-        If only one pol pos present in data, display pol pos as static text.
-        :param choices: polarization positions found in data
+        Create radio buttons or a combination of radio buttons and a combo box, to switch between
+        positions within legend. If only one pos present in data, display pos as static text.
+        :param choices: (set or dict -> tuple or dict) Positions found in data. If too many choices,
+                        it is possible to sort them in a dict and pass it to the radio legend.
+                        Radio legend will then create a legend consisting of a drop down menu/combo box
+                        (keys of dict) combined with radio buttons (values of dict).
+        :param default_value: (str) Default value that should be active.
+        :param name: (str) Text to be displayed describing the radio legend.
         """
         self.clear()
 
-        if len(choices) > 1:
-            # if we have multiple choices -> select between choices with radio button
-            self.pol_display = GraphicalRadioButtonControl(self, choices=choices, labels=choices)
-            self.pol_display.SetToolTip("Select a polarization direction for display.")
-            self.pol_display.Bind(wx.EVT_BUTTON, self.OnPolarizationButton)
-            self.pol_display.SetValue(default)
-        else:
-            self.pol_display = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
-            self.pol_display.SetBackgroundColour(self.bg_color)
-            self.pol_display.SetForegroundColour(self.fg_color)
-            # if only one choice -> only text displayed
-            self.pol_display.SetValue(next(iter(choices)))
-
+        # add descriptive text to legend
         self.control_sizer.Add(self.text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
-        self.control_sizer.Add(self.pol_display, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+        self.text.SetValue(name)  # set the descriptive text for the legend
+
+        if len(choices) > 1:
+            if isinstance(choices, collections.Mapping):  # create combo box + radio buttons
+                self._choices_dict = choices
+
+                choices_radio = self.createComboBox(choices, default_value)
+                self.createRadioButtons(choices_radio, default_value)  # create radio buttons
+
+                self.control_sizer.Add(self.pos_display_combo, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+                self.control_sizer.Add(self.pos_display, 2, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+
+                self._legend_on = True  # True while not changes requested via stream panel
+
+            elif isinstance(choices, collections.Iterable):  # only create radio buttons
+                # if we have multiple choices -> select between choices with radio button
+                self.createRadioButtons(choices, default_value)  # create radio buttons
+                self.control_sizer.Add(self.pos_display, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+
+            else:
+                raise TypeError("Choices for radio legend must be of type 'frozenset' or 'dict'.")
+
+        else:  # if only one choice -> only text displayed
+            self.createStaticText(default_value)
+            self.control_sizer.Add(self.pos_display, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 
         # refresh layout
         self.border_sizer.Layout()
