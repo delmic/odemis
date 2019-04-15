@@ -355,15 +355,15 @@ SPARC2-VisNIR-TR: {
         refswitch: {"fw": 0, "od": 0},
         inverted: ["od"],
         do_axes: {
-            # channel -> axis name, position enabled, position disabled, transition period (s)
-            4: ["shutter0", 0, 1, 0.5],
-            5: ["shutter1", 0, 1, 0.5],
+            # channel -> axis name, reported position when high, reported position when low, transition period (s)
+            4: ["shutter0", 0, 1, 0.5], # high: open = 0
+            5: ["shutter1", 0, 1, 0.5], # low: closed = 1
         },
         # LED protection for digital output channels
         led_prot_do: {
             # VERY IMPORTANT TO GET THIS RIGHT, WRONG VALUE WILL DAMAGE INSTRUMENT!
-            4: 0,  # output when leds are on (0 = shutter closed)
-            5: 0
+            4: 1,  # position when leds are on (1 = shutter closed)
+            5: 1
         },
     },
 }
@@ -414,8 +414,8 @@ SPARC2-VisNIR-TR: {
         zero_cross: [10.e-3, 10.e-3], # V (< 20 mV)
         shutter_axes: {
         # internal child role of the actuator -> axis name, position when shutter is closed (ie, protected), position when opened (receiving light)
-            "shutter0": ["x", 0, 1],
-            "shutter1": ["x", 0, 1],
+            "shutter0": ["x", 1, 0],
+            "shutter1": ["x", 1, 0],
         },
     },
     # These children allow to have access to the raw data on the PMTs
