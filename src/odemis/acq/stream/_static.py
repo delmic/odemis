@@ -214,7 +214,7 @@ class Static2DStream(StaticStream):
             self.zIndex.subscribe(self._on_zIndex)
 
         # Copy back the metadata
-        raw[0].metadata = copy.copy(metadata)
+        raw[0].metadata = metadata
 
         super(Static2DStream, self).__init__(name, raw, *args, **kwargs)
 

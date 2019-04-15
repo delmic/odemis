@@ -84,8 +84,7 @@ class Stream(object):
         emtvas (None or set of str): names of all the emitter VAs to be
           duplicated on the stream. They will be named .emtOriginalName
         raw (None or list of DataArrays or DataArrayShadow): raw data to be used
-          at initialisation. By default, it will contain no data. If it's a
-          DataArrayShadow, it will provide a 2D tuple as .raw.
+          at initialisation. By default, it will contain no data.
         acq_type (MD_AT_*): acquisition type associated with this stream (as in model._metadata)
         """
         self.name = model.StringVA(name)
@@ -109,7 +108,7 @@ class Stream(object):
         self._im_needs_recompute = threading.Event()
         self._init_thread()
 
-        # list of DataArray received and used to generate the image
+        # list of DataArray(Shadow) received and used to generate the image
         # every time it's modified, image is also modified
         if raw is None:
             self.raw = []
@@ -215,11 +214,7 @@ class Stream(object):
         # TODO: have this done by the child class, if needed.
         if self.raw:
             self._updateHistogram(drange_raw)
-            if isinstance(self.raw, list):
-                raw = self.raw[0]
-            else:
-                raw = self.raw
-            self._onNewData(None, raw)
+            self._onNewData(None, self.raw[0])
 
     def _init_projection_vas(self):
         """ Initialize the VAs related with image projection
@@ -886,36 +881,31 @@ class Stream(object):
             return
 
         try:
-            # if .raw is a list of DataArray, .image is a complete image
-            if isinstance(self.raw, list):
-                data = self.raw[0]
-                bkg = self.background.value
-                if bkg is not None:
-                    try:
-                        data = img.Subtract(data, bkg)
-                    except Exception as ex:
-                        logging.info("Failed to subtract background data: %s", ex)
-
-                dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-                ci = dims.find("C")  # -1 if not found
-                # is RGB
-                if dims in ("CYX", "YXC") and data.shape[ci] in (3, 4):
-                    try:
-                        rgbim = img.ensureYXC(data)
-                        rgbim.flags.writeable = False
-                        # merge and ensures all the needed metadata is there
-                        rgbim.metadata = self._find_metadata(rgbim.metadata)
-                        rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
-                        self.image.value = rgbim
-                    except Exception:
-                        logging.exception("Updating %s image", self.__class__.__name__)
-                else: # is grayscale
-                    if data.ndim != 2:
-                        data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
-                    self.image.value = self._projectXY2RGB(data, self.tint.value)
-            else:
+            if not isinstance(self.raw, list):
                 raise AttributeError(".raw must be a list of DA/DAS")
 
+            data = self.raw[0]
+            bkg = self.background.value
+            if bkg is not None:
+                try:
+                    data = img.Subtract(data, bkg)
+                except Exception as ex:
+                    logging.info("Failed to subtract background data: %s", ex)
+
+            dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
+            ci = dims.find("C")  # -1 if not found
+            # is RGB
+            if dims in ("CYX", "YXC") and data.shape[ci] in (3, 4):
+                rgbim = img.ensureYXC(data)
+                rgbim.flags.writeable = False
+                # merge and ensures all the needed metadata is there
+                rgbim.metadata = self._find_metadata(rgbim.metadata)
+                rgbim.metadata[model.MD_DIMS] = "YXC"  # RGB format
+                self.image.value = rgbim
+            else:  # is grayscale
+                if data.ndim != 2:
+                    data = img.ensure2DImage(data)  # Remove extra dimensions (of length 1)
+                self.image.value = self._projectXY2RGB(data, self.tint.value)
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
@@ -1008,11 +998,13 @@ class Stream(object):
         #     logging.debug("Receive raw %g s after acquisition",
         #                   time.time() - data.metadata[model.MD_ACQ_DATE])
 
-        if not self.raw and isinstance(self.raw, list):
-            self.raw.append(data)
-        else:
-            if isinstance(self.raw, list):
+        if isinstance(self.raw, list):
+            if not self.raw:
+                self.raw.append(data)
+            else:
                 self.raw[0] = data
+        else:
+            logging.error("%s .raw is not a list, so can store new data", self)
 
         self._shouldUpdateImage()
 
