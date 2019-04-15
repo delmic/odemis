@@ -25,15 +25,36 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
-from concurrent.futures import CancelledError
-from functools import partial
 import gc
 import logging
 import math
+import os.path
+import time
+from concurrent.futures._base import CancelledError
+from functools import partial
+
 import numpy
+import pkg_resources
+import wx
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
+# This is not related to any particular wxPython version and is most likely permanent.
+import wx.html
+
+import odemis.acq.align
+import odemis.acq.stream as acqstream
+import odemis.gui
+import odemis.gui.cont.acquisition as acqcont
+import odemis.gui.cont.export as exportcont
+import odemis.gui.cont.streams as streamcont
+import odemis.gui.cont.views as viewcont
+import odemis.gui.model as guimod
+import odemis.gui.util as guiutil
+import odemis.gui.util.align as align
 from odemis import dataio, model
 from odemis.acq import calibration, leech
-from odemis.acq.align import AutoFocus, AutoFocusSpectrometer
+from odemis.acq.align import AutoFocus
+from odemis.acq.align.autofocus import Sparc2AutoFocus
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
@@ -42,7 +63,6 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream
 from odemis.driver.actuator import ConvertStage
-import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
@@ -61,23 +81,6 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter
 from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
-import os.path
-import pkg_resources
-import time
-import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
-
-import odemis.acq.stream as acqstream
-import odemis.gui.cont.acquisition as acqcont
-import odemis.gui.cont.export as exportcont
-import odemis.gui.cont.streams as streamcont
-import odemis.gui.cont.views as viewcont
-import odemis.gui.model as guimod
-import odemis.gui.util as guiutil
-import odemis.gui.util.align as align
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_POINT,
@@ -3736,51 +3739,28 @@ class Sparc2AlignTab(Tab):
         self.tab_data_model.autofocus_active.value = not self.tab_data_model.autofocus_active.value
 
     def _onManualFocus(self, event):
-        """Called when manual focus btn receives an event."""
-        # TODO need to handle all cases where focus is enabled/used
+        """
+        Called when manual focus btn receives an event.
+        """
         main = self.tab_data_model.main
         bl = main.brightlight
         align_mode = self.tab_data_model.align_mode.value
-
         if event.GetEventObject().GetValue():  # manual focus btn active
-            # switch on calibration light
-            # close slit spectrograph maximal
-            if align_mode == "streak-align":
-                s = None
-                opath = "streak-focus"
-            else:
-                logging.warning("Manual focus requested not compatible with requested alignment mode %s. "
-                                "Do nothing.", align_mode)
-                return
-
-            # Note: First close slit, then switch on calibration light
-            # Go to the special focus mode (=> close the slit & turn on the lamp)
-            f = main.opm.setPath(opath)
-            f.add_done_callback(self._on_align_mode_done)
-
-            # force wavelength 0
-            self.spectrograph.moveAbsSync({"wavelength": 0})
-
-            if align_mode != "streak-align":
-                self._stream_controller.pauseStreams()
-
-            bl.power.value = bl.power.range[1]
-            if s:
-                s.should_update.value = True  # the stream will set all the emissions to 1
-            else:
-                bl.emissions.value = [1] * len(bl.emissions.value)
-
-            f.result()  # TODO: don't block the GUI => make it part of the manual focus??
-
             # # Disable autofocus if manual focus btn pushed
-            # self.panel.btn_autofocus.Enable(False)
-            # self.panel.gauge_autofocus.Enable(False)
-
+            #         # self.panel.btn_autofocus.Enable(False)
+            #         # self.panel.gauge_autofocus.Enable(False)
+            if align_mode == "streak-align":
+                s = []
+            else:
+                self._stream_controller.pauseStreams()
+                logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)
+                return
+            f = Sparc2AutoFocus(align_mode, main.opm, s, start_autofocus=False)
+            f.add_done_callback(self._on_align_mode_done)
         else:  # manual focus button is inactive
             # Go back to previous mode (=> open the slit & turn off the lamp)
             if align_mode == "streak-align":
                 s = None
-
             # Note: First turn off calibration light, then open slit
             bl.power.value = bl.power.range[0]
             if s:
@@ -3792,11 +3772,11 @@ class Sparc2AlignTab(Tab):
             f = main.opm.setPath(opath)
             f.add_done_callback(self._on_align_mode_done)
             f.result()  # TODO: don't block the GUI => make it part of the manual focus??
-
             # if align_mode != "streak-align":
             #     # Enable autofocus if manual focus btn not pushed
             #     self.panel.btn_autofocus.Enable(True)
             #     self.panel.gauge_autofocus.Enable(True)
+
 
     @call_in_wx_main
     def _onAutofocus(self, active):
@@ -3805,55 +3785,25 @@ class Sparc2AlignTab(Tab):
             main = self.tab_data_model.main
             align_mode = self.tab_data_model.align_mode.value
             if align_mode == "lens-align":
-                s = self._specline_stream
-                focuser = s.focuser
-                opath = "spec-focus"
+                # s = self._specline_stream
+                ss = [self._specline_stream]
                 btn = self.panel.btn_autofocus
                 gauge = self.panel.gauge_autofocus
             elif align_mode == "fiber-align":
-                s = None  # No stream to play
-                focuser = main.focus
-                opath = "spec-fiber-focus"
+                ss = []  # No stream to play
+                # s = None
                 btn = self.panel.btn_fib_autofocus
                 gauge = self.panel.gauge_fib_autofocus
             else:
                 logging.info("Autofocus requested outside of lens or fiber alignment mode, not doing anything")
                 return
 
-            # Get all the detectors affected by by the focuser
-            try:
-                spgr, dets, selector = self._getSpectrometerFocusingComponents(focuser)
-            except LookupError as ex:
-                logging.error("Failed to focus: %s", ex)
-                # TODO: just run the standard autofocus procedure instead?
-                return
-
-            # Go to the special focus mode (=> close the slit & turn on the lamp)
-            fopm = main.opm.setPath(opath)
-
+            # GUI stream bar controller pauses the stream
             btn.SetLabel("Cancel")
             self._stream_controller.pauseStreams()
 
-            bl = main.brightlight
-            bl.power.value = bl.power.range[1]
-            if s:
-                s.should_update.value = True  # the stream will set all the emissions to 1
-            else:
-                bl.emissions.value = [1] * len(bl.emissions.value)
-
-            # Configure each detector with good settings
-            for d in dets:
-                if s and d.name == s.detector.name:
-                    # The stream takes care of configuring its detector, so no need
-                    continue
-                if model.hasVA(d, "binning"):
-                    d.binning.value = d.binning.clip((2, 2))
-                if model.hasVA(d, "exposureTime"):
-                    d.exposureTime.value = d.exposureTime.clip(0.2)
-
-            fopm.result()  # TODO: don't block the GUI => make it part of the autofocus
-            # self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
-            self._autofocus_f = AutoFocusSpectrometer(spgr, focuser, dets, selector)
+            # No manual autofocus for now
+            self._autofocus_f = Sparc2AutoFocus(ss, align_mode, main.opm, start_autofocus=True)
             self._autofocus_align_mode = align_mode
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
 
@@ -3872,74 +3822,6 @@ class Sparc2AlignTab(Tab):
                 return
             btn.SetLabel("Auto focus")
 
-    def _getSpectrometerFocusingComponents(self, focuser):
-        """
-        Finds the different components needed to run auto-focusing with the
-        given focuser.
-        focuser (Actuator): the focuser that will be used to change focus
-        return:
-            * spectrograph (Actuator): component to move the grating and wavelength
-            * detectors (list of Detectors): the detectors attached on the
-              spectrograph, which can be used for focusing
-            * selector (Actuator or None): the component to switch detectors
-        raise LookupError: if not all the components could be found
-        """
-        main = self.tab_data_model.main
-
-        dets = []
-        # "ccd", which is the detector of the stream, should be first, as it's
-        # normally on the "direct" output port (which the SR193 tends to prefer
-        # for focusing), and typically has a better performance for focus.
-        for r in ("ccd", "sp-ccd"):
-            try:
-                d = model.getComponent(role=r)
-            except LookupError:
-                continue
-            if r == "sp-ccd" and d.shape[1] == 1:
-                # Currently, the autofocus doesn't work correctly on spectrum
-                # (ie, resolution of X x 1), so skip it, and hope the focus is
-                # already correct.
-                # TODO: make the autofocus work also in such case.
-                logging.info("Will not focus on %s as it is 1D", d.name)
-                continue
-            if d.name in focuser.affects.value:
-                dets.append(d)
-
-        if not dets:
-            raise LookupError("Failed to find any detector for the spectrometer focusing")
-
-        # Get the spectrograph and selector based on the fact they affect the
-        # same detectors.
-        spgr = self._findSameAffects([main.spectrograph, main.spectrograph_ded],
-                                     dets)
-        if len(dets) <= 1:
-            selector = None  # we can keep it simple
-        else:
-            # TODO: make this code able to handle systems with multiple
-            # spectrographs (with a focus)
-            # Precisely, a selector would have multiple positions, with
-            # each position corresponding to one of the detectors
-            sels = [model.getComponent(role="spec-det-selector")]
-            selector = self._findSameAffects(sels, dets)
-
-        return spgr, dets, selector
-
-    def _findSameAffects(self, comps, affected):
-        """
-        Find a component that affects all the given components
-        comps (list of Component or None): set of components in which to look
-          for the "affecter"
-        affected (list of Component): set of affected components
-        return (Component): the first component that affects all the affected
-        raise LookupError: if no component found
-        """
-        naffected = set(c.name for c in affected)
-        for c in comps:
-            if c is not None and naffected <= set(c.affects.value):
-                return c
-        else:
-            raise LookupError("Failed to find a component that affects all %s" % (naffected,))
-
     def _on_autofocus_done(self, future):
         align_mode = self._autofocus_align_mode
 
@@ -3952,6 +3834,11 @@ class Sparc2AlignTab(Tab):
         # Turn off the light
         bl = self.tab_data_model.main.brightlight
         bl.power.value = bl.power.range[0]
+
+        try:
+            future.result()
+        except Exception:
+            logging.exception("Autofocus failed")
 
         # That VA will take care of updating all the GUI part
         self.tab_data_model.autofocus_active.value = False
