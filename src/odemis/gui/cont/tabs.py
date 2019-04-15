@@ -3350,10 +3350,12 @@ class Sparc2AlignTab(Tab):
 
                 if len(photods) > 1:
                     self._fbdet2 = photods[1]
-                    _, self._det2_cnt_ctrl = speccnt_spe.stream_panel.add_text_field("Detector 2", "")
+                    _, self._det2_cnt_ctrl = speccnt_spe.stream_panel.add_text_field("Detector 2", "", readonly=True)
+                    self._det2_cnt_ctrl.SetForegroundColour("#FFFFFF")
                     f = self._det2_cnt_ctrl.GetFont()
                     f.PointSize = 12
                     self._det2_cnt_ctrl.SetFont(f)
+                    speccnts.should_update.subscribe(self._on_fbdet1_should_update)
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
@@ -3416,6 +3418,12 @@ class Sparc2AlignTab(Tab):
         # Force MoI view fit to content when magnification is updated
         if not main_data.ebeamControlsMag:
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
+
+    def _on_fbdet1_should_update(self, should_update):
+        if should_update:
+            self._fbdet2.data.subscribe(self._on_fbdet2_data)
+        else:
+            self._fbdet2.data.unsubscribe(self._on_fbdet2_data)
 
     @wxlimit_invocation(0.5)
     def _on_fbdet2_data(self, df, data):
@@ -3555,10 +3563,6 @@ class Sparc2AlignTab(Tab):
         if mode != "fiber-align" and main.spec_sel:
             main.spec_sel.position.unsubscribe(self._onFiberPos)
 
-        if mode != "fiber-align":
-            # Unsubscribe from data of photo-detector 2
-            if self._fbdet2:
-                self._fbdet2.data.unsubscribe(self._on_fbdet2_data)
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
         f = main.opm.setPath(op_mode)
@@ -3618,9 +3622,6 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            # Subscribe to data of photo-detector 2
-            if self._fbdet2:
-                self._fbdet2.data.subscribe(self._on_fbdet2_data)
             # Note: it's OK to leave autofocus enabled, as it will wait by itself
             # for the fiber-aligner to be in place
             f.add_done_callback(self._on_fibalign_done)
@@ -4110,9 +4111,6 @@ class Sparc2AlignTab(Tab):
             self._stream_controller.pauseStreams()
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
-            # Unsubscribe from data of photo-detector 2
-            if self._fbdet2:
-                self._fbdet2.data.unsubscribe(self._on_fbdet2_data)
 
             if main.lens_mover:
                 main.lens_mover.position.unsubscribe(self._onLensPos)
