@@ -1482,7 +1482,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             t = index[hdims.index("T")]
             deltat = da.metadata.get(model.MD_TIME_OFFSET) + da.metadata[model.MD_PIXEL_DUR] * t
             plane.attrib["DeltaT"] = "%.15f" % deltat
-        if time_list:
+        if time_list is not None:
             plane.attrib["DeltaT"] = "%.15f" % time_list[index[1]]
 
         if model.MD_EXP_TIME in da.metadata:
