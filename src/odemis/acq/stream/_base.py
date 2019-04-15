@@ -29,7 +29,10 @@ from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase,
                           MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
-                          MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC)
+                          MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3,
+                          MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX,
+                          MD_POL_EY, MD_POL_EZ, MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N,
+                          MD_POL_DS2N, MD_POL_DS3N, MD_POL_S1N, MD_POL_S2N, MD_POL_S3N)
 from odemis.util import img
 import threading
 import time
@@ -43,6 +46,43 @@ UNDEFINED_ROI = (0, 0, 0, 0)
 # use hardcode list of polarization positions necessary for polarimetry analysis
 POL_POSITIONS = (MD_POL_HORIZONTAL, MD_POL_VERTICAL, MD_POL_POSDIAG,
                  MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC)
+POL_POSITIONS_RESULTS = (MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3,
+                         MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N,
+                         MD_POL_S0, MD_POL_S1, MD_POL_S2, MD_POL_S3,
+                         MD_POL_S1N, MD_POL_S2N, MD_POL_S3N,
+                         MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX, MD_POL_EY, MD_POL_EZ,
+                         MD_POL_DOP, MD_POL_DOLP, MD_POL_DOCP, MD_POL_UP)
+# user-friendly look-up dict for display in legend
+POL_POSITIONS_2_DISPLAY = {MD_POL_HORIZONTAL: "Horizontal",
+                           MD_POL_VERTICAL: "Vertical",
+                           MD_POL_POSDIAG: "Positive diagonal",
+                           MD_POL_NEGDIAG: "Negative diagonal",
+                           MD_POL_RHC: "Right-handed circular",
+                           MD_POL_LHC: "Left-handed circular",
+                           MD_POL_DS0: "Stokes parameter detector plane S0",
+                           MD_POL_DS1: "Stokes parameter detector plane S1",
+                           MD_POL_DS2: "Stokes parameter detector plane S2",
+                           MD_POL_DS3: "Stokes parameter detector plane S3",
+                           MD_POL_DS1N: "Normalized stokes parameter detector plane S1",
+                           MD_POL_DS2N: "Normalized stokes parameter detector plane S2",
+                           MD_POL_DS3N: "Normalized stokes parameter detector plane S3",
+                           MD_POL_S0: "Stokes parameter sample plane S0",
+                           MD_POL_S1: "Stokes parameter sample plane S1",
+                           MD_POL_S2: "Stokes parameter sample plane S2",
+                           MD_POL_S3: "Stokes parameter sample plane S3",
+                           MD_POL_S1N: "Normalized stokes parameter sample plane S1",
+                           MD_POL_S2N: "Normalized stokes parameter sample plane S2",
+                           MD_POL_S3N: "Normalized stokes parameter sample plane S3",
+                           MD_POL_EPHI: u"Electrical field amplitude φ",
+                           MD_POL_ETHETA: u"Electrical field amplitude θ",
+                           MD_POL_EX: "Electrical field amplitude Ex",
+                           MD_POL_EY: "Electrical field amplitude Ey",
+                           MD_POL_EZ: "Electrical field amplitude Ez",
+                           MD_POL_DOP: "Degree of polarization",
+                           MD_POL_DOLP: "Degree of linear polarization",
+                           MD_POL_DOCP: "Degree of circular polarization",
+                           MD_POL_UP: "Degree of unpolarized light"
+                           }
 POL_MOVE_TIME = 6  # [s] extra time to move polarimetry hardware (value is very approximate)
 
 

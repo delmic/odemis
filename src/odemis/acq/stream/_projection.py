@@ -31,10 +31,18 @@ import math
 import gc
 import numpy
 
+from odemis.acq.stream import POL_POSITIONS
+
+try:
+    import arpolarimetry
+except ImportError:
+    pass  # The projection using this module should never be instantiated then.
+
 from odemis import model
-from odemis.util import img
+from odemis.util import img, angleres
 from scipy import ndimage
-from odemis.model import MD_PIXEL_SIZE
+from odemis.model import MD_PIXEL_SIZE, MD_POL_EPHI, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_DS0, \
+    MD_POL_S0, MD_POL_DOP, MD_POL_DOLP, MD_POL_UP
 from odemis.acq.stream._static import StaticSpectrumStream
 from abc import abstractmethod
 
@@ -135,7 +143,6 @@ class RGBProjection(DataProjection):
         self.stream.tint.subscribe(self._onTint)
         self.stream.intensityRange.subscribe(self._onIntensityRange)
 
-        self._shouldUpdateImage()
 
     def _find_metadata(self, md):
         return self.stream._find_metadata(md)
@@ -218,6 +225,608 @@ class RGBProjection(DataProjection):
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
 
+class ARProjection(RGBProjection):
+    """
+    An ARProjection is a typical projection used to show raw 2D angle resolved images.
+    Its .image contains a DataArray 2D RGB (shape YXC), with metadata MD_PIXEL_SIZE and MD_POS.
+    The .background and .point VA are still on the stream passed in the __init__ as the same
+    background image and ebeam position can be used for multiple projections connected to the same stream.
+    """
+
+    def __init__(self, stream):
+        """
+        :param stream: (Stream) The stream the projection is connected to.
+        """
+        super(ARProjection, self).__init__(stream)
+
+        self.stream.point.subscribe(self._onPoint)
+        self.stream.background.subscribe(self._onBackground)
+
+        self._shouldUpdateImage()
+
+    # overrides method in RGBProjection
+    def _find_metadata(self, md):
+        """
+        Find the useful metadata for the projection.
+        :returns: (dict) Metadata dictionary.
+        """
+        # Note: for polar view, no PIXEL_SIZE nor POS
+
+        new_md = {}
+        if model.MD_ACQ_DATE in md:
+            new_md[model.MD_ACQ_DATE] = md[model.MD_ACQ_DATE]
+        if model.MD_POL_MODE in md:
+            new_md[model.MD_POL_MODE] = md[model.MD_POL_MODE]
+
+        return new_md
+
+    def _onBackground(self, data):
+        """
+        Called after the background has changed.
+        :param data: (list) List of data arrays.
+        """
+        self._shouldUpdateImage()
+
+    def _onPoint(self, pos):
+        """
+        Called when a new ebeam position has been selected.
+        :param pos: (float, float) One key of .point.choices.
+        """
+        self._shouldUpdateImage()
+
+    def _getBackground(self, pol_mode):
+        """
+        Get the background image from the .background VA on the stream.
+        It must match the polarization position.
+        :param pol_mode: (str) The polarization mode, the background is requested for.
+        :return: (DataArray or None) The background image corresponding to the requested polarization
+                position or None, if no matching background can be found.
+        """
+        bg_data = self.stream.background.value  # list containing DataArrays, DataArray or None
+
+        if bg_data is None:
+            return None
+
+        if isinstance(bg_data, model.DataArray):
+            bg_data = [bg_data]  # convert to list of bg images
+
+        for bg in bg_data:
+            # if no analyzer hardware, set MD_POL_MODE = "pass-through" (MD_POL_NONE)
+            if bg.metadata.get(model.MD_POL_MODE, model.MD_POL_NONE) == pol_mode:
+                # should be only one bg image with the same metadata entry
+                return bg  # DataArray
+
+        # Nothing found e.g. pol_mode = "rhc" but no bg image with "rhc"
+        logging.debug("No background image with polarization mode %s ." % pol_mode)
+        return None
+
+    def _processBackground(self, data, pol_mode, clip_data=True):
+        """
+        Process the background on the raw data. Try to get the background image on the stream
+        and subtracts it if available. Otherwise process do a simple background processing.
+        :param data: (DataArray) The data that will be background corrected.
+        :param pol_mode: (str) The polarization mode, the background is requested for.
+        :param clip_data: (bool) If True, data is clipped at 0. If False (e.g. csv export), negative values are kept.
+        :return: (DataArray) The background corrected data.
+        """
+        bg_image = self._getBackground(pol_mode)
+        if bg_image is None:
+            # Simple version: remove the background value, will clip data
+            data_corr = angleres.ARBackgroundSubtract(data)
+        else:
+            if clip_data:
+                data_corr = img.Subtract(data, bg_image)  # metadata from data
+            else:
+                # subtract bg image, but don't clip (keep negative values for export)
+                data_corr = (data.astype(numpy.float64) - bg_image.astype(numpy.float64))
+
+        return data_corr
+
+    def _resizeImage(self, data, size):
+        """
+        Resize the image.
+        :param data: (2D DataArray) Image to resize.
+        :param size: (int) Size of the resized image in px. Size of the largest dimension. The aspect
+                     ratio is kept, when computing the other dimension.
+        :returns: (2D DataArray) Resized image.
+        """
+        # Note: AR conversion might fail with very large images due to too much memory consumed (> 2Gb).
+        # So, rescale + use a "degraded" type that uses less memory. As the display size is small (compared
+        # to the size of the input image, it shouldn't actually affect much the output.
+
+        logging.info("AR image is very large %s, will convert to projection in reduced precision.", data.shape)
+
+        y, x = data.shape
+        if y > x:
+            small_shape = size, int(round(size * x / y))
+        else:
+            small_shape = int(round(size * y / x)), size
+        # resize
+        image_resized = img.rescale_hq(data, small_shape)
+
+        return image_resized
+
+
+class ARRawProjection(ARProjection):
+    """
+    An ARRawProjection is a typical projection used to show raw 2D angle resolved images
+    projected to polar representation.
+    Its .image contains a DataArray 2D RGB (shape YXC), with metadata MD_PIXEL_SIZE and MD_POS.
+    The .background and .point VA are still on the stream passed in the __init__ as the same
+    background image and ebeam position can be used for multiple projections connected to the same stream.
+    Additionally, if the stream has an attribute "polarization" it will calculate the polar
+    representations for all polarization positions available from the raw ar data.
+    """
+
+    def __init__(self, stream):
+        """
+        :param stream: (Stream) The stream the projection is connected to.
+        """
+        super(ARRawProjection, self).__init__(stream)
+
+        # Cached conversion of the detector image to polar representation
+        self._polar_cache = {}  # dict tuple (float, float, str or None) -> DataArray
+        # represents (ebeam posX, ebeam posY, polarization pos)
+
+        if hasattr(stream, "polarization"):
+            self.polarization = self.stream.polarization  # make it an attribute of the projection
+            self.polarization.subscribe(self._onPolarization)
+
+    def _project2Polar(self, ebeam_pos, pol_pos):
+        """
+        Return the polar projection of the image at the given position.
+        :param ebeam_pos: (float, float), string or None) Ebeam position (must be part of the .stream._pos).
+        :param pol_pos: (str or None) Polarization position (must be part of the .stream._pos).
+        :returns: (2D DataArray) The polar projection.
+        """
+
+        # Note: Need a copy of the link to the dict. If self._polar_cache is reset while
+        # still running this method, the dict might get new entries again, though it should be empty.
+        polar_cache = self._polar_cache
+
+        try:
+            polar_data = polar_cache[ebeam_pos][pol_pos]
+        except KeyError:
+            # Compute the polar representation
+            data = self.stream._pos[ebeam_pos + (pol_pos,)]
+            # TODO stream._pos can be then also be ordered first ebeam_pos, then pol_pos
+            # TODO would also simplify the check for the correct bg image etc.
+
+            try:
+                # Create empty dict for processed ebeam position in cache
+                polar_cache[ebeam_pos] = {}
+
+                # Correct image for background. It must match the polarization (defaulting to MD_POL_NONE).
+                calibrated = self._processBackground(data, data.metadata.get(model.MD_POL_MODE, model.MD_POL_NONE))
+
+                # resize if too large to not run into memory problems
+                if numpy.prod(calibrated.shape) > (1280 * 1080):
+                    calibrated = self._resizeImage(calibrated, size=1024)
+
+                # define the size of the image for polar representation in GUI
+                # 2 x size of original/raw image (on smallest axis) and at most
+                # the size of a full-screen canvas (1134)
+                output_size = min(min(calibrated.shape) * 2, 1134)
+
+                # TODO: could use the size of the canvas that will display the image to save some computation time.
+
+                # Warning: allocates lot of memory, which will not be free'd until
+                # the current thread is terminated.
+
+                polar_data = angleres.AngleResolved2Polar(calibrated, output_size, hole=False)
+
+                # TODO: don't hold too many of them in cache (eg, max 3 * 1134**2)
+                # polar_cache[ebeam_pos + (pol_pos,)] = polar_data
+                polar_cache[ebeam_pos][pol_pos] = polar_data
+
+                # return an array
+                polar_data = polar_cache[ebeam_pos][pol_pos]
+
+            except Exception:
+                logging.exception("Failed to convert to azimuthal projection")
+                return data  # display its raw as fallback
+
+        return polar_data
+
+    def _updateImage(self):
+        """
+        Recomputes the image for the current ebeam position and polarization position requested.
+        """
+        if not self.raw:
+            return
+
+        ebeam_pos = self.stream.point.value
+        try:
+            if ebeam_pos == (None, None):
+                self.image.value = None
+            else:
+                if hasattr(self.stream, "polarization"):
+                    pol_pos = self.stream.polarization.value
+                else:
+                    pol_pos = None
+
+                polar_data = self._project2Polar(ebeam_pos, pol_pos)
+
+                # update the histogram
+                # TODO: cache the histogram per image
+                # FIXME: histogram should not include the black pixels outside
+                # of the circle. => use a masked array?
+                # reset the drange to ensure that it doesn't depend on older data
+                self.stream._drange = None
+                self.stream._updateHistogram(polar_data)
+
+                self.image.value = self._project2RGB(polar_data)
+                # Note: Need to calculate the histogram when user changes B/C settings and then project2RGB
+
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+
+    def _onPolarization(self, pos):
+        """
+        Called when the polarization VA has changed.
+        :param pos: (str) Polarization position requested.
+        """
+        self._shouldUpdateImage()
+
+    def _onBackground(self, data):
+        """
+        Called after the background has changed.
+        :param data: (list) List of data arrays.
+        """
+        # un-cache all the polar images
+        self._polar_cache = {}
+        super(ARRawProjection, self)._onBackground(data)
+
+    def projectAsRaw(self):
+        """
+        Returns the raw data for the currently selected pixel (ebeam position).
+        :returns: (dict: MD_POL_* -> DataArray) Dictionary containing all images with different
+                  polarization analyzer positions for one pixel with metadata.
+        """
+        data_dict = {}
+
+        ebeam_pos = self.stream.point.value  # ebeam pos selected
+
+        # find positions of each acquisition
+        # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
+        pos = {}
+        # TODO why do we actually do that for all images and not only the displayed one??
+        for data_raw in self.raw:
+            try:
+                pos[data_raw.metadata[model.MD_POS] + (
+                    data_raw.metadata.get(model.MD_POL_MODE, None),)] = img.ensure2DImage(data_raw)
+            except KeyError:
+                logging.info("Skipping DataArray without known position")
+
+        if hasattr(self, "polarization"):
+            pol_positions = self.polarization.choices
+        else:
+            pol_positions = [None]
+
+        for pol_pos in pol_positions:
+            data = pos[ebeam_pos + (pol_pos,)]
+
+            # Correct image for background. It must match the polarization (defaulting to MD_POL_NONE).
+            calibrated = self._processBackground(data, data.metadata.get(model.MD_POL_MODE, model.MD_POL_NONE),
+                                                 clip_data=False)
+
+            # resize if too large to not run into memory problems
+            if numpy.prod(calibrated.shape) > (800 * 800):
+                calibrated = self._resizeImage(calibrated, size=768)
+
+            output_size = (90, 360)  # Note: increase if data is high def
+
+            # calculate raw theta/phi representation
+            data = angleres.AngleResolved2Rectangular(calibrated, output_size, hole=False)
+
+            data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
+            data_dict[pol_pos] = data
+
+        # TODO for now we distinguish in export between dict and array...
+        if len(pol_positions) > 1:
+            return data_dict  # return the dict
+        else:
+            return next(iter(data_dict.values()))  # only one data array in dict
+
+    def projectAsVis(self):
+        """
+        Returns the special (polar) visualized data as shown in the GUI of the polarimetry visualization for
+        the currently selected pixel (ebeam position).
+        :returns: (dict: MD_POL_* -> DataArray) Dictionary containing all images for the polarimetry visualization
+                  for one pixel with metadata.
+        """
+        ebeam_pos = self.stream.point.value  # ebeam pos selected
+        data_dict = {}
+
+        if hasattr(self, "polarization"):
+            for pol_pos in self.polarization.choices:
+                try:
+                    data = self._polar_cache[ebeam_pos][pol_pos]
+                except KeyError:
+                    data = self._project2Polar(ebeam_pos, pol_pos)
+                data = self._project2RGB(data, self.stream.tint.value)
+                data_dict[pol_pos] = data
+        else:  # standard single AR image
+            data_dict[None] = self.image.value
+
+        return data_dict
+
+
+class ARPolarimetryProjection(ARProjection):
+    """
+    An ARPolarimetryProjection is a typical projection used to show the polarimetry results in polar
+    representation of the raw 2D angle resolved images acquired with a polarization analyzer.
+    It is only instantiated when the stream has an attribute "polarimetry" (meaning the raw data was
+    acquired for 6 different polarization analyzer positions).
+    Its .image contains a DataArray 2D RGB (shape YXC), with metadata MD_PIXEL_SIZE and MD_POS.
+    The .background and .point VA are still on the stream passed in the __init__ as the same
+    background image and ebeam position can be used for multiple projections connected to the same stream.
+    """
+
+    def __init__(self, stream):
+        """
+        :param stream: (Stream) The stream the projection is connected to.
+        """
+        # If the stream does not have polarimetry data, the GUI tries anyway to have a projection.
+        # In this case we have a simple projection, which has no data ever.
+        if not hasattr(stream, "polarimetry"):
+            self.image = model.VigilantAttribute(None)
+            return
+
+        super(ARPolarimetryProjection, self).__init__(stream)
+
+        # Cached conversion of the raw 6 polarization images to:
+        #   *Stokes parameters in the detector plane (4 images)
+        #   *Stokes parameters in the sample plane (4 images)
+        #   *E-fields in polar and Cartesian coordinates (5 images)
+        #   *DOPs (degree of polarization) (4 images)
+        # All images in polar representation.
+        self._polarimetry_cache = {}  # dict tuple (float, float) -> dict(MD_POL_* (str) -> DataArray)
+        # represents (ebeam posX, ebeam posY) -> (polarimetry pos -> DataArray)
+
+        # Same as above, but the raw (aka rectangular representation -> phi/theta) images.
+        # Images are background corrected.
+        self._polarimetry_cache_raw = {}  # dict tuple (float, float) -> dict(MD_POL_* (str) -> DataArray)
+
+        self.polarimetry = self.stream.polarimetry  # make VA an attribute of the projection
+        self.polarimetry.subscribe(self._onPolarimetry)
+
+    def _getRawData(self, ebeam_pos):
+        """
+        Gets the 6 polarization images for one pixel (ebeam) position and collects them in a dict.
+        :param ebeam_pos: (tuple of 2 float) The ebeam position, the data is requested for.
+        :returns: (dict: MD_POL_* (str) -> DataArray) A dictionary containing the 6 raw images -
+                  one for each polarization analyzer position.
+        """
+        data_raw = {}
+        for polpos in POL_POSITIONS:
+            data_raw[polpos] = self.stream._pos[ebeam_pos + (polpos,)]
+
+        return data_raw
+
+    def _projectAsRaw(self, ebeam_pos):
+        """
+        Calculates the raw polarimetry visualization (rectangular phi/theta representation) of the images at the
+        requested ebeam and polarimetry position.
+        :param ebeam_pos: (float, float) Current ebeam (pixel) position (must be part of the .stream._pos).
+        :returns: (dict(MD_POL_* (str) -> DataArray)) Cached conversion of the polarimetry
+                  visualization results as raw images (aka rectangular representation -> phi/theta) for one ebeam
+                  position. Images are background corrected.
+        """
+        # Note: Need a copy of the link to the dict. If self._polarimetry_cache is reset while
+        # still running this method, the dict might get new entries again, though it should be empty.
+        polarimetry_cache_raw = self._polarimetry_cache_raw
+
+        # Note: Method needs about 4sec to display the image for selecting a new ebeam position
+        if ebeam_pos not in polarimetry_cache_raw:
+            # Compute the polarimetry representation
+            data_raw = self._getRawData(ebeam_pos)  # get the 6 images for requested ebeam pos
+
+            try:
+                # Convert data into rectangular format (theta-phi-representation).
+                # Check if rectangular converted representation already was calculated for requested ebeam pos.
+                # Note: This calc is very time consuming. Takes about 3.6 sec for one ebeam pos (conversion of 6 images)
+                # and tested on an image of size (256, 1024).
+
+                # TODO get the raw/bg processed data from polar_cache, as now we do bg subtraction twice
+                calibrated_raw = {}
+
+                # TODO allow variable input size? Calc based on raw data? E.g. with binning
+                # The number of pixels (theta, phi) of the output image.
+                output_size = (400, 600)  # defines the resolution of the displayed image
+
+                for pol, raw in data_raw.items():
+
+                    # Correct image for background. It must match the polarization (defaulting to MD_POL_NONE).
+                    calibrated = self._processBackground(raw, raw.metadata.get(model.MD_POL_MODE, model.MD_POL_NONE))
+
+                    # check if image is too large and we might run into memory trouble -> resize
+                    if numpy.prod(calibrated.shape) > (1280 * 1080):
+                        calibrated = self._resizeImage(calibrated, size=1024)
+
+                    # calculate the rectangular representation (phi/theta) of the background corrected raw images
+                    calibrated_raw[pol] = angleres.AngleResolved2Rectangular(calibrated, output_size, hole=False)
+
+                # Get the center wavelength of the filter used (no filter aka "pass-through" use fallback)
+                # Does not matter from which of the 6 images as they all were recorded with the same filter
+                band = next(iter(calibrated_raw.values())).metadata.get(model.MD_OUT_WL)
+                if isinstance(band, tuple):  # wl is usually tuple of min/max value
+                    wl = sum(band) / len(band)
+                else:  # handles if band is str
+                    # TODO if type is "str", support center wavelength based on color
+                    wl = 650e-9
+
+                # Warning: allocates lot of memory, which will not be free'd until
+                # the current thread is terminated.
+
+                # Calculate the polarimetry results for the requested ebeam pos (pixel):
+                # Note: Takes about 0.25 sec to calc all polarimetry results for one ebeam pos
+                # and tested on an image of size (256, 1024)
+                polarimetry_cache_raw[ebeam_pos] = arpolarimetry.calcPolarimetry(calibrated_raw, wl)
+
+                # set acq type on metadata
+                md = {model.MD_ACQ_TYPE: model.MD_AT_AR}
+                for polpos in polarimetry_cache_raw[ebeam_pos]:
+                    # Note: already background corrected data in dict
+                    polarimetry_cache_raw[ebeam_pos][polpos].metadata.update(md)
+
+            except Exception:
+                logging.exception("Failed to calculate raw polarimetry results for visualization.")
+                return None
+
+        return polarimetry_cache_raw[ebeam_pos]
+
+    def _project2RGBPolar(self, ebeam_pos, pol_pos, cache_raw):
+        """
+        Returns the RGB polar representation of the polarimetry visualization at the requested ebeam and
+        polarimetry position for GUI display.
+        :param ebeam_pos: (float, float) Current ebeam (pixel) position (must be part of the .stream._pos).
+        :param pol_pos: (str) Polarimetry position.
+        :param cache_raw: (dict(MD_POL_* (str) -> DataArray)) Cached conversion of the polarimetry visualization
+                          results as raw images (aka rectangular representation -> phi/theta) for one ebeam
+                          position. Images are background corrected.
+        :returns: (DataArray) The polarimetry visualization projection.
+        """
+        # Note: Need a copy of the link to the dict. If self._polarimetry_cache is reset while
+        # still running this method, the dict might get new entries again, though it should be empty.
+        polarimetry_cache = self._polarimetry_cache
+
+        if ebeam_pos in polarimetry_cache and pol_pos in polarimetry_cache[ebeam_pos]:
+            polarimetry_data = polarimetry_cache[ebeam_pos][pol_pos]
+        else:
+            try:
+                # Note: Takes 0.24 sec to convert one image for display and tested on an image of size (256, 1024)
+                # Create empty dict for processed ebeam position in cache
+                polarimetry_cache[ebeam_pos] = {}
+
+                # select a color map based on the data
+                if pol_pos in [MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX, MD_POL_EY, MD_POL_EZ]:
+                    data = numpy.abs(cache_raw[pol_pos])
+                    try:
+                        plotorder = int(numpy.log10(data.max()))
+                    except OverflowError:
+                        # Note: Error is raised, when bg image and image are the same
+                        # (-> cannot convert float infinity to integer)
+                        plotorder = 0
+
+                    cache_raw[pol_pos] = data / 10 ** plotorder
+                    colormap = "inferno"
+                elif pol_pos in [MD_POL_DS0, MD_POL_S0, MD_POL_DOP, MD_POL_DOLP, MD_POL_UP]:
+                    colormap = "viridis"
+                else:
+                    colormap = "seismic"
+
+                # define the size of the image for polar representation in GUI
+                # 3 x size of original/raw image (on smallest axis) and at most
+                # the size of a full-screen canvas (1134)
+                output_size = min(min(next(iter(self.stream.raw)).shape) * 3, 1134)
+
+                # Convert the data to polar representation for GUI display.
+                polarimetry_data = angleres.Rectangular2Polar(cache_raw[pol_pos], output_size,
+                                                              colormap=colormap)
+
+                new_md = self._find_metadata(polarimetry_data.metadata)
+                new_md[model.MD_DIMS] = "YXC"
+                polarimetry_cache[ebeam_pos][pol_pos] = model.DataArray(polarimetry_data, new_md)
+
+                # return an array
+                polarimetry_data = polarimetry_cache[ebeam_pos][pol_pos]
+
+            except Exception:
+                logging.exception("Failed to convert the raw polarimetry data to RGB polar representation.")
+                return None
+
+        return polarimetry_data
+
+    def _updateImage(self):
+        """
+        Recomputes the image for the current ebeam position and polarimetry visualization requested.
+        """
+
+        if not self.raw:
+            return
+
+        # TODO check looks like it is called twice when loading a new image/bg image
+        # TODO most likely on the histogram update, calc histogram in this class
+
+        ebeam_pos = self.stream.point.value
+        try:
+            if ebeam_pos == (None, None):
+                self.image.value = None
+            else:
+                pol_pos = self.stream.polarimetry.value
+
+                # Calculate the raw polarimetry data (phi/theta representation).
+                # Note: If already done before for the requested pixel (ebeam pos), method will immediately return.
+                cache_raw = self._projectAsRaw(ebeam_pos)
+                if cache_raw is None:
+                    self.image.value = None
+                    return
+
+                # Project the raw polarimetry data to RGB polar representation.
+                polarimetry_data = self._project2RGBPolar(ebeam_pos, pol_pos, cache_raw)
+
+                # TODO histogram on projection instead of stream
+                # self.stream._drange = None
+                # image_greyscale = img.RGB2Greyscale(self.stream._polarimetry[pos + (pol,)])
+                # self.stream._updateHistogram(image_greyscale)
+
+                self.image.value = polarimetry_data
+
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+
+    def _onPolarimetry(self, pos):
+        """
+        Called when the polarimetry VA has changed.
+        :param pos: (str) Polarimetry visualization requested.
+        """
+        self._shouldUpdateImage()
+
+    def _onBackground(self, data):
+        """
+        Called after the background has changed.
+        :param data: (list) List of data arrays.
+        """
+        # un-cache all the polar images
+        self._polarimetry_cache = {}
+        self._polarimetry_cache_raw = {}
+        super(ARPolarimetryProjection, self)._onBackground(data)
+
+    def projectAsRaw(self):
+        """
+        Returns the raw data of the polarimetry visualization for the currently selected pixel (ebeam position).
+        :returns: (dict: MD_POL_* (str) -> DataArray) Dictionary containing all images for the polarimetry visualization
+                  for one pixel with metadata.
+        """
+        return self._projectAsRaw(self.stream.point.value)
+
+    def projectAsVis(self):
+        """
+        Returns the special (polar) visualized data as shown in the GUI of the polarimetry visualization for
+        the currently selected pixel (ebeam position).
+        :returns: (dict: MD_POL_* (str) -> DataArray) Dictionary containing all images for the polarimetry visualization
+                  for one pixel with metadata.
+        """
+        ebeam_pos = self.stream.point.value  # ebeam pos selected
+        data_dict = {}
+
+        for pol_pos in self.polarimetry.choices:
+            try:
+                # the visualized data is only calculated when the user selects the corresponding
+                # value in the legend --> therefore there might be still some visualizations that need calculation
+                data = self._polarimetry_cache[ebeam_pos][pol_pos]
+            except KeyError:
+                # Note: If this method is called, while cache is empty e.g. the bg image was loaded (which empties
+                # the cache), recalculate raw (should always work).
+                raw = self._projectAsRaw(ebeam_pos)
+                data = self._project2RGBPolar(ebeam_pos, pol_pos, raw)
+
+            data_dict[pol_pos] = model.DataArray(data, data.metadata)
+
+        return data_dict
+
+
 class RGBSpatialProjection(RGBProjection):
     """
     An RGBSpatialProjection is a typical projection used to show 2D images.
@@ -227,6 +836,7 @@ class RGBSpatialProjection(RGBProjection):
     RGBSpatialProjection might be created (via the use of the __new__ operator).
     That is the recommended way to create a RGBSpatialProjection.
     """
+
     def __new__(cls, stream):
 
         if isinstance(stream, StaticSpectrumStream):
@@ -299,7 +909,7 @@ class RGBSpatialProjection(RGBProjection):
         #     logging.debug("Computed RGB projection %g s after acquisition",
         #                    time.time() - data.metadata[model.MD_ACQ_DATE])
         md = self._find_metadata(data.metadata)
-        md[model.MD_DIMS] = "YXC" # RGB format
+        md[model.MD_DIMS] = "YXC"  # RGB format
         return model.DataArray(rgbim, md)
 
     def _onZIndex(self, value):
@@ -424,7 +1034,7 @@ class RGBSpatialProjection(RGBProjection):
             tile.flags.writeable = False
             # merge and ensures all the needed metadata is there
             tile.metadata = self.stream._find_metadata(tile.metadata)
-            tile.metadata[model.MD_DIMS] = "YXC" # RGB format
+            tile.metadata[model.MD_DIMS] = "YXC"  # RGB format
             return tile
         elif dims in ("ZYX",) and model.hasVA(self.stream, "zIndex"):
             tile = img.getYXFromZYX(tile, self.stream.zIndex.value)
@@ -439,6 +1049,7 @@ class RGBSpatialProjection(RGBProjection):
         Get the tiles inside the region defined by .rect and .mpp
         return (DataArray, DataArray): Raw tiles and projected tiles
         """
+
         # This custom exception is used when the .mpp or .rect values changes while
         # generating the tiles. If the values changes, everything needs to be recomputed
         class NeedRecomputeException(Exception):
@@ -491,7 +1102,7 @@ class RGBSpatialProjection(RGBProjection):
                             raise NeedRecomputeException()
 
                         raw_tile, proj_tile = \
-                                self._getTile(x, y, z, prev_raw_cache, prev_proj_cache)
+                            self._getTile(x, y, z, prev_raw_cache, prev_proj_cache)
                         rt_column.append(raw_tile)
                         pt_column.append(proj_tile)
 
@@ -552,7 +1163,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         if hasattr(stream, "spectrumBandwidth"):
             stream.spectrumBandwidth.subscribe(self._on_spectrumBandwidth)
         if hasattr(stream, "fitToRGB"):
-            stream.fitToRGB.subscribe (self._on_fitToRGB)
+            stream.fitToRGB.subscribe(self._on_fitToRGB)
         self._updateImage()
 
     def _on_fitToRGB(self, _):
@@ -679,6 +1290,7 @@ class LineSpectrumProjection(RGBProjection):
     """
     Project a spectrum from the selected_line of the stream.
     """
+
     def __init__(self, stream):
 
         super(LineSpectrumProjection, self).__init__(stream)
@@ -713,7 +1325,7 @@ class LineSpectrumProjection(RGBProjection):
         """
 
         if ((None, None) in self.stream.selected_line.value or
-            self.stream.calibrated.value.shape[0] == 1):
+                self.stream.calibrated.value.shape[0] == 1):
             return None, None
 
         if model.hasVA(self.stream, "selected_time"):
@@ -837,6 +1449,7 @@ class PixelTemporalSpectrumProjection(RGBProjection):
     Project a temporal spectrum (typically from streak camera data) as a 2D
     RGB image of time vs. wavelength, for a given "selected_pixel".
     """
+
     def __init__(self, stream):
 
         super(PixelTemporalSpectrumProjection, self).__init__(stream)
@@ -868,8 +1481,8 @@ class PixelTemporalSpectrumProjection(RGBProjection):
         """
         data = self.stream.calibrated.value
 
-        if (self.stream.selected_pixel.value == (None, None) or 
-            (data.shape[1] == 1 or data.shape[0] == 1)):
+        if (self.stream.selected_pixel.value == (None, None) or
+                (data.shape[1] == 1 or data.shape[0] == 1)):
             return None
 
         x, y = self.stream.selected_pixel.value
@@ -926,7 +1539,7 @@ class PixelTemporalSpectrumProjection(RGBProjection):
                 self.image.value = self._project2RGB(data)
             else:
                 self.image.value = None
-            
+
         except Exception:
             logging.exception("Updating %s %s image", self.__class__.__name__, self.stream.name.value)
 
@@ -969,6 +1582,7 @@ class SinglePointSpectrumProjection(DataProjection):
     """
     Project the (0D) spectrum belonging to the selected pixel.
     """
+
     def __init__(self, stream):
 
         super(SinglePointSpectrumProjection, self).__init__(stream)
@@ -999,7 +1613,7 @@ class SinglePointSpectrumProjection(DataProjection):
         data = self.stream.calibrated.value
 
         if (self.stream.selected_pixel.value == (None, None) or
-            data is None or data.shape[0] == 1):
+                data is None or data.shape[0] == 1):
             return None
 
         x, y = self.stream.selected_pixel.value
@@ -1081,7 +1695,7 @@ class SinglePointTemporalProjection(DataProjection):
 
     def _on_selected_wl(self, _):
         self._shouldUpdateImage()
-        
+
     def _computeSpec(self):
         
         if self.stream.selected_pixel.value == (None, None) or self.stream.calibrated.value.shape[1] == 1:
