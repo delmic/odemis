@@ -27,6 +27,7 @@ from __future__ import division
 
 from abc import abstractmethod, ABCMeta
 from concurrent.futures._base import CancelledError
+from functools import partial
 import logging
 import math
 from odemis import gui, model, util
@@ -968,15 +969,16 @@ class PlotViewport(ViewPort):
 
         self._view = view
         self._tab_data_model = tab_data
+        self._stream_subs = []  # _on_stream_play subscribers
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        view.stream_tree.flat.subscribe(self.connect_stream, init=True)
+        view.stream_tree.flat.subscribe(self._on_stream_tree, init=True)
 
         # For the play/pause icon
-        view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
+        view.stream_tree.should_update.subscribe(self._on_streams_play, init=True)
         view.stream_tree.flat.subscribe(self._on_stream_update, init=True)
 
     def _on_stream_update(self, projs):
@@ -990,7 +992,7 @@ class PlotViewport(ViewPort):
             show = False
         self.canvas.play_overlay.show = show
 
-    def _on_stream_play(self, is_playing):
+    def _on_streams_play(self, is_playing):
         """
         Update the status of the play/pause icon overlay
         """
@@ -1005,13 +1007,16 @@ class PlotViewport(ViewPort):
         self.bottom_legend.Refresh()
         self.canvas.Refresh()
 
-    def connect_stream(self, projs):
+    def _on_stream_tree(self, projs):
         """
         Called when the stream_tree is changed.
         projs (list of Streams or Projections)
         Find the most appropriate stream in the view to be displayed, and make
         sure the display is updated when the stream is updated.
         """
+        # Disconnect all previous subscribers
+        self._stream_subs = []  # Automatic unsubscription
+
         # Most of the time, there is only one stream, but in some cases, there might be more.
         if not projs:
             proj = None
@@ -1028,9 +1033,26 @@ class PlotViewport(ViewPort):
                     proj = self._projection  # don't change
                 else:
                     proj = projs[0]
+
+            for o in projs:
+                s = get_original_stream(o)
+                f = partial(self._on_stream_play, s)
+                s.should_update.subscribe(f)
+                self._stream_subs.append(f)  # Hold the ref to avoid unsubscription
         else:
             proj = projs[0]
 
+        self._connect_projection(proj)
+
+    def _on_stream_play(self, stream, is_playing):
+        # Force the stream playing to be shown
+        if is_playing:
+            self._connect_projection(stream)
+
+    def _connect_projection(self, proj):
+        """
+        Adjust the viewport to show the given projection (of a stream)
+        """
         if self._projection is proj:
             # logging.debug("not reconnecting to stream as it's already connected")
             return
@@ -1166,10 +1188,8 @@ class ChronographViewport(PlotViewport):
         wx.CallAfter(self.bottom_legend.SetToolTip, "Time")
         wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
 
-
-    def connect_stream(self, projs):
-        super(ChronographViewport, self).connect_stream(projs)
-        stream, proj = self._stream, self._projection
+    def _connect_projection(self, proj):
+        super(ChronographViewport, self)._connect_projection(proj)
         if proj:
             # Show "count / s" if we know the data is normalized
             im = proj.image.value
