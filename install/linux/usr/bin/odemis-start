@@ -580,6 +580,8 @@ def run_model_selector(cmd_str):
                        (ex.cmd[0], ex.returncode, output))
         raise ValueError("Failed to pick the microscope file: %s" % (ex,))
 
+    return modelfile
+
 
 def main(args):
     """ Parse the command line arguments and launch the Odemis daemon
@@ -651,13 +653,13 @@ def main(args):
                     if options.model_conf:
                         modelfile = options.model_conf
                     elif options.model_sel:
-                        run_model_selector(options.model_sel)
+                        modelfile = run_model_selector(options.model_sel)
                     elif "MODEL" in odemis_config:
                         modelfile = odemis_config["MODEL"]
                         if "MODEL_SELECTOR" in odemis_config:
                             logging.warning("Both MODEL and MODEL_SELECTOR defined in odemis.conf, using MODEL")
                     elif "MODEL_SELECTOR" in odemis_config:
-                        run_model_selector(odemis_config["MODEL_SELECTOR"])
+                        modelfile = run_model_selector(odemis_config["MODEL_SELECTOR"])
                     else:
                         raise ValueError("No microscope model specified")
 
