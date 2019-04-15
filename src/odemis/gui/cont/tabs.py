@@ -3751,11 +3751,12 @@ class Sparc2AlignTab(Tab):
             #         # self.panel.gauge_autofocus.Enable(False)
             if align_mode == "streak-align":
                 s = []
+                focus_mode = "temporal-spec-focus"
             else:
                 self._stream_controller.pauseStreams()
                 logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)
                 return
-            f = Sparc2AutoFocus(align_mode, main.opm, s, start_autofocus=False)
+            f = Sparc2AutoFocus(focus_mode, main.opm, s, start_autofocus=False)
             f.add_done_callback(self._on_align_mode_done)
         else:  # manual focus button is inactive
             # Go back to previous mode (=> open the slit & turn off the lamp)
@@ -3785,13 +3786,14 @@ class Sparc2AlignTab(Tab):
             main = self.tab_data_model.main
             align_mode = self.tab_data_model.align_mode.value
             if align_mode == "lens-align":
-                # s = self._specline_stream
+                focus_mode = "spec-focus"
+                # TODO: create one stream per detector
                 ss = [self._specline_stream]
                 btn = self.panel.btn_autofocus
                 gauge = self.panel.gauge_autofocus
             elif align_mode == "fiber-align":
+                focus_mode = "spec-fiber-focus"
                 ss = []  # No stream to play
-                # s = None
                 btn = self.panel.btn_fib_autofocus
                 gauge = self.panel.gauge_fib_autofocus
             else:
@@ -3803,7 +3805,7 @@ class Sparc2AlignTab(Tab):
             self._stream_controller.pauseStreams()
 
             # No manual autofocus for now
-            self._autofocus_f = Sparc2AutoFocus(ss, align_mode, main.opm, start_autofocus=True)
+            self._autofocus_f = Sparc2AutoFocus(focus_mode, main.opm, ss, start_autofocus=True)
             self._autofocus_align_mode = align_mode
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
 

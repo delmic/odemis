@@ -23,15 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
+from concurrent.futures import TimeoutError, CancelledError
+from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 import cv2
 import logging
 import numpy
 from odemis import model
 from odemis.acq.align import light
 from odemis.model import InstantaneousFuture
-from odemis.util import executeAsyncTask, almost_equal, TimeoutError, img
+from odemis.util import executeAsyncTask, almost_equal
 from odemis.util.img import Subtract
 from scipy import ndimage
 import threading
