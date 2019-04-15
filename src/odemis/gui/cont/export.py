@@ -32,6 +32,7 @@ from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, \
     images_to_export_data, line_to_export_data, temporal_spectrum_to_export_data, \
     chronogram_to_export_data
+from odemis.util.dataio import splitext
 import os
 import time
 import wx
@@ -131,6 +132,8 @@ class ExportController(object):
             default_exporter = get_converter(formats[0][0])
         extension = default_exporter.EXTENSIONS[0]
 
+        batch_export = False
+
         # Suggested name= current file name + stream/view name + extension of default format
         fi = self._data_model.acq_fileinfo.value
         if fi is not None and fi.file_name:
@@ -145,13 +148,19 @@ class ExportController(object):
             else:
                 # TODO: remove numbers from the view name?
                 basename += " " + view.name.value
+
+            # only batch export when more than 1 image to export for view
+            if hasattr(streams[0], "polarimetry") or \
+                    (hasattr(streams[0], "polarization") and len(streams[0].polarization.choices) > 1):
+                batch_export = True
+
         else:
             basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
 
         filepath = os.path.join(self._conf.last_export_path, basename + extension)
-
         # filepath will be None if cancelled by user
-        return self.ShowExportFileDialog(filepath, default_exporter)
+
+        return self.ShowExportFileDialog(filepath, default_exporter, batch_export)
 
     @call_in_wx_main
     def export_viewport(self, filepath, export_format, export_type):
@@ -168,15 +177,57 @@ class ExportController(object):
             self._conf.last_export_path = os.path.dirname(filepath)
 
             exported_data = self.export(export_type, raw)
-            # record everything to a file
-            exporter.export(filepath, exported_data)
 
-            popup.show_message(self._main_frame,
-                               "Exported in %s" % (filepath,),
-                               timeout=3
-                               )
+            # batch export
+            # TODO: for now we do not create a new folder where all files are saved
 
-            logging.info("Exported a %s view into file '%s'.", export_type, filepath)
+            if isinstance(exported_data, dict):
+                # get the file names
+                filename_dict = {}
+                for key in exported_data.keys():
+                    dir_name, base = os.path.split(filepath)
+                    base_name, file_extension = splitext(base)
+
+                    # use the filename defined by the user and add the MD_POL_MODE to the filename
+                    filename = os.path.join(dir_name, base_name + "_" + key + file_extension)
+
+                    # detect we'd overwrite an existing file => show our own warning
+                    if os.path.exists(filename):
+                        dlg = wx.MessageDialog(self._main_frame,
+                                               "A file named \"%s\" already exists.\n"
+                                               "Do you want to replace it?" % (filename,),
+                                               "File already exists",
+                                               wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
+                        ret = dlg.ShowModal()
+                        dlg.Destroy()
+                        if ret == wx.ID_NO:
+                            return
+
+                    filename_dict[key] = filename
+
+                # record everything to a file
+                for key in exported_data.keys():
+                    exporter.export(filename_dict[key], exported_data[key])
+
+                # TODO need to be adapted for batch export as now redundant
+                popup.show_message(self._main_frame,
+                                   "Exported in files of type %s"
+                                   % (os.path.join(dir_name, base_name + "_" + "xxx" + file_extension),),
+                                   timeout=3
+                                   )
+
+                logging.info("Exported a %s view into files with name of type '%s'.",
+                             export_type, os.path.join(dir_name, base_name + "_" + "mode" + file_extension))
+
+            else:  # single file export
+                exporter.export(filepath, exported_data)
+
+                popup.show_message(self._main_frame,
+                                   "Exported in %s" % (filepath,),
+                                   timeout=3
+                                   )
+
+                logging.info("Exported a %s view into file '%s'.", export_type, filepath)
         except LookupError as ex:
             logging.info("Export of a %s view as %s seems to contain no data.",
                          export_type, export_format, exc_info=True)
@@ -197,7 +248,7 @@ class ExportController(object):
         """
         view_name = view.name.value
         # TODO: just use another dict
-        if view_name == 'Angle-resolved':
+        if view_name == 'Angle-resolved' or view_name == 'Polarimetry':
             export_type = 'AR'
         elif view_name == 'Spectrum plot':
             export_type = 'spectrum'
@@ -261,10 +312,11 @@ class ExportController(object):
                 return vp
         raise LookupError("No ViewPort found for view %s" % view)
 
-    def ShowExportFileDialog(self, filename, default_exporter):
+    def ShowExportFileDialog(self, filename, default_exporter, batch_export):
         """
         filename (string): full filename to propose by default
         default_exporter (module): default exporter to be used
+        batch_export (bool): If True, indicates that multiple files will be created (using the filename as a prefix).
         return (string or None): the new filename (or the None if the user cancelled)
                 (string): the format name
                 (string): spatial, AR, spectrum or spectrum-line
@@ -278,13 +330,18 @@ class ExportController(object):
         path, base = os.path.split(filename)
         uformats_to_ext = OrderedDict(formats_to_ext.values())
         wildcards, uformats = formats_to_wildcards(uformats_to_ext, suffix="")
-        dialog = wx.FileDialog(self._main_frame,
-                               message="Choose a filename and destination",
-                               defaultDir=path,
-                               defaultFile="",
-                               style=wx.FD_SAVE,  # | wx.FD_OVERWRITE_PROMPT,
-                               wildcard=wildcards)
 
+        # TODO: want to show a DirDialog for batch export
+        #  need to write own class which shows the possible fileextensions in dirdialog
+
+        dialog = wx.FileDialog(self._main_frame,
+                                   message="Choose a filename and destination",
+                                   defaultDir=path,
+                                   defaultFile="",
+                                   style=wx.FD_SAVE,  # | wx.FD_OVERWRITE_PROMPT,
+                                   wildcard=wildcards)
+
+        # TODO adjust code for dirdialog
         # Select the default format
         default_fmt = default_exporter.FORMAT
         try:
@@ -336,9 +393,11 @@ class ExportController(object):
             fn += ext
 
         fullfn = os.path.join(path, fn)
+
         # As we strip the extension from the filename, the normal dialog cannot
         # detect we'd overwrite an existing file => show our own warning
-        if os.path.exists(fullfn):
+        if os.path.exists(fullfn) and not batch_export:
+            # TODO if batch_export implemented, check all filenames here!
             dlg = wx.MessageDialog(self._main_frame,
                                    "A file named \"%s\" already exists.\n"
                                    "Do you want to replace it?" % (fn,),

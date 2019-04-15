@@ -32,7 +32,7 @@ import numpy
 from odemis import model
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, conversion, angleres, img, units
+from odemis.util import intersect, fluo, conversion, img, units
 import time
 import wx
 
@@ -693,130 +693,105 @@ def draw_image(ctx, im_data, p_im_center, buffer_center, buffer_scale,
     ctx.restore()
 
 
-def calculate_raw_ar(data, bg_data):
+def ar_to_export_data(projections, raw=False):
     """
-    Project the AR data to equirectangular
-    return (DataArray of shape phi/theta): phi/theta -> intensity
+    Creates either raw or WYSIWYG representation for the AR projection.
+    :param projections: (list of projection objects) projections displayed in the current view.
+    :param raw: (boolean) If True returns raw representation of the data.
+    :returns: (model.DataArray or dict of images)
+            If raw, returns a 2D array with axes phi/theta -> intensity (equi-rectangular projection).
+            Otherwise, returns a 3D DataArray corresponding to a greyscale RGBA view of the polar projection,
+            with the axes drawn over it. If polarization or polarimetry VAs present, all images for
+            the requested ebeam position will be returned in a dictionary. If only one polarization position
+            is available, a 3D DataArray will be returned.
     """
-    # FIXME: This code is a duplicate of part of _project2Polar
-    if numpy.prod(data.shape) > (800 * 800):
-        logging.info("AR image is very large %s, will convert to "
-                     "equirectangular projection in reduced precision.",
-                     data.shape)
-        y, x = data.shape
-        if y > x:
-            small_shape = 768, int(round(768 * x / y))
-        else:
-            small_shape = int(round(768 * y / x)), 768
-        # resize
-        data = img.rescale_hq(data, small_shape)
-        if bg_data is not None:
-            bg_data = img.rescale_hq(bg_data, small_shape)
 
-    size = (90, 360)  # TODO: increase if data is high def
+    # load logo for legend
+    logo = "legend_logo_delmic_black.png"
 
-    if bg_data is None:
-        # Simple version: remove the background value
-        data0 = angleres.ARBackgroundSubtract(data)
-    else:
-        # subtract bg image, but don't clip (keep negative values for export)
-        data0 = (data.astype(numpy.float64) - bg_data.astype(numpy.float64))
-
-    # calculate raw polar representation
-    polard = angleres.AngleResolved2Rectangular(data0, size, hole=False)
-
-    return polard
-
-
-def ar_to_export_data(streams, raw=False):
-    """
-    Creates either raw or WYSIWYG representation for the AR projection
-
-    streams (list of Stream objects): streams displayed in the current view
-    client_size (wx._core.Size)
-    raw (boolean): if True returns raw representation
-
-    returns (model.DataArray): if raw, returns a 2D array with axes phi/theta ->
-       intensity (equirectangular projection). Otherwise, returns a 3D DataArray
-       corresponding to a greyscale RGBA view of the polar projection, with the
-       axes drawn over it.
-    """
     # we expect just one stream
-    if len(streams) == 0:
+    if len(projections) == 0:
         raise LookupError("No stream to export")
-    elif len(streams) > 1:
+    elif len(projections) > 1:
         logging.warning("More than one stream exported to AR, will only use the first one.")
 
-    s = streams[0]
+    projection = projections[0]
 
     if raw:  # csv
-        polpos = None
-        sempos = s.point.value  # ebeam pos selected
-        if hasattr(s, "polarization"):
-            polpos = s.polarization.value  # polarization pos selected
+        # single image for raw ar data (phi/theta representation) for one ebeam pos
+        # if multiple images per ebeam pos (e.g. polarization or polarimetry data): batch export
+        return projection.projectAsRaw()
 
-        # find positions of each acquisition
-        # (float, float, str or None)) -> DataArray: position on SEM + polarization -> data
-        pos = {}
-        for d in s.raw:
-            try:
-                pos[d.metadata[model.MD_POS] + (d.metadata.get(model.MD_POL_MODE, None),)] = img.ensure2DImage(d)
-            except KeyError:
-                logging.info("Skipping DataArray without known position")
+    else:  # png, tiff
+        # single image for visualized ar data for one ebeam pos
+        # batch export for polarization analyzer raw data and polarimetry results for one ebeam pos
+        data_dict = projection.projectAsVis()
 
-        data = pos[sempos + (polpos,)]
-        data_bg = s._getBackground(pos[sempos + (polpos,)].metadata.get(model.MD_POL_MODE, model.MD_POL_NONE))
+        # create the image with web overlay, legend etc.
+        for pol_mode in data_dict:
+            stream_im = data_dict[pol_mode]
+            if stream_im is None:
+                raise LookupError("Stream %s has no data selected" % (projection.name.value,))
+            plot_im = format_rgba_darray(stream_im)  # RGB -> BGRA for cairo
+            # image is always centered, fitting the whole canvas, with scale 1
+            images = set_images([(plot_im, (0, 0), (1, 1), False, None, None, None, None,
+                                  projection.name.value, None, None, {})])
+            ar_margin = int(0.2 * stream_im.shape[0])
+            ar_size = stream_im.shape[0] + ar_margin, stream_im.shape[1] + ar_margin
 
-        raw_ar = calculate_raw_ar(data, data_bg)
-        raw_ar.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
-        return raw_ar
-    else:
-        sim = s.image.value  # TODO: check that it's up to date (and not None)
-        if sim is None:
-            raise LookupError("Stream %s has no data selected" % (s.name.value,))
-        wim = format_rgba_darray(sim)
-        # image is always centered, fitting the whole canvas, with scale 1
-        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value, None, None, {})])
-        ar_margin = int(0.2 * sim.shape[0])
-        ar_size = sim.shape[0] + ar_margin, sim.shape[1] + ar_margin
+            # Make surface based on the maximum resolution
+            data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
+            surface = cairo.ImageSurface.create_for_data(
+                data_to_draw, cairo.FORMAT_ARGB32, ar_size[0], ar_size[1])
+            ctx = cairo.Context(surface)
 
-        # Make surface based on the maximum resolution
-        data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
-        surface = cairo.ImageSurface.create_for_data(
-            data_to_draw, cairo.FORMAT_ARGB32, ar_size[0], ar_size[1])
-        ctx = cairo.Context(surface)
+            im = images[0]
+            buffer_center = (-ar_margin / 2, ar_margin / 2)
+            buffer_scale = (1.0, 1.0)
+            buffer_size = stream_im.shape[0], stream_im.shape[1]
 
-        im = images[0]
-        buffer_center = (-ar_margin / 2, ar_margin / 2)
-        buffer_scale = (1.0, 1.0)
-        buffer_size = sim.shape[0], sim.shape[1]
+            draw_image(
+                ctx,
+                im,
+                im.metadata['dc_center'],
+                buffer_center,
+                buffer_scale,
+                buffer_size,
+                1.0,
+                rotation=im.metadata['dc_rotation'],
+                shear=im.metadata['dc_shear'],
+                flip=im.metadata['dc_flip'],
+                blend_mode=im.metadata['blend_mode'],
+                interpolate_data=False
+            )
 
-        draw_image(
-            ctx,
-            im,
-            im.metadata['dc_center'],
-            buffer_center,
-            buffer_scale,
-            buffer_size,
-            1.0,
-            # im_scale=(1.0, 1.0),
-            rotation=im.metadata['dc_rotation'],
-            shear=im.metadata['dc_shear'],
-            flip=im.metadata['dc_flip'],
-            blend_mode=im.metadata['blend_mode'],
-            interpolate_data=False
-        )
+            font_name = "Sans"
+            ticksize = 10
+            num_ticks = 6
+            ticks_info = ar_create_tick_labels(projection.image.value.shape, ticksize, num_ticks, int(ar_margin / 2))
+            ticks, (center_x, center_y), inner_radius, radius = ticks_info
+            draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius)
+            draw_ar_spiderweb(ctx, center_x, center_y, radius)
 
-        font_name = "Sans"
-        ticksize = 10
-        num_ticks = 6
-        ticks_info = ar_create_tick_labels(streams[0].image.value.shape, ticksize, num_ticks, ar_margin / 2)
-        ticks, (center_x, center_y), inner_radius, radius = ticks_info
-        draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius)
-        draw_ar_spiderweb(ctx, center_x, center_y, radius)
-        ar_plot = model.DataArray(data_to_draw)
-        ar_plot.metadata[model.MD_DIMS] = 'YXC'
-        return ar_plot
+            # draw legend
+            md = stream_im.metadata
+            img.mergeMetadata(md, im.metadata)
+            ar_plot = model.DataArray(data_to_draw, md)
+            date = stream_im.metadata[model.MD_ACQ_DATE]
+            buffer_size = ar_size[0], ar_size[1]
+            legend_rgb = draw_legend_simple(ar_plot, buffer_size, date,
+                                            img_file=logo, bg_color=(1, 1, 1), text_color=(0, 0, 0))
+            data_with_legend = numpy.append(ar_plot, legend_rgb, axis=0)
+            data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]  # BGRA -> RGBA for exporter
+            ar_plot_final = model.DataArray(data_with_legend, metadata={model.MD_DIMS: "YXC"})
+            data_dict[pol_mode] = ar_plot_final
+
+        # TODO this needs to be redone when we can handle batch export in export.py
+        # as we now distinguish between a dict and array export for handling the data
+        if len(data_dict) > 1:
+            return data_dict
+        else:  # only return the array
+            return next(iter(data_dict.values()))
 
 
 def value_to_pixel(value, pixel_space, vtp_ratio, value_range, orientation):
@@ -1679,17 +1654,137 @@ def temporal_spectrum_to_export_data(proj, raw):
         return line_img
 
 
-def draw_export_legend(images, buffer_size, buffer_scale,
-                       hfw, date, stream=None, logo=None):
+def _draw_file(file, legend_ctx, buffer_size, margin_x, legend_height, cell_x_step, cell_factor=1):
     """
-    Draws legend to be attached to the exported image
-    stream (None or Stream): if provided, the text corresponding to this stream
-      will be indicated by a bullet before the name
-    return (ndarray of 3 dims Y,X,4) : the legend in RGB
+    :param file: (str or None) Name of an image file, that should be displayed in the legend.
+    :param legend_ctx: (cairo.Context) The legend object.
+    :param buffer_size: (int, int) Size of the output image (original size plus some frame for the legend).
+    :param margin_x: (float) The initial x pos to start drawing/writing in the legend.
+    :param legend_height: (float) Heights of the legend containing the general information.
+    :param cell_x_step: (float) Step in x direction.
+    :param cell_factor: (0 < int < 6) Factor to specify in which cell to write the image. A cell is 20% of the
+                        full width of the legend.
+    """
+    img_surface = cairo.ImageSurface.create_from_png(guiimg.getStream(file))
+    img_scale_x = ((cell_x_step / 2) - margin_x) / img_surface.get_width()
+    legend_ctx.save()
+    # Note: Goal of antialiasing & interpolation is to smooth the edges when
+    # downscaling the image. It only works with cairo v1.14 or newer.
+    surfpat = cairo.SurfacePattern(img_surface)
+    # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
+    # Downscaling and upscaling < 2x is nice, but above that, it just
+    # makes the pixels big (and antialiased)
+    if img_scale_x > 2:
+        surfpat.set_filter(cairo.FILTER_BILINEAR)
+    else:
+        surfpat.set_filter(cairo.FILTER_BEST)
+
+    img_h_height = (img_scale_x * img_surface.get_height()) / 2
+    # move origin of translation matrix
+    legend_ctx.translate(buffer_size[0] - cell_x_step * cell_factor / 2, (legend_height / 2) - img_h_height)
+    legend_ctx.scale(img_scale_x, img_scale_x)
+    legend_ctx.set_source(surfpat)
+    legend_ctx.paint()  # draw the image (paints the current source everywhere within the current clip region)
+    legend_ctx.restore()
+
+
+def _draw_acq_date(date, legend_ctx, buffer_size, legend_x_pos):
+    """
+    Draws the acquisition date into the legend.
+    :param date: (float) Acquisition date to be written to the legend.
+    :param legend_ctx: (cairo.Context) The legend object.
+    :param buffer_size: (int, int) Size of the output image (original size plus some frame for the legend).
+    :param legend_x_pos: (float) The x position to start drawing the acquisition date.
+    """
+    label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
+    date_split = label.split()
+    legend_ctx.show_text(date_split[0])  # write date
+    legend_y_pos = MAIN_LOWER * buffer_size[0]  # specify y pos of next row
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)
+    legend_ctx.show_text(date_split[1])  # write time
+
+
+def draw_legend_simple(image, buffer_size, date, img_file=None, bg_color=(0, 0, 0), text_color=(1, 1, 1)):
+    """
+    Draws simple legend to be attached to the exported image.
+    :param image: (DataArray) Image to draw a legend for.
+    :param buffer_size: (int, int) Size of the output image (original size plus some frame for the legend).
+    :param date: (float or None) Acquisition date to be attached to the legend.
+    :param img_file: (str or None) An image file, that should be displayed in the legend.
+    :param bg_color: (int, int, int) The background color of the legend. Default is black.
+    :param text_color: (int, int, int) The text color in the legend. Default is white.
+    :returns: (ndarray of 3 dims Y,X,4) The legend in RGB.
+    """
+    # create the legend canvas
+    full_shape = (int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4)
+    legend_rgb = numpy.zeros(full_shape, dtype=numpy.uint8)
+    legend_surface = cairo.ImageSurface.create_for_data(
+                        legend_rgb, cairo.FORMAT_ARGB32,
+                        legend_rgb.shape[1], legend_rgb.shape[0])
+    legend_ctx = cairo.Context(legend_surface)
+
+    margin_x = buffer_size[0] * CELL_MARGIN  # a bit of space to the canvas edge
+    medium_font = buffer_size[0] * MEDIUM_FONT  # used for acquisition date and pol mode
+
+    # Just make cell dimensions analog to the image buffer dimensions
+    legend_height = buffer_size[0] * MAIN_LAYER  # big cell containing the general info in the legend
+    cell_x_step = buffer_size[0] * CELL_WIDTH  # step in x direction
+
+    # fills the legend canvas with bg color
+    legend_ctx.set_source_rgb(*bg_color)
+    legend_ctx.rectangle(0, 0, buffer_size[0], legend_height)
+    legend_ctx.fill()
+
+    legend_ctx.set_source_rgb(*text_color)
+    legend_ctx.set_font_size(medium_font)
+
+    # move to the next position in the legend to write the acquisition date to
+    legend_x_pos = cell_x_step/2  # x pos to start writing the acq date at (start where the actual plot starts)
+    legend_y_pos = MAIN_UPPER * buffer_size[0]  # y pos in legend to write acq date to
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)  # move to pos of acq date
+
+    # write acquisition date
+    if date:
+        _draw_acq_date(date, legend_ctx, buffer_size, legend_x_pos)
+
+    # move to the next position in the legend to write the polarization mode to
+    legend_x_pos += cell_x_step  # x pos in legend to write pol mode to
+    legend_y_pos = MAIN_UPPER * buffer_size[0]  # y pos in legend to write pol mode to
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)  # move to pos of pol mode
+
+    # write the polarization mode info (polarization analyzer position or polarimetry result)
+    if model.MD_POL_MODE in image.metadata:
+        legend_ctx.show_text(model.MD_POL_MODE)  # write text for polarization mode
+        legend_y_pos = MAIN_LOWER * buffer_size[0]  # specify y pos of next row
+        legend_ctx.move_to(legend_x_pos, legend_y_pos)  # move to next row
+        legend_ctx.show_text(acqstream.POL_POSITIONS_2_DISPLAY[image.metadata[model.MD_POL_MODE]])  # write pol mode
+
+    # write delmic logo
+    if img_file:
+        _draw_file(img_file, legend_ctx, buffer_size, margin_x, legend_height, cell_x_step, cell_factor=2)
+
+    return legend_rgb
+
+
+def draw_legend_multi_streams(images, buffer_size, buffer_scale,
+                              hfw, date, stream=None, img_file=None,
+                              bg_color=(0, 0, 0), text_color=(1, 1, 1)):
+    """
+    Draws legend to be attached to the exported image.
+    :param images: (list) List of images (dataArray) to draw a legend for.
+    :param buffer_size: (int, int) Size of the output image (original size plus some frame for the legend).
+    :param buffer_scale: (0<float, 0<float) Scaling factor for size of output image.  TODO please check!
+    :param hfw: (numpy.float64 or None) horizontal field width
+    :param date: (float or None) Acquisition date to be attached to the legend.
+    :param stream: (None or Stream) If provided, the text corresponding to this stream
+                   will be indicated by a bullet before the name.
+    :param img_file: (str or None) An image file, that should be displayed in the legend.
+    :param bg_color: (tuple) The background color of the legend. Default is black.
+    :param text_color: (tuple) The text color in the legend. Default is white.
+    :returns: (ndarray of 3 dims Y,X,4) The legend in RGB.
     """
     # TODO: get a "raw" parameter to know whether to display in RGB or greyscale
     # TODO: get a better argument (name) than "stream"
-
     n = len(images)
     full_shape = (n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4)
     legend_rgb = numpy.zeros(full_shape, dtype=numpy.uint8)
@@ -1700,38 +1795,45 @@ def draw_export_legend(images, buffer_size, buffer_scale,
 
     init_x_pos = buffer_size[0] * CELL_MARGIN
     large_font = buffer_size[0] * LARGE_FONT  # used for general data
-    medium_font = buffer_size[0] * MEDIUM_FONT
+    medium_font = buffer_size[0] * MEDIUM_FONT  # used for acquisition date
     small_font = buffer_size[0] * SMALL_FONT  # used for stream data
+
     arc_radius = buffer_size[0] * ARC_RADIUS
     tint_box_size = buffer_size[0] * TINT_SIZE
+
     # Just make cell dimensions analog to the image buffer dimensions
-    big_cell_height = buffer_size[0] * MAIN_LAYER
-    small_cell_height = buffer_size[0] * SUB_LAYER
+    legend_height = buffer_size[0] * MAIN_LAYER  # big cell containing the general info in the legend
+    legend_height_stream = buffer_size[0] * SUB_LAYER  # smaller cell containing the stream info in the legend
     cell_x_step = buffer_size[0] * CELL_WIDTH
-    legend_ctx.set_source_rgb(0, 0, 0)
-    legend_ctx.rectangle(0, 0, buffer_size[0], n * small_cell_height + big_cell_height)
+
+    # fills the legend canvas with bg color
+    legend_ctx.set_source_rgb(*bg_color)
+    legend_ctx.rectangle(0, 0, buffer_size[0], n * legend_height_stream + legend_height)  # 1 big + n*stream small cells
     legend_ctx.fill()
-    legend_ctx.set_source_rgb(1, 1, 1)
-    legend_ctx.set_line_width(buffer_size[0] * LINE_THICKNESS)
 
     # draw separation lines
-    legend_y_pos = big_cell_height
+    legend_ctx.set_line_width(buffer_size[0] * LINE_THICKNESS)
+    legend_ctx.set_source_rgb(*text_color)
+    legend_y_pos = legend_height
     legend_ctx.move_to(0, legend_y_pos)
     legend_ctx.line_to(buffer_size[0], legend_y_pos)
     legend_ctx.stroke()
     for i in range(n - 1):
-        legend_y_pos += small_cell_height
+        legend_y_pos += legend_height_stream
         legend_ctx.move_to(0, legend_y_pos)
         legend_ctx.line_to(buffer_size[0], legend_y_pos)
         legend_ctx.stroke()
 
+    legend_x_pos = init_x_pos
+    max_bar_width = 2 * cell_x_step - 2 * init_x_pos
+    max_actual_width = max_bar_width * buffer_scale[0]
+    actual_width = units.round_down_significant(max_actual_width, 1)
+    bar_width = int(round(actual_width / buffer_scale[0]))
+
     # Write: HFW | Scale bar | date | logos
     legend_ctx.select_font_face("Sans", cairo.FONT_SLANT_NORMAL)
     legend_ctx.set_font_size(large_font)
-    legend_x_pos = init_x_pos
     legend_y_pos = MAIN_MIDDLE * buffer_size[0]
-    legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    # TODO: not done => remove
 
     # write HFW
     legend_x_pos += cell_x_step
@@ -1741,20 +1843,14 @@ def draw_export_legend(images, buffer_size, buffer_scale,
     legend_ctx.show_text(label)
 
     # Draw scale bar
-    # min_bar_width = cell_x_step - init_x_pos
-    max_bar_width = 2 * cell_x_step - 2 * init_x_pos
-    max_actual_width = max_bar_width * buffer_scale[0]
-    actual_width = units.round_down_significant(max_actual_width, 1)
-    bar_width = int(round(actual_width / buffer_scale[0]))
-
     legend_ctx.set_line_width(buffer_size[0] * BAR_THICKNESS)
     legend_x_pos += cell_x_step
-    legend_y_pos = (big_cell_height / 2) - (BAR_HEIGHT * buffer_size[0] / 2)
+    legend_y_pos = (legend_height / 2) - (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    legend_y_pos = (big_cell_height / 2) + (BAR_HEIGHT * buffer_size[0] / 2)
+    legend_y_pos = (legend_height / 2) + (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
     bar_line = bar_width * 0.375
-    legend_y_pos = big_cell_height / 2
+    legend_y_pos = legend_height / 2
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     legend_x_pos += bar_line
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
@@ -1768,65 +1864,44 @@ def draw_export_legend(images, buffer_size, buffer_scale,
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     legend_ctx.show_text(label)
 
-    legend_y_pos = big_cell_height / 2
+    legend_y_pos = legend_height / 2
     legend_x_pos += 1.1 * plw
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     legend_x_pos += bar_line
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
-    legend_y_pos = (big_cell_height / 2) - (BAR_HEIGHT * buffer_size[0] / 2)
+    legend_y_pos = (legend_height / 2) - (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    legend_y_pos = (big_cell_height / 2) + (BAR_HEIGHT * buffer_size[0] / 2)
+    legend_y_pos = (legend_height / 2) + (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
     legend_ctx.stroke()
 
-    # write acquisition date
     legend_ctx.set_font_size(medium_font)
-    legend_x_pos += 2 * cell_x_step - (bar_width + init_x_pos)
-    legend_y_pos = MAIN_UPPER * buffer_size[0]
-    legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    if date is not None:
-        label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
-        date_split = label.split()
-        legend_ctx.show_text(date_split[0])
-        legend_y_pos = MAIN_LOWER * buffer_size[0]
-        legend_ctx.move_to(legend_x_pos, legend_y_pos)
-        legend_ctx.show_text(date_split[1])
+
+    # move to the next position in the legend to write the acquisition date to
+    legend_x_pos += 2 * cell_x_step - (bar_width + init_x_pos)  # x pos in legend to write acq date to
+    legend_y_pos = MAIN_UPPER * buffer_size[0]  # y pos in legend to write acq date to
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)  # move to pos of acq date
+
+    # write acquisition date
+    if date:
+        _draw_acq_date(date, legend_ctx, buffer_size, legend_x_pos)
 
     # TODO: allow to insert another logo or text
     # => pass a string (= text) or a 2D or 3D numpy array (image)
 
     # write delmic logo
-    if logo is not None:
-        logo_surface = cairo.ImageSurface.create_from_png(guiimg.getStream(logo))
-        logo_scale_x = ((cell_x_step / 2) - init_x_pos) / logo_surface.get_width()
-        legend_ctx.save()
-        # Note: Goal of antialiasing & interpolation is to smooth the edges when
-        # downscaling the logo. It only works with cairo v1.14 or newer.
-        surfpat = cairo.SurfacePattern(logo_surface)
-        # Since cairo v1.14, FILTER_BEST is different from BILINEAR.
-        # Downscaling and upscaling < 2x is nice, but above that, it just
-        # makes the pixels big (and antialiased)
-        if logo_scale_x > 2:
-            surfpat.set_filter(cairo.FILTER_BILINEAR)
-        else:
-            surfpat.set_filter(cairo.FILTER_BEST)
-
-        logo_h_height = (logo_scale_x * logo_surface.get_height()) / 2
-        legend_ctx.translate(buffer_size[0] - (cell_x_step / 2), (big_cell_height / 2) - logo_h_height)
-        legend_ctx.scale(logo_scale_x, logo_scale_x)
-        legend_ctx.set_source(surfpat)
-        legend_ctx.paint()
-        legend_ctx.restore()
+    if img_file:
+        _draw_file(img_file, legend_ctx, buffer_size, init_x_pos, legend_height, cell_x_step)
 
     # Write stream data, sorted by acquisition date (and fallback on stable order)
     legend_ctx.set_font_size(small_font)
-    legend_y_pos = big_cell_height
+    legend_y_pos = legend_height
 
     sorted_im = sorted(images, key=lambda im: im.metadata['date'])
     for im in sorted_im:
         s = im.metadata['stream']
         md = im.metadata['metadata']
-        if s is stream:
+        if s is stream and stream is not None:
             # in case of multifile/raw, spot this particular stream with a
             # circle next to the stream name
             legend_ctx.arc(ARC_LEFT_MARGIN * buffer_size[0],
@@ -1838,7 +1913,8 @@ def draw_export_legend(images, buffer_size, buffer_scale,
         legend_x_pos = init_x_pos
         legend_y_pos += SUB_UPPER * buffer_size[0]
         legend_ctx.move_to(legend_x_pos, legend_y_pos)
-        legend_ctx.show_text(s.name.value)
+        if s:
+            legend_ctx.show_text(s.name.value)
 
         # If stream has tint, draw the colour in a little square next to the name
         if stream is None and isinstance(s, (acqstream.FluoStream, acqstream.StaticFluoStream)):
@@ -1848,7 +1924,7 @@ def draw_export_legend(images, buffer_size, buffer_scale,
                                  legend_y_pos - small_font,
                                  tint_box_size, tint_box_size)
             legend_ctx.fill()
-            legend_ctx.set_source_rgb(1, 1, 1)
+            legend_ctx.set_source_rgb(*bg_color)
 
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
@@ -1860,7 +1936,7 @@ def draw_export_legend(images, buffer_size, buffer_scale,
                 legend_y_pos = legend_y_pos_store
             else:
                 legend_y_pos += (SUB_LOWER - SUB_UPPER) * buffer_size[0]
-        legend_y_pos = (legend_y_pos_store + (small_cell_height - SUB_UPPER * buffer_size[0]))
+        legend_y_pos = (legend_y_pos_store + (legend_height_stream - SUB_UPPER * buffer_size[0]))
 
     return legend_rgb
 
@@ -2220,10 +2296,10 @@ def images_to_export_data(streams, view_hfw, view_pos,
         )
 
         # Create legend for each raw image
-        if raw:
-            legend_rgb = draw_export_legend(images, buffer_size, buffer_scale,
-                                            view_hfw[0], im.metadata['date'],
-                                            im.metadata['stream'], logo)
+        if raw:  # csv
+            legend_rgb = draw_legend_multi_streams(images, buffer_size, buffer_scale,
+                                                   view_hfw[0], im.metadata['date'],
+                                                   im.metadata['stream'], img_file=logo)
 
             new_data_to_draw = _unpack_raw_data(data_to_draw, im_min_type)
             legend_as_raw = _adapt_rgb_to_raw(legend_rgb, new_data_to_draw)
@@ -2233,10 +2309,10 @@ def images_to_export_data(streams, view_hfw, view_pos,
             data_to_export.append(model.DataArray(data_with_legend, md))
 
     # Create legend for print-ready
-    if not raw:
+    if not raw:  # png, tiff
         date = max(im.metadata['date'] for im in images)
-        legend_rgb = draw_export_legend(images, buffer_size, buffer_scale,
-                                        view_hfw[0], date, logo=logo)
+        legend_rgb = draw_legend_multi_streams(images, buffer_size, buffer_scale,
+                                               view_hfw[0], date, img_file=logo)
         data_with_legend = numpy.append(data_to_draw, legend_rgb, axis=0)
         data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
         md = {model.MD_DIMS: 'YXC'}
@@ -2498,6 +2574,7 @@ def insert_tile_to_image(tile, ovv):
         pos_top_left[0]: pos_top_left[0] + tile_sz_px[0] - diff_x - diff_x2] = \
         img.rescale_hq(tile, (tile_sz_px[1], tile_sz_px[0], c))[diff_y:y_right, diff_x:x_right]
     return ovv
+
 
 def merge_screen(im, background):
     """ 
