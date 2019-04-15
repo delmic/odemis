@@ -632,30 +632,28 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
             LookupError if procedure failed
     """
     focuser = None
-    detector = None
     if align_mode in ("spec-focus", "temporal-spec-focus"):
         focuser = model.getComponent(role='focus')
     elif align_mode == "spec-fiber-focus":
+        # The "right" focuser is the one which affects the same detectors as the fiber-aligner
         aligner = model.getComponent(role='fiber-aligner')
-        for r in ("ccd", "sp-ccd"):
+        aligner_affected = aligner.affects.value  # List of component names
+        for f in ("spec-ded-focus", "focus"):
             try:
-                det = model.getComponent(role=r)
+                focus = model.getComponent(role=f)
             except LookupError:
-                logging.warning("No detector component found")
+                logging.debug("No focus component %s found", f)
                 continue
-            if aligner is not None and det.name in aligner.affects.value:
-                detector = det
-        if detector is not None:
-            for f in ("focus", "spec-ded-focus"):
-                try:
-                    focus = model.getComponent(role=f)
-                except LookupError:
-                    logging.warning("No focus component found")
-                    continue
-                if focus is not None and detector.name in focus.affects.value:
-                    focuser = focus
+            focuser_affected = focus.affects.value
+            # Does the focus affects _at least_ one component also affected by the fiber-aligner?
+            if set(focuser_affected) & set(aligner_affected):
+                focuser = focus
+                break
     else:
         raise ValueError("Unknown align_mode %s", align_mode)
+
+    if focuser is None:
+        raise LookupError("Failed to find the focuser for align mode %s", align_mode)
 
     if streams is None:
         streams = []
@@ -673,7 +671,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         spgr, dets, selector = _getSpectrometerFocusingComponents(focuser)  # type: (object, List[Any], Optional[Any])
     except LookupError as ex:
         # TODO: just run the standard autofocus procedure instead?
-        raise LookupError("Failed to focus: %s", ex)
+        raise LookupError("Failed to focus in mode %s: %s" % (align_mode, ex))
 
     for s in streams:
         if s.detector.role not in (d.role for d in dets):
@@ -688,7 +686,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     # * af_time s for the AutoFocusSpectrometer procedure to be completed
     # * 0.2 s to acquire one last image
     # * 0.1 s to turn off the light
-    if start_autofocus == True:
+    if start_autofocus:
         # calculate the time needed for the AutoFocusSpectrometer procedure to be completed
         af_time = _totalAutoFocusTime(spgr, dets)
         autofocus_loading_times = (5, 5, af_time, 0.2, 5) # a list with the time that each action needs
@@ -720,35 +718,22 @@ def _getSpectrometerFocusingComponents(focuser):
         * selector (Actuator or None): the component to switch detectors
     raise LookupError: if not all the components could be found
     """
-    # to adapt the code don't use main data model but just call model.getComponent() properly
-    try:
-        spectrograph = model.getComponent(role="spectrograph")
-    except LookupError as exp:
-        logging.warning("No spectrograph found")
-        spectrograph = None
-    try:
-        spectrograph_ded = model.getComponent(role="spectrograph-dedicated")
-    except LookupError:
-        logging.warning("No dedicated spectrograph found")
-        spectrograph_ded = None
-
     dets = []
-    # "ccd", which is the detector of the stream, should be first, as it's
-    # normally on the "direct" output port (which the SR193 tends to prefer
-    # for focusing), and typically has a better performance for focus.
-    for r in ("ccd", "sp-ccd"):
+    # The order of the detectors shouldn't matter for the SpectrometerAutofocus.
+    # So we leave it to the microscope file to specify the order.
+    for n in focuser.affects.value:
         try:
-            d = model.getComponent(role=r)
+            d = model.getComponent(name=n)
         except LookupError:
             continue
-        if r == "sp-ccd" and d.shape[1] == 1:
-            # Currently, the autofocus doesn't work correctly on spectrum
-            # (ie, resolution of X x 1), so skip it, and hope the focus is
-            # already correct.
-            # TODO: make the autofocus work also in such case.
-            logging.info("Will not focus on %s as it is 1D", d.name)
-            continue
-        if d.name in focuser.affects.value:
+        if d.role.startswith("ccd") or d.role.startswith("sp-ccd"): # catches ccd*, sp-ccd*
+            if d.shape[1] == 1:
+                # Currently, the autofocus doesn't work correctly on spectrum
+                # (ie, resolution of X x 1), so skip it, and hope the focus is
+                # already correct.
+                # TODO: make the autofocus work also in such case.
+                logging.info("Will not focus on %s as it is 1D", d.name)
+                continue
             dets.append(d)
 
     if not dets:
@@ -756,32 +741,33 @@ def _getSpectrometerFocusingComponents(focuser):
 
     # Get the spectrograph and selector based on the fact they affect the
     # same detectors.
-    spgr = _findSameAffects([spectrograph, spectrograph_ded], dets)
+    spgr = _findSameAffects(["spectrograph", "spectrograph-dedicated"], dets)
+
+    # Only need the selector if there are several detectors
     if len(dets) <= 1:
         selector = None  # we can keep it simple
     else:
-        # TODO: make this code able to handle systems with multiple
-        # spectrographs (with a focus)
-        # Precisely, a selector would have multiple positions, with
-        # each position corresponding to one of the detectors
-        sels = [model.getComponent(role="spec-det-selector")]
-        selector = _findSameAffects(sels, dets)
+        selector = _findSameAffects(["spec-det-selector", "spec-ded-det-selector"], dets)
 
     return spgr, dets, selector
 
 
-def _findSameAffects(comps, affected):
+def _findSameAffects(roles, affected):
     """
     Find a component that affects all the given components
-    comps (list of Component or None): set of components in which to look
-      for the "affecter"
+    comps (list of str): set of component's roles in which to look for the "affecter"
     affected (list of Component): set of affected components
     return (Component): the first component that affects all the affected
     raise LookupError: if no component found
     """
     naffected = set(c.name for c in affected)
-    for c in comps:
-        if c is not None and naffected <= set(c.affects.value):
+    for r in roles:
+        try:
+            c = model.getComponent(role=r)
+        except LookupError:
+            logging.debug("No component with role %s found", r)
+            continue
+        if naffected <= set(c.affects.value):
             return c
     else:
         raise LookupError("Failed to find a component that affects all %s" % (naffected,))

@@ -46,6 +46,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-focus-test.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc2-focus-test.odm.yaml"
 SPARC2_FOCUS_CONFIG = CONFIG_PATH + "sim/sparc2-ded-focus-test-sim.odm.yaml"
+SPARC2_FOCUS2_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 
 TEST_IMAGE_PATH = os.path.dirname(__file__)
 
@@ -411,6 +412,98 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
 
         # We expect an entry for each combination grating/detector
         self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
+
+class TestSparc2AutoFocus_3(unittest.TestCase):
+    """
+    Test Sparc2Autofocus for in case of 4 detectors
+    backend : SPARC2_FOCUS2_CONFIG
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+
+        # try:
+        #     test.start_backend(SPARC2_FOCUS2_CONFIG)
+        # except LookupError:
+        #     logging.info("A running backend is already found, skipping tests")
+        #     cls.backend_was_running = True
+        #     return
+        # except IOError as exp:
+        #     logging.error(str(exp))
+        #     raise
+
+        # find components by their role
+        cls.ccd = model.getComponent(role="ccd0")
+        cls.spccd = model.getComponent(role="sp-ccd3")
+        cls.focus = model.getComponent(role="focus")
+        cls.spgr = model.getComponent(role="spectrograph")
+        cls.spgr_ded = model.getComponent(role="spectrograph-dedicated")
+        cls.bl = model.getComponent(role="brightlight")
+        cls.microscope = model.getMicroscope()
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
+        cls.specline_ccd = stream.BrightfieldStream("Spectrograph_line_ccd", cls.ccd, cls.ccd.data, cls.bl)
+        cls.specline_spccd = stream.BrightfieldStream ("Spectrograph line_spccd", cls.spccd, cls.spccd.data, cls.bl)
+
+        # The good focus position is the start up position
+        cls._good_focus = cls.focus.position.value["z"]
+
+    @classmethod
+    def tearDownClass(cls):
+        # if cls.backend_was_running:
+        #     return
+        # test.stop_backend()
+        pass
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+        self.opm = acq.path.OpticalPathManager(model.getMicroscope())
+        # Speed it up
+        self.ccd.exposureTime.value = self.ccd.exposureTime.range[0]
+        self.spccd.exposureTime.value = self.spccd.exposureTime.range[0]
+
+
+    @timeout(1000)
+    def test_spectrograph(self):
+        """
+        Test AutoFocus Spectrometer on CCD
+        """
+        f = Sparc2AutoFocus("spec-focus", self.optmngr, [self.specline_ccd], True)
+        res = f.result(timeout=900)
+        for (g, d), fpos in res.items():
+            self.assertIn(d.role, {"ccd0", "sp-ccd1"})
+
+        self.assertEqual(len(res.keys()), 2*len(self.spgr_ded.axes["grating"].choices))
+
+    def test_ded_spectrograph(self):
+        """
+        Test AutoFocus Spectrometer on CCD
+        """
+        f = Sparc2AutoFocus("spec-fiber-focus", self.optmngr, [self.specline_spccd], True)
+        res = f.result(timeout=900)
+        for (g, d), fpos in res.items():
+            self.assertIn(d.role, {"sp-ccd2", "sp-ccd3"})
+
+        self.assertEqual(len(res.keys()), 2*len(self.spgr_ded.axes["grating"].choices))
+
+    @timeout(100)
+    def test_cancel(self):
+        """
+        Test cancelling does cancel (relatively quickly)
+        """
+        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+
+        f = Sparc2AutoFocus("spec-focus", self.optmngr, [self.specline_ccd], True)
+
+        time.sleep(5)
+
+        cancelled = f.cancel()
+        self.assertTrue(cancelled)
+        self.assertTrue(f.cancelled())
+        with self.assertRaises(CancelledError):
+            res = f.result(timeout=900)
+
 
 class TestAutofocusSpectrometer(unittest.TestCase):
     """
