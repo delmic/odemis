@@ -218,8 +218,11 @@ class SpecExtraPlugin(Plugin):
                              self.name)
                 return
 
-            sptms = [main_data.spectrometer, main_data.spectrometer_int]
-            sptms = [s for s in sptms if s is not None]
+            if hasattr(main_data, "spectrometers"):  # From Odemis 2.10
+                sptms = main_data.spectrometers
+            else:  # Odemis 2.9
+                sptms = [main_data.spectrometer, main_data.spectrometer_int]
+                sptms = [s for s in sptms if s is not None]
             if not sptms:
                 logging.info("%s plugin cannot load as there are no spectrometers",
                              self.name)
