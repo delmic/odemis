@@ -370,32 +370,6 @@ class OpticalPathManager(object):
             if not self._chamber_view_own_focus:
                 logging.debug("No focus component affecting chamber")
 
-        # TODO: do this also for the sparc
-        if self.microscope.role == "sparc2":
-            # Remove the moves that don't affects the detector
-            for mode in self._modes:
-                det_role = self._modes[mode][0]
-                det = self._getComponent(det_role)
-                targets = {det.name}
-                # In case the "detector" (which might actually be any component)
-                # affects other components, also consider these affected
-                # components as the targets (as they are most probably the
-                # actual detectors).
-                targets.update(set(det.affects.value))
-
-                modeconf = self._modes[mode][1]
-                for act_role in modeconf.keys():
-                    try:
-                        act = self._getComponent(act_role)
-                    except LookupError:
-                        # TODO: just remove that move too?
-                        logging.debug("Failed to find component %s, skipping it", act_role)
-                        continue
-                    if not any(self.affects(act.name, n) for n in targets):
-                        logging.debug("Actuator %s doesn't affect %s, so removing it from mode %s",
-                                      act_role, det_role, mode)
-                        del modeconf[act_role]
-
         # will take care of executing setPath asynchronously
         self._executor = ThreadPoolExecutor(max_workers=1)
 
@@ -516,6 +490,13 @@ class OpticalPathManager(object):
                 comp = self._getComponent(comp_role)
             except LookupError:
                 logging.debug("Failed to find component %s, skipping it", comp_role)
+                continue
+
+            # Check whether that actuator affects the target
+            targets = {target.name} | set(target.affects.value)
+            if not any(self.affects(comp.name, n) for n in targets):
+                logging.debug("Actuator %s doesn't affect %s, so not moving it",
+                              comp.name, target.name)
                 continue
 
             mv = {}
@@ -809,6 +790,9 @@ class OpticalPathManager(object):
         """
         Returns True if "affecting" component affects -directly of indirectly-
         the "affected" component
+        affecting (str): component name
+        affected (str): component name
+        return bool
         """
         path = self.findPath(affecting, affected)
         if path is None:
