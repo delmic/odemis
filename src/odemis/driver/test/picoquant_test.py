@@ -39,7 +39,6 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CONFIG_DET0 = {"name": "APD0", "role": "cl-detector"}
 CONFIG_DET1 = {"name": "APD1", "role": "cl-detector2"}
 
-SHUTTER1 = dict(name="sr303", role="spectrograph", device=0)
 CONFIG_PH = {"name": "HP300", "role": "time-correlator", "device": None,
              "disc_volt": [0.1, 0.1], "zero_cross": [1e-3, 1e-3],
              "children": {"detector0": CONFIG_DET0, "detector1": CONFIG_DET1}}
@@ -112,7 +111,7 @@ class TestPH300(unittest.TestCase):
         self._cnt = 0
         self._lastdata = None
         df.subscribe(self._on_det)
-        time.sleep(5)
+        time.sleep(8)  # consider some time for opening/ closing shutters in subclass
         df.unsubscribe(self._on_det)
         self.assertGreater(self._cnt, 3)
         self.assertEqual(self._lastdata.shape, exp_shape)
@@ -208,30 +207,31 @@ class TestPH300_Shutters(TestPH300):
         # When acquiring, the shutters should open and close automatically once the acquisition is done
         self._cnt = 0
         self._lastdata = None
+        self.tc_act.speed.value = {'shutter0': 10, 'shutter1': 10}  # shutters are much faster than a stage
         self.dev.data.subscribe(self._on_rawdet)
-        time.sleep(3)  # speed is 1 m/s
+        time.sleep(1)
         self.assertEqual(self.tc_act.position.value['shutter0'], 1)
         self.assertEqual(self.tc_act.position.value['shutter1'], 1)
         self.dev.data.unsubscribe(self._on_rawdet)
-        time.sleep(3)
+        time.sleep(1)
         self.assertEqual(self.tc_act.position.value['shutter0'], 0)
         self.assertEqual(self.tc_act.position.value['shutter1'], 0)
         # Acquire on one detector alone and check if the right shutter opens
         self.det0.data.subscribe(self._on_det)
-        time.sleep(3)
+        time.sleep(1)
         self.assertEqual(self.tc_act.position.value['shutter0'], 1)
         self.assertEqual(self.tc_act.position.value['shutter1'], 0)
         self.det0.data.unsubscribe(self._on_det)
-        time.sleep(3)
+        time.sleep(1)
         self.assertEqual(self.tc_act.position.value['shutter0'], 0)
         self.assertEqual(self.tc_act.position.value['shutter1'], 0)
 
         self.det1.data.subscribe(self._on_det)
-        time.sleep(3)
+        time.sleep(1)
         self.assertEqual(self.tc_act.position.value['shutter0'], 0)
         self.assertEqual(self.tc_act.position.value['shutter1'], 1)
         self.det1.data.unsubscribe(self._on_det)
-        time.sleep(3)
+        time.sleep(1)
         self.assertEqual(self.tc_act.position.value['shutter0'], 0)
         self.assertEqual(self.tc_act.position.value['shutter1'], 0)
 
