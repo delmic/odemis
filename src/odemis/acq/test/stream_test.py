@@ -3280,6 +3280,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertLessEqual(ir[1][1], 3)  # Should be rounded to the next power of 2 -1
         self.assertEqual(h[2], da.shape[1])
 
+    # TODO add test polarimetry visualization data
 #     @skip("simple")
     def test_ar(self):
         """Test StaticARStream"""
@@ -3310,6 +3311,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         logging.info("setting up stream")
         ars = stream.StaticARStream("test", [data0, data1])
+        ars_raw_pj = stream.ARRawProjection(ars)
 
         # wait a bit for the image to update
         e = threading.Event()
@@ -3318,11 +3320,11 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
+        ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         # Control AR projection
-        im2d0 = ars.image.value
+        im2d0 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times (maybe due to calc histogram)
 
         # Check it's a RGB DataArray
@@ -3340,7 +3342,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         e.wait()
 
-        im2d1 = ars.image.value
+        im2d1 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
@@ -3359,15 +3361,15 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
         e.wait()
 
-        im2dc = ars.image.value
+        im2d2 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
-        self.assertEqual(im2dc.shape[2], 3)
-        self.assertFalse(im2d1 is im2dc)
+        self.assertEqual(im2d2.shape[2], 3)
+        self.assertFalse(im2d1 is im2d2)
 
         # check if the .image VA has been updated
-        assert not numpy.array_equal(im2d1, im2dc)
+        assert not numpy.array_equal(im2d1, im2d2)
 
     def test_ar_das(self):
         """Test StaticARStream with a DataArrayShadow"""
@@ -3399,6 +3401,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         acd = tiff.open_data(FILENAME)
 
         ars = stream.StaticARStream("test", acd.content)
+        ars_raw_pj = stream.ARRawProjection(ars)
 
         self.assertEqual(len(ars.point.choices), 3)  # 2 data + (None, None)
 
@@ -3408,11 +3411,12 @@ class StaticStreamsTestCase(unittest.TestCase):
         def on_im(im):
             if im is not None:
                 e.set()
-        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
+
+        ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         # Control AR projection
-        im2d0 = ars.image.value
+        im2d0 = ars_raw_pj.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2d0.shape[2], 3)
 
@@ -3453,6 +3457,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         logging.info("setting up ar stream")
         ars = stream.StaticARStream("test arpol static stream", data)
+        ars_raw_pj = stream.ARRawProjection(ars)
 
         # wait a bit for the image to update
         e = threading.Event()
@@ -3461,11 +3466,11 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
+        ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         # Control AR projection
-        im2d0 = ars.image.value
+        im2d0 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
@@ -3475,16 +3480,16 @@ class StaticStreamsTestCase(unittest.TestCase):
         logging.info("changing polarization position")
         e.clear()
         # change position once
-        for p in ars.polarization.choices:
-            if p != (None, None) and p != ars.polarization.value:
-                ars.polarization.value = p
+        for p in ars_raw_pj.polarization.choices:
+            if p != (None, None) and p != ars_raw_pj.polarization.value:
+                ars_raw_pj.polarization.value = p
                 break
         else:
             self.fail("Failed to find another polarization position in ARPOL")
 
         e.wait()
 
-        im2d1 = ars.image.value
+        im2d1 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
@@ -3513,7 +3518,7 @@ class StaticStreamsTestCase(unittest.TestCase):
             numpy.testing.assert_equal(bg_VA[0], bg_im[0][0, 0, 0])
         e.wait()
 
-        im2d2 = ars.image.value
+        im2d2 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # Check it's a RGB DataArray
@@ -3554,6 +3559,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
         logging.info("setting up stream")
         ars = stream.StaticARStream("test arpol static stream", data)
+        ars_raw_pj = stream.ARRawProjection(ars)
 
         # wait a bit for the image to update
         e = threading.Event()
@@ -3562,10 +3568,10 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
+        ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
-        im2d3 = ars.image.value
+        im2d0 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # corresponding bg image
@@ -3576,10 +3582,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
         e.wait()
 
-        im2d4 = ars.image.value
+        im2d1 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
         # check if the bg image has been applied and the .image VA has been updated
-        assert not numpy.array_equal(im2d3, im2d4)
+        assert not numpy.array_equal(im2d0, im2d1)
 
     def test_ar_large_image(self):
         """Test StaticARStream with a large image to trigger resizing."""
@@ -3602,6 +3608,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
         logging.info("setting up stream")
         ars = stream.StaticARStream("test ar static stream with large image", data)
+        ars_raw_pj = stream.ARRawProjection(ars)
 
         # wait a bit for the image to update
         e = threading.Event()
@@ -3610,10 +3617,10 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
+        ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
-        im2d5 = ars.image.value
+        im2d0 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # corresponding bg image
@@ -3624,10 +3631,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
         e.wait()
 
-        im2d6 = ars.image.value
+        im2d1 = ars_raw_pj.image.value
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
         # check if the bg image has been applied and the .image VA has been updated
-        assert not numpy.array_equal(im2d5, im2d6)
+        assert not numpy.array_equal(im2d0, im2d1)
 
     def _create_spec_data(self):
         # Spectrum

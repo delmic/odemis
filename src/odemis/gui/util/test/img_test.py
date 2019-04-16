@@ -163,6 +163,8 @@ class TestARExport(unittest.TestCase):
         self.assertGreater(raw_polar.shape[0], 50)
         self.assertGreater(raw_polar.shape[1], 50)
 
+    # TODO add test export polarization and polarimetry visualization data
+
     def test_ar_export(self):
 
         # Create AR data
@@ -189,17 +191,18 @@ class TestARExport(unittest.TestCase):
         data1 = model.DataArray(3345 + numpy.zeros((512, 512), dtype=numpy.uint16), md1)
 
         # Create AR stream
-        ars = stream.StaticARStream("test", [data0, data1])
+        ars = stream.StaticARStream("test export static ar stream", [data0, data1])
+        ars_raw_pj = stream.ARRawProjection(ars)
         ars.point.value = md1[model.MD_POS]
 
         # Wait for the projection to be computed
         tend = time.time() + 30
-        while ars.image.value is None:
+        while ars_raw_pj.image.value is None:
             self.assertLess(time.time(), tend, "Timeout during AR computation")
             time.sleep(0.1)
 
         # Convert to exportable RGB image
-        exdata = img.ar_to_export_data([ars], raw=False)
+        exdata = img.ar_to_export_data([ars_raw_pj], raw=False)
         # shape = RGBA
         self.assertGreater(exdata.shape[0], 200)
         self.assertGreater(exdata.shape[1], 200)
@@ -217,7 +220,7 @@ class TestARExport(unittest.TestCase):
         self.assertGreater(st.st_size, 1000)
 
         # Convert to exportable RGB image
-        exdata = img.ar_to_export_data([ars], raw=True)
+        exdata = img.ar_to_export_data([ars_raw_pj], raw=True)
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
         self.assertGreater(exdata.shape[1], 50)
@@ -257,16 +260,17 @@ class TestARExport(unittest.TestCase):
 
         # Create AR stream
         ars = stream.StaticARStream("test", [data0])
+        ars_raw_pj = stream.ARRawProjection(ars)
         ars.point.value = md0[model.MD_POS]
 
         # Wait for the projection to be computed
         tend = time.time() + 90
-        while ars.image.value is None:
+        while ars_raw_pj.image.value is None:
             self.assertLess(time.time(), tend, "Timeout during AR computation")
             time.sleep(0.1)
 
         # Convert to exportable RGB image
-        exdata = img.ar_to_export_data([ars], raw=False)
+        exdata = img.ar_to_export_data([ars_raw_pj], raw=False)
         # shape = RGBA
         self.assertGreater(exdata.shape[0], 200)
         self.assertGreater(exdata.shape[1], 200)
@@ -284,7 +288,7 @@ class TestARExport(unittest.TestCase):
         self.assertGreater(st.st_size, 1000)
 
         # Convert to equirectangular (RAW) image
-        exdata = img.ar_to_export_data([ars], raw=True)
+        exdata = img.ar_to_export_data([ars_raw_pj], raw=True)
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
         self.assertGreater(exdata.shape[1], 50)
@@ -299,7 +303,7 @@ class TestARExport(unittest.TestCase):
         ars.background.value = data1
 
         # Convert to equirectangular (RAW) image
-        exdata = img.ar_to_export_data([ars], raw=True)
+        exdata = img.ar_to_export_data([ars_raw_pj], raw=True)
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
         self.assertGreater(exdata.shape[1], 50)
