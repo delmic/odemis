@@ -2830,6 +2830,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check polarization VA connected to GUI did not trigger position VA listening to HW
         self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
 
+
 class TimeCorrelatorTestCase(unittest.TestCase):
     """
     Tests the SEMTemporalMDStream.
@@ -3339,22 +3340,24 @@ class StaticStreamsTestCase(unittest.TestCase):
              model.MD_DESCRIPTION: "AR",
              model.MD_ACQ_DATE: time.time(),
              model.MD_BPP: 12,
-             model.MD_BINNING: (1, 1), # px, px
-             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
-             model.MD_PIXEL_SIZE: (2e-5, 2e-5), # m/px
-             model.MD_POS: (1.2e-3, -30e-3), # m
-             model.MD_EXP_TIME: 1.2, # s
+             model.MD_BINNING: (1, 1),  # px, px
+             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+             model.MD_POS: (1.2e-3, -30e-3),  # m
+             model.MD_EXP_TIME: 1.2,  # s
              model.MD_AR_POLE: (253.1, 65.1),
-             model.MD_LENS_MAG: 0.4, # ratio
+             model.MD_LENS_MAG: 0.4,  # ratio
             }
 
         # AR data
         md0 = dict(md)
         data0 = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md0)
+        data0[200:250, 50:70] = 1000  # modify a few px close to AR_POLE so _projectXY2RGB has different values
         md1 = dict(md)
         md1[model.MD_POS] = (1.5e-3, -30e-3)
-        md1[model.MD_BASELINE] = 300 # AR background should take this into account
+        md1[model.MD_BASELINE] = 300  # AR background should take this into account
         data1 = model.DataArray(3345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
+        data1[200:250, 50:70] = 2000  # modify a few px close to AR_POLE so _projectXY2RGB has different values
 
         logging.info("setting up stream")
         ars = stream.StaticARStream("test", [data0, data1])
@@ -3383,11 +3386,15 @@ class StaticStreamsTestCase(unittest.TestCase):
             self.fail("Failed to find a second point in AR")
 
         e.wait()
+
+        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d1 = ars.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
-
         self.assertFalse(im2d0 is im2d1)
+
+        with self.assertRaises(AssertionError):
+            numpy.testing.assert_array_equal(im2d0, im2d1)
 
         logging.info("testing image background correction")
         # test background correction from image
@@ -3399,11 +3406,15 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
         e.wait()
 
+        time.sleep(3)  # TODO e.wait() seems to be not to be enough...why??
         im2dc = ars.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2dc.shape[2], 3)
-
         self.assertFalse(im2d1 is im2dc)
+
+        # check if the .image VA has been updated
+        with self.assertRaises(AssertionError):
+            numpy.testing.assert_array_equal(im2d1, im2dc)
 
     def test_ar_das(self):
         """Test StaticARStream with a DataArrayShadow"""
@@ -3481,8 +3492,9 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # ARPOL data
         data = []
-        for md in metadata:
-            data_pol = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+        for index, md in enumerate(metadata):
+            data_pol = model.DataArray(1500 + 100 * index + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+            data_pol[200:250, 50:70] = 1000 * index  # modify a few px close to AR_POLE
             data.append(data_pol)
 
         logging.info("setting up stream")
@@ -3515,11 +3527,16 @@ class StaticStreamsTestCase(unittest.TestCase):
             self.fail("Failed to find another polarization position in ARPOL")
 
         e.wait()
+
+        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d1 = ars.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
-        self.assertFalse(im2d0 is im2d1)
+        # check if the .image VA has been updated
+        with self.assertRaises(AssertionError):
+            numpy.testing.assert_array_equal(im2d0, im2d1)
 
+        ###################################################################
         # testing background correction
         logging.info("testing image background correction")
         # test background correction from image using a different image for each polarization position
@@ -3540,21 +3557,26 @@ class StaticStreamsTestCase(unittest.TestCase):
             numpy.testing.assert_equal(bg_VA[0], bg_im[0][0, 0, 0])
         e.wait()
 
-        im2dc = ars.image.value
+        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
+        im2d2 = ars.image.value
         # Check it's a RGB DataArray
-        self.assertEqual(im2dc.shape[2], 3)
+        self.assertEqual(im2d2.shape[2], 3)
+        # check if the bg image has been applied and the .image VA has been updated
+        with self.assertRaises(AssertionError):
+            numpy.testing.assert_array_equal(im2d1, im2d2)
 
-        self.assertFalse(im2d1 is im2dc)
-
+        ###################################################################
         # test bg correction passing only 1 bg image but have six images -> should raise an error
         bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
         e.clear()
         with self.assertRaises(ValueError):
             ars._setBackground(bg_data)
 
+        ###################################################################
         # test 1 image + corresponding bg image
         # ARPOL data
         data = [model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), metadata[0])]
+        data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
         logging.info("setting up stream")
         ars = stream.StaticARStream("test arpol static stream", data)
 
@@ -3567,12 +3589,55 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         ars.image.subscribe(on_im)
         e.wait()
+
+        im2d3 = ars.image.value
+
         # corresponding bg image
         bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
         e.clear()
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
-        numpy.testing.assert_equal(ars.background.value[0], bg_data[0][0, 0, 0])
+        numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
+        e.wait()
+
+        time.sleep(3)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
+        im2d4 = ars.image.value
+        # check if the bg image has been applied and the .image VA has been updated
+        with self.assertRaises(AssertionError):
+            numpy.testing.assert_array_equal(im2d3, im2d4)
+
+        ###################################################################
+        # test 1 large image + corresponding bg image to test resizing
+        data = [model.DataArray(1500 + numpy.zeros((2000, 2200), dtype=numpy.uint16), metadata[0])]
+        data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
+        logging.info("setting up stream")
+        ars = stream.StaticARStream("test arpol static stream with large image", data)
+
+        # wait a bit for the image to update
+        e = threading.Event()
+
+        def on_im(im):
+            if im is not None:
+                e.set()
+
+        ars.image.subscribe(on_im)
+        e.wait()
+
+        im2d5 = ars.image.value
+
+        # corresponding bg image
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 2000, 2200), dtype=numpy.uint16), metadata[0])]
+        e.clear()
+        ars.background.value = bg_data
+        # test if bg VA shows same values as stored in bg_data
+        numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
+        e.wait()
+
+        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
+        im2d6 = ars.image.value
+        # check if the bg image has been applied and the .image VA has been updated
+        with self.assertRaises(AssertionError):
+            numpy.testing.assert_array_equal(im2d5, im2d6)
 
     def _create_spec_data(self):
         # Spectrum
