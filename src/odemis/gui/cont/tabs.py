@@ -3102,7 +3102,7 @@ class Sparc2AlignTab(Tab):
                                 "Spectrograph line",
                                 main_data.ccd,
                                 main_data.ccd.data,
-                                main_data.brightlight,
+                                emitter=None,  # actually, the brightlight, but the autofocus procedure takes care of it
                                 focuser=ccd_focuser,
                                 detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
                                 forcemd={model.MD_POS: (0, 0),
