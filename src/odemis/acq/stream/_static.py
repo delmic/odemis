@@ -479,6 +479,10 @@ class StaticARStream(StaticStream):
                     # Simple version: remove the background value
                     data0 = angleres.ARBackgroundSubtract(data)
                 else:
+                    # image shape of image and bg image might be not the same due to resizing
+                    if data.shape != bg_image.shape:
+                        # resize bg image
+                        bg_image = img.rescale_hq(bg_image, data.shape)
                     data0 = img.Subtract(data, bg_image)  # metadata from data
 
                 # Warning: allocates lot of memory, which will not be free'd until
