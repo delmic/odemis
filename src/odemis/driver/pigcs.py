@@ -134,16 +134,14 @@ import time
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
 
-class PIGCSError(IOError):
+class PIGCSError(Exception):
 
     def __init__(self, errno, *args, **kwargs):
         # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
         desc = self._errordict.get(errno, "Unknown error")
         strerror = "PIGCS error %d: %s" % (errno, desc)
-        IOError.__init__(self, errno, strerror, *args, **kwargs)
-
-    def __str__(self):
-        return self.strerror
+        Exception.__init__(self, strerror, *args, **kwargs)
+        self.errno = errno
 
     _errordict = {
         0: "No error",
