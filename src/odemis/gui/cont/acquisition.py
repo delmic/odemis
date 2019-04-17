@@ -36,7 +36,7 @@ import math
 from odemis import model, dataio, acq
 from odemis.acq import align
 from odemis.acq.align.spot import OBJECTIVE_MOVE
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries
@@ -714,6 +714,19 @@ class SparcAcquiController(object):
         Start the acquisition (really)
         Similar to win.acquisition.on_acquire()
         """
+        # Time-resolved data cannot be saved in .ome.tiff format for now
+        # OME-TIFF wants to save each time data on a separate "page", which causes too many pages.
+        has_temporal = False
+        for s in self._tab_data_model.streams.value:
+            if (isinstance(s, ScannedTemporalSettingsStream) or
+                isinstance(s, ScannedTCSettingsStream) or
+                isinstance(s, TemporalSpectrumSettingsStream)):
+                has_temporal = True
+
+        if (self.conf.last_format == 'TIFF' or self.conf.last_format == 'Serialized TIFF') and has_temporal:
+            raise NotImplementedError("Cannot save temporal data in %s format, data format must be HDF5." \
+                                      % self.conf.last_format)
+
         self._pause_streams()
 
         self.btn_acquire.Disable()
