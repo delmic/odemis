@@ -38,8 +38,10 @@ from odemis.gui.util.img import format_rgba_darray
 from odemis.util import units
 import scipy.ndimage
 import time
+import numpy
 import wx
 from wx.lib.imageutils import stepColour
+import wx.lib.newevent
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
@@ -55,6 +57,11 @@ def view_check(f, self, *args, **kwargs):
     if self.view:
         return f(self, *args, **kwargs)
 
+
+"""
+Define a wx event that is triggered when the scale to fit view to content is triggered.
+"""
+evtFitViewToContent, EVT_FIT_VIEW_TO_CONTENT = wx.lib.newevent.NewEvent()
 
 # Note: a Canvas with a fit_view_to_content method indicates that the view
 # can be adapted. (Some other components of the GUI will use this information)
@@ -1126,7 +1133,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
-        if data:
+        if data is not None:
             self.markline_overlay.activate()
         else:
             self.markline_overlay.deactivate()
@@ -1165,6 +1172,225 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         if self.view:
             self.update_thumbnail()
+            
+class NavigableBarPlotCanvas(BarPlotCanvas):
+    
+    """
+    A plot canvas that can be navigated by the user.
+
+    The x and y scales can be dragged with the left mouse button, and can be zoomed
+    with the mouse wheel.The plot can be panned with a middle mouse button drag.
+    Therefore, the data range and display range are different.
+
+    The plot also re-samples large data sets to speed up their display.
+
+    API:
+    Read only values
+        .data_xrange: The x range of the data
+        .data_yrange: The y range of the data
+        .display_xrange: The currently displayed x range
+        .display_yrange: The currently displayed y range
+    Methods
+        .set_data(...): Functions similar to the parent
+        .set_1d_data(...): Functions similar to the parent
+        .set_ranges(x_range, y_range): Set the display range of the plot. x_range and y_range
+            are range tuples.
+        .reset_ranges(): Resets the display ranges to the data ranges
+        .refresh_plot(): Redraws the plot with the newest parameters.
+            This function takes a window of the data set based on the current display range
+            and resamples large data sets so that they can be displayed quickly without lag.
+
+    Note: fit_view_to_content does not function in the same way as the parent. Because the plot ranges
+        are usually controlled by VA's in the viewport, this method now posts
+        a evtFitViewToContent event, which is intercepted by the parent viewport.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(NavigableBarPlotCanvas, self).__init__(*args, **kwargs)
+        self.abilities |= {CAN_DRAG}
+        self._data_buffer = None  # numpy Array with the plot data
+        self.display_xrange = None  # range tuple of floats
+        self.display_yrange = None  # range tuple of floats
+        self.data_xrange = None  # range tuple of floats
+        self.data_yrange = None  # range tuple of floats
+
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
+        xs, ys = zip(*data)
+        self.set_1d_data(xs, ys, unit_x, unit_y, range_x, range_y)
+        self.refresh_plot()
+
+    def set_1d_data(self, xs, ys, unit_x=None, unit_y=None, range_x=None, range_y=None):
+        """
+        Note - this function will not plot any data until a call to refresh_plot is made
+        """
+
+        if len(xs) != len(ys):
+            msg = "X and Y list are of unequal length. X: %s, Y: %s, Xs: %s..."
+            raise ValueError(msg % (len(xs), len(ys), str(xs)[:30]))
+        self._data_buffer = (numpy.array(xs), numpy.array(ys))
+        self.unit_x = unit_x
+        self.unit_y = unit_y
+        
+        if range_x is None or range_y is None:
+            _, range_x, _, range_y = self._calc_data_characteristics(zip(xs, ys))
+
+        self.data_xrange = range_x
+        self.data_yrange = range_y
+        self.display_xrange = range_x
+        self.display_yrange = range_y
+        
+    def fit_view_to_content(self, recenter=None):
+        # note - need to do this via an event to the viewport. Otherwise it doesn't
+        # set the axes properly
+        evt = evtFitViewToContent()
+        wx.PostEvent(self, evt)
+
+    def get_hcontent_range(self):
+        """
+        To allow fitting to content, detect where the first leftmost non-zero value
+        occurs, and also detect where the first rightmost non-zero value occurs.
+        Returns the horizontal range that fits the data content
+        If no range is found, return none
+        """
+        if self._data_buffer is None:
+            return None
+
+        (xd , yd) = self._data_buffer
+        # If the empty portion on the edge is less than the threshold percent of
+        # the full data width, do not include it.
+        threshold = 0.05
+
+        for ileft in range(len(yd)):
+            if yd[ileft] > 0:
+                break
+        
+        for iright in range(len(yd) - 1, 0, -1):
+            if yd[iright] > 0:
+                break
+            
+        # if ileft is > iright, then the data must be all 0.
+        if ileft < iright and (ileft / len(yd) < threshold \
+            or (1 - iright / len(yd)) < threshold):
+            return (xd[ileft], xd[iright])
+        else:
+            return None
+
+    def reset_ranges(self):
+        if self._data_buffer is None:
+            return
+
+        self.set_ranges(self.data_xrange, self.data_yrange)
+
+    def _resample_plot(self, xs, ys, threshold):
+        """
+        Re-sample the data if there are more points than the threshold
+        xs, ys: two 1-D arrays with data
+        threshold: the minimum number of points for a re-sampling to occur
+        """
+        # Re-sample data based on window size
+        if len(xs) > threshold:
+            rs_factor = len(xs) // (threshold // 2)
+            logging.debug("Re-sampling data with factor %d", rs_factor)
+
+            """
+            # TODO: One we support Scipy 1.2.1, we can use this function
+            xr = xs[::rs_factor]
+            # Add the peaks back into the data set so that features are displayed
+            # peaks, _ = scipy.signal.find_peaks(ys, height=0)
+            xr = numpy.append(xr, peaks)
+            xr = numpy.unique(xr)
+            xr.sort()
+            """
+            n = len(xs)
+            rem = n % rs_factor
+            new_shape = (n // rs_factor, rs_factor)
+
+            # Reshape the array into bins and take the max of each bin
+            xr = numpy.reshape(xs[:(n - rem)], new_shape)
+            xr = numpy.amax(xr, axis=1)
+
+            # in case there are remaining items left at the end (could not fit into
+            # an equally sized bin) add these to the end of the re-sampled dataset
+            rem_items = xs[(n - rem):n]
+            if len(rem_items) > 0:
+                xr = numpy.append(xr, max(rem_items))
+
+            yr = numpy.interp(xr, xs, ys)
+
+            return xr, yr
+        else:
+            return xs, ys
+
+    def refresh_plot(self):
+        """
+        Refresh the displayed data in the plot.
+        """
+        if self._data_buffer is None:
+            return
+
+        (xst , yst) = self._data_buffer
+
+        # Using the selected horizontal range, define a window
+        # for display of the data.
+        lo, hi = self.display_xrange
+
+        # Find the index closest to the range extremes
+        lox = numpy.searchsorted(xst, lo, side="left")
+        hix = numpy.searchsorted(xst, hi, side="right")
+
+        # normal Case
+        if lox != hix:
+            xs = xst[lox:hix]
+            ys = yst[lox:hix]
+        # otherwise we are zoomed in so much that only a single point is visible.
+        # Therefore just display a single bar that fills the the panel
+        else:
+            xs = [(hi + lo) / 2]
+            ys = [yst[lox]]
+
+        # Add a few points onto the beginning and end of the array
+        # to prevent gaps in the data from appearing
+        if lox > 0 and xs[0] != lo:
+            xs = numpy.insert(xs, 0, xst[lox - 1])
+            ys = numpy.insert(ys, 0, yst[lox - 1])
+
+        if hix < len(xst) and xs[-1] != hi:
+            xs = numpy.append(xs, xst[hix])
+            ys = numpy.append(ys, yst[hix])
+
+        # Resample the plot (if necessary) for the view, and restack the data
+        xs, ys = self._resample_plot(xs, ys, self.ClientSize.x * 10)
+        temp_data = numpy.column_stack((xs, ys))
+
+        if temp_data.size == 0:
+            temp_data = numpy.empty((1, 2))
+
+        super(NavigableBarPlotCanvas, self).set_data(temp_data, self.unit_x,
+                      self.unit_y, self.display_xrange, self.display_yrange)
+
+        self.Refresh()
+
+    def set_ranges(self, x_range, y_range):
+        """
+        Set the ranges of the plot.
+        """
+
+        if x_range is None:
+            x_range = self.data_xrange
+
+        if y_range is None:
+            y_range = self.data_yrange
+
+        self.display_xrange = x_range
+        self.display_yrange = y_range
+
+        self.refresh_plot()
+
+    def on_size(self, evt):
+        # Reset the data display to ensure the data resampling is done
+        self.refresh_plot()
+        super(NavigableBarPlotCanvas, self).on_size(evt)
 
 
 class TwoDPlotCanvas(BitmapCanvas):

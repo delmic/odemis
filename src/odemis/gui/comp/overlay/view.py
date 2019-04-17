@@ -447,6 +447,13 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 val = self.cnvs.val_x_to_val(val[0])
             v_pos = self.cnvs.val_to_pos(val)
 
+            if hasattr(self.cnvs, "display_xrange"):
+                h_draw = self.cnvs.display_xrange[0] <= val[0] <= self.cnvs.display_xrange[1]
+                v_draw = self.cnvs.display_yrange[0] <= val[1] <= self.cnvs.display_yrange[1]
+            else:
+                h_draw = True
+                v_draw = True
+
             # Adapt the significant numbers based on how different are all the
             # values.
             # TODO: once the range is always available, don't use the value type.
@@ -472,12 +479,12 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
             ctx.set_source_rgba(*self.colour)
 
             # v_posx, v_posy = self.v_pos.value
-            if self.orientation & self.VERTICAL:
+            if self.orientation & self.VERTICAL and h_draw:
                 ctx.move_to(v_pos[0], 0)
                 ctx.line_to(v_pos[0], self.cnvs.ClientSize.y)
                 ctx.stroke()
 
-            if self.orientation & self.HORIZONTAL:
+            if self.orientation & self.HORIZONTAL and v_draw:
                 ctx.move_to(0, v_pos[1])
                 ctx.line_to(self.cnvs.ClientSize.x, v_pos[1])
                 ctx.stroke()
@@ -487,11 +494,11 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 self._write_label(ctx, self.x_label)
 
             if self.y_label.text:
-                yp = max(0, v_pos[1] - 5)  # Padding from line
+                yp = max(2, v_pos[1] - 5)  # Padding from line
                 # Increase bottom margin if x label is close
                 label_padding = 30 if v_pos[0] < 50 else 0
                 yn = min(self.view_height - label_padding, yp)
-                self.y_label.pos = (2, yn)
+                self.y_label.pos = (3, yn)
                 self._write_label(ctx, self.y_label)
 
             r, g, b, a = change_brightness(self.colour, -0.2)
@@ -519,6 +526,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.peaks = None  # list of peak data
         self.peak_offset = None
         self.range = None  # array of wl/px
+        self.display_range = None  # array of wl/px displayed (subset of range)
         self.unit = None  # str
         self.type = None  # str
         # Cached computation of the peak curve. The global curve is index None
@@ -589,6 +597,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     def draw(self, ctx):
         peaks = self.peaks
         rng = self.range
+
         if (peaks is None) or (self.type is None):
             return
 
@@ -627,9 +636,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         curve_drawn = []
         curve_n = curve[1::step]
         for x, y in itertools.izip(rng_n, curve_n):
-            x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
-            y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
-            y_canvas = client_size_y - y_canvas
+            x_canvas, y_canvas = self.cnvs.val_to_pos((x, y))
             ctx.line_to(x_canvas, y_canvas)
             curve_drawn.append((x_canvas, y_canvas))
         ctx.stroke()
@@ -638,7 +645,8 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         peaks_canvpos = []
         # Depends on canvas size so always update
         for pos, width, amplitude in peaks:
-            peaks_canvpos.append(int((((pos - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1))
+            x_canvas, _ = self.cnvs.val_to_pos((pos, 0))
+            peaks_canvpos.append(int(x_canvas))
 
         ctx.set_source_rgba(*self.colour_peaks)
         self.list_labels = []
@@ -674,17 +682,14 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                     self._curves[peak_i] = peak.Curve(rng, [peaks[peak_i]], self.peak_offset, type=self.type)
                 single_curve = self._curves[peak_i]
                 ctx.set_source_rgba(*self.colour)
-                x_canvas = 1
-                y_canvas = client_size_y - 1
+                x_canvas, y_canvas = self.cnvs.val_to_pos((self.cnvs.data_xrange[0], min(0, self.cnvs.data_yrange[0])))
                 ctx.move_to(x_canvas, y_canvas)
                 curve_n = single_curve[1::step]
                 for x, y in itertools.izip(rng_n, curve_n):
-                    x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
-                    y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
-                    y_canvas = client_size_y - y_canvas
+                    x_canvas, y_canvas = self.cnvs.val_to_pos((x, y))
                     ctx.line_to(x_canvas, y_canvas)
-                x_canvas = client_size_x
-                y_canvas = client_size_y - 1
+
+                x_canvas, y_canvas = self.cnvs.val_to_pos((self.cnvs.data_xrange[1], min(0, self.cnvs.data_yrange[0])))
                 ctx.line_to(x_canvas, y_canvas)
                 ctx.fill()
                 # Add more info to that specific peak label

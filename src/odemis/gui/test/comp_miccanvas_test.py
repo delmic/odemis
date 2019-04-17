@@ -334,6 +334,61 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
+    def test_navigable_plot_canvas(self):
+        # Create and add a test plot canvas
+        # cnvs = canvas.PlotCanvas(self.panel)
+        cnvs = miccanvas.NavigableBarPlotCanvas(self.panel)
+
+        cnvs.SetBackgroundColour(wx.BLACK)
+        cnvs.SetForegroundColour("#DDDDDD")
+        cnvs.set_closure(canvas.PLOT_CLOSE_STRAIGHT)
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
+
+        # def toggle(event):
+        #     canv = event.GetEventObject()
+
+        #     if canv.plot_mode == canvas.PLOT_MODE_BAR:
+        #         canv.set_plot_mode(canvas.PLOT_MODE_LINE)
+        #     else:
+        #         canv.set_plot_mode(canvas.PLOT_MODE_BAR)
+
+        #     event.Skip()
+
+        # Enable this bind to enable render toggling by clicking
+        # cnvs.Bind(wx.EVT_LEFT_UP, toggle)
+
+        test.gui_loop()
+
+        test_data = [(0.5, 0.5), (0.6, 4.5), (4.5, 4.5), (4.6, 0.5)]
+
+        test.gui_loop()
+        cnvs.set_data(test_data)
+
+        test.gui_loop(0.2)
+
+        cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
+
+        for horz, vert in PLOTS:
+            cnvs.set_1d_data(horz, vert)
+            range_x = (min(horz), max(horz))
+            w = abs(range_x[1] - range_x[0])
+            range_y = (min(vert), max(vert))
+            h = abs(range_y[1] - range_y[0])
+
+            # Set range smaller than width
+            test_xrange = (range_x[0] + w * 0.1, range_x[1] - w * 0.1)
+            cnvs.set_ranges(test_xrange, range_y)
+            self.assertEqual(test_xrange, cnvs.display_xrange)
+            test.gui_loop(0.2)
+
+            # Set range smaller than width
+            test_yrange = (range_y[0] + h * 0.1, range_y[1] - h * 0.1)
+            cnvs.set_ranges(range_x, test_yrange)
+            self.assertEqual(test_yrange, cnvs.display_yrange)
+            test.gui_loop(0.2)
+
+        test.gui_loop()
+
     def test_onedimensional_canvas(self):
         cnvs = miccanvas.TwoDPlotCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")

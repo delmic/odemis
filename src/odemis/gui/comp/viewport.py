@@ -45,6 +45,7 @@ from odemis.model import NotApplicableError
 from odemis.util import no_conflict
 from odemis.util import units, spectrum, peak
 import wx
+import time
 
 
 def get_original_stream(s_or_p):
@@ -1065,7 +1066,325 @@ class PlotViewport(ViewPort):
         pass
 
 
-class PointSpectrumViewport(PlotViewport):
+class NavigablePlotViewport(PlotViewport):
+    """ Abstract Class for displaying plotted data
+
+    Unlike PlotViewport, the NavigablePlotViewport can be manipulated by the user.
+    The plot can be zoomed and panned
+        - Mousewheel over an axis zooms that axis.
+        - Left mouse drag over an axis pans that axis.
+        - Mousewheel over the canvas zooms the horizontal axis
+        - Middle mouse button drag on the canvas pans the plot
+
+    This is controlled by VA's
+    .hrange: Tuple VA with the horizontal scale range
+    .vrange: Tuple VA with the vertical scale range
+    .hrange_lock, .vrange_lock: Bool VA that locks H/V axes from manipulation
+
+    Note: clamping of the ranges is handle by the mouse events, because
+    the clamping behavior must function differently for pans, drags, and scrolling
+
+    """
+    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
+
+    # Default class
+    canvas_class = miccanvas.NavigableBarPlotCanvas
+
+    def __init__(self, *args, **kwargs):
+        super(NavigablePlotViewport, self).__init__(*args, **kwargs)
+
+        self.hrange = model.TupleVA(setter=self.update_hrange)
+        self.bottom_legend.tick_spacing = 80
+        self.hrange_lock = model.BooleanVA(False)
+        self.bottom_legend.lock_va = self.hrange_lock
+
+        self.vrange = model.TupleVA(setter=self.update_vrange)
+        self.vrange_lock = model.BooleanVA(False)
+        self.left_legend.lock_va = self.vrange_lock
+
+        # Indicate a left mouse button drag in the canvas
+        # Note: *only* use it indicate that the *canvas* is performing an operation related to
+        # dragging!
+        self._dragging = False
+        self._hdrag_scale_factor = -0.1
+        self._vdrag_scale_factor = -0.1
+        self._vmargin = 2  # factor for the upper margin of data display
+
+        # The amount of pixels shifted in the current drag event
+        self.drag_shift = (0, 0)  # cnvs, cnvs
+        #  initial position of mouse when started dragging
+        self.drag_init_pos = (0, 0)  # cnvs, cnvs
+
+        # Track if the legend was dragged. It should be reset to False at the
+        # end of button up handlers, giving overlay the chance to check if a
+        # drag occurred.
+
+        self.canvas.Bind(wx.EVT_MOUSEWHEEL, self.on_hlegend_scroll)
+
+        self.canvas.Bind(wx.EVT_MIDDLE_DOWN, self.on_drag_start)
+        self.canvas.Bind(wx.EVT_MIDDLE_UP, self.on_drag_end)
+        self.canvas.Bind(wx.EVT_MOTION, self.on_canvas_motion)
+        self.canvas.Bind(miccanvas.EVT_FIT_VIEW_TO_CONTENT, self.on_fit_view)
+
+        self.left_legend.Bind(wx.EVT_MOUSEWHEEL, self.on_vlegend_scroll)
+        self.left_legend.Bind(wx.EVT_LEFT_DOWN, self.on_drag_start)
+        self.left_legend.Bind(wx.EVT_LEFT_UP, self.on_drag_end)
+        self.left_legend.Bind(wx.EVT_MOTION, self.on_vlegend_motion)
+
+        self.bottom_legend.Bind(wx.EVT_MOUSEWHEEL, self.on_hlegend_scroll)
+        self.bottom_legend.Bind(wx.EVT_LEFT_DOWN, self.on_drag_start)
+        self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.on_drag_end)
+        self.bottom_legend.Bind(wx.EVT_MOTION, self.on_hlegend_motion)
+        
+    def on_fit_view(self, _):
+        """
+        Called when a fit view to content event occurs.
+
+        Sets the display ranges to the data ranges.
+        """
+
+        if not self.canvas.has_data():
+            return
+
+        # Unlock the axis locks
+        self.hrange_lock.value = False
+        self.vrange_lock.value = False
+
+        hcontent = self.canvas.get_hcontent_range()
+
+        if hcontent is not None:
+            self.hrange.value = hcontent
+        else:
+            self.hrange.value = self.canvas.data_xrange
+
+        self.vrange.value = self.canvas.data_yrange
+
+        logging.debug("Fitting view to content: H %s V %s", self.hrange.value, self.vrange.value)
+
+    def update_hrange(self, hrange):
+        """
+        Setter for VA hrange
+
+        Refreshes the plot and axis legend displays with the new scale
+        """
+        if hrange[0] > hrange[1]:
+            raise ValueError("Bad range tuple. First element should be less than the second")
+
+        self.canvas.set_ranges(hrange, self.vrange.value)
+
+        self.bottom_legend.range = hrange
+        if self.canvas.has_data():
+            self.bottom_legend.lo_ellipsis = self.canvas.display_xrange[0] > self.canvas.data_xrange[0]
+            self.bottom_legend.hi_ellipsis = self.canvas.display_xrange[1] < self.canvas.data_xrange[1]
+        self.bottom_legend.Refresh()
+
+        logging.debug("HRange: %s", hrange)
+        return hrange
+
+    def update_vrange(self, vrange):
+        """
+        Setter for VA vrange
+
+        Refreshes the plot and axis legend displays with the new scale
+        """
+        if vrange[0] > vrange[1]:
+            raise ValueError("Bad range tuple. First element should be less than the second")
+
+        self.canvas.set_ranges(self.hrange.value, vrange)
+
+        self.left_legend.range = vrange
+        if self.canvas.has_data():
+            self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
+            self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
+        self.left_legend.Refresh()
+
+        logging.debug("VRange: %s", vrange)
+        return vrange
+
+    def on_hlegend_scroll(self, evt=None):
+        """ Scroll event for the bottom legend.
+
+        Zooms the x-scale of the data and refreshes display
+        """
+        if not self.canvas.has_data():
+            return
+
+        rot = evt.GetWheelRotation() / evt.GetWheelDelta()
+        span = self.hrange.value[1] - self.hrange.value[0]
+        zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
+        scale = 0.1
+        rng = self.hrange.value
+
+        # proportion of zoom_centre
+        prop = (zoom_centre - rng[0]) / span
+        
+        # zoom around the centre point
+        if rot < 0:
+            new_span = span * (1 + scale)
+        else:
+            new_span = span * (1 - scale)
+
+        lo = zoom_centre - prop * new_span
+        hi = lo + new_span
+
+        # Clamp the ranges - this functions differently for scrolls than pans
+        if lo < self.canvas.data_xrange[0]:
+            lo = self.canvas.data_xrange[0]
+        if hi > self.canvas.data_xrange[1]:
+            hi = self.canvas.data_xrange[1]
+
+        self.hrange.value = (lo, hi)
+
+    def on_vlegend_scroll(self, evt=None):
+        """ Scroll event for the left legend.
+
+        Zooms the y-scale of the data and refreshes display
+        """
+        if not self.canvas.has_data():
+            return
+
+        rot = evt.GetWheelRotation() / evt.GetWheelDelta()
+        span = self.vrange.value[1] - self.vrange.value[0]
+        # zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
+        zoom_centre = self.canvas.pos_y_to_val_y(evt.Position[1])
+        scale = 0.1
+        rng = self.vrange.value
+
+        # proportion of zoom_centre
+        prop = (zoom_centre - rng[0]) / span
+
+        # zoom around the centre point
+        if rot < 0:
+            new_span = span * (1 + scale)
+        else:
+            new_span = span * (1 - scale)
+
+        lo = zoom_centre - prop * new_span
+        hi = lo + new_span
+
+        # Clamp the ranges - this functions differently for scrolls than pans
+        lo = max(self.canvas.data_yrange[0], lo)
+        hi = min(hi, self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin)
+
+        self.vrange.value = (lo, hi)
+
+    def on_drag_start(self, evt):
+        """ Start a dragging procedure """
+        if not self.canvas.has_data():
+            return
+
+        self._dragging = True
+
+        pos = evt.Position
+        self.drag_init_pos = (self.canvas.pos_x_to_val_x(pos[0]),
+                              self.canvas.pos_y_to_val_y(pos[1]))
+
+        logging.debug("Drag started at %s", self.drag_init_pos)
+
+    def on_drag_end(self, evt):
+        """ End the dragging procedure """
+        self._dragging = False
+
+    def on_hlegend_motion(self, evt):
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        """
+        if self._dragging:
+
+            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                self.canvas.pos_y_to_val_y(evt.Position[1]))
+
+            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            # Rescale the horizontal axis
+            (lo, hi) = self.hrange.value
+
+            lo += (self.drag_shift[0] * self._hdrag_scale_factor)
+            hi += (self.drag_shift[0] * self._hdrag_scale_factor)
+
+            if lo < self.canvas.data_xrange[0]:
+                lo = self.canvas.data_xrange[0]
+                hi = self.canvas.display_xrange[1]
+            if hi > self.canvas.data_xrange[1]:
+                hi = self.canvas.data_xrange[1]
+                lo = self.canvas.display_xrange[0]
+
+            self.hrange.value = (lo, hi)
+
+    def on_vlegend_motion(self, evt):
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        """
+        if self._dragging:
+
+            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                self.canvas.pos_y_to_val_y(evt.Position[1]))
+
+            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            # Rescale the vertical axis
+            (lo, hi) = self.vrange.value
+            lo += (self.drag_shift[1] * self._vdrag_scale_factor)
+            hi += (self.drag_shift[1] * self._vdrag_scale_factor)
+
+            if lo < self.canvas.data_yrange[0]:
+                lo = self.canvas.data_yrange[0]
+                hi = self.canvas.display_yrange[1]
+            if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
+                hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
+                lo = self.canvas.display_yrange[0]
+
+            self.vrange.value = (lo, hi)
+
+    def on_canvas_motion(self, evt):
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        """
+        if self._dragging:
+
+            v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
+                     self.canvas.pos_y_to_val_y(evt.Position[1]))
+
+            self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            (lo, hi) = self.hrange.value
+            lo += (self.drag_shift[0] * self._hdrag_scale_factor)
+            hi += (self.drag_shift[0] * self._hdrag_scale_factor)
+            if lo < self.canvas.data_xrange[0]:
+                lo = self.canvas.data_xrange[0]
+                hi = self.canvas.display_xrange[1]
+            if hi > self.canvas.data_xrange[1]:
+                hi = self.canvas.data_xrange[1]
+                lo = self.canvas.display_xrange[0]
+            self.hrange.value = (lo, hi)
+
+            (lo, hi) = self.vrange.value
+            lo += (self.drag_shift[1] * self._vdrag_scale_factor)
+            hi += (self.drag_shift[1] * self._vdrag_scale_factor)
+
+            if lo < self.canvas.data_yrange[0]:
+                lo = self.canvas.data_yrange[0]
+                hi = self.canvas.display_yrange[1]
+            if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
+                hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
+                lo = self.canvas.display_yrange[0]
+
+            self.vrange.value = (lo, hi)
+
+
+class PointSpectrumViewport(NavigablePlotViewport):
     """
     Shows the spectrum of a point -> bar plot + legend
     Legend axes are wavelength/intensity.
@@ -1101,11 +1420,19 @@ class PointSpectrumViewport(PlotViewport):
             wll, unit_x = spectrum.get_spectrum_range(data)
             wl_rng = wll[0], wll[-1]
             data_rng = min(data), max(data)
-            self.canvas.set_1d_data(wll, data, unit_x, range_x=wl_rng, range_y=data_rng)
+
+            self.canvas.set_1d_data(wll, data, range_x=wl_rng, range_y=data_rng, unit_x=unit_x)
+
+            if not self.hrange_lock.value:
+                hcontent = self.canvas.get_hcontent_range()
+                if hcontent is not None:
+                    self.hrange.value = hcontent
+                else:
+                    self.hrange.value = wl_rng
+            if not self.vrange_lock.value:
+                self.vrange.value = data_rng
 
             self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = wl_rng
-            self.left_legend.range = data_rng
 
             if hasattr(self._stream, "peak_method") and self._stream.peak_method.value is not None:
                 # cancel previous fitting if there is one in progress
@@ -1155,7 +1482,7 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.Refresh()
 
 
-class ChronographViewport(PlotViewport):
+class ChronographViewport(NavigablePlotViewport):
     """
     Shows the chronograph of a 0D detector reading -> bar plot + legend
     Legend axes are time/intensity.
@@ -1198,11 +1525,20 @@ class ChronographViewport(PlotViewport):
                 range_y = (max(0, extrema[0] - data_width * 0.05),
                            extrema[1] + data_width * 0.05)
 
-            self.canvas.set_1d_data(x, data, unit_x, range_x=range_x, range_y=range_y)
+            if not self.hrange_lock.value:
+                hcontent = self.canvas.get_hcontent_range()
+                if hcontent is not None:
+                    self.hrange.value = hcontent
+                else:
+                    self.hrange.value = range_x
+            if not self.vrange_lock.value:
+                self.vrange.value = range_y
+
+            self.canvas.set_1d_data(x, data, range_x=range_x, range_y=range_y, unit_x=unit_x)
 
             self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = range_x
-            self.left_legend.range = range_y
+            self.canvas.set_ranges(self.hrange.value, self.vrange.value)
+
         else:
             self.clear()
         self.Refresh()

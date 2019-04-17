@@ -32,6 +32,7 @@ from odemis.gui import img
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
+from odemis.gui.comp.buttons import ImageToggleButton, darken_image
 from odemis.gui.util import wxlimit_invocation, call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks
@@ -41,6 +42,7 @@ from odemis.model import MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
 import wx
 
 import odemis.util.units as units
+from odemis.model._vattributes import BooleanVA
 
 
 class InfoLegend(wx.Panel):
@@ -243,6 +245,19 @@ class InfoLegend(wx.Panel):
 
 
 class AxisLegend(wx.Panel):
+    """
+    The axis legend displayed in plots
+
+    Properties:
+    .unit: Unit displayed
+    .range: the range of the scale
+    .lo_ellipsis, hi_ellipsis: These properties, when true, show an ellipsis
+        on the first and/or last tick marks
+        e.g.: ...-10,  -5 , 0, 5, 10...
+    .lock_va: a boolean VA which is connected to the lock toggle button.
+        Typically, this button shows when the scale is locked from manipulation.
+        If this property is set to None, the lock button will be hidden.
+    """
 
     def __init__(self, parent, wid=wx.ID_ANY, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
@@ -262,30 +277,98 @@ class AxisLegend(wx.Panel):
         self._max_tick_width = 32  # Largest pixel width of any label in use
         self._tick_spacing = 120 if orientation == wx.HORIZONTAL else 80
         self._unit = None
+        self._lo_ellipsis = False
+        self._hi_ellipsis = False
+        self._lock_va = None
 
         # Explicitly set the min size
         if self._orientation == wx.HORIZONTAL:
-            self.SetMinSize((-1, 28))
+            self.SetMinSize((-1, 32))
         else:
             self.SetMinSize((42, -1))
 
         # The following properties are volatile, meaning that they can change often
-
         self._value_range = None  # 2 tuple with the minimum and maximum value
         self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
         self._vtp_ratio = None  # Ratio to convert value to pixel
         self._pixel_space = None  # Number of available pixels
+
+        # Axis lock button
+        # This button allows a user to lock the scales from manipulation
+        bmp = img.getBitmap("menu/btn_lock.png")
+        bmpa = img.getBitmap("menu/btn_lock_a.png")
+        bmph = img.getBitmap("menu/btn_lock.png")
+
+        self.lockBtn = ImageToggleButton(self, pos=(0, 0), bitmap=bmp, size=(24, 24))
+        self.lockBtn.bmpSelected = bmpa
+        self.lockBtn.bmpHover = bmph
+        self.lockBtn.Hide()
+
         self.on_size()  # Force a refresh
+
+        if self._orientation == wx.HORIZONTAL:
+            self.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
+        else:
+            self.SetCursor(wx.Cursor(wx.CURSOR_SIZENS))
 
     @property
     def unit(self):
         return self._unit
+
+    @property
+    def lo_ellipsis(self):
+        return self._lo_ellipsis
+
+    @property
+    def hi_ellipsis(self):
+        return self._hi_ellipsis
 
     @unit.setter
     def unit(self, val):
         if self._unit != val:
             self._unit = val
             self.Refresh()
+
+    @lo_ellipsis.setter
+    def lo_ellipsis(self, val):
+        if self._lo_ellipsis != val:
+            self._lo_ellipsis = bool(val)
+            self.Refresh()
+
+    @hi_ellipsis.setter
+    def hi_ellipsis(self, val):
+        if self._hi_ellipsis != val:
+            self._hi_ellipsis = bool(val)
+            self.Refresh()
+
+    @property
+    def lock_va(self):
+        return self._lock_va
+
+    @lock_va.setter
+    def lock_va(self, va):
+        """
+        Note: The caller must run in the main GUI Thread
+        """
+        if self._lock_va != va:
+            if self._lock_va is not None:
+                self._lock_va.unsubscribe(self._on_lock_va_change)
+
+            # Show the lock button
+            self.lockBtn.Show()
+            self._lock_va = va
+
+            self.lockBtn.Bind(wx.EVT_BUTTON, self._on_lock_click)
+            self._lock_va.subscribe(self._on_lock_va_change)
+
+            self.Refresh()
+
+    def _on_lock_click(self, evt):
+        self._lock_va.value = evt.isDown
+
+    @call_in_wx_main
+    def _on_lock_va_change(self, new_value):
+        self.lockBtn.SetToggle(new_value)
 
     @property
     def range(self):
@@ -307,6 +390,20 @@ class AxisLegend(wx.Panel):
         if self._value_range:
             self.Refresh()
 
+        if self._orientation == wx.HORIZONTAL:
+            self.lockBtn.SetPosition((self.ClientSize.x - 24, 0))
+        else:
+            self.lockBtn.SetPosition((self.ClientSize.x - self.ClientSize.x / 2 - 12, 0))
+
+    def on_mouse_enter(self, _=None):
+        if self._orientation == wx.HORIZONTAL:
+            self.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
+        else:
+            self.SetCursor(wx.Cursor(wx.CURSOR_SIZENS))
+
+    def on_mouse_leave(self, _=None):
+        self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
+
     @wxlimit_invocation(0.2)
     def Refresh(self):
         """
@@ -322,6 +419,10 @@ class AxisLegend(wx.Panel):
         # shared function with the export method
         self._tick_list, self._vtp_ratio = calculate_ticks(self._value_range, self.ClientSize, self._orientation, self._tick_spacing)
         csize = self.ClientSize
+
+        if self.lock_va is not None and self.lock_va.value == False:
+            if self._orientation == wx.HORIZONTAL:
+                csize.x -= 24
 
         # If min and max are very close, we need more significant numbers to
         # ensure the values displayed are different (ex 17999 -> 18003)
@@ -347,6 +448,13 @@ class AxisLegend(wx.Panel):
 
         for i, (pos, val) in enumerate(self._tick_list):
             label = units.readable_str(val, self.unit, sig)
+
+            if i == 0 and self._lo_ellipsis:
+                label = u"…" + label
+
+            if i == len(self._tick_list) - 1 and self._hi_ellipsis:
+                label = label + u"…"
+
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
             if self._orientation == wx.HORIZONTAL:
