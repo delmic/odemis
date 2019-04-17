@@ -17,7 +17,8 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 CONFIG = {"name": "SmartPod",
         "role": "",
-        "id": "usb:id:123456789",
+        "locator": "usb:id:123456789",
+        "options":"",
         "axes": {
             'x': {
                 'number': 1,
@@ -62,11 +63,10 @@ class TestSmartPod(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         test = smartpod.SmartPodDLL()
-        # cls.dev = smartpod.ESP(**CONFIG)
+        cls.dev = smartpod.SmartPod(**CONFIG)
         logging.debug(test.major)
 
     @classmethod
     def tearDownClass(cls):
-        #cls.dev.terminate()  # free up socket.
-        pass
+        cls.dev.terminate()  # free up socket.
 

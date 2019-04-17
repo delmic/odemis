@@ -30,13 +30,17 @@ from odemis import model
 from odemis.util import driver
 from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecutor, isasync
 
-
 class SmartPodDLL(CDLL):
     """
     Subclass of CDLL specific to andor library, which handles error codes for
     all the functions automatically.
     It works by setting a default _FuncPtr.errcheck.
     """
+    
+    # Defines
+    SMARPOD_SENSORS_DISABLED = 0
+    SMARPOD_SENSORS_ENABLED = 1
+    SMARPOD_SENSORS_POWERSAVE = 2
 
     def __init__(self):
         if os.name == "nt":
@@ -50,21 +54,23 @@ class SmartPodDLL(CDLL):
             self.minor = c_uint()
             self.update = c_uint()
             self.Smarpod_GetDLLVersion(byref(self.major), byref(self.minor), byref(self.update))
+            logging.debug("using SmarPod library version %u.%u.%u", self.major.value, self.minor.value, self.update.value)
 
 
 class SmartPod(model.Actuator):
     
-    def __init__(self, name, role, id, axes=None, **kwargs):
+    def __init__(self, name, role, locator, options, axes=None, **kwargs):
 
         if len(axes) == 0:
             raise ValueError("Needs at least 1 axis.")
 
-        self.atcore = SmartPodDLL()
+        self.core = SmartPodDLL()
 
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
-        self._id = {}
+        self._locator = c_char_p(locator)
+        self._options = c_char_p(options)
 
         for axis_name, axis_par in axes.items():
             # Unpack axis parameters from the definitions in the YAML
@@ -89,6 +95,11 @@ class SmartPod(model.Actuator):
 
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
-
+            
+            
+        # Connect to the device
+        self._id = c_uint()
+        self.core.Smarpod_Open(byref(self._id), c_uint(10001), pointer(self._locator), pointer(self._options))
+        self.core.Smarpod_SetSensorMode(byref(self._id), SmartPodDLL.SMARPOD_SENSORS_ENABLED)
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
