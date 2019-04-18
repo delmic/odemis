@@ -3364,14 +3364,18 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # wait a bit for the image to update
         e = threading.Event()
+
         def on_im(im):
             if im is not None:
                 e.set()
-        ars.image.subscribe(on_im)
+
+        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         # Control AR projection
         im2d0 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times (maybe due to calc histogram)
+
         # Check it's a RGB DataArray
         self.assertEqual(im2d0.shape[2], 3)
 
@@ -3387,14 +3391,14 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         e.wait()
 
-        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d1 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
+
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
         self.assertFalse(im2d0 is im2d1)
 
-        with self.assertRaises(AssertionError):
-            numpy.testing.assert_array_equal(im2d0, im2d1)
+        assert not numpy.array_equal(im2d0, im2d1)
 
         logging.info("testing image background correction")
         # test background correction from image
@@ -3406,15 +3410,15 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
         e.wait()
 
-        time.sleep(3)  # TODO e.wait() seems to be not to be enough...why??
         im2dc = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
+
         # Check it's a RGB DataArray
         self.assertEqual(im2dc.shape[2], 3)
         self.assertFalse(im2d1 is im2dc)
 
         # check if the .image VA has been updated
-        with self.assertRaises(AssertionError):
-            numpy.testing.assert_array_equal(im2d1, im2dc)
+        assert not numpy.array_equal(im2d1, im2dc)
 
     def test_ar_das(self):
         """Test StaticARStream with a DataArrayShadow"""
@@ -3451,10 +3455,11 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # wait a bit for the image to update
         e = threading.Event()
+
         def on_im(im):
             if im is not None:
                 e.set()
-        ars.image.subscribe(on_im)
+        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         # Control AR projection
@@ -3507,11 +3512,13 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)
+        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         # Control AR projection
         im2d0 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
+
         # Check it's a RGB DataArray
         self.assertEqual(im2d0.shape[2], 3)
 
@@ -3528,13 +3535,13 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         e.wait()
 
-        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d1 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
+
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
         # check if the .image VA has been updated
-        with self.assertRaises(AssertionError):
-            numpy.testing.assert_array_equal(im2d0, im2d1)
+        assert not numpy.array_equal(im2d0, im2d1)
 
         ###################################################################
         # testing background correction
@@ -3557,13 +3564,13 @@ class StaticStreamsTestCase(unittest.TestCase):
             numpy.testing.assert_equal(bg_VA[0], bg_im[0][0, 0, 0])
         e.wait()
 
-        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d2 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
+
         # Check it's a RGB DataArray
         self.assertEqual(im2d2.shape[2], 3)
         # check if the bg image has been applied and the .image VA has been updated
-        with self.assertRaises(AssertionError):
-            numpy.testing.assert_array_equal(im2d1, im2d2)
+        assert not numpy.array_equal(im2d1, im2d2)
 
         ###################################################################
         # test bg correction passing only 1 bg image but have six images -> should raise an error
@@ -3587,10 +3594,11 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)
+        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         im2d3 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # corresponding bg image
         bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
@@ -3600,11 +3608,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
         e.wait()
 
-        time.sleep(3)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d4 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
         # check if the bg image has been applied and the .image VA has been updated
-        with self.assertRaises(AssertionError):
-            numpy.testing.assert_array_equal(im2d3, im2d4)
+        assert not numpy.array_equal(im2d3, im2d4)
 
         ###################################################################
         # test 1 large image + corresponding bg image to test resizing
@@ -3620,10 +3627,11 @@ class StaticStreamsTestCase(unittest.TestCase):
             if im is not None:
                 e.set()
 
-        ars.image.subscribe(on_im)
+        ars.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
         e.wait()
 
         im2d5 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # corresponding bg image
         bg_data = [model.DataArray(numpy.ones((1, 1, 1, 2000, 2200), dtype=numpy.uint16), metadata[0])]
@@ -3633,11 +3641,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
         e.wait()
 
-        time.sleep(5)  # TODO e.wait() seems to be not to be enough...why?? And why so long?
         im2d6 = ars.image.value
+        time.sleep(0.5)  # wait shortly as .image is updated multiple times
         # check if the bg image has been applied and the .image VA has been updated
-        with self.assertRaises(AssertionError):
-            numpy.testing.assert_array_equal(im2d5, im2d6)
+        assert not numpy.array_equal(im2d5, im2d6)
 
     def _create_spec_data(self):
         # Spectrum
