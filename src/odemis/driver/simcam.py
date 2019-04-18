@@ -215,8 +215,8 @@ class Camera(model.DigitalCamera):
         Generates the fake output based on the translation, resolution and
         current drift.
         """
-        gen_img = self._simulate()
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
+        gen_img = self._simulate()
         self.data._waitSync()
         if self.data._sync_event:
             # If sync event, we need to simulate period after event (not efficient, but works)
