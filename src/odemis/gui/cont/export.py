@@ -231,13 +231,13 @@ class ExportController(object):
         if export_type == 'AR':
             exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':
-            exported_data = spectrum_to_export_data(streams[0], raw)
+            exported_data = spectrum_to_export_data(streams[0], raw, vp)
         elif export_type == 'spectrum-line':
             exported_data = line_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-temporal':
             exported_data = temporal_spectrum_to_export_data(streams[0], raw)
         elif export_type == 'spectrum-time':
-            exported_data = chronogram_to_export_data(streams[0], raw)
+            exported_data = chronogram_to_export_data(streams[0], raw, vp)
         else:
             view_px = tuple(vp.canvas.ClientSize)
             view_mpp = fview.mpp.value

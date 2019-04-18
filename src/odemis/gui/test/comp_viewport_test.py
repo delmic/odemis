@@ -150,6 +150,9 @@ class ViewportTestCase(test.GuiTestCase):
         for mode in MODES:
             vwp.canvas.set_plot_mode(mode)
 
+            """
+            # Note: With the new version of the plotting canvas, which can
+            # be navigated, all ranges will be accepted, and no ValueError is raised
             for plot in BAD_RANGED_PLOTS:
                 with self.assertRaises(ValueError):
                     logging.debug("Testing range X = %s, range Y = %s", plot[0], plot[1])
@@ -159,6 +162,7 @@ class ViewportTestCase(test.GuiTestCase):
                                            range_y=plot[1])
                     vwp.canvas.draw()
                     test.gui_loop(0.3)
+            """
 
             vwp.Refresh()
 
@@ -193,6 +197,41 @@ class ViewportTestCase(test.GuiTestCase):
                                        range_y=plot[1])
                 vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
                 vwp.left_legend.range = (min(plot[1]), max(plot[1]))
+                test.gui_loop(0.1)
+
+            # Test setting ranges
+            for plot in RANGED_PLOTS[:-1]:
+                range_x = plot[0]
+                range_y = plot[1]
+                # data width and height
+                w = abs(range_x[1] - range_x[0])
+                h = abs(range_y[1] - range_y[0])
+
+                vwp.canvas.set_1d_data(plot[2],
+                                       plot[3],
+                                       range_x=range_x,
+                                       range_y=range_y)
+                vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
+                vwp.left_legend.range = (min(plot[1]), max(plot[1]))
+
+                # Test setting bad ranges
+                test_xrange = (range_x[1], range_x[0])
+                with self.assertRaises(ValueError):
+                    vwp.hrange.value = test_xrange
+
+                test_yrange = (range_y[1], range_y[0])
+                with self.assertRaises(ValueError):
+                    vwp.vrange.value = test_yrange
+
+                # Test setting ranges that fall within the data ranges
+                test_xrange = (range_x[0] + w * 0.2, range_x[1] - w * 0.2)
+                vwp.hrange.value = test_xrange
+                self.assertEqual(vwp.hrange.value, test_xrange)
+
+                test_yrange = (range_y[0] + h * 0.2, range_y[1] - h * 0.2)
+                vwp.vrange.value = test_yrange
+                self.assertEqual(vwp.vrange.value, test_yrange)
+
                 test.gui_loop(0.1)
 
             vwp.Refresh()

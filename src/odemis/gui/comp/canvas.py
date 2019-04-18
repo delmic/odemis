@@ -1794,7 +1794,7 @@ class PlotCanvas(BufferedCanvas):
             ordered and not duplicated.
 
         """
-        if data:
+        if data is not None:
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
             try:
@@ -1861,7 +1861,7 @@ class PlotCanvas(BufferedCanvas):
         max_y = max(vert)
 
         # If a range is not given, we calculate it from the data
-        if not self.range_x:
+        if not self.range_x or self.range_x is None:
             range_x = (min_x, max_x)
             data_width = max_x - min_x
         else:
@@ -1871,10 +1871,12 @@ class PlotCanvas(BufferedCanvas):
                 data_width = range_x[1] - range_x[0]
             else:
                 msg = "X values out of range! min: %s, max: %s, range: %s"
-                raise ValueError(msg % (min_x, max_x, range_x))
+                # raise ValueError(msg % (min_x, max_x, range_x))
+                logging.debug(msg % (min_x, max_x, range_x))
+                data_width = range_x[1] - range_x[0]
 
         # If a range is not given, we calculate it from the data
-        if not self.range_y:
+        if not self.range_y or self.range_y is None:
             range_y = (min_y, max_y)
             data_height = max_y - min_y
         else:
@@ -1884,7 +1886,9 @@ class PlotCanvas(BufferedCanvas):
                 data_height = range_y[1] - range_y[0]
             else:
                 msg = "Y values out of range! min: %s, max: %s, range: %s"
-                raise ValueError(msg % (min_y, max_y, range_y))
+                # raise ValueError(msg % (min_y, max_y, range_y))
+                logging.debug(msg % (min_y, max_y, range_y))
+                data_height = range_y[1] - range_y[0]
 
         return data_width, range_x, data_height, range_y
 
@@ -1960,6 +1964,26 @@ class PlotCanvas(BufferedCanvas):
 
         return val_x
 
+    def pos_y_to_val_y(self, pos_y, snap=False):
+        """ Map the given pixel position to a y value from the data
+
+        If snap is True, the closest snap from `self._data` will be returned, otherwise
+        interpolation will occur.
+        """
+        perc_y = pos_y / self.ClientSize.y
+        val_y = self.data_prop[3][1] - (perc_y * self.data_prop[2])
+
+        if snap:
+            # Return the value closest to val_x
+            return util.find_closest(val_y, [y for _, y in self._data])
+        else:
+            # Clip the value
+            max_val = max(self.data_prop[3])
+            min_val = min(self.data_prop[3])
+            val_y = max(min_val, min(val_y, max_val))
+
+        return val_y
+
     def val_x_to_val(self, val_x):
         """
         Find the X/Y value from the data closest to the given X value
@@ -2000,7 +2024,7 @@ class PlotCanvas(BufferedCanvas):
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
         self._draw_background(ctx)
 
-        if self._data:
+        if self._data is not None:
             data = self._data
             # TODO: reuse data_prop if the data has not changed
             data_width, range_x, data_height, range_y = self._calc_data_characteristics(data)
@@ -2011,7 +2035,7 @@ class PlotCanvas(BufferedCanvas):
     def _plot_data(self, ctx, data, data_width, range_x, data_height, range_y):
         """ Plot the current `_data` to the given context """
 
-        if self._data:
+        if self._data is not None:
             if self.plot_mode == PLOT_MODE_LINE:
                 self._line_plot(ctx, data, data_width, range_x, data_height, range_y)
             elif self.plot_mode == PLOT_MODE_BAR:

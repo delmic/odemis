@@ -929,6 +929,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         # Round "almost 0" (due to floating point errors) to 0
         if abs(tick_value) < epsilon:
             tick_value = 0
+
         pix_val = (pixel, tick_value)
         if pix_val not in ticks:
             if (tick_value not in (numpy.min(tick_values), numpy.max(tick_values)) and
@@ -1156,14 +1157,61 @@ def bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, 
 
     ctx.close_path()
     ctx.fill()
+    
+def clip_data_window(hrange, vrange, xd, yd):
+    """
+    Clip  a winodw from data values (xd, yd) using two range tuples
+    hrange and vrange
+    returns: xs, ys (the clipped dataset as a tuple)
+    """
+
+    # Using the selected horizontal range, define a window
+    # for display of the data.
+    lo, hi = hrange
+
+    # Find the index closest to the range extremes
+    lox = numpy.searchsorted(xd, lo, side="left")
+    hix = numpy.searchsorted(xd, hi, side="right")
+
+    # normal case
+    if lox != hix:
+        xs = xd[lox:hix]
+        ys = yd[lox:hix]
+    # otherwise we are zoomed in so much that only a single point is visible.
+    # Therefore just display a single bar that fills the the panel
+    else:
+        xs = [(hi + lo) / 2]
+        ys = [yd[lox]]
+
+    # Add a few points onto the beginning and end of the array
+    # to prevent gaps in the data from appearing
+    if lox > 0 and xs[0] != lo:
+        xs = numpy.insert(xs, 0, xd[lox - 1])
+        ys = numpy.insert(ys, 0, yd[lox - 1])
+
+    if hix < len(xd) and xs[-1] != hi:
+        xs = numpy.append(xs, xd[hix])
+        ys = numpy.append(ys, yd[hix])
+
+    # Clip y
+    ys = numpy.clip(ys, vrange[0], vrange[1])
+
+    # Redefine the data to export with the clipped data
+    return xs, ys
 
 
-def spectrum_to_export_data(proj, raw):
+def spectrum_to_export_data(proj, raw, vp=None):
     """
     Creates either raw or WYSIWYG representation for the spectrum data plot
 
     proj (DataProjection): DataProjection of the spectrum to export
     raw (boolean): if True returns raw representation
+    vp (Viewport): Viewport object
+
+    TODO: Instead of a viewport, pass a gui.model.StreamView. That (special) view
+    would have the corresponding VAs hrange and vrange.
+    The NavigablePlotViewport would just read/write them,
+    whenever the user moves or zooms around.
 
     returns (model.DataArray)
     """
@@ -1178,6 +1226,10 @@ def spectrum_to_export_data(proj, raw):
         spec.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return spec
     else:
+        # Take data window
+        if vp is not None:
+            spectrum_range, spec = clip_data_window(vp.hrange.value, vp.vrange.value, spectrum_range, spec)
+
         # Draw spectrum bar plot
         data = zip(spectrum_range, spec)
         fill_colour = BAR_PLOT_COLOUR
@@ -1193,20 +1245,28 @@ def spectrum_to_export_data(proj, raw):
         max_x = max(horz)
         min_y = min(vert)
         max_y = max(vert)
-        range_x = (min_x, max_x)
+
+        if vp is not None:
+            range_x = (vp.hrange.value[0], vp.hrange.value[1])
+            range_y = (vp.vrange.value[0], vp.vrange.value[1])
+        else:
+            range_x = (min_x, max_x)
+            range_y = (min_y, max_y)
+
         data_width = max_x - min_x
-        range_y = (min_y, max_y)
         data_height = max_y - min_y
+        display_height = range_y[1] - range_y[0]
+
         if data_height == 0:
             data_height = max_y
-        bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, fill_colour)
+        bar_plot(ctx, data, data_width, range_x, display_height, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
         # can easily change the bar plot or the scale bar colour
         fill_colour = (0, 0, 0)
 
         # Draw bottom horizontal scale legend
-        value_range = (spec[0], spec[-1])
+        value_range = range_x
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
         font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
@@ -1232,7 +1292,7 @@ def spectrum_to_export_data(proj, raw):
         # Draw left vertical scale legend
         orientation = wx.VERTICAL
         tick_spacing = SPEC_PLOT_SIZE // 6
-        value_range = (min(spec), max(spec))
+        value_range = range_y
         scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
@@ -1269,12 +1329,13 @@ def spectrum_to_export_data(proj, raw):
         return spec_plot
 
 
-def chronogram_to_export_data(proj, raw):
+def chronogram_to_export_data(proj, raw, vp=None):
     """
     Creates either raw or WYSIWYG representation for the time spectrum data plot
 
     stream (SpectrumStream): spectrum stream
     raw (boolean): if True returns raw representation
+    vp (Viewport): the viewport of the export to get display window data
 
     returns (model.DataArray)
     """
@@ -1291,6 +1352,10 @@ def chronogram_to_export_data(proj, raw):
         return spec
     else:
         # Draw spectrum bar plot
+        if vp is not None:
+            # Deal with x
+            time_range, spec = clip_data_window(vp.hrange.value, vp.vrange.value, time_range, spec)
+
         data = zip(time_range, spec)
         fill_colour = BAR_PLOT_COLOUR
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
@@ -1305,20 +1370,27 @@ def chronogram_to_export_data(proj, raw):
         max_x = max(horz)
         min_y = min(vert)
         max_y = max(vert)
-        range_x = (min_x, max_x)
+
+        if vp is not None:
+            range_x = (vp.hrange.value[0], vp.hrange.value[1])
+            range_y = (vp.vrange.value[0], vp.vrange.value[1])
+        else:
+            range_x = (min_x, max_x)
+            range_y = (min_y, max_y)
+
         data_width = max_x - min_x
-        range_y = (min_y, max_y)
         data_height = max_y - min_y
+        display_height = range_y[1] - range_y[0]
         if data_height == 0:
             data_height = max_y
-        bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, fill_colour)
+        bar_plot(ctx, data, data_width, range_x, display_height, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
         # can easily change the bar plot or the scale bar colour
         fill_colour = (0, 0, 0)
 
         # Draw bottom horizontal scale legend
-        value_range = (time_range[0], time_range[-1])
+        value_range = range_x
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
         font_size = SPEC_PLOT_SIZE * SPEC_FONT_SIZE
@@ -1344,7 +1416,7 @@ def chronogram_to_export_data(proj, raw):
         # Draw left vertical scale legend
         orientation = wx.VERTICAL
         tick_spacing = SPEC_PLOT_SIZE // 6
-        value_range = (min(spec), max(spec))
+        value_range = range_y
         scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
