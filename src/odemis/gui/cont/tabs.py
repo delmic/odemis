@@ -3763,7 +3763,7 @@ class Sparc2AlignTab(Tab):
             #         # self.panel.gauge_autofocus.Enable(False)
             if align_mode == "streak-align":
                 s = []
-                focus_mode = "temporal-spec-focus"
+                focus_mode = "streak-focus"
             else:
                 self._stream_controller.pauseStreams()
                 logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)

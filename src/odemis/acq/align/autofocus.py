@@ -622,7 +622,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         Run AutoFocusSpectrometer
         Acquire one last image
         Turn off the light
-    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, temporal-spec-focus
+    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus
     opm: OpticalPathManager
     streams: list of streams
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
@@ -632,7 +632,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
             LookupError if procedure failed
     """
     focuser = None
-    if align_mode in ("spec-focus", "temporal-spec-focus"):
+    if align_mode in ("spec-focus", "streak-focus"):
         focuser = model.getComponent(role='focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner
@@ -797,14 +797,9 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
 
-        logging.debug("Adjust the optical path")
-        # Go to the special focus mode
-        if align_mode == "spec-focus" or align_mode == "temporal-spec-focus":
-            opath = "spec-focus"
-        elif align_mode == "spec-fiber-focus":
-            opath = "spec-fiber-focus"
-        # change the optical path
-        fopm = opm.setPath(opath)
+        # Configure the optical path to the specific focus mode
+        logging.debug("Adjusting the optical path to %s", align_mode)
+        fopm = opm.setPath(align_mode)
         fopm.result()
         if future._autofocus_state == CANCELLED:
             logging.warning("Autofocus procedure is cancelled after closing the slit")
