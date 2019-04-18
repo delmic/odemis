@@ -3468,8 +3468,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(im2d0.shape[2], 3)
 
     #     @skip("simple")
-    def test_arpol(self):
-        """Test StaticARPOLStream"""
+    def test_arpol_allpol(self):
+        """Test StaticARPOLStream with all possible polarization modes."""
 
         metadata = []
         pol_positions = [model.MD_POL_NONE] + list(POL_POSITIONS)
@@ -3502,7 +3502,7 @@ class StaticStreamsTestCase(unittest.TestCase):
             data_pol[200:250, 50:70] = 1000 * index  # modify a few px close to AR_POLE
             data.append(data_pol)
 
-        logging.info("setting up stream")
+        logging.info("setting up ar stream")
         ars = stream.StaticARStream("test arpol static stream", data)
 
         # wait a bit for the image to update
@@ -3579,10 +3579,29 @@ class StaticStreamsTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             ars._setBackground(bg_data)
 
-        ###################################################################
-        # test 1 image + corresponding bg image
+    def test_arpol_1pol(self):
+        """Test StaticARPOLStream with one possible polarization mode."""
+
+        # ARPOL metadata
+        md = {model.MD_SW_VERSION: "1.0-test",
+              model.MD_HW_NAME: "fake ccd",
+              model.MD_DESCRIPTION: "ARPOL",
+              model.MD_ACQ_DATE: time.time(),
+              model.MD_BPP: 12,
+              model.MD_BINNING: (1, 1),  # px, px
+              model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+              model.MD_POS: (1.2e-3, -30e-3),  # m
+              model.MD_EXP_TIME: 1.2,  # s
+              model.MD_AR_POLE: (253.1, 65.1),
+              model.MD_LENS_MAG: 0.4,  # ratio
+              model.MD_POL_MODE: model.MD_POL_HORIZONTAL,
+              model.MD_POL_POS_LINPOL: 0.0,  # rad
+              model.MD_POL_POS_QWP: 0.0,  # rad
+              }
+
         # ARPOL data
-        data = [model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), metadata[0])]
+        data = [model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)]
         data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
         logging.info("setting up stream")
         ars = stream.StaticARStream("test arpol static stream", data)
@@ -3601,7 +3620,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # corresponding bg image
-        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), metadata[0])]
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16), md)]
         e.clear()
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
@@ -3613,12 +3632,27 @@ class StaticStreamsTestCase(unittest.TestCase):
         # check if the bg image has been applied and the .image VA has been updated
         assert not numpy.array_equal(im2d3, im2d4)
 
-        ###################################################################
-        # test 1 large image + corresponding bg image to test resizing
-        data = [model.DataArray(1500 + numpy.zeros((2000, 2200), dtype=numpy.uint16), metadata[0])]
+    def test_ar_large_image(self):
+        """Test StaticARStream with a large image to trigger resizing."""
+
+        md = {model.MD_SW_VERSION: "1.0-test",
+              model.MD_HW_NAME: "fake ccd",
+              model.MD_DESCRIPTION: "AR",
+              model.MD_ACQ_DATE: time.time(),
+              model.MD_BPP: 12,
+              model.MD_BINNING: (1, 1),  # px, px
+              model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+              model.MD_POS: (1.2e-3, -30e-3),  # m
+              model.MD_EXP_TIME: 1.2,  # s
+              model.MD_AR_POLE: (253.1, 65.1),
+              model.MD_LENS_MAG: 0.4,  # ratio
+              }
+
+        data = [model.DataArray(1500 + numpy.zeros((2000, 2200), dtype=numpy.uint16), md)]
         data[0][200:250, 50:70] = 1000  # modify a few px close to AR_POLE
         logging.info("setting up stream")
-        ars = stream.StaticARStream("test arpol static stream with large image", data)
+        ars = stream.StaticARStream("test ar static stream with large image", data)
 
         # wait a bit for the image to update
         e = threading.Event()
@@ -3634,7 +3668,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         # corresponding bg image
-        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 2000, 2200), dtype=numpy.uint16), metadata[0])]
+        bg_data = [model.DataArray(numpy.ones((1, 1, 1, 2000, 2200), dtype=numpy.uint16), md)]
         e.clear()
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
