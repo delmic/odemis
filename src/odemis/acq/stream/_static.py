@@ -440,6 +440,8 @@ class StaticARStream(StaticStream):
         pos (float, float, string or None): position (must be part of the ._pos)
         returns DataArray: the polar projection
         """
+        # Note: Need a copy of the link to the dict. If self._polar is reset while
+        # still running this method, the dict might get new entries again, though it should be empty.
         polar = self._polar
         if pos in polar:
             polard = polar[pos]
