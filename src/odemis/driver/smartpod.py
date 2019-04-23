@@ -32,20 +32,51 @@ from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecut
 
 class SmartPodDLL(CDLL):
     """
-    Subclass of CDLL specific to andor library, which handles error codes for
+    Subclass of CDLL specific to SmartPod library, which handles error codes for
     all the functions automatically.
-    It works by setting a default _FuncPtr.errcheck.
     """
     
+    # Status
+    SMARPOD_OK= c_uint(0)
+    SMARPOD_OTHER_ERROR = c_uint(1)
+    SMARPOD_SYSTEM_NOT_INITIALIZED_ERROR = c_uint(2)
+    SMARPOD_NO_SYSTEMS_FOUND_ERROR = c_uint(3)
+    SMARPOD_INVALID_PARAMETER_ERROR = c_uint(4)
+    SMARPOD_COMMUNICATION_ERROR = c_uint(5)
+    SMARPOD_UNKNOWN_PROPERTY_ERROR = c_uint(6)
+    SMARPOD_RESOURCE_TOO_OLD_ERROR= c_uint(7)
+    SMARPOD_FEATURE_UNAVAILABLE_ERROR= c_uint(8)
+    SMARPOD_INVALID_SYSTEM_LOCATOR_ERROR = c_uint(9)
+    SMARPOD_QUERYBUFFER_SIZE_ERROR = c_uint(10)
+    SMARPOD_COMMUNICATION_TIMEOUT_ERROR = c_uint(11)
+    SMARPOD_DRIVER_ERROR = c_uint(12)
+    
     # Defines
-    SMARPOD_SENSORS_DISABLED = 0
-    SMARPOD_SENSORS_ENABLED = 1
-    SMARPOD_SENSORS_POWERSAVE = 2
+    SMARPOD_SENSORS_DISABLED = c_uint(0)
+    SMARPOD_SENSORS_ENABLED = c_uint(1)
+    SMARPOD_SENSORS_POWERSAVE = c_uint(2)
+
+    # property symbols
+    SMARPOD_FREF_METHOD = c_uint(1000)
+    SMARPOD_FREF_ZDIRECTION = c_uint(1002)
+    SMARPOD_FREF_XDIRECTION = c_uint(1003)
+    SMARPOD_FREF_YDIRECTION = c_uint(1004)
+    SMARPOD_PIVOT_MODE = c_uint(1010)
+    SMARPOD_FREF_AND_CAL_FREQUENCY = c_uint(1020)
+    SMARPOD_POSITIONERS_MIN_SPEED = c_double(1100)
+
+    # move-status constants
+    SMARPOD_STOPPED = c_uint(0)
+    SMARPOD_HOLDING = c_uint(1)
+    SMARPOD_MOVING = c_uint(2)
+    SMARPOD_CALIBRATING = c_uint(3)
+    SMARPOD_REFERENCING = c_uint(4)
+    SMARPOD_STANDBY = c_uint(5)
 
     def __init__(self):
         if os.name == "nt":
             raise NotImplemented("Windows not yet supported")
-            # WinDLL.__init__(self, "atmcd32d.dll")  # TODO check it works
+            # WinDLL.__init__(self, "libsmarpod.dll")  # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
             # Global so that its sub-libraries can access it
@@ -55,6 +86,17 @@ class SmartPodDLL(CDLL):
             self.update = c_uint()
             self.Smarpod_GetDLLVersion(byref(self.major), byref(self.minor), byref(self.update))
             logging.debug("using SmarPod library version %u.%u.%u", self.major.value, self.minor.value, self.update.value)
+
+
+class Pose(Structure):
+    _fields_ = [
+        ("positionX", c_double),
+        ("positionY", c_double),
+        ("positionZ", c_double),
+        ("rotationX", c_double),
+        ("rotationY", c_double),
+        ("rotationZ", c_double),
+        ]
 
 
 class SmartPod(model.Actuator):
@@ -101,5 +143,32 @@ class SmartPod(model.Actuator):
         self._id = c_uint()
         self.core.Smarpod_Open(byref(self._id), c_uint(10001), pointer(self._locator), pointer(self._options))
         self.core.Smarpod_SetSensorMode(byref(self._id), SmartPodDLL.SMARPOD_SENSORS_ENABLED)
+
+        # Check referencing
+        self._referenced = c_int()
+        self.core.Smarpod_IsReferenced(self._id, byref(self._referenced))
+        if not self._referenced.value:
+            self.core.Smarpod_FindReferenceMarks(self._id)
+            self.core.Smarpod_IsReferenced(self._id, byref(self._referenced))
+
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
+    def terminate(self):
+        self.core.Smarpod_Close(self._id)
+        model.Actuator.terminate(self)
+        
+    def _setProperty(self, prop, value):
+        if isinstance(value, c_uint):
+            self.core.Smarpod_Set_ui(self._id, prop, value)
+        elif isinstance(value, c_int):
+            self.core.Smarpod_Set_i(self._id, prop, value)
+        elif isinstance(value, c_double):
+            self.core.Smarpod_Set_d(self._id, prop, value)
+        else:
+            raise ValueError("value must be a C-type (uint, int, or double)")
+
+    @isasync
+    def moveAbs(self, pos):
+        # convert pos to a SmartPod pose
+
+        model.Actuator.moveAbs(self, pos)
