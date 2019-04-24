@@ -151,6 +151,8 @@ SHIFT_2XFF_ROUT = 15  # Each routine must be < 15 instructions
 ADD_2XFF_INT = 50  # Interrupt handler for the referencing
 SHIFT_2XFF_INT = 10  # Each interrupt handler must be < 10 instructions
 
+# General purpose 32-bit variable in Bank 2
+AREF_USER_VAR = 117  # Global parameter should be between 56-255
 
 class TMCLController(model.Actuator):
     """
@@ -394,13 +396,14 @@ class TMCLController(model.Actuator):
         # axis + inverted bit on the high byte to double check). Might also
         # want to check that the device has been running for long enough if
         # the bits are set (see timer in global axis 0/132)
+
         if refproc is None:
             # Only the axes which are "absolute"
             axes_ref = {a: True for a, i in self._name_to_axis.items() if self._abs_encoder[i]}
         else:
             # str -> boolean. Indicates whether an axis has already been referenced
             # (considered already referenced if absolute)
-            axes_ref = {a: (self._abs_encoder[i] is True) for a, i in self._name_to_axis.items()}
+            axes_ref = {a: self._is_already_ref(i) for a, i in self._name_to_axis.items()}
 
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
@@ -417,6 +420,45 @@ class TMCLController(model.Actuator):
                                                    "TMCM temperature update")
             self._updateTemperatureVA() # make sure the temperature is correct
             self._temp_timer.start()
+
+    def _update_ref(self):
+        """
+        It updates the global parameter AREF_USER_VAR with the axes that are referenced
+        """
+        # AREF_USER_VAR is a general purpose 32-bit variable in bank 2. It is used to store the axes that are already referenced.
+        # Up to 256 variables are available, only the first 56 can be stored permanently in EEPROM. #117 is randomly chosen between 56-255.
+        # In case the TMCM controller is turned off, or the main motor power is turned off/on, the variable is automatically reset to 0.
+        # We use this behaviour to detect whether the axes could have been moved without the device control.
+        aref = 0
+        for n, i in self._name_to_axis.items():
+            if self.referenced.value[n]:
+                aref |= 1 << i
+        # special format: one bit per axis + inverted bit on the high 2 bytes to double check
+        aref |= ~aref << 16
+        self.SetGlobalParam(2, AREF_USER_VAR, aref)
+
+    def _is_already_ref(self, axis):
+        """
+        It checks if the axis is already referenced or not by using the global parameter AREF_USER_VAR
+
+        Args:
+            axis: axis number
+
+        Returns (boolean): if the axis is referenced or not
+
+        """
+        if self._abs_encoder[axis] is True:
+            return True
+        aref = self.GetGlobalParam(2, AREF_USER_VAR)
+        # Is arefd the right format? if not, return False
+        if aref & 0xffff != ~(aref >> 16):
+            # Reset the user variable in case it's not already zero
+            if aref != 0:
+                logging.warning("Reset AREF variable %d as it had unexpected value %d", AREF_USER_VAR, aref)
+                self.SetGlobalParam(2, AREF_USER_VAR, 0)
+            return False
+        aref_axis = 1 << axis
+        return bool(aref & aref_axis)
 
     def terminate(self):
         if self._executor:
@@ -1868,6 +1910,8 @@ class TMCLController(model.Actuator):
                 self._updatePosition(axes)
                 # read-only so manually notify
                 self.referenced.notify(self.referenced.value)
+                # Update the global variable, based on the referenced axes
+                self._update_ref()
 
     def _cancelReference(self, future):
         # The difficulty is to synchronise correctly when:
