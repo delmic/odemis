@@ -3830,18 +3830,6 @@ class Sparc2AlignTab(Tab):
             btn.SetLabel("Auto focus")
 
     def _on_autofocus_done(self, future):
-        align_mode = self._autofocus_align_mode
-
-        if align_mode == "lens-align" and not future.cancelled():
-            # Ensure the latest image in _specline_stream shows the slit focused,
-            # with the same grating as used in lens-align mode.
-            self.tab_data_model.main.opm.setPath("spec-focus").result()
-            self._specline_stream.detector.data.get(asap=False)
-
-        # Turn off the light
-        bl = self.tab_data_model.main.brightlight
-        bl.power.value = bl.power.range[0]
-
         try:
             future.result()
         except Exception:
