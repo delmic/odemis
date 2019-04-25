@@ -111,12 +111,11 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
-                 # TODO: need to restore slit-in to the current position?
-                 # 'cl-det-selector': {'x': 'off'},
-                 # 'spec-det-selector': {'rx': 0},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # TODO: leave the grating as-is, if the user wants to acquire with
+                 # a mirror, so be it? (and up to the GUI to select a non-mirror
+                 # grating by default)
                  # That one will be automatically dropped if it doesn't affect
-                 # spectrometer (eg, with a spectrograph-dedicated)
+                 # spectrometer (eg, when using a spectrograph-dedicated)
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
@@ -426,41 +425,49 @@ class OpticalPathManager(object):
                 self._setCCDFan(True)
             # Don't turn off the fan if BEST: first wait for setPath()
 
-    def setPath(self, mode):
+    def setPath(self, mode, detector=None):
         """
         Given a particular mode it sets all the necessary components of the
         optical path (found through the microscope component) to the
         corresponding positions.
         path (stream.Stream or str): The stream or the optical path mode
+        detector (Component or None): The detector which will be targeted on this
+          path. This can only be set if the path is a str (optical mode). That
+          is useful in case the mode can be used with multiple detectors (eg,
+          fiber-align on a SPARC with multiple spectrometers). When path is a
+          Stream, the Stream.detector is always used.
         return (Future): a Future allowing to follow the status of the path
           update.
         raises (via the future):
             ValueError if the given mode does not exist
             IOError if a detector is missing
         """
-        f = self._executor.submit(self._doSetPath, mode)
+        f = self._executor.submit(self._doSetPath, mode, detector)
 
         return f
 
-    def _doSetPath(self, path):
+    def _doSetPath(self, path, detector):
         """
         Actual implementation of setPath()
         """
         if isinstance(path, stream.Stream):
+            if detector is not None:
+                raise ValueError("Not possible to specify both a stream, and a detector")
             try:
                 mode = self.guessMode(path)
             except LookupError:
                 logging.debug("%s doesn't require optical path change", path)
                 return
-            if mode not in self._modes:
-                raise ValueError("Mode '%s' does not exist" % (mode,))
             target = self.getStreamDetector(path)  # target detector
         else:
             mode = path
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             comp_role = self._modes[mode][0]
-            target = self._getComponent(comp_role)
+            if detector is None:
+                target = self._getComponent(comp_role)
+            else:
+                target = detector
 
         logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
 

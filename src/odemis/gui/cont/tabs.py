@@ -3568,7 +3568,12 @@ class Sparc2AlignTab(Tab):
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
-        f = main.opm.setPath(op_mode)
+        if mode == "fiber-align" and self._speccnt_stream:
+            # In case there are multiple detectors after the fiber-aligner, it's
+            # necessary to pass the actual detector that we want.
+            f = main.opm.setPath(op_mode, self._speccnt_stream.detector)
+        else:
+            f = main.opm.setPath(op_mode)
         f.add_done_callback(self._on_align_mode_done)
 
         # Focused view must be updated before the stream to play is changed,
