@@ -1250,31 +1250,37 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         """
         To allow fitting to content, detect where the first leftmost non-zero value
         occurs, and also detect where the first rightmost non-zero value occurs.
-        Returns the horizontal range that fits the data content
-        If no range is found, return none
+        return ((float, float) or None): the horizontal range that fits the data
+          content. If no range is found, return None.
         """
         if self._data_buffer is None:
             return None
 
-        (xd , yd) = self._data_buffer
-        # If the empty portion on the edge is less than the threshold percent of
-        # the full data width, do not include it.
-        threshold = 0.05
+        xd, yd = self._data_buffer
 
+        ileft = 0  # init value (useful in case len(yd) = 0)
         for ileft in range(len(yd)):
-            if yd[ileft] > 0:
+            if yd[ileft] != 0:
                 break
         
+        iright = len(yd) - 1  # init value (useful in case len(yd) <= 1)
         for iright in range(len(yd) - 1, 0, -1):
-            if yd[iright] > 0:
+            if yd[iright] != 0:
                 break
             
         # if ileft is > iright, then the data must be all 0.
-        if ileft < iright and (ileft / len(yd) < threshold \
-            or (1 - iright / len(yd)) < threshold):
-            return (xd[ileft], xd[iright])
-        else:
+        if ileft >= iright:
             return None
+
+        # If the empty portion on the edge is less than 5% of the full data
+        # width, show it anyway.
+        threshold = 0.05 * len(yd)
+        if ileft < threshold:
+            ileft = 0
+        if (len(yd) - iright) < threshold:
+            iright = len(yd) - 1
+
+        return xd[ileft], xd[iright]
 
     def reset_ranges(self):
         if self._data_buffer is None:
