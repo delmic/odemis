@@ -99,19 +99,18 @@ def main(args):
 
     for res in data.keys():
         for zoom in data[res].keys():
-            td = np.array(data[res][zoom].keys())
-            td.sort()
+            td = sorted(np.array(data[res][zoom].keys()))
             s = np.array([data[res][zoom][x] for x in td])
             # plt.scatter(td, s)
             # plt.show()
             try:
                 popt, pcov = curve_fit(arctan_func, td, s)
-            except RuntimeError, TypeError:
+            except RuntimeError as TypeError:
                 popt = None
                 continue
 
             xdata = np.linspace(0.00000096, 0.00004, 100)
-            print zoom
+            print(zoom)
             plt.plot(xdata, arctan_func(xdata, *popt))
             plt.plot(td, s, 'r-')
             plt.show()
@@ -176,8 +175,7 @@ def s_of_z_td(zoom, td, calib):
         return arctan_func(td, *popt)
     except KeyError:
         # No zoom for this position. Interpolate.
-        zooms = calib.keys()
-        zooms.sort()
+        zooms = sorted(calib.keys())
 
         if zoom <= 2:
             z1 = [z for z in zooms if z <= 2]

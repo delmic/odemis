@@ -19,7 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Test module for model.Stream classes
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent.futures import CancelledError
 import gc
@@ -432,7 +432,7 @@ class StreamTestCase(unittest.TestCase):
         time.sleep(1)  # Give some time to disappear
         sts = wsts()
         if sts is not None:
-            print gc.get_referrers(sts)
+            print(gc.get_referrers(sts))
         assert(wsts() is None)
 
         # Live stream
@@ -454,7 +454,7 @@ class StreamTestCase(unittest.TestCase):
         time.sleep(1)  # Give some time to disappear
         ss = wss()
         if ss is not None:
-            print gc.get_referrers(ss)
+            print(gc.get_referrers(ss))
         assert(wss() is None)
 
 

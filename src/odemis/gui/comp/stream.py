@@ -865,6 +865,8 @@ class StreamPanel(wx.Panel):
 
     def _add_slider(self, klass, label_text, value, conf):
         """ Add a slider of type 'klass' to the settings panel """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self._panel, value=value, **conf)
@@ -931,6 +933,8 @@ class StreamPanel(wx.Panel):
         return self._add_num_field(UnitFloatCtrl, label_text, value, conf)
 
     def _add_num_field(self, klass, label_text, value, conf):
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self._panel, value=value, style=wx.NO_BORDER, **conf)
@@ -1032,10 +1036,12 @@ class StreamPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = GraphicalRadioButtonControl(self._panel, -1, style=wx.NO_BORDER,
-                                                 **conf if conf else {})
+                                                 **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 

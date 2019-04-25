@@ -21,7 +21,7 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
+from __future__ import division, print_function
 
 import logging
 import math
@@ -336,7 +336,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         def do_stuff(value):
             """ Test function that can be used to subscribe to VAs """
-            print "Testing VA subscriber received value ", value
+            print("Testing VA subscriber received value ", value)
 
         self.dummy = do_stuff
         dol.sequence_va.subscribe(do_stuff, init=True)

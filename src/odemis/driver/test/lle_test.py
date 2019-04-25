@@ -20,7 +20,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from odemis.driver import lle
 from unittest.case import skipIf
@@ -60,7 +60,7 @@ class TestStatic(unittest.TestCase):
             self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening %s" % (name,)
+            print("opening %s" % (name,))
             dev = CLASS(name, "light", **kwargs)
             self.assertTrue(dev.selfTest(), "Device self-test failed.")
             dev.terminate()
@@ -167,9 +167,9 @@ class TestLLE(unittest.TestCase):
         self.dev.power.value = self.dev.power.range[1]
 
         # can fully checked only by looking what the hardware is doing
-        print "Starting emission source cycle..."
+        print("Starting emission source cycle...")
         for i in range(len(em)):
-            print "Turning on wavelength %g" % self.dev.spectra.value[i][2]
+            print("Turning on wavelength %g" % self.dev.spectra.value[i][2])
             em[i] = 1
             self.dev.emissions.value = em
             time.sleep(1)

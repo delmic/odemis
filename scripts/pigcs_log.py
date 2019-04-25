@@ -18,6 +18,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import print_function
 import logging
 from odemis.driver import pigcs
 
@@ -31,10 +32,10 @@ if __name__ == '__main__':
     devices = pigcs.Bus.scan()
     if len(devices) == 0:
         logging.error("No PI controller found")
-        print "No PI controller found"
+        print("No PI controller found")
 
     for name, kwargs in devices:
-        print "Opening ", name
+        print("Opening ", name)
         ctls = pigcs.Bus("test", "logging", **kwargs)
         # Just starting it logs lots of info.
         logging.info("swVersion: %s", ctls.swVersion)

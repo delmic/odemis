@@ -11,6 +11,7 @@
 # Howerever, the CallAfter messes things up when a lot of GUI tests are run
 # in quick succession using this script.
 
+from __future__ import print_function
 def run_test():
     import sys
 
@@ -25,7 +26,7 @@ def run_test():
 
     import odemis.gui.test as test
 
-    print "\n** Gathering all Odemis GUI TestCases...\n"
+    print("\n** Gathering all Odemis GUI TestCases...\n")
 
     alltests = unittest.TestSuite()
 
@@ -35,7 +36,7 @@ def run_test():
         modules_to_test = [x[:-3] for x in files if x.endswith('test.py')]
 
         for file_name in sorted(modules_to_test):
-            print " * Adding module %s" % file_name
+            print(" * Adding module %s" % file_name)
             module = __import__(file_name)
             logging.getLogger().setLevel(logging.ERROR)
 
@@ -49,26 +50,26 @@ def run_test():
     test.INSPECT = False
     test.MANUAL = False
 
-    print "\n** Running..."
+    print("\n** Running...")
     alltests.run(result)
 
     num_errors = len(result.errors)
-    print "\n** %d Errors occured" % num_errors
+    print("\n** %d Errors occured" % num_errors)
 
     for error in result.errors:
-        print "  * %s" % error[0]
+        print("  * %s" % error[0])
         for line in error[1].splitlines():
-            print "  %s" % line
+            print("  %s" % line)
 
     num_failures = len(result.failures)
-    print "\n** %d Failures occured\n" % num_failures
+    print("\n** %d Failures occured\n" % num_failures)
 
     for failure in result.failures:
-        print " * %s" % failure[0]
+        print(" * %s" % failure[0])
         for line in failure[1].splitlines():
-            print "  %s" % line
+            print("  %s" % line)
 
-    print "** Done."
+    print("** Done.")
 
 if __name__ == '__main__':
     run_test()

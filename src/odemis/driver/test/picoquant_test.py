@@ -18,7 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import copy
 import logging
@@ -126,7 +126,7 @@ class TestPH300(unittest.TestCase):
         self.dev.dwellTime.value = dt
         df = self.dev.data
 
-        print self.dev.pixelDuration.choices
+        print(self.dev.pixelDuration.choices)
         for i, pxdr in zip(range(1, 5), self.dev.pixelDuration.choices):
             self.dev.pixelDuration.value = pxdr
             pxd = self.dev.pixelDuration.value

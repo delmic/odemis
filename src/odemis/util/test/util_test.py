@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
+from __future__ import division, print_function
 
 from functools import partial
 import gc
@@ -76,11 +76,11 @@ class Useless(object):
     Independent class for testing limit_invocation decorator
     """
     def __del__(self):
-        print "Useless %r is gone" % self
+        print("Useless %r is gone" % self)
 
     @limit_invocation(0.1)
     def doit(self, a, b=None):
-        print "doing it %s, %s" % (a, b)
+        print("doing it %s, %s" % (a, b))
 
 
 class TestTimeout(unittest.TestCase):

@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # ===============================================================================
 # Test module for Odemis' gui.comp.text module
 # ===============================================================================
-from __future__ import division
+from __future__ import division, print_function
 import locale
 import unittest
 import wx
@@ -46,7 +46,7 @@ TEST_FLT = [1234567489.0, 123456748.9, 12345674.89, 1234567.489, 123456.7489, 12
 
 def gen_test_data():
     data = [1234567489.0 / 10 ** i for i in range(20)]
-    print data
+    print(data)
 
 
 def suggest(val):

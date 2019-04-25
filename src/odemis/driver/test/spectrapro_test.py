@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 from concurrent import futures
 import logging
@@ -72,7 +72,7 @@ class TestStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print("opening ", name)
             sem = CLASS(name, "spec", children={"ccd": ccd}, **kwargs)
             self.assertTrue(sem.selfTest(), "self test failed.")
 

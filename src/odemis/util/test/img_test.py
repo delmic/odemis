@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
+from __future__ import division, print_function
 
 import logging
 import numpy
@@ -522,7 +522,7 @@ class TestDataArray2RGB(unittest.TestCase):
         irange = (25, 135)
         shape = (1024, 836)
         tint = (0, 73, 255)
-        data = numpy.random.random_integers(irange[0], irange[1], shape).astype(numpy.uint8)
+        data = numpy.random.randint(irange[0], irange[1] + 1, shape).astype(numpy.uint8)
         # to be really sure there is at least one of the min and max values
         data[0, 0] = irange[0]
         data[0, 1] = irange[1]

@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import glob
+import binascii
 import logging
 from odemis import model, util
 import odemis
@@ -178,7 +179,7 @@ class LLE(model.Emitter):
         com (bytearray): command to send
         """
         assert(len(com) <= 10) # commands cannot be long
-        logging.debug("Sending: %s", str(com).encode('hex_codec'))
+        logging.debug("Sending: %s", binascii.hexlify(com))
         while True:
             try:
                 self._serial.write(com)
@@ -206,10 +207,10 @@ class LLE(model.Emitter):
                     # TODO resend the question
                     return b"\x00" * length
                 else:
-                    raise IOError("Device timeout after receiving '%s'." % str(response).encode('hex_codec'))
-            response.append(char)
+                    raise IOError("Device timeout after receiving '%s'." % binascii.hexlify(response))
+            response.extend(char)
 
-        logging.debug("Received: %s", str(response).encode('hex_codec'))
+        logging.debug("Received: %s", binascii.hexlify(response))
         return response
 
     def _initDevice(self):
@@ -370,7 +371,7 @@ class LLE(model.Emitter):
             green_i = None
 
         # Yellow has precedence over green
-        if yellow_i is not None and intensities[yellow_i] > 0:
+        if yellow_i is not None and intensities[yellow_i]: # don't use if None or 0
             return intensities[yellow_i]
         elif green_i is not None:
             return intensities[green_i]
@@ -582,6 +583,7 @@ class FakeLLE(LLE):
     Pretends to connect but actually just print the commands sent.
     """
     def __init__(self, name, role, port, *args, **kwargs):
+        logging.info("Staring fakeLLE")
         # force a port pattern with just one existing file
         LLE.__init__(self, name, role, port="/dev/null", *args, **kwargs)
 
@@ -610,7 +612,7 @@ class LLESimulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._output_buf = b"" # what the commands sends back to the "host computer"
         self._input_buf = bytearray() # what we receive from the "host computer"
 
     def write(self, data):
@@ -654,7 +656,7 @@ class LLESimulator(object):
             if processed:
                 com = self._input_buf[:processed]
                 self._input_buf = self._input_buf[processed:]
-                logging.debug("LLE received %s", str(com).encode('hex_codec'))
+                logging.debug("Sim LLE received %s", binascii.hexlify(com))
             else:
                 # remove everything useless
                 changed = False
