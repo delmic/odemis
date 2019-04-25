@@ -1288,7 +1288,11 @@ class StreamBarController(object):
         # when not in spot mode. (for now, we keep it simple)
         self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream, acqstream.OpticalStream)
         self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
-                               acqstream.MonochromatorSettingsStream, acqstream.ScannedTCSettingsStream)
+                               acqstream.MonochromatorSettingsStream,
+                               acqstream.ScannedTCSettingsStream,
+                               acqstream.ScannedTemporalSettingsStream,
+                               acqstream.TemporalSpectrumSettingsStream,
+                               )
         tab_data.tool.subscribe(self.on_tool_change)
 
         self._view_controller = view_ctrl
