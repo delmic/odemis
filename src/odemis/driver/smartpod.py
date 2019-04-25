@@ -253,7 +253,7 @@ class SmartPod(model.Actuator):
             else:
                 raise ValueError("Invalid axis")
 
-        CheckErr(self.core.Smarpod_Move(self._id, byref(newPose), c_uint(6000), c_int(0)))
+        CheckErr(self.core.Smarpod_Move(self._id, byref(newPose), c_uint(1000), c_int(0)))
 
     def GetPose(self):
         """
