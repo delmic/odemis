@@ -364,7 +364,7 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
         """
         Test cancelling does cancel (relatively quickly)
         """
-        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
@@ -423,15 +423,15 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        # try:
-        #     test.start_backend(SPARC2_FOCUS2_CONFIG)
-        # except LookupError:
-        #     logging.info("A running backend is already found, skipping tests")
-        #     cls.backend_was_running = True
-        #     return
-        # except IOError as exp:
-        #     logging.error(str(exp))
-        #     raise
+        try:
+            test.start_backend(SPARC2_FOCUS2_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # find components by their role
         cls.ccd = model.getComponent(role="ccd0")
@@ -450,10 +450,9 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # if cls.backend_was_running:
-        #     return
-        # test.stop_backend()
-        pass
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -492,7 +491,7 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
         """
         Test cancelling does cancel (relatively quickly)
         """
-        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
 
         f = Sparc2AutoFocus("spec-focus", self.optmngr, [self.specline_ccd], True)
 
