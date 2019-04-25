@@ -731,6 +731,9 @@ class TileAcqPlugin(Plugin):
         stitching and compares it to the available memory on the computer.
         Displays a warning if memory exceeds available memory.
         """
+        if not self._dlg:  # Already destroyed? => no need to care
+            return
+
         if self.stitch.value:
             # Number of pixels for acquisition
             pxs = sum(self._estimateStreamPixels(ss[1]) for ss in self._get_acq_streams())
