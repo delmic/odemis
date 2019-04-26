@@ -22,12 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from concurrent.futures._base import CancelledError
 import logging
 
+import numpy
 from odemis.dataio import tiff
 from odemis import model, acq
 import odemis
 from odemis.acq import align, stream
 from odemis.acq.align import autofocus
-from odemis.acq.align.autofocus import Sparc2AutoFocus
+from odemis.acq.align.autofocus import Sparc2AutoFocus, MTD_BINARY
 from odemis.dataio import hdf5
 from odemis.util import test, timeout, img
 import os
@@ -600,6 +601,77 @@ class TestAutofocusSpectrometer(unittest.TestCase):
         ngs = len(self.spgr.axes["grating"].choices)
         nds = 2
         self.assertEqual(len(res), ngs * nds)
+
+
+class TestAutofocus1d(unittest.TestCase):
+    """
+    Test autofocus functions on 1 line CCD.
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SPARC2_FOCUS_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # find components by their role
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spectrometer = model.getComponent(role="spectrometer-integrated")
+
+        cls.focus = model.getComponent(role="focus")
+        cls._good_focus = cls.focus.position.value["z"]
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    @timeout(1000)
+    def test_autofocus_spect(self):
+        """
+        Test AutoFocus on 1 line CCD for example spectrum.
+        """
+        self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
+        self.ccd.updateMetadata({model.MD_LENS_RI: 1.0e-2})
+        f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
+        foc_pos, foc_lev = f.result(timeout=900)
+        logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
+        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)
+
+    @timeout(1000)
+    def test_autofocus_slit(self):
+        """
+        Test AutoFocus on 1 line CCD for an image of a slit.
+        """
+        # Change image to slit image.
+        data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
+        new_img = img.ensure2DImage(data[0])
+        self.ccd.set_image(new_img)
+        self.spectrometer.binning.value = (4, 64)
+        self.ccd.updateMetadata({model.MD_LENS_RI: 1.0e-2})
+        self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
+        f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
+        foc_pos, foc_lev = f.result(timeout=900)
+        logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
+        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=1e-6)
+        self.ccd.updateMetadata({model.MD_LENS_RI: 1.0e-2})
+        self.focus.moveAbs({"z": self._good_focus + 400e-6}).result()
+        f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
+        foc_pos, foc_lev = f.result(timeout=900)
+        logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
+        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=1e-6)
 
 
 if __name__ == '__main__':

@@ -34,6 +34,7 @@ from odemis.model import InstantaneousFuture
 from odemis.util import executeAsyncTask, almost_equal
 from odemis.util.img import Subtract
 from scipy import ndimage
+from scipy.optimize import curve_fit
 import threading
 import time
 
@@ -112,6 +113,28 @@ def MeasureOpticalFocus(image):
         image = _convertRBGToGrayscale(image)
 
     return cv2.Laplacian(image, cv2.CV_64F).var()
+
+
+def Measure1d(image):
+    """
+    Given an image of a 1 line ccd, measure the focus based on the inverse of the width of a gaussian fit of the data.
+    It is assumed that the signal is in focus when the width of the signal is smallest and therefore sigma is smallest.
+    image (model.DataArray): 1D image from 1 line ccd.
+    returns (float): The focus level of the image.
+    """
+    def gauss(x, *p):
+        a, b, c, d = p
+        y = a * numpy.exp(-numpy.power((x - b), 2.) / (2. * c ** 2.)) + d
+        return y
+    # squeeze to make sure the image array is 1d.
+    signal = numpy.squeeze(image)
+    x = numpy.arange(len(signal))
+    # give an initial estimate for the parameters of the gaussian fit: [max, mu, sigma, y-offset]
+    p_initial = [max(signal), numpy.argmax(signal), 10, min(signal)]
+    # Use curve_fit to fit the gauss function to the data. Use p_initial as our initial guess.
+    popt, pcov = curve_fit(gauss, x, signal, p0=p_initial)
+    # The focus metric is the inverse of sigma of the gaussian fit; a smaller sigma is a higher focus level.
+    return 1 / abs(popt[2])
 
 
 def MeasureSpotsFocus(image):
@@ -289,6 +312,8 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             if detector.role == 'diagnostic-ccd':
                 logging.debug("Using Spot method to estimate focus")
                 Measure = MeasureSpotsFocus
+            elif detector.resolution.value[1] == 1:
+                Measure = Measure1d
             else:
                 logging.debug("Using Optical method to estimate focus")
                 Measure = MeasureOpticalFocus
@@ -496,6 +521,8 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             if detector.role == 'diagnostic-ccd':
                 logging.debug("Using Spot method to estimate focus")
                 Measure = MeasureSpotsFocus
+            elif detector.resolution.value[1] == 1:
+                Measure = Measure1d
             else:
                 logging.debug("Using Optical method to estimate focus")
                 Measure = MeasureOpticalFocus
@@ -750,13 +777,6 @@ def _getSpectrometerFocusingComponents(focuser):
         except LookupError:
             continue
         if d.role.startswith("ccd") or d.role.startswith("sp-ccd"): # catches ccd*, sp-ccd*
-            if d.shape[1] == 1:
-                # Currently, the autofocus doesn't work correctly on spectrum
-                # (ie, resolution of X x 1), so skip it, and hope the focus is
-                # already correct.
-                # TODO: make the autofocus work also in such case.
-                logging.info("Will not focus on %s as it is 1D", d.name)
-                continue
             dets.append(d)
 
     if not dets:

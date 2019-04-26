@@ -102,8 +102,8 @@ class Camera(model.DigitalCamera):
                                               cls=(int, long), unit="px",
                                               setter=self._setTranslation)
 
-        exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
-        self.exposureTime = model.FloatContinuous(exp, (1e-3, 1e3), unit="s")
+        self._orig_exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1)  # s
+        self.exposureTime = model.FloatContinuous(self._orig_exp, (1e-3, 1e3), unit="s")
         # Some code care about the readout rate to know how long an acquisition will take
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
 
@@ -247,6 +247,8 @@ class Camera(model.DigitalCamera):
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
             img = gen_img
+        # to simulate changing the exposure time exp/self._orig_exp
+        numpy.multiply(img, exp/self._orig_exp, out=img, casting="unsafe")
 
         img = model.DataArray(img, metadata)
 
