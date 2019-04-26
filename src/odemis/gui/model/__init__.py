@@ -135,7 +135,6 @@ class MainGUIData(object):
         "tc-detector": "tc_detector",
         "tc-detector-live": "tc_detector_live",
         "spectrometer": "spectrometer",
-        "spectrometer-integrated": "spectrometer_int",
         # spectrometer* -> spectrometers[]
         "sp-ccd": "sp_ccd",  # Only used for a hack in the Sparc2 align tab
         # sp-ccd* -> sp_ccds[]
@@ -147,6 +146,7 @@ class MainGUIData(object):
         "stage": "stage",
         "scan-stage": "scan_stage",
         "focus": "focus",
+        "spec-ded-focus": "spec_ded_focus",
         "pinhole": "pinhole",
         "ebeam-focus": "ebeam_focus",
         "overview-focus": "overview_focus",
@@ -219,9 +219,9 @@ class MainGUIData(object):
         self.pcd = None  # Probe current detector (to measure actual e-beam current)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.sp_ccd = None  # raw access to the spectrometer
-        self.spectrometer_int = None  # second spectrometer, which has its detector also usable for AR (SPARCv2)
         self.spectrograph = None  # actuator to change the wavelength/grating (on SPARCv2, it's directly on the optical path)
         self.spectrograph_ded = None  # spectrograph connected via an optical fiber (SPARCv2)
+        self.spec_ded_focus = None  # focus on spectrograph dedicated (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)

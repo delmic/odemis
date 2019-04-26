@@ -30,6 +30,13 @@ import threading
 
 
 def turnOnLight(bl, ccd):
+    """
+    Turn on a light and wait until it detects a signal change on the ccd
+    bl (Light): the light, which should initially be turned off.
+    ccd (DigitalCamera): detector to use to check for the signal
+    returns (CancellableFuture): a future that will finish when a significant
+      signal increase is detected. Can also be used to stop the procedure. 
+    """
     f = CancellableFuture()
     f.task_canceller = _cancelTurnOnLight
     f._task_state = RUNNING
@@ -42,9 +49,9 @@ def turnOnLight(bl, ccd):
 
 def _cancelTurnOnLight(f):
     """
-    Canceller of turnLightAndCheck task.
+    Canceller of turnLight task.
     """
-    logging.debug("Cancelling turnLightAndCheck...")
+    logging.debug("Cancelling turnLight...")
     with f._task_lock:
         if f._task_state == FINISHED:
             logging.debug("The task already finished")
@@ -56,21 +63,23 @@ def _cancelTurnOnLight(f):
 
 def _doTurnOnLight(f, bl, ccd):
     try:
-        # check if the light is already turned on. The light should normally be turned off.
-        # In case it's already turned on return and start the procedure of autofocus
+        # We need the light to be off, so that we can notice a difference when
+        # it turns on.
+        # In case it's already turned on, just assume everything is fine.
         if bl.emissions.value[0] * bl.power.value != 0:
             logging.debug("The light is already on")
             return
         if f._task_state == CANCELLED:
             raise CancelledError()
 
-        # Light turned off, take the avg intensity of the image
+        # Light turned off, if indeed it's all "black", the avg intensity should
+        # roughly correspond to the maximum noise level.
         img_light_off = ccd.data.get(asap=False)
         avg_intensity_off = numpy.average(img_light_off)
-        # set the avg minimum intensity - a significant change (+50%)
-        avg_intensity_min_on = avg_intensity_off * 1.5 + 0.1
-        logging.debug("Minimum avg intensity of %s in an %s image", avg_intensity_min_on, img_light_off.shape)
-        # Turn the light on
+        # Intensity which is for sure not caused by noise: +150% of the noise level
+        intensity_min_on = avg_intensity_off * 1.5 + 0.1
+        logging.debug("Looking for intensity of %s in an %s image", intensity_min_on, img_light_off.shape)
+        # Turn the light on, full power!
         bl.power.value = bl.power.range[1]
         bl.emissions.value = [1] * len(bl.emissions.value)
         while True:
@@ -82,19 +91,19 @@ def _doTurnOnLight(f, bl, ccd):
             if f._task_state == CANCELLED:
                 raise CancelledError()
             # number of pixels with higher intensity than the avg minimum
-            pixels_high_intensity = numpy.sum(new_img > avg_intensity_min_on)
+            pixels_high_intensity = numpy.sum(new_img > intensity_min_on)
             # the percent of pixels that have intensity higher than the avg minimum
             a = pixels_high_intensity / new_img.size
             # check whether this percent is larger than 0.5% which indicates that the light is on
             if a > 0.005:
-                logging.debug("Detected light on (%f %% pixels above %f)", a * 100, avg_intensity_min_on)
+                logging.debug("Detected light on (%f %% pixels above %f)", a * 100, intensity_min_on)
                 break
-            logging.debug("No light detected (%f %% pixels above %f)", a * 100, avg_intensity_min_on)
+            logging.debug("No light detected (%f %% pixels above %f)", a * 100, intensity_min_on)
 
     except CancelledError:
         raise  # Just don't log the exception
     except Exception:
-        logging.exception("Failure")
+        logging.exception("Failure while turning on light %s", bl.name)
         raise
     finally:
         with f._task_lock:

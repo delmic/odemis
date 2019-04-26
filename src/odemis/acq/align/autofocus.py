@@ -622,7 +622,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         Run AutoFocusSpectrometer
         Acquire one last image
         Turn off the light
-    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, temporal-spec-focus
+    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus
     opm: OpticalPathManager
     streams: list of streams
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
@@ -632,7 +632,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
             LookupError if procedure failed
     """
     focuser = None
-    if align_mode in ("spec-focus", "temporal-spec-focus"):
+    if align_mode in ("spec-focus", "streak-focus"):
         focuser = model.getComponent(role='focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner
@@ -659,12 +659,10 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         streams = []
 
     for s in streams:
-        if s.focuser == focuser:
-            logging.debug("The focuser of stream %s is the same as the one picked", s)
-        elif s.focuser is None:
+        if s.focuser is None:
             logging.debug("Stream %s has no focuser, will assume it's fine", s)
-        else:
-            logging.warning("Stream %s used for focusing has no focuser", s)
+        elif s.focuser != focuser:
+            logging.warning("Stream %s has focuser %s, while expected %s", s, s.focuser, focuser)
 
     # Get all the detectors, spectrograph and selectors affected by the focuser
     try:
@@ -691,7 +689,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         af_time = _totalAutoFocusTime(spgr, dets)
         autofocus_loading_times = (5, 5, af_time, 0.2, 5) # a list with the time that each action needs
     else:
-        autofocus_loading_times = (5,5)
+        autofocus_loading_times = (5, 5)
 
     f = model.ProgressiveFuture(start=est_start, end=est_start + sum(autofocus_loading_times))
     f._autofocus_state = RUNNING
@@ -780,34 +778,29 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
     """
     try:
         if future._autofocus_state == CANCELLED:
-            logging.warning("Autofocus procedure is cancelled before the light is on")
+            logging.info("Autofocus procedure cancelled before the light is on")
             raise CancelledError()
 
-        logging.debug("Turn on the light")
+        logging.debug("Turning on the light")
         bl = model.getComponent(role="brightlight")
         f = light.turnOnLight(bl, dets[0])
         try:
             f.result(timeout=60)
         except TimeoutError:
             f.cancel()
-            logging.warning("Light doesn't appear to turn on after 60s")
+            logging.warning("Light doesn't appear to have turned on after 60s, will try focusing anyway")
         if future._autofocus_state == CANCELLED:
-            logging.warning("Autofocus procedure is cancelled after turning on the light")
+            logging.info("Autofocus procedure cancelled after turning on the light")
             raise CancelledError()
         future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
 
-        logging.debug("Adjust the optical path")
-        # Go to the special focus mode
-        if align_mode == "spec-focus" or align_mode == "temporal-spec-focus":
-            opath = "spec-focus"
-        elif align_mode == "spec-fiber-focus":
-            opath = "spec-fiber-focus"
-        # change the optical path
-        fopm = opm.setPath(opath)
+        # Configure the optical path to the specific focus mode
+        logging.debug("Adjusting the optical path to %s", align_mode)
+        fopm = opm.setPath(align_mode)
         fopm.result()
         if future._autofocus_state == CANCELLED:
-            logging.warning("Autofocus procedure is cancelled after closing the slit")
+            logging.info("Autofocus procedure cancelled after closing the slit")
             raise CancelledError()
         future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
@@ -826,10 +819,11 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
                 if model.hasVA(d, "exposureTime"):
                     d.exposureTime.value = d.exposureTime.clip(0.2)
         ret = {}
-        logging.debug("Run AutoFocusSpectrometer")
+        logging.debug("Running AutoFocusSpectrometer on %s, using %s, for the detectors %s, and using selector %s",
+                      spgr, focuser, dets, selector)
         try:
             future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
-            ret = future._running_subf.result(timeout=3*future._actions_time[0]+10)
+            ret = future._running_subf.result(timeout=3 * future._actions_time[0] + 10)
         except TimeoutError:
             f.cancel()
             logging.warning("Timeout error for autofocus spectrometer")
@@ -838,25 +832,25 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
                 raise CancelledError()
             raise
         if future._autofocus_state == CANCELLED:
-            logging.warning("Autofocus procedure is cancelled after the completion of the autofocus of the spectrometer")
+            logging.info("Autofocus procedure cancelled after the completion of the autofocus")
             raise CancelledError()
         future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
 
         logging.debug("Acquiring the last image")
-        if streams[0]:
+        if streams:
             _playStream(streams[0].detector, streams)
             # Ensure the latest image shows the slit focused
             streams[0].detector.data.get(asap=False)
             # pause the streams
             streams[0].is_active.value = False
         if future._autofocus_state == CANCELLED:
-            logging.warning("Autofocus procedure is cancelled after acquiring the last image")
+            logging.info("Autofocus procedure cancelled after acquiring the last image")
             raise CancelledError()
         future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
 
-        logging.debug("Turn off the light")
+        logging.debug("Turning off the light")
         bl.power.value = bl.power.range[0]
         if future._autofocus_state == CANCELLED:
             logging.warning("Autofocus procedure is cancelled after turning off the light")
@@ -869,6 +863,13 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
     except CancelledError:
         logging.debug("DoSparc2AutoFocus cancelled")
     finally:
+        # Make sure the light is always turned off, even if cancelled/error half-way
+        if start_autofocus:
+            try:
+                bl.power.value = bl.power.range[0]
+            except:
+                logging.exception("Failed to turn off the light")
+
         with future._autofocus_lock:
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -1035,6 +1036,8 @@ def _playStream(detector, streams):
     for s in streams:
         if s.detector.role == detector.role:
             s.is_active.value = True
+            break
+
 
 def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector, streams):
     """

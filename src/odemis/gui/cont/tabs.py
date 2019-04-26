@@ -3138,14 +3138,26 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.pnl_focus.Show(False)
 
-        # Add autofocus in case there is a spectrometer after the optical fiber,
-        # and the spectrometer
-        # Consider the focuser is after the fiber, if the fiber aligner affects it
-        if (main_data.fibaligner and main_data.focus and
-            main_data.focus.name in main_data.fibaligner.affects.value):
-            if ccd_focuser:
-                logging.warning("Focus seems to both affect the 'ccd' and be after "
-                                "the optical fiber ('fiber-aligner').")
+        # Add autofocus in case there is a focusable spectrometer after the optical fiber.
+        # Pick the focuser which affects at least one component common with the
+        # fiber aligner.
+        fib_focuser = None
+        if main_data.fibaligner:
+            aligner_affected = set(main_data.fibaligner.affects.value)
+            for focuser in (main_data.spec_ded_focus, main_data.focus):
+                if focuser is None:
+                    continue
+                # Is there at least one component affected by the focuser which
+                # is also affected by the fibaligner?
+                if set(focuser.affects.value) & aligner_affected:
+                    fib_focuser = focuser
+                    break
+
+        if fib_focuser:
+            if ccd_focuser == fib_focuser:
+                # a ccd can never be after an optical fiber (only sp-ccd)
+                logging.warning("Focus %s seems to affect the 'ccd' but also be after "
+                                "the optical fiber ('fiber-aligner').", fib_focuser.name)
             # Bind autofocus
             # Note: we can use the same functions as for the ccd_focuser, because
             # we'll distinguish which autofocus to run based on the align_mode.
@@ -3751,7 +3763,7 @@ class Sparc2AlignTab(Tab):
             #         # self.panel.gauge_autofocus.Enable(False)
             if align_mode == "streak-align":
                 s = []
-                focus_mode = "temporal-spec-focus"
+                focus_mode = "streak-focus"
             else:
                 self._stream_controller.pauseStreams()
                 logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)

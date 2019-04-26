@@ -194,7 +194,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': 'pass-through'},
-                 'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
+                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
@@ -218,7 +218,7 @@ SPARC2_MODES = {
                  'filter': {'band': 'pass-through'},
                  # In the current convention, only the spectrograph-dedicated
                  # can be after the fiber, so no need to check for spectrograph
-                 'spectrograph-dedicated': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
+                 'spectrograph-dedicated': {'slit-in': 10e-6},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
