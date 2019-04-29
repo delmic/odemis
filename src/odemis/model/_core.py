@@ -239,19 +239,19 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the new component instantiated
         """
         try:
-            # HACK: we know that children can contain components, which are pretty
+            # HACK: we know that dependencies should contain components, which are pretty
             # much always PyroProxies. In case, the component run in the same
             # container, get the direct reference, to make it faster.
             # The best would be that Pyro takes care of this automatically for all Proxies
-            children = kwargs["children"]
-            if isinstance(children, collections.Mapping):
-                logging.debug("Looking to simplify children entry %s", children)
-                children = {k: _getMostDirectObject(self, v) for k, v in children.items()}
-                kwargs["children"] = children
+            dependencies = kwargs["dependencies"]
+            if isinstance(dependencies, collections.Mapping):
+                logging.debug("Looking to simplify dependencies entry %s", dependencies)
+                dependencies = {k: _getMostDirectObject(self, v) for k, v in dependencies.items()}
+                kwargs["dependencies"] = dependencies
         except KeyError:
             pass
         except Exception:
-            logging.warning("Exception while trying to unwrap children", exc_info=True)
+            logging.warning("Exception while trying to unwrap dependencies", exc_info=True)
 
         return self.daemon.instantiate(klass, kwargs)
 

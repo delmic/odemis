@@ -188,8 +188,9 @@ class TestPH300_Shutters(TestPH300):
         cls.shutter1 = actuator.MultiplexActuator("Shutter 1", "shutter1", {"x": cls.tc_act},
                                               {"x": "shutter1"})
 
-        cls.dev = picoquant.PH300(children={'detector0': CONFIG_DET0, 'detector1': CONFIG_DET1,
-                                            'shutter0': cls.shutter0, 'shutter1': cls.shutter1}, **PH300_KWARGS)
+        cls.dev = picoquant.PH300(children={'detector0': CONFIG_DET0, 'detector1': CONFIG_DET1},
+                                  dependencies={'shutter0': cls.shutter0, 'shutter1': cls.shutter1},
+                                  **PH300_KWARGS)
 
         for child in cls.dev.children.value:
             if child.name == CONFIG_DET0["name"]:

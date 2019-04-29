@@ -36,11 +36,11 @@ NON_SPEC_MD = {model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE, model.MD_AR_PARABOL
 
 class CompositedSpectrometer(model.Detector):
     '''
-    A generic Detector which takes 2 children to create a spectrometer. It's
+    A generic Detector which takes 2 dependencies to create a spectrometer. It's
     essentially a wrapper to a DigitalCamera to generate a spectrum as data
     from the DataFlow. Manipulation of the mirrors/gratings/prism must be done
-    via the "spectrograph" child. On the contrary, access to the detector must
-    be done only via this Component, and never directly on the "detector" child.
+    via the "spectrograph" dependency. On the contrary, access to the detector must
+    be done only via this Component, and never directly on the "detector" dependency.
 
     The main differences between a Spectrometer and a normal DigitalCamera are:
      * the spectrometer data of the DataFlow has only one dimension (i.e., second
@@ -53,47 +53,47 @@ class CompositedSpectrometer(model.Detector):
        wavelength associated to each pixel.
     '''
 
-    def __init__(self, name, role, children, **kwargs):
+    def __init__(self, name, role, dependencies, **kwargs):
         '''
-        children (dict string->model.HwComponent): the children
-            There must be exactly two children "spectrograph" and "detector". The
+        dependencies (dict string->model.HwComponent): the dependencies
+            There must be exactly two dependencies "spectrograph" and "detector". The
             first dimension of the CCD is supposed to be along the wavelength,
             with the first pixels representing the lowest wavelengths.
         Raise:
-          ValueError: if the children are not compatible
+          ValueError: if the dependencies are not compatible
         '''
-        # we will fill the set of children with Components later in ._children
-        model.Detector.__init__(self, name, role, **kwargs)
+        # we will fill the set of dependencies with Components later in ._dependencies
+        model.Detector.__init__(self, name, role, dependencies=dependencies, **kwargs)
 
-        # Check the children
-        dt = children["detector"]
+        # Check the dependencies
+        dt = dependencies["detector"]
         if not isinstance(dt, ComponentBase):
-            raise ValueError("Child detector is not a component.")
+            raise ValueError("Dependency detector is not a component.")
         if ((not hasattr(dt, "shape") or not isinstance(dt.shape, tuple)) or
             not model.hasVA(dt, "pixelSize")):
-            raise ValueError("Child detector is not a Detector component.")
+            raise ValueError("Dependency detector is not a Detector component.")
         if not hasattr(dt, "data") or not isinstance(dt.data, DataFlowBase):
-            raise ValueError("Child detector has not .data DataFlow.")
+            raise ValueError("Dependency detector has not .data DataFlow.")
         self._detector = dt
-        self.children.value.add(dt)
+        self.dependencies.value.add(dt)
 
-        sp = children["spectrograph"]
+        sp = dependencies["spectrograph"]
         if not isinstance(sp, ComponentBase):
-            raise ValueError("Child spectrograph is not a component.")
+            raise ValueError("Dependency spectrograph is not a component.")
         try:
             if "wavelength" not in sp.axes:
-                raise ValueError("Child spectrograph has no 'wavelength' axis.")
+                raise ValueError("Dependency spectrograph has no 'wavelength' axis.")
         except Exception:
-            raise ValueError("Child spectrograph is not an Actuator.")
+            raise ValueError("Dependency spectrograph is not an Actuator.")
         self._spectrograph = sp
-        self.children.value.add(sp)
+        self.dependencies.value.add(sp)
 
         # set up the detector part
         # check that the shape is "horizontal"
         if dt.shape[0] <= 1:
-            raise ValueError("Child detector must have at least 2 pixels horizontally")
+            raise ValueError("Dependency detector must have at least 2 pixels horizontally")
         if dt.shape[0] < dt.shape[1]:
-            logging.warning("Child detector is shaped vertically (%dx%d), "
+            logging.warning("Dependency detector is shaped vertically (%dx%d), "
                             "this is probably incorrect, as wavelengths are "
                             "expected to be along the horizontal axis",
                             dt.shape[0], dt.shape[1])

@@ -70,7 +70,7 @@ SimOptical: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Andor SimCam"],
-    children: {"a": FakePIGCS, "b": FakePIGCS},
+    dependencies: {"a": FakePIGCS, "b": FakePIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
 #        inverted: ["a"]
@@ -90,7 +90,7 @@ SimOptical: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Andor SimCam"],
-    children: {"z": FakePIGCS},
+    dependencies: {"z": FakePIGCS},
     init: {
         axes_map: {"z": "z"}
     },

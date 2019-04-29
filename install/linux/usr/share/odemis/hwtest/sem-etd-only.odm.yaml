@@ -2,9 +2,7 @@
 SEM: {
     class: Microscope,
     role: sem,
-    emitters: ["EBeam ExtXY"],
-    detectors: ["SED ExtXY","BSD ExtXY"],
-    actuators: ["Perfect Stage"],
+    children: ["EBeam ExtXY", "SED ExtXY","BSD ExtXY", "Perfect Stage"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board

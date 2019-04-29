@@ -288,11 +288,10 @@ class BackendContainer(model.Container):
                 pass
             raise ValueError("Failed to instantiate component %s" % name)
         else:
-            children = self._instantiator.get_children(comp)
-            dchildren = self._instantiator.get_delegated_children(name)
-            newcmps = set(c for c in children if c.name in dchildren)
+            newcmps = set(self._instantiator.get_children(comp))
             mic.alive.value = mic.alive.value | newcmps
             # update ghosts by removing all the new components
+            dchildren = self._instantiator.get_children_names(name)
             for n in dchildren:
                 del ghosts[n]
 

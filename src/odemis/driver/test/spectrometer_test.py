@@ -77,9 +77,9 @@ class TestSimulated(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
-        cls.spectrograph = CLASS_SPG_SIM(children={"ccd": cls.detector},
+        cls.spectrograph = CLASS_SPG_SIM(dependencies={"ccd": cls.detector},
                                          **KWARGS_SPG)
-        cls.spectrometer = CLASS(children={"detector": cls.detector,
+        cls.spectrometer = CLASS(dependencies={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph},
                                  **SPEC_KWARGS)
         #save position
@@ -148,7 +148,7 @@ class TestSimulatedShamrock(TestSimulated):
     def setUpClass(cls):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
         cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
-        cls.spectrometer = CLASS(children={"detector": cls.detector,
+        cls.spectrometer = CLASS(dependencies={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph},
                                  **SPEC_KWARGS)
         # save position
@@ -163,9 +163,9 @@ class TestCompositedSpectrometer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.detector = CLASS_CCD(**KWARGS_CCD)
-        cls.spectrograph = CLASS_SPG(children={"ccd": cls.detector},
+        cls.spectrograph = CLASS_SPG(dependencies={"ccd": cls.detector},
                                      **KWARGS_SPG)
-        cls.spectrometer = CLASS(children={"detector": cls.detector,
+        cls.spectrometer = CLASS(dependencies={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph},
                                  **SPEC_KWARGS)
         #save position

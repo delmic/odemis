@@ -78,13 +78,13 @@ SPARC2: {
     init: {
         image: "sparc-spec-sim.h5",
     },
-    children: {focus: "Spectrograph focus"}
+    dependencies: {focus: "Spectrograph focus"}
 }
 
 "Spectrometer Vis-NIR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer-integrated,
-    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -108,7 +108,7 @@ SPARC2: {
 "Spectrometer IR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         binning: [4, 16],
     },
@@ -130,7 +130,7 @@ SPARC2: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Spectrograph"},
+    dependencies: {"z": "Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -141,7 +141,7 @@ SPARC2: {
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {
@@ -191,7 +191,7 @@ affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -207,7 +207,7 @@ affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -222,7 +222,7 @@ affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"
 "Slit": {
     class: actuator.FixedPositionsActuator,
     role: "slit-in-big",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "slit",
         positions: {
@@ -257,7 +257,7 @@ affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)

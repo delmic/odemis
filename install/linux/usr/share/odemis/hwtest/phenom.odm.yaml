@@ -2,9 +2,8 @@
 PhenomProX: {
     class: Microscope,
     role: sem,
-    emitters: ["EBeam Phenom"],
-    detectors: ["SED Phenom", "NavCam"],
-    actuators: ["Stage Phenom", "Chamber Phenom", "EBeam focus", "NavCam focus"],
+    children: ["EBeam Phenom", "SED Phenom", "NavCam", "Stage Phenom", "Chamber Phenom",
+              "EBeam focus", "NavCam focus"],
 }
 
 # Connection to the Phenom, which must have API access activated

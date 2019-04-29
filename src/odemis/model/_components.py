@@ -107,12 +107,14 @@ class Component(ComponentBase):
     Component to be shared remotely
     '''
 
-    def __init__(self, name, parent=None, children=None, daemon=None):
+    def __init__(self, name, parent=None, children=None, dependencies=None, daemon=None):
         """
         name (string): unique name used to identify the component
         parent (Component): the parent of this component, that will be in .parent
         children (dict str -> Component): the children of this component, that will
-            be in .children. Objects not instance of Component are skipped
+            be in .children. Objects not instance of Component are skipped.
+        dependencies (dict str -> Component): the dependencies of this component, that will
+            be in .dependencies.
         daemon (Pyro4.daemon): daemon via which the object will be registered.
             default=None => not registered
         """
@@ -125,13 +127,18 @@ class Component(ComponentBase):
         self._parent = None
         self.parent = parent  # calls the setter, which updates ._parent
 
-        if children is None:
-            children = {}
+        dependencies = dependencies or {}
+        children = children or {}
         # Do not add non-Component, so that it's compatible with passing a kwargs
-        # It's up to the sub-class to set correctly the .parent of the children
+        # It's up to the sub-class to set correctly the .parent of the dependencies
+        for dep, c in dependencies.items():
+            if not isinstance(c, ComponentBase):
+                raise ValueError("Dependency %s is not a component." % dep)
+        cd = set (c for c in dependencies.values())
         cc = set(c for c in children.values() if isinstance(c, ComponentBase))
         # Note the only way to ensure the VA notifies changes is to set a
         # different object at every change.
+        self.dependencies = _vattributes.VigilantAttribute(cd)
         self.children = _vattributes.VigilantAttribute(cc)
 
     def _getproxystate(self):

@@ -141,7 +141,7 @@ MAX_GRATINGS_NUM = { # gratings
 
 class SpectraPro(model.Actuator):
     def __init__(self, name, role, port, turret=None, calib=None,
-                 _noinit=False, children=None, **kwargs):
+                 _noinit=False, dependencies=None, **kwargs):
         """
         port (string): name of the serial port to connect to.
         turret (None or 1<=int<=3): turret number set-up. If None, consider that
@@ -152,7 +152,7 @@ class SpectraPro(model.Actuator):
            blaze in nm, groove gl/mm, center adjust, slope adjust,
            focal length, inclusion angle, detector angle
         inverted (None): it is not allowed to invert the axes
-        children (dict str -> Component): "ccd" should be the CCD used to acquire
+        dependencies (dict str -> Component): "ccd" should be the CCD used to acquire
          the spectrum.
         _noinit (boolean): for internal use only, don't try to initialise the device
         """
@@ -180,11 +180,11 @@ class SpectraPro(model.Actuator):
         self._try_recover = True
 
         try:
-            self._ccd = children["ccd"]
+            self._ccd = dependencies["ccd"]
         except (TypeError, KeyError):
             # TODO: only needed if there is calibration info (for the pixel size)
             # otherwise it's fine without CCD.
-            raise ValueError("Spectrograph needs a child 'ccd'")
+            raise ValueError("Spectrograph needs a dependency 'ccd'")
 
         # according to the model determine how many gratings per turret
         model_name = self.GetModel()
@@ -222,7 +222,7 @@ class SpectraPro(model.Actuator):
                 "grating": model.Axis(choices=gchoices)
                 }
         # provides a ._axes
-        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+        model.Actuator.__init__(self, name, role, axes=axes, dependencies=dependencies, **kwargs)
 
         # First step of parsing calib parmeter: convert to (int, int) -> ...
         calib = calib or ()

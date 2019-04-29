@@ -52,6 +52,7 @@ KWARGS_SPECTROGRAPH = dict(name="sr193", role="spectrograph", device="fake",
 # Export TEST_NOHW = 1 to prevent using the real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
+
 # Inheritance order is important for setUp, tearDown
 class TestHamamatsurxCamGenericCam(VirtualTestCam, unittest.TestCase):
     """
@@ -582,10 +583,11 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         cls.spectrograph = CLASS_SPECTROGRAPH(**KWARGS_SPECTROGRAPH)
 
         STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
-                    "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
+                           "delaybox": CONFIG_DELAYBOX}
 
         cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="172.16.4.2",
-                                                 port=1001, children=STREAK_CHILDREN)
+                                                 port=1001, children=STREAK_CHILDREN,
+                                                 dependencies={"spectrograph": cls.spectrograph})
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:

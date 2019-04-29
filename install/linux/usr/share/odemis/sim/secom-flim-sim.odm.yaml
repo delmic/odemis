@@ -38,7 +38,7 @@ Light: {
 "Extended Light": {
     class: emitter.ExtendedLight,
     role: light,
-    children: {
+    dependencies: {
         "light": "Light",
         "clock": "Rigol Wave Generator",
     },
@@ -182,13 +182,11 @@ Light: {
 
 "Pinhole": {
     # Internal child of Nikon C2, so no class
-    creator: "Nikon C2",
     role: pinhole,
 }
 
 "Switch Sensor": {
     # Internal child of Nikon C2, so no class
-    creator: "Nikon C2",
     role: null,
 }
 
@@ -230,7 +228,7 @@ Light: {
 "Fiber Selector": {
     class: actuator.FixedPositionsActuator,
     role: det-selector,
-    children: {"rx": "Selector motor"},
+    dependencies: {"rx": "Selector motor"},
     init: {
         axis_name: "rx",
         positions: {
@@ -253,7 +251,7 @@ Light: {
     # It changes the position, which matters for the scanners (and indirectly
     # the detectors)  
     affects: ["Galvano Mirror", "SEM E-beam"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "sx", "y": "sy"},
     },
@@ -263,7 +261,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Galvano Mirror", "Time Correlator"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
     },
@@ -275,7 +273,7 @@ Light: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Galvano Mirror", "Time Correlator"],
-    children: {"z": "Stage Actuators"},
+    dependencies: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}
     },

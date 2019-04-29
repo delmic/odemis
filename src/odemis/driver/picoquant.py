@@ -209,18 +209,21 @@ class PH300(model.Detector):
     Represents a PicoQuant PicoHarp 300.
     """
 
-    def __init__(self, name, role, device=None, children=None, daemon=None,
+    def __init__(self, name, role, device=None, dependencies=None, children=None, daemon=None,
                  disc_volt=None, zero_cross=None, shutter_axes=None, **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
           or None if any device is fine.
+        dependencies (dict str -> Component): shutters components (shutter0 and shutter1 are valid)
         children (dict str -> kwargs): the names of the detectors (detector0 and
-         detector1 are valid) to the arguments.
+         detector1 are valid)
         disc_volt (2 (0 <= float <= 0.8)): discriminator voltage for the APD 0 and 1 (in V)
         zero_cross (2 (0 <= float <= 2e-3)): zero cross voltage for the APD0 and 1 (in V)
         shutter_axes (dict str -> str, value, value): internal child role of the photo-detector ->
           axis name, position when shutter is closed (ie protected), position when opened (receiving light).
         """
+        if dependencies is None:
+            dependencies = {}
         if children is None:
             children = {}
 
@@ -239,7 +242,7 @@ class PH300(model.Detector):
         if zero_cross is None:
             zero_cross = [0, 0]
 
-        super(PH300, self).__init__(name, role, daemon=daemon, **kwargs)
+        super(PH300, self).__init__(name, role, daemon=daemon, dependencies=dependencies, **kwargs)
 
         # TODO: metadata for indicating the range? cf WL_LIST?
 
@@ -268,29 +271,32 @@ class PH300(model.Detector):
         self._shutter_axes = shutter_axes or {}
         for name, ckwargs in children.items():
             if name == "detector0":
-                if "shutter0" in children:
+                if "shutter0" in dependencies:
                     shutter_name = "shutter0"
                 else:
                     shutter_name = None
                 self._detectors[name] = PH300RawDetector(channel=0, parent=self, shutter_name=shutter_name, daemon=daemon, **ckwargs)
                 self.children.value.add(self._detectors[name])
             elif name == "detector1":
-                if "shutter1" in children:
+                if "shutter1" in dependencies:
                     shutter_name = "shutter1"
                 else:
                     shutter_name = None
                 self._detectors[name] = PH300RawDetector(channel=1, parent=self, shutter_name=shutter_name, daemon=daemon, **ckwargs)
                 self.children.value.add(self._detectors[name])
-            elif name == "shutter0":
+            else:
+                raise ValueError("Child %s not recognized, should be detector0 or detector1.")
+        for name, comp in dependencies.items():
+            if name == "shutter0":
                 if "shutter0" not in shutter_axes.keys():
                     raise ValueError("'shutter0' not found in shutter_axes")
-                self._shutters['shutter0'] = ckwargs  # ckwargs = The component
+                self._shutters['shutter0'] = comp
             elif name == "shutter1":
                 if "shutter1" not in shutter_axes.keys():
                     raise ValueError("'shutter1' not found in shutter_axes")
-                self._shutters['shutter1'] = ckwargs  # ckwargs = The component
+                self._shutters['shutter1'] = comp
             else:
-                raise ValueError("Child %s not recognized, should be detector0, detector1, shutter0, or shutter1.")
+                raise ValueError("Dependency %s not recognized, should be shutter0 or shutter1.")
 
         # dwellTime = measurement duration
         dt_rng = (ACQTMIN * 1e-3, ACQTMAX * 1e-3)  # s

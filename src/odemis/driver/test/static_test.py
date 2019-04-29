@@ -78,7 +78,7 @@ class TestSpectrograph(unittest.TestCase):
         """
         wlp = [500e-9, 1/1e6]
         ccd = simcam.Camera("testcam", "ccd", image="andorcam2-fake-clara.tiff")
-        sp = static.Spectrograph("test", "spectrograph", wlp=wlp, children={"ccd": ccd})
+        sp = static.Spectrograph("test", "spectrograph", wlp=wlp, dependencies={"ccd": ccd})
         ptw = sp.getPixelToWavelength(ccd.shape[0], ccd.pixelSize.value[0])
         self.assertGreater(wlp[0], ptw[0])
         self.assertLess(wlp[0], ptw[-1])

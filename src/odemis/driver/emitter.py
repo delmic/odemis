@@ -24,31 +24,31 @@ class MultiplexLight(model.Emitter):
     """
     Light composed of multiple Lights
     """
-    # There are different solutions to map power * intensities to the children.
+    # There are different solutions to map power * intensities to the dependencies.
     # In any case, the child with the max power will have the power and
     # intensities copied.
-    # For the other children, the power is set with the same ratio as the
+    # For the other dependencies, the power is set with the same ratio as the
     # parent power, and the intensities are inversely proportional to the
     # max power ratio.
     # => the intensities and power are set independently
 
-    def __init__(self, name, role, children, **kwargs):
+    def __init__(self, name, role, dependencies, **kwargs):
         """
-        children (dict str -> Emitter): arbitrary role -> emitter to be used as
+        dependencies (dict str -> Emitter): arbitrary role -> emitter to be used as
           part of this emitter. All its provided emissions will be provided.
         """
         # TODO: allow to only use a subset of the emissions from each child
 
-        if not children:
-            raise ValueError("MultiplexLight needs children")
+        if not dependencies:
+            raise ValueError("MultiplexLight needs dependencies")
 
-        model.Emitter.__init__(self, name, role, children=children, **kwargs)
+        model.Emitter.__init__(self, name, role, dependencies=dependencies, **kwargs)
         self._shape = ()
 
         self._child_idx = {} # Emitter -> index (shift) in the emissions/spectra
 
         spectra = []
-        for n, child in children.items():
+        for n, child in dependencies.items():
             if not (model.hasVA(child, "power") and
                     model.hasVA(child, "emissions") and
                     model.hasVA(child, "spectra")
@@ -59,7 +59,7 @@ class MultiplexLight(model.Emitter):
             # TODO: update emissions whenever the child emissions change
 
         # Child with the maximum power range
-        max_power = max(c.power.range[1] for c in self.children.value)
+        max_power = max(c.power.range[1] for c in self.dependencies.value)
         self.power = model.FloatContinuous(0, (0., max_power), unit="W")
         self.power.subscribe(self._updatePower)
 
@@ -84,13 +84,13 @@ class MultiplexLight(model.Emitter):
     def _readPwrEmissions(self):
         """
         Compute what should be the .power and .emissions value, based on the
-        values from all the children.
+        values from all the dependencies.
         """
-        pwr_ratio = max(c.power.value / c.power.range[1] for c in self.children.value)
+        pwr_ratio = max(c.power.value / c.power.range[1] for c in self.dependencies.value)
         pwr = self.power.range[1] * pwr_ratio
         em = [0] * len(self.spectra.value)
         for child, idx in self._child_idx.items():
-            # Compensate for the fact that not all children have the same max power
+            # Compensate for the fact that not all dependencies have the same max power
             if pwr > 0:
                 pratio = child.power.value / pwr
             else:
@@ -103,8 +103,8 @@ class MultiplexLight(model.Emitter):
 
 #     def _updateEmissions(self):
 #         """
-#         Called when the emission of one of the children changes.
-#         Update the emissions from all the children
+#         Called when the emission of one of the dependencies changes.
+#         Update the emissions from all the dependencies
 #         """
 #         # TODO: do not call the setter in such case, but it's a little tricky
 #         # because emissions is a ListVA, which has a special _set_value (which
@@ -138,18 +138,19 @@ class ExtendedLight(model.Emitter):
     """
     Wrapper component to add to an Emitter, a .period VA coming from a clock generator
     """
-    def __init__(self, name, role, children, **kwargs):
+
+    def __init__(self, name, role, dependencies, **kwargs):
         """
-        children (dict str->Component): the two components to wrap together.
+        dependencies (dict str->Component): the two components to wrap together.
             The key must be "light" for the emitter component, and "clock" for the clock generator.
         """
         # This will create the .powerSupply VA
-        model.Emitter.__init__(self, name, role, children=children, **kwargs)
+        model.Emitter.__init__(self, name, role, dependencies=dependencies, **kwargs)
         self._shape = ()
 
         # Determine child objects. Light
         try:
-            self._light = children["light"]
+            self._light = dependencies["light"]
         except KeyError:
             raise ValueError("No 'light' child provided")
         if not isinstance(self._light, model.ComponentBase):
@@ -160,7 +161,7 @@ class ExtendedLight(model.Emitter):
             raise ValueError("Child %s has no emissions VA." % (self._light.name,))
         # Clock generator
         try:
-            self._clock = children["clock"]
+            self._clock = dependencies["clock"]
         except KeyError:
             raise ValueError("No 'clock generator' child provided")
         if not isinstance(self._clock,  model.ComponentBase):

@@ -127,6 +127,7 @@ class TestCommandLine(unittest.TestCase):
                 subprocess.call(["sudo", "odemis-stop"])
             except Exception:
                 pass  # Odemis is not installed, too bad
+        time.sleep(1)  # give it some time to finish
 
     def test_error_command_line(self):
         """
@@ -221,9 +222,31 @@ class TestCommandLine(unittest.TestCase):
         os.remove("test.log")
 
     @timeout(20)
-    def test_multiple_parents(self):
+    def test_multiple_parents_old(self):
         """Test creating component with multiple parents"""
-        filename = "multiple-parents.odm.yaml"
+        filename = "multiple-parents-old-style.odm.yaml"
+        cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s' gave status %d" % (cmdline, ret))
+
+        # eventually it should say it's running
+        ret = self._wait_backend_starts(10)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+        # stop the backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        time.sleep(5)  # give some time to stop
+        ret = main.main(cmdline.split())
+        os.remove("test.log")
+        os.remove("testdaemon.log")
+
+    @timeout(20)
+    def test_multiple_parents_new(self):
+        """Test creating component with multiple parents"""
+        filename = "multiple-parents-new-style.odm.yaml"
         cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s' gave status %d" % (cmdline, ret))

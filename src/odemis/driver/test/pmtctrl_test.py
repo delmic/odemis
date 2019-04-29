@@ -161,7 +161,7 @@ class TestPMT(unittest.TestCase):
             elif child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
         cls.pmt = CLASS_PMT(name="test", role="detector",
-                                 children={"detector": cls.bsd,
+                                 dependencies={"detector": cls.bsd,
                                            "pmt-control": cls.control})
 
     @classmethod
@@ -187,9 +187,6 @@ class TestPMT(unittest.TestCase):
         # save basic VA
         self._orig_gain = self.pmt.gain.value
         self._orig_powerSupply = self.pmt.powerSupply.value
-
-    def tearDown(self):
-        pass
 
     def test_simple_acquisition(self):
         self.is_received = threading.Event()

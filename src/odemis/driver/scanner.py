@@ -26,39 +26,37 @@ from odemis.model import ComponentBase
 
 class CompositedScanner(model.Emitter):
     '''
-    A generic Emitter which takes 2 children to create a scanner. It's
+    A generic Emitter which takes 2 dependencies to create a scanner. It's
     essentially a wrapper to an Emitter to generate data using the "external"
     scanner while manipulating HFW, accelerating voltage and probe current via
     the "internal" scanner.
     '''
 
-    def __init__(self, name, role, children, **kwargs):
+    def __init__(self, name, role, dependencies, **kwargs):
         '''
-        children (dict string->model.HwComponent): the children
-            There must be exactly two children "external" and "internal".
+        dependencies (dict string->model.HwComponent): the dependencies
+            There must be exactly two dependencies "external" and "internal".
         Raise:
-          ValueError: if the children are not compatible
+          ValueError: if the dependencies are not compatible
         '''
-        # we will fill the set of children with Components later in ._children
-        model.Emitter.__init__(self, name, role, **kwargs)
+        # we will fill the set of dependencies with Components later in ._dependencies
+        model.Emitter.__init__(self, name, role, dependencies=dependencies, **kwargs)
 
-        # Check the children
-        extnl = children["external"]
+        # Check the dependencies
+        extnl = dependencies["external"]
         if not isinstance(extnl, ComponentBase):
-            raise ValueError("Child external is not a component.")
+            raise ValueError("Dependency external is not a component.")
         if not model.hasVA(extnl, "pixelSize"):
-            raise ValueError("Child external is not a Emitter component.")
+            raise ValueError("Dependency external is not a Emitter component.")
         self._external = extnl
-        self.children.value.add(extnl)
 
-        intnl = children["internal"]
+        intnl = dependencies["internal"]
         if not isinstance(intnl, ComponentBase):
-            raise ValueError("Child internal is not a component.")
+            raise ValueError("Dependency internal is not a component.")
         if not hasattr(intnl, "shape"):
             # Note: the internal component doesn't need to provide pixelSize
-            raise ValueError("Child internal is not a Emitter component.")
+            raise ValueError("Dependency internal is not a Emitter component.")
         self._internal = intnl
-        self.children.value.add(intnl)
 
         # Copy VAs directly related to scanning from external
         self._shape = self._external.shape

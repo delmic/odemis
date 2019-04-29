@@ -37,12 +37,12 @@ import time
 
 class PMT(model.Detector):
     '''
-    A generic Detector which takes 2 children to create a PMT detector. It's
+    A generic Detector which takes 2 dependencies to create a PMT detector. It's
     a wrapper to a Detector (PMT) and a PMT Control Unit to allow the
     second one to control and ensure the safe operation of the first one and act
     with respect to its DataFlow.
 
-    It actually duplicates some of the children VAs that need to be included in
+    It actually duplicates some of the dependencies VAs that need to be included in
     the user interface (connecting them to the original ones) and uses the rest
     of them in order to protect the PMT via the PMT Control Unit in case of trip
     i.e. excess of a current threshold for a certain amount of time (see Control
@@ -59,16 +59,17 @@ class PMT(model.Detector):
         - Upon initialization it turns on the power supply and turns it off on
         termination.
     '''
-    def __init__(self, name, role, children, settle_time=0, **kwargs):
+
+    def __init__(self, name, role, dependencies, settle_time=0, **kwargs):
         '''
-        children (dict string->model.HwComponent): the children
-            There must be exactly two children "pmt-control" and "detector".
+        dependencies (dict string->model.HwComponent): the dependencies
+            There must be exactly two dependencies "pmt-control" and "detector".
         settle_time (0 < float): time to wait after turning on the gain to have
           it fully working.
-        Raise an ValueError exception if the children are not compatible
+        Raise an ValueError exception if the dependencies are not compatible
         '''
-        # we will fill the set of children with Components later in ._children
-        model.Detector.__init__(self, name, role, **kwargs)
+        # we will fill the set of dependencies with Components later in ._dependencies
+        model.Detector.__init__(self, name, role, dependencies=dependencies, **kwargs)
 
         if settle_time < 0:
             raise ValueError("Settle time of %g s for '%s' is negative"
@@ -79,16 +80,16 @@ class PMT(model.Detector):
                              % (settle_time, name))
         self._settle_time = settle_time
 
-        # Check the children
-        pmt = children["detector"]
+        # Check the dependencies
+        pmt = dependencies["detector"]
         if not isinstance(pmt, ComponentBase):
-            raise ValueError("Child detector is not a component.")
+            raise ValueError("Dependency detector is not a component.")
         if not hasattr(pmt, "data") or not isinstance(pmt.data, DataFlowBase):
-            raise ValueError("Child detector is not a Detector component.")
+            raise ValueError("Dependency detector is not a Detector component.")
         self._pmt = pmt
-        self.children.value.add(pmt)
+        self.dependencies.value.add(pmt)
         self._shape = pmt.shape
-        # copy all the VAs and Events from the PMT to here (but .state and .children).
+        # copy all the VAs and Events from the PMT to here (but .state and .dependencies).
         pmtVAs = model.getVAs(pmt)
         for key, value in pmtVAs.items():
             setattr(self, key, value)
@@ -96,11 +97,11 @@ class PMT(model.Detector):
         for key, value in pmtEvents.items():
             setattr(self, key, value)
 
-        ctrl = children["pmt-control"]
+        ctrl = dependencies["pmt-control"]
         if not isinstance(ctrl, ComponentBase):
             raise ValueError("Child pmt-control is not a component.")
         self._control = ctrl
-        self.children.value.add(ctrl)
+        self.dependencies.value.add(ctrl)
 
         self.data = PMTDataFlow(self, self._pmt, self._control)
 

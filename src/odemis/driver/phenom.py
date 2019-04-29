@@ -258,7 +258,7 @@ class SEM(model.HwComponent):
         try:
             kwargs = children["pressure"]
         except (KeyError, TypeError):
-            raise KeyError("PhenomSEM was not given a 'pressure' child")
+            raise KeyError("PhenomSEM was not given a 'pressure' dependency")
         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._pressure)
 
@@ -691,7 +691,7 @@ class Detector(model.Detector):
     """
     def __init__(self, name, role, parent, **kwargs):
         """
-        Note: parent should have a child "scanner" already initialised
+        Note: parent should have a dependency "scanner" already initialised
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)

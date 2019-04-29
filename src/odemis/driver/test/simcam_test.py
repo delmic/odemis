@@ -42,7 +42,7 @@ class TestSimCam(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.focus = simulated.Stage(**KWARGS_FOCUS)
-        cls.camera = CLASS(children={"focus": cls.focus}, **KWARGS)
+        cls.camera = CLASS(dependencies={"focus": cls.focus}, **KWARGS)
 
     @classmethod
     def tearDownClass(cls):
@@ -309,7 +309,7 @@ class TestSimCamWithPolarization(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.focus = simulated.Stage(**KWARGS_FOCUS)
-        cls.camera = CLASS(children={"focus": cls.focus}, **KWARGS_POL)
+        cls.camera = CLASS(dependencies={"focus": cls.focus}, **KWARGS_POL)
 
     @classmethod
     def tearDownClass(cls):

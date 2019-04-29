@@ -96,8 +96,7 @@ SPARC2: {
 
 # Must be connected on AI 1/AI GND
 "CL PMT": { # the raw detector of the PMT
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: null,
     init: {
         channel: 1, # 0-> sawtooth waves, 1-> square waves
@@ -122,7 +121,7 @@ SPARC2: {
     init: {
         settle_time: 0.1, # s, time to wait before detector is ready
     },
-    children: {
+    dependencies: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
     },
@@ -147,7 +146,7 @@ SPARC2: {
 #     init: {
 #         image: "sparc-ar-mirror-align.h5", # only for simulator
 #     },
-#     children: {
+#     dependencies: {
 #         focus: "Spectrograph focus",
 #     },
 # }
@@ -155,7 +154,7 @@ SPARC2: {
 "Spectrometer Vis-NIR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer-integrated,
-    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -180,7 +179,7 @@ SPARC2: {
 "Spectrometer IR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         binning: [4, 100],
     },
@@ -209,7 +208,7 @@ SPARC2: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Spectrograph"},
+    dependencies: {"z": "Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -220,7 +219,7 @@ SPARC2: {
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {
@@ -235,7 +234,7 @@ SPARC2: {
 "Spec Filter Wheel": {
     class: actuator.MultiplexActuator,
     role: filter,
-    children: {"band": "Spectrograph"},
+    dependencies: {"band": "Spectrograph"},
     init: {
         axes_map: {"band": "band"},
     },
@@ -285,7 +284,7 @@ SPARC2: {
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -301,7 +300,7 @@ SPARC2: {
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -316,7 +315,7 @@ SPARC2: {
 "Slit": {
     class: actuator.FixedPositionsActuator,
     role: "slit-in-big",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "slit",
         positions: {
@@ -331,7 +330,7 @@ SPARC2: {
 "CL Selector": {
     class: actuator.FixedPositionsActuator,
     role: "cl-det-selector",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "cl-sel",
         positions: {
@@ -345,7 +344,7 @@ SPARC2: {
 "CL Filter Wheel": {
     class: actuator.FixedPositionsActuator,
     role: "cl-filter",
-    children: {"band": "Optical Actuators"},
+    dependencies: {"band": "Optical Actuators"},
     init: {
         axis_name: "fw",
         # It supports up to 8 filters
@@ -389,7 +388,7 @@ SPARC2: {
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)

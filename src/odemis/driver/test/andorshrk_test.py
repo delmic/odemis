@@ -688,7 +688,7 @@ class TestShamrockSlit(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.pmt = CLASS_PMT(**KWARGS_PMT)
-        cls.spectrograph = CLASS_SHRK(children={"led_prot0": cls.pmt},
+        cls.spectrograph = CLASS_SHRK(dependencies={"led_prot0": cls.pmt},
                                       slitleds_settle_time=1,
                                       **KWARGS_SHRK_SIM)
 
