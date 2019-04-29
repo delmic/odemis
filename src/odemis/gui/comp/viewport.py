@@ -930,7 +930,7 @@ class AngularResolvedViewport(ViewPort):
         polarization position is requested.
         """
         choices = self.stream.polarization.choices
-        if len(choices) > 1:
+        if choices == frozenset(POL_POSITIONS):
             choices = POL_POSITIONS  # use the ordered tuple to keep legend ordered later
         default = self.stream.polarization.value
         self.bottom_legend.set_pol_entries(choices, default)
