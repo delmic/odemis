@@ -32,8 +32,8 @@ import logging
 import math
 from odemis import gui, model, util
 from odemis.acq.stream import EMStream, SpectrumStream, \
-                              StaticStream, CLStream, FluoStream, \
-                              StaticFluoStream, Stream, DataProjection
+    StaticStream, CLStream, FluoStream, \
+    StaticFluoStream, Stream, DataProjection, POL_POSITIONS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -930,6 +930,8 @@ class AngularResolvedViewport(ViewPort):
         polarization position is requested.
         """
         choices = self.stream.polarization.choices
+        if choices == frozenset(POL_POSITIONS):
+            choices = POL_POSITIONS  # use the ordered tuple to keep legend ordered later
         default = self.stream.polarization.value
         self.bottom_legend.set_pol_entries(choices, default)
 
