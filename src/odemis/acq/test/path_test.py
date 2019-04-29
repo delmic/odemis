@@ -55,6 +55,7 @@ SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
 SPARC2_EXT_SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-ext-spec-sim.odm.yaml"
 SECOM_FLIM_CONFIG = CONFIG_PATH + "sim/secom-flim-sim.odm.yaml"
 SPARC2_POLARIZATIONANALYZER_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
+SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 
 
 # @skip("faster")
@@ -574,16 +575,16 @@ class Sparc2PathTestCase(unittest.TestCase):
         guess = self.optmngr.guessMode(sas)
         self.assertEqual(guess, "ar")
 
-        # test guess mode for spectral-dedicated
+        # test guess mode for spectral on spectrograph dedicated
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
-        self.assertIn(guess, ("spectral", "spectral-dedicated"))
+        self.assertEqual(guess, "spectral")
 
         guess = self.optmngr.guessMode(sps)
-        self.assertIn(guess, ("spectral", "spectral-dedicated"))
+        self.assertEqual(guess, "spectral")
 
 #   @skip("simple")
     def test_set_path_stream(self):
@@ -969,15 +970,6 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
-        # setting chamber-view
-        self.optmngr.setPath("chamber-view").result()
-        # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
-        self.assert_pos_as_in_mode(self.slit, "chamber-view")
-        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
-        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
-        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
-
         # setting spec-focus
         self.optmngr.setPath("spec-focus").result()
         # Assert that actuator was moved according to mode given
@@ -992,7 +984,28 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # Assert that actuator was moved according to mode given
         self.assert_pos_as_in_mode(self.lenswitch, "fiber-align")
         self.assert_pos_as_in_mode(self.specgraph_dedicated, "fiber-align")
-        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
+        spec_sel_md = self.spec_sel.getMetadata()
+        spec_sel_pos = self.spec_sel.position.value["x"]
+        self.assertAlmostEqual(spec_sel_pos, 0.026112848)
+        # FAV_POS: position dict, and FAV_POS_DEST: [detector names]
+        act_pos = spec_sel_md[model.MD_FAV_POS_ACTIVE]
+        act_pos_dest = spec_sel_md[model.MD_FAV_POS_ACTIVE_DEST]
+        self.assertAlmostEqual(spec_sel_pos, act_pos["x"])
+        self.assertIn(self.spec.name, act_pos_dest)
+
+        # setting chamber-view
+        self.optmngr.setPath("chamber-view").result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
+        self.assert_pos_as_in_mode(self.slit, "chamber-view")
+        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # Setting fiber-align with an explicit target
+        self.optmngr.setPath("fiber-align", detector=self.spec).result()
+        spec_sel_pos = self.spec_sel.position.value["x"]
+        self.assertAlmostEqual(spec_sel_pos, act_pos["x"])
 
     # @skip("simple")
     def test_guess_mode(self):
@@ -1007,16 +1020,16 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         guess = self.optmngr.guessMode(sas)
         self.assertEqual(guess, "ar")
 
-        # test guess mode for spectral-dedicated
+        # test guess mode for spectral on the external spectrograph
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
 
         guess = self.optmngr.guessMode(specs)
-        self.assertIn(guess, ("spectral", "spectral-dedicated"))
+        self.assertEqual(guess, "spectral")
 
         guess = self.optmngr.guessMode(sps)
-        self.assertIn(guess, ("spectral", "spectral-dedicated"))
+        self.assertEqual(guess, "spectral")
 
     # @skip("simple")
     def test_set_path_stream(self):
@@ -1044,7 +1057,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
-        # test guess mode for spectral-dedicated
+        # test guess mode for spectral on spectrograph dedicated
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
@@ -1062,6 +1075,266 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # Assert that actuator was moved according to mode given
         self.assert_pos_as_in_mode(self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
+
+
+class Sparc2FourSpecPathTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARC2 with 2 spectrometers on the 
+    "integrated" spectrograph and 2 spectrometers on a spectrograph connected
+    via an optical fiber. In addition to check the handling of multiple external
+    spectrometers, it also tests the detectors with numbered roles (eg, spectrometer2) 
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SPARC2_4SPEC_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Microscope component
+        cls.microscope = model.getComponent(role="sparc2")
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd0")
+        cls.ispec1 = model.getComponent(role="spectrometer0")  # wrapper of CCD
+        cls.ispec2 = model.getComponent(role="spectrometer1")
+        cls.espec1 = model.getComponent(role="spectrometer2")
+        cls.espec2 = model.getComponent(role="spectrometer3")
+        cls.specgraph = model.getComponent(role="spectrograph")
+        cls.spec_det_sel = model.getComponent(role="spec-det-selector")
+        cls.specgraph_dedicated = model.getComponent(role="spectrograph-dedicated")
+        cls.spec_dd_sel = model.getComponent(role="spec-ded-det-selector")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.lensmover = model.getComponent(role="lens-mover")
+        cls.lenswitch = model.getComponent(role="lens-switch")
+        cls.spec_sel = model.getComponent(role="spec-selector")
+        cls.slit = model.getComponent(role="slit-in-big")
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        del cls.optmngr  # To garbage collect it
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def assert_pos_as_in_mode(self, comp, mode):
+        """
+        Check the position of the given component is as defined for the
+        specified mode (for all the axes defined in the specified mode)
+        comp (Component): component for which
+        mode (str): name of one of the modes
+        raises AssertionError if not equal
+        """
+        positions = path.SPARC2_MODES[mode][1][comp.role]
+        for axis, pos in positions.items():
+            axis_def = comp.axes[axis]
+            # If "not mirror", just check it's different from "mirror"
+            if pos == path.GRATING_NOT_MIRROR:
+                choices = axis_def.choices
+                for key, value in choices.items():
+                    if value == "mirror":
+                        self.assertNotEqual(comp.position.value[axis], key,
+                                            "Position of %s.%s is %s == mirror, but shouldn't be" %
+                                            (comp.name, axis, comp.position.value[axis]))
+                        break
+                # If no "mirror" pos => it's all fine anyway
+                continue
+
+            # If the position is a name => convert it
+            if hasattr(axis_def, "choices"):
+                for key, value in axis_def.choices.items():
+                    if value == pos:
+                        pos = key
+                        break
+
+            # TODO: if grating == mirror and no mirror choice, check wavelength == 0
+            self.assertAlmostEqual(comp.position.value[axis], pos,
+                                   msg="Position of %s.%s is %s != %s" %
+                                       (comp.name, axis, comp.position.value[axis], pos))
+
+    # @skip("simple")
+    def test_wrong_mode(self):
+        """
+        Test setting mode that does not exist
+        """
+        with self.assertRaises(ValueError):
+            self.optmngr.setPath("ErrorMode").result()
+
+    # @skip("simple")
+    def test_set_path(self):
+        """
+        Test setting modes that do exist. We expect all modes to be available
+        """
+        # setting ar
+        self.optmngr.setPath("ar").result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "ar")
+        self.assert_pos_as_in_mode(self.slit, "ar")
+        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # Not testing spectral explicitly, as it can match almost any detector,
+        # so it doesn't make sense
+
+        # setting mirror-align
+        self.optmngr.setPath("mirror-align").result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "mirror-align")
+        self.assert_pos_as_in_mode(self.slit, "mirror-align")
+        self.assert_pos_as_in_mode(self.specgraph, "mirror-align")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # setting spec-focus
+        self.optmngr.setPath("spec-focus").result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "spec-focus")
+        self.assert_pos_as_in_mode(self.slit, "spec-focus")
+        self.assert_pos_as_in_mode(self.specgraph, "spec-focus")
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # setting fiber-align without target: works, but may select any of the 2 spectrometers
+        self.optmngr.setPath("fiber-align").result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "fiber-align")
+        self.assert_pos_as_in_mode(self.specgraph_dedicated, "fiber-align")
+
+        # setting chamber-view
+        self.optmngr.setPath("chamber-view").result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
+        self.assert_pos_as_in_mode(self.slit, "chamber-view")
+        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # Setting fiber-align with an explicit target
+        self.optmngr.setPath("fiber-align", detector=self.espec1).result()
+        spec_sel_md = self.spec_sel.getMetadata()
+        spec_sel_pos = self.spec_sel.position.value["x"]
+        # FAV_POS_ACTIVE: position dict, and FAV_POS_ACTIVE_DEST: [detector names]
+        act_pos = spec_sel_md[model.MD_FAV_POS_ACTIVE]
+        act_pos_dest = spec_sel_md[model.MD_FAV_POS_ACTIVE_DEST]
+        self.assertAlmostEqual(spec_sel_pos, act_pos["x"])
+        self.assertIn(self.espec1.name, act_pos_dest)
+        dd_sel_pos = self.spec_dd_sel.position.value["rx"]
+        # dict pos -> [detector names]
+        dd_sel_choices = self.spec_dd_sel.axes["rx"].choices
+        self.assertIn(self.espec1.name, dd_sel_choices[dd_sel_pos])
+
+        # Setting fiber-align with an explicit target
+        self.optmngr.setPath("fiber-align", detector=self.espec2).result()
+        spec_sel_pos = self.spec_sel.position.value["x"]
+        self.assertIn(self.espec2.name, act_pos_dest)
+        self.assertAlmostEqual(spec_sel_pos, act_pos["x"])
+        dd_sel_pos = self.spec_dd_sel.position.value["rx"]
+        self.assertIn(self.espec2.name, dd_sel_choices[dd_sel_pos])
+
+    # @skip("simple")
+    def test_guess_mode(self):
+        # test guess mode for ar
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        guess = self.optmngr.guessMode(ars)
+        self.assertEqual(guess, "ar")
+
+        guess = self.optmngr.guessMode(sas)
+        self.assertEqual(guess, "ar")
+
+        # test guess mode for spectral on external spectrograph
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.espec2, self.espec2.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
+
+        guess = self.optmngr.guessMode(specs)
+        self.assertEqual(guess, "spectral")
+
+        guess = self.optmngr.guessMode(sps)
+        self.assertEqual(guess, "spectral")
+
+    # @skip("simple")
+    def test_set_path_stream(self):
+        # test guess mode for ar
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        self.optmngr.setPath(ars).result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "ar")
+        self.assert_pos_as_in_mode(self.slit, "ar")
+        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # Change positions back
+        self.optmngr.setPath("mirror-align").result()
+
+        self.optmngr.setPath(sas).result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "ar")
+        self.assert_pos_as_in_mode(self.slit, "ar")
+        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+
+        # test guess mode for spectral with external spectrometer 2
+        specs = stream.SpectrumSettingsStream("test espec2", self.espec2, self.espec2.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-espec2", [sems, specs])
+
+        self.optmngr.setPath(specs).result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        # No slit/spectrograph as they are not affecting the detector
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
+        self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 1.57, places=2)
+
+        # Change positions back (for extra check)
+        self.optmngr.setPath("chamber-view").result()
+
+        self.optmngr.setPath(sps).result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
+        self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 1.57, places=2)
+
+        # test guess mode for spectral with *integrated* spectrometer 2
+        specs = stream.SpectrumSettingsStream("test ispec2", self.ispec2, self.ispec2.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-ispec2", [sems, specs])
+
+        self.optmngr.setPath(specs).result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        # No slit/spectrograph as they are not affecting the detector
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
+        self.assertAlmostEqual(self.spec_det_sel.position.value["rx"], 1.57, places=2)
+
+        # test guess mode for spectral with external spectrometer 1
+        specs = stream.SpectrumSettingsStream("test espec1", self.espec1, self.espec1.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-espec1", [sems, specs])
+
+        self.optmngr.setPath(specs).result()
+        # Assert that actuator was moved according to mode given
+        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        # No slit/spectrograph as they are not affecting the detector
+        self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
+        self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 0, places=2)
+
 
 class SecomPathTestCase(unittest.TestCase):
     """

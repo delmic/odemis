@@ -3580,7 +3580,12 @@ class Sparc2AlignTab(Tab):
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
-        f = main.opm.setPath(op_mode)
+        if mode == "fiber-align" and self._speccnt_stream:
+            # In case there are multiple detectors after the fiber-aligner, it's
+            # necessary to pass the actual detector that we want.
+            f = main.opm.setPath(op_mode, self._speccnt_stream.detector)
+        else:
+            f = main.opm.setPath(op_mode)
         f.add_done_callback(self._on_align_mode_done)
 
         # Focused view must be updated before the stream to play is changed,
@@ -3837,18 +3842,6 @@ class Sparc2AlignTab(Tab):
             btn.SetLabel("Auto focus")
 
     def _on_autofocus_done(self, future):
-        align_mode = self._autofocus_align_mode
-
-        if align_mode == "lens-align" and not future.cancelled():
-            # Ensure the latest image in _specline_stream shows the slit focused,
-            # with the same grating as used in lens-align mode.
-            self.tab_data_model.main.opm.setPath("spec-focus").result()
-            self._specline_stream.detector.data.get(asap=False)
-
-        # Turn off the light
-        bl = self.tab_data_model.main.brightlight
-        bl.power.value = bl.power.range[0]
-
         try:
             future.result()
         except Exception:
