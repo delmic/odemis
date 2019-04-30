@@ -46,7 +46,6 @@ from odemis.model import NotApplicableError
 from odemis.util import no_conflict
 from odemis.util import units, spectrum, peak
 import wx
-import time
 
 
 def get_original_stream(s_or_p):

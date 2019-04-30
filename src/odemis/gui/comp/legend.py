@@ -32,7 +32,7 @@ from odemis.gui import img
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.buttons import ImageToggleButton, darken_image
+from odemis.gui.comp.buttons import ImageToggleButton
 from odemis.gui.util import wxlimit_invocation, call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks
@@ -42,7 +42,6 @@ from odemis.model import MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
 import wx
 
 import odemis.util.units as units
-from odemis.model._vattributes import BooleanVA
 
 
 class InfoLegend(wx.Panel):
