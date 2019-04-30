@@ -1230,8 +1230,15 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         self.unit_x = unit_x
         self.unit_y = unit_y
 
-        if range_x is None or range_y is None:
-            _, range_x, _, range_y = self._calc_data_characteristics(zip(xs, ys))
+        if range_x is None:
+            # It's easy, as the data is ordered
+            range_x = (xs[0], xs[-1])
+
+        # If a range is not given, we calculate it from the data
+        if range_y is None:
+            min_y = float(min(self._data_buffer[1]))
+            max_y = float(max(self._data_buffer[1]))
+            range_y = (min_y, max_y)
 
         self.data_xrange = range_x
         self.data_yrange = range_y
@@ -1348,13 +1355,6 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         """
         Set the ranges of the plot.
         """
-
-        if x_range is None:
-            x_range = self.data_xrange
-
-        if y_range is None:
-            y_range = self.data_yrange
-
         self.display_xrange = x_range
         self.display_yrange = y_range
 

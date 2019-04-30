@@ -1192,7 +1192,7 @@ class NavigablePlotViewport(PlotViewport):
         """
         Refreshes the plot and axis legend displays with the new scale
         """
-        self.canvas.set_ranges(hrange, self.vrange.value)
+        self.canvas.set_ranges(hrange, self.canvas.display_yrange)
 
         self.bottom_legend.range = hrange
         if self.canvas.has_data():
@@ -1213,7 +1213,7 @@ class NavigablePlotViewport(PlotViewport):
         """
         Refreshes the plot and axis legend displays with the new scale
         """
-        self.canvas.set_ranges(self.hrange.value, vrange)
+        self.canvas.set_ranges(self.canvas.display_xrange, vrange)
 
         self.left_legend.range = vrange
         if self.canvas.has_data():
