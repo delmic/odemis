@@ -378,8 +378,7 @@ class AxisLegend(wx.Panel):
     def range(self, val):
         if self._value_range != val:
             self._value_range = val
-
-        self.Refresh()
+            self.Refresh()
 
     def clear(self):
         self._value_range = None
