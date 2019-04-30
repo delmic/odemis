@@ -311,9 +311,10 @@ class OpticalPathManager(object):
             if hasattr(comp, 'axes') and isinstance(comp.axes, dict):
                 self._actuators.append(comp)
 
-        # last known axes position
-        self._stored = {}
+        # last known axes position (before going to an alignment mode)
+        self._stored = {}  # (str, str) -> pos: (comp role, axis name) -> position
         self._last_mode = None  # previous mode that was set
+
         # Removes modes which are not supported by the current microscope
         for m, (det, conf) in self._modes.items():
             try:
@@ -535,7 +536,7 @@ class OpticalPathManager(object):
                                 # Just to store current band in order to restore
                                 # it once we leave this mode
                                 if self._last_mode not in ALIGN_MODES:
-                                    self._stored[axis] = comp.position.value[axis]
+                                    self._stored[comp_role, axis] = comp.position.value[axis]
                                 break
                         else:
                             logging.debug("Choice %s is not present in %s axis", pos, axis)
@@ -550,8 +551,8 @@ class OpticalPathManager(object):
                             # Store current grating (if we use one at the moment)
                             # to restore it once we use a normal grating again
                             if choices[comp.position.value[axis]] != "mirror":
-                                self._stored[axis] = comp.position.value[axis]
-                                self._stored['wavelength'] = comp.position.value['wavelength']
+                                self._stored[comp_role, axis] = comp.position.value[axis]
+                                self._stored[comp_role, 'wavelength'] = comp.position.value['wavelength']
                             # Use the special "mirror" grating, if it exists
                             for key, value in choices.items():
                                 if value == "mirror":
@@ -565,31 +566,28 @@ class OpticalPathManager(object):
                             if choices[comp.position.value[axis]] == "mirror":
                                 # if there is a grating stored use this one
                                 # otherwise find the non-mirror grating
-                                if axis in self._stored:
-                                    pos = self._stored[axis]
+                                if (comp_role, axis) in self._stored:
+                                    pos = self._stored[comp_role, axis]
                                 else:
                                     pos = self.findNonMirror(choices)
-                                if 'wavelength' in self._stored:
-                                    mv['wavelength'] = self._stored['wavelength']
+                                if (comp_role, 'wavelength') in self._stored:
+                                    mv['wavelength'] = self._stored[comp_role, 'wavelength']
                             else:
                                 pos = comp.position.value[axis]  # no change
                             try:
-                                del self._stored[axis]
+                                del self._stored[comp_role, axis]
                             except KeyError:
                                 pass
                             try:
-                                del self._stored['wavelength']
+                                del self._stored[comp_role, 'wavelength']
                             except KeyError:
                                 pass
                         else:
                             logging.debug("Using grating position as-is: '%s'", pos)
                             pass  # use pos as-is
                     elif axis == "slit-in":
-                        if self._last_mode not in ALIGN_MODES:
-                            # TODO: save also the component
-                            # FIXME: only if "spectrograph" (not "spectrograph-dedicated")?
-                            # Or also store the component
-                            self._stored[axis] = comp.position.value[axis]
+                        if mode in ALIGN_MODES and (comp_role, axis) not in self._stored:
+                            self._stored[comp_role, axis] = comp.position.value[axis]
                     elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
                         choices = comp.axes[axis].choices
                         for key, value in choices.items():
@@ -612,18 +610,14 @@ class OpticalPathManager(object):
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
-            if 'band' in self._stored:
-                try:
-                    flter = self._getComponent("filter")
-                    fmoves.append(flter.moveAbs({"band": self._stored['band']}))
-                except LookupError:
-                    logging.debug("No filter component available")
-            if 'slit-in' in self._stored:
-                try:
-                    spectrograph = self._getComponent("spectrograph")
-                    fmoves.append(spectrograph.moveAbs({"slit-in": self._stored['slit-in']}))
-                except LookupError:
-                    logging.debug("No spectrograph component available")
+            logging.debug("Leaving align mode %s for %s, will restore positions: %s",
+                          self._last_mode, mode, self._stored)
+            for (cr, an), pos in self._stored.copy().items(): # copy for deleting entries
+                if an == "grating":
+                    continue  # handled separately via GRATING_NOT_MIRROR
+                comp = self._getComponent(cr)
+                fmoves.append(comp.moveAbs({an: pos}))
+                del self._stored[cr, an]
 
         # Save last mode
         self._last_mode = mode
