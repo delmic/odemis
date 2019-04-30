@@ -35,7 +35,7 @@ from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, Mar
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray
-from odemis.util import units
+from odemis.util import units, limit_invocation
 import scipy.ndimage
 import time
 import numpy
@@ -1209,78 +1209,44 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
     def __init__(self, *args, **kwargs):
         super(NavigableBarPlotCanvas, self).__init__(*args, **kwargs)
         self.abilities |= {CAN_DRAG}
-        self._data_buffer = None  # numpy Array with the plot data
+        self._data_buffer = None  # numpy arrays with the plot X and Y data
         self.display_xrange = None  # range tuple of floats
         self.display_yrange = None  # range tuple of floats
         self.data_xrange = None  # range tuple of floats
         self.data_yrange = None  # range tuple of floats
 
-    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
+    # TODO: only provide set_data(), and store the data as a single 2xN numpy array.
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None,
+                 display_xrange=None, display_yrange=None):
         xs, ys = zip(*data)
-        self.set_1d_data(xs, ys, unit_x, unit_y, range_x, range_y)
-        self.refresh_plot()
+        self.set_1d_data(xs, ys, unit_x, unit_y, range_x, range_y, display_xrange, display_yrange)
 
-    def set_1d_data(self, xs, ys, unit_x=None, unit_y=None, range_x=None, range_y=None):
-        """
-        Note - this function will not plot any data until a call to refresh_plot is made
-        """
-
+    def set_1d_data(self, xs, ys, unit_x=None, unit_y=None, range_x=None, range_y=None,
+                    display_xrange=None, display_yrange=None):
         if len(xs) != len(ys):
             msg = "X and Y list are of unequal length. X: %s, Y: %s, Xs: %s..."
             raise ValueError(msg % (len(xs), len(ys), str(xs)[:30]))
         self._data_buffer = (numpy.array(xs), numpy.array(ys))
         self.unit_x = unit_x
         self.unit_y = unit_y
-        
+
         if range_x is None or range_y is None:
             _, range_x, _, range_y = self._calc_data_characteristics(zip(xs, ys))
 
         self.data_xrange = range_x
         self.data_yrange = range_y
-        self.display_xrange = range_x
-        self.display_yrange = range_y
+        self.display_xrange = range_x if display_xrange is None else display_xrange
+        self.display_yrange = range_y if display_yrange is None else display_yrange
         
+        self.refresh_plot()
+
+    # TODO: refactor so that the viewports has fit_view_to_content(), and they
+    # are in charge of calling the right function in the canvas
     def fit_view_to_content(self, recenter=None):
         # note - need to do this via an event to the viewport. Otherwise it doesn't
         # set the axes properly
         evt = evtFitViewToContent()
         wx.PostEvent(self, evt)
-
-    def get_hcontent_range(self):
-        """
-        To allow fitting to content, detect where the first leftmost non-zero value
-        occurs, and also detect where the first rightmost non-zero value occurs.
-        return ((float, float) or None): the horizontal range that fits the data
-          content. If no range is found, return None.
-        """
-        if self._data_buffer is None:
-            return None
-
-        xd, yd = self._data_buffer
-
-        ileft = 0  # init value (useful in case len(yd) = 0)
-        for ileft in range(len(yd)):
-            if yd[ileft] != 0:
-                break
-        
-        iright = len(yd) - 1  # init value (useful in case len(yd) <= 1)
-        for iright in range(len(yd) - 1, 0, -1):
-            if yd[iright] != 0:
-                break
-            
-        # if ileft is > iright, then the data must be all 0.
-        if ileft >= iright:
-            return None
-
-        # If the empty portion on the edge is less than 5% of the full data
-        # width, show it anyway.
-        threshold = 0.05 * len(yd)
-        if ileft < threshold:
-            ileft = 0
-        if (len(yd) - iright) < threshold:
-            iright = len(yd) - 1
-
-        return xd[ileft], xd[iright]
 
     def reset_ranges(self):
         if self._data_buffer is None:
@@ -1328,6 +1294,7 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         else:
             return xs, ys
 
+    @limit_invocation(0.05)  # Max 20 Hz
     def refresh_plot(self):
         """
         Refresh the displayed data in the plot.
