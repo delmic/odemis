@@ -802,10 +802,12 @@ class OpticalPathManager(object):
         else:
             return True
 
-    def findPath(self, node1, node2, path=[]):
+    def findPath(self, node1, node2, path=None):
         """
         Find any path between node1 and node2 (may not be shortest)
         """
+        if path is None:
+            path = []
         path = path + [node1]
         if node1 == node2:
             return path
