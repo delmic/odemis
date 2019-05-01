@@ -676,7 +676,7 @@ class PM8742(model.Actuator):
         else:
             # split the (IP) port, separated by a :
             if ":" in address:
-                host, ipport_str = port.split(":")
+                host, ipport_str = address.split(":")
                 port = int(ipport_str)
             else:
                 host = address
