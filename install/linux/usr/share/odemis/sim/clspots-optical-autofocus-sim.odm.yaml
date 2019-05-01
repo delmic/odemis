@@ -11,6 +11,7 @@ MultiBeamSEM: {
     role: diagnostic-ccd,
     init: {
         image: "../acq/align/test/multiprobe01.tiff",
+        blur_factor: 100.e4,
     },
     children: {focus: "DiagnosticCam Focus"}
 }

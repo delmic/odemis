@@ -60,7 +60,6 @@ class TestAutofocusSim(unittest.TestCase):
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")
-        cls.diagnostic_cam.blur_factor.value = 100e4
         cls.stage = model.getComponent(role="stage")
         cls.ofocus = model.getComponent(role="diagnostic-cam-focus")
 
@@ -81,7 +80,7 @@ class TestAutofocusSim(unittest.TestCase):
         """
         # set the position where the image is in focus.
         good_focus = 68e-6
-        self.diagnostic_cam.good_focus.value = good_focus
+        self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
         # Move the stage so that the image is out of focus
         center_position = 17e-6
         self.ofocus.moveAbs({"z": center_position}).result()
@@ -98,7 +97,7 @@ class TestAutofocusSim(unittest.TestCase):
         """
         # set the position where the image is in focus.
         good_focus = 0
-        self.diagnostic_cam.good_focus.value = good_focus
+        self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
         # Move the stage so that the image is out of focus
         center_position = 32e-6
         self.ofocus.moveAbs({"z": center_position}).result()
@@ -111,7 +110,7 @@ class TestAutofocusSim(unittest.TestCase):
 
         # set the position where the image is in focus.
         good_focus = 100e-6
-        self.diagnostic_cam.good_focus.value = good_focus
+        self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
         # Move the stage so that the image is out of focus
         center_position = 17e-6
         self.ofocus.moveAbs({"z": center_position}).result()
@@ -134,7 +133,7 @@ class TestAutofocusSim(unittest.TestCase):
             # Set the good focus to a random value.
             good_focus = numpy.random.randint(100) * 1e-6
             logging.debug("start position {}, good focus {}".format(start_position, good_focus))
-            self.diagnostic_cam.good_focus.value = good_focus
+            self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
             # run auto focus
             future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.ofocus)
             foc_pos, foc_lev = future_focus.result(timeout=900)
