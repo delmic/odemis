@@ -34,19 +34,20 @@ def add_size_to_version():
         version = '.'.join(odemis._get_version().split('-')[:2])
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
+
 print "Build OdemisViewer", '.'.join(odemis._get_version().split('-')[:2])
 
 os.chdir(os.path.dirname(__file__) or '.')
 
 
 def build_odemisviewer_exe():
-    rc = run_command(cpy_command)
-    return rc or run_command(pyi_command, "odemis")
+    run_command(cpy_command)
+    run_command(pyi_command, "odemis")
 
 
 def build_delphiviewer_exe():
-    rc = run_command(cpy_command)
-    return rc or run_command(pyi_command, "delphi")
+    run_command(cpy_command)
+    run_command(pyi_command, "delphi")
 
 
 def build_odemisviewer_inst():

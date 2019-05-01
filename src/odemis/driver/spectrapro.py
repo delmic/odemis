@@ -417,7 +417,7 @@ class SpectraPro(model.Actuator):
         # command we've just sent.
 
         try:
-            r = self._sendOrder("no-echo")
+            self._sendOrder("no-echo")
         except SPError:
             logging.info("Failed to disable echo, hopping the device has not echo anyway")
 

@@ -215,8 +215,8 @@ def s_of_z_td(zoom, td, calib):
         plt.show()
         """
 
-        return val
+        return None  # code never reached
 
 
 if __name__ == '__main__':
-    ret = main(sys.argv)
+    main(sys.argv)
