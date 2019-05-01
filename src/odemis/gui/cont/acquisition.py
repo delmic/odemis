@@ -767,8 +767,8 @@ class SparcAcquiController(object):
         thumb = acq.computeThumbnail(st, acq_future)
         data, exp = acq_future.result()
 
+        filename = self.filename.value
         if data:
-            filename = self.filename.value
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info(u"Acquisition saved as file '%s'.", filename)

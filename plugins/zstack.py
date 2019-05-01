@@ -367,10 +367,6 @@ class ZStackPlugin(Plugin):
 
                 logging.debug("Acquisition %d of %d", i, nb)
 
-                if left == 1 and last_ss:
-                    ss += last_ss
-                    dur += acq.estimateTime(ss) - sacqt
-
                 startt = time.time()
                 f.set_progress(end=startt + dur)
                 das, e = acq.acquire(ss).result()
