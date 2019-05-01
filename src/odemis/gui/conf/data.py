@@ -26,6 +26,7 @@ from odemis.acq import stream
 import odemis.gui
 from odemis.model import getVAs
 from odemis.util import recursive_dict_update
+import logging
 import re
 import wx
 
@@ -821,6 +822,10 @@ def get_hw_config(hw_comp, hw_settings):
       it will return an empty dictionary.
     """
     role = hw_comp.role
+    if not role:
+        logging.warning("Cannot find VA config for component %s because it doesn't have a role.")
+        return {}
+
     try:
         # fast path: try to directly find the role
         return hw_settings[role]
