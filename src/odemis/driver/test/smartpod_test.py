@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 '''
 Created on Apr 17, 2019
 
@@ -38,7 +40,8 @@ COMP_ARGS = {
 
 CONFIG = {"name": "SmartPod",
         "role": "",
-        "locator": "usb:ix:0",
+        # "locator": "usb:ix:0",
+        "locator": "fake",
         "options":"",
         "axes": {
             'x': {
@@ -71,7 +74,7 @@ CONFIG = {"name": "SmartPod",
 
 class TestSmartPod(unittest.TestCase):
     """
-    Tests cases for the NSmartPod actuator driver
+    Tests cases for the SmartPod actuator driver
     """
 
     @classmethod
@@ -89,7 +92,7 @@ class TestSmartPod(unittest.TestCase):
         self.dev.stop()
 
     def test_move_abs(self):
-        self.dev.SetSpeed(0.001)
+        self.dev.SetSpeed(0.01)
 
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}
         pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'theta_x': 2.0, 'theta_y': 0, 'theta_z': 0}

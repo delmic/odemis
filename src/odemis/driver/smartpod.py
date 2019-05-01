@@ -26,6 +26,7 @@ import os
 import logging
 import time
 from ctypes import *
+import copy
 import threading
 
 from odemis import model
@@ -46,6 +47,20 @@ def add_coord(pos1, pos2):
         ret[an] += v
 
     return ret
+
+
+class Pose(Structure):
+    """
+    SmartPod Pose Structure
+    """
+    _fields_ = [
+        ("positionX", c_double),
+        ("positionY", c_double),
+        ("positionZ", c_double),
+        ("rotationX", c_double),
+        ("rotationY", c_double),
+        ("rotationZ", c_double),
+        ]
 
 
 class SmartPodDLL(CDLL):
@@ -101,7 +116,7 @@ class SmartPodDLL(CDLL):
     SMARPOD_POSITIONERS_MIN_SPEED = c_uint(1100)
 
     # move-status constants
-    SMARPOD_STOPPED = 0
+    SMARPOD_STOPPED = c_uint(0)
     SMARPOD_HOLDING = c_uint(1)
     SMARPOD_MOVING = c_uint(2)
     SMARPOD_CALIBRATING = c_uint(3)
@@ -135,24 +150,17 @@ def CheckErr(st):
         raise SmartPodError(st)
 
 
-class Pose(Structure):
-    _fields_ = [
-        ("positionX", c_double),
-        ("positionY", c_double),
-        ("positionZ", c_double),
-        ("rotationX", c_double),
-        ("rotationY", c_double),
-        ("rotationZ", c_double),
-        ]
-
-
 class SmartPod(model.Actuator):
     
     def __init__(self, name, role, locator, options, axes=None, **kwargs):
 
         if len(axes) == 0:
             raise ValueError("Needs at least 1 axis.")
-        self.core = SmartPodDLL()
+
+        if locator != "fake":
+            self.core = SmartPodDLL()
+        else:
+            self.core = FakeSmartPodDLL()
 
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
@@ -188,7 +196,7 @@ class SmartPod(model.Actuator):
         CheckErr(self.core.Smarpod_IsReferenced(self._id, byref(self._referenced)))
         if not self._referenced.value:
             logging.debug("SmartPod is not referenced. Referncing...")
-            CheckErr(self.core.Smarpod_FindReferenceMarks(self._id))
+            self.reference(None)
             CheckErr(self.core.Smarpod_IsReferenced(self._id, byref(self._referenced)))
             logging.debug("Referencing complete.")
         else:
@@ -204,9 +212,15 @@ class SmartPod(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
     def terminate(self):
-        self.core.Smarpod_Close(self._id)
+        CheckErr(self.core.Smarpod_Close(self._id))
         model.Actuator.terminate(self)
         
+    def reference(self, _):
+        """
+        Note: this function blocks.
+        """
+        CheckErr(self.core.Smarpod_FindReferenceMarks(self._id))
+
     def SetProperty(self, prop, value):
         """
         Set SmartPod internal property register
@@ -225,7 +239,7 @@ class SmartPod(model.Actuator):
         Gets the move status from the controller
         """
         status = c_uint()
-        self.core.Smarpod_GetMoveStatus(self._id, byref(status))
+        CheckErr(self.core.Smarpod_GetMoveStatus(self._id, byref(status)))
         return status
 
     def MoveToPose(self, pos):
@@ -359,7 +373,7 @@ class SmartPod(model.Actuator):
             self.MoveToPose(pos)  # blocking function
             while not future._must_stop.is_set():
                 status = self.GetMoveStatus()
-                if status.value == SmartPodDLL.SMARPOD_STOPPED:
+                if status.value == SmartPodDLL.SMARPOD_STOPPED.value:
                     break
 
                 now = time.time()
@@ -420,3 +434,101 @@ class SmartPod(model.Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
+# Only for testing/simulation purpose
+# Very rough version that is just enough so that if the wrapper behaves correctly,
+# it returns the expected values.
+
+
+def _deref(p, typep):
+    """
+    p (byref object)
+    typep (c_type): type of pointer
+    Use .value to change the value of the object
+    """
+    # This is using internal ctypes attributes, that might change in later
+    # versions. Ugly!
+    # Another possibility would be to redefine byref by identity function:
+    # byref= lambda x: x
+    # and then dereferencing would be also identity function.
+    return typep.from_address(addressof(p._obj))
+
+
+class FakeSmartPodDLL(object):
+    """
+    Fake smartpod DLL for simulator
+    """
+
+    def __init__(self):
+        self.pose = Pose()
+        self.properties = {}
+        self.speed = c_double(0)
+        self.speed_control = c_int()
+
+    def Smarpod_Open(self, id, timeout, locator, options):
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_Close(self, id):
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_SetSensorMode(self, id, mode):
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_FindReferenceMarks(self, id):
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_IsReferenced(self, id, p_referenced):
+        referenced = _deref(p_referenced, c_int)
+        referenced.value = 1
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_Move(self, id, p_pose, hold_time, block):
+        pose = _deref(p_pose, Pose)
+        self.pose.positionX = pose.positionX
+        self.pose.positionY = pose.positionY
+        self.pose.positionZ = pose.positionZ
+        self.pose.rotationX = pose.rotationX
+        self.pose.rotationY = pose.rotationY
+        self.pose.rotationZ = pose.rotationZ
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_GetPose(self, id, p_pose):
+        pose = _deref(p_pose, Pose)
+        pose.positionX = self.pose.positionX
+        pose.positionY = self.pose.positionY
+        pose.positionZ = self.pose.positionZ
+        pose.rotationX = self.pose.rotationX
+        pose.rotationY = self.pose.rotationY
+        pose.rotationZ = self.pose.rotationZ
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_GetMoveStatus(self, id, p_status):
+        status = _deref(p_status, c_int)
+        status.value = SmartPodDLL.SMARPOD_STOPPED.value
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_Stop(self, id):
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_SetSpeed(self, id, speed_control, speed):
+        self.speed = speed
+        self.speed_control = speed_control
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_GetSpeed(self, id, p_speed_control, p_speed):
+        speed = _deref(p_speed, c_double)
+        speed.value = self.speed.value
+        speed_control = _deref(p_speed_control, c_int)
+        speed_control.value = self.speed_control.value
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_Set_ui(self, id, prop, value):
+        self.properties[prop] = value
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_Set_i(self, id, prop, value):
+        self.properties[prop] = value
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_Set_d(self, id, prop, value):
+        self.properties[prop] = value
+        return SmartPodDLL.SMARPOD_OK.value
