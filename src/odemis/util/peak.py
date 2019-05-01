@@ -247,7 +247,7 @@ class PeakFitter(object):
                 # Increase window size until peak detection finds enough peaks to fit
                 # the spectrum curve
                 peaks = Detect(smoothed, wavelength, lookahead=window_size, delta=5)[0]
-                if peaks == []:
+                if not peaks:
                     window_size = int(round(window_size * 1.2))
                     logging.debug("Retrying to fit peak with window = %d", window_size)
                     continue
