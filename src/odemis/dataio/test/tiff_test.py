@@ -486,8 +486,7 @@ class TestTiffIO(unittest.TestCase):
 
         iwl = float(ime.find("Pixels/Channel").get("ExcitationWavelength")) # nm
         iwl *= 1e-9
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
-                         iwl <= metadata[model.MD_IN_WL][1]))
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]

@@ -415,8 +415,7 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(metadata[model.MD_DESCRIPTION], desc)
 
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
-                         iwl <= metadata[model.MD_IN_WL][1]))
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)

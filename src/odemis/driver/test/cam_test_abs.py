@@ -137,7 +137,7 @@ class VirtualTestCam(object):
             self.skipTest("Camera doesn't support setting temperature")
 
         ttemp = self.camera.targetTemperature.value
-        self.assertTrue(-300 < ttemp and ttemp < 100)
+        self.assertTrue(-300 < ttemp < 100)
         self.camera.targetTemperature.value = self.camera.targetTemperature.range[0]
         self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[0])
 

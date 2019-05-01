@@ -717,7 +717,7 @@ class ESPSimulator(object):
 
     def _doMove(self, axis, new_pos):
         # Check that the position is within the range.
-        if new_pos >= self._range[0] and new_pos <= self._range[1]:
+        if self._range[0] <= new_pos <= self._range[1]:
             self._target_pos[axis] = new_pos
             self._start_pos = copy.copy(self._pos)
             d = self._target_pos[axis] - self._start_pos[axis]

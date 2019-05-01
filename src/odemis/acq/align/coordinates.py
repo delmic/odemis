@@ -213,7 +213,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     # If we still have more spots than expected we discard the ones
     # with "stranger" distances from their closest spots. Only applied
     # if we have an at least 2x2 grid.
-    if expected_spots >= 4 and len(clean_subimage_coordinates) > expected_spots:
+    if 4 <= expected_spots < len(clean_subimage_coordinates):
         points = numpy.array(clean_subimage_coordinates)
         tree = cKDTree(points, 5)
         distance, index = tree.query(clean_subimage_coordinates, 5)

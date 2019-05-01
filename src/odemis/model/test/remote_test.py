@@ -691,7 +691,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(prop.value, 0)
         self.assertEqual(self.last_value, 0)
         # called once or twice depending if the brief 3 was seen
-        self.assertTrue(1 <= self.called and self.called <= 2)
+        self.assertTrue(1 <= self.called <= 2)
         called_before = self.called
 
         # check we are not called anymore
