@@ -75,7 +75,7 @@ class TileAcqPlugin(Plugin):
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
                 "HDF5 Files (*.h5)|*.h5",
         }),
         ("stitch", {
