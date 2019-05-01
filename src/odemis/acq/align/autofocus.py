@@ -650,10 +650,10 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
                 focuser = focus
                 break
     else:
-        raise ValueError("Unknown align_mode %s", align_mode)
+        raise ValueError("Unknown align_mode %s" % (align_mode,))
 
     if focuser is None:
-        raise LookupError("Failed to find the focuser for align mode %s", align_mode)
+        raise LookupError("Failed to find the focuser for align mode %s" % (align_mode,))
 
     if streams is None:
         streams = []
