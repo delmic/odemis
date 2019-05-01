@@ -6,6 +6,8 @@ Created on 10 Jan 2019
 
 This file is a modified version of scipy.linalg.solve_triangular();
 https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/basic.py#L261
+and _datacopied() from:
+https://github.com/scipy/scipy/blob/v1.2.0/scipy/linalg/misc.py#L177
 
 Copyright (c) 2001, 2002 Enthought, Inc.
 All rights reserved.
@@ -42,9 +44,23 @@ from __future__ import division, print_function, absolute_import
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
-from scipy.linalg.misc import LinAlgError, _datacopied
+from scipy.linalg.misc import LinAlgError
 
 __all__ = ['tri_inv']
+
+
+# Duplicate from scipy.linalg.misc
+def _datacopied(arr, original):
+    """
+    Strict check for `arr` not sharing any data with `original`,
+    under the assumption that arr = asarray(original)
+
+    """
+    if arr is original:
+        return False
+    if not isinstance(original, numpy.ndarray) and hasattr(original, '__array__'):
+        return False
+    return arr.base is None
 
 
 def tri_inv(c, lower=False, unit_diagonal=False, overwrite_c=False,
