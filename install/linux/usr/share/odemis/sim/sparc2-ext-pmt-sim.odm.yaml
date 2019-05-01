@@ -5,7 +5,6 @@ SPARC2: {
     children: ["SEM E-beam", "SEM Detector","Calibration Light", "Integrated Spectrograph",
                "Optical Path Properties", "Spectrometer Selector", "External Spectrograph",
                "Camera", "Dedicated Spectrometer", "Fiber align", "Spectral Camera",
-               "CL PMT",
                "Spec CCD Flipper", "Spectrograph focus", "Integrated Spectrometer",
                "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
                "Lens1 Mover", "Lens2 Switch"],
@@ -56,7 +55,6 @@ SPARC2: {
     children: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
-       detector1: "CL PMT",
     }
 }
 
@@ -89,17 +87,6 @@ SPARC2: {
     init: {
         channel: 0, # 0-> sawtooth waves, 1-> square waves
         limits: [-3, 3] # V
-    },
-}
-
-# Must be connected on AI 1/AI GND
-"CL PMT": { # the raw detector of the PMT
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
-    role: null,
-    init: {
-        channel: 1, # 0-> sawtooth waves, 1-> square waves
-        limits: [3, 0], # V, with contrast reversed
     },
 }
 
@@ -301,7 +288,7 @@ SPARC2: {
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"},
     },
-    affects: ["CL PMT"],
+    affects: ["Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between integrated spectrometer and external spectrometer
