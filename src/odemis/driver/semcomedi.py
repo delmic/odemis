@@ -319,9 +319,7 @@ class SEMComedi(model.HwComponent):
         self._new_position_thread = None
         self._new_position_thread_pipe = [] # list to communicate with the current thread
 
-        self._acquisition_thread = threading.Thread(target=self._acquisition_run,
-                                                    name="SEM acquisition thread")
-        self._acquisition_thread.start()
+        self._acquisition_thread = None
 
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -1613,7 +1611,10 @@ class SEMComedi(model.HwComponent):
 
             # If something went wrong with the thread, report also here
             if self._acquisition_thread is None:
-                raise IOError("Acquisition thread is gone, cannot acquire")
+                logging.info("Starting acquisition thread")
+                self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                                            name="SEM acquisition thread")
+                self._acquisition_thread.start()
 
     def stop_acquire(self, detector):
         """
@@ -3165,7 +3166,10 @@ class Scanner(model.Emitter):
             center = (lim[0] + lim[1]) / 2
             width = lim[1] - lim[0]
             ratio = (shape[i] * scale[i]) / area_shape[i]
-            assert ratio <= 1 # cannot be bigger than the whole area
+            if ratio > 1:  # cannot be bigger than the whole area
+                # TODO: handle floating point error, and check for 1.0000001?
+                raise ValueError("Scan area too big: %s * %s > %s" %
+                                 (shape, scale, area_shape))
             # center_comp is to ensure the point scanned of each pixel is at the
             # center of the area of each pixel
             center_comp = (shape[i] - 1) / shape[i]
@@ -3175,11 +3179,13 @@ class Scanner(model.Emitter):
             roi_lim = (center + shift - roi_hwidth,
                        center + shift + roi_hwidth)
             if lim[0] < lim[1]:
-                assert roi_lim[0] <= roi_lim[1]
-                assert roi_lim[0] >= lim[0] and roi_lim[1] <= lim[1]
-            else:
-                assert roi_lim[0] >= roi_lim[1]
-                assert roi_lim[0] <= lim[0] and roi_lim[1] >= lim[1]
+                if not lim[0] <= roi_lim[0] <= roi_lim[1] <= lim[1]:
+                    raise ValueError("ROI limit %s > limit %s, with area %s * %s" %
+                                     (roi_lim, lim, shape, scale))
+            else:  # inverted scan direction
+                if not lim[0] >= roi_lim[0] >= roi_lim[1] >= lim[1]:
+                    raise ValueError("ROI limit %s > limit %s, with area %s * %s" %
+                                     (roi_lim, lim, shape, scale))
             roi_limits.append(roi_lim)
         logging.debug("ranges X = %sV, Y = %sV, for shape %s + margin %d",
                       roi_limits[1], roi_limits[0], shape, margin)
