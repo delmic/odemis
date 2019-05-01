@@ -865,7 +865,7 @@ class CLSettingsStream(PMTSettingsStream):
         """
         hwpxs = self._emitter.pixelSize.value[0]
         scale = self.pixelSize.value / hwpxs
-        logging.debug("Setting scale to %f, based on pxs = %f m", scale, self.pixelSize.value)
+        logging.debug("Setting scale to %f, based on pxs = %g m", scale, self.pixelSize.value)
         self._emitter.scale.value = (scale, scale)
 
         # use full FoV
