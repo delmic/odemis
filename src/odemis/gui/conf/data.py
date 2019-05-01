@@ -32,7 +32,7 @@ import wx
 import odemis.gui.conf.util as util
 
 # VAs which should never be displayed (because they are not for changing the settings)
-HIDDEN_VAS = {"children", "affects", "state", "powerSupply"}
+HIDDEN_VAS = {"children", "dependencies", "affects", "state", "powerSupply"}
 
 # All values in CONFIG are optional
 #
