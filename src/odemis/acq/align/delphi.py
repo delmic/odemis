@@ -102,7 +102,7 @@ def list_hw_settings(escan, ccd):
         if k not in MD_CALIB_SEM:
             del mdsem[k]
 
-    return (et, cbin, cres, eres, scale, trans, dt, av, sptsz, rot, mdsem)
+    return et, cbin, cres, eres, scale, trans, dt, av, sptsz, rot, mdsem
 
 
 def restore_hw_settings(escan, ccd, hw_settings):
@@ -1338,7 +1338,7 @@ def _DoLensAlignment(future, navcam, sem_stage, logpath):
         except LookupError:
             raise IOError("Lens not found.")
 
-        return (sem_stage.position.value["x"] + lens_shift[0], sem_stage.position.value["y"] + lens_shift[1])
+        return sem_stage.position.value["x"] + lens_shift[0], sem_stage.position.value["y"] + lens_shift[1]
     finally:
         with future._task_lock:
             if future._task_state == CANCELLED:

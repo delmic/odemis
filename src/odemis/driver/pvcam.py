@@ -845,7 +845,7 @@ class PVCam(model.DigitalCamera):
         if "InGaAs" in chip:
             # InGaAs detectors don't support binning (written in the
             # specification). In practice, it stops sending images if binning > 1.
-            return (1, 1)
+            return 1, 1
 
         # other cameras seem to support up to the entire sensor resolution
         return self.GetSensorSize()

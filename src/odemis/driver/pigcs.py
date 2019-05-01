@@ -874,7 +874,7 @@ class Controller(object):
             if len(ss) != 2:
                 raise ValueError("Failed to parse answer from %s: '%s'" %
                                  (com, lresp))
-            return (ss[1] == "1")
+            return ss[1] == "1"
         else:
             return self._readAxisValue("ONT?", axis) == 1
 

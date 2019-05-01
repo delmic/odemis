@@ -130,7 +130,7 @@ def parse_config(configfile):
     return config
 
 
-class OdemisBugreporter():
+class OdemisBugreporter(object):
     """
     Class to create a bugreport. Contains functions for compressing the odemis files, opening
     a window asking for a bugreport description, and uploading the bugreport to

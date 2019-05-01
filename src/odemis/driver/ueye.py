@@ -789,7 +789,7 @@ class Camera(model.DigitalCamera):
         build = ver & 0xFFFF
         minor = (ver & 0xFF0000) >> 16
         major = (ver & 0xFF000000) >> 24
-        return (major, minor, build)
+        return major, minor, build
 
     def GetCameraInfo(self):
         cam_info = CAMINFO()

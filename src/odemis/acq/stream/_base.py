@@ -1031,7 +1031,7 @@ class Stream(object):
         pxs = md[model.MD_PIXEL_SIZE]
         c = md[model.MD_POS]
         w, h = shape[1] * pxs[0], shape[0] * pxs[1]
-        return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+        return c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2
 
     def getRawMetadata(self):
         """

@@ -403,7 +403,7 @@ class PH300(model.Detector):
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
         self._dll.PH_GetHardwareInfo(self._idx, mod, partnum, ver)
-        return (mod.value, partnum.value, ver.value)
+        return mod.value, partnum.value, ver.value
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)

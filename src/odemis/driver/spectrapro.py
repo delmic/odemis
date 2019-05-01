@@ -229,7 +229,7 @@ class SpectraPro(model.Actuator):
         if not isinstance(calib, collections.Iterable):
             raise ValueError("calib parameter must be in the format "
                              "[blz, gl, ca, sa, fl, ia, da], "
-                             "but got %s" % (calib))
+                             "but got %s" % (calib,))
         dcalib = {}
         for c in calib:
             if not isinstance(c, collections.Iterable) or len(c) != 7:

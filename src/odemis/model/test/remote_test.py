@@ -882,7 +882,7 @@ class MyComponent(model.Component):
         """
         start = time.time()
         time.sleep(duration)
-        return (time.time() - start)
+        return time.time() - start
 
     @isasync
     def do_progressive_long(self, duration=5):
@@ -907,7 +907,7 @@ class MyComponent(model.Component):
             psmt_end = max(psmt_end - 1, time.time())
             future.set_progress(end=psmt_end)
 
-        return (time.time() - start)
+        return time.time() - start
 
     def get_number_futures(self):
         return self.number_futures

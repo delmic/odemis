@@ -229,7 +229,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test vertical binning (use less than the whole detector)
         """
-        if (self.detector.resolution.range[1][1] == 1):
+        if self.detector.resolution.range[1][1] == 1:
             self.skipTest("Detector doesn't support vertical binning")
 
         # Check using the maximum vertical binning (which is the default, so
@@ -290,7 +290,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test horizontal binning (large horizontal pixels)
         """
-        if (self.spectrometer.binning.range[1][0] == 1):
+        if self.spectrometer.binning.range[1][0] == 1:
             self.skipTest("Spectrometer doesn't support horizontal binning")
 
         # start with minimum binning
@@ -320,7 +320,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Check the (unusual) behaviour of the resolution
         """
-        if (self.spectrometer.resolution.range[0] == self.spectrometer.resolution.range[1]):
+        if self.spectrometer.resolution.range[0] == self.spectrometer.resolution.range[1]:
             self.skipTest("Spectrometer doesn't support changing the resolution, boring")
 
         # horizontally, resolution behaves pretty normally

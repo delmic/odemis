@@ -313,7 +313,7 @@ class RGBSpatialProjection(RGBProjection):
         '''
         if hasattr(self, 'rect'):
             rng = self.rect.range
-            return (rng[0][0], rng[0][1], rng[1][0], rng[1][1])
+            return rng[0][0], rng[0][1], rng[1][0], rng[1][1]
         else:
             im = self.image.value
             if im is None:

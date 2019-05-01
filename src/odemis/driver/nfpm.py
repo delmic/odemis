@@ -661,7 +661,7 @@ class PM8742(model.Actuator):
                 else:
                     raise HwError("Failed to find New Focus controller %s over the "
                                   "network. Ensure it is turned on and connected to "
-                                  "the network." % (sn))
+                                  "the network." % (sn,))
             else:
                 # just pick the first one
                 # TODO: only pick the ones of model 8742

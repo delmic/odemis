@@ -543,7 +543,7 @@ class TileAcqPlugin(Plugin):
                 # compensate for binning
                 binning = ccd.binning.value
                 pxs = [p / b for p, b in zip(pxs, binning)]
-                return (shape[0] * pxs[0], shape[1] * pxs[1])
+                return shape[0] * pxs[0], shape[1] * pxs[1]
 
             elif isinstance(sd, RepetitionStream):
                 # CL, Spectrum, AR

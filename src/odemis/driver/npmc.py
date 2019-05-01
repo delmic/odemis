@@ -331,7 +331,7 @@ class ESP(model.Actuator):
 
         # After errors are collected
         if len(err_q) > 0:
-            raise ESPError("Error code(s) %s" % (err_q))
+            raise ESPError("Error code(s) %s" % (err_q,))
 
     def SetAxisUnit(self, axis_num, unit):
         # Set the internal unit used by the controller

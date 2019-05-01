@@ -529,7 +529,7 @@ def move_abs(comp_name, moves, check_distance=True):
 
         # Allow the user to indicate the position via the user-friendly choice entry
         position = None
-        if (hasattr(ad, "choices") and isinstance(ad.choices, dict)):
+        if hasattr(ad, "choices") and isinstance(ad.choices, dict):
             for key, value in ad.choices.items():
                 if value == str_position:
                     logging.info("Converting '%s' into %s", str_position, key)

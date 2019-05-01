@@ -193,7 +193,7 @@ class Plugin(object):
             name = self.__class__.__name__
 
         if self.__version__:
-            v = " v%s" % (self.__version__)
+            v = " v%s" % (self.__version__,)
         else:
             v = ""
 

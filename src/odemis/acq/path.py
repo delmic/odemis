@@ -766,7 +766,7 @@ class OpticalPathManager(object):
             except AttributeError:
                 pass  # will raise error just after
 
-        raise LookupError("Failed to find a detector on stream %s" % (path_stream.name.value))
+        raise LookupError("Failed to find a detector on stream %s" % (path_stream.name.value,))
 
     def findNonMirror(self, choices):
         """

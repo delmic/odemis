@@ -1308,7 +1308,7 @@ class FixedPositionsActuator(model.Actuator):
         # If we just did homing and ended up to an unsupported position, move to
         # the nearest supported position
         cp = self._dependency.position.value[self._caxis]
-        if (cp not in self._positions):
+        if cp not in self._positions:
             nearest = util.find_closest(cp, self._positions.keys())
             self._doMoveAbs({self._axis: nearest})
 

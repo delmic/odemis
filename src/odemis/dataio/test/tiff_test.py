@@ -1390,7 +1390,7 @@ class TestTiffIO(unittest.TestCase):
         # It should be within at least one of the bands
         owl = rmd[model.MD_OUT_WL]  # nm
         for eowl in emd[model.MD_OUT_WL]:
-            if (eowl[0] <= owl[0] and owl[1] <= eowl[-1]):
+            if eowl[0] <= owl[0] and owl[1] <= eowl[-1]:
                 break
         else:
             self.fail("Out wl %s is not within original metadata" % (owl,))
@@ -2103,7 +2103,7 @@ class TestTiffIO(unittest.TestCase):
         # calculate the shapes of each zoomed image
         shapes = tiff._genResizedShapes(rdata.content[0])
         # add the full image to the shape list
-        shapes = [(rdata.content[0].shape)] + shapes
+        shapes = [rdata.content[0].shape] + shapes
 
         # First zoom level (full image)
         zoom_level = 0

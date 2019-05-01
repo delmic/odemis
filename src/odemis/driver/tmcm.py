@@ -1023,14 +1023,14 @@ class TMCLController(model.Actuator):
         val = self.SendInstruction(13, 2, axis) # 2 = status
         # The value seems to go from 1 -> 9 corresponding to the referencing state.
         # After cancelling, it becomes 15 (but not sure when it becomes 0 again)
-        return (val != 0)
+        return val != 0
 
     def _isOnTarget(self, axis):
         """
         return (bool): True if the target position is reached
         """
         reached = self.GetAxisParam(axis, 8)
-        return (reached != 0)
+        return reached != 0
 
     def UploadProgram(self, prog, addr):
         """
@@ -1121,7 +1121,7 @@ class TMCLController(model.Actuator):
         val = self.GetIO(1, 8)  # 1 <-> 0.1 V
         v_supply = 0.1 * val
         logging.debug("Supply power reported is %.1f V", v_supply)
-        return (v_supply >= self._minpower)
+        return v_supply >= self._minpower
 
         # Old method was to use a strange fact that programs will not run if the
         # device is not self-powered.
@@ -1229,7 +1229,7 @@ class TMCLController(model.Actuator):
             # if timed out raise
             raise IOError("Timeout during reference search dir %d" % edge)
 
-        return (edge == 1)
+        return edge == 1
 
     # Special methods for referencing
     # One of the couple run/stop methods will be picked at init based on the

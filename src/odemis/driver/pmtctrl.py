@@ -356,7 +356,7 @@ class PMTControl(model.PowerSupplier):
 
     def _getPowerSupply(self):
         ans = self._sendCommand("PWR?")
-        return (ans == "1")
+        return ans == "1"
 
     def _setProtection(self, value):
         if value:
@@ -368,7 +368,7 @@ class PMTControl(model.PowerSupplier):
 
     def _getProtection(self):
         ans = self._sendCommand("SWITCH?")
-        return (ans == "0")
+        return ans == "0"
 
     # These two methods are strictly used for the SPARC system in Monash. Use
     # them to send a high/low signal via the PMT Control Unit to the relay, thus

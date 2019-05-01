@@ -360,7 +360,7 @@ class OverviewController(object):
         ax_x = self.main_data.stage.axes["x"]
         ax_y = self.main_data.stage.axes["y"]
         mpp = max(MAX_OVV_SIZE / shape[0], MAX_OVV_SIZE / shape[1])
-        if (hasattr(ax_x, "range") and hasattr(ax_y, "range")):
+        if hasattr(ax_x, "range") and hasattr(ax_y, "range"):
             max_x = ax_x.range[1] - ax_x.range[0]
             max_y = ax_y.range[1] - ax_y.range[0]
             if max_x < MAX_OVV_SIZE and max_y < MAX_OVV_SIZE:

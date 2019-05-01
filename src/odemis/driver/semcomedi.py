@@ -890,7 +890,7 @@ class SEMComedi(model.HwComponent):
         else:
             comedi.get_cmd_generic_timed(self._device, subdevice,
                                          wcmd, nchans, period_ns)
-        return (wcmd.scan_begin_arg == period_ns)
+        return wcmd.scan_begin_arg == period_ns
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
                             start_src=comedi.TRIG_INT, start_arg=0,

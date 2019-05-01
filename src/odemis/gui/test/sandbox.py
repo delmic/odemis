@@ -88,7 +88,7 @@ class DrawPanelDBT(wx.Panel):
 
         def color(i):
             a = int(mapme(i, 1, MI, 0, 255))
-            return(a, a, a)
+            return a, a, a
 
         def compute_buff(x1, x2, y1, y2, w, h):
             buffer = array.array('B')

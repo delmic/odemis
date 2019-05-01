@@ -269,7 +269,7 @@ def isClipping(data, drange=None):
     """
     if drange is None:
         drange = guessDRange(data)
-    return (drange[1] in data)
+    return drange[1] in data
 
 
 # TODO: try to do cumulative histogram value mapping (=histogram equalization)?
@@ -573,7 +573,7 @@ def Subtract(a, b):
         return numpy.maximum(a, b) - b
     else:
         # TODO handle under/over-flows with integer types (127 - (-1) => -128)
-        return (a - b)
+        return a - b
 
 # TODO: use VIPS to be fast?
 def Average(images, rect, mpp, merge=0.5):
@@ -670,7 +670,7 @@ def getTilesSize(tiles):
     for tiles_column in tiles:
         width += tiles_column[0].shape[1]
 
-    return (height, width)
+    return height, width
 
 def getCenterOfTiles(tiles, result_shape):
     """ Calculates the center of the result image

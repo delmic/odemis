@@ -486,7 +486,7 @@ class SecomStreamsTab(Tab):
         """
 
         # If both SEM and Optical are present (= SECOM & DELPHI)
-        if (main_data.ebeam and main_data.light):
+        if main_data.ebeam and main_data.light:
 
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([

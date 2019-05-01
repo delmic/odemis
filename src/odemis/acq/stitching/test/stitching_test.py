@@ -269,7 +269,7 @@ def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shif
                 posY = int(i * (1 - overlap) * tileSize)
 
             else:
-                raise ValueError("%s is not a valid method" % (method))
+                raise ValueError("%s is not a valid method" % (method,))
 
             yMax = img.shape[0]
             px_size = 100e-9

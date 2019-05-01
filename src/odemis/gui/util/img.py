@@ -1870,7 +1870,7 @@ def draw_export_legend(images, buffer_size, buffer_scale,
         for i, d in enumerate(_get_stream_legend_text(md)):
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
             legend_ctx.show_text(d)
-            if (i % 2 == 1):
+            if i % 2 == 1:
                 legend_x_pos += cell_x_step
                 legend_y_pos = legend_y_pos_store
             else:
