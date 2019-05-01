@@ -1,0 +1,39 @@
+MultiBeamSEM: {
+    class: Microscope,
+    role: mbsem,
+    children: ["Sample Stage", "DiagnosticCam", "DiagnosticCam Focus"],
+}
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"DiagnosticCam": {
+    class: simcam.Camera,
+    role: diagnostic-ccd,
+    init: {
+        image: "../acq/align/test/multiprobe01.tiff",
+    },
+    children: {focus: "DiagnosticCam Focus"}
+}
+
+"DiagnosticCam Focus": {
+    class: actuator.MultiplexActuator,
+    role: diagnostic-cam-focus,
+    children: {"z": "Sample Stage"},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.001} # m/s
+    }
+}
+
+
+"Sample Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {
+        axes: ["z"],
+        ranges: {"z": [0, 100.e-6]}
+    },
+}
+

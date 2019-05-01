@@ -1,0 +1,41 @@
+MultiBeamSEM: {
+    class: Microscope,
+    role: mbsem,
+    children: ["DiagnosticCam", "DiagnosticCam Focus", "Sample Stage"],
+}
+
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"DiagnosticCam": {
+    class: ueye.Camera,
+    role: diagnostic-ccd,
+    init: {
+        device: null,
+    },
+    children: {focus: "DiagnosticCam Focus"}
+}
+
+"DiagnosticCam Focus": {
+    class: actuator.MultiplexActuator,
+    role: diagnostic-cam-focus,
+    children: {"z": "Sample Stage"},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.001} # m/s
+    }
+}
+
+"Sample Stage": {
+    class: pigcs.Bus,
+    role: stage,
+    init: {
+        port: "/dev/ttyUSB0",
+        # axis -> controller, channel, closed-loop?
+        axes: {
+            "z": [null, "Z", True]
+        },
+    },
+}
