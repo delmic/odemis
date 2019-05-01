@@ -563,7 +563,7 @@ class Instantiator(object):
                 self.sub_containers[name] = cont
             else:
                 logging.debug("Creating %s in container %s", name, cont)
-                comp = cont.instantiate(class_comp, args)
+                comp = model.createInContainer(cont, class_comp, args)
             self._comp_container[name] = cont
         except Exception:
             logging.error("Error while instantiating component %s.", name)
