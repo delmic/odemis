@@ -788,7 +788,7 @@ class PH300(model.Detector):
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
-        else:
+        else:  # code unreachable
             logging.error("Acquisition thread ended without exception")
         finally:
             self._toggle_shutters(self._shutters.keys(), False)

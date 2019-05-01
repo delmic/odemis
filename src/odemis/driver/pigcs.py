@@ -2419,6 +2419,7 @@ class CLRelController(Controller):
             self.ReferenceToSwitch(axis)
         elif self._hasLimitSwitches[axis]:
             raise NotImplementedError("Don't know how to reference to limit yet")
+            # TODO code for reference support to be implemented, for now code unreachable
             self.ReferenceToLimit(axis)
             # TODO: need to do that after the move is complete
             self.waitEndMotion(set(axis))
