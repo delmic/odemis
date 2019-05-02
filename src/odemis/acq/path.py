@@ -601,18 +601,6 @@ class OpticalPathManager(object):
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
-            # To do an absolute move, an axis should be referenced (if it
-            # supports referencing). If not, that's an error (but for now we
-            # still try, just in case it might work anyway).
-            for a in mv.keys():
-                try:
-                    if (model.hasVA(comp, "referenced") and 
-                        not comp.referenced.value.get(a, True)):
-                        logging.error("%s.%s is not referenced, it might be a sign of a hardware issue",
-                                      comp.name, a)
-                except Exception:
-                    logging.exception("Failed to check %s.%s is referenced", comp.name, a)
-
             try:
                 # move actuator
                 fmoves.append(comp.moveAbs(mv))
@@ -645,6 +633,19 @@ class OpticalPathManager(object):
             try:
                 # Can be large, eg within 5 min one (any) move should finish.
                 f.result(timeout=180)
+
+                # To do an absolute move, an axis should be referenced (if it
+                # supports referencing). If not, that's an error (but for now we
+                # still try, just in case it might work anyway).
+                for a in mv.keys():
+                    try:
+                        if (model.hasVA(comp, "referenced") and
+                            not comp.referenced.value.get(a, True)):
+                            logging.error("%s.%s is not referenced, it might be a sign of a hardware issue",
+                                          comp.name, a)
+                    except Exception:
+                        logging.exception("Failed to check %s.%s is referenced", comp.name, a)
+
             except IOError as e:
                 logging.warning("Actuator move failed giving the error %s", e)
             except:
