@@ -557,12 +557,9 @@ class SmartPod(model.Actuator):
             SmartPodError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
         """
-        d = 0.5
-        dur = driver.estimateMoveDuration(d, self._speed, 0.0001)
-        end = time.time() + dur
-
         last_upd = time.time()
         dur = 30  # TODO: Calculate an estimated move duration
+        end = time.time() + dur
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
