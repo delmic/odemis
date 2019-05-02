@@ -41,7 +41,6 @@ import wx
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
 
-import odemis.acq.align
 import odemis.acq.stream as acqstream
 import odemis.gui
 import odemis.gui.cont.acquisition as acqcont

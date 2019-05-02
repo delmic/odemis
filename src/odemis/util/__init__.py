@@ -289,6 +289,44 @@ def normalize_rect(rect):
     return type(rect)((l, t, r, b))
 
 
+def find_plot_content(xd, yd):
+    """
+    Locate the first leftmost non-zero value and the first rightmost non-zero
+    value for a set of points.
+    xd (list of floats): The X coordinates of the points, ordered.
+    yd (list of floats): The Y coordinates of the points.
+      Must be the same length as xd.
+    return (float, float): the horizontal range that fits the data content.
+      IOW, these are the xd value for the first and last non-null yd.
+    """
+    if len(xd) != len(yd):
+        raise ValueError("xd and yd should be the same length")
+
+    ileft = 0  # init value (useful in case len(yd) = 0)
+    for ileft in range(len(yd)):
+        if yd[ileft] != 0:
+            break
+
+    iright = len(yd) - 1  # init value (useful in case len(yd) <= 1)
+    for iright in range(len(yd) - 1, 0, -1):
+        if yd[iright] != 0:
+            break
+
+    # if ileft is > iright, then the data must be all 0.
+    if ileft >= iright:
+        return xd[0], xd[-1]
+
+    # If the empty portion on the edge is less than 5% of the full data
+    # width, show it anyway.
+    threshold = 0.05 * len(yd)
+    if ileft < threshold:
+        ileft = 0
+    if (len(yd) - iright) < threshold:
+        iright = len(yd) - 1
+
+    return xd[ileft], xd[iright]
+
+
 def _li_thread(delay, q):
 
     try:

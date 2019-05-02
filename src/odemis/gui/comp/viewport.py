@@ -46,7 +46,6 @@ from odemis.model import NotApplicableError
 from odemis.util import no_conflict
 from odemis.util import units, spectrum, peak
 import wx
-import time
 
 
 def get_original_stream(s_or_p):
@@ -1116,12 +1115,13 @@ class NavigablePlotViewport(PlotViewport):
     def __init__(self, *args, **kwargs):
         super(NavigablePlotViewport, self).__init__(*args, **kwargs)
 
-        self.hrange = model.TupleVA(setter=self.update_hrange)
-        self.bottom_legend.tick_spacing = 80
+        self.hrange = model.TupleVA(None, setter=self.set_hrange)
+        self.hrange.subscribe(self.on_hrange)
         self.hrange_lock = model.BooleanVA(False)
         self.bottom_legend.lock_va = self.hrange_lock
 
-        self.vrange = model.TupleVA(setter=self.update_vrange)
+        self.vrange = model.TupleVA(None, setter=self.set_vrange)
+        self.vrange.subscribe(self.on_vrange)
         self.vrange_lock = model.BooleanVA(False)
         self.left_legend.lock_va = self.vrange_lock
 
@@ -1165,7 +1165,6 @@ class NavigablePlotViewport(PlotViewport):
 
         Sets the display ranges to the data ranges.
         """
-
         if not self.canvas.has_data():
             return
 
@@ -1173,56 +1172,54 @@ class NavigablePlotViewport(PlotViewport):
         self.hrange_lock.value = False
         self.vrange_lock.value = False
 
-        hcontent = self.canvas.get_hcontent_range()
-
-        if hcontent is not None:
-            self.hrange.value = hcontent
-        else:
-            self.hrange.value = self.canvas.data_xrange
-
+        # TODO: a public access to the data? Or an overridden method to get the data from the projection?
+        xd, yd = self.canvas._data_buffer
+        self.hrange.value = util.find_plot_content(xd, yd)
         self.vrange.value = self.canvas.data_yrange
 
         logging.debug("Fitting view to content: H %s V %s", self.hrange.value, self.vrange.value)
 
-    def update_hrange(self, hrange):
+    def set_hrange(self, hrange):
         """
         Setter for VA hrange
-
-        Refreshes the plot and axis legend displays with the new scale
         """
         if hrange[0] > hrange[1]:
             raise ValueError("Bad range tuple. First element should be less than the second")
+        return hrange
 
-        self.canvas.set_ranges(hrange, self.vrange.value)
+    def on_hrange(self, hrange):
+        """
+        Refreshes the plot and axis legend displays with the new scale
+        """
+        self.canvas.set_ranges(hrange, self.canvas.display_yrange)
 
         self.bottom_legend.range = hrange
         if self.canvas.has_data():
             self.bottom_legend.lo_ellipsis = self.canvas.display_xrange[0] > self.canvas.data_xrange[0]
             self.bottom_legend.hi_ellipsis = self.canvas.display_xrange[1] < self.canvas.data_xrange[1]
-        self.bottom_legend.Refresh()
 
         logging.debug("HRange: %s", hrange)
-        return hrange
 
-    def update_vrange(self, vrange):
+    def set_vrange(self, vrange):
         """
         Setter for VA vrange
-
-        Refreshes the plot and axis legend displays with the new scale
         """
         if vrange[0] > vrange[1]:
             raise ValueError("Bad range tuple. First element should be less than the second")
+        return vrange
 
-        self.canvas.set_ranges(self.hrange.value, vrange)
+    def on_vrange(self, vrange):
+        """
+        Refreshes the plot and axis legend displays with the new scale
+        """
+        self.canvas.set_ranges(self.canvas.display_xrange, vrange)
 
         self.left_legend.range = vrange
         if self.canvas.has_data():
             self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
             self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
-        self.left_legend.Refresh()
 
         logging.debug("VRange: %s", vrange)
-        return vrange
 
     def on_hlegend_scroll(self, evt=None):
         """ Scroll event for the bottom legend.
@@ -1441,20 +1438,23 @@ class PointSpectrumViewport(NavigablePlotViewport):
         """
         if data is not None and data.size:
             wll, unit_x = spectrum.get_spectrum_range(data)
-            wl_rng = wll[0], wll[-1]
-            data_rng = min(data), max(data)
 
-            self.canvas.set_1d_data(wll, data, range_x=wl_rng, range_y=data_rng, unit_x=unit_x)
-
+            range_x = wll[0], wll[-1]
             if not self.hrange_lock.value:
-                hcontent = self.canvas.get_hcontent_range()
-                if hcontent is not None:
-                    self.hrange.value = hcontent
-                else:
-                    self.hrange.value = wl_rng
-            if not self.vrange_lock.value:
-                self.vrange.value = data_rng
+                display_xrange = util.find_plot_content(wll, data)
+            else:
+                display_xrange = self.hrange.value
 
+            range_y = float(min(data)), float(max(data))  # float() to avoid numpy arrays
+            if not self.vrange_lock.value or self.vrange.value is None:
+                display_yrange = range_y
+            else:
+                display_yrange = self.vrange.value
+
+            self.canvas.set_1d_data(wll, data, unit_x=unit_x, range_x=range_x, range_y=range_y,
+                                    display_xrange=display_xrange, display_yrange=display_yrange)
+            self.hrange.value = display_xrange
+            self.vrange.value = display_yrange
             self.bottom_legend.unit = unit_x
 
             if hasattr(self._stream, "peak_method") and self._stream.peak_method.value is not None:
@@ -1527,38 +1527,44 @@ class ChronographViewport(NavigablePlotViewport):
             else:
                 wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
 
+            # If there is a known period, lock the horizontal range by default
+            # and use the period as initial range
+            if hasattr(self._stream, "windowPeriod"):
+                self.hrange_lock.value = True
+                self.hrange.value = (-self._stream.windowPeriod.value, 0)
+
     def _on_new_data(self, data):
         if data is not None and data.size:
             x, unit_x = spectrum.get_time_range(data)
-            # If there is a known period, use it
-            if hasattr(self._stream, "windowPeriod"):
-                range_x = (min(x[0], -self._stream.windowPeriod.value), x[-1])
-            else:
-                range_x = (x[0], x[-1])
 
-            # Put the data axis with -5% of min and +5% of max:
-            # the margin hints the user the display is not clipped
-            extrema = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
-            data_width = extrema[1] - extrema[0]
-            if data_width == 0:
-                range_y = (0, extrema[1] * 1.05)
-            else:
-                range_y = (max(0, extrema[0] - data_width * 0.05),
-                           extrema[1] + data_width * 0.05)
-
-            if not self.hrange_lock.value:
-                hcontent = self.canvas.get_hcontent_range()
-                if hcontent is not None:
-                    self.hrange.value = hcontent
+            range_x = (x[0], x[-1])
+            if not self.hrange_lock.value or self.hrange.value is None:
+                # If there is a known period, use it
+                if hasattr(self._stream, "windowPeriod"):
+                    display_xrange = (-self._stream.windowPeriod.value, range_x[1])
                 else:
-                    self.hrange.value = range_x
-            if not self.vrange_lock.value:
-                self.vrange.value = range_y
+                    display_xrange = util.find_plot_content(x, data)
+            else:
+                display_xrange = self.hrange.value
 
-            self.canvas.set_1d_data(x, data, range_x=range_x, range_y=range_y, unit_x=unit_x)
+            range_y = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
+            if not self.vrange_lock.value or self.vrange.value is None:
+                # Put the data axis with -5% of min and +5% of max:
+                # the margin hints the user the display is not clipped
+                data_width = range_y[1] - range_y[0]
+                if data_width == 0:
+                    display_yrange = (0, range_y[1] * 1.05)
+                else:
+                    display_yrange = (max(0, range_y[0] - data_width * 0.05),
+                               range_y[1] + data_width * 0.05)
+            else:
+                display_yrange = self.vrange.value
 
+            self.canvas.set_1d_data(x, data, unit_x=unit_x, range_x=range_x, range_y=range_y,
+                                    display_xrange=display_xrange, display_yrange=display_yrange)
+            self.hrange.value = display_xrange
+            self.vrange.value = display_yrange
             self.bottom_legend.unit = unit_x
-            self.canvas.set_ranges(self.hrange.value, self.vrange.value)
 
         else:
             self.clear()
