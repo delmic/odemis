@@ -3199,6 +3199,7 @@ class Bus(model.Actuator):
         moving_axes = set(axes)
 
         need_pos_update = True
+        raise_exp = None  # exception to raise at the end
 
         last_upd = time.time()
         dur = max(0.01, min(end - last_upd, 60))
@@ -3223,6 +3224,11 @@ class Bus(model.Actuator):
                     # TODO: change isMoving to report separate info on multiple channels
                     if not controller.isMoving({channel}):
                         moving_axes.discard(an)
+                        try:
+                            controller.checkError()
+                        except PIGCSError as ex:
+                            raise_exp = ex  # Keep it for the end, while waiting for other axes
+                            logging.error("Move on axis %s has failed: %s", an, ex)
                 if not moving_axes:
                     # no more axes to wait for
                     break
@@ -3257,6 +3263,9 @@ class Bus(model.Actuator):
                 raise CancelledError()
         except Exception:
             raise
+        else:
+            if raise_exp:
+                raise raise_exp
         finally:
             if need_pos_update:
                 # Position update takes quite some time, which increases latency for
