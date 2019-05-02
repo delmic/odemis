@@ -2378,6 +2378,14 @@ class TMCMSimulator(object):
                 return
             self._astates[mot][typ] = self._orig_axis_state.get(typ, 0)
             self._sendReply(inst, val=0)
+        elif inst == 9:  # Set global param
+            if not 0 <= mot < len(self._gstate):
+                self._sendReply(inst, status=4)  # invalid value
+                return
+            if not 0 <= typ <= 255:
+                self._sendReply(inst, status=3)  # wrong type
+                return
+            self._sendReply(inst, val=0)  # Simple simulation: say it's stored
         elif inst == 10:  # Get global param
             if not 0 <= mot < len(self._gstate):
                 self._sendReply(inst, status=4)  # invalid value
