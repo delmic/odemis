@@ -63,6 +63,27 @@ class Pose(Structure):
         ("rotationZ", c_double),
         ]
     
+    def __add__(self, o):
+        pose = Pose()
+        pose.positionX = self.positionX + o.positionX
+        pose.positionY = self.positionY + o.positionY
+        pose.positionZ = self.positionZ + o.positionZ
+        pose.rotationX = self.rotationX + o.rotationX
+        pose.rotationY = self.rotationY + o.rotationY
+        pose.rotationZ = self.rotationZ + o.rotationZ
+        return pose
+
+    def __sub__(self, o):
+        pose = Pose()
+        pose.positionX = self.positionX - o.positionX
+        pose.positionY = self.positionY - o.positionY
+        pose.positionZ = self.positionZ - o.positionZ
+        pose.rotationX = self.rotationX - o.rotationX
+        pose.rotationY = self.rotationY - o.rotationY
+        pose.rotationZ = self.rotationZ - o.rotationZ
+        return pose
+
+
 def pose_to_dict(pose):
     pos = {}
     pos['x'] = pose.positionX
@@ -129,6 +150,7 @@ class SmartPodDLL(CDLL):
     SMARPOD_SENSOR_NOT_FOUND_ERROR = c_uint(513)
     SMARPOD_STOPPED_ERROR = c_uint(514)
     SMARPOD_BUSY_ERROR = c_uint(515)
+    SMARPOD_POSE_UNREACHABLE_ERROR = c_uint(551)
 
     # Defines
     SMARPOD_SENSORS_DISABLED = c_uint(0)
@@ -593,6 +615,29 @@ class FakeSmartPodDLL(object):
         self.properties = {}
         self.speed = c_double(0)
         self.speed_control = c_int()
+        self.referenced = False
+
+        # Sepcify ranges
+        self._range = {}
+        self._range['x'] = (-1, 1)
+        self._range['y'] = (-1, 1)
+        self._range['z'] = (-1, 1)
+        self._range['theta_x'] = (-3.14, 3.14)
+        self._range['theta_y'] = (-3.14, 3.14)
+        self._range['theta_z'] = (-3.14, 3.14)
+
+        self.stopping = threading.Event()
+
+    def _pose_in_range(self, pose):
+        if self._range['x'][0] <= pose.positionX <= self._range['x'][1] and \
+            self._range['y'][0] <= pose.positionY <= self._range['y'][1] and \
+            self._range['z'][0] <= pose.positionZ <= self._range['z'][1] and \
+            self._range['theta_x'][0] <= pose.rotationX <= self._range['theta_x'][1] and \
+            self._range['theta_y'][0] <= pose.rotationY <= self._range['theta_y'][1] and \
+            self._range['theta_z'][0] <= pose.rotationZ <= self._range['theta_z'][1]:
+            return True
+        else:
+            return False
 
     def Smarpod_Open(self, id, timeout, locator, options):
         return SmartPodDLL.SMARPOD_OK.value
@@ -604,22 +649,52 @@ class FakeSmartPodDLL(object):
         return SmartPodDLL.SMARPOD_OK.value
 
     def Smarpod_FindReferenceMarks(self, id):
+        self.stopping.clear()
+        time.sleep(0.5)
+        if self.stopping.is_set():
+            self.referenced = False
+            return SmartPodDLL.SMARPOD_STOPPED_ERROR.value
+        else:
+            self.referenced = True
+            return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_IsPoseReachable(self, id, p_pos, p_reachable):
+        reachable = _deref(p_reachable, c_int)
+        pos = _deref(p_pos, Pose)
+        if self._pose_in_range(pos):
+            reachable.value = 1
+        else:
+            reachable.value = 0
         return SmartPodDLL.SMARPOD_OK.value
 
     def Smarpod_IsReferenced(self, id, p_referenced):
         referenced = _deref(p_referenced, c_int)
-        referenced.value = 1
+        referenced.value = 1 if self.referenced else 0
         return SmartPodDLL.SMARPOD_OK.value
 
     def Smarpod_Move(self, id, p_pose, hold_time, block):
+        self.stopping.clear()
         pose = _deref(p_pose, Pose)
-        self.pose.positionX = pose.positionX
-        self.pose.positionY = pose.positionY
-        self.pose.positionZ = pose.positionZ
-        self.pose.rotationX = pose.rotationX
-        self.pose.rotationY = pose.rotationY
-        self.pose.rotationZ = pose.rotationZ
-        return SmartPodDLL.SMARPOD_OK.value
+        if self._pose_in_range(pose):
+            self.pose.positionX = self.pose.positionX / 2 + pose.positionX / 2
+            self.pose.positionY = self.pose.positionY / 2 + pose.positionY / 2
+            self.pose.positionZ = self.pose.positionZ / 2 + pose.positionZ / 2
+            self.pose.rotationX = self.pose.rotationX / 2 + pose.rotationX / 2
+            self.pose.rotationY = self.pose.rotationY / 2 + pose.rotationY / 2
+            self.pose.rotationZ = self.pose.rotationZ / 2 + pose.rotationZ / 2
+
+            time.sleep(0.5)
+            if self.stopping.is_set(): return SmartPodDLL.SMARPOD_OK.value
+
+            self.pose.positionX = pose.positionX
+            self.pose.positionY = pose.positionY
+            self.pose.positionZ = pose.positionZ
+            self.pose.rotationX = pose.rotationX
+            self.pose.rotationY = pose.rotationY
+            self.pose.rotationZ = pose.rotationZ
+            return SmartPodDLL.SMARPOD_OK.value
+        else:
+            return SmartPodDLL.SMARPOD_POSE_UNREACHABLE_ERROR.value
 
     def Smarpod_GetPose(self, id, p_pose):
         pose = _deref(p_pose, Pose)
@@ -637,6 +712,7 @@ class FakeSmartPodDLL(object):
         return SmartPodDLL.SMARPOD_OK.value
 
     def Smarpod_Stop(self, id):
+        self.stopping.set()
         return SmartPodDLL.SMARPOD_OK.value
 
     def Smarpod_SetSpeed(self, id, speed_control, speed):
@@ -649,6 +725,15 @@ class FakeSmartPodDLL(object):
         speed.value = self.speed.value
         speed_control = _deref(p_speed_control, c_int)
         speed_control.value = self.speed_control.value
+        return SmartPodDLL.SMARPOD_OK.value
+
+    def Smarpod_GetDLLVersion(self, p_major, p_minor, p_update):
+        major = _deref(p_major, c_uint)
+        major.value = 0
+        minor = _deref(p_minor, c_uint)
+        minor.value = 0
+        update = _deref(p_update, c_uint)
+        update.value = 0
         return SmartPodDLL.SMARPOD_OK.value
 
     def Smarpod_Set_ui(self, id, prop, value):

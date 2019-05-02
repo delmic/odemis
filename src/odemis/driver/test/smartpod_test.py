@@ -40,8 +40,8 @@ COMP_ARGS = {
 
 CONFIG = {"name": "SmartPod",
         "role": "",
-        "locator": "usb:ix:0",
-        # "locator": "fake",
+        # "locator": "usb:ix:0",
+         "locator": "fake",
         "options":"",
         "axes": {
             'x': {
@@ -109,8 +109,8 @@ class TestSmartPod(unittest.TestCase):
     def test_move_abs(self):
         self.dev.SetSpeed(0.1)
 
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}
-        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'theta_x': 2.0, 'theta_y': 0, 'theta_z': 0}
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0.0005}
+        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'theta_x': 2.0, 'theta_y': 0.0001, 'theta_z': 0}
         pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}
 
         self.dev.moveAbs(pos1).result()
@@ -124,9 +124,9 @@ class TestSmartPod(unittest.TestCase):
     def test_move_cancel(self):
         self.dev.SetSpeed(0.1)
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
-        new_pos = {'x':-0.0102, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.478}
+        new_pos = {'x':0.1, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.478}
         f = self.dev.moveAbs(new_pos)
-        time.sleep(0.1)
+        time.sleep(0.05)
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
@@ -136,7 +136,7 @@ class TestSmartPod(unittest.TestCase):
         self.dev.SetSpeed(0.1)
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y': 0, 'z': 0, 'theta_x': 0.001, 'theta_y': 0, 'theta_z': 0}
+        shift = {'x': 0.01, 'y':-0.001, 'z': 0, 'theta_x': 0.0001, 'theta_y':-0.0003, 'theta_z': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -144,7 +144,7 @@ class TestSmartPod(unittest.TestCase):
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
-        shift = {'x': 0.00001, 'y': 0.00001, 'z':-0.000001, 'theta_x': 0.00001, 'theta_y':-0.000001, 'theta_z':-0.00001}
+        shift = {'x': 0.00000001, 'y': 0.00001, 'z':-0.000001, 'theta_x': 0.00001, 'theta_y':-0.000001, 'theta_z':-0.00001}
         self.dev.moveRel(shift)
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()
