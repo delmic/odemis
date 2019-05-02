@@ -40,8 +40,8 @@ COMP_ARGS = {
 
 CONFIG = {"name": "SmartPod",
         "role": "",
-        # "locator": "usb:ix:0",
-         "locator": "fake",
+        "locator": "usb:ix:0",
+        # "locator": "fake",
         "options":"",
         "axes": {
             'x': {
@@ -100,11 +100,13 @@ class TestSmartPod(unittest.TestCase):
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
-    def test_stop(self):
-        self.dev.moveAbs({'x':0.00, 'y':-0.0002, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0})
-        time.sleep(0.5)
-        logging.debug(self.dev.position.value)
-        self.dev.stop()
+    def test_out_of_range(self):
+        """
+        Test sending a position that is out of range.
+        """
+        pos = {'x': 1.5, 'y': 20, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0.0005}
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
         self.dev.SetSpeed(0.1)
@@ -123,16 +125,29 @@ class TestSmartPod(unittest.TestCase):
 
     def test_move_cancel(self):
         self.dev.SetSpeed(0.1)
+
+        # Test cancellation by cancelling the future
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
-        new_pos = {'x':0.1, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.478}
+        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.178}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         f.cancel()
 
         difference = new_pos['x'] - self.dev.position.value['x']
         self.assertNotEqual(round(difference, 4), 0)
+        
+        # Test cancellation by stopping
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
+        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.178}
+        f = self.dev.moveAbs(new_pos)
+        time.sleep(0.05)
+        self.dev.stop()
+
+        difference = new_pos['x'] - self.dev.position.value['x']
+        self.assertNotEqual(round(difference, 4), 0)
 
     def test_move_rel(self):
+        # Test relative moves
         self.dev.SetSpeed(0.1)
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
         old_pos = self.dev.position.value
