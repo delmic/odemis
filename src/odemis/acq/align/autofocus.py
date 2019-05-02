@@ -795,9 +795,12 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         future._actions_time.pop(0)
         future.set_progress(end=time.time() + sum(future._actions_time))
 
-        # Configure the optical path to the specific focus mode
+        # Configure the optical path to the specific focus mode, for the detector
+        # (so that the path manager knows which component matters). In case of
+        # multiple detectors, any of them should be fine, as the only difference
+        # should be the selector, which AutoFocusSpectrometer() takes care of.
         logging.debug("Adjusting the optical path to %s", align_mode)
-        fopm = opm.setPath(align_mode)
+        fopm = opm.setPath(align_mode, detector=dets[0])
         fopm.result()
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled after closing the slit")
