@@ -26,12 +26,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, print_function
 
-from odemis.gui import test
 import odemis.gui.comp.slider as slidecomp
-import odemis.gui.test as test
-import odemis.model as model
+from odemis.gui import test
+from odemis import model
 import math
-import odemis.gui.util.widgets as widgets
+from odemis.gui.util import widgets
 import unittest
 import wx
 
