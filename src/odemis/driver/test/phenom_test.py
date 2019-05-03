@@ -228,7 +228,6 @@ class TestSEM(unittest.TestCase):
         # shift a bit
         # reduce the size of the image so that we can have translation
         self.scanner.translation.value = (-10, 10)  # px
-        pxs = self.scanner.pixelSize.value
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
 

@@ -181,7 +181,6 @@ class FixedPositionsTest(unittest.TestCase):
         self.assertEqual(self.dev_cycle.position.value["x"], cur_pos)
 
         # find a different position
-        new_pos = cur_pos
         position = self.dev_cycle.axes["x"]
         for p in position.choices:
             if p != cur_pos:

@@ -61,8 +61,6 @@ def LoadDyeDatabase():
     """
 
     # For the API see doc/fluorophores-api.txt
-    index = None
-    basedir = None
     for p in FLUODB_PATHS:
         try:
             findex = open(p + u"environment/index.json")

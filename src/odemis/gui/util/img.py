@@ -362,7 +362,6 @@ def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_he
         l.text_size = lw, lh
     else:
         x, y = l.render_pos
-        lw, lh = l.text_size
 
     # Draw Shadow
     if l.colour:

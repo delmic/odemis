@@ -2102,6 +2102,7 @@ class TestTiffIO(unittest.TestCase):
         shapes = tiff._genResizedShapes(rdata.content[0])
         # add the full image to the shape list
         shapes = [rdata.content[0].shape] + shapes
+        # TODO shapes unused - add test to check shape is correct
 
         # First zoom level (full image)
         zoom_level = 0

@@ -326,13 +326,11 @@ class TestCompositedSpectrometer(unittest.TestCase):
         # horizontally, resolution behaves pretty normally
         res = self.spectrometer.resolution.range[1] # max
         self.spectrometer.resolution.value = res
-        res = self.spectrometer.resolution.value # the actual value
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
         res = self.spectrometer.resolution.range[0] # min
         self.spectrometer.resolution.value = res
-        res = self.spectrometer.resolution.value # the actual value
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
@@ -423,8 +421,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
             self.spectrometer.pixelSize.value[0] != 20e-6):
             self.skipTest("Hardware needs to be a PIXIS 400 for the test")
         # TODO: check we have a SpectraPro i2300 or FakeSpectraPro
-
-        res = self.spectrometer.resolution.value
 
         # 300 l/mm / 600 nm
         # => CCD coverage = 278 nm

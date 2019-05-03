@@ -606,7 +606,6 @@ class PMTControlSimulator(object):
         process the msg, and put the result in the output buffer
         msg (str): raw message (including header)
         """
-        res = None
         wspaces = msg.count(' ')
         qmarks = msg.count('?')
         tokens = msg.split()

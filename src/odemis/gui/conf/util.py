@@ -426,7 +426,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             # TODO: handle iterables
             rng = setting_va.range
             choices = set(c for c in choices if rng[0] <= c <= rng[1])
-    except (AttributeError, NotApplicableError) as e:
+    except (AttributeError, NotApplicableError):
         pass
 
     # Ensure the choices are within the range (if both are given)

@@ -886,7 +886,6 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             # of the CCD FoV
             # Simplified version of AlignSpot() but without autofocus, with
             # different error margin, and moves the SEM stage.
-            dist = None
             for step in range(MAX_STEPS):
                 try:
                     vector = find_spot(pos_ind)
@@ -1041,7 +1040,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
         escan.accelVoltage.value = 5.3e3  # to ensure that features are visible
         escan.spotSize.value = 2.7  # smaller values seem to give a better contrast
         holes_found = []
-        hole_focus = None
 
         def find_sh_hole(holep):
             if future._task_state == CANCELLED:
@@ -1446,7 +1444,6 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
         detector.data.unsubscribe(_discard_data)
 
         smaller_image = None
-        larger_image = None
         crop_res = (escan.resolution.value[0] // zoom_f,
                     escan.resolution.value[1] // zoom_f)
 
@@ -1583,7 +1580,6 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         detector.data.unsubscribe(_discard_data)
 
         largest_image = None  # reference image
-        smaller_image = None
 
         images = []
         while cur_resolution >= min_resolution:
@@ -1757,7 +1753,6 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
         detector.data.unsubscribe(_discard_data)
 
         smaller_image = None
-        larger_image = None
         crop_res = (SPOT_RES[0] // zoom_f, SPOT_RES[1] // zoom_f)
 
         while cur_scale <= max_scale:

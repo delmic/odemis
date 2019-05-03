@@ -316,7 +316,6 @@ class OverviewController(object):
             tab_data.streams.subscribe(self._on_current_stream)
 
         # Global overview image (Delphi)
-        overview_stream = None
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:

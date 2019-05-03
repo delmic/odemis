@@ -83,8 +83,6 @@ def register(tiles, method=REGISTER_GLOBAL_SHIFT):
             tileUpd = tuple(tilesNew)
 
         else:
-            dep_tiles = None
-
             md = copy.deepcopy(ts.metadata)
             md[model.MD_POS] = registrar.getPositions()[0][i]
             tileUpd = model.DataArray(ts, md)

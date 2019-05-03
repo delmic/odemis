@@ -458,8 +458,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         FILENAME = u"test" + tiff.EXTENSIONS[0]
         w = 201
         h = 201
-        size = (w, h, 3)
-        dtype = numpy.uint8
         md = {
             model.MD_PIXEL_SIZE: (mpp, mpp),
             model.MD_POS: (200.5 * mpp, 199.5 * mpp),
@@ -568,8 +566,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # 1 row of 2 tiles
         w = 512
         h = 250
-        size = (w, h, 3)
-        dtype = numpy.uint8
         md = {
             model.MD_PIXEL_SIZE: (mpp, mpp),
             model.MD_POS: init_pos,
@@ -700,8 +696,6 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # 1 row of 2 tiles
         w = 600
         h = 300
-        size = (w, h, 3)
-        dtype = numpy.uint8
         md = {
             model.MD_PIXEL_SIZE: (mpp, mpp),
             model.MD_POS: init_pos,

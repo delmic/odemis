@@ -208,8 +208,6 @@ class CorrelatorScanStream(stream.Stream):
 
         self._save_hw_settings()
 
-        # drift correction vectors
-        dc_vect = (0, 0)
         # a list (instead of a tuple) for the summation to work on each element independently
         tot_dc_vect = [0, 0]
 
@@ -231,9 +229,7 @@ class CorrelatorScanStream(stream.Stream):
 
                 for x, y in xyps:
                     sedatapix = []
-                    sedatam = []
                     cordatapix = []
-                    cordatam = []
 
                     for ll in range(self.nDC.value):
                         # add total drift vector at this point
@@ -258,6 +254,7 @@ class CorrelatorScanStream(stream.Stream):
                         sedatapix.append(sedat)
                         logging.debug("Memory used = %d bytes", udriver.readMemoryUsage())
                         drift_est.acquire()
+                        # drift correction vectors
                         dc_vect = drift_est.estimate()
                         tot_dc_vect[0] += dc_vect[0]
                         tot_dc_vect[1] += dc_vect[1]

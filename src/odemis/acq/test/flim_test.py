@@ -479,7 +479,6 @@ class TestFlim(unittest.TestCase):
         assert tcs.roi.value == (0, 0, 1, 1)
         assert tcs.repetition.value == (1, 1)
         pxs = tcs.pixelSize.value  # 1 float
-        scan_pxs = self.lscanner.pixelSize.value  # 2 floats
         self.assertEqual(fov, (pxs, pxs))
 
 

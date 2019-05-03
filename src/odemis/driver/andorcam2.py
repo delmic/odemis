@@ -2042,7 +2042,6 @@ class AndorCam2(model.DigitalCamera):
                     raise
             if has_hw_lock:
                 self.hw_lock.release()
-                has_hw_lock = False
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
             gc.collect()
