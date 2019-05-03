@@ -343,7 +343,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         except Exception:
             pass
         else:
-            self.fail("vertical resolution should not be allowed above 1, got %r" % new_res)
+            self.fail("vertical resolution should not be allowed above 1, got %r" % (new_res, ))
 
     def test_spec_calib(self):
         """

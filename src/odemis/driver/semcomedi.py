@@ -2375,7 +2375,7 @@ class MMapReader(Reader):
             raise IOError("Failed to read all the %d expected values" % self.count)
         elif self.remaining != 0:
             raise IOError("Read only %d values from the %d expected" %
-                          (self.count - self.remaining / self.buf.itemsize), self.count)
+                          ((self.count - self.remaining / self.buf.itemsize), self.count))
 
         return self.buf
 
