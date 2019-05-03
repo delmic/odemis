@@ -1899,8 +1899,7 @@ class TestTiffIO(unittest.TestCase):
         main_images = []
         count = 0
         for im in f.iter_images():
-            zoom_level_images = []
-            zoom_level_images.append(im)
+            zoom_level_images = [im]
             # get an array of offsets, one for each subimage
             sub_ifds = f.GetField(T.TIFFTAG_SUBIFD)
             if not sub_ifds:
