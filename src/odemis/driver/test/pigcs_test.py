@@ -102,11 +102,11 @@ class TestController(unittest.TestCase):
         ctrl.setSpeed('1', speed)
         distance = -ctrl.moveRel('1', -speed / 2)  # should take 0.5s
         self.assertGreater(distance, 0)
-        self.assertTrue(ctrl.isMoving(set(['1'])))
+        self.assertTrue(ctrl.isMoving({'1'}))
         self.assertEqual(ctrl.GetErrorNum(), 0)
         status = ctrl.GetStatus()
         ts = time.time()
-        while ctrl.isMoving(set(['1'])):
+        while ctrl.isMoving({'1'}):
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
@@ -120,7 +120,7 @@ class TestController(unittest.TestCase):
         ctrl.stopMotion()
 
         ts = time.time()
-        while ctrl.isMoving(set(['1'])):
+        while ctrl.isMoving({'1'}):
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)

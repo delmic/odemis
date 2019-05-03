@@ -282,9 +282,9 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertIsInstance(prop2.value, int)
 
     def test_enumerated(self):
-        prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        prop = model.StringEnumerated("a", {"a", "c", "bfds"})
         self.assertEqual(prop.value, "a")
-        self.assertEqual(prop.choices, set(["a", "c", "bfds"]))
+        self.assertEqual(prop.choices, {"a", "c", "bfds"})
 
         self.called = 0
         prop.subscribe(self.callback_test_notify)
@@ -298,10 +298,10 @@ class VigilantAttributeTest(unittest.TestCase):
         except IndexError:
             pass # as it should be
 
-        prop.choices = set(["a", "c", "b", 5])
+        prop.choices = {"a", "c", "b", 5}
         assert(prop.value == "c")
         try:
-            prop.choices = set(["a", "b"])
+            prop.choices = {"a", "b"}
             self.fail("Assigning choices not containing current value should not be allowed.")
         except IndexError:
             pass # as it should be

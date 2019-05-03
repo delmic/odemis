@@ -722,7 +722,7 @@ class RemoteTest(unittest.TestCase):
     def test_enumerated_va(self):
         # enumerated
         self.assertEqual(self.comp.enum.value, "a")
-        self.assertEqual(self.comp.enum.choices, set(["a", "c", "bfds"]))
+        self.assertEqual(self.comp.enum.choices, {"a", "c", "bfds"})
         self.comp.enum.value = "c"
         self.assertEqual(self.comp.enum.value, "c")
 
@@ -810,7 +810,7 @@ class SimpleHwComponent(model.HwComponent):
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4])
-        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.enum = model.StringEnumerated("a", {"a", "c", "bfds"})
 
     @roattribute
     def my_value(self):
@@ -835,7 +835,7 @@ class MyComponent(model.Component):
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
-        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.enum = model.StringEnumerated("a", {"a", "c", "bfds"})
         self.cut = model.IntVA(0, setter=self._setCut)
         self.listval = model.ListVA([2, 65])
 

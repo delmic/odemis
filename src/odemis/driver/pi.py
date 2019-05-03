@@ -804,7 +804,7 @@ class FakePIRedStone(PIRedStone):
 
     @staticmethod
     def scan(port, max_add=15):
-        present = set([1])
+        present = {1}
         return present
 
     @staticmethod
