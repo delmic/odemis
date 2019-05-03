@@ -107,15 +107,13 @@ class LinearActuatorTest(unittest.TestCase):
         self.dev = self.actuator_type("OD Filter", "tc-od-filter", {"density": self.dependency}, "od", offset=-3)
 
     def test_normal_moveAbs(self):
-        move = {}
-        move["density"] = 1
+        move = {"density": 1}
         f = self.dev.moveAbs(move)
         f.result()  # wait
         self.assertAlmostEqual(self.dev.position.value["density"], 1, places=4)
 
     def test_unsupported_position(self):
-        move = {}
-        move["density"] = 5
+        move = {"density": 5}
         with self.assertRaises(ValueError):
             f = self.dev.moveAbs(move)
             f.result()  # wait
@@ -157,8 +155,7 @@ class FixedPositionsTest(unittest.TestCase):
         if not hasattr(self.dev_normal, "moveAbs"):
             self.skipTest("Actuator doesn't support absolute move")
 
-        move = {}
-        move["x"] = 0.01
+        move = {"x": 0.01}
         f = self.dev_normal.moveAbs(move)
         f.result()  # wait
         self.assertDictEqual(move, self.dev_normal.position.value,
@@ -169,8 +166,7 @@ class FixedPositionsTest(unittest.TestCase):
         if not hasattr(self.dev_normal, "moveAbs"):
             self.skipTest("Actuator doesn't support absolute move")
 
-        move = {}
-        move["x"] = 0.07
+        move = {"x": 0.07}
         with self.assertRaises(ValueError):
             f = self.dev_normal.moveAbs(move)
             f.result()  # wait

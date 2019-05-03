@@ -751,8 +751,7 @@ class TMCLController(model.Actuator):
         s = s[:struct.calcsize(fmt)]  # discard the padding
         ud = struct.unpack(fmt, s)
 
-        io_config = {}
-        io_config[(0, 0)] = ud[0]
+        io_config = {(0, 0): ud[0]}
 
         i = 1
         axis_params = {}

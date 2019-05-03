@@ -93,10 +93,9 @@ def _convertToTiffTag(metadata):
     # bring too much problem we might need .encode("ascii", "ignore") or
     # unidecode (but they are lossy).
 
-    tiffmd = {}
+    tiffmd = {T.TIFFTAG_RESOLUTIONUNIT: T.RESUNIT_CENTIMETER,
+              T.TIFFTAG_SOFTWARE: "%s %s" % (odemis.__shortname__, odemis.__version__)}
     # we've got choice between inches and cm... so it's easy
-    tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
-    tiffmd[T.TIFFTAG_SOFTWARE] = "%s %s" % (odemis.__shortname__, odemis.__version__)
     for key, val in metadata.items():
         if key == model.MD_HW_NAME:
             tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8")

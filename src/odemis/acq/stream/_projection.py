@@ -571,10 +571,11 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         try:
             data = self.stream.calibrated.value
             raw_md = self.stream.calibrated.value.metadata
-            md = {}
+            md = {
+                 model.MD_PIXEL_SIZE: raw_md[model.MD_PIXEL_SIZE],
+                 model.MD_POS: raw_md[model.MD_POS]
+                 }
 
-            md[model.MD_PIXEL_SIZE] = raw_md[model.MD_PIXEL_SIZE]  # pixel size
-            md[model.MD_POS] = raw_md[model.MD_POS]
             # Average time values if they exist.
             if data.shape[1] > 1:
                 t = data.shape[1] - 1
@@ -610,10 +611,11 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         try:
             data = self.stream.calibrated.value
             raw_md = self.stream.calibrated.value.metadata
-            md = {}
+            md = {
+                 model.MD_PIXEL_SIZE: raw_md[model.MD_PIXEL_SIZE],
+                 model.MD_POS: raw_md[model.MD_POS]
+                 }
 
-            md[model.MD_PIXEL_SIZE] = raw_md[model.MD_PIXEL_SIZE]  # pixel size
-            md[model.MD_POS] = raw_md[model.MD_POS]
             # Average time values if they exist.
             if data.shape[1] > 1:
                 t = data.shape[1] - 1
@@ -1089,8 +1091,7 @@ class SinglePointTemporalProjection(DataProjection):
         c = self.stream._wl_px_values.index(self.stream.selected_wavelength.value)
         chrono2d = self.stream.calibrated.value[c, :, 0, :, :]  # same data but remove useless dims
 
-        md = {}
-        md[model.MD_DIMS] = "T"
+        md = {model.MD_DIMS: "T"}
         if model.MD_TIME_LIST in chrono2d.metadata:
             md[model.MD_TIME_LIST] = chrono2d.metadata[model.MD_TIME_LIST]
 
