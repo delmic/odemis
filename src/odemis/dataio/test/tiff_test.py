@@ -1305,7 +1305,7 @@ class TestTiffIO(unittest.TestCase):
             if model.MD_HW_NOTE in md:
                 self.assertEqual(im.metadata[model.MD_HW_NOTE], md[model.MD_HW_NOTE])
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
-            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4);
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
             numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
