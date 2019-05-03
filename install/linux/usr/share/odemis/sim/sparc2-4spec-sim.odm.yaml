@@ -150,7 +150,7 @@ SPARC2-4Spec: {
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
         # These values are adapted to make the simulator roughly the same speed
         ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 5.86e-9, 5.e-9], # m/µstep
-        unit: ["m", "m", "m", "rad", "m"],
+        unit: ["m", "m", "m", "m", "m"],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "spec-sel": 4}, # fiby has no ref swich
         inverted: ["l2"],
@@ -216,6 +216,14 @@ SPARC2-4Spec: {
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"},
     },
+    metadata: {
+        # Default Y position of the aligner (can be improved by user)
+        # X position is on the Spectrometer Selector
+        FAV_POS_ACTIVE: {"y": 0.000372989} # m
+    },
+    persistent: {
+        metadata: [FAV_POS_ACTIVE],
+    },
     affects: ["Spec Camera 2", "Ext Spectrometer 2", "Spec Camera 3", "Ext Spectrometer 3"],
 }
 
@@ -235,6 +243,9 @@ SPARC2-4Spec: {
         FAV_POS_ACTIVE_DEST: ["Spec Camera 2", "Ext Spectrometer 2", "Spec Camera 3", "Ext Spectrometer 3"],
         FAV_POS_DEACTIVE: {"x": 0.022}, # m
         FAV_POS_DEACTIVE_DEST: ["AR Camera", "Int Spectrometer 0", "Spec Camera 1", "Int Spectrometer 1"], # m
+    },
+    persistent: {
+        metadata: [FAV_POS_ACTIVE],
     },
     affects: ["AR Camera", "Int Spectrometer 0", "Spec Camera 1", "Int Spectrometer 1",
               "Spec Camera 2", "Ext Spectrometer 2", "Spec Camera 3", "Ext Spectrometer 3"],
@@ -449,7 +460,7 @@ SPARC2-4Spec: {
         FAV_POS_ACTIVE: {"l": 40.e-3, "s": 1.e-3},  # m, m
     },
     persistent: {
-        metadata: [FAV_POS_ACTIVE], 
+        metadata: [FAV_POS_ACTIVE],
     },
 }
 

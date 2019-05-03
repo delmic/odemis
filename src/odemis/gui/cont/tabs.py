@@ -2963,6 +2963,23 @@ class Sparc2AlignTab(Tab):
             else:
                 self._moveLensToActive()
 
+        if main_data.fibaligner:
+            # Reference and move the fiber aligner Y to its default position (if
+            # it has a favourite position, as the older versions didn't support
+            # referencing, so just stayed physically as-is).
+            fib_fav_pos = main_data.fibaligner.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+            if fib_fav_pos:
+                try:
+                    refd = main_data.fibaligner.referenced.value
+                    not_refd = {a for a in fib_fav_pos.keys() if not refd[a]}
+                    if any(not_refd):
+                        f = main_data.fibaligner.reference(not_refd)
+                        f.add_done_callback(self._moveFibAlignerToActive)
+                    else:
+                        self._moveFibAlignerToActive()
+                except Exception:
+                    logging.exception("Failed to move fiber aligner to %s", fib_fav_pos)
+
         # Documentation text on the right panel for alignment
         self.doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_header.html")
         panel.html_moi_doc.SetBorders(0)
@@ -3525,7 +3542,24 @@ class Sparc2AlignTab(Tab):
             lpos = lm.getMetadata()[model.MD_FAV_POS_ACTIVE]
         except KeyError:
             logging.exception("Lens-mover actuator has no metadata FAV_POS_ACTIVE")
+            return
         lm.moveAbs(lpos)
+
+    def _moveFibAlignerToActive(self, f=None):
+        """
+        Move the fiber aligner to its default active position
+        f (future): future of the referencing
+        """
+        if f:
+            f.result()  # to fail & log if the referencing failed
+
+        fiba = self.tab_data_model.main.fibaligner
+        try:
+            fpos = fiba.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        except KeyError:
+            logging.exception("Fiber aligner actuator has no metadata FAV_POS_ACTIVE")
+            return
+        fiba.moveAbs(fpos)
 
     def _onClickAlignButton(self, evt):
         """ Called when one of the Mirror/Optical fiber button is pushed
@@ -3574,8 +3608,11 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
 
         # Things to do at the end of a mode
-        if mode != "fiber-align" and main.spec_sel:
-            main.spec_sel.position.unsubscribe(self._onFiberPos)
+        if mode != "fiber-align":
+            if main.spec_sel:
+                main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+            if main.fibaligner:
+                main.fibaligner.position.unsubscribe(self._onFiberPos)
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
@@ -3725,7 +3762,9 @@ class Sparc2AlignTab(Tab):
 
         # Make sure the user can move the X axis only once at ACTIVE position
         if self.tab_data_model.main.spec_sel:
-            self.tab_data_model.main.spec_sel.position.subscribe(self._onFiberPos)
+            self.tab_data_model.main.spec_sel.position.subscribe(self._onSpecSelPos)
+        if self.tab_data_model.main.fibaligner:
+            self.tab_data_model.main.fibaligner.position.subscribe(self._onFiberPos)
         self.panel.btn_m_fibaligner_x.Enable(True)
         self.panel.btn_p_fibaligner_x.Enable(True)
         self.panel.btn_m_fibaligner_y.Enable(True)
@@ -3964,7 +4003,7 @@ class Sparc2AlignTab(Tab):
         m = self.tab_data_model.main.mirror
         m.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
-    def _onFiberPos(self, pos):
+    def _onSpecSelPos(self, pos):
         """
         Called when the spec-selector (wrapper to the X axis of fiber-aligner)
           is moved (and the fiber align mode is active)
@@ -3977,8 +4016,28 @@ class Sparc2AlignTab(Tab):
 
         # Save the axis position as the "calibrated" one
         ss = self.tab_data_model.main.spec_sel
-        logging.debug("Updating the active fiber position to %s", pos)
+        logging.debug("Updating the active fiber X position to %s", pos)
         ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
+    def _onFiberPos(self, pos):
+        """
+        Called when the fiber-aligner is moved (and the fiber align mode is active),
+          for updating the Y position. (X pos is handled by _onSpecSelPos())
+        """
+        if not self.IsShown():
+            # Should never happen, but for safety, we double check
+            logging.warning("Received active fiber position while outside of alignment tab")
+            return
+
+        # Update the fibaligner with the Y axis, if it supports it
+        fiba = self.tab_data_model.main.fibaligner
+        fib_fav_pos = fiba.getMetadata().get(model.MD_FAV_POS_ACTIVE, {})
+
+        # If old hardware, without FAV_POS: just do nothing
+        if fib_fav_pos and "y" in fib_fav_pos:
+            fib_fav_pos["y"] = pos["y"]
+            logging.debug("Updating the active fiber Y position to %s", fib_fav_pos)
+            fiba.updateMetadata({model.MD_FAV_POS_ACTIVE: fib_fav_pos})
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -4009,7 +4068,9 @@ class Sparc2AlignTab(Tab):
                 main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
-                main.spec_sel.position.unsubscribe(self._onFiberPos)
+                main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+            if main.fibaligner:
+                main.fibaligner.position.unsubscribe(self._onFiberPos)
 
             # Also fit to content now, so that next time the tab is displayed,
             # it's ready
