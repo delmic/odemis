@@ -30,7 +30,7 @@ import math
 import numpy
 from odemis import dataio, model, gui, acq, util
 from odemis.acq import stream
-from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream
+from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream, CLSettingsStream
 from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
@@ -263,18 +263,15 @@ class QuickCLPlugin(Plugin):
 
         self.addMenu("Acquisition/Quick CL...\tF2", self.start)
 
-    def _show_mn_axes(self, sctrl):
-        main_data = self.main_app.main_data
-        spg = self._getAffectingSpectrograph(main_data.monochromator)
-
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-                "slit-monochromator": spg,
-               }
-
+    def _show_axes(self, sctrl, axes, sclass):
+        """
+        Show axes in settings panel for a given stream.
+        sctrl (StreamController): stream controller
+        axes (str -> comp): list of axes to display
+        sclass (Stream): stream class of (settings) stream
+        """
         stream_configs = get_stream_settings_config()
-        stream_config = stream_configs.get(MonochromatorSettingsStream, {})
+        stream_config = stream_configs.get(sclass, {})
 
         # Add Axes (in same order as config)
         axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
@@ -434,9 +431,7 @@ class QuickCLPlugin(Plugin):
         if fov_hw:
             dlg.viewport_l.canvas.fit_view_to_next_image = False
 
-        # Ideally, the user should be able to pick the cf-filter, for now, we
-        # just hard-code to "pass-through".
-        # TODO: provide a cl-filter control in the CL stream
+        # Use pass-through filter by default
         if main_data.cl_filter and "band" in main_data.cl_filter.axes:
             # find the "pass-through"
             bdef = main_data.cl_filter.axes["band"]
@@ -475,11 +470,26 @@ class QuickCLPlugin(Plugin):
     def _setup_sbar_cont(self):
         # The following code needs to be run asynchronously to make sure the streams are added to
         # the streambar controller first in .addStream.
+        main_data = self.main_app.main_data
+        sconts = self._dlg.streambar_controller.stream_controllers
+
+        # Add axes to monochromator and cl streams
         if hasattr(self, "_mn_stream"):
-            self._show_mn_axes(self._dlg.streambar_controller.stream_controllers[-1])
+            spg = self._getAffectingSpectrograph(main_data.monochromator)
+            axes = {"wavelength": spg,
+                    "grating": spg,
+                    "slit-in": spg,
+                    "slit-monochromator": spg,
+                   }
+            scont = [sc for sc in sconts if sc.stream.detector is main_data.monochromator][0]
+            self._show_axes(scont, axes, MonochromatorSettingsStream)
+        if hasattr(self, "_cl_stream"):
+            axes = {"band": main_data.cl_filter}
+            scont = [sc for sc in sconts if sc.stream.detector is main_data.cld][0]
+            self._show_axes(scont, axes, CLSettingsStream)
 
         # Don't allow removing the streams
-        for sctrl in self._dlg.streambar_controller.stream_controllers:
+        for sctrl in sconts:
             sctrl.stream_panel.show_remove_btn(False)
 
     def _acq_canceller(self, future):
