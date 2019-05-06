@@ -39,7 +39,7 @@ from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.gui.util import img
+from odemis.gui.util import img, call_in_wx_main
 from odemis.model import InstantaneousFuture
 from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
@@ -451,13 +451,7 @@ class QuickCLPlugin(Plugin):
         for s in self._get_acq_streams():
             dlg.addStream(s)
 
-        if hasattr(self, "_mn_stream"):
-            self._show_mn_axes(dlg.streambar_controller.stream_controllers[-1])
-
-        # Don't allow removing the streams
-        for sctrl in dlg.streambar_controller.stream_controllers:
-            sctrl.stream_panel.show_remove_btn(False)
-
+        self._setup_sbar_cont()
         dlg.addSettings(self, self.vaconf)
         if ALLOW_SAVE:
             dlg.addButton("Save", self.save, face_colour='blue')
@@ -476,6 +470,17 @@ class QuickCLPlugin(Plugin):
         # Update filename in main window
         tab_acqui = main_data.getTabByName("sparc_acqui")
         tab_acqui.acquisition_controller.update_fn_suggestion()
+
+    @call_in_wx_main
+    def _setup_sbar_cont(self):
+        # The following code needs to be run asynchronously to make sure the streams are added to
+        # the streambar controller first in .addStream.
+        if hasattr(self, "_mn_stream"):
+            self._show_mn_axes(self._dlg.streambar_controller.stream_controllers[-1])
+
+        # Don't allow removing the streams
+        for sctrl in self._dlg.streambar_controller.stream_controllers:
+            sctrl.stream_panel.show_remove_btn(False)
 
     def _acq_canceller(self, future):
         return future._cur_f.cancel()
