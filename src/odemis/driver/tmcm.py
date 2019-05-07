@@ -31,6 +31,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from past.builtins import basestring
 from collections import OrderedDict
 from concurrent.futures import CancelledError
 import fcntl

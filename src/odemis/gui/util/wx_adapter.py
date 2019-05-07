@@ -19,6 +19,7 @@ from __future__ import division
 # If you import this module, it will ensure that wxPython follows the v4 API.
 # Note that it only converts the v4 -> v3 API that Odemis needs, nothing more.
 
+from past.builtins import basestring
 import wx
 import sys
 import io

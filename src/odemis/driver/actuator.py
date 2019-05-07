@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import basestring
 import collections
 from concurrent import futures
 import copy

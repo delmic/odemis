@@ -22,6 +22,7 @@ This file is part of Odemis.
 
 from __future__ import division
 
+from past.builtins import basestring
 import logging
 import odemis.gui.conf.file as conffile
 import odemis.gui as gui

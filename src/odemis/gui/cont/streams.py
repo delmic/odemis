@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import basestring
 from collections import OrderedDict
 import collections
 import functools

@@ -22,6 +22,7 @@ This file is part of Odemis.
 """
 from __future__ import division
 
+from past.builtins import basestring
 try:
     import Queue
 except ImportError:  # Python 3 naming
