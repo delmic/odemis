@@ -122,8 +122,7 @@ SPARC2: {
 
 
 "CL PMT": { # the raw detector of the PMT
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: null,
     init: {},
 }
@@ -145,7 +144,7 @@ SPARC2: {
     init: {
         settle_time: 0.5,  # s, time for the gain to be fully active
     },
-    children: {
+    dependencies: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
     },
@@ -212,7 +211,7 @@ SPARC2: {
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -228,7 +227,7 @@ SPARC2: {
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -243,7 +242,7 @@ SPARC2: {
 "CL Selector": {
     class: actuator.FixedPositionsActuator,
     role: "cl-det-selector",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "cl-sel",
         positions: {
@@ -258,7 +257,7 @@ SPARC2: {
 "CL Filter Wheel": {
     class: actuator.FixedPositionsActuator,
     role: "cl-filter",
-    children: {"band": "Optical Actuators"},
+    dependencies: {"band": "Optical Actuators"},
     init: {
         axis_name: "fw",
         # It supports up to 8 filters
@@ -305,7 +304,7 @@ SPARC2: {
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)

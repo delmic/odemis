@@ -127,13 +127,14 @@ def get_class(name):
 
     return the_class
 
+# A component can reference other components as 'children' or as 'dependencies'.
+#  * A dependency is a component which is needed by another one (a functional dependency/requirement)
+#  * A child is a component which is created by another one (provided/creation)
+# It used to be the case that 'children' and 'dependencies' were provided in the same attribute
+# called 'children'. Therefore we need to provide compatibility with both ways of defining references.
+# The microscope class is special. It only has a .children attribute and no .dependencies
+# attribute because we want to be able to list all the components.
 
-# TODO: one big flaw of this model is that there is confusion between two types
-# of "children":
-#  * A component which is needed by another one (a functional dependency/requirement)
-#    => could be in a 'requires' attribute
-#  * A component which is created by another one (provided/creation)
-#    => could be in a 'provides' attribute
 
 class Instantiator(object):
     """
@@ -232,20 +233,20 @@ class Instantiator(object):
         """
         # update the children by adding a "parents" attribute
         for name, comp in self.ast.items():
-            children_names = comp.get("children", {}) # dict internal name -> name
-            for child_name in children_names.values():
+            references = comp.get("children", {}).values() + comp.get("dependencies", {}).values()
+            for ref in references:
                 # detect direct loop
-                if child_name == name:
+                if ref == name:
                     raise SemanticError("Error in microscope file: "
-                                        "component %s is child of itself." % name)
-                if child_name not in self.ast:
+                                        "component %s is child/dependency of itself." % ref)
+                if ref not in self.ast:
                     raise SemanticError("Error in microscope file: "
-                                        "component %s references unknown child %s." %
-                                        (name, child_name))
+                                        "component %s references unknown child/dependency %s." %
+                                        (name, ref))
 
-                if "parents" not in self.ast[child_name].keys():
-                    self.ast[child_name]["parents"] = []
-                self.ast[child_name]["parents"].append(name)
+                if "parents" not in self.ast[ref].keys():
+                    self.ast[ref]["parents"] = []
+                self.ast[ref]["parents"].append(name)
 
         # For each component which is created by delegation (= no class):
         # * if no creator specified, use its parent (and error if multiple parents)
@@ -269,14 +270,19 @@ class Instantiator(object):
                     raise SemanticError("Error in microscope file: component %s "
                             "has no class specified and is not created by any "
                             "component." % name)
-                elif len(parents) > 1:
-                    raise SemanticError("Error in microscope file: component %s "
-                            "has to be created by one of its parents %s, but no "
-                            "creator is designated." % (name, tuple(parents)))
                 else:
-                    comp["creator"] = parents[0]
-                    logging.debug("Identified %s as creator of %s",
-                                  parents[0], name)
+                    creator = None
+                    for p in parents:
+                        if name in self.ast[p].get("children", {}).values() and creator:
+                            raise SemanticError("Error in microscope file: component %s "
+                                    "has to be created by one of its parents %s, but no "
+                                    "creator is designated." % (name, tuple(parents)))
+                        elif name in self.ast[p].get("children", {}).values() and not creator:
+                            creator = p
+                    if creator:
+                        comp["creator"] = creator
+                        logging.debug("Identified %s as creator of %s",
+                                      creator, name)
 
     def _check_cyclic(self):
 
@@ -292,7 +298,7 @@ class Instantiator(object):
 
     def _check_lone_component(self, strict=False):
         """
-        Check that every component is instantiate for eventually being a part
+        Check that every component is instantiated for eventually being a part
         of the microscope.
         Every component should be either:
          * A child of the microscope
@@ -308,10 +314,10 @@ class Instantiator(object):
             # these created components are not required by the microscope, but used
             attrs = self.ast[cname]
             while "creator" in attrs:
-                comps_used |= self.get_delegated_children(cname)
+                comps_used |= self.get_children_names(cname)
                 cname = attrs["creator"]  # look at the creator too
                 attrs = self.ast[cname]
-            comps_used |= self.get_delegated_children(cname)
+            comps_used |= self.get_children_names(cname)
 
         for cname, attrs in self.ast.items():
             if cname not in comps_used:
@@ -326,7 +332,7 @@ class Instantiator(object):
                         logging.warning("Component '%s' has role %s but it is not used by the microscope",
                                         cname, role)
 
-                creations = self.get_delegated_children(cname)
+                creations = self.get_children_names(cname)
                 if not creations & comps_used:
                     if len(creations) > 1:
                         logging.info("Component '%s' will create non-used components %s", cname, creations)
@@ -439,9 +445,14 @@ class Instantiator(object):
         if "children" in init:
             raise SemanticError("Error in microscope file: "
                 "component '%s' should not have a 'children' entry in the init." % name)
+        if "dependencies" in init:
+            raise SemanticError("Error in microscope file: "
+                "component '%s' should not have a 'dependencies' entry in the init." % name)
         if "children" in attr and not class_name == "Microscope":
             init["children"] = {}
+            init["dependencies"] = {}
             children_names = attr["children"]
+
             for internal_role, child_name in children_names.items():
                 child_attr = self.ast[child_name]
                 # Two types of children creation:
@@ -453,7 +464,20 @@ class Instantiator(object):
                 else:
                     # the child has a class or is created by another component
                     # => we explicitly reuse it
-                    init["children"][internal_role] = self._get_component_by_name(child_name)
+                    init["dependencies"][internal_role] = self._get_component_by_name(child_name)
+        if "dependencies" in attr and class_name == "Microscope":
+            raise SemanticError("Error in microscope file: "
+                                "microscope class '%s' should not have 'dependencies' argument." % name)
+        if "dependencies" in attr:
+            if "dependencies" not in init:
+                # in case of a mixed yaml-file with old-style and new-style children, the 'dependencies'
+                # argument might already exist.
+                init["dependencies"] = {}
+            else:
+                logging.warning("Mix legacy dependent-component (%s) + dependencies", init["dependencies"].keys)
+            dep_names = attr["dependencies"]
+            for internal_role, dep_name in dep_names.items():
+                init["dependencies"][internal_role] = self._get_component_by_name(dep_name)
 
         # take care of power supplier argument
         if "power_supplier" in init:
@@ -502,9 +526,18 @@ class Instantiator(object):
         # separate container. If clearly it wraps just one other component,
         # use the same container, otherwise, use the root container
 
-        # Get the instantiated children (ie, dependencies)
+        # Get the dependencies
+        dependency_names = attr.get("dependencies", {})
+        deps_cont = set()
+        for child_name in dependency_names.values():
+            try:
+                cont = self._comp_container[child_name]
+            except KeyError:
+                logging.warning("Component %s was not created yet, but %s depends on it", child_name, name)
+                continue
+            deps_cont.add(cont)
+        # Ensure backwards compatibility with old-style children (children = dependencies + delegated comps)
         children_names = attr.get("children", {})
-        children_cont = set()
         for child_name in children_names.values():
             if "class" in self.ast[child_name]:
                 try:
@@ -512,10 +545,10 @@ class Instantiator(object):
                 except KeyError:
                     logging.warning("Component %s was not created yet, but %s depends on it", child_name, name)
                     continue
-                children_cont.add(cont)
+                deps_cont.add(cont)
 
-        if len(children_cont) == 1:
-            return children_cont.pop()
+        if len(deps_cont) == 1:
+            return deps_cont.pop()
 
         # Multiple dependencies -> just use the root container then
         return self.root_container
@@ -600,12 +633,18 @@ class Instantiator(object):
         ret = set()
 
         attrs = self.ast[name]
-        children = attrs.get("children", {}).values()
+        dependencies = attrs.get("dependencies", {}).values()
+        for n in dependencies:
+            ret.add(n)
+            ret |= self.get_required_components(n)
+
         try:
-            children.append(attrs["power_supplier"])
+            dependencies.append(attrs["power_supplier"])
         except KeyError:
             pass  # no power supplier
 
+        # Support legacy code
+        children = attrs.get("children", {}).values()
         for n in children:
             cattrs = self.ast[n]
             if cattrs.get("creator") != name and n not in ret:
@@ -614,7 +653,7 @@ class Instantiator(object):
 
         return ret
 
-    def get_delegated_children(self, name):
+    def get_children_names(self, name):
         """
         Return all the components created by delegation when creating the given
          component (including the given component)
@@ -628,7 +667,7 @@ class Instantiator(object):
                 # Note: by passing ret, and checking it's not already added,
                 # we could handle cyclic creation... but it's better to fail here
                 # than trying to instantiate such beast.
-                ret |= self.get_delegated_children(n)
+                ret |= self.get_children_names(n)
 
         return ret
 
@@ -784,8 +823,8 @@ class Instantiator(object):
 
     def instantiate_component(self, name):
         """
-        Generate the component (and its children, if they are created by delegation)
-        All the children that are created by separate instantiation must already
+        Generate the component (and its children)
+        All the dependencies that are created by separate instantiation must already
         have been created.
         It will take care of updating the .children VA of the microscope if
          needed.
@@ -842,10 +881,11 @@ class Instantiator(object):
                 if psuname not in instantiated:
                     logging.debug("Component %s is not instantiable yet", n)
                     continue
-            for cname in attrs.get("children", {}).values():
-                childat = self.ast[cname]
-                # the child must be either instantiated or instantiated via delegation
-                if cname not in instantiated and not childat.get("creator") == n:
+            deps = list(attrs.get("dependencies", {}).values())
+            # support legacy code
+            deps += [c for c in attrs.get("children", {}).values() if self.ast[c].get("creator") != n]
+            for name in deps:
+                if name not in instantiated:
                     logging.debug("Component %s is not instantiable yet", n)
                     break
             else:

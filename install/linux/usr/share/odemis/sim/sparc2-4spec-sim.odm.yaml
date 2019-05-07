@@ -76,7 +76,6 @@ SPARC2-4Spec: {
 # Ground -> AO GND
 "SEM E-beam": {
     # Internal child of SEM Scan Interface, so no class
-    creator: "SEM Scan Interface",
     role: e-beam,
     init: {
         channels: [1, 0],
@@ -161,7 +160,7 @@ SPARC2-4Spec: {
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -180,7 +179,7 @@ SPARC2-4Spec: {
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -196,7 +195,7 @@ SPARC2-4Spec: {
 "Slit": {
     class: actuator.FixedPositionsActuator,
     role: "slit-in-big",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "slit",
         positions: {
@@ -212,7 +211,7 @@ SPARC2-4Spec: {
 "Fiber align": {
     class: actuator.MultiplexActuator,
     role: "fiber-aligner",
-    children: {"x": "Optical Actuators", "y": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators", "y": "Optical Actuators"},
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"},
     },
@@ -231,7 +230,7 @@ SPARC2-4Spec: {
 "Spectrometer Selector": {
     class: actuator.MultiplexActuator,
     role: "spec-selector",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "spec-sel"},
         ref_on_init: ["x"],
@@ -276,7 +275,7 @@ SPARC2-4Spec: {
 "Int Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Integrated Spectrograph"},
+    dependencies: {"z": "Integrated Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -287,7 +286,7 @@ SPARC2-4Spec: {
 "Int Spec Filter Wheel": {
     class: actuator.MultiplexActuator,
     role: filter,
-    children: {"band": "Integrated Spectrograph"},
+    dependencies: {"band": "Integrated Spectrograph"},
     init: {
         axes_map: {"band": "band"},
     },
@@ -298,7 +297,7 @@ SPARC2-4Spec: {
 "Int Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
-    children: {"rx": "Integrated Spectrograph"},
+    dependencies: {"rx": "Integrated Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {
@@ -323,7 +322,7 @@ SPARC2-4Spec: {
 "Int Spectrometer 0": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer0,
-    children: {detector: "AR Camera", spectrograph: "Integrated Spectrograph"},
+    dependencies: {detector: "AR Camera", spectrograph: "Integrated Spectrograph"},
     init: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -345,7 +344,7 @@ SPARC2-4Spec: {
 "Int Spectrometer 1": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer1,
-    children: {detector: "Spec Camera 1", spectrograph: "Integrated Spectrograph"},
+    dependencies: {detector: "Spec Camera 1", spectrograph: "Integrated Spectrograph"},
     init: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -371,7 +370,7 @@ SPARC2-4Spec: {
 "Ext Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: spec-ded-focus,
-    children: {"z": "External Spectrograph"},
+    dependencies: {"z": "External Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -382,7 +381,7 @@ SPARC2-4Spec: {
 "Ext Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: spec-ded-det-selector,
-    children: {"rx": "External Spectrograph"},
+    dependencies: {"rx": "External Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {
@@ -410,7 +409,7 @@ SPARC2-4Spec: {
 "Ext Spectrometer 2": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer2,
-    children: {detector: "Spec Camera 2", spectrograph: "External Spectrograph"},
+    dependencies: {detector: "Spec Camera 2", spectrograph: "External Spectrograph"},
     properties: {
         binning: [4, 1],
     },
@@ -433,7 +432,7 @@ SPARC2-4Spec: {
 "Ext Spectrometer 3": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer3,
-    children: {detector: "Spec Camera 3", spectrograph: "External Spectrograph"},
+    dependencies: {detector: "Spec Camera 3", spectrograph: "External Spectrograph"},
     properties: {
         binning: [4, 100],
     },
@@ -469,7 +468,7 @@ SPARC2-4Spec: {
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: 0.07330382 # rad (= 4.2°)

@@ -58,7 +58,7 @@ SPARC-Spec: {
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         #binning: [4, 256],
     },

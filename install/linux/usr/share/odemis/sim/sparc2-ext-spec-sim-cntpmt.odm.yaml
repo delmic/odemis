@@ -94,8 +94,7 @@ SPARC2-Fiber: {
 ## This is the counting PMT, called monochromator PMT
 # No user settings
 "Monochromator": {
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: monochromator,
     init: {
         source: 8,  # PFI number
@@ -118,7 +117,7 @@ SPARC2-Fiber: {
 #"Spectrometer": {
 #    class: spectrometer.CompositedSpectrometer,
 #    role: spectrometer,
-#    children: {detector: "Camera", spectrograph: "Integrated Spectrograph"},
+#    dependencies: {detector: "Camera", spectrograph: "Integrated Spectrograph"},
 #    properties: {
 #        binning: [4, 256],
 #    },
@@ -144,7 +143,7 @@ SPARC2-Fiber: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Integrated Spectrograph"},
+    dependencies: {"z": "Integrated Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -156,7 +155,7 @@ SPARC2-Fiber: {
 "Spec CCD Flipper": {
     class: actuator.MultiplexActuator,
     role: "spec-det-selector",
-    children: {"rx": "Integrated Spectrograph"},
+    dependencies: {"rx": "Integrated Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},
     },
@@ -169,7 +168,7 @@ SPARC2-Fiber: {
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
     properties: {
         binning: [4, 16],
     },
@@ -178,7 +177,7 @@ SPARC2-Fiber: {
 "External Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph-dedicated,
-    children: {"ccd": "Spectral Camera"},
+    dependencies: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
@@ -245,7 +244,7 @@ SPARC2-Fiber: {
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -261,7 +260,7 @@ SPARC2-Fiber: {
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -276,7 +275,7 @@ SPARC2-Fiber: {
 "Slit": {
     class: actuator.FixedPositionsActuator,
     role: "slit-in-big",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "slit",
         positions: {
@@ -292,7 +291,7 @@ SPARC2-Fiber: {
 "Fiber align": {
     class: actuator.MultiplexActuator,
     role: "fiber-aligner",
-    children: {"x": "Optical Actuators", "y": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators", "y": "Optical Actuators"},
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"}
     },
@@ -303,7 +302,7 @@ SPARC2-Fiber: {
 "Spectrometer Selector": {
     class: actuator.MultiplexActuator,
     role: "spec-selector",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "spec-sel"},
         ref_on_init: ["x"],
@@ -342,7 +341,7 @@ SPARC2-Fiber: {
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)

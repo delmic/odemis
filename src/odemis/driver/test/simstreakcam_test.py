@@ -420,9 +420,10 @@ class TestSimStreakCamWithSpectrograph(unittest.TestCase):
         cls.spectrograph = CLASS_SPECTROGRAPH(**KWARGS_SPECTROGRAPH)
 
         STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
-                    "delaybox": CONFIG_DELAYBOX, "spectrograph": cls.spectrograph}
+                    "delaybox": CONFIG_DELAYBOX}
 
-        cls.streakcam = CLASS_STREAKCAM("streak cam", "streakcam", children=STREAK_CHILDREN)
+        cls.streakcam = CLASS_STREAKCAM("streak cam", "streakcam", children=STREAK_CHILDREN,
+                                        dependencies={"spectrograph": cls.spectrograph})
 
         for child in cls.streakcam.children.value:
             if child.name == CONFIG_READOUTCAM["name"]:

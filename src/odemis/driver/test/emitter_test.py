@@ -29,8 +29,8 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CHILD1_CLASS = pwrcomedi.Light
-CHILD1_KWARGS = {"name": "test1", "role": None,
+DEPENDENCY1_CLASS = pwrcomedi.Light
+DEPENDENCY1_KWARGS = {"name": "test1", "role": None,
                  "device": "/dev/comedi0", # Simulator, if comedi_test is loaded
           "channels": [0, 2],
           "spectra": [(615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9),
@@ -48,8 +48,8 @@ CHILD1_KWARGS = {"name": "test1", "role": None,
                         }
                         ]
          }
-CHILD2_CLASS = omicronxx.HubxX
-CHILD2_KWARGS = {"name": "test2", "role": None, "port": "/dev/fakehub"}
+DEPENDENCY2_CLASS = omicronxx.HubxX
+DEPENDENCY2_KWARGS = {"name": "test2", "role": None, "port": "/dev/fakehub"}
 CONFIG_DG1000Z = {"name": "Rigol Wave Gen", "role": "pc-emitter",
                 "host": "fake",
                 "port": 5555, "channel": 1,
@@ -61,15 +61,15 @@ KWARGS = {"name": "test", "role": "light"}
 class TestMultiplexLight(unittest.TestCase):
 
     def setUp(self):
-        self.child1 = CHILD1_CLASS(**CHILD1_KWARGS)
-        self.child2 = CHILD2_CLASS(**CHILD2_KWARGS)
+        self.dependency1 = DEPENDENCY1_CLASS(**DEPENDENCY1_KWARGS)
+        self.dependency2 = DEPENDENCY2_CLASS(**DEPENDENCY2_KWARGS)
         self.dev = emitter.MultiplexLight("test", "light",
-                                          children={"c1": self.child1, "c2": self.child2})
+                                          dependencies={"c1": self.dependency1, "c2": self.dependency2})
 
     def tearDown(self):
         self.dev.terminate()
-        self.child1.terminate()
-        self.child2.terminate()
+        self.dependency1.terminate()
+        self.dependency2.terminate()
 
     def test_simple(self):
         # should start off
@@ -139,7 +139,7 @@ class TestExtendedLight(unittest.TestCase):
         self.wg = rigol.WaveGenerator(**CONFIG_DG1000Z)    # specify IP of actual device
         self.light = simulated.Light("test", "light")
         CONFIG_EX_LIGHT = {"name": "Test Extended Light", "role": None,
-                           "children": {"light": self.light, "clock": self.wg }
+                           "dependencies": {"light": self.light, "clock": self.wg }
                            }
         self.ex_light = emitter.ExtendedLight(**CONFIG_EX_LIGHT)
 

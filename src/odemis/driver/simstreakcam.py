@@ -471,20 +471,21 @@ class StreakCamera(model.HwComponent):
     Represents the streak camera system.
     """
 
-    def __init__(self, name, role, children=None, daemon=None, **kwargs):
+    def __init__(self, name, role, children=None, dependencies=None, daemon=None, **kwargs):
         """
         Initializes the device.
         """
-        super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
+        super(StreakCamera, self).__init__(name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
         children = children or {}
+        dependencies = dependencies or {}
 
         try:
             kwargs = children["readoutcam"]
         except Exception:
             raise ValueError("Required child readoutcam not provided")
         self._readoutcam = ReadoutCamera(parent=self,
-                                         spectrograph=children.get("spectrograph"),
+                                         spectrograph=dependencies.get("spectrograph"),
                                          daemon=daemon, **kwargs)
         self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
         try:

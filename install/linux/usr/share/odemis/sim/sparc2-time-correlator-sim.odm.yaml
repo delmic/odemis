@@ -72,7 +72,6 @@ SPARC2-VisNIR-TR: {
 # Ground -> AO GND
 "SEM E-beam": {
     # Internal child of SEM ExtXY, so no class
-    creator: "SEM Scan Interface",
     role: e-beam,
     init: {
         channels: [1, 0],
@@ -153,7 +152,7 @@ SPARC2-VisNIR-TR: {
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -172,7 +171,7 @@ SPARC2-VisNIR-TR: {
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -188,7 +187,7 @@ SPARC2-VisNIR-TR: {
 "Slit": {
     class: actuator.FixedPositionsActuator,
     role: "slit-in-big",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "slit",
         positions: {
@@ -204,7 +203,7 @@ SPARC2-VisNIR-TR: {
 "Fiber align": {
     class: actuator.MultiplexActuator,
     role: "fiber-aligner",
-    children: {"x": "Optical Actuators", "y": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators", "y": "Optical Actuators"},
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"},
         ref_on_init: ["y"],
@@ -216,7 +215,7 @@ SPARC2-VisNIR-TR: {
 "Spectrometer Selector": {
     class: actuator.MultiplexActuator,
     role: "spec-selector",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "spec-sel"},
         ref_on_init: ["x"],
@@ -257,7 +256,7 @@ SPARC2-VisNIR-TR: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Spectrograph"},
+    dependencies: {"z": "Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -268,7 +267,7 @@ SPARC2-VisNIR-TR: {
 "Spec Filter Wheel": {
     class: actuator.MultiplexActuator,
     role: filter,
-    children: {"band": "Spectrograph"},
+    dependencies: {"band": "Spectrograph"},
     init: {
         axes_map: {"band": "band"},
     },
@@ -279,7 +278,7 @@ SPARC2-VisNIR-TR: {
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {
@@ -308,7 +307,7 @@ SPARC2-VisNIR-TR: {
 "VisNIR Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer0,
-    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -333,7 +332,7 @@ SPARC2-VisNIR-TR: {
 "IR Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer1,
-    children: {detector: "IR Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "IR Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -371,7 +370,7 @@ SPARC2-VisNIR-TR: {
 "TC Filter Wheel": {
     class: actuator.FixedPositionsActuator,
     role: "tc-filter",
-    children: {"band": "Time-Correlator Actuators"},
+    dependencies: {"band": "Time-Correlator Actuators"},
     init: {
         axis_name: "fw",
         # It supports up to 8 filters
@@ -394,7 +393,7 @@ SPARC2-VisNIR-TR: {
 "TC Optical Density Filter": {
     class: actuator.LinearActuator,
     role: "tc-od-filter",
-    children: {"density": "Time-Correlator Actuators"},
+    dependencies: {"density": "Time-Correlator Actuators"},
     init: {
         axis_name: "od",
         # position when referenced (adjusted to be a multiple of the actuator stepsize)
@@ -421,7 +420,9 @@ SPARC2-VisNIR-TR: {
     # These children allow to have access to the raw data on the PMTs
     children: {
         "detector0": "Photon counter sync",
-        "detector1": "Photon counter signal",
+        "detector1": "Photon counter signal"
+    },
+    dependencies: {
         "shutter0": "Shutter 0",
         "shutter1": "Shutter 1",
     },
@@ -440,7 +441,7 @@ SPARC2-VisNIR-TR: {
 "Shutter 0": {
     class: actuator.MultiplexActuator,
     role: "shutter0",
-    children: {"x": "Time-Correlator Actuators"},
+    dependencies: {"x": "Time-Correlator Actuators"},
     init: {
         axes_map: {"x": "shutter0"},
     },
@@ -450,7 +451,7 @@ SPARC2-VisNIR-TR: {
 "Shutter 1": {
     class: actuator.MultiplexActuator,
     role: "shutter1",
-    children: {"x": "Time-Correlator Actuators"},
+    dependencies: {"x": "Time-Correlator Actuators"},
     init: {
         axes_map: {"x": "shutter1"},
     },
@@ -486,7 +487,7 @@ SPARC2-VisNIR-TR: {
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)

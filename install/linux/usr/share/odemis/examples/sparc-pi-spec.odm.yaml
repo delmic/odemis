@@ -52,7 +52,7 @@ SPARC-AMOLF: {
 Spec10: {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "SpecCam", spectrograph: "SP2300i"}
+    dependencies: {detector: "SpecCam", spectrograph: "SP2300i"}
 }
 
 SpecCam: {

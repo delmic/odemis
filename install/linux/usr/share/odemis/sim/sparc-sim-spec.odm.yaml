@@ -53,7 +53,7 @@ SimSPARC: {
 "FakeSpec10": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "SpecSimCam", spectrograph: "FakeSP2300i"},
+    dependencies: {detector: "SpecSimCam", spectrograph: "FakeSP2300i"},
     properties: {
         binning: [4, 16],
     },

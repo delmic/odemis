@@ -269,7 +269,7 @@ class Shamrock(model.Actuator):
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
                  slitleds_settle_time=1e-3, slits=None, bands=None, rng=None,
-                 fstepsize=1e-6, drives_shutter=None, children=None, **kwargs):
+                 fstepsize=1e-6, drives_shutter=None, dependencies=None, **kwargs):
         """
         device (0<=int or str): if int, device number, if str serial number or
           "fake" to use the simulator
@@ -296,7 +296,7 @@ class Shamrock(model.Actuator):
         drives_shutter (list of float): flip-out angles for which the shutter
           should be set to BNC (external) mode. Otherwise, the shutter is left
           opened.
-        children (None or dict str -> HwComponent): if the key starts with
+        dependencies (None or dict str -> HwComponent): if the key starts with
           "led_prot", it will set the .protection to True any time that the
           slit leds could be turned on.
         """
@@ -315,12 +315,12 @@ class Shamrock(model.Actuator):
         else:
             self._dll = ShamrockDLL()
 
-        # Note: it used to need a "ccd" child, but not anymore
+        # Note: it used to need a "ccd" dependency, but not anymore
         self._camera = camera
         self._hw_access = HwAccessMgr(camera)
         self._is_via_camera = (camera is not None)
 
-        children = children or {}
+        dependencies = dependencies or {}
         rng = rng or {}
 
         slits = slits or {}
@@ -363,9 +363,9 @@ class Shamrock(model.Actuator):
                 self._setProtection(True)
                 led_comps.append(self)
 
-            for cr, child in children.items():
+            for cr, dep in dependencies.items():
                 if cr.startswith("led_prot"):
-                    led_comps.append(child)
+                    led_comps.append(dep)
 
             self._led_access = LedActiveMgr(led_comps, slitleds_settle_time)
 

@@ -877,13 +877,13 @@ class StreakCamera(model.HwComponent):
     Client to connect to HPD-TA software via RemoteEx.
     """
 
-    def __init__(self, name, role, port, host, children=None, daemon=None, **kwargs):
+    def __init__(self, name, role, port, host, children=None, dependencies=None, daemon=None, **kwargs):
         """
         Initializes the device.
         :parameter host: (str) IP-adress or hostname
         :parameter port: (int) port for sending/receiving commands
         """
-        super(StreakCamera, self).__init__(name, role, daemon=daemon, **kwargs)
+        super(StreakCamera, self).__init__(name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
         port_d = port + 1  # the port number to receive the image data
         self.host = host
@@ -928,12 +928,13 @@ class StreakCamera(model.HwComponent):
         self.AppStart()  # start HPDTA software  # Note: comment out for testing in order to not start a new App
 
         children = children or {}
+        dependencies = dependencies or {}
 
         try:
             kwargs = children["readoutcam"]
         except Exception:
             raise ValueError("Required child readoutcam not provided")
-        self._readoutcam = ReadoutCamera(parent=self, spectrograph=children.get("spectrograph"),
+        self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
                                          daemon=daemon, **kwargs)
         self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
         try:

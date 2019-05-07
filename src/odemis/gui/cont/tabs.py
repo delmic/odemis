@@ -2135,7 +2135,7 @@ class SecomAlignTab(Tab):
         # approximation is enough to do the calibration relatively quickly.
         if "a" in main_data.aligner.axes:
             self._aligner_xy = ConvertStage("converter-ab", "stage",
-                                            children={"orig": main_data.aligner},
+                                            dependencies={"orig": main_data.aligner},
                                             axes=["b", "a"],
                                             rotation=math.radians(45))
             self._convert_to_aligner = self._convert_xy_to_ab

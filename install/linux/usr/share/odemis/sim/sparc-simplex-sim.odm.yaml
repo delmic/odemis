@@ -65,8 +65,7 @@ SPARC-Lund-sim: {
 
 # Must be connected on AI 0/AI 8 (differential)
 "PMT": {
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: monochromator, # TODO: use cl-detector if you want fast dwell time & full scanning in live view
     init: {
         channel: 0, # 0-> sawtooth waves, 1-> square waves
@@ -77,8 +76,7 @@ SPARC-Lund-sim: {
 # EBIC: In either configuration, the signal is either ±10V or ±5V. As the signal can be positive and negative, is uses the full range.
 # Must be connected on AI 2/AI 10 (differential)
 "EBIC": {
-    # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: ebic-detector,
     init: {
         channel: 2,
@@ -90,7 +88,7 @@ SPARC-Lund-sim: {
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         binning: [4, 100],
     },
@@ -126,7 +124,7 @@ SPARC-Lund-sim: {
 "Spec CCD Flipper": {
     class: actuator.MultiplexActuator,
     role: "spec-det-selector",
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},
     },
@@ -138,7 +136,7 @@ SPARC-Lund-sim: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Spectrograph"},
+    dependencies: {"z": "Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },

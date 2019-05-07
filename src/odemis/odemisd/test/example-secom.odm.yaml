@@ -93,7 +93,7 @@ Clara: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: [Clara],
-    children: {"l": PIGCS, "r": PIGCS},
+    dependencies: {"l": PIGCS, "r": PIGCS},
     init: {
         axes_map: {"l": "l", "r": "r"},
 #        inverted: ["l"]
@@ -108,7 +108,7 @@ Clara: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: [Clara],
-    children: {"z": PIGCS},
+    dependencies: {"z": PIGCS},
     init: {
         axes_map: {"z": "z"}
     },

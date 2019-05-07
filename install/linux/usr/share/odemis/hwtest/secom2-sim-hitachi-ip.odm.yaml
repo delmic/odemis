@@ -24,7 +24,7 @@ SECOMv2: {
 "SEM E-beam full": {
     class: scanner.CompositedScanner,
     role: e-beam,
-    children: {external: "SEM E-beam", internal: "EBeam control"},
+    dependencies: {external: "SEM E-beam", internal: "EBeam control"},
     init: {},
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
@@ -51,7 +51,6 @@ SECOMv2: {
 # Ground -> AO GND
 "SEM E-beam": {
     # Internal child of SEM ExtXY, so no class
-    creator: "SEM Scan Interface",
     role: null,
     init: {
         channels: [0, 1],
@@ -94,11 +93,11 @@ SECOMv2: {
     children: {
         scanner: "EBeam control",
         focus: "EBeam Focus",
-    }
+    },    
+    
 }
 
 "EBeam control": {
-    creator: "SEM via API",
     role: null,
     init: {
         hfw_nomag: 0.127,  # m, theoretical HFW if mag == 1x
@@ -156,7 +155,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: stage,
     affects: ["Camera", "SEM E-beam"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "sx", "y": "sy"},
     },
@@ -166,7 +165,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Camera"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
     },
@@ -178,7 +177,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Camera"],
-    children: {"z": "Stage Actuators"},
+    dependencies: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}
     },

@@ -132,7 +132,7 @@ SimSECOM: {
     class: actuator.MultiplexActuator,
     role: stage,
     affects: ["Camera", "SEM E-beam"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "x", "y": "y"},
         inverted: ["x"],
@@ -143,7 +143,7 @@ SimSECOM: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Camera"],
-    children: {"a": "Stage Actuators", "b": "Stage Actuators"},
+    dependencies: {"a": "Stage Actuators", "b": "Stage Actuators"},
     init: {
         axes_map: {"a": "a", "b": "b"},
         inverted: ["a", "b"]
@@ -156,7 +156,7 @@ SimSECOM: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Camera"],
-    children: {"z": "Stage Actuators"},
+    dependencies: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "z"}
     },

@@ -104,7 +104,7 @@ SPARC2: {
 "Spectrometer 1": {
     class: spectrometer.CompositedSpectrometer,
     role: "spectrometer-integrated",
-    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
     },
@@ -128,7 +128,7 @@ SPARC2: {
 "Spectrometer 2": {
     class: spectrometer.CompositedSpectrometer,
     role: "spectrometer",
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         binning: [4, 16],
     },
@@ -156,7 +156,7 @@ SPARC2: {
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
-    children: {"z": "Spectrograph"},
+    dependencies: {"z": "Spectrograph"},
     init: {
         axes_map: {"z": "focus"},
     },
@@ -167,7 +167,7 @@ SPARC2: {
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
-    children: {"rx": "Spectrograph"},
+    dependencies: {"rx": "Spectrograph"},
     init: {
         axis_name: "flip-out",
         positions: {
@@ -182,7 +182,7 @@ SPARC2: {
 "Spec Filter Wheel": {
     class: actuator.MultiplexActuator,
     role: "filter",
-    children: {"band": "Spectrograph"},
+    dependencies: {"band": "Spectrograph"},
     init: {
         axes_map: {"band": "band"},
     },
@@ -229,7 +229,7 @@ SPARC2: {
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
     role: "lens-mover",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axes_map: {"x": "l1"},
         ref_on_init: ["x"],
@@ -245,7 +245,7 @@ SPARC2: {
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
     role: "lens-switch",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "l2",
         positions: {
@@ -260,7 +260,7 @@ SPARC2: {
 "Slit": {
     class: actuator.FixedPositionsActuator,
     role: "slit-in-big",
-    children: {"x": "Optical Actuators"},
+    dependencies: {"x": "Optical Actuators"},
     init: {
         axis_name: "slit",
         positions: {
@@ -295,7 +295,7 @@ SPARC2: {
 "Mirror Actuators in XY referential": {
     class: actuator.ConvertStage,
     role: "mirror-xy",
-    children: {"orig": "Mirror Actuators"},
+    dependencies: {"orig": "Mirror Actuators"},
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)
@@ -306,7 +306,7 @@ SPARC2: {
 "Polarization Analyzer": {
     class: actuator.CombinedFixedPositionActuator,
     role: "pol-analyzer",
-    children: {"Pol1": "Quarter Wave Plate", "Pol2": "Linear Polarizer"}, # alphabetically sorted
+    dependencies: {"Pol1": "Quarter Wave Plate", "Pol2": "Linear Polarizer"}, # alphabetically sorted
     init: {
         axis_name: "pol",
         caxes_map: ["rz", "rz"],
@@ -334,7 +334,7 @@ SPARC2: {
 "Linear Polarizer": {
     class: actuator.RotationActuator,
     role: "lin-pol",
-    children: {"rz": "Optical Actuators"},
+    dependencies: {"rz": "Optical Actuators"},
     init: {
         axis_name: "linear",
     },
@@ -347,7 +347,7 @@ SPARC2: {
 "Quarter Wave Plate": {
     class: actuator.RotationActuator,
     role: "quarter-wave-plate",
-    children: {"rz": "Optical Actuators"},
+    dependencies: {"rz": "Optical Actuators"},
     init: {
         axis_name: "qwp",
         ref_start: 6.1  # if axis inverted (see Optical Actuators) use ref_start close to cycle (e.g. 95% of 2pi)

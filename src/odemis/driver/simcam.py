@@ -41,9 +41,9 @@ class Camera(model.DigitalCamera):
     given at initialisation.
     '''
 
-    def __init__(self, name, role, image, children=None, daemon=None, **kwargs):
+    def __init__(self, name, role, image, dependencies=None, daemon=None, **kwargs):
         '''
-        children (dict string->Component): If "focus" is passed, and it's an
+        dependencies (dict string->Component): If "focus" is passed, and it's an
             actuator with a z axis, the image will be blurred based on the
             position, to simulate a focus axis.
         image (str or None): path to a file to use as fake image (relative to
@@ -58,8 +58,7 @@ class Camera(model.DigitalCamera):
         converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
         self._img = converter.read_data(image)[0]  # can be RGB or greyscale
 
-        # we will fill the set of children with Components later in ._children
-        model.DigitalCamera.__init__(self, name, role, daemon=daemon, **kwargs)
+        model.DigitalCamera.__init__(self, name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
         if self._img.ndim > 3:  # remove dims of length 1
             self._img = numpy.squeeze(self._img)
@@ -118,7 +117,7 @@ class Camera(model.DigitalCamera):
                           model.MD_DET_TYPE: model.MD_DT_INTEGRATING}
 
         try:
-            focuser = children["focus"]
+            focuser = dependencies["focus"]
             if (not isinstance(focuser, model.ComponentBase) or
                 not hasattr(focuser, "axes") or not isinstance(focuser.axes, dict) or
                 "z" not in focuser.axes

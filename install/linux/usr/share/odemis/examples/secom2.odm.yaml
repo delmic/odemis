@@ -130,7 +130,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: stage,
     affects: ["Camera", "SEM E-beam"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "sx", "y": "sy"},
     },
@@ -140,7 +140,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Camera"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
     },
@@ -152,7 +152,7 @@ SECOMv2: {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Camera"],
-    children: {"z": "Stage Actuators"},
+    dependencies: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}
     },

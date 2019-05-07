@@ -66,7 +66,6 @@ DELPHI: {
 }
 
 "Stage Phenom": {
-    creator: "Phenom", # necessary as it has multiple parents
     role: sem-stage,
     init: {},
 }
@@ -134,7 +133,7 @@ DELPHI: {
     role: stage,
     affects: ["EBeam Phenom", "Camera"],
     init: {},
-    children: {"master": "AntiBacklash Stage", "slave": "Stage Phenom"},
+    dependencies: {"master": "AntiBacklash Stage", "slave": "Stage Phenom"},
 }
 
 "AntiBacklash Stage": {
@@ -143,7 +142,7 @@ DELPHI: {
     init: {
         backlash: {"x": 100.e-6, "y": 100.e-6},
     },
-    children: {"slave": "Objective Stage"},
+    dependencies: {"slave": "Objective Stage"},
 }
 
 # Use 2 MultiplexActuators to separate the axes of the TMCM over different roles
@@ -151,7 +150,7 @@ DELPHI: {
     class: actuator.MultiplexActuator,
     role: null,
     affects: ["Camera"],
-    children: {"x": "Sample Holder Actuators", "y": "Sample Holder Actuators"},
+    dependencies: {"x": "Sample Holder Actuators", "y": "Sample Holder Actuators"},
     init: {
         axes_map: {"x": "x", "y": "y"},
         inverted: ["x", "y"], # inverted so it moves oppositely to the SEM stage
@@ -169,7 +168,7 @@ DELPHI: {
         # for the cross-talk with the Y backlash.
         backlash: {"z": 10.e-6},
     },
-    children: {"slave": "Optical Focus"},
+    dependencies: {"slave": "Optical Focus"},
 }
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
@@ -177,7 +176,7 @@ DELPHI: {
     class: actuator.MultiplexActuator,
     role: null,
     affects: ["Camera"],
-    children: {"z": "Sample Holder Actuators"},
+    dependencies: {"z": "Sample Holder Actuators"},
     init: {
         axes_map: {"z": "z"}
     },
