@@ -1073,17 +1073,15 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing,
         ctx.stroke()
 
 
-def val_x_to_pos_x(val_x, client_size, data_width=None, range_x=None, data_prop=None):
+def val_x_to_pos_x(val_x, client_size, range_x):
     """ Translate an x value to an x position in pixels
     The minimum x value is considered to be pixel 0 and the maximum is the canvas width. The
     parameter will be clipped if it's out of range.
     val_x (float): The value to map
     client_size (wx._core.Size)
-    data_prop (int, int, int, int)
     returns (float)
     """
-    range_x = range_x or data_prop[1]
-    data_width = data_width or data_prop[0]
+    data_width = range_x[1] - range_x[0]
 
     if data_width:
         # Clip val_x
@@ -1094,17 +1092,17 @@ def val_x_to_pos_x(val_x, client_size, data_width=None, range_x=None, data_prop=
         return 0
 
 
-def val_y_to_pos_y(val_y, client_size, data_height=None, range_y=None, data_prop=None):
+def val_y_to_pos_y(val_y, client_size, range_y):
     """ Translate an y value to an y position in pixels
     The minimum y value is considered to be pixel 0 and the maximum is the canvas width. The
     parameter will be clipped if it's out of range.
     val_y (float): The value to map
     client_size (wx._core.Size)
-    data_prop (int, int, int, int)
     returns (float)
     """
-    range_y = range_y or data_prop[3]
-    data_height = data_height or data_prop[2]
+    data_height = range_y[1] - range_y[0]
+    if data_height == 0:
+        data_height = range_y[1]
 
     if data_height:
         y = min(max(range_y[0], val_y), range_y[1])
@@ -1114,43 +1112,40 @@ def val_y_to_pos_y(val_y, client_size, data_height=None, range_y=None, data_prop
         return 0
 
 
-def bar_plot(ctx, data, data_width, range_x, data_height, range_y, client_size, fill_colour):
+def bar_plot(ctx, data, range_x, range_y, client_size, fill_colour):
     """ Do a bar plot of the current `_data` """
 
     if len(data) < 2:
         return
 
-    vx_to_px = val_x_to_pos_x
-    vy_to_py = val_y_to_pos_y
-
     line_to = ctx.line_to
     ctx.set_source_rgb(*fill_colour)
 
-    diff = (data[1][0] - data[0][0]) / 2.0
-    px = vx_to_px(data[0][0] - diff, client_size, data_width, range_x)
-    py = vy_to_py(0, client_size, data_height, range_y)
+    diff = (data[1][0] - data[0][0]) / 2
+    px = val_x_to_pos_x(data[0][0] - diff, client_size, range_x)
+    py = val_y_to_pos_y(0, client_size, range_y)
 
     ctx.move_to(px, py)
     # print "-", px, py
 
     for i, (vx, vy) in enumerate(data[:-1]):
-        py = vy_to_py(vy, client_size, data_height, range_y)
+        py = val_y_to_pos_y(vy, client_size, range_y)
         # print "-", px, py
         line_to(px, py)
-        px = vx_to_px((data[i + 1][0] + vx) / 2.0, client_size, data_width, range_x)
+        px = val_x_to_pos_x((data[i + 1][0] + vx) / 2, client_size, range_x)
         # print "-", px, py
         line_to(px, py)
 
-    py = vy_to_py(data[-1][1], client_size, data_height, range_y)
+    py = val_y_to_pos_y(data[-1][1], client_size, range_y)
     # print "-", px, py
     line_to(px, py)
 
-    diff = (data[-1][0] - data[-2][0]) / 2.0
-    px = vx_to_px(data[-1][0] + diff, client_size, data_width, range_x)
+    diff = (data[-1][0] - data[-2][0]) / 2
+    px = val_x_to_pos_x(data[-1][0] + diff, client_size, range_x)
     # print "-", px, py
     line_to(px, py)
 
-    py = vy_to_py(0, client_size, data_height, range_y)
+    py = val_y_to_pos_y(0, client_size, range_y)
     # print "-", px, py
     line_to(px, py)
 
@@ -1238,27 +1233,21 @@ def spectrum_to_export_data(proj, raw, vp=None):
         surface = cairo.ImageSurface.create_for_data(
             data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
         ctx = cairo.Context(surface)
-        # calculate data characteristics
-        horz, vert = zip(*data)
-        min_x = min(horz)
-        max_x = max(horz)
-        min_y = min(vert)
-        max_y = max(vert)
 
         if vp is not None:
-            range_x = (vp.hrange.value[0], vp.hrange.value[1])
-            range_y = (vp.vrange.value[0], vp.vrange.value[1])
+            range_x = vp.hrange.value
+            range_y = vp.vrange.value
         else:
+            # calculate data characteristics
+            horz, vert = zip(*data)
+            min_x = min(horz)
+            max_x = max(horz)
+            min_y = min(vert)
+            max_y = max(vert)
             range_x = (min_x, max_x)
             range_y = (min_y, max_y)
 
-        data_width = max_x - min_x
-        data_height = max_y - min_y
-        display_height = range_y[1] - range_y[0]
-
-        if data_height == 0:
-            data_height = max_y
-        bar_plot(ctx, data, data_width, range_x, display_height, range_y, client_size, fill_colour)
+        bar_plot(ctx, data, range_x, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
         # can easily change the bar plot or the scale bar colour
@@ -1363,26 +1352,21 @@ def chronogram_to_export_data(proj, raw, vp=None):
         surface = cairo.ImageSurface.create_for_data(
             data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
         ctx = cairo.Context(surface)
-        # calculate data characteristics
-        horz, vert = zip(*data)
-        min_x = min(horz)
-        max_x = max(horz)
-        min_y = min(vert)
-        max_y = max(vert)
 
         if vp is not None:
-            range_x = (vp.hrange.value[0], vp.hrange.value[1])
-            range_y = (vp.vrange.value[0], vp.vrange.value[1])
+            range_x = vp.hrange.value
+            range_y = vp.vrange.value
         else:
+            # calculate data characteristics
+            horz, vert = zip(*data)
+            min_x = min(horz)
+            max_x = max(horz)
+            min_y = min(vert)
+            max_y = max(vert)
             range_x = (min_x, max_x)
             range_y = (min_y, max_y)
 
-        data_width = max_x - min_x
-        data_height = max_y - min_y
-        display_height = range_y[1] - range_y[0]
-        if data_height == 0:
-            data_height = max_y
-        bar_plot(ctx, data, data_width, range_x, display_height, range_y, client_size, fill_colour)
+        bar_plot(ctx, data, range_x, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
         # can easily change the bar plot or the scale bar colour
