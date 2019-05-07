@@ -42,18 +42,17 @@ CONFIG = {"name": "SmartPod",
         "role": "",
         "locator": "usb:ix:0",
         # "locator": "fake",
-        "options":"",
         "axes": {
             'x': {
-                'range': [-1, 1],
+                'range': [-0.2, 0.2],
                 'unit': 'm',
             },
             'y': {
-                'range': [-1, 1],
+                'range': [-0.2, 0.2],
                 'unit': 'm',
             },
             'z': {
-                'range': [-1, 1],
+                'range': [-0.1, 0.1],
                 'unit': 'm',
             },
             'theta_x': {
@@ -80,10 +79,12 @@ class TestSmartPod(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dev = smartpod.SmartPod(**CONFIG)
+        cls.dev.reference().result()
+        cls.dev.SetSpeed(0.1)
 
     @classmethod
     def tearDownClass(cls):
-        cls.dev.terminate()  # free up socket.
+        cls.dev.terminate()
         
     def test_reference_cancel(self):
         # Test canceling referencing
@@ -109,8 +110,6 @@ class TestSmartPod(unittest.TestCase):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        self.dev.SetSpeed(0.1)
-
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0.0005}
         pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'theta_x': 2.0, 'theta_y': 0.0001, 'theta_z': 0}
         pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}
@@ -124,8 +123,6 @@ class TestSmartPod(unittest.TestCase):
         logging.debug(self.dev.position.value)
 
     def test_move_cancel(self):
-        self.dev.SetSpeed(0.1)
-
         # Test cancellation by cancelling the future
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
         new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.178}
@@ -148,7 +145,6 @@ class TestSmartPod(unittest.TestCase):
 
     def test_move_rel(self):
         # Test relative moves
-        self.dev.SetSpeed(0.1)
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
         old_pos = self.dev.position.value
         shift = {'x': 0.01, 'y':-0.001, 'z': 0, 'theta_x': 0.0001, 'theta_y':-0.0003, 'theta_z': 0}
