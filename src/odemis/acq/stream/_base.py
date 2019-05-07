@@ -435,7 +435,7 @@ class Stream(object):
             logging.warning(u"Going to link Hw VAs, while already linked")
 
         # Make sure the VAs are set in the right order to keep values
-        hwvas = self._hwvas.items()  # must be a list
+        hwvas = list(self._hwvas.items())  # must be a list
         hwvas.sort(key=self._index_in_va_order)
 
         for vaname, hwva in hwvas:

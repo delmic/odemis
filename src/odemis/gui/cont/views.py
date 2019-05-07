@@ -67,7 +67,7 @@ class ViewPortController(object):
 
         assert not self._data_model.views.value  # should still be empty
 
-        self._viewports = viewports.keys()
+        self._viewports = list(viewports.keys())
         self._create_views_fixed(viewports)
 
         # First view is focused

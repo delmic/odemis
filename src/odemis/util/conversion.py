@@ -233,7 +233,7 @@ def reproduce_typed_value(typed_value, str_val):
     elif isinstance(typed_value, dict):
         # Grab the first key/value pair, to determine their types
         if typed_value:
-            key_typed_val = typed_value.keys()[0]
+            key_typed_val = list(typed_value.keys())[0]
             value_typed_val = typed_value[key_typed_val]
         else:
             logging.warning("Type of attribute is unknown, using string")

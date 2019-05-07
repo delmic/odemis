@@ -267,7 +267,7 @@ class StreamController(object):
 
         # Process the hardware VAs first (emitter and detector hardware VAs are combined into one
         # attribute called 'hw_vas'
-        vas_names = util.sorted_according_to(self.stream.hw_vas.keys(), emitter_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.hw_vas.keys()), list(emitter_conf.keys()))
 
         for name in vas_names:
             va = self.stream.hw_vas[name]
@@ -279,7 +279,7 @@ class StreamController(object):
             add_divider = True
 
         # Process the emitter VAs first
-        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(), emitter_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.emt_vas.keys()), list(emitter_conf.keys()))
 
         for name in vas_names:
             va = self.stream.emt_vas[name]
@@ -292,7 +292,7 @@ class StreamController(object):
             add_divider = True
 
         # Then process the detector
-        vas_names = util.sorted_according_to(self.stream.det_vas.keys(), detector_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.det_vas.keys()), list(detector_conf.keys()))
 
         for name in vas_names:
             va = self.stream.det_vas[name]
@@ -749,7 +749,7 @@ class StreamController(object):
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
-            self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
+            self.stream_panel.set_header_choices(list(dye.DyeDatabase.keys()))
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
         center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
@@ -2516,7 +2516,7 @@ class SparcStreamsController(StreamBarController):
         stream_config = self._stream_config.get(type(stream), {})
 
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        axes_names = util.sorted_according_to(list(axes.keys()), list(stream_config.keys()))
         for axisname in axes_names:
             comp = axes[axisname]
             if comp is None:

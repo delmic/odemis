@@ -473,7 +473,7 @@ def format_choices(choices):
     # choice_fmt is an iterable of tuples: (choice, formatted choice)
     if isinstance(choices, dict):
         # In this case we assume that the values are already formatted
-        choices_formatted = choices.items()
+        choices_formatted = list(choices.items())
     elif len(choices) > 1 and all(isinstance(c, numbers.Real) for c in choices):
         try:
             choices = sorted(choices)
@@ -521,7 +521,7 @@ def format_axis_choices(name, axis_def):
     unit = axis_def.unit
 
     if isinstance(choices, dict):
-        choices_formatted = choices.items()
+        choices_formatted = list(choices.items())
         # In this case, normally the values are already formatted, but for
         # wavelength band, the "formatted" value is still a band info (ie, two
         # values in m)

@@ -1008,7 +1008,7 @@ def _mapDetectorToSelector(selector, detectors):
 
     if len(det_2_sel) < len(detectors):
         raise ValueError("Failed to find all detectors (%s) in positions of selector axes %s" %
-                  (", ".join(d.name for d in detectors), selector.axes.keys()))
+                  (", ".join(d.name for d in detectors), list(selector.axes.keys())))
 
     return sel_axis, det_2_sel
 

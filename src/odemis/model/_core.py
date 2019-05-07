@@ -215,8 +215,7 @@ def load_roattributes(self, roattributes):
         setattr(self, a, value)
 
     # save the list in case we need to pickle the object again
-    self._odemis_roattributes = roattributes.keys()
-
+    self._odemis_roattributes = list(roattributes.keys())
 
 # Container management functions and class
 

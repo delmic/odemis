@@ -277,7 +277,7 @@ class QuickCLPlugin(Plugin):
         stream_config = stream_configs.get(MonochromatorSettingsStream, {})
 
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        axes_names = util.sorted_according_to(axes.keys(), list(stream_config.keys()))
         for axisname in axes_names:
             comp = axes[axisname]
             if comp is None:

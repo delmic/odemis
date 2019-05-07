@@ -233,7 +233,7 @@ class Instantiator(object):
         """
         # update the children by adding a "parents" attribute
         for name, comp in self.ast.items():
-            references = comp.get("children", {}).values() + comp.get("dependencies", {}).values()
+            references = list(comp.get("children", {}).values()) + list(comp.get("dependencies", {}).values())
             for ref in references:
                 # detect direct loop
                 if ref == name:
@@ -435,7 +435,7 @@ class Instantiator(object):
         class_name = attr.get("class", None)
         if self.dry_run and not class_name == "Microscope":
             # mock class needs some hints to create the fake VAs
-            init["_vas"] = attr.get("properties", {}).keys()
+            init["_vas"] = list(attr.get("properties", {}).keys())
 
         # microscope take a special "model" argument which is AST itself
         if class_name == "Microscope":
@@ -497,7 +497,7 @@ class Instantiator(object):
         """
         attr = self.ast[name]
 
-        children_names = attr.get("children", {}).values()
+        children_names = list(attr.get("children", {}).values())
         for child_name in children_names:
             child_attr = self.ast[child_name]
             if "class" in child_attr:

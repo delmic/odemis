@@ -120,7 +120,7 @@ class TestMFF(unittest.TestCase):
 
     def test_simple(self):
         cur_pos = self.dev.position.value
-        axis = cur_pos.keys()[0]
+        axis = list(cur_pos.keys())[0]
         apos = cur_pos[axis]
         logging.info("Device is currently at position %s", apos)
 

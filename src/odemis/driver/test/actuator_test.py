@@ -820,7 +820,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
     def test_moveAbs(self):
         """test all possible positions"""
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # check all possible positions
         # check dependency axes report expected positions (e.g. [float, float]
@@ -845,7 +845,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
         if unsupported position is requested, move combined actuator to known position
         """
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
         pos = "false_key"
         with self.assertRaises(ValueError):
             f = self.dev.moveAbs({axis_name: pos})  # move
@@ -857,7 +857,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
             f.result()  # wait
 
         # move to unsupported pos, check reports back fallback position
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
         # Note: reports continuously now as _updatePosition is continuously called
         pos1 = {self.axis1: 0.392699}  # pi/8, 7/8*pi
         pos2 = {self.axis2: 2.748893}  # pi/8, 7/8*pi
@@ -902,7 +902,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
 
     def test_stop_move(self):
         """test stop movement while running"""
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # request to move to 3 different positions, stop after some time
         for i in range(3):
@@ -927,7 +927,7 @@ class TestCombinedFixedPositionActuator(unittest.TestCase):
         check dependency reports its axis as referenced
         """
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # move to position different from zero and current position
         cur_pos = self.dev.position.value[axis_name]
@@ -1005,7 +1005,7 @@ class TestCombinedFixedPositionActuatorCycle(unittest.TestCase):
         f = self.dev.moveAbs({self.axis_name: pos})
         f.result()
 
-        axis_name = self.dev.axes.keys()[0]
+        axis_name = list(self.dev.axes.keys())[0]
 
         # move one axis to a position close to 2pi (6.283168347179586)
         # which is also close to zero and within tolerance
@@ -1049,7 +1049,7 @@ class TestRotationActuator(unittest.TestCase):
         test if unsupported position is handled correctly
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # It's optional
         if not hasattr(self.dev_cycle, "moveAbs"):
@@ -1067,7 +1067,7 @@ class TestRotationActuator(unittest.TestCase):
         test if current position is requested nothing is done
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # test don't change position
         cur_pos = self.dev_cycle.position.value[axis_name]
@@ -1088,7 +1088,7 @@ class TestRotationActuator(unittest.TestCase):
         test if current position is requested nothing is done
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # test don't change position
         cur_pos = self.dev_cycle.position.value[axis_name]
@@ -1110,7 +1110,7 @@ class TestRotationActuator(unittest.TestCase):
         only works for cycle = 2pi
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         f = self.dev_cycle.moveAbs({axis_name: 0.0})
         f.result()
@@ -1147,7 +1147,7 @@ class TestRotationActuator(unittest.TestCase):
         value can be pos and neg within range of cycle/2
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         offset = "any_offset"
         # raise exception if offset value is not string and abs(value) not within range of cycle/2
@@ -1218,7 +1218,7 @@ class TestRotationActuator(unittest.TestCase):
     #     request a position, wait and cancel movement
     #     """
     #
-    #     axis_name = self.dev_cycle.axes.keys()[0]
+    #     axis_name = list(self.dev_cycle.axes.keys())[0]
     #
     #     cur_pos = self.dev_cycle.position.value[axis_name]
     #     new_pos = (cur_pos + random.uniform(0, 2*math.pi)) % self.dev_cycle._cycle
@@ -1229,7 +1229,7 @@ class TestRotationActuator(unittest.TestCase):
     def test_stop_move(self):
         """test stop movement while running"""
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # request to move to 3 different positions, stop after some time
         i=1
@@ -1255,7 +1255,7 @@ class TestRotationActuator(unittest.TestCase):
         check axis is referenced
         """
 
-        axis_name = self.dev_cycle.axes.keys()[0]
+        axis_name = list(self.dev_cycle.axes.keys())[0]
 
         # move to random position, check if axis was referenced
         new_pos = random.uniform(0, 2*math.pi)

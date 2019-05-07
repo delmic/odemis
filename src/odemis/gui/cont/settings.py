@@ -387,7 +387,7 @@ class SettingsBarController(object):
             if isinstance(ets, collections.Mapping):
                 # To handle StreamController.entries which is a dict
                 # TODO: make StreamController.entries a list and drop this
-                ets = ets.values()
+                ets = list(ets.values())
             entries.extend(ets)
         return entries
 
@@ -409,7 +409,7 @@ class SettingsBarController(object):
         vas_config = get_hw_config(hw_comp, self._hw_settings_config)  # OrderedDict or dict
 
         # Re-order the VAs of the component in the same order as in the config
-        vas_names = util.sorted_according_to(vas_comp.keys(), vas_config.keys())
+        vas_names = util.sorted_according_to(list(vas_comp.keys()), list(vas_config.keys()))
 
         for name in vas_names:
             try:
