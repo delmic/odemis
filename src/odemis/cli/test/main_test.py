@@ -24,7 +24,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from PIL import Image
-import StringIO
+try:
+    import StringIO
+except ImportError:  # Python 3 naming
+    import io as StringIO
 import logging
 from odemis import model
 import odemis
