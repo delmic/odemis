@@ -415,8 +415,7 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(metadata[model.MD_DESCRIPTION], desc)
 
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
-                         iwl <= metadata[model.MD_IN_WL][1]))
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
@@ -1071,7 +1070,7 @@ class TestHDF5IO(unittest.TestCase):
         # It should be within at least one of the bands
         owl = rmd[model.MD_OUT_WL]  # nm
         for eowl in emd[model.MD_OUT_WL]:
-            if (eowl[0] <= owl[0] and owl[1] <= eowl[-1]):
+            if eowl[0] <= owl[0] and owl[1] <= eowl[-1]:
                 break
         else:
             self.fail("Out wl %s is not within original metadata" % (owl,))

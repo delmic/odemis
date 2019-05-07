@@ -845,7 +845,7 @@ class PVCam(model.DigitalCamera):
         if "InGaAs" in chip:
             # InGaAs detectors don't support binning (written in the
             # specification). In practice, it stops sending images if binning > 1.
-            return (1, 1)
+            return 1, 1
 
         # other cameras seem to support up to the entire sensor resolution
         return self.GetSensorSize()
@@ -1179,7 +1179,7 @@ class PVCam(model.DigitalCamera):
             left = expected_end - time.time()
             # proportional to readout
             margin = max(readout * 2, 2) # at least 2s
-            while left < margin and left > -1: # between margin s ahead up to 1 s late
+            while margin > left > -1: # between margin s ahead up to 1 s late
                 if not self.exp_check_status() in STATUS_IN_PROGRESS:
                     logging.debug("not aborting acquisition as it's already finished")
                     break

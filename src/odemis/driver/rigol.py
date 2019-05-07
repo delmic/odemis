@@ -276,7 +276,7 @@ class IPAccesser(object):
             IOError: if problem with sending/receiving data over the connection
         """
         if not self._is_connected:
-            raise IOError("Device %s not connected." % (self._host))
+            raise IOError("Device %s not connected." % (self._host,))
 
         msg = "%s\n" % cmd
 

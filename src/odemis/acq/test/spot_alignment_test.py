@@ -182,7 +182,6 @@ class TestAlignment(unittest.TestCase):
         f.result() # make sure the move is over
         time.sleep(0.1) # make sure the stream had time to detect position has changed
 
-        received = st.image.value
         f = acq.acquire([st])
         received, _ = f.result()
         self.assertTrue(received, "No image received after 30 s")

@@ -173,7 +173,7 @@ def main(args):
                         default="stderr", help="Specify the log target (stderr, filename)")
     parser.add_argument("--config", "-c", dest="config", nargs="+", action='append',
                         required=True,
-                        metavar=("<configfile>"),  # , "[EEPROM ID]", "[USB:ID]"),
+                        metavar="<configfile>",  # , "[EEPROM ID]", "[USB:ID]"),
                         help="Microscope file and EEPROM and/or USB IDs to select it (all of them must match). "
                              "Can also have one .tmcm.tsv file, in which case it will be passed to tmcmconfig.")
     parser.add_argument("--fallback", "-f", dest="fallback", type=str,

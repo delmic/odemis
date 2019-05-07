@@ -390,11 +390,10 @@ class TestCommandLine(unittest.TestCase):
         """Test initialization with persistent data with a broken file"""
 
         # Create broken settings file
-        broken_data = {}
-        broken_data['non_existing_comp'] = {'properties': {'exposureTime': 5}}
-        broken_data['Andor SimCam'] = {'properties': {'not_a_property': 10}}
-        broken_data['Andor SimCam'] = {'unknown_type': {'': 10}}
-        broken_data[''] = {'properties': {'not_a_property': 10}}
+        broken_data = {'non_existing_comp': {'properties': {'exposureTime': 5}},
+                       'FakeRedStoneStage': {'properties': {'not_a_property': 10}},
+                       'Andor SimCam': {'unknown_type': {'': 10}},
+                       '': {'properties': {'not_a_property': 10}}}
 
         with open("test-settings-broken.yaml", "w+") as f:
             yaml.dump(broken_data, f)

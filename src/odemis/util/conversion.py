@@ -391,8 +391,8 @@ def get_img_transformation_md(mat, timage, src_img):
     # the transformation matrix to the values, passing by OpenCV. There should
     # be a more straightforward mathematical path to achieve the same.
 
-    half_size = ((timage.shape[1] / 2, timage.shape[0] / 2))
-    img_src_center = ((src_img.shape[1] / 2, src_img.shape[0] / 2))
+    half_size = (timage.shape[1] / 2, timage.shape[0] / 2)
+    img_src_center = (src_img.shape[1] / 2, src_img.shape[0] / 2)
 
     # project some key points from the original image on the transformed image
     points = [

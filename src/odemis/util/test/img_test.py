@@ -164,7 +164,6 @@ class TestFindOptimalRange(unittest.TestCase):
         will look like just one column not null. But we still want the image
         to display between 0->255 in RGB.
         """
-        depth = 2 ** 32
         size = (512, 100)
         grey_img = numpy.zeros(size, dtype="uint32") + 3
         grey_img[0, :] = 0

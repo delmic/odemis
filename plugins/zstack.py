@@ -56,7 +56,7 @@ class ZStackPlugin(Plugin):
         ("filename", {
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
                 "HDF5 Files (*.h5)|*.h5",
         }),
         ("zstep", {

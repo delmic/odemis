@@ -58,10 +58,9 @@ class OdemisXmlResourceCompiler(XmlResourceCompiler):
 
     # Fixed version, for label of the menu
     def GenerateWidgetClass(self, windowClass, windowName, topWindow, vars):
-        outputList = []
 
         # output the header
-        outputList.append(self.templates.CLASS_HEADER % locals())
+        outputList = [self.templates.CLASS_HEADER % locals()]
 
         # Generate an attribute for each named item in the container
         for widget in topWindow.getElementsByTagName("object"):

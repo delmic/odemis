@@ -250,7 +250,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
 
     def __str__(self):
         try:
-            return "Proxy of Component '%s'" % (self.name)
+            return "Proxy of Component '%s'" % (self.name,)
         except AttributeError:
             return super(ComponentProxy, self).__str__()
 
@@ -264,7 +264,7 @@ def ComponentSerializer(self):
     daemon = getattr(self, "_pyroDaemon", None)
     if daemon:  # TODO might not be even necessary: They should be registering themselves in the init
         # only return a proxy if the object is a registered pyro object
-        return (ComponentProxy, (daemon.uriFor(self),), self._getproxystate())
+        return ComponentProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 Pyro4.Daemon.serializers[Component] = ComponentSerializer

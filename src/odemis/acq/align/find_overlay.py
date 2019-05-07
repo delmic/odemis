@@ -400,7 +400,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=Fa
         skew_md = {model.MD_SHEAR_COR: calc_shear}
         scaling_xy = ((1 - calc_scaling_xy), (1 + calc_scaling_xy))
         skew_md[model.MD_PIXEL_SIZE_COR] = scaling_xy
-        return (transform_md, skew_md)
+        return transform_md, skew_md
     return transform_md
 
 

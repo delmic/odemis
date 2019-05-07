@@ -85,8 +85,8 @@ class TestConversion(unittest.TestCase):
         for values that should raise an exception
         """
         # example value / input str
-        tc = [("{5:"),
-              ("[5.3"),
+        tc = ["{5:",
+              "[5.3",
               # ("5,6]"), # TODO
               ]
 

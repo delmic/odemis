@@ -874,7 +874,7 @@ class Controller(object):
             if len(ss) != 2:
                 raise ValueError("Failed to parse answer from %s: '%s'" %
                                  (com, lresp))
-            return (ss[1] == "1")
+            return ss[1] == "1"
         else:
             return self._readAxisValue("ONT?", axis) == 1
 
@@ -2419,6 +2419,7 @@ class CLRelController(Controller):
             self.ReferenceToSwitch(axis)
         elif self._hasLimitSwitches[axis]:
             raise NotImplementedError("Don't know how to reference to limit yet")
+            # TODO code for reference support to be implemented, for now code unreachable
             self.ReferenceToLimit(axis)
             # TODO: need to do that after the move is complete
             self.waitEndMotion(set(axis))

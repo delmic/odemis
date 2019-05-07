@@ -403,7 +403,7 @@ class PH300(model.Detector):
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
         self._dll.PH_GetHardwareInfo(self._idx, mod, partnum, ver)
-        return (mod.value, partnum.value, ver.value)
+        return mod.value, partnum.value, ver.value
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)
@@ -788,7 +788,7 @@ class PH300(model.Detector):
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
-        else:
+        else:  # code unreachable
             logging.error("Acquisition thread ended without exception")
         finally:
             self._toggle_shutters(self._shutters.keys(), False)

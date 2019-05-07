@@ -73,7 +73,7 @@ TOOL_RO_ANCHOR = 8 # Select the region of the anchor region for drift correction
 # Auto-focus is handle by a separate VA, still needs an ID for the button
 TOOL_AUTO_FOCUS = 9 # Run auto focus procedure on the (active) stream
 
-ALL_TOOL_MODES = set((
+ALL_TOOL_MODES = {
     TOOL_NONE,
     TOOL_ZOOM,
     TOOL_ROI,
@@ -84,7 +84,7 @@ ALL_TOOL_MODES = set((
     TOOL_SPOT,
     TOOL_RO_ANCHOR,
     TOOL_AUTO_FOCUS,
-    ))
+    }
 
 # "Actions" are also buttons on the toolbar, but with immediate effect:
 TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content

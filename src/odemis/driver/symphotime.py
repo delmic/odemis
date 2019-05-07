@@ -684,9 +684,8 @@ class Controller(model.Detector):
         iPixelNumber_X, iPixelNumber_Y = self.scanner.resolution.value
 
         # Define optional data records to send to the server
-        optional_data = []
-        optional_data.append(OptionalDataRecord("TimePerPixel", PQ_OPT_DATATYPE_FLOAT,
-                                        self.scanner.dwellTime.value))
+        optional_data = [OptionalDataRecord("TimePerPixel", PQ_OPT_DATATYPE_FLOAT,
+                                            self.scanner.dwellTime.value)]
 
         # Only send a filename if it is not empty. Otherwise we will have problems.
         # If no filename is specified, the default filename from the server will be adopted in the VA

@@ -135,7 +135,7 @@ dist = setup(name='Odemis',
              data_files=data_files, # not officially in setuptools, but works as for distutils
             )
 
-if ROOT and dist != None:
+if ROOT and dist is not None:
     # for mime file association, see openshot's setup.py
     # update the XDG .desktop file database
     try:

@@ -516,7 +516,7 @@ class Slider(BaseSlider):
         self.SetRange(self.min_value, max_value)
 
     def GetRange(self):
-        return (self.min_value, self.max_value)
+        return self.min_value, self.max_value
 
     def GetMin(self):
         """ Return the minimum value of the range """
@@ -810,7 +810,7 @@ class VisualRangeSlider(BaseSlider):
             self.pixel_value = (self.pixel_value[0], self.pixel_value[0] + 1)
 
     def GetRange(self):
-        return (self.min_value, self.max_value)
+        return self.min_value, self.max_value
 
     def Enable(self, enable=True):  #pylint: disable=W0221
 

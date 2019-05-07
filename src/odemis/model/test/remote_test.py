@@ -691,7 +691,7 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(prop.value, 0)
         self.assertEqual(self.last_value, 0)
         # called once or twice depending if the brief 3 was seen
-        self.assertTrue(1 <= self.called and self.called <= 2)
+        self.assertTrue(1 <= self.called <= 2)
         called_before = self.called
 
         # check we are not called anymore
@@ -722,7 +722,7 @@ class RemoteTest(unittest.TestCase):
     def test_enumerated_va(self):
         # enumerated
         self.assertEqual(self.comp.enum.value, "a")
-        self.assertEqual(self.comp.enum.choices, set(["a", "c", "bfds"]))
+        self.assertEqual(self.comp.enum.choices, {"a", "c", "bfds"})
         self.comp.enum.value = "c"
         self.assertEqual(self.comp.enum.value, "c")
 
@@ -810,7 +810,7 @@ class SimpleHwComponent(model.HwComponent):
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4])
-        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.enum = model.StringEnumerated("a", {"a", "c", "bfds"})
 
     @roattribute
     def my_value(self):
@@ -835,7 +835,7 @@ class MyComponent(model.Component):
         # TODO automatically register the property when serializing the Component
         self.prop = model.IntVA(42)
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
-        self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
+        self.enum = model.StringEnumerated("a", {"a", "c", "bfds"})
         self.cut = model.IntVA(0, setter=self._setCut)
         self.listval = model.ListVA([2, 65])
 
@@ -882,7 +882,7 @@ class MyComponent(model.Component):
         """
         start = time.time()
         time.sleep(duration)
-        return (time.time() - start)
+        return time.time() - start
 
     @isasync
     def do_progressive_long(self, duration=5):
@@ -907,7 +907,7 @@ class MyComponent(model.Component):
             psmt_end = max(psmt_end - 1, time.time())
             future.set_progress(end=psmt_end)
 
-        return (time.time() - start)
+        return time.time() - start
 
     def get_number_futures(self):
         return self.number_futures

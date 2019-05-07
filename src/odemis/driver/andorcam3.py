@@ -552,7 +552,7 @@ class AndorCam3(model.DigitalCamera):
                 self.handle = None
             # Note: FinaliseLibrary() doesn't seem to help
 
-            while(not self.handle):
+            while not self.handle:
                 try:
                     handle = c_int()
                     # Note: with USB, doesn't seem to work if the camera is
@@ -679,7 +679,7 @@ class AndorCam3(model.DigitalCamera):
         result = (c_longlong(), c_longlong())
         self.atcore.AT_GetIntMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result[1]))
-        return (result[0].value, result[1].value)
+        return result[0].value, result[1].value
 
     def SetFloat(self, prop, value):
         assert(isinstance(prop, unicode))
@@ -700,7 +700,7 @@ class AndorCam3(model.DigitalCamera):
         result = (c_double(), c_double())
         self.atcore.AT_GetFloatMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetFloatMax(self.handle, prop, byref(result[1]))
-        return (result[0].value, result[1].value)
+        return result[0].value, result[1].value
 
     def SetBool(self, prop, value):
         assert(isinstance(prop, unicode))
@@ -716,7 +716,7 @@ class AndorCam3(model.DigitalCamera):
         if not self.handle:  # TODO: apply this to all API calls. As a decorator?
             raise HwError("Device not opened")
         self.atcore.AT_GetBool(self.handle, prop, byref(result))
-        return (result.value != 0)
+        return result.value != 0
 
     def isImplemented(self, prop):
         """
@@ -725,7 +725,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         implemented = c_int()
         self.atcore.AT_IsImplemented(self.handle, prop, byref(implemented))
-        return (implemented.value != 0)
+        return implemented.value != 0
 
     def isWritable(self, prop):
         """
@@ -734,7 +734,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         writable = c_int()
         self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
-        return (writable.value != 0)
+        return writable.value != 0
 
     def isEnumIndexAvailable(self, prop, idx):
         """
@@ -743,7 +743,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         available = c_int()
         self.atcore.AT_IsEnumIndexAvailable(self.handle, prop, idx, byref(available))
-        return (available.value != 0)
+        return available.value != 0
 
     def SetEnumString(self, prop, value):
         """
@@ -802,7 +802,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return (2-tuple int): size of the sensor (width, height) in pixel
         """
-        return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
+        return self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight")
 
     def _getTargetTemperatureRange(self):
         """
@@ -822,7 +822,7 @@ class AndorCam3(model.DigitalCamera):
                 tmps = [float(t) for t in tmps_str if tmps_str is not None]
                 if not self.isWritable(u"TemperatureControl"):
                     # Still allow 25°C to disable the cooling
-                    return (min(tmps), 25)
+                    return min(tmps), 25
                 else:
                     # TODO: just return a set
                     return min(tmps), max(tmps)
@@ -993,7 +993,7 @@ class AndorCam3(model.DigitalCamera):
                 binning[1] = max(binning[1], int(m.group(2)))
             return tuple(binning)
         else:
-            return (1, 1)
+            return 1, 1
 
     def _findBinning(self, binning):
         """

@@ -240,4 +240,4 @@ def get_backend_status():
         logging.exception("Unresponsive back-end")
         return BACKEND_DEAD
 
-    return BACKEND_DEAD
+    return BACKEND_DEAD  # Note: unreachable, but leave in case code will be changed

@@ -38,7 +38,7 @@ def read_param(ctrl, eid, filename):
     if id not in ctrl.memoryIDs.value:
         raise KeyError("There was no EEPROM with the given id found")
     mem_yaml = ctrl.readEEPROM(eid)
-    filename.write("%s" % (mem_yaml))
+    filename.write("%s" % (mem_yaml,))
     filename.close()
 
 

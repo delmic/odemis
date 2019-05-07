@@ -1888,7 +1888,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
                     logging.debug("Memory used = %d bytes", udriver.readMemoryUsage())
                     # Perform drift correction
                     if self._dc_estimator:
-                        dc_vect = drift_est.acquire()
+                        drift_est.acquire()
                         dc_vect = drift_est.estimate()
                         tot_dc_vect[0] += dc_vect[0]
                         tot_dc_vect[1] += dc_vect[1]

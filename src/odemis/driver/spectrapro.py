@@ -229,7 +229,7 @@ class SpectraPro(model.Actuator):
         if not isinstance(calib, collections.Iterable):
             raise ValueError("calib parameter must be in the format "
                              "[blz, gl, ca, sa, fl, ia, da], "
-                             "but got %s" % (calib))
+                             "but got %s" % (calib,))
         dcalib = {}
         for c in calib:
             if not isinstance(c, collections.Iterable) or len(c) != 7:
@@ -336,7 +336,7 @@ class SpectraPro(model.Actuator):
         # ?\r
         # \r\nAddress Error \r\nA=3F4F4445 PC=81444
 
-        assert(len(com) > 1 and len(com) <= 100) # commands cannot be long
+        assert(1 < len(com) <= 100) # commands cannot be long
         com += "\r"
 
         logging.debug("Sending: %s", com.encode('string_escape'))
@@ -417,7 +417,7 @@ class SpectraPro(model.Actuator):
         # command we've just sent.
 
         try:
-            r = self._sendOrder("no-echo")
+            self._sendOrder("no-echo")
         except SPError:
             logging.info("Failed to disable echo, hopping the device has not echo anyway")
 
@@ -448,7 +448,7 @@ class SpectraPro(model.Actuator):
         # TURRET  Specifies the presently installed turret or the turret to be installed.
         # Doesn't change the hardware, just which gratings are available
 
-        assert(1 <= t and t <= 3)
+        assert(1 <= t <= 3)
         # TODO check that there is grating configured for this turret (using GetGratingChoices)
         self._sendOrder("%d turret" % t)
 

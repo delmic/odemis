@@ -117,7 +117,6 @@ class TestFW102c(unittest.TestCase):
         self.assertEqual(self.dev.position.value["band"], cur_pos)
 
         # find a different position
-        new_pos = cur_pos
         bands = self.dev.axes["band"]
         for p in bands.choices:
             if p != cur_pos:
