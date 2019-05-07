@@ -703,8 +703,8 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus,
             brightest = numpy.unravel_index(image.argmax(), image.shape)
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
             center_px = (image.shape[1] / 2, image.shape[0] / 2)
-            # Get the "direction" of the vector. cmp() gives the sign
-            shift_dir = [cmp(a - b, 0) for a, b in zip(brightest, center_px)]
+            # Get the "direction" of the vector.
+            shift_dir = [math.copysign(1, a - b) for a, b in zip(brightest, center_px)]
             half_ccd_fov = (center_px[0] * pixelSize[0], center_px[1] * pixelSize[1])
             shift_m = (-shift_dir[0] * half_ccd_fov[0],
                        shift_dir[1] * half_ccd_fov[1])  # not inverted because physical Y goes opposite direction already

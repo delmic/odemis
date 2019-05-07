@@ -253,7 +253,7 @@ class PowerControlUnit(model.PowerSupplier):
             raise HwError("There is no power provided to the Power Control Unit. "
                           "Please make sure the board is turned on.")
         x = ans.split(',')
-        return filter(lambda a: a != '', x)
+        return [x != '' for x in ans.split(',')]
 
     def _sendCommand(self, cmd):
         """

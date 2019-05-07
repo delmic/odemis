@@ -4022,7 +4022,7 @@ class E861Simulator(object):
 
         com = m.group("com") # also removes the \n at the end if it's there
         # split into arguments separated by spaces (not including empty strings)
-        args = filter(bool, com.split(" "))
+        args = [bool(a) for a in com.split(" ")]
         logging.debug("Command decoded: %s", args)
 
         if self._errno:
