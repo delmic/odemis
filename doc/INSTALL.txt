@@ -74,7 +74,7 @@ http://article.gmane.org/gmane.linux.kernel.stable/57796/raw
 
 == Installing comedilib 0.10.1 ==
 Ubuntu 12.04 has a too old version of comedi (v 0.8). Version 0.10 or higher is required.
-git clone git://comedi.org/git/comedi/comedilib.git
+git clone git@github.com:Linux-Comedi/comedilib.git
 sudo apt-get install autoconf libltdl-dev flex byacc python-dev swig
 cd comedilib
 ./autogen.sh
@@ -83,7 +83,7 @@ make -j
 sudo make install
 
 == Installing comedi_calibrate ==
-git clone git://comedi.org/git/comedi/comedi_calibrate.git
+git clone git@github.com:Linux-Comedi/comedi_calibrate.git
 sudo apt-get install libboost-dev libboost-program-options-dev libgsl0-dev
 cd comedi_calibrate
 ./autogen.sh
