@@ -639,7 +639,7 @@ class Instantiator(object):
             ret |= self.get_required_components(n)
 
         try:
-            dependencies.append(attrs["power_supplier"])
+            ret.add(attrs["power_supplier"])
         except KeyError:
             pass  # no power supplier
 

@@ -1711,7 +1711,7 @@ class CombinedFixedPositionActuator(model.Actuator):
         update the position VA
         """
         try:
-            pos_key_matching = self._readPositionfromdependencies()
+            pos_key_matching = self._readPositionfromDependencies()
 
             # it's read-only, so we change it via _value
             self.position._set_value({self._axis_name: pos_key_matching}, force_write=True)
@@ -1853,7 +1853,7 @@ class CombinedFixedPositionActuator(model.Actuator):
 
             try:
                 # check if referencing pos matches any position allowed
-                self._readPositionfromdependencies()
+                self._readPositionfromDependencies()
             except LookupError:
                 # If we just did referencing and ended up to an unsupported position,
                 # move to closest supported position
