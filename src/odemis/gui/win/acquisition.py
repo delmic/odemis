@@ -230,7 +230,10 @@ class AcquisitionDialog(xrcfr_acq):
             self.streambar_controller.addStream(s, add_to_view=v)
 
     def remove_all_streams(self):
-        """ Remove the streams we added to the view on creation """
+        """
+        Remove the streams we added to the view on creation
+        Must be called in the main GUI thread
+        """
         # Ensure we don't update the view after the window is destroyed
         self.streambar_controller.clear()
 
@@ -342,9 +345,12 @@ class AcquisitionDialog(xrcfr_acq):
             logging.exception("Couldn't match any preset")
             preset_name = u"Custom"
 
-        self.cmb_presets.SetValue(preset_name)
+        wx.CallAfter(self.cmb_presets.SetValue, preset_name)
 
     def update_acquisition_time(self):
+        """
+        Must be called in the main GUI thread.
+        """
         streams = self.get_acq_streams()
         if streams:
             acq_time = acq.estimateTime(streams)
@@ -356,6 +362,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.lbl_acqestimate.SetLabel(txt)
 
+    @call_in_wx_main
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
         # decompose into path/file
@@ -416,6 +423,10 @@ class AcquisitionDialog(xrcfr_acq):
             self.last_saved_file = None
 
     def terminate_listeners(self):
+        """
+        Disconnect all the connections to the streams.
+        Must be called in the main GUI thread.
+        """
         # stop listening to events
         self._view.stream_tree.flat.unsubscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.unsubscribe(self.on_streams_changed)
@@ -441,6 +452,7 @@ class AcquisitionDialog(xrcfr_acq):
     def _view_file(self):
         """
         Called to open the file which was just acquired
+        Must be called in the main GUI thread.
         """
         self.terminate_listeners()
 
