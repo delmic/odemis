@@ -422,19 +422,20 @@ class SmarPod(model.Actuator):
         self.core.Smarpod_GetMoveStatus(self._id, byref(status))
         return status
 
-    def Move(self, pos, hold_time=1000):
+    def Move(self, pos, hold_time=0, block=False):
         """
         Move to pose command. Non-blocking
         pos: (dict str -> float): axis name -> position
             This is converted to the pose C-struct which is sent to the SmarPod DLL
         hold_time: (int) specify in milliseconds how long to hold after the move.
+        block: (bool): Set to True if the function should block until the move completes
         Raises: SmarPodError if a problem occurs
         """
         # convert into a smartpad pose
         newPose = dict_to_pose(pos)
 
         # Use an infiinite holdtime and non-blocking (final argument)
-        self.core.Smarpod_Move(self._id, byref(newPose), c_uint(hold_time), c_int(0))
+        self.core.Smarpod_Move(self._id, byref(newPose), c_uint(hold_time), c_int(block))
 
     def GetPose(self):
         """
