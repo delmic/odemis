@@ -2580,7 +2580,7 @@ class FakeAndorV2DLL(object):
 
     def Initialize(self, path):
         if not os.path.isdir(path):
-            logging.warning("Trying to inialise simulator with an incorrect path: %s",
+            logging.warning("Trying to initialize simulator with an incorrect path: %s",
                             path)
 
     def ShutDown(self):

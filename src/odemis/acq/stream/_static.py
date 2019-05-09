@@ -303,9 +303,6 @@ class StaticFluoStream(Static2DStream):
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_IN_WL and MD_OUT_WL.
         """
-
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_FLUO
         # Note: it will update the image, and changing the tint will do it again
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FLUO
