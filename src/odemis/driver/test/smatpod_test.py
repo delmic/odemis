@@ -23,7 +23,7 @@ import logging
 import os
 import time
 import unittest
-from odemis.driver import smartpod
+from odemis.driver import smarpod
 from odemis.util import test
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -38,8 +38,10 @@ COMP_ARGS = {
     "rtol": 1e-3,
     }
 
-CONFIG = {"name": "SmartPod",
+CONFIG = {"name": "SmarPod",
         "role": "",
+        "ref_on_init": True,
+        "actuator_speed": 0.1,  # m/s
         "locator": "usb:ix:0",
         # "locator": "fake",
         "axes": {
@@ -56,31 +58,29 @@ CONFIG = {"name": "SmartPod",
                 'unit': 'm',
             },
             'theta_x': {
-                'range': [0, 3.1415],
+                'range': [-2, 2],
                 'unit': 'rad',
             },
             'theta_y': {
-                'range': [0, 3.1415],
+                'range': [-2, 2],
                 'unit': 'rad',
             },
             'theta_z': {
-                'range': [0, 3.1415],
+                'range': [-2, 2],
                 'unit': 'rad',
             },
         },
 }
 
 
-class TestSmartPod(unittest.TestCase):
+class TestSmarPod(unittest.TestCase):
     """
-    Tests cases for the SmartPod actuator driver
+    Tests cases for the SmarPod actuator driver
     """
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = smartpod.SmartPod(**CONFIG)
-        cls.dev.reference().result()
-        cls.dev.SetSpeed(0.1)
+        cls.dev = smarpod.SmarPod(**CONFIG)
 
     @classmethod
     def tearDownClass(cls):
@@ -147,18 +147,18 @@ class TestSmartPod(unittest.TestCase):
         # Test relative moves
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y':-0.001, 'z': 0, 'theta_x': 0.0001, 'theta_y':-0.0003, 'theta_z': 0}
+        shift = {'x': 0.01, 'y':-0.001, 'theta_y':-0.0003, 'theta_z': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
-        test.assert_pos_almost_equal(smartpod.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+        test.assert_pos_almost_equal(smarpod.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
-        shift = {'x': 0.00000001, 'y': 0.00001, 'z':-0.000001, 'theta_x': 0.00001, 'theta_y':-0.000001, 'theta_z':-0.00001}
+        shift = {'z':-0.000001, 'theta_x': 0.00001, 'theta_y':-0.000001, 'theta_z':-0.00001}
         self.dev.moveRel(shift)
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()
 
-        new_pos = smartpod.add_coord(smartpod.add_coord(smartpod.add_coord(old_pos, shift), shift), shift)
+        new_pos = smarpod.add_coord(smarpod.add_coord(smarpod.add_coord(old_pos, shift), shift), shift)
         test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
