@@ -92,7 +92,7 @@ class StreamController(object):
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
-        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.StaticCLStream)):
             options |= OPT_BTN_TINT
             if not isinstance(stream, acqstream.StaticStream):
                 options |= OPT_NAME_EDIT
