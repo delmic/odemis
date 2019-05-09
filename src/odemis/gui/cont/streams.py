@@ -2045,6 +2045,7 @@ class StreamBarController(object):
     def clear(self):
         """
         Remove all the streams (from the model and the GUI)
+        Must be called in the main GUI thread
         """
         # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists
