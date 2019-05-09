@@ -93,7 +93,7 @@ __shortname__ = "Odemis"
 __copyright__ = u"Copyright © 2012-2019 Delmic"
 __authors__ = [u"Éric Piel", u"Rinze de Laat", u"Kimon Tsitsikas",
                u"Philip Winkler", u"Anders Muskens", u"Sabrina Rossberger",
-               u"Thera Pals"]
+               u"Thera Pals", u"Victoria Mavrikopoulou"]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
 """Odemis is free software: you can redistribute it and/or modify it under the terms
