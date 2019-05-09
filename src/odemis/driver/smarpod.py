@@ -358,30 +358,26 @@ class SmarPod(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
-        axes_ref = {a: False for a, i in self.axes.items()}
-        # VA dict str(axis) -> bool
-        self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         referenced = c_int()
         self.core.Smarpod_IsReferenced(self._id, byref(referenced))
-        if not referenced.value:
-            logging.debug("SmarPod is not referenced. The device will not function until referencing occurs.")
+        # define the referenced VA from the query
+        axes_ref = {a: referenced.value for a, i in self.axes.items()}
+        # VA dict str(axis) -> bool
+        self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+        # If ref_on_init, referenced immediately.
+        if referenced.value:
+            logging.debug("SmarPod is referenced")
+        else:
+            logging.warning("SmarPod is not referenced. The device will not function until referencing occurs.")
             if ref_on_init:
                 self.reference().result()
-        else:
-            logging.debug("SmarPod is referenced")
 
         # Use a default actuator speed
         self.SetSpeed(actuator_speed)
         self._speed = self.GetSpeed()
         self._accel = self.GetAcceleration()
 
-        try:
-            self._updatePosition()    # will fail if not referenced.
-        except SmarPodError as ex:
-            if ex.errno == SmarPodDLL.SMARPOD_NOT_REFERENCED_ERROR:
-                logging.info("Must reference SmarPod controller before use.")
-            else:
-                raise
+        self._updatePosition()
 
     def terminate(self):
         # should be safe to close the device multiple times if terminate is called more than once.
@@ -422,20 +418,26 @@ class SmarPod(model.Actuator):
         self.core.Smarpod_GetMoveStatus(self._id, byref(status))
         return status
 
-    def Move(self, pos, hold_time=0, block=False):
+    def Move(self, pos, hold_time=0.0, block=False):
         """
         Move to pose command. Non-blocking
-        pos: (dict str -> float): axis name -> position
+        pos: (dict str -> float) axis name -> position
             This is converted to the pose C-struct which is sent to the SmarPod DLL
-        hold_time: (int) specify in milliseconds how long to hold after the move.
-        block: (bool): Set to True if the function should block until the move completes
+        hold_time: (float) specify in seconds how long to hold after the move.
+        block: (bool) Set to True if the function should block until the move completes
+
         Raises: SmarPodError if a problem occurs
         """
         # convert into a smartpad pose
         newPose = dict_to_pose(pos)
 
+        if hold_time == float("inf"):
+            ht = SmarPodDLL.SMARPOD_HOLDTIME_INFINITE
+        else:
+            ht = c_uint(int(hold_time / 1000.0))
+
         # Use an infiinite holdtime and non-blocking (final argument)
-        self.core.Smarpod_Move(self._id, byref(newPose), c_uint(hold_time), c_int(block))
+        self.core.Smarpod_Move(self._id, byref(newPose), ht, c_int(block))
 
     def GetPose(self):
         """
@@ -513,10 +515,18 @@ class SmarPod(model.Actuator):
         """
         update the position VA
         """
-        pos = self.GetPose()
-        pos = self._applyInversion(pos)
-        logging.debug("Updated position to %s", pos)
-        self.position._set_value(pos, force_write=True)
+        try:
+            p = self.GetPose()
+        except SmarPodError as ex:
+            if ex.errno == SmarPodDLL.SMARPOD_NOT_REFERENCED_ERROR:
+                logging.warning("Position unknown because SmarPod is not referenced")
+                p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+            else:
+                raise
+        finally:
+            p = self._applyInversion(p)
+            logging.debug("Updated position to %s", p)
+            self.position._set_value(p, force_write=True)
 
     def _createMoveFuture(self, ref=False):
         """
@@ -564,6 +574,7 @@ class SmarPod(model.Actuator):
                 if self.IsReferenced():
                     self.referenced._value = {a: True for a in self.axes.keys()}
                     self._updatePosition()
+                    logging.info("Referencing successful.")
 
             except SmarPodError as ex:
                 future._was_stopped = True
