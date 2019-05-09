@@ -106,9 +106,9 @@ def pose_to_dict(pose):
     pos['z'] = pose.positionZ
 
     # Note: internally, the system uses metres and degrees for rotation
-    pos['rx'] = pose.rotationX * (math.pi / 180.0)
-    pos['ry'] = pose.rotationY * (math.pi / 180.0)
-    pos['rz'] = pose.rotationZ * (math.pi / 180.0)
+    pos['rx'] = math.radians(pose.rotationX)
+    pos['ry'] = math.radians(pose.rotationY)
+    pos['rz'] = math.radians(pose.rotationZ)
     return pos
 
 def dict_to_pose(pos):
@@ -129,11 +129,11 @@ def dict_to_pose(pos):
         elif an == "z":
             pose.positionZ = v
         elif an == "rx":
-            pose.rotationX = v * (180.0 / math.pi)
+            pose.rotationX = math.degrees(v)
         elif an == "ry":
-            pose.rotationY = v * (180.0 / math.pi)
+            pose.rotationY = math.degrees(v)
         elif an == "rz":
-            pose.rotationZ = v * (180.0 / math.pi)
+            pose.rotationZ = math.degrees(v)
         else:
             raise ValueError("Invalid axis")
     return pose
