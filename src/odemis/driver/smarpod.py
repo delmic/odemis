@@ -29,6 +29,7 @@ from concurrent.futures import CancelledError, TimeoutError
 import os
 import logging
 import time
+import math
 from ctypes import *
 import copy
 import threading
@@ -60,6 +61,8 @@ def add_coord(pos1, pos2):
 class Pose(Structure):
     """
     SmarPod Pose Structure (C Struct used by DLL)
+
+    Note: internally, the system uses metres and degrees for rotation
     """
     _fields_ = [
         ("positionX", c_double),
@@ -101,9 +104,11 @@ def pose_to_dict(pose):
     pos['x'] = pose.positionX
     pos['y'] = pose.positionY
     pos['z'] = pose.positionZ
-    pos['theta_x'] = pose.rotationX
-    pos['theta_y'] = pose.rotationY
-    pos['theta_z'] = pose.rotationZ
+
+    # Note: internally, the system uses metres and degrees for rotation
+    pos['rx'] = pose.rotationX * (math.pi / 180.0)
+    pos['ry'] = pose.rotationY * (math.pi / 180.0)
+    pos['rz'] = pose.rotationZ * (math.pi / 180.0)
     return pos
 
 def dict_to_pose(pos):
@@ -114,6 +119,8 @@ def dict_to_pose(pos):
     raises ValueError if an unsupported axis name is input
     """
     pose = Pose()
+
+    # Note: internally, the system uses metres and degrees for rotation
     for an, v in pos.items():
         if an == "x":
             pose.positionX = v
@@ -121,12 +128,12 @@ def dict_to_pose(pos):
             pose.positionY = v
         elif an == "z":
             pose.positionZ = v
-        elif an == "theta_x":
-            pose.rotationX = v
-        elif an == "theta_y":
-            pose.rotationY = v
-        elif an == "theta_z":
-            pose.rotationZ = v
+        elif an == "rx":
+            pose.rotationX = v * (180.0 / math.pi)
+        elif an == "ry":
+            pose.rotationY = v * (180.0 / math.pi)
+        elif an == "rz":
+            pose.rotationZ = v * (180.0 / math.pi)
         else:
             raise ValueError("Invalid axis")
     return pose
@@ -195,6 +202,8 @@ class SmarPodDLL(CDLL):
     SMARPOD_REFERENCING = c_uint(4)
     SMARPOD_STANDBY = c_uint(5)
     
+    SMARPOD_HOLDTIME_INFINITE = c_uint(60000)
+
     err_code = {
 0: "OK",
 1: "OTHER_ERROR",
@@ -365,6 +374,7 @@ class SmarPod(model.Actuator):
         self.SetSpeed(actuator_speed)
         self._speed = self.GetSpeed()
         self._accel = self.GetAcceleration()
+
         try:
             self._updatePosition()    # will fail if not referenced.
         except SmarPodError as ex:
@@ -412,17 +422,19 @@ class SmarPod(model.Actuator):
         self.core.Smarpod_GetMoveStatus(self._id, byref(status))
         return status
 
-    def Move(self, pos):
+    def Move(self, pos, hold_time=1000):
         """
         Move to pose command. Non-blocking
         pos: (dict str -> float): axis name -> position
             This is converted to the pose C-struct which is sent to the SmarPod DLL
+        hold_time: (int) specify in milliseconds how long to hold after the move.
         Raises: SmarPodError if a problem occurs
         """
         # convert into a smartpad pose
         newPose = dict_to_pose(pos)
 
-        self.core.Smarpod_Move(self._id, byref(newPose), c_uint(1000), c_int(0))
+        # Use an infiinite holdtime and non-blocking (final argument)
+        self.core.Smarpod_Move(self._id, byref(newPose), c_uint(hold_time), c_int(0))
 
     def GetPose(self):
         """
@@ -721,17 +733,18 @@ class FakeSmarPodDLL(object):
         self.properties = {}
         self._speed = c_double(0)
         self._speed_control = c_int()
+        self._accel_control = c_int()
         self._accel = c_double(0)
         self.referenced = False
 
-        # Sepcify ranges
+        # Specify ranges
         self._range = {}
         self._range['x'] = (-1, 1)
         self._range['y'] = (-1, 1)
         self._range['z'] = (-1, 1)
-        self._range['theta_x'] = (-3.14, 3.14)
-        self._range['theta_y'] = (-3.14, 3.14)
-        self._range['theta_z'] = (-3.14, 3.14)
+        self._range['rx'] = (-45, 45)
+        self._range['ry'] = (-45, 45)
+        self._range['rz'] = (-45, 45)
 
         self.stopping = threading.Event()
 
@@ -742,9 +755,9 @@ class FakeSmarPodDLL(object):
         if self._range['x'][0] <= pose.positionX <= self._range['x'][1] and \
             self._range['y'][0] <= pose.positionY <= self._range['y'][1] and \
             self._range['z'][0] <= pose.positionZ <= self._range['z'][1] and \
-            self._range['theta_x'][0] <= pose.rotationX <= self._range['theta_x'][1] and \
-            self._range['theta_y'][0] <= pose.rotationY <= self._range['theta_y'][1] and \
-            self._range['theta_z'][0] <= pose.rotationZ <= self._range['theta_z'][1]:
+            self._range['rx'][0] <= pose.rotationX <= self._range['rx'][1] and \
+            self._range['ry'][0] <= pose.rotationY <= self._range['ry'][1] and \
+            self._range['rz'][0] <= pose.rotationZ <= self._range['rz'][1]:
             return True
         else:
             return False
@@ -831,12 +844,13 @@ class FakeSmarPodDLL(object):
 
     def Smarpod_SetAcceleration(self, id, accel_control, accel):
         self._accel = accel
+        self._accel_control = accel_control
 
     def Smarpod_GetAcceleration(self, id, p_accel_control, p_accel):
         accel = _deref(p_accel, c_double)
         accel.value = self._accel.value
         accel_control = _deref(p_accel_control, c_int)
-        accel_control.value = 1
+        accel_control.value = self._accel_control.value
 
     def Smarpod_GetDLLVersion(self, p_major, p_minor, p_update):
         major = _deref(p_major, c_uint)

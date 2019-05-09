@@ -57,16 +57,16 @@ CONFIG = {"name": "SmarPod",
                 'range': [-0.1, 0.1],
                 'unit': 'm',
             },
-            'theta_x': {
-                'range': [-2, 2],
+            'rx': {
+                'range': [-0.785, 0.785],
                 'unit': 'rad',
             },
-            'theta_y': {
-                'range': [-2, 2],
+            'ry': {
+                'range': [-0.785, 0.785],
                 'unit': 'rad',
             },
-            'theta_z': {
-                'range': [-2, 2],
+            'rz': {
+                'range': [-0.785, 0.785],
                 'unit': 'rad',
             },
         },
@@ -105,14 +105,14 @@ class TestSmarPod(unittest.TestCase):
         """
         Test sending a position that is out of range.
         """
-        pos = {'x': 1.5, 'y': 20, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0.0005}
+        pos = {'x': 1.5, 'y': 20, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
         with self.assertRaises(ValueError):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0.0005}
-        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'theta_x': 2.0, 'theta_y': 0.0001, 'theta_z': 0}
-        pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}
+        pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
+        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'rx': 0.0001, 'ry': 0.0001, 'rz': 0}
+        pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
         test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -124,8 +124,8 @@ class TestSmarPod(unittest.TestCase):
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
-        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.178}
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
+        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'rx': 0.001, 'ry': 0.005, 'rz': 0.002}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         f.cancel()
@@ -134,8 +134,8 @@ class TestSmarPod(unittest.TestCase):
         self.assertNotEqual(round(difference, 4), 0)
         
         # Test cancellation by stopping
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
-        new_pos = {'x':0.01, 'y': 0, 'z': 0.0007, 'theta_x': 0.01, 'theta_y': 0.005, 'theta_z': 0.178}
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
+        new_pos = {'x':0.0021, 'y': 0, 'z': 0.0007, 'rx': 0.01, 'ry': 0.005, 'rz': 0.0001}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
@@ -145,9 +145,9 @@ class TestSmarPod(unittest.TestCase):
 
     def test_move_rel(self):
         # Test relative moves
-        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'theta_x': 0, 'theta_y': 0, 'theta_z': 0}).result()
+        self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y':-0.001, 'theta_y':-0.0003, 'theta_z': 0}
+        shift = {'x': 0.01, 'y':-0.001, 'ry':-0.0003, 'rz': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -155,7 +155,7 @@ class TestSmarPod(unittest.TestCase):
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
-        shift = {'z':-0.000001, 'theta_x': 0.00001, 'theta_y':-0.000001, 'theta_z':-0.00001}
+        shift = {'z':-0.000001, 'rx': 0.00001, 'ry':-0.000001, 'rz':-0.00001}
         self.dev.moveRel(shift)
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()
