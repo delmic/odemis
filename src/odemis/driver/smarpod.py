@@ -44,8 +44,6 @@ def add_coord(pos1, pos2):
     """
     Adds two coordinate dictionaries together and returns a new coordinate dictionary.
 
-    NOTE: pos1 and pos2 MUST contain the same axes values
-
     pos1: dict (axis name str) -> (float)
     pos2: dict (axis name str) -> (float)
     Returns ret
@@ -418,12 +416,13 @@ class SmarPod(model.Actuator):
         self.core.Smarpod_GetMoveStatus(self._id, byref(status))
         return status
 
-    def Move(self, pos, hold_time=0.0, block=False):
+    def Move(self, pos, hold_time=0, block=False):
         """
-        Move to pose command. Non-blocking
+        Move to pose command.
         pos: (dict str -> float) axis name -> position
             This is converted to the pose C-struct which is sent to the SmarPod DLL
         hold_time: (float) specify in seconds how long to hold after the move.
+            If set to float(inf), will hold forever until a stop command is issued.
         block: (bool) Set to True if the function should block until the move completes
 
         Raises: SmarPodError if a problem occurs
@@ -434,7 +433,7 @@ class SmarPod(model.Actuator):
         if hold_time == float("inf"):
             ht = SmarPodDLL.SMARPOD_HOLDTIME_INFINITE
         else:
-            ht = c_uint(int(hold_time / 1000.0))
+            ht = c_uint(int(hold_time * 1000.0))
 
         # Use an infiinite holdtime and non-blocking (final argument)
         self.core.Smarpod_Move(self._id, byref(newPose), ht, c_int(block))
@@ -523,10 +522,10 @@ class SmarPod(model.Actuator):
                 p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
             else:
                 raise
-        finally:
-            p = self._applyInversion(p)
-            logging.debug("Updated position to %s", p)
-            self.position._set_value(p, force_write=True)
+
+        p = self._applyInversion(p)
+        logging.debug("Updated position to %s", p)
+        self.position._set_value(p, force_write=True)
 
     def _createMoveFuture(self, ref=False):
         """
