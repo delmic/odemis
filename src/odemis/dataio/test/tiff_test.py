@@ -1401,7 +1401,7 @@ class TestTiffIO(unittest.TestCase):
         """
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake monochromator",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_DESCRIPTION: "test",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_HW_VERSION: "Unknown",
@@ -1413,7 +1413,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "etd",
                      model.MD_ACQ_DATE: time.time(),
@@ -1424,7 +1424,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "Anchor region",
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
@@ -1983,7 +1983,7 @@ class TestTiffIO(unittest.TestCase):
         num_cols = 5
         size = (num_rows, num_cols)
         md = {
-            model.MD_SAMPLES_PER_PIXEL: 1,
+            model.MD_INTEGRATION_COUNT: 1,
             model.MD_DIMS: 'YX',
             model.MD_POS: (2e-6, 10e-6),
             model.MD_PIXEL_SIZE: (1e-6, 1e-6)
@@ -2019,7 +2019,7 @@ class TestTiffIO(unittest.TestCase):
         size = (3, 257, 295)
         dtype = numpy.uint16
         md = {
-            model.MD_SAMPLES_PER_PIXEL: 3,
+            model.MD_INTEGRATION_COUNT: 3,
             model.MD_DIMS: 'YXC',
             model.MD_POS: (2e-6, 10e-6),
             model.MD_PIXEL_SIZE: (1e-6, 1e-6)
