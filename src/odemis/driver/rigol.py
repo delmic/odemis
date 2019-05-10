@@ -241,9 +241,6 @@ class IPAccesser(object):
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
 
-    def __del__(self):
-        self.terminate()
-
     def terminate(self):
         if self.simulator:
             self.simulator.terminate()
@@ -269,7 +266,7 @@ class IPAccesser(object):
 
     def sendQueryCommand(self, cmd):
         """
-        Sends one command, and don't expect any reply
+        Sends one command, and expect a reply
         cmd (str): command to send, including the ?
 
         raises:
