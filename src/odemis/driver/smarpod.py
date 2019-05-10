@@ -35,14 +35,14 @@ import copy
 import threading
 
 from odemis import model
-from odemis.util import driver
-from odemis.model import HwError, CancellableFuture, CancellableThreadPoolExecutor, isasync
-from operator import pos
+from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync
 
 
 def add_coord(pos1, pos2):
     """
     Adds two coordinate dictionaries together and returns a new coordinate dictionary.
+
+    All of the keys (axis names) in pos2 must be present in pos1
 
     pos1: dict (axis name str) -> (float)
     pos2: dict (axis name str) -> (float)
