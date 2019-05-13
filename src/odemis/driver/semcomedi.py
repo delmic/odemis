@@ -1799,7 +1799,7 @@ class SEMComedi(model.HwComponent):
         metadata = {
             model.MD_ACQ_DATE: time.time(),  # time at the beginning
             model.MD_DWELL_TIME: period,
-            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+            model.MD_INTEGRATION_COUNT: osr * dpr,
         }
 
         # add scanner translation to the center
@@ -1884,7 +1884,7 @@ class SEMComedi(model.HwComponent):
         metadata = {
             model.MD_ACQ_DATE: time.time(),  # time at the beginning
             model.MD_DWELL_TIME: period,
-            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+            model.MD_INTEGRATION_COUNT: osr * dpr,
         }
 
         # add scanner translation to the center
