@@ -21,9 +21,12 @@ import logging
 import numpy
 from odemis.acq.drift import AnchoredEstimator, GuessAnchorRegion
 from odemis.dataio import hdf5
+import os
 import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+DATA_DIR = os.path.dirname(__file__)
 
 
 class TestAnchoredEstimator(unittest.TestCase):
@@ -74,7 +77,7 @@ class TestGuessAnchorRegion(unittest.TestCase):
     # @unittest.skip("skip")
     def setUp(self):
         # Input
-        self.data = hdf5.read_data("example_input.h5")
+        self.data = hdf5.read_data(os.path.join(DATA_DIR, "example_input.h5"))
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
 
