@@ -632,7 +632,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
             LookupError if procedure failed
     """
     focuser = None
-    if align_mode in ("spec-focus", "streak-focus"):
+    if align_mode == "spec-focus":
         focuser = model.getComponent(role='focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner

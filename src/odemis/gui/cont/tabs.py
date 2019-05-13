@@ -3800,19 +3800,39 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
         bl = main.brightlight
         align_mode = self.tab_data_model.align_mode.value
+        opath = self._mode_to_opm[align_mode]
         if event.GetEventObject().GetValue():  # manual focus btn active
             # # Disable autofocus if manual focus btn pushed
             #         # self.panel.btn_autofocus.Enable(False)
             #         # self.panel.gauge_autofocus.Enable(False)
             if align_mode == "streak-align":
-                s = []
-                focus_mode = "streak-focus"
+                s = None
             else:
                 self._stream_controller.pauseStreams()
                 logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)
                 return
-            f = Sparc2AutoFocus(focus_mode, main.opm, s, start_autofocus=False)
-            f.add_done_callback(self._on_align_mode_done)
+
+            # For streak-focus, it's not useful to use turnLightOn(), as the camera should not
+            # yet be receiving light anyway.
+            # TODO: if standard focus mode, call Sparc2AutoFocus(align_mode, main.opm, s, start_autofocus=False)
+
+            # Note: First close slit, then switch on calibration light
+            # Go to the special focus mode (=> close the slit)
+            f = main.opm.setPath(opath).result()
+
+            # force wavelength 0
+            self.spectrograph.moveAbsSync({"wavelength": 0})
+
+            if align_mode != "streak-align":
+                self._stream_controller.pauseStreams()
+
+            # Turn on the light
+            bl.power.value = bl.power.range[1]
+            if s:
+                s.should_update.value = True  # the stream will set all the emissions to 1
+            else:
+                bl.emissions.value = [1] * len(bl.emissions.value)
+
         else:  # manual focus button is inactive
             # Go back to previous mode (=> open the slit & turn off the lamp)
             if align_mode == "streak-align":
@@ -3824,7 +3844,6 @@ class Sparc2AlignTab(Tab):
             else:
                 bl.emissions.value = [0] * len(bl.emissions.value)
 
-            opath = self._mode_to_opm[align_mode]
             f = main.opm.setPath(opath)
             f.add_done_callback(self._on_align_mode_done)
             f.result()  # TODO: don't block the GUI => make it part of the manual focus??
