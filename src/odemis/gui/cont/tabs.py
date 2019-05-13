@@ -3686,7 +3686,7 @@ class Sparc2AlignTab(Tab):
             if self._ts_stream:
                 self._ts_stream.should_update.value = True
                 self._ts_stream.auto_bc.value = False  # default manual brightness/contrast
-                self._ts_stream.intensityRange.value = (100, 1000)  # default range
+                self._ts_stream.intensityRange.value = self._ts_stream.intensityRange.clip((100, 1000))  # default range
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
