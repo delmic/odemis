@@ -699,9 +699,9 @@ class PH300(model.Detector):
         shutters (list of string): the names of the shutters
         open (boolean): True if shutters should open, False if they should close
         """
-        axes = {}
         fs = []
         for sn in shutters:
+            axes = {}
             logging.debug("Setting shutter %s to %s.", sn, open)
             ax_name, closed_pos, open_pos = self._shutter_axes[sn]
             shutter = self._shutters[sn]
