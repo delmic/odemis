@@ -75,7 +75,7 @@ class TestAlignment(unittest.TestCase):
 
         # Used for OBJECTIVE_MOVE type
         cls.aligner_xy = ConvertStage("converter-ab", "stage",
-                                      children={"orig": cls.align},
+                                      dependencies={"orig": cls.align},
                                       axes=["b", "a"],
                                       rotation=math.radians(45))
 
