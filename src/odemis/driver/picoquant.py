@@ -713,7 +713,8 @@ class PH300(model.Detector):
                 fs.append(shutter.moveAbs(axes))
             except Exception as e:
                 logging.error("Toggling shutters failed with exception %s", e)
-        futures.wait(fs)
+        for f in fs:
+            f.result()
 
     def _acquire(self):
         """
