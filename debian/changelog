@@ -1,3 +1,15 @@
+odemis (2.9.3-1) precise; urgency=medium
+
+  * New version: 2.9.3
+  * Main bug fixes:
+    - Handle unicode characters in filename when reading back the latest filename
+    - Fix rare case where GUI could crash during SECOM/DELPHI acquisition
+    - Fix rare SEM acquisition failure with very specific resolution settings (eg 1025px/5760px)
+    - When loading AR data with a background already set, the first image was sometimes shown without background subtraction (SPARC)
+    - In case the OmicronxX has a hardware issue, the back-end would stop, instead of showing the error (SECOM)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 15 May 2019 14:44:01 +0200
+
 odemis (2.9.2-1) precise; urgency=medium
 
   * New version: 2.9.2
