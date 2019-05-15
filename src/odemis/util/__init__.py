@@ -500,12 +500,15 @@ class RepeatingTimer(threading.Thread):
     def run(self):
         # use the timeout as a timer
         try:
-            while not self._must_stop.wait(self.period):
+            wait_time = self.period
+            while not self._must_stop.wait(wait_time):
+                tstart = time.time()
                 try:
                     self.callback()
                 except weak.WeakRefLostError:
                     # it's gone, it's over
                     return
+                wait_time = max(0, (tstart + self.period) - time.time())
         except Exception:
             logging.exception("Failure while calling repeating timer '%s'", self.name)
         finally:
