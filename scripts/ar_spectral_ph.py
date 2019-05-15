@@ -43,7 +43,7 @@ from odemis.acq import drift
 from odemis.util import driver
 import sys
 import threading
-
+from builtins import input
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
@@ -130,7 +130,7 @@ class Acquirer(object):
 
             # TODO: replace next line by code waiting for the pinhole actuator
             # to be finished moving.
-            raw_input("Press enter to start next spectrum acquisition...")
+            input("Press enter to start next spectrum acquisition...")
             spec = self.acquire_spec(spot)
             # TODO: replace next line by code letting know the pinhole actuator
             # that it should go to next point.
