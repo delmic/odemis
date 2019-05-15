@@ -3,6 +3,7 @@ import subprocess
 import sys
 import odemis
 import traceback
+from builtins import input
 
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "--clean", "-y", "viewer.spec"]
@@ -25,7 +26,7 @@ def run_command(cmd, flavor=None):
     except Exception as ex:
         # Don't close terminal after raising Exception
         traceback.print_exc(ex)
-        raw_input("Press any key to exit.")
+        input("Press any key to exit.")
         sys.exit(-1)
 
 
@@ -73,7 +74,7 @@ def build_delphiviewer_inst():
 
 
 while True:
-    i = raw_input("""
+    i = input("""
     [1] OdemisViewer Executable
     [2] OdemisViewer Installer
 

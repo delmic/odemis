@@ -424,7 +424,7 @@ class Detector(model.Detector):
         drift = self.current_drift + random.random() * self.drift_factor
         if abs(drift) >= self.drift_bound:
             # Make it bounce back
-            drift = cmp(drift, 0) * (2 * self.drift_bound - abs(drift))
+            drift = math.copysign(1, drift) * (2 * self.drift_bound - abs(drift))
             self.drift_factor = -self.drift_factor
 
         self.current_drift = drift

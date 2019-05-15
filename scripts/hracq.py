@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # This script collects multiple fluorescence images at high frame rate in order
 # to provide input for high-resolution reconstruction algorithm.
 
+from __future__ import division
 
 import Queue
 import argparse
@@ -26,6 +27,7 @@ import logging
 from odemis import dataio, model
 from odemis.gui.util import get_picture_folder
 from odemis.util import fluo
+
 import os
 import sys
 import threading

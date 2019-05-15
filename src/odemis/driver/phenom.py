@@ -31,6 +31,7 @@ import collections
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import functools
+from functools import reduce
 import logging
 import math
 import numpy

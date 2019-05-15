@@ -1,6 +1,7 @@
 # Solving the metaclass conflict https://code.activestate.com/recipes/204197-solving-the-metaclass-conflict/
 from __future__ import division
 import inspect, types
+import sys
 
 
 def skip_redundant(iterable, skipset=None):
@@ -13,7 +14,10 @@ def skip_redundant(iterable, skipset=None):
 
 
 def remove_redundant(metaclasses):
-    skipset = {types.ClassType}
+    if sys.version_info[0] >= 3:
+        skipset = {type}
+    else:
+        skipset = {types.ClassType}
     for meta in metaclasses: # determines the metaclasses to be skipped
         skipset.update(inspect.getmro(meta)[1:])
     return tuple(skip_redundant(metaclasses, skipset))

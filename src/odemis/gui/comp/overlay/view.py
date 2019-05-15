@@ -635,7 +635,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_source_rgba(*self.colour)
         curve_drawn = []
         curve_n = curve[1::step]
-        for x, y in itertools.izip(rng_n, curve_n):
+        for x, y in zip(rng_n, curve_n):
             x_canvas, y_canvas = self.cnvs.val_to_pos((x, y))
             ctx.line_to(x_canvas, y_canvas)
             curve_drawn.append((x_canvas, y_canvas))
@@ -685,7 +685,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 x_canvas, y_canvas = self.cnvs.val_to_pos((self.cnvs.data_xrange[0], min(0, self.cnvs.data_yrange[0])))
                 ctx.move_to(x_canvas, y_canvas)
                 curve_n = single_curve[1::step]
-                for x, y in itertools.izip(rng_n, curve_n):
+                for x, y in zip(rng_n, curve_n):
                     x_canvas, y_canvas = self.cnvs.val_to_pos((x, y))
                     ctx.line_to(x_canvas, y_canvas)
 

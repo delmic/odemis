@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, print_function
 
+from past.builtins import basestring
 import Pyro4
 import inspect
 import logging

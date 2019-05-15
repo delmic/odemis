@@ -35,7 +35,7 @@ import sys
 import threading
 import time
 import wx
-
+from builtins import input
 
 logging.getLogger().setLevel(logging.INFO)  # put "DEBUG" level for more messages
 
@@ -308,7 +308,7 @@ def acquire_spec(wls, wle, res, dt, filename):
         exporter = dataio.find_fittest_converter(filename)
         exporter.export(filename, das)
         logging.info("Spectrum successfully saved to %s", filename)
-        raw_input("Press Enter to close.")
+        input("Press Enter to close.")
 
 
 def getNumber(prompt):
@@ -316,7 +316,7 @@ def getNumber(prompt):
     return (float)
     """
     while True:
-        s = raw_input(prompt)
+        input(prompt)
         try:
             return float(s)
         except ValueError:
@@ -331,7 +331,7 @@ def main(args):
     """
     ebeam = model.getComponent(role="e-beam")
     while ebeam.resolution.value != (1, 1):
-        raw_input("Please select spot mode and pick a point and press Enter...")
+        input("Please select spot mode and pick a point and press Enter...")
 
     wls = getNumber("Starting wavelength (in nm): ") * 1e-9
     wle = getNumber("Ending wavelength (in nm): ") * 1e-9
@@ -340,7 +340,7 @@ def main(args):
     exp_time = nbp * (dt + 0.05)  # 50 ms to change wavelength
     print("Expected duration: %s" % (units.readable_time(math.ceil(exp_time)),))
 
-    filename = raw_input("Filename to store the spectrum: ")
+    filename = input("Filename to store the spectrum: ")
     if "." not in filename:
         # No extension -> force hdf5
         filename += ".h5"

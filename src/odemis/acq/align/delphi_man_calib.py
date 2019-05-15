@@ -51,7 +51,7 @@ import tty
 
 import odemis.acq.align.delphi as aligndelphi
 import termios
-
+from builtins import input
 
 YES_CHARS = {"Y", "y", ''}
 YES_NO_CHARS = {"Y", "y", "N", "n", ''}
@@ -103,7 +103,7 @@ def input_col(colour, s):
     return (string): the input from the user
     """
     coloured_s = "\033[1;%sm%s\033[1;m" % (colour, s)
-    return raw_input(coloured_s)
+    return input(coloured_s)
 
 
 def _discard_data(df, data):
