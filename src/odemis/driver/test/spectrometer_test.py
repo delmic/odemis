@@ -21,10 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 import logging
 from odemis import model
 from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2, andorshrk
@@ -479,7 +476,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
 
-        self._data = Queue.Queue()
+        self._data = queue.Queue()
 
         orig_res = self.spectrometer.resolution.value
         self.spectrometer.data.subscribe(self.receive_spec_data)
@@ -498,7 +495,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
             while True:
                 try:
                     self._data.get(block=False)
-                except Queue.Empty:
+                except queue.Empty:
                     break
 
             d = self._data.get()
@@ -517,7 +514,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
             while True:
                 try:
                     self._data.get(block=False)
-                except Queue.Empty:
+                except queue.Empty:
                     break
 
             d = self._data.get()

@@ -17,10 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 import logging
 import math
 
@@ -907,9 +904,9 @@ class StreakCamera(model.HwComponent):
             raise
 
         # collect responses (error_code = 0-3,6-10) from commandport
-        self.queue_command_responses = Queue.Queue(maxsize=0)
+        self.queue_command_responses = queue.Queue(maxsize=0)
         # save messages (error_code = 4,5) from commandport
-        self.queue_img = Queue.Queue(maxsize=0)
+        self.queue_img = queue.Queue(maxsize=0)
 
         self.should_listen = True  # used in readCommandResponse thread
         self._waitForCorrectResponse = True  # used in sendCommand
@@ -1068,7 +1065,7 @@ class StreakCamera(model.HwComponent):
                 try:
                     # if not receive something after timeout
                     response = self.queue_command_responses.get(timeout=timeout)
-                except Queue.Empty:
+                except queue.Empty:
                     if last_error_code:
                         # log the last error code received before timeout
                         logging.error("Last error code for function %s before timeout was %s with message %s."

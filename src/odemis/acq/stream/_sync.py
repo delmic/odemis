@@ -39,10 +39,7 @@ from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 import random
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME
 
@@ -2531,7 +2528,7 @@ class ScannedRemoteTCStream(LiveStream):
         self._acq_state = RUNNING
         self._acq_thread = None  # thread
         self._prog_sum = 0  # s, for progress time estimation
-        self._data_queue = Queue.Queue()
+        self._data_queue = queue.Queue()
         self._current_future = None
 
     @property
@@ -2658,7 +2655,7 @@ class ScannedRemoteTCStream(LiveStream):
 
                     try:
                         data = self._data_queue.get(timeout=0.1)
-                    except Queue.Empty:
+                    except queue.Empty:
                         if time.time() > ttimeout:
                             raise IOError("Timed out waiting for frame, after %f s" % (time.time() - tstart,))
                         continue  # will check again whether the acquisition is cancelled
@@ -2691,7 +2688,7 @@ class ScannedRemoteTCStream(LiveStream):
             self._setEmission(0)
 
             # If cancelled, some data might still be queued => forget about it
-            self._data_queue = Queue.Queue()
+            self._data_queue = queue.Queue()
 
             with self._acq_lock:
                 if self._acq_state == CANCELLED:

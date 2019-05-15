@@ -26,10 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division, absolute_import
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 import collections
 from concurrent.futures import CancelledError
 from decorator import decorator
@@ -355,7 +352,7 @@ def _li_thread(delay, q):
                     if t is None: # Sign that we should stop (object is gone)
                         return
                     # logging.debug("Overriding call with call at %f", t)
-                except Queue.Empty:
+                except queue.Empty:
                     break
 
             try:
@@ -419,7 +416,7 @@ def limit_invocation(delay_s):
                         q = getattr(self, queue_name)
                     except AttributeError:
                         # Create everything need
-                        q = Queue.Queue()
+                        q = queue.Queue()
                         setattr(self, queue_name, q)
 
                         # Detect when instance of self is dereferenced

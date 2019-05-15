@@ -22,10 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from past.builtins import basestring
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 from concurrent.futures import CancelledError
 import glob
 import logging
@@ -1967,7 +1964,7 @@ class CLRelController(Controller):
             self.speed_rng[a] = (10e-6, max_speed)  # m/s (default low value for min)
 
             self._suspendAxis(a)  # in case it was not off yet
-            self._suspend_req[a] = Queue.Queue()
+            self._suspend_req[a] = queue.Queue()
             self._axis_ready[a] = threading.Event()
             t = threading.Thread(target=self._suspend_mng_run,
                                  name="Suspend manager ctrl %d axis %s" % (address, a),
@@ -2186,7 +2183,7 @@ class CLRelController(Controller):
                     timeout = stopt - now
                     try:
                         msg = q.get(timeout=timeout)
-                    except Queue.Empty:
+                    except queue.Empty:
                         # time to stop the encoder => just do the loop again
                         continue
                 else:  # time to stop
