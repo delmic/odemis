@@ -124,7 +124,6 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
-                 'spectrograph': {'grating': "mirror"},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),

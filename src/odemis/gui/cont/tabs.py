@@ -3800,13 +3800,14 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
         bl = main.brightlight
         align_mode = self.tab_data_model.align_mode.value
-        opath = self._mode_to_opm[align_mode]
+
         if event.GetEventObject().GetValue():  # manual focus btn active
             # # Disable autofocus if manual focus btn pushed
             #         # self.panel.btn_autofocus.Enable(False)
             #         # self.panel.gauge_autofocus.Enable(False)
             if align_mode == "streak-align":
                 s = None
+                opath = "streak-focus"
             else:
                 self._stream_controller.pauseStreams()
                 logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.", align_mode)
@@ -3844,6 +3845,7 @@ class Sparc2AlignTab(Tab):
             else:
                 bl.emissions.value = [0] * len(bl.emissions.value)
 
+            opath = self._mode_to_opm[align_mode]
             f = main.opm.setPath(opath)
             f.add_done_callback(self._on_align_mode_done)
             f.result()  # TODO: don't block the GUI => make it part of the manual focus??
