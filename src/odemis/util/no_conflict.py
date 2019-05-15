@@ -15,9 +15,9 @@ def skip_redundant(iterable, skipset=None):
 
 def remove_redundant(metaclasses):
     if sys.version_info[0] >= 3:
-        skipset = set([type])
+        skipset = {type}
     else:
-        skipset = set([types.ClassType])
+        skipset = {types.ClassType}
     for meta in metaclasses: # determines the metaclasses to be skipped
         skipset.update(inspect.getmro(meta)[1:])
     return tuple(skip_redundant(metaclasses, skipset))

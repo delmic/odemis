@@ -197,7 +197,6 @@ class TestTiffIO(unittest.TestCase):
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake spec",
                     model.MD_HW_VERSION: "1.23",
-                    model.MD_SW_VERSION: "aa 4.56",
                     model.MD_DESCRIPTION: "test3d",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
@@ -266,7 +265,6 @@ class TestTiffIO(unittest.TestCase):
                     model.MD_HW_NAME: "fake spec",
                     model.MD_DIMS: "ZYX",
                     model.MD_HW_VERSION: "1.23",
-                    model.MD_SW_VERSION: "aa 4.56",
                     model.MD_DESCRIPTION: "test3dspatial",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
@@ -488,8 +486,7 @@ class TestTiffIO(unittest.TestCase):
 
         iwl = float(ime.find("Pixels/Channel").get("ExcitationWavelength")) # nm
         iwl *= 1e-9
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
-                         iwl <= metadata[model.MD_IN_WL][1]))
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
@@ -1308,7 +1305,7 @@ class TestTiffIO(unittest.TestCase):
             if model.MD_HW_NOTE in md:
                 self.assertEqual(im.metadata[model.MD_HW_NOTE], md[model.MD_HW_NOTE])
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
-            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4);
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
             numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
@@ -1392,7 +1389,7 @@ class TestTiffIO(unittest.TestCase):
         # It should be within at least one of the bands
         owl = rmd[model.MD_OUT_WL]  # nm
         for eowl in emd[model.MD_OUT_WL]:
-            if (eowl[0] <= owl[0] and owl[1] <= eowl[-1]):
+            if eowl[0] <= owl[0] and owl[1] <= eowl[-1]:
                 break
         else:
             self.fail("Out wl %s is not within original metadata" % (owl,))
@@ -1404,7 +1401,7 @@ class TestTiffIO(unittest.TestCase):
         """
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake monochromator",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_DESCRIPTION: "test",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_HW_VERSION: "Unknown",
@@ -1416,7 +1413,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "etd",
                      model.MD_ACQ_DATE: time.time(),
@@ -1427,7 +1424,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "Anchor region",
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
@@ -1902,8 +1899,7 @@ class TestTiffIO(unittest.TestCase):
         main_images = []
         count = 0
         for im in f.iter_images():
-            zoom_level_images = []
-            zoom_level_images.append(im)
+            zoom_level_images = [im]
             # get an array of offsets, one for each subimage
             sub_ifds = f.GetField(T.TIFFTAG_SUBIFD)
             if not sub_ifds:
@@ -1987,7 +1983,7 @@ class TestTiffIO(unittest.TestCase):
         num_cols = 5
         size = (num_rows, num_cols)
         md = {
-            model.MD_SAMPLES_PER_PIXEL: 1,
+            model.MD_INTEGRATION_COUNT: 1,
             model.MD_DIMS: 'YX',
             model.MD_POS: (2e-6, 10e-6),
             model.MD_PIXEL_SIZE: (1e-6, 1e-6)
@@ -2023,7 +2019,7 @@ class TestTiffIO(unittest.TestCase):
         size = (3, 257, 295)
         dtype = numpy.uint16
         md = {
-            model.MD_SAMPLES_PER_PIXEL: 3,
+            model.MD_INTEGRATION_COUNT: 3,
             model.MD_DIMS: 'YXC',
             model.MD_POS: (2e-6, 10e-6),
             model.MD_PIXEL_SIZE: (1e-6, 1e-6)
@@ -2105,7 +2101,8 @@ class TestTiffIO(unittest.TestCase):
         # calculate the shapes of each zoomed image
         shapes = tiff._genResizedShapes(rdata.content[0])
         # add the full image to the shape list
-        shapes = [(rdata.content[0].shape)] + shapes
+        shapes = [rdata.content[0].shape] + shapes
+        # TODO shapes unused - add test to check shape is correct
 
         # First zoom level (full image)
         zoom_level = 0

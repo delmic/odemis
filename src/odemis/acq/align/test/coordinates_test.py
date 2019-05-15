@@ -243,7 +243,7 @@ class TestMatchCoordinates(unittest.TestCase):
         distorted_coordinates = []
         # Add noise to the coordinates
         for i in xrange(len(shuffled_coordinates)):
-            distortion = ((uniform(-0.1, 0.1), uniform(-0.1, 0.1)))
+            distortion = (uniform(-0.1, 0.1), uniform(-0.1, 0.1))
             distorted_coordinates.append(tuple(map(operator.add, shuffled_coordinates[i], distortion)))
 
         known_estimated_coordinates, known_optical_coordinates, max_dist = coordinates.MatchCoordinates(distorted_coordinates, electron_coordinates, 0.25, 0.25)

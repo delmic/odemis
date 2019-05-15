@@ -99,14 +99,13 @@ def main(args):
 
     for res in data.keys():
         for zoom in data[res].keys():
-            td = sorted(np.array(data[res][zoom].keys()))
+            td = sorted(np.array(list(data[res][zoom].keys())))
             s = np.array([data[res][zoom][x] for x in td])
             # plt.scatter(td, s)
             # plt.show()
             try:
                 popt, pcov = curve_fit(arctan_func, td, s)
-            except RuntimeError as TypeError:
-                popt = None
+            except (RuntimeError, TypeError):
                 continue
 
             xdata = np.linspace(0.00000096, 0.00004, 100)
@@ -126,9 +125,10 @@ def main(args):
 
     # slope_r, intercept_r, r, p, stderr = scipy.stats.linregress(z, s)
 
+    """
     n = 50
 
-    """
+    
     xdata = np.linspace(1, 50, n)
     ydata = np.linspace(0.00000096, 0.00004, n)
     zdata = np.empty((n, n))
@@ -143,7 +143,7 @@ def main(args):
     plt.show()
     """
 
-"""
+    """
     popt, pcov = curve_fit(lin_func, z[:2], s[:2])
     popt2, pcov2 = curve_fit(cubic_func, z[1:8], s[1:8])
     popt3, pcov3 = curve_fit(quad_func, z[7:], s[7:])
@@ -162,8 +162,9 @@ def main(args):
     plt.plot(xdata, ydata2, 'r-')
     # abline(slope_r, intercept_r)
     plt.show()
-"""
-    
+    """
+
+
 def s_of_z_td(zoom, td, calib):
     """
     
@@ -215,8 +216,8 @@ def s_of_z_td(zoom, td, calib):
         plt.show()
         """
 
-        return val
+        return None  # code never reached
 
 
 if __name__ == '__main__':
-    ret = main(sys.argv)
+    main(sys.argv)

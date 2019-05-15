@@ -229,7 +229,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test vertical binning (use less than the whole detector)
         """
-        if (self.detector.resolution.range[1][1] == 1):
+        if self.detector.resolution.range[1][1] == 1:
             self.skipTest("Detector doesn't support vertical binning")
 
         # Check using the maximum vertical binning (which is the default, so
@@ -290,7 +290,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Test horizontal binning (large horizontal pixels)
         """
-        if (self.spectrometer.binning.range[1][0] == 1):
+        if self.spectrometer.binning.range[1][0] == 1:
             self.skipTest("Spectrometer doesn't support horizontal binning")
 
         # start with minimum binning
@@ -320,19 +320,17 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Check the (unusual) behaviour of the resolution
         """
-        if (self.spectrometer.resolution.range[0] == self.spectrometer.resolution.range[1]):
+        if self.spectrometer.resolution.range[0] == self.spectrometer.resolution.range[1]:
             self.skipTest("Spectrometer doesn't support changing the resolution, boring")
 
         # horizontally, resolution behaves pretty normally
         res = self.spectrometer.resolution.range[1] # max
         self.spectrometer.resolution.value = res
-        res = self.spectrometer.resolution.value # the actual value
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
         res = self.spectrometer.resolution.range[0] # min
         self.spectrometer.resolution.value = res
-        res = self.spectrometer.resolution.value # the actual value
         data = self.spectrometer.data.get()
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
 
@@ -343,7 +341,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         except Exception:
             pass
         else:
-            self.fail("vertical resolution should not be allowed above 1, got %r" % new_res)
+            self.fail("vertical resolution should not be allowed above 1, got %r" % (new_res, ))
 
     def test_spec_calib(self):
         """
@@ -423,8 +421,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
             self.spectrometer.pixelSize.value[0] != 20e-6):
             self.skipTest("Hardware needs to be a PIXIS 400 for the test")
         # TODO: check we have a SpectraPro i2300 or FakeSpectraPro
-
-        res = self.spectrometer.resolution.value
 
         # 300 l/mm / 600 nm
         # => CCD coverage = 278 nm

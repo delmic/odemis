@@ -233,7 +233,7 @@ class Instantiator(object):
         """
         # update the children by adding a "parents" attribute
         for name, comp in self.ast.items():
-            references = comp.get("children", {}).values() + comp.get("dependencies", {}).values()
+            references = list(comp.get("children", {}).values()) + list(comp.get("dependencies", {}).values())
             for ref in references:
                 # detect direct loop
                 if ref == name:
@@ -435,7 +435,7 @@ class Instantiator(object):
         class_name = attr.get("class", None)
         if self.dry_run and not class_name == "Microscope":
             # mock class needs some hints to create the fake VAs
-            init["_vas"] = attr.get("properties", {}).keys()
+            init["_vas"] = list(attr.get("properties", {}).keys())
 
         # microscope take a special "model" argument which is AST itself
         if class_name == "Microscope":
@@ -492,11 +492,15 @@ class Instantiator(object):
     def is_leaf(self, name):
         """
         says whether a component is a leaf or not. A "leaf" is a component which
-          has no children separately instantiated (ie, only delegated children).
+          has no dependencies.
         name (str): name of the component instance
         """
         attr = self.ast[name]
 
+        if attr.get("dependencies", {}):
+            return False
+
+        # For backwards compatibility, also check the "dependent children"
         children_names = attr.get("children", {}).values()
         for child_name in children_names:
             child_attr = self.ast[child_name]
@@ -639,7 +643,7 @@ class Instantiator(object):
             ret |= self.get_required_components(n)
 
         try:
-            dependencies.append(attrs["power_supplier"])
+            ret.add(attrs["power_supplier"])
         except KeyError:
             pass  # no power supplier
 

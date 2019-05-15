@@ -415,8 +415,7 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(metadata[model.MD_DESCRIPTION], desc)
 
         iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
-        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl and
-                         iwl <= metadata[model.MD_IN_WL][1]))
+        self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
         self.assertAlmostEqual(metadata[model.MD_EXP_TIME], expt)
@@ -1071,7 +1070,7 @@ class TestHDF5IO(unittest.TestCase):
         # It should be within at least one of the bands
         owl = rmd[model.MD_OUT_WL]  # nm
         for eowl in emd[model.MD_OUT_WL]:
-            if (eowl[0] <= owl[0] and owl[1] <= eowl[-1]):
+            if eowl[0] <= owl[0] and owl[1] <= eowl[-1]:
                 break
         else:
             self.fail("Out wl %s is not within original metadata" % (owl,))
@@ -1087,7 +1086,7 @@ class TestHDF5IO(unittest.TestCase):
 
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake monochromator",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_DESCRIPTION: "test",
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_HW_VERSION: "Unknown",
@@ -1099,7 +1098,7 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "etd",
                      model.MD_ACQ_DATE: time.time(),
@@ -1110,7 +1109,7 @@ class TestHDF5IO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_VERSION: "Unknown",
-                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "Anchor region",
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
@@ -1249,7 +1248,7 @@ class TestHDF5IO(unittest.TestCase):
                              "Reporting excitation wavelength while there is none")
 
             if model.MD_TIME_LIST in md:
-                self.assertIn(model.MD_TIME_LIST, im.metadata.keys())
+                self.assertIn(model.MD_TIME_LIST, list(im.metadata.keys()))
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

@@ -93,7 +93,7 @@ class StreamController(object):
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
-        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.StaticCLStream)):
             options |= OPT_BTN_TINT
             if not isinstance(stream, acqstream.StaticStream):
                 options |= OPT_NAME_EDIT
@@ -268,7 +268,7 @@ class StreamController(object):
 
         # Process the hardware VAs first (emitter and detector hardware VAs are combined into one
         # attribute called 'hw_vas'
-        vas_names = util.sorted_according_to(self.stream.hw_vas.keys(), emitter_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.hw_vas.keys()), list(emitter_conf.keys()))
 
         for name in vas_names:
             va = self.stream.hw_vas[name]
@@ -280,7 +280,7 @@ class StreamController(object):
             add_divider = True
 
         # Process the emitter VAs first
-        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(), emitter_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.emt_vas.keys()), list(emitter_conf.keys()))
 
         for name in vas_names:
             va = self.stream.emt_vas[name]
@@ -293,7 +293,7 @@ class StreamController(object):
             add_divider = True
 
         # Then process the detector
-        vas_names = util.sorted_according_to(self.stream.det_vas.keys(), detector_conf.keys())
+        vas_names = util.sorted_according_to(list(self.stream.det_vas.keys()), list(detector_conf.keys()))
 
         for name in vas_names:
             va = self.stream.det_vas[name]
@@ -750,7 +750,7 @@ class StreamController(object):
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
-            self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
+            self.stream_panel.set_header_choices(list(dye.DyeDatabase.keys()))
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
         center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
@@ -1043,7 +1043,7 @@ class StreamController(object):
         va_config = OrderedDict((
             ("repetition", {
                 "control_type": CONTROL_COMBO,
-                "choices": set((1, 1)),  # Actually, it's immediately replaced by _onStreamRep()
+                "choices": {1, 1},  # Actually, it's immediately replaced by _onStreamRep()
                 "accuracy": None,  # never simplify the numbers
             }),
             ("pixelSize", {
@@ -2046,6 +2046,7 @@ class StreamBarController(object):
     def clear(self):
         """
         Remove all the streams (from the model and the GUI)
+        Must be called in the main GUI thread
         """
         # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists
@@ -2517,7 +2518,7 @@ class SparcStreamsController(StreamBarController):
         stream_config = self._stream_config.get(type(stream), {})
 
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        axes_names = util.sorted_according_to(list(axes.keys()), list(stream_config.keys()))
         for axisname in axes_names:
             comp = axes[axisname]
             if comp is None:

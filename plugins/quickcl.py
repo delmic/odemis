@@ -30,7 +30,7 @@ import math
 import numpy
 from odemis import dataio, model, gui, acq, util
 from odemis.acq import stream
-from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream
+from odemis.acq.stream import CLStream, SEMStream, MonochromatorSettingsStream, CLSettingsStream
 from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
@@ -39,7 +39,7 @@ from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.gui.util import img
+from odemis.gui.util import img, call_in_wx_main
 from odemis.model import InstantaneousFuture
 from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
@@ -263,21 +263,18 @@ class QuickCLPlugin(Plugin):
 
         self.addMenu("Acquisition/Quick CL...\tF2", self.start)
 
-    def _show_mn_axes(self, sctrl):
-        main_data = self.main_app.main_data
-        spg = self._getAffectingSpectrograph(main_data.monochromator)
-
-        axes = {"wavelength": spg,
-                "grating": spg,
-                "slit-in": spg,
-                "slit-monochromator": spg,
-               }
-
+    def _show_axes(self, sctrl, axes, sclass):
+        """
+        Show axes in settings panel for a given stream.
+        sctrl (StreamController): stream controller
+        axes (str -> comp): list of axes to display
+        sclass (Stream): stream class of (settings) stream
+        """
         stream_configs = get_stream_settings_config()
-        stream_config = stream_configs.get(MonochromatorSettingsStream, {})
+        stream_config = stream_configs.get(sclass, {})
 
         # Add Axes (in same order as config)
-        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        axes_names = util.sorted_according_to(axes.keys(), list(stream_config.keys()))
         for axisname in axes_names:
             comp = axes[axisname]
             if comp is None:
@@ -434,9 +431,7 @@ class QuickCLPlugin(Plugin):
         if fov_hw:
             dlg.viewport_l.canvas.fit_view_to_next_image = False
 
-        # Ideally, the user should be able to pick the cf-filter, for now, we
-        # just hard-code to "pass-through".
-        # TODO: provide a cl-filter control in the CL stream
+        # Use pass-through filter by default
         if main_data.cl_filter and "band" in main_data.cl_filter.axes:
             # find the "pass-through"
             bdef = main_data.cl_filter.axes["band"]
@@ -451,13 +446,7 @@ class QuickCLPlugin(Plugin):
         for s in self._get_acq_streams():
             dlg.addStream(s)
 
-        if hasattr(self, "_mn_stream"):
-            self._show_mn_axes(dlg.streambar_controller.stream_controllers[-1])
-
-        # Don't allow removing the streams
-        for sctrl in dlg.streambar_controller.stream_controllers:
-            sctrl.stream_panel.show_remove_btn(False)
-
+        self._setup_sbar_cont()
         dlg.addSettings(self, self.vaconf)
         if ALLOW_SAVE:
             dlg.addButton("Save", self.save, face_colour='blue')
@@ -476,6 +465,32 @@ class QuickCLPlugin(Plugin):
         # Update filename in main window
         tab_acqui = main_data.getTabByName("sparc_acqui")
         tab_acqui.acquisition_controller.update_fn_suggestion()
+
+    @call_in_wx_main
+    def _setup_sbar_cont(self):
+        # The following code needs to be run asynchronously to make sure the streams are added to
+        # the streambar controller first in .addStream.
+        main_data = self.main_app.main_data
+        sconts = self._dlg.streambar_controller.stream_controllers
+
+        # Add axes to monochromator and cl streams
+        if hasattr(self, "_mn_stream"):
+            spg = self._getAffectingSpectrograph(main_data.monochromator)
+            axes = {"wavelength": spg,
+                    "grating": spg,
+                    "slit-in": spg,
+                    "slit-monochromator": spg,
+                   }
+            scont = [sc for sc in sconts if sc.stream.detector is main_data.monochromator][0]
+            self._show_axes(scont, axes, MonochromatorSettingsStream)
+        if hasattr(self, "_cl_stream"):
+            axes = {"band": main_data.cl_filter}
+            scont = [sc for sc in sconts if sc.stream.detector is main_data.cld][0]
+            self._show_axes(scont, axes, CLSettingsStream)
+
+        # Don't allow removing the streams
+        for sctrl in sconts:
+            sctrl.stream_panel.show_remove_btn(False)
 
     def _acq_canceller(self, future):
         return future._cur_f.cancel()

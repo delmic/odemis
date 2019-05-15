@@ -650,7 +650,7 @@ class AndorCam2(model.DigitalCamera):
                                     "in the device properties (%s/%s)",
                                     rr, gain, ror_choices, gain_choices)
                     continue
-                if not 1 <= emgain <= 300 or not isinstance(emgain, (int)):
+                if not 1 <= emgain <= 300 or not isinstance(emgain, int):
                     raise ValueError("emgain must be 1 <= integer <= 300, but "
                                      "got %s" % (emgain,))
                 if (exc_rr, exc_gain) in self._lut_emgains:
@@ -1213,7 +1213,7 @@ class AndorCam2(model.DigitalCamera):
         gain (float): wished gain (multiplication, no unit), should be a correct value
         return (float): the actual gain set
         """
-        assert((0 <= gain))
+        assert(0 <= gain)
 
         gains = self.GetPreAmpGains()
         self.atcore.SetPreAmpGain(util.index_closest(gain, gains))
@@ -1593,7 +1593,7 @@ class AndorCam2(model.DigitalCamera):
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         caps = self.GetCapabilities()
-        if (not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE):
+        if not caps.ReadModes & AndorCapabilities.READMODE_SUBIMAGE:
             if size != resolution:
                 raise IOError("AndorCam: Requested image size " + str(size) +
                               " does not match sensor resolution " + str(resolution))
@@ -2043,7 +2043,6 @@ class AndorCam2(model.DigitalCamera):
                     raise
             if has_hw_lock:
                 self.hw_lock.release()
-                has_hw_lock = False
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
             gc.collect()
@@ -2582,7 +2581,7 @@ class FakeAndorV2DLL(object):
 
     def Initialize(self, path):
         if not os.path.isdir(path):
-            logging.warning("Trying to inialise simulator with an incorrect path: %s",
+            logging.warning("Trying to initialize simulator with an incorrect path: %s",
                             path)
 
     def ShutDown(self):

@@ -288,7 +288,7 @@ def FindSpot(image, sensitivity_limit=100):
             LookupError() if spot was not found
     """
     subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20, sensitivity_limit)
-    if subimages == []:
+    if not subimages:
         raise LookupError("No spot detected")
 
     spot_coordinates = [FindCenterCoordinates(i) for i in subimages]

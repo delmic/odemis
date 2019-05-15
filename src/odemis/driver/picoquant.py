@@ -403,7 +403,7 @@ class PH300(model.Detector):
         partnum = create_string_buffer(8)
         ver = create_string_buffer(8)
         self._dll.PH_GetHardwareInfo(self._idx, mod, partnum, ver)
-        return (mod.value, partnum.value, ver.value)
+        return mod.value, partnum.value, ver.value
 
     def GetSerialNumber(self):
         sn_str = create_string_buffer(8)
@@ -699,9 +699,9 @@ class PH300(model.Detector):
         shutters (list of string): the names of the shutters
         open (boolean): True if shutters should open, False if they should close
         """
-        axes = {}
         fs = []
         for sn in shutters:
+            axes = {}
             logging.debug("Setting shutter %s to %s.", sn, open)
             ax_name, closed_pos, open_pos = self._shutter_axes[sn]
             shutter = self._shutters[sn]
@@ -713,7 +713,8 @@ class PH300(model.Detector):
                 fs.append(shutter.moveAbs(axes))
             except Exception as e:
                 logging.error("Toggling shutters failed with exception %s", e)
-        futures.wait(fs)
+        for f in fs:
+            f.result()
 
     def _acquire(self):
         """
@@ -788,7 +789,7 @@ class PH300(model.Detector):
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
-        else:
+        else:  # code unreachable
             logging.error("Acquisition thread ended without exception")
         finally:
             self._toggle_shutters(self._shutters.keys(), False)

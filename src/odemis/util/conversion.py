@@ -234,7 +234,7 @@ def reproduce_typed_value(typed_value, str_val):
     elif isinstance(typed_value, dict):
         # Grab the first key/value pair, to determine their types
         if typed_value:
-            key_typed_val = typed_value.keys()[0]
+            key_typed_val = list(typed_value.keys())[0]
             value_typed_val = typed_value[key_typed_val]
         else:
             logging.warning("Type of attribute is unknown, using string")
@@ -392,8 +392,8 @@ def get_img_transformation_md(mat, timage, src_img):
     # the transformation matrix to the values, passing by OpenCV. There should
     # be a more straightforward mathematical path to achieve the same.
 
-    half_size = ((timage.shape[1] / 2, timage.shape[0] / 2))
-    img_src_center = ((src_img.shape[1] / 2, src_img.shape[0] / 2))
+    half_size = (timage.shape[1] / 2, timage.shape[0] / 2)
+    img_src_center = (src_img.shape[1] / 2, src_img.shape[0] / 2)
 
     # project some key points from the original image on the transformed image
     points = [

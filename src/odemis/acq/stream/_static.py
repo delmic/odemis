@@ -304,9 +304,6 @@ class StaticFluoStream(Static2DStream):
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_IN_WL and MD_OUT_WL.
         """
-
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_FLUO
         # Note: it will update the image, and changing the tint will do it again
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FLUO
@@ -423,12 +420,10 @@ class StaticARStream(StaticStream):
 
         # polarization VA
         # check if any polarization analyzer data, (None) == no analyzer data (pol)
-        if self._pos.keys()[0][-1]:
+        if polpositions != {None}:
             # use first entry in acquisition to populate VA (acq could have 1 or 6 pol pos)
-            self.polarization = model.VAEnumerated(self._pos.keys()[0][-1],
+            self.polarization = model.VAEnumerated(list(polpositions)[0],
                                 choices=polpositions)
-
-        if self._pos.keys()[0][-1]:
             self.polarization.subscribe(self._onPolarization)
 
         if "acq_type" not in kwargs:
@@ -539,7 +534,7 @@ class StaticARStream(StaticStream):
             if pos == (None, None):
                 self.image.value = None
             else:
-                if self._pos.keys()[0][-1]:
+                if list(self._pos.keys())[0][-1]:
                     pol = self.polarization.value
                 else:
                     pol = None

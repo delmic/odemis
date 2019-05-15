@@ -483,7 +483,7 @@ class RepetitionStream(LiveStream):
         shape = self._scanner.shape
         # The maximum pixel size is if we acquire a single pixel for the whole FoV
         max_pxs = min(spxs[0] * shape[0], spxs[1] * shape[1])
-        return (min_pxs, max_pxs)
+        return min_pxs, max_pxs
 
     @abstractmethod
     def estimateAcquisitionTime(self):
@@ -1254,7 +1254,7 @@ class OverlayStream(Stream):
             c_rot = -ccdmd.get(model.MD_ROTATION_COR, 0) % (2 * math.pi)
             rot_diff = abs(((f_rot - c_rot) + math.pi) % (2 * math.pi) - math.pi)
             scale_diff = max(f_scale[0] / c_scale[0], c_scale[0] / f_scale[0])
-            if (rot_diff > math.radians(2) or scale_diff > max_scale_diff or any(v > 1.3 for v in f_scale_xy) or any(v < 0.7 for v in f_scale_xy)):
+            if rot_diff > math.radians(2) or scale_diff > max_scale_diff or any(v > 1.3 for v in f_scale_xy) or any(v < 0.7 for v in f_scale_xy):
                 raise ValueError("Overlay failure. There is a significant difference between the calibration "
                                  "and fine alignment values (scale difference: %f, rotation difference: %f, "
                                  "scale ratio xy: %s)"

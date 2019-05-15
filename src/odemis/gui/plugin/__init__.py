@@ -193,7 +193,7 @@ class Plugin(object):
             name = self.__class__.__name__
 
         if self.__version__:
-            v = " v%s" % (self.__version__)
+            v = " v%s" % (self.__version__,)
         else:
             v = ""
 
@@ -377,7 +377,7 @@ class AcquisitionDialog(xrcfr_plugin):
 
         if not conf:
             conf = {}
-        vas_names = util.sorted_according_to(vas.keys(), conf.keys())
+        vas_names = util.sorted_according_to(list(vas.keys()), list(conf.keys()))
 
         for name in vas_names:
             va = vas[name]

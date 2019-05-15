@@ -608,7 +608,7 @@ class ConvertStage(model.Actuator):
         if len(dependencies) != 1:
             raise ValueError("ConvertStage needs 1 dependency")
 
-        self._dependency = dependencies.values()[0]
+        self._dependency = list(dependencies.values())[0]
         self._axes_dep = {"x": axes[0], "y": axes[1]}
         if scale is None:
             scale = (1, 1)
@@ -749,7 +749,7 @@ class AntiBacklashActuator(model.Actuator):
             if not isinstance(v, numbers.Real):
                 raise ValueError("Backlash value of %s must be a number but got '%s'" % (a, v))
 
-        self._dependency = dependencies.values()[0]
+        self._dependency = list(dependencies.values())[0]
         self._backlash = backlash
         axes_def = {}
         for an, ax in self._dependency.axes.items():
@@ -860,7 +860,7 @@ class AntiBacklashActuator(model.Actuator):
                     return
 
         # backlash move
-        self._antiBacklashMove(shift.keys())
+        self._antiBacklashMove(list(shift.keys()))
 
     def _doMoveAbs(self, future, pos):
         sub_pos = {}
@@ -974,7 +974,7 @@ class LinearActuator(model.Actuator):
         if len(dependencies) != 1:
             raise ValueError("LinearActuator needs precisely one dependency")
 
-        axis, dep = dependencies.items()[0]
+        axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
         self._caxis = axis_name
@@ -1089,7 +1089,7 @@ class LinearActuator(model.Actuator):
     def _doMoveAbs(self, pos):
         self._referenceIfNeeded()
 
-        axis, distance = pos.items()[0]
+        axis, distance = list(pos.items())[0]
         logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
         move = {self._caxis: distance + self._offset}
         self._dependency.moveAbs(move).result()
@@ -1154,7 +1154,7 @@ class FixedPositionsActuator(model.Actuator):
         self._move_sum = 0
         self._position = {}
         self._referenced = {}
-        axis, dep = dependencies.items()[0]
+        axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
         self._caxis = axis_name
@@ -1197,7 +1197,7 @@ class FixedPositionsActuator(model.Actuator):
             f.add_done_callback(self._on_referenced)
         else:
             # If not at a known position => move to the closest known position
-            nearest = util.find_closest(self._dependency.position.value[self._caxis], self._positions.keys())
+            nearest = util.find_closest(self._dependency.position.value[self._caxis], list(self._positions.keys()))
             self.moveAbs({self._axis: nearest}).result()
 
     def _on_referenced(self, future):
@@ -1262,7 +1262,7 @@ class FixedPositionsActuator(model.Actuator):
         return f
 
     def _doMoveAbs(self, pos):
-        axis, distance = pos.items()[0]
+        axis, distance = list(pos.items())[0]
         logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
 
         try:
@@ -1309,7 +1309,7 @@ class FixedPositionsActuator(model.Actuator):
         # If we just did homing and ended up to an unsupported position, move to
         # the nearest supported position
         cp = self._dependency.position.value[self._caxis]
-        if (cp not in self._positions):
+        if cp not in self._positions:
             nearest = util.find_closest(cp, self._positions.keys())
             self._doMoveAbs({self._axis: nearest})
 
@@ -1656,7 +1656,7 @@ class CombinedFixedPositionActuator(model.Actuator):
                     if pos[i] not in c.axes[ac].choices:
                         raise ValueError("Position %s is not in range of choices for dependencies." % pos[i])
 
-        axes = {axis_name: model.Axis(choices=set(positions.keys() + [fallback]))}
+        axes = {axis_name: model.Axis(choices=set(list(positions.keys()) + [fallback]))}
 
         # this set ._axes and ._dependencies
         model.Actuator.__init__(self, name, role, axes=axes, dependencies=dependencies, **kwargs)
@@ -1712,7 +1712,7 @@ class CombinedFixedPositionActuator(model.Actuator):
         update the position VA
         """
         try:
-            pos_key_matching = self._readPositionfromdependencies()
+            pos_key_matching = self._readPositionfromDependencies()
 
             # it's read-only, so we change it via _value
             self.position._set_value({self._axis_name: pos_key_matching}, force_write=True)
@@ -1854,7 +1854,7 @@ class CombinedFixedPositionActuator(model.Actuator):
 
             try:
                 # check if referencing pos matches any position allowed
-                self._readPositionfromdependencies()
+                self._readPositionfromDependencies()
             except LookupError:
                 # If we just did referencing and ended up to an unsupported position,
                 # move to closest supported position
@@ -1939,7 +1939,7 @@ class RotationActuator(model.Actuator):
         self._move_sum = 0
         # check when a specified number of rotations was performed
         self._move_num_total = 0
-        axis, dep = dependencies.items()[0]
+        axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
         self._dep_future = None

@@ -79,7 +79,7 @@ def get_shift_calibration(data):
 
     for res in data.keys():
         for zoom in data[res].keys():
-            td = sorted(np.array(data[res][zoom].keys()))
+            td = sorted(np.array(list(data[res][zoom].keys())))
             s = np.array([data[res][zoom][x] for x in td])
             try:
                 popt, pcov = curve_fit(arctan_func, td, s)

@@ -260,7 +260,7 @@ class PIRedStone(object):
         st = bytes_int[0] + (bytes_int[1] << 8) + (bytes_int[2] << 16) + (bytes_int[3] << 24)
         err = bytes_int[4]
         assert((0 <= err) and (err <= 255))
-        return (st, err)
+        return st, err
 
     def tellBoardAddress(self):
         """
@@ -608,13 +608,13 @@ class PIRedStone(object):
         sign = math.copysign(1, m)
         distance = abs(m)
         if distance < distance_step:
-            return (1, self.convertSmallMToDevice(m))
+            return 1, self.convertSmallMToDevice(m)
 
         # linear => several times steps of at much 255 (can be smaller to accommodate)
         steps = math.ceil(distance / distance_step)
         stepsize = self.convertSmallMToDevice(distance / steps)
         assert(stepsize > 0) # could happen if c is very bad (but normally it's never so bad)
-        return (steps, sign * stepsize)
+        return steps, sign * stepsize
 
     def convertDeviceToM(self, units):
         """
@@ -766,7 +766,7 @@ class FakePIRedStone(PIRedStone):
     def tellStatus(self):
         status = STATUS_BOARD_ADDRESSED
         err = 0
-        return (status, err)
+        return status, err
 
     def tellBoardAddress(self):
         return self.address
@@ -802,7 +802,7 @@ class FakePIRedStone(PIRedStone):
 
     @staticmethod
     def scan(port, max_add=15):
-        present = set([1])
+        present = {1}
         return present
 
     @staticmethod

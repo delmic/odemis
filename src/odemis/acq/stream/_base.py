@@ -435,7 +435,7 @@ class Stream(object):
             logging.warning(u"Going to link Hw VAs, while already linked")
 
         # Make sure the VAs are set in the right order to keep values
-        hwvas = self._hwvas.items()  # must be a list
+        hwvas = list(self._hwvas.items())  # must be a list
         hwvas.sort(key=self._index_in_va_order)
 
         for vaname, hwva in hwvas:
@@ -1031,7 +1031,7 @@ class Stream(object):
         pxs = md[model.MD_PIXEL_SIZE]
         c = md[model.MD_POS]
         w, h = shape[1] * pxs[0], shape[0] * pxs[1]
-        return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+        return c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2
 
     def getRawMetadata(self):
         """

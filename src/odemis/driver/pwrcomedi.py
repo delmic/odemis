@@ -166,7 +166,6 @@ class Light(model.Emitter):
             raise ValueError("Power requested %g < %g" % (power, curve[0][1]))
 
         # Find the segment that correspond to that power
-        seg = 0
         for i, (v, w) in enumerate(curve[1:]):
             if power <= w:
                 seg = i

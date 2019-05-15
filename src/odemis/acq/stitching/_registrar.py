@@ -557,7 +557,7 @@ class GlobalShiftRegistrar(object):
             if num_rows <= row:
                 self.tiles.append([None] * num_cols)
                 self.shifts_hor.append([None] * (num_cols - 1))
-                self.shifts_ver.append([None] * (num_cols))
+                self.shifts_ver.append([None] * num_cols)
         elif abs(ver_diff) > abs(hor_diff) and ver_diff > 0:
             # new tile on top of previous tile
             row = prev_row - 1
@@ -746,4 +746,4 @@ class GlobalShiftRegistrar(object):
             if i not in positions:
                 positions[i] = [None, None]
 
-        return numpy.array(positions.values()).reshape([num_rows, num_cols, 2])
+        return numpy.array(list(positions.values())).reshape([num_rows, num_cols, 2])

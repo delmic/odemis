@@ -33,6 +33,7 @@ import os
 import signal
 import threading
 import time
+import itertools
 
 
 # Constants from ShamrockCIF.h
@@ -518,7 +519,7 @@ class Shamrock(model.Actuator):
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
 
             # set HW and SW version
-            self._swVersion = "%s" % (odemis.__version__)
+            self._swVersion = "%s" % (odemis.__version__,)
             sn = self.GetSerialNumber()
             self._hwVersion = ("%s (s/n: %s, focal length: %d mm)" %
                                ("Andor Shamrock", sn, round(fl * 1000)))
@@ -813,7 +814,7 @@ class Shamrock(model.Actuator):
         present = c_int()
         with self._hw_access:
             self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     def GetCalibration(self, npixels):
         """
@@ -959,7 +960,7 @@ class Shamrock(model.Actuator):
     def FocusMirrorIsPresent(self):
         present = c_int()
         self._dll.ShamrockFocusMirrorIsPresent(self._device, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     # Filter wheel support
     def SetFilter(self, pos):
@@ -995,7 +996,7 @@ class Shamrock(model.Actuator):
     def FilterIsPresent(self):
         present = c_int()
         self._dll.ShamrockFilterIsPresent(self._device, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     # Slits management
     def SetAutoSlitWidth(self, index, width):
@@ -1046,7 +1047,7 @@ class Shamrock(model.Actuator):
         assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         present = c_int()
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     # Note: the following 4 functions are not documented (although advertised in
     # the changelog and in the include file)
@@ -1131,14 +1132,14 @@ class Shamrock(model.Actuator):
         # Note: mode = 2 causes a "Invalid argument" error. Reported 2016-09-16.
         with self._hw_access:
             self._dll.ShamrockIsModePossible(self._device, mode, byref(possible))
-        return (possible.value != 0)
+        return possible.value != 0
 
     def ShutterIsPresent(self):
         present = c_int()
 
         with self._hw_access:
             self._dll.ShamrockShutterIsPresent(self._device, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     # Mirror flipper management
     def SetFlipperMirror(self, flipper, port):
@@ -1189,7 +1190,7 @@ class Shamrock(model.Actuator):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         present = c_int()
         self._dll.ShamrockFlipperMirrorIsPresent(self._device, flipper, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     # "Accessory" port control (= 2 TTL lines)
     def SetAccessory(self, line, val):
@@ -1220,12 +1221,12 @@ class Shamrock(model.Actuator):
         state = c_int()
         with self._hw_access:
             self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
-        return (state.value != 0)
+        return state.value != 0
 
     def AccessoryIsPresent(self):
         present = c_int()
         self._dll.ShamrockAccessoryIsPresent(self._device, byref(present))
-        return (present.value != 0)
+        return present.value != 0
 
     # Helper functions
     def _getGratingChoices(self):
@@ -2142,7 +2143,7 @@ class AndorSpec(model.Detector):
 
         # duplicate every other VA and Event from the detector
         # that includes required VAs like .exposureTime
-        for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
+        for aname, value in itertools.chain(model.getVAs(dt).items(), model.getEvents(dt).items()):
             if not hasattr(self, aname):
                 setattr(self, aname, value)
             else:

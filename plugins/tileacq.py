@@ -75,7 +75,7 @@ class TileAcqPlugin(Plugin):
             "tooltip": "Pattern of each filename",
             "control_type": odemis.gui.CONTROL_SAVE_FILE,
             "wildcard":
-                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|" \
+                "TIFF files (*.tiff, *tif)|*.tiff;*.tif|"
                 "HDF5 Files (*.h5)|*.h5",
         }),
         ("stitch", {
@@ -543,7 +543,7 @@ class TileAcqPlugin(Plugin):
                 # compensate for binning
                 binning = ccd.binning.value
                 pxs = [p / b for p, b in zip(pxs, binning)]
-                return (shape[0] * pxs[0], shape[1] * pxs[1])
+                return shape[0] * pxs[0], shape[1] * pxs[1]
 
             elif isinstance(sd, RepetitionStream):
                 # CL, Spectrum, AR

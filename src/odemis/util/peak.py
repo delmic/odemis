@@ -239,7 +239,7 @@ class PeakFitter(object):
                 width = PEAK_WIDTHS[type]
                 FitFunction = PEAK_FUNCTIONS[type]
             except KeyError:
-                raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
+                raise KeyError("Given type %s not in available fitting types: %s" % (type, list(PEAK_FUNCTIONS.keys())))
             for step in range(5):
                 if future._fit_state == CANCELLED:
                     raise CancelledError()
@@ -247,7 +247,7 @@ class PeakFitter(object):
                 # Increase window size until peak detection finds enough peaks to fit
                 # the spectrum curve
                 peaks = Detect(smoothed, wavelength, lookahead=window_size, delta=5)[0]
-                if peaks == []:
+                if not peaks:
                     window_size = int(round(window_size * 1.2))
                     logging.debug("Retrying to fit peak with window = %d", window_size)
                     continue
@@ -336,7 +336,7 @@ def Curve(wavelength, peak_parameters, offset, type='gaussian'):
     try:
         FitFunction = PEAK_FUNCTIONS[type]
     except KeyError:
-        raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
+        raise KeyError("Given type %s not in available fitting types: %s" % (type, list(PEAK_FUNCTIONS.keys())))
 
     # Flatten the peak parameters tuples
     peak_flat = [p for l in peak_parameters for p in l]

@@ -258,7 +258,6 @@ class TestTiffIO(unittest.TestCase):
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake spec",
                     model.MD_HW_VERSION: "1.23",
-                    model.MD_SW_VERSION: "aa 4.56",
                     model.MD_DESCRIPTION: "test3d",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,

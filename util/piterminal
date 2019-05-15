@@ -83,9 +83,8 @@ def main(args):
     logging.getLogger().setLevel(loglev)
 
     try:
-        kwargs = {}
+        kwargs = {"master": None}
         # Never try to connect to the master
-        kwargs["master"] = None
 
         if options.port == "/dev/fake":
             kwargs["_addresses"] = {1: False}

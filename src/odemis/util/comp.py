@@ -51,7 +51,7 @@ def compute_scanner_fov(comp):
     except AttributeError:
         raise ValueError("Component %s doesn't have pixelSize" % (comp,))
 
-    return (shape[0] * pxs[0], shape[1] * pxs[1])
+    return shape[0] * pxs[0], shape[1] * pxs[1]
 
 
 def compute_camera_fov(comp):
@@ -89,7 +89,7 @@ def compute_camera_fov(comp):
     except AttributeError:  # No binning => binning is fixed to 1,1
         pass
 
-    return (shape[0] * pxs[0], shape[1] * pxs[1])
+    return shape[0] * pxs[0], shape[1] * pxs[1]
 
 
 def get_fov_rect(comp, fov):

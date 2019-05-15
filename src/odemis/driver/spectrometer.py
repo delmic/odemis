@@ -26,6 +26,7 @@ import math
 import numpy
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase
+from itertools import chain
 
 # This is a class that represents a spectrometer (ie, a detector to acquire
 # a spectrum) by wrapping a DigitalCamera and a spectrograph (ie, actuator which
@@ -130,7 +131,7 @@ class CompositedSpectrometer(model.Detector):
 
         # duplicate every other VA and Event from the detector
         # that includes required VAs like .pixelSize and .exposureTime
-        for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
+        for aname, value in chain(model.getVAs(dt).items(), model.getEvents(dt).items()):
             if not hasattr(self, aname):
                 setattr(self, aname, value)
             else:

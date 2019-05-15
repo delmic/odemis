@@ -302,7 +302,7 @@ class LLE(model.Emitter):
 
         s_byte = 0x7f # reset a bit to 0 to activate
         for s in sources:
-            assert(0 <= s and s <= 6)
+            assert(0 <= s <= 6)
             if s == 4: # for yellow, "green/yellow" (1) channel must be activated (=0)
                 s_byte &= ~ (1 << 1)
             s_byte &= ~(1 << s)
@@ -317,7 +317,7 @@ class LLE(model.Emitter):
         source (0 <= int <= 6): source number
         intensity (0<= int <= 255): intensity value 0=> off, 255 => fully bright
         """
-        assert(0 <= source and source <= 6)
+        assert(0 <= source <= 6)
         bit, addr = SOURCE_TO_BIT_ADDR[source]
 
         com = bytearray(b"\x53\x18\x03\x0F\xFF\xF0\x50")
@@ -479,7 +479,7 @@ class LLE(model.Emitter):
             if temp == 0:
                 # means that we read only 0's
                 logging.warning("device reports suspicious temperature of exactly 0°C.")
-            if 0 < temp and temp < 250:
+            if 0 < temp < 250:
                 return True
         except Exception:
             logging.exception("Selftest failed")

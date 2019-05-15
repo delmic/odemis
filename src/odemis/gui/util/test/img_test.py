@@ -49,7 +49,7 @@ def GetRGB(im, x, y):
     g = im.GetGreen(x, y)
     b = im.GetBlue(x, y)
 
-    return (r, g, b)
+    return r, g, b
 
 
 class TestWxImage2NDImage(unittest.TestCase):

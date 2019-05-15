@@ -331,7 +331,7 @@ class ESP(model.Actuator):
 
         # After errors are collected
         if len(err_q) > 0:
-            raise ESPError("Error code(s) %s" % (err_q))
+            raise ESPError("Error code(s) %s" % (err_q,))
 
     def SetAxisUnit(self, axis_num, unit):
         # Set the internal unit used by the controller
@@ -717,7 +717,7 @@ class ESPSimulator(object):
 
     def _doMove(self, axis, new_pos):
         # Check that the position is within the range.
-        if new_pos >= self._range[0] and new_pos <= self._range[1]:
+        if self._range[0] <= new_pos <= self._range[1]:
             self._target_pos[axis] = new_pos
             self._start_pos = copy.copy(self._pos)
             d = self._target_pos[axis] - self._start_pos[axis]

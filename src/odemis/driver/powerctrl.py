@@ -59,7 +59,7 @@ class PowerControlUnit(model.PowerSupplier):
         Raise an exception if the device cannot be opened
         '''
         if pin_map:
-            self.powered = pin_map.keys()
+            self.powered = list(pin_map.keys())
         else:
             self.powered = []
         model.PowerSupplier.__init__(self, name, role, **kwargs)

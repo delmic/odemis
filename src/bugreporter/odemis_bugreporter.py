@@ -130,7 +130,7 @@ def parse_config(configfile):
     return config
 
 
-class OdemisBugreporter():
+class OdemisBugreporter(object):
     """
     Class to create a bugreport. Contains functions for compressing the odemis files, opening
     a window asking for a bugreport description, and uploading the bugreport to
@@ -237,10 +237,15 @@ class OdemisBugreporter():
         self.zip_fn = os.path.join(home_dir, 'Desktop', '%s-odemis-log-%s.zip' % (hostname, t))
 
         logging.debug("Will store bug report in %s", self.zip_fn)
-        files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
+        LOGFILE_BACKEND = '/var/log/odemis.log'
+        files = [LOGFILE_BACKEND, os.path.join(home_dir, 'odemis-gui.log'),
                  os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
                  os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png',
                  '/etc/odemis-settings.yaml']
+
+        # If odemis.log is < 2M, it might not have enough info, so also get odemis.log.1
+        if not os.path.exists(LOGFILE_BACKEND) or os.path.getsize(LOGFILE_BACKEND) < 2e6:
+            files.append(LOGFILE_BACKEND + ".1")
 
         try:
             # Save yaml file, call MODEL_SELECTOR if needed
@@ -468,11 +473,11 @@ class BugreporterFrame(wx.Frame):
         if name in self.known_users.keys():
             del self.known_users[name]
         elif len(self.known_users.items()) >= MAX_USERS:
-            oldest_entry = self.known_users.keys()[-1]
+            oldest_entry = list(self.known_users.keys())[-1]
             del self.known_users[oldest_entry]
         # It would be nicer not to create a new ordered dictionary, but to move the
         # element internally. The python 3 version has such a function (move_to_end).
-        prev_items = self.known_users.items()
+        prev_items = list(self.known_users.items())
         self.known_users = OrderedDict([(name, email)] + prev_items)
         # Overwrite tsv file
         with open(self.conf_path, 'w+') as f:

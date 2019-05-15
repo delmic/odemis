@@ -209,7 +209,7 @@ class DataFlow(DataFlowBase):
         Equivalent to __getstate__() of the proxy version
         """
         proxy_state = Pyro4.core.pyroObjectSerializer(self)[2]
-        return (proxy_state, _core.dump_roattributes(self), self.max_discard)
+        return proxy_state, _core.dump_roattributes(self), self.max_discard
 
     @property
     def max_discard(self):
@@ -416,7 +416,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     def __getstate__(self):
         # must permit to recreate a proxy to a data-flow in a different container
         proxy_state = Pyro4.Proxy.__getstate__(self)
-        return (proxy_state, _core.dump_roattributes(self), self.max_discard)
+        return proxy_state, _core.dump_roattributes(self), self.max_discard
 
     def __setstate__(self, state):
         proxy_state, roattributes, self.max_discard = state
@@ -634,7 +634,7 @@ def DataFlowSerializer(self):
     daemon = getattr(self, "_pyroDaemon", None)
     if daemon:
         # only return a proxy if the object is a registered pyro object
-        return (DataFlowProxy, (daemon.uriFor(self),), self._getproxystate())
+        return DataFlowProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 
@@ -754,7 +754,7 @@ def EventSerializer(self):
     daemon = getattr(self, "_pyroDaemon", None)
     if daemon:
         # only return a proxy if the object is a registered pyro object
-        return (EventProxy, (daemon.uriFor(self),), self._getproxystate())
+        return EventProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 

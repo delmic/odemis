@@ -57,7 +57,7 @@ class WeakMethodFree(object):
 
     def __call__(self, *arg, **kwargs):
         fun = self.f()
-        if fun == None:
+        if fun is None:
             raise WeakRefLostError('Function no longer exist')
         return fun(*arg, **kwargs)
 

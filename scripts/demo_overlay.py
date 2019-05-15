@@ -182,8 +182,7 @@ def _DoAcquisition(future, escan, ccd, detector, light):
     finally:
         detector.data.unsubscribe(_ssOnSEMImage)
 
-    return optical_image_1, optical_image_2, optical_image_3,
-    detector.data._electron_image
+    return optical_image_1, optical_image_2, optical_image_3, detector.data._electron_image
 
 # Copy from acqmng
 # @staticmethod
