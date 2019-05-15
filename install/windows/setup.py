@@ -31,10 +31,10 @@ def find_vcvarsall(_=None):
     productdir = "%s/AppData/Local/Programs/Common/Microsoft/Visual C++ for Python/9.0" % home
     vcvarsall = os.path.join(productdir, "vcvarsall.bat")
     if os.path.isfile(vcvarsall):
-        print "VCvarsall.bat found"
+        print("VCvarsall.bat found")
         return vcvarsall
     else:
-        print "Vcvarsall.bat not found. Update the productdir variable in setup.py?"
+        print("Vcvarsall.bat not found. Update the productdir variable in setup.py?")
         return None
 
 msvc9compiler.find_vcvarsall = find_vcvarsall
