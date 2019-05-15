@@ -63,7 +63,7 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
                     self._toLens2Pos = pos
             if self._toLens2Pos is None:
                 raise ValueError("Lens 2 actuator should have an 'on' position, but only %s" %
-                                 (l2.axes["x"].choices.values(),))
+                                 (list(l2.axes["x"].choices.values()),))
 
         # Polarization stored on the stream.
         # We don't use the standard "global" axes trick, so that it's possible

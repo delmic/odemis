@@ -1248,7 +1248,7 @@ class TestHDF5IO(unittest.TestCase):
                              "Reporting excitation wavelength while there is none")
 
             if model.MD_TIME_LIST in md:
-                self.assertIn(model.MD_TIME_LIST, im.metadata.keys())
+                self.assertIn(model.MD_TIME_LIST, list(im.metadata.keys()))
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

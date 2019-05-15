@@ -306,7 +306,7 @@ class PMTControl(model.PowerSupplier):
         """
         supply power
         """
-        value = sup.values()[0]  # only care about the value
+        value = list(sup.values())[0]  # only care about the value
         self.setRelay(value)
         self._updateSupplied()
 

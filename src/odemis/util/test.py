@@ -112,7 +112,7 @@ def assert_pos_almost_equal(actual, expected, *args, **kwargs):
     """
     if set(expected.keys()) != set(actual.keys()):
         raise AssertionError("Dimensions of position do not match: %s != %s" %
-                             (actual.keys(), expected.keys()))
+                             (list(actual.keys()), list(expected.keys())))
 
     for k in expected.keys():
         if not util.almost_equal(actual[k], expected[k], *args, **kwargs):

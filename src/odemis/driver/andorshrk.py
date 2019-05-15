@@ -32,6 +32,7 @@ import os
 import signal
 import threading
 import time
+import itertools
 
 
 # Constants from ShamrockCIF.h
@@ -2141,7 +2142,7 @@ class AndorSpec(model.Detector):
 
         # duplicate every other VA and Event from the detector
         # that includes required VAs like .exposureTime
-        for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
+        for aname, value in itertools.chain(model.getVAs(dt).items(), model.getEvents(dt).items()):
             if not hasattr(self, aname):
                 setattr(self, aname, value)
             else:

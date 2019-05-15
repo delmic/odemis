@@ -60,7 +60,7 @@ class ActuatorTest(object):
         Asserts that two stage positions have almost equal coordinates.
         """
         try:
-            if expected.viewkeys() != actual.viewkeys():
+            if expected.keys() != actual.keys():
                 raise AssertionError("Dimensions of coordinates do not match")
             for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
                 self.assertAlmostEqual(actual[dim_act], expected[dim_exp], places=6)

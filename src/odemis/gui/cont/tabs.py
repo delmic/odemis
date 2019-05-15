@@ -3467,7 +3467,7 @@ class Sparc2AlignTab(Tab):
         """
         # If 3 buttons or less, keep them all on a single line, otherwise,
         # spread on two lines. (Works up to 6 buttons)
-        btns = self._alignbtn_to_mode.keys()
+        btns = list(self._alignbtn_to_mode.keys())
         if len(btns) == 1:
             btns[0].Show(False)  # No other choice => no need to choose
             return

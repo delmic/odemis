@@ -1002,7 +1002,7 @@ class AndorCam3(model.DigitalCamera):
         if self._binmtd == FULL_BINNING:
             return binning  # Any spellable binning is allowed
         elif self._binmtd == FIXED_BINNING:
-            allowed_bin = self._bin_to_resrng[0].keys()
+            allowed_bin = list(self._bin_to_resrng[0].keys())
             binning = (util.find_closest(min(binning), allowed_bin),) * 2
         else:
             binning = (1, 1)

@@ -746,4 +746,4 @@ class GlobalShiftRegistrar(object):
             if i not in positions:
                 positions[i] = [None, None]
 
-        return numpy.array(positions.values()).reshape([num_rows, num_cols, 2])
+        return numpy.array(list(positions.values())).reshape([num_rows, num_cols, 2])

@@ -99,7 +99,7 @@ def main(args):
 
     for res in data.keys():
         for zoom in data[res].keys():
-            td = sorted(np.array(data[res][zoom].keys()))
+            td = sorted(np.array(list(data[res][zoom].keys())))
             s = np.array([data[res][zoom][x] for x in td])
             # plt.scatter(td, s)
             # plt.show()

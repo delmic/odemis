@@ -459,7 +459,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
             _addImageElement(root, g, ifd, rois)
 
     # ROIs have to come _after_ images, so add them only now
-    root.extend(rois.values())
+    root.extend(list(rois.values()))
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?

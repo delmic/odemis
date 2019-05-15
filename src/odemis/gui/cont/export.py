@@ -72,7 +72,7 @@ class ExportController(object):
         # Listen to "acquire image" button
         self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.on_export)
 
-        self._viewports = viewports.keys()
+        self._viewports = list(viewports.keys())
 
         self._main_frame.Bind(wx.EVT_MENU, self.on_export, id=self._main_frame.menu_item_export_as.GetId())
 
