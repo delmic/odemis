@@ -571,7 +571,7 @@ class RadioLegend(wx.Panel):
             self.pol_display.SetBackgroundColour(self.bg_color)
             self.pol_display.SetForegroundColour(self.fg_color)
             # if only one choice -> only text displayed
-            self.pol_display.SetValue(iter(choices).next())
+            self.pol_display.SetValue(next(iter(choices)))
 
         self.control_sizer.Add(self.text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
         self.control_sizer.Add(self.pol_display, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)

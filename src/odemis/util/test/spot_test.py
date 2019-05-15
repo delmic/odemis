@@ -174,7 +174,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         position and the estimated position should be zero.
         """
         n = len(self.imgdata)
-        coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
+        coords = numpy.array(list(map(spot.FindCenterCoordinates, self.imgdata)))
         delta = coords - self.coords0
         bias = numpy.average(delta, axis=0)
         stdev = numpy.std(delta, axis=0)
@@ -187,7 +187,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         Perform Bartlett's test for equal variances on the residuals in x and
         y at a significance level of 5%.
         """
-        coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
+        coords = numpy.array(list(map(spot.FindCenterCoordinates, self.imgdata)))
         delta = coords - self.coords0
         _, pvalue = scipy.stats.bartlett(delta[:, 0], delta[:, 0])
         self.assertTrue(pvalue > 0.05)
@@ -196,7 +196,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
         """
         FindCenterCoordinates should have an accuracy of better than 0.05 px.
         """
-        coords = numpy.array(map(spot.FindCenterCoordinates, self.imgdata))
+        coords = numpy.array(list(map(spot.FindCenterCoordinates, self.imgdata)))
         delta = coords - self.coords0
         stdev = numpy.std(delta.ravel())
         self.assertLess(stdev, 0.05)

@@ -110,7 +110,7 @@ class Acquirer(object):
                        numpy.prod(self.spect.resolution.value) / self.spect.readoutRate.value + # readout time
                        0.1) # overhead (eg, pinhole movement)
             px_iter = de.estimateCorrectionPeriod(dperiod, px_time, shape)
-            next_dc = px_iter.next()
+            next_dc = next(px_iter)
 
         # Set the E-beam in spot mode (order matters)
         self.escan.scale.value = (1, 1)
@@ -147,7 +147,7 @@ class Acquirer(object):
                     self.drift = (self.drift[0] + d[0], self.drift[1] + d[1])
                     logging.info("Drift estimated to %s", self.drift)
                     n = 0
-                    next_dc = px_iter.next()
+                    next_dc = next(px_iter)
 
         # Stop all acquisition
         self.spect.data.unsubscribe(self.on_spectrum)
