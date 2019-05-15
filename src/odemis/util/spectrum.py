@@ -68,6 +68,8 @@ def get_wavelength_per_pixel(da):
                 raise ValueError("Dimension 'C' not in dimensions, so skip computing wavelength list.")
 
         if len(wl) != da.shape[ci]:
+            if len(wl) == 0:
+                raise TypeError("Wavelength list is empty.")  # empty WL_LIST is also in MD when...@Eric?
             raise ValueError("Length of wavelength list does not match length of wavelength data.")
         return wl
 
@@ -103,7 +105,7 @@ def get_spectrum_range(data):
 
     try:
         return get_wavelength_per_pixel(data), "m"
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):
         dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
         # useless polynomial => just show pixels values (ex: -50 -> +50 px)
         if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?
@@ -154,6 +156,8 @@ def get_time_per_pixel(da):
                 raise ValueError("Dimension 'T' not in dimensions, so skip computing time list.")
 
         if len(tl) != da.shape[ti]:
+            if len(tl) == 0:
+                raise TypeError("Time list is empty.")  # empty TIME_LIST is also in MD when...@Eric? can that happen as well?
             raise ValueError("Length of time list does not match length of time data.")
         return tl
 
@@ -171,7 +175,7 @@ def get_time_range(data):
 
     try:
         return get_time_per_pixel(data), "s"
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):
         dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
 
         if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?

@@ -368,8 +368,12 @@ def _add_image_info(group, dataset, image):
                 _h5svi_set_state(group["DimensionScaleT"], numpy.uint(ST_REPORTED))
                 dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
             except Exception as ex:
-                logging.warning("Failed to record time information, "
-                                "it will not be saved: %s", ex)
+                if type(ex) == TypeError:
+                    logging.debug("Failed to record time information, "
+                                  "it will not be saved: %s", ex)
+                else:
+                    logging.warning("Failed to record time information, "
+                                    "it will not be saved: %s", ex)
 
         # Wavelength (for spectrograms)
         if ("C" in dims and
@@ -396,8 +400,12 @@ def _add_image_info(group, dataset, image):
                 cpos = dims.index("C")
                 dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
             except Exception as ex:
-                logging.warning("Failed to record wavelength information, "
-                                "it will not be saved: %s", ex)
+                if type(ex) == TypeError:
+                    logging.debug("Failed to record wavelength information, "
+                                  "it will not be saved: %s", ex)
+                else:
+                    logging.warning("Failed to record wavelength information, "
+                                    "it will not be saved: %s", ex)
 
         # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
         # angle in radians (according to the right-hand rule)

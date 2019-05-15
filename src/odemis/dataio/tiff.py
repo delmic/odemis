@@ -1307,15 +1307,25 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     if set(globalMD.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}:
         try:
             wl_list = spectrum.get_wavelength_per_pixel(da0)
-        except Exception:
-            logging.warning("Spectrum metadata is insufficient to be saved")
+        except Exception as ex:
+            if type(ex) == TypeError:
+                logging.debug("Failed to record wavelength information, "
+                              "it will not be saved: %s", ex)
+            else:
+                logging.warning("Failed to record wavelength information, "
+                                "it will not be saved: %s", ex)
 
     time_list = None
     if model.MD_TIME_LIST in globalMD:
         try:
             time_list = spectrum.get_time_per_pixel(da0)
-        except Exception:
-            logging.warning("Temporal spectrum metadata is insufficient to be saved")
+        except Exception as ex:
+            if type(ex) == TypeError:
+                logging.debug("Failed to record time information, "
+                              "it will not be saved: %s", ex)
+            else:
+                logging.warning("Failed to record time information, "
+                                "it will not be saved: %s", ex)
 
     subid = 0
     for da in das:
