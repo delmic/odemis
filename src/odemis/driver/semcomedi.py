@@ -1799,7 +1799,7 @@ class SEMComedi(model.HwComponent):
         metadata = {
             model.MD_ACQ_DATE: time.time(),  # time at the beginning
             model.MD_DWELL_TIME: period,
-            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+            model.MD_INTEGRATION_COUNT: osr * dpr,
         }
 
         # add scanner translation to the center
@@ -1884,7 +1884,7 @@ class SEMComedi(model.HwComponent):
         metadata = {
             model.MD_ACQ_DATE: time.time(),  # time at the beginning
             model.MD_DWELL_TIME: period,
-            model.MD_SAMPLES_PER_PIXEL: osr * dpr,
+            model.MD_INTEGRATION_COUNT: osr * dpr,
         }
 
         # add scanner translation to the center
@@ -3169,10 +3169,20 @@ class Scanner(model.Emitter):
             center = (lim[0] + lim[1]) / 2
             width = lim[1] - lim[0]
             ratio = (shape[i] * scale[i]) / area_shape[i]
-            if ratio > 1:  # cannot be bigger than the whole area
-                # TODO: handle floating point error, and check for 1.0000001?
+            if ratio > 1.000001:  # cannot be bigger than the whole area
                 raise ValueError("Scan area too big: %s * %s > %s" %
                                  (shape, scale, area_shape))
+            elif ratio > 1:
+                # Note: in theory, it'd be impossible for the ratio to be > 1,
+                # however, due to floating error, it might happen that a scale
+                # a tiny bit too big is allowed. For example:
+                # shape = 5760, res = 1025, scale = 5.619512195121952
+                # int(shape/scale) * scale == 5760.000000000001
+                logging.warning("Scan area appears too big due to floating error (ratio=%g), limiting to maximum",
+                                ratio)
+                # scale[i] = area_shape[i] / shape[i]
+                ratio = 1
+
             # center_comp is to ensure the point scanned of each pixel is at the
             # center of the area of each pixel
             center_comp = (shape[i] - 1) / shape[i]

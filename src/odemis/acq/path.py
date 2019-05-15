@@ -124,7 +124,6 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
-                 'spectrograph': {'grating': "mirror"},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
@@ -479,7 +478,7 @@ class OpticalPathManager(object):
             elif self.quality == ACQ_QUALITY_BEST:
                 self._setCCDFan(target.role == "ccd")
 
-        fmoves = []  # moves in progress
+        fmoves = []  # moves in progress, list of (future, Component, dict(axis->pos) tuples
 
         # Restore the spectrometer focus before any other move, as (on the SR193),
         # the value is grating/output dependent
@@ -489,7 +488,7 @@ class OpticalPathManager(object):
             if self._focus_out_chamber_view is not None:
                 logging.debug("Restoring focus from before coming to chamber view to %s",
                               self._focus_out_chamber_view)
-                fmoves.append(focus_comp.moveAbs(self._focus_out_chamber_view))
+                fmoves.append((focus_comp.moveAbs(self._focus_out_chamber_view), focus_comp, self._focus_out_chamber_view))
 
         modeconf = self._modes[mode][1]
         for comp_role, conf in modeconf.items():
@@ -601,7 +600,7 @@ class OpticalPathManager(object):
 
             try:
                 # move actuator
-                fmoves.append(comp.moveAbs(mv))
+                fmoves.append((comp.moveAbs(mv), comp, mv))
             except AttributeError:
                 logging.warning("%s not an actuator", comp_role)
 
@@ -616,14 +615,14 @@ class OpticalPathManager(object):
                 if an == "grating":
                     continue  # handled separately via GRATING_NOT_MIRROR
                 comp = self._getComponent(cr)
-                fmoves.append(comp.moveAbs({an: pos}))
+                fmoves.append((comp.moveAbs({an: pos}), comp, {an: pos}))
                 del self._stored[cr, an]
 
         # Save last mode
         self._last_mode = mode
 
         # wait for all the moves to be completed
-        for f in fmoves:
+        for f, comp, mv in fmoves:
             try:
                 # Can be large, eg within 5 min one (any) move should finish.
                 f.result(timeout=180)
@@ -631,7 +630,7 @@ class OpticalPathManager(object):
                 # To do an absolute move, an axis should be referenced (if it
                 # supports referencing). If not, that's an error (but for now we
                 # still try, just in case it might work anyway).
-                for a in mv.keys():
+                for a in mv:
                     try:
                         if (model.hasVA(comp, "referenced") and
                             not comp.referenced.value.get(a, True)):
@@ -692,7 +691,7 @@ class OpticalPathManager(object):
 
             if mv:
                 logging.debug("Move %s added so %s targets to %s", mv, comp.name, target)
-                fmoves.append(comp.moveAbs(mv))
+                fmoves.append((comp.moveAbs(mv), comp, mv))
                 # make sure this component is also on the optical path
                 fmoves.extend(self.selectorsToPath(comp.name))
 

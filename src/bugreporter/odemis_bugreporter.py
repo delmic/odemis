@@ -237,10 +237,15 @@ class OdemisBugreporter(object):
         self.zip_fn = os.path.join(home_dir, 'Desktop', '%s-odemis-log-%s.zip' % (hostname, t))
 
         logging.debug("Will store bug report in %s", self.zip_fn)
-        files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
+        LOGFILE_BACKEND = '/var/log/odemis.log'
+        files = [LOGFILE_BACKEND, os.path.join(home_dir, 'odemis-gui.log'),
                  os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
                  os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png',
                  '/etc/odemis-settings.yaml']
+
+        # If odemis.log is < 2M, it might not have enough info, so also get odemis.log.1
+        if not os.path.exists(LOGFILE_BACKEND) or os.path.getsize(LOGFILE_BACKEND) < 2e6:
+            files.append(LOGFILE_BACKEND + ".1")
 
         try:
             # Save yaml file, call MODEL_SELECTOR if needed

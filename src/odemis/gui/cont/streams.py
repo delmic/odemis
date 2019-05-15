@@ -92,7 +92,7 @@ class StreamController(object):
 
         options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
         # Special display for dyes (aka FluoStreams)
-        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream, acqstream.StaticCLStream)):
             options |= OPT_BTN_TINT
             if not isinstance(stream, acqstream.StaticStream):
                 options |= OPT_NAME_EDIT
@@ -2045,6 +2045,7 @@ class StreamBarController(object):
     def clear(self):
         """
         Remove all the streams (from the model and the GUI)
+        Must be called in the main GUI thread
         """
         # We could go for each stream panel, and call removeStream(), but it's
         # as simple to reset all the lists

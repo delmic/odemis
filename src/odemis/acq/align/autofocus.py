@@ -114,6 +114,23 @@ def MeasureOpticalFocus(image):
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
+def MeasureSpotsFocus(image):
+    """
+    Focus measurement metric based on Tenengrad variance:
+        Pech, J.; Cristobal, G.; Chamorro, J. & Fernandez, J. Diatom autofocusing in brightfield microscopy: a
+        comparative study. 2000.
+
+    Given an image, the focus measure is calculated using the variance of a Sobel filter applied in the
+    x and y directions of the raw data.
+    image (model.DataArray): Optical image
+    returns (float): The focus level of the image (higher is better)
+    """
+    sobelx = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=5)
+    sobely = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=5)
+    sobel_image = sobelx ** 2 + sobely ** 2
+    return sobel_image.var()
+
+
 def getNextImage(det, timeout=None):
     """
     Acquire one image from the given detector
@@ -254,7 +271,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
         if max_step <= 0:
             raise ValueError("Unexpected focus range %s" % (rng,))
 
-        max_reached = False  # True once we've passed the maximum level (ie, start bouncing)
+        rough_search = True  # False once we've passed the maximum level (ie, start bouncing)
         # It's used to cache the focus level, to avoid reacquiring at the same
         # position. We do it only for the 'rough' max search because for the fine
         # search, the actuator and acquisition delta are likely to play a role
@@ -269,8 +286,12 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
         # TODO: is this working as expected? Alternatively, we could check
         # MD_DET_TYPE.
         if len(detector.shape) > 1:
-            logging.debug("Using Optical method to estimate focus")
-            Measure = MeasureOpticalFocus
+            if detector.role == 'diagnostic-ccd':
+                logging.debug("Using Spot method to estimate focus")
+                Measure = MeasureSpotsFocus
+            else:
+                logging.debug("Using Optical method to estimate focus")
+                Measure = MeasureOpticalFocus
         else:
             logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
@@ -319,7 +340,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             center = focus.position.value['z']
             # Don't redo the acquisition either if we've just done it, or if it
             # was already done and we are still doing a rough search
-            if (not max_reached or last_pos == center) and center in focus_levels:
+            if (rough_search or last_pos == center) and center in focus_levels:
                 fm_center = focus_levels[center]
             else:
                 image = AcquireNoBackground(detector, dfbkg, timeout)
@@ -332,7 +353,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             # Move to right position
             right = center + step_factor * min_step
             right = max(rng[0], min(right, rng[1]))  # clip
-            if not max_reached and right in focus_levels:
+            if rough_search and right in focus_levels:
                 fm_right = focus_levels[right]
             else:
                 focus.moveAbsSync({"z": right})
@@ -346,7 +367,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             # Move to left position
             left = center - step_factor * min_step
             left = max(rng[0], min(left, rng[1]))  # clip
-            if not max_reached and left in focus_levels:
+            if rough_search and left in focus_levels:
                 fm_left = focus_levels[left]
             else:
                 focus.moveAbsSync({"z": left})
@@ -382,18 +403,21 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             # if best focus was found at the center
             if i_max == 1:
                 step_factor /= 2
-                if not max_reached:
+                if rough_search:
                     logging.debug("Now zooming in on improved focus")
-                max_reached = True
+                rough_search = False
             elif (rng[0] > best_pos - step_factor * min_step or
                   rng[1] < best_pos + step_factor * min_step):
                 step_factor /= 1.5
                 logging.debug("Reducing step factor to %g because the focus (%g) is near range limit %s",
                               step_factor, best_pos, rng)
                 if step_factor <= 8:
-                    max_reached = True  # Force re-checking data
+                    rough_search = False  # Force re-checking data
 
-            focus.moveAbsSync({"z": best_pos})
+            if last_pos != best_pos:
+                # Clip best_pos in case the hardware reports a position outside of the range.
+                best_pos = max(rng[0], min(best_pos, rng[1]))
+                focus.moveAbsSync({"z": best_pos})
             step_cntr += 1
 
         worst_fm = min(focus_levels.values())
@@ -469,8 +493,12 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         # TODO: is this working as expected? Alternatively, we could check
         # MD_DET_TYPE.
         if len(detector.shape) > 1:
-            logging.debug("Using Optical method to estimate focus")
-            Measure = MeasureOpticalFocus
+            if detector.role == 'diagnostic-ccd':
+                logging.debug("Using Spot method to estimate focus")
+                Measure = MeasureSpotsFocus
+            else:
+                logging.debug("Using Optical method to estimate focus")
+                Measure = MeasureOpticalFocus
         else:
             logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
@@ -498,10 +526,8 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         lower_bound, upper_bound = rng
         # start moving upwards until we reach the upper bound or we find some
         # significant deviation in focus level
-        # we know that upper_bound is excluded but: 1. realistically the best focus
-        # position would not be there 2. the upper_bound - orig_pos range is not
-        # expected to be precisely a multiple of the step anyway
-        for next_pos in numpy.arange(orig_pos, upper_bound, step):
+        # The number of steps is the distance to the upper bound divided by the step size.
+        for next_pos in numpy.linspace(orig_pos, upper_bound, (upper_bound - orig_pos) / step):
             focus.moveAbsSync({"z": next_pos})
             image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
@@ -518,10 +544,9 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
 
-        # if nothing was found return to original position and start going
-        # downwards
-        focus.moveAbsSync({"z": orig_pos})
-        for next_pos in numpy.arange(orig_pos - step, lower_bound, -step):
+        # if nothing was found go downwards, starting one step below the original position
+        num = max((orig_pos - lower_bound) / step, 0)  # Take 0 steps if orig_pos is too close to lower_bound
+        for next_pos in numpy.linspace(orig_pos - step, lower_bound, num):
             focus.moveAbsSync({"z": next_pos})
             image = AcquireNoBackground(detector, dfbkg, timeout)
             new_fm = Measure(image)
@@ -632,7 +657,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
             LookupError if procedure failed
     """
     focuser = None
-    if align_mode in ("spec-focus", "streak-focus"):
+    if align_mode == "spec-focus":
         focuser = model.getComponent(role='focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner
@@ -978,6 +1003,26 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, strea
     # Run in separate thread
     executeAsyncTask(f, _DoAutoFocusSpectrometer, args=(f, spectrograph, focuser, detectors, selector, streams))
     return f
+
+
+def CLSpotsAutoFocus(detector, focus, good_focus=None, rng_focus=None, method=MTD_EXHAUSTIVE):
+    """
+    Wrapper for do auto focus for CL spots. It provides the ability to check the progress of the CL spots auto focus
+    procedure in a Future or even cancel it.
+
+    detector (model.DigitalCamera or model.Detector): Detector on which to improve the focus quality. Should have the
+            role diagnostic-ccd.
+    focus (model.Actuator): The focus actuator.
+    good_focus (float): if provided, an already known good focus position to be
+            taken into consideration while autofocusing.
+    rng_focus (tuple): if provided, the search of the best focus position is limited within this range.
+    method: if provided, the search of the best focus position is limited within this range.
+    returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
+        Focus position (m)
+        Focus level
+    """
+    detector.exposureTime.value = 0.01
+    return AutoFocus(detector, None, focus, good_focus=good_focus, rng_focus=rng_focus, method=method)
 
 
 def _mapDetectorToSelector(selector, detectors):

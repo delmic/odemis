@@ -492,12 +492,16 @@ class Instantiator(object):
     def is_leaf(self, name):
         """
         says whether a component is a leaf or not. A "leaf" is a component which
-          has no children separately instantiated (ie, only delegated children).
+          has no dependencies.
         name (str): name of the component instance
         """
         attr = self.ast[name]
 
-        children_names = list(attr.get("children", {}).values())
+        if attr.get("dependencies", {}):
+            return False
+
+        # For backwards compatibility, also check the "dependent children"
+        children_names = attr.get("children", {}).values()
         for child_name in children_names:
             child_attr = self.ast[child_name]
             if "class" in child_attr:
@@ -639,7 +643,7 @@ class Instantiator(object):
             ret |= self.get_required_components(n)
 
         try:
-            dependencies.append(attrs["power_supplier"])
+            ret.add(attrs["power_supplier"])
         except KeyError:
             pass  # no power supplier
 

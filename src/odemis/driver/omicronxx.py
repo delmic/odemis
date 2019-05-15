@@ -256,11 +256,12 @@ class DevxX(object):
                               acc.port, error, lerror)
 
             # always reset the master, so temporarily do not send the channel
+            com_chan_orig = self._com_chan
+            self._com_chan = ""
             try:
-                self._com_chan = ""
                 self.ResetController()
             finally:
-                self._com_chan = "[%d]" % channel
+                self._com_chan = com_chan_orig
 
             # Check if that has helped
             error = self.GetFailureByte()

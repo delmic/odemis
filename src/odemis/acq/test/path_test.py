@@ -950,9 +950,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
-        # setting spectral
+        # setting spectral (with the external spectrometer)
         spgph_pos = self.specgraph.position.value
-        self.optmngr.setPath("spectral").result()
+        self.optmngr.setPath("spectral", detector=self.spec).result()
         # Assert that actuator was moved according to mode given
         self.assert_pos_as_in_mode(self.lenswitch, "spectral")
         # No slit check, as slit-in-big does _not_ affects the (external) spectrometer
