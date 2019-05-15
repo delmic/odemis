@@ -24,10 +24,10 @@ from __future__ import division, absolute_import, print_function
 
 import os
 import shutil
-import urllib2
 import logging
 import sys
 import json
+from future.moves.urllib.request import urlopen
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -50,7 +50,7 @@ def download(url, filename):
     """
     if url.startswith("/"): # absolute path
         url = URL_DB + url
-    ufile = urllib2.urlopen(url)
+    ufile = urlopen(url)
     lfile = open(filename, 'w') # will delete if exists
     shutil.copyfileobj(ufile, lfile)
 

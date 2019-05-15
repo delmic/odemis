@@ -27,9 +27,9 @@ import os
 import pkg_resources
 import subprocess
 import tempfile
-import urllib2
+from future.moves.urllib.request import Request, urlopen
+from future.moves.urllib.error import HTTPError
 import wx
-from urllib2 import HTTPError
 
 
 VERSION_FILE = "version.txt"
@@ -64,8 +64,8 @@ class WindowsUpdater:
         for url in VIEWER_ROOT_URLS:
             try:
                 web_url = url + fn
-                req = urllib2.Request(web_url, headers=headers)
-                web_file = urllib2.urlopen(req, timeout=10)
+                req = Request(web_url, headers=headers)
+                web_file = urlopen(req, timeout=10)
                 break
             except HTTPError as err:
                 if err.getcode() == 404 and url != VIEWER_ROOT_URLS[-1]:
