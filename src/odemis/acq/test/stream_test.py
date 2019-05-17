@@ -1443,63 +1443,6 @@ class SPARCTestCase(unittest.TestCase):
         self.assertLess(-cs.windowPeriod.value - dur, dates[0])
         numpy.testing.assert_array_equal(dates, sorted(dates))
 
-#    @skip("simple")
-    def test_acq_moi(self):
-        """
-        Test acquisition of Moment of Inertia
-        """
-        # Create the stream
-        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        mas = stream.MomentOfInertiaLiveStream("test moi", self.ccd, self.ccd.data, self.ebeam, sems,
-                                               detvas={"exposureTime", "binning"})
-
-        mas.detExposureTime.value = mas.detExposureTime.clip(0.1)
-        mas.detBinning.value = (4, 4)  # hopefully always supported
-
-        exp = mas.detExposureTime.value
-        mas.repetition.value = (9, 9)
-        num_ar = numpy.prod(mas.repetition.value)
-        res = self.ccd.resolution.value
-        rot = numpy.prod(res) / self.ccd.readoutRate.value
-        dur = num_ar * (exp + rot)
-        logging.debug("Expecting a new MoI frame every %g s", dur)
-
-        # acquire for a few seconds
-        mas.should_update.value = True
-        mas.is_active.value = True
-
-        time.sleep(2 * dur)
-        mas.is_active.value = False
-        time.sleep(0.5)  # Give some time for the projection to be computed
-        im = mas.image.value
-        X, Y, Z = im.shape
-        self.assertEqual((X, Y), mas.repetition.value)
-
-        imd = im.metadata
-        semmd = mas.raw[0].metadata  # SEM raw data is first one
-        self.assertEqual(imd[model.MD_POS], semmd[model.MD_POS])
-        self.assertEqual(imd[model.MD_PIXEL_SIZE], semmd[model.MD_PIXEL_SIZE])
-
-        mas.detExposureTime.value = mas.detExposureTime.clip(1)
-        exp = mas.detExposureTime.value
-        mas.roi.value = (0.1, 0.1, 0.8, 0.8)
-        mas.repetition.value = (3, 3)
-        num_ar = numpy.prod(mas.repetition.value)
-        dur = num_ar * (exp + rot)
-        mas.is_active.value = True
-
-        time.sleep(3 * dur)
-        mas.is_active.value = False
-        time.sleep(0.5)  # Give some time for the projection to be computed
-        im = mas.image.value
-        X, Y, Z = im.shape
-        self.assertEqual((X, Y), mas.repetition.value)
-
-        imd = im.metadata
-        semmd = mas.raw[0].metadata  # SEM raw data is first one
-        self.assertEqual(imd[model.MD_POS], semmd[model.MD_POS])
-        self.assertEqual(imd[model.MD_PIXEL_SIZE], semmd[model.MD_PIXEL_SIZE])
-
 
 class Fake0DDetector(model.Detector):
     """
