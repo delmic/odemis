@@ -36,6 +36,9 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         data = hdf5.read_data("ar-example-input.h5")
         self.data = data
 
+        # data_inverted_mirror = hdf5.read_data("ar-invertedMirror.h5")
+        # self.data_invMir = data_inverted_mirror
+
         # test also for different polar parameters
         data_mini = hdf5.read_data("ar-example-minimirror-input.h5")
         self.data_mini = data_mini
@@ -89,6 +92,22 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
                white_spxs_2500[1] * white_binning_2500[1] / white_mag_2500)
         white_data_2500.metadata[model.MD_PIXEL_SIZE] = white_pxs_2500
         self.white_data_2500 = white_data_2500
+
+    def test_invertedMirror(self):
+        data = self.data
+        C, T, Z, Y, X = data[0].shape
+
+        data[0].shape = Y, X
+        data_inv = data[0][::-1]
+        data_inv.metadata[model.MD_AR_FOCUS_DISTANCE] *= -1  # invert the focus distance for inverted mirror
+        data_inv.metadata[model.MD_AR_POLE] = (data_inv.metadata[model.MD_AR_POLE][0], 138.0)  # put y pole coordinate
+        result = angleres.AngleResolved2Polar(data_inv, 1134)
+
+        # desired_output = hdf5.read_data("desired201x201image.h5")
+        # C, T, Z, Y, X = desired_output[0].shape
+        # desired_output[0].shape = Y, X
+        #
+        # numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
     def test_precomputed(self):
         data = self.data

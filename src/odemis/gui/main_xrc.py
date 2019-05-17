@@ -275,6 +275,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
+        self.pnl_centering = xrc.XRCCTRL(self, "pnl_centering")
         self.pnl_streak = xrc.XRCCTRL(self, "pnl_streak")
         self.txt_StreakCalibFilename = xrc.XRCCTRL(self, "txt_StreakCalibFilename")
         self.btn_open_streak_calib_file = xrc.XRCCTRL(self, "btn_open_streak_calib_file")
@@ -623,7 +624,7 @@ class xrcfr_plugin(wx.Dialog):
 
 def __init_resources():
     global __res
-    __res = xrc.XmlResource()
+    __res = xrc.EmptyXmlResource()
 
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
@@ -3222,6 +3223,35 @@ def __init_resources():
                     </object>
                     <flag>wxALIGN_CENTRE</flag>
                   </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_centering">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Centering</label>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <flag>wxALIGN_CENTRE</flag>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>

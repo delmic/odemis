@@ -69,6 +69,10 @@ class TestOpticalLens(unittest.TestCase):
             comp.magnification.value = 2.0
         comp.terminate()
 
+    def test_configurations(self):
+        configurations = {"Mirror up": {pole_pos: [458, 519], focus_dist: 0.5e-3},
+                          "Mirror down": {pole_pos: [634, 652], focus_dist: -0.5e-3}}
+        comp = static.OpticalLens("test", "lens", 1, configurations_choices=configurations)
 
 class TestSpectrograph(unittest.TestCase):
     @timeout(3)

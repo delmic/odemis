@@ -2694,9 +2694,9 @@ class SparcAlignTab(Tab):
                 # CCD size. Some of them contained (small) error in the mirror size,
                 # which will make this new display look a bit bigger.
                 m = lens.magnification.value
-                mirror_ol.set_mirror_dimensions(-lens.parabolaF.value / m,
+                mirror_ol.set_mirror_dimensions(lens.parabolaF.value / m,
                                                 lens.xMax.value / m,
-                                                lens.focusDistance.value / m,
+                                                -lens.focusDistance.value / m,
                                                 lens.holeDiameter.value / m)
             except (AttributeError, TypeError) as ex:
                 logging.warning("Failed to get mirror dimensions: %s", ex)
@@ -2984,6 +2984,11 @@ class Sparc2AlignTab(Tab):
         self.doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_header.html")
         panel.html_moi_doc.SetBorders(0)
         panel.html_moi_doc.LoadPage(self.doc_path)
+
+        if main_data.lens:  # TODO do we need this or is lens not always there?
+            lens = main_data.lens
+            if model.hasVA(lens, "configuration"):
+                self._centering_settings_controller = settings.CenterAlignSettingsController(panel, tab_data)
 
         if main_data.streak_ccd:
             self._streak_settings_controller = settings.StreakCamAlignSettingsController(panel, tab_data)
@@ -3310,21 +3315,17 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.btn_manualfocus.Bind(wx.EVT_BUTTON, self._onManualFocus)
 
-        if "center-align" in tab_data.align_mode.choices:
+        if "center-align" not in tab_data.align_mode.choices:
+            self.panel.pnl_centering.Show(False)
+        else:
             # The center align view share the same CCD stream (and settings)
             self.panel.vp_align_center.view.addStream(ccd_stream)
 
             # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
-            mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
-            lens = main_data.lens
-            try:
-                mirror_ol.set_mirror_dimensions(lens.parabolaF.value,
-                                                lens.xMax.value,
-                                                lens.focusDistance.value,
-                                                lens.holeDiameter.value)
-            except (AttributeError, TypeError) as ex:
-                logging.warning("Failed to get mirror dimensions: %s", ex)
-            mirror_ol.set_hole_position(tab_data.polePositionPhysical)
+            self.mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
+            self.lens = main_data.lens
+            self.lens.focusDistance.subscribe(self._onMirrorDimensions, init=True)
+            self.mirror_ol.set_hole_position(tab_data.polePositionPhysical)
             self.panel.vp_align_center.show_mirror_overlay()
 
             # TODO: As this view uses the same stream as lens-align, the view
@@ -3632,6 +3633,7 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.pnl_lens_mover.Enable(True)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_focus.Enable(True)
             self.panel.btn_autofocus.Enable(True)
             self.panel.gauge_autofocus.Enable(True)
@@ -3649,6 +3651,7 @@ class Sparc2AlignTab(Tab):
             if self._moi_stream:
                 self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
@@ -3657,6 +3660,7 @@ class Sparc2AlignTab(Tab):
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
             self._ccd_stream.should_update.value = True
+            self.panel.pnl_centering.Enable(True)
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
@@ -3668,6 +3672,7 @@ class Sparc2AlignTab(Tab):
             if self._speccnt_stream:
                 self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
@@ -3688,6 +3693,7 @@ class Sparc2AlignTab(Tab):
                 self._ts_stream.auto_bc.value = False  # default manual brightness/contrast
                 self._ts_stream.intensityRange.value = self._ts_stream.intensityRange.clip((100, 1000))  # default range
             self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
             self.panel.btn_manualfocus.Enable(True)
@@ -4009,6 +4015,15 @@ class Sparc2AlignTab(Tab):
             self._moi_stream.is_active.value = False
             self._moi_stream.is_active.value = True
         self.panel.vp_moi.canvas.fit_view_to_next_image = True
+
+    def _onMirrorDimensions(self, focusDistance):
+        try:
+            self.mirror_ol.set_mirror_dimensions(self.lens.parabolaF.value,
+                                                 self.lens.xMax.value,
+                                                 self.lens.focusDistance.value,
+                                                 self.lens.holeDiameter.value)
+        except (AttributeError, TypeError) as ex:
+            logging.warning("Failed to get mirror dimensions: %s", ex)
 
     def _onLensPos(self, pos):
         """

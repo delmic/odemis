@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 """
 :created: 2014-01-25
 :author: Rinze de Laat
@@ -1521,19 +1522,21 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
            horizontally in m. (Also called "focus distance")
         hole_diam (float): diameter the hole in the mirror in m
         """
-        self.flipped = (parabola_f < 0)
-        parabola_f = abs(parabola_f)
+        self.flipped = (cut_offset_y < 0) # focus_dist - the vertical mirror cutoff can be positive or negative
+        self.cut_offset_y = abs(cut_offset_y)
 
         # The radius of the circle shaped edge facing the detector
         # We don't care about cut_x, but "cut_y"
         # Use the formula y = x²/4f
         self.parabole_cut_radius = 2 * math.sqrt(parabola_f * cut_x)
 
-        # The mirror is cut horizontally just above the symmetry line
-        self.cut_offset_y = cut_offset_y
+        # # The mirror is cut horizontally just above the symmetry line
+        # self.cut_offset_y = cut_offset_y
 
+        # self.mirror_height = self.parabole_cut_radius - cut_offset_y
         self.mirror_height = self.parabole_cut_radius - self.cut_offset_y
         # The number of radians to remove from the left and right of the semi-circle
+        # self.rad_offset = math.atan2(cut_offset_y, self.parabole_cut_radius)
         self.rad_offset = math.atan2(self.cut_offset_y, self.parabole_cut_radius)
 
         # The radius of the hole through which the electron beam enters

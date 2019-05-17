@@ -45,7 +45,8 @@ class OpticalLens(model.HwComponent):
 
     def __init__(self, name, role, mag, mag_choices=None, na=0.95, ri=1,
                  pole_pos=None, x_max=None, hole_diam=None,
-                 focus_dist=None, parabola_f=None, rotation=None, **kwargs):
+                 focus_dist=None, parabola_f=None, rotation=None,
+                 configurations=None, **kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
@@ -110,7 +111,21 @@ class OpticalLens(model.HwComponent):
         if rotation is not None:
             self.rotation = model.FloatContinuous(rotation, (0, 2 * math.pi),
                                                   unit="rad")
+        if configurations is not None:
+            self._configurations = configurations
+            conf = list(configurations.keys())[0]
+            self.configuration = model.StringEnumerated(conf, choices=set(configurations.keys()), setter=self._setConfiguration)
 
+    def _setConfiguration(self, config):
+        # set all the VAs based on the ._configurations
+        settings = self._configurations[config]
+        for arg, value in settings.items():
+            # TODO: convert arg to VA name
+            if arg == "pole_pos":
+                self.polePosition.value = value
+            elif arg == "focus_dist":
+                self.focusDistance.value = value
+        return config
 
 class LightFilter(model.Actuator):
     """

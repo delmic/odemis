@@ -10,7 +10,6 @@ SPARC2: {
                "Slit", "CL Selector", "CL Filter Wheel",
                "Lens1 Mover", "Lens2 Switch"],
 }
-
 # Light (lamp with known spectrum)
 "Calibration Light": {
     class: light.Light,
@@ -18,7 +17,6 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
-
 "Power Control Unit": {
     class: powerctrl.PowerControlUnit,
     role: "power-control",
@@ -43,7 +41,6 @@ SPARC2: {
         },
     }
 }
-
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
 # sudo modprobe comedi comedi_num_legacy_minors=4
 # sudo modprobe comedi_test
@@ -59,7 +56,6 @@ SPARC2: {
        detector1: "CL PMT",
     }
 }
-
 # Connect:
 # X -> AO 0
 # Y -> AO 1
@@ -81,7 +77,6 @@ SPARC2: {
     },
     affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
 }
-
 # Must be connected on AI 0/AI GND
 "SEM Detector": { # aka ETD
     # Internal child of SEM Scan Interface, so no class
@@ -91,9 +86,7 @@ SPARC2: {
         limits: [-3, 3] # V
     },
 }
-
 # CL PMT: composed of the control unit + the PMT output connected to the DAQ board
-
 # Must be connected on AI 1/AI GND
 "CL PMT": { # the raw detector of the PMT
     # Internal child of SEM Scan Interface, so no class
@@ -103,7 +96,6 @@ SPARC2: {
         limits: [3, 0], # V, with contrast reversed
     },
 }
-
 "CL PMT control unit": {
     class: pmtctrl.PMTControl,
     role: null,
@@ -114,7 +106,6 @@ SPARC2: {
         prot_curr: 50.e-6,  # A
     }
 }
-
 "CL Detector": {
     class: pmtctrl.PMT,
     role: cl-detector,
@@ -126,7 +117,6 @@ SPARC2: {
        "pmt-control": "CL PMT control unit",
     },
 }
-
 # In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer
 "Camera": {
@@ -134,11 +124,11 @@ SPARC2: {
     role: ccd,
     power_supplier: "Power Control Unit",
     init: {
-        device: "fake",
-        image: "sparc-ar.h5", # only for simulator
+       device: "fake",
+       image: "ar-example-input.h5", # only for simulator
+       transp: [1, -2],
     },
 }
-
 # "Camera": {
 #     class: simcam.Camera,
 #     role: ccd,
@@ -150,7 +140,6 @@ SPARC2: {
 #         focus: "Spectrograph focus",
 #     },
 # }
-
 "Spectrometer Vis-NIR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer-integrated,
@@ -159,7 +148,6 @@ SPARC2: {
         transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
     },
 }
-
 # On some configuration, there is a dedicated camera for the acquisition of the
 # spectra, otherwise 'Camera' is used.
 "Spectral Camera": {
@@ -167,24 +155,21 @@ SPARC2: {
     role: sp-ccd,
     power_supplier: "Power Control Unit",
     init: {
-        device: "fake",
-        transp: [-1, 2], # if mirrored on X axis
-        image: "sparc-spec-sim.h5", # only for simulator
+       device: "fake",
+       transp: [-1, 2], # if mirrored on X axis
     },
     properties: {
         targetTemperature: -60, # °C
     },
 }
-
 "Spectrometer IR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
     dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
-        binning: [4, 100],
+        binning: [4, 16],
     },
 }
-
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
@@ -204,7 +189,6 @@ SPARC2: {
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
-
 "Spectrograph focus": {
     class: actuator.MultiplexActuator,
     role: "focus",
@@ -214,7 +198,11 @@ SPARC2: {
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
-
+# "Spectrograph focus": {
+#     # Normally child of Spectrograph, but for the simulator: child of Camera
+#     role: "focus",
+#     affects: ["Camera", "Spectral Camera"],
+# }
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 "Spec CCD Flipper": {
     class: actuator.FixedPositionsActuator,
@@ -229,7 +217,6 @@ SPARC2: {
     },
     affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
-
 # Provide the filter wheel of the spectrograph as a separate component
 "Spec Filter Wheel": {
     class: actuator.MultiplexActuator,
@@ -240,12 +227,15 @@ SPARC2: {
     },
     affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
-
 "Optical Path Properties": {
     class: static.OpticalLens,
     role: lens,
     # Standard mirror config
     init: {
+       configurations: {
+            "Mirror up": {pole_pos: [458, 519],  focus_dist: 0.5e-3},
+            "Mirror down": {pole_pos: [634, 652],  focus_dist: -0.5e-3}
+       },
        mag: 0.31, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
@@ -257,11 +247,10 @@ SPARC2: {
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
     persistent: {
-        properties: [polePosition],
+        properties: [configuration, polePosition],
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
-
 # Controller for the motors moving the various parts of the optical box
 "Optical Actuators": {
     class: tmcm.TMCLController,
@@ -273,13 +262,11 @@ SPARC2: {
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values are adapted to make the simulator roughly the same speed
         ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
-        unit: ["m", "m", "m", "rad", "m"],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
     },
 }
-
 # The first lens of Plate 1, able to move along the whole range
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
@@ -295,7 +282,6 @@ SPARC2: {
     },
     affects: ["Lens2 Switch"],
 }
-
 # The second lens of Plate 1, either to working or parking position
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
@@ -310,7 +296,6 @@ SPARC2: {
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
 }
-
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
 "Slit": {
     class: actuator.FixedPositionsActuator,
@@ -325,7 +310,6 @@ SPARC2: {
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
-
 # Mirror in Plate 2, selects between spectrometer and cl-detector
 "CL Selector": {
     class: actuator.FixedPositionsActuator,
@@ -340,7 +324,6 @@ SPARC2: {
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
 }
-
 "CL Filter Wheel": {
     class: actuator.FixedPositionsActuator,
     role: "cl-filter",
@@ -359,7 +342,6 @@ SPARC2: {
     },
     affects: ["CL Detector"],
 }
-
 # Controller for moving the 'Redux' stage
 # Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {
@@ -370,19 +352,14 @@ SPARC2: {
         address: null,
         axes: ["s", "l"],
         ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
-        rng: [[-1.e-3, 1.e-3], [0, 51.e-3]],  # m, min/max
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 48.e-3, "s": 1.e-3},  # m, m
-    },
-    persistent: {
-        metadata: [FAV_POS_ACTIVE],
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
     },
 }
-
 # Internal component to convert between the referential of the mirror actuators
 # and the X/Y referential of the SEM. Used by the mirror alignment functions.
 "Mirror Actuators in XY referential": {

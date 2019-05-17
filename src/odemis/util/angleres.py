@@ -26,7 +26,9 @@ from scipy.spatial import Delaunay as DelaunayTriangulation
 from scipy.interpolate import LinearNDInterpolator
 import numpy
 from odemis import model
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+plt.switch_backend("TkAgg")
+import matplotlib.pyplot as plt
 
 # Functions to convert/manipulate Angle resolved image to polar projection
 # Based on matlab script created by Ernst Jan Vesseur (from AMOLF).
@@ -69,10 +71,15 @@ def _ExtractAngleInformation(data, hole):
         pixel_size = data.metadata[model.MD_PIXEL_SIZE]
         pole_x, pole_y = data.metadata[model.MD_AR_POLE]
         parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
+        focus_distance = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
+        # TODO new MD for inverted mirror or not?
+        # focus_dist = model.AR_FOCUS_DISTANCE
     except KeyError:
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
     pole_pos = (pole_x, pole_y)
+
+    # TODO flip data here
 
     # Crop the input image to half circle (set values outside of half circle zero)
     cropped_image = _CropHalfCircle(data, pixel_size, pole_pos, hole=hole)
@@ -96,6 +103,9 @@ def _ExtractAngleInformation(data, hole):
     y_indices = numpy.linspace(0, data.shape[0] - 1, data.shape[0])  # list of px indices
     # correct y coordinates to be 0 at the hole position
     y_pos = (y_indices - pole_pos[1]) + (2 * parabola_f) / pixel_size[0]  # y coordinates of the pixels (vertical)
+    # invert y axis in case of inverted mirror
+    if focus_distance < 0:
+        y_pos = y_pos[::-1]
 
     # create two arrays with set of x and y coordinates and with same shape of data
     x_array, y_array = numpy.meshgrid(x_pos, y_pos)
@@ -401,10 +411,15 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     Y, X = data.shape
     pole_x, pole_y = pole_pos
 
-    # Calculate the coordinates of the cutoff of half circle
+    # Calculate the center coordinates of the full circle
     center_x = pole_x
-    lower_y = pole_y - ((2 * parabola_f - focus_distance) / pixel_size[1])
-    center_y = pole_y - ((2 * parabola_f) / pixel_size[1])
+    # distance from pole position to cutoff of mirror in y direction
+    dist_pole2mirrorcutoff = (2 * parabola_f) / pixel_size[1]
+    # center of the full circle mask
+    if focus_distance >= 0:  # mirror up (standard)
+        center_y = pole_y - dist_pole2mirrorcutoff
+    else:  # mirror down (flipped)
+        center_y = pole_y + dist_pole2mirrorcutoff
 
     # Compute the dilated radius
     # use dilated mask to handle edge effects for triangulation code (offset_radius)
@@ -413,9 +428,16 @@ def _CreateMirrorMask(data, pixel_size, pole_pos, offset_radius=0, hole=True):
     circle_mask = x * x + y * y <= r * r
 
     # Create half circle mask
-    # check that center of mask is located within image (e.g. if mask at the edge of image not cutoff)
-    if (lower_y - offset_radius) > 0:
-        circle_mask[:int(lower_y) - offset_radius, :] = False
+    if focus_distance >= 0:  # mirror up (standard)
+        lower_y = pole_y - ((2 * parabola_f - focus_distance) / pixel_size[1])
+        # check that center of mask is located within image (e.g. if mask at the edge of image not cutoff)
+        if (lower_y - offset_radius) > 0:
+            circle_mask[:int(lower_y) - offset_radius, :] = False
+    else:  # mirror down (flipped)
+        lower_y = pole_y + ((2 * parabola_f + focus_distance) / pixel_size[1])
+        # check that center of mask is located within image (e.g. if mask at the edge of image not cutoff)
+        if (lower_y + offset_radius) < Y:
+            circle_mask[int(lower_y) - offset_radius:, :] = False
 
     # Crop the pole making hole of hole_diameter
     # For delaunay triangulation hole=False: to avoid edge effects
