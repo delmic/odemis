@@ -2220,11 +2220,16 @@ class AndorSpec(model.Detector):
         self._updateWavelengthList()
 
     def _updateWavelengthList(self):
+        """
+        Updates the wavelength list MD based on the current spectrograph position.
+        """
         npixels = self.resolution.value[0]
         pxs = self.pixelSize.value[0] * self.binning.value[0]
         wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
-        md = {model.MD_WL_LIST: wll}
-        self._detector.updateMetadata(md)
+        if len(wll) == 0 and model.MD_WL_LIST in self._metadata:
+            del self._metadata[model.MD_WL_LIST]  # remove WL list from MD if empty
+        else:
+            self._metadata[model.MD_WL_LIST] = wll
 
     def terminate(self):
         self._spectrograph.terminate()

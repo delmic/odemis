@@ -325,7 +325,10 @@ class SpecDataFlow(model.DataFlow):
                 pxs = dmd[model.MD_SENSOR_PIXEL_SIZE][0] * dmd[model.MD_BINNING][0]
                 logging.info("Recomputing correct WL_LIST metadata")
                 wll = self.component._spectrograph.getPixelToWavelength(npixels, pxs)
-                md[model.MD_WL_LIST] = wll
+                if len(wll) == 0 and model.MD_WL_LIST in md:
+                    del md[model.MD_WL_LIST]  # remove WL list from MD if empty
+                else:
+                    md[model.MD_WL_LIST] = wll
             except KeyError as ex:
                 logging.warning("Failed to compute correct WL_LIST metadata: %s", ex)
             except Exception:
