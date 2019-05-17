@@ -134,8 +134,8 @@ class ReadoutCamera(model.DigitalCamera):
         # pixelsize VA is sensor px size without binning and magnification
         pxs = self.pixelSize.value[0] * self._binning[0] / self._metadata.get(model.MD_LENS_MAG, 1.0)
         wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
-        if len(wll) == 0 and model.MD_WL_LIST in self._metadata.keys():
-            self._metadata.pop(model.MD_WL_LIST, None)  # remove WL list from MD if empty
+        if len(wll) == 0 and model.MD_WL_LIST in self._metadata:
+            del self._metadata[model.MD_WL_LIST]  # remove WL list from MD if empty
         else:
             self._metadata[model.MD_WL_LIST] = wll
 
