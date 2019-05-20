@@ -252,8 +252,7 @@ class PowerControlUnit(model.PowerSupplier):
             # means there is no power provided
             raise HwError("There is no power provided to the Power Control Unit. "
                           "Please make sure the board is turned on.")
-        x = ans.split(',')
-        return [x != '' for x in ans.split(',')]
+        return [x for x in ans.split(',') if x != '']
 
     def _sendCommand(self, cmd):
         """
