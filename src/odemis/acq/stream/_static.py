@@ -419,8 +419,8 @@ class StaticARStream(StaticStream):
         self.point.subscribe(self._onPoint)
 
         # polarization VA
-        # check if any polarization analyzer data, (None) == no analyzer data (pol)
-        if polpositions != {None}:
+        # check if any polarization analyzer data, set([]) == no analyzer data (pol)
+        if polpositions:
             # use first entry in acquisition to populate VA (acq could have 1 or 6 pol pos)
             self.polarization = model.VAEnumerated(list(polpositions)[0],
                                 choices=polpositions)
