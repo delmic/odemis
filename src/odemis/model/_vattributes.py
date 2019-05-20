@@ -438,7 +438,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         if not self._thread:
             self._create_thread()
-        self._commands.send("SUB")
+        self._commands.send(b"SUB")
         self._commands.recv() # synchronise
 
         # send subscription to the actual VA
@@ -456,7 +456,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         """
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
         if self._commands:
-            self._commands.send("UNSUB")
+            self._commands.send(b"UNSUB")
 
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
@@ -468,7 +468,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
                                         "because VA '%s' is going out of context",
                                         self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
-                    self._commands.send("STOP")
+                    self._commands.send(b"STOP")
                     self._thread.join(1)
                 self._commands.close()
             # self._ctx.term()
@@ -518,13 +518,13 @@ class SubscribeProxyThread(threading.Thread):
             # process commands
             if socks.get(self._commands) == zmq.POLLIN:
                 message = self._commands.recv()
-                if message == "SUB":
-                    self.data.setsockopt(zmq.SUBSCRIBE, '')
-                    self._commands.send("SUBD")
-                elif message == "UNSUB":
-                    self.data.setsockopt(zmq.UNSUBSCRIBE, '')
+                if message == b"SUB":
+                    self.data.setsockopt(zmq.SUBSCRIBE, b'')
+                    self._commands.send(b"SUBD")
+                elif message == b"UNSUB":
+                    self.data.setsockopt(zmq.UNSUBSCRIBE, b'')
                     # no confirmation (async)
-                elif message == "STOP":
+                elif message == b"STOP":
                     self._commands.close()
                     self.data.close()
                     return

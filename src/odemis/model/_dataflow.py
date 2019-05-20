@@ -449,7 +449,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         # start the remote subscription
         if not self._thread:
             self._create_thread()
-        self._commands.send("SUB")
+        self._commands.send(b"SUB")
         self._commands.recv() # synchronise
 
         # send subscription to the actual dataflow
@@ -460,7 +460,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     def stop_generate(self):
         # stop the remote subscription
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
-        self._commands.send("UNSUB") # asynchronous (necessary to not deadlock)
+        self._commands.send(b"UNSUB")  # asynchronous (necessary to not deadlock)
 
     def __del__(self):
         try:
@@ -473,7 +473,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
                                           "are still subscribers because dataflow '%s' is going out of context",
                                           self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
-                    self._commands.send("STOP")
+                    self._commands.send(b"STOP")
                     self._thread.join(1)
                 self._commands.close()
                 # Not needed: called when garbage-collected and it's dangerous
@@ -542,16 +542,16 @@ class SubscribeProxyThread(threading.Thread):
                 # process commands
                 if self._commands in socks:
                     message = self._commands.recv()
-                    if message == "SUB":
-                        self._data.setsockopt(zmq.SUBSCRIBE, '')
+                    if message == b"SUB":
+                        self._data.setsockopt(zmq.SUBSCRIBE, b'')
                         logging.debug("Subscribed to remote dataflow %s", self.uri)
-                        self._commands.send("SUBD")
-                    elif message == "UNSUB":
-                        self._data.setsockopt(zmq.UNSUBSCRIBE, '')
+                        self._commands.send(b"SUBD")
+                    elif message == b"UNSUB":
+                        self._data.setsockopt(zmq.UNSUBSCRIBE, b'')
                         if logging:
                             logging.debug("Unsubscribed from remote dataflow %s", self.uri)
                         # no confirmation (async)
-                    elif message == "STOP":
+                    elif message == b"STOP":
                         return
                     else:
                         logging.warning("Received unknown message %s", message)
