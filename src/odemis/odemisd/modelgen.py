@@ -952,7 +952,7 @@ class Instantiator(object):
         prop_names = persistent.get("properties", [])
         md_names = persistent.get("metadata", [])
 
-        if not self._can_persist and prop_names or md_names:
+        if not self._can_persist and (prop_names or md_names):
             logging.warning("Component %s has persistent settings, but no persistent file available",
                             comp_name)
 
