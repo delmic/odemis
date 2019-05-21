@@ -288,8 +288,20 @@ class BackendContainer(model.Container):
                 pass
             raise ValueError("Failed to instantiate component %s" % name)
         else:
-            newcmps = set(self._instantiator.get_children(comp))
-            mic.alive.value = mic.alive.value | newcmps
+            new_cmps = self._instantiator.get_children(comp)
+
+            # Check it created at least all the expected children
+            new_names = {c.name for c in new_cmps}
+            exp_names = self._instantiator.get_children_names(name)
+            if exp_names - new_names:
+                logging.error("Component %s instantiated components %s, while expected %s",
+                              name, new_names, exp_names)
+                raise ValueError("Component %s didn't instantiate all components" % (name,))
+            elif new_names - exp_names:  # Too many?
+                logging.warning("Component %s instantiated extra unexpected components %s",
+                                name, new_names - exp_names)
+
+            mic.alive.value = mic.alive.value | new_cmps
             # update ghosts by removing all the new components
             dchildren = self._instantiator.get_children_names(name)
             for n in dchildren:
@@ -297,12 +309,13 @@ class BackendContainer(model.Container):
 
             mic.ghosts.value = ghosts
 
-            for c in newcmps:
+            for c in new_cmps:
                 prop_names, _ = self._instantiator.get_persistent(c.name)
                 for prop_name in prop_names:
                     self._observe_persistent_va(c, prop_name)
             self._update_persistent_metadata()
-            return newcmps
+
+            return new_cmps
 
     def _terminate_all_alive(self):
         """
