@@ -845,10 +845,15 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             # The stream takes care of configuring its detector, so no need
             # In case there is no streams for the detector, take the binning and exposureTime values as far as they exist
             if not streams:
+                binning = 1, 1
                 if model.hasVA(d, "binning"):
                     d.binning.value = d.binning.clip((2, 2))
+                    binning = d.binning.value
                 if model.hasVA(d, "exposureTime"):
-                    d.exposureTime.value = d.exposureTime.clip(0.2)
+                    # 0.2 s tends to be good for most cameras, but need to compensate
+                    # if binning is smaller
+                    exp = 0.2 * ((2 * 2) / numpy.prod(binning))
+                    d.exposureTime.value = d.exposureTime.clip(exp)
         ret = {}
         logging.debug("Running AutoFocusSpectrometer on %s, using %s, for the detectors %s, and using selector %s",
                       spgr, focuser, dets, selector)

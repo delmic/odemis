@@ -210,13 +210,13 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
-            'spec-fiber-focus': ("focus",  # TODO: make it work if there are multiple focusers
+            'spec-fiber-focus': ("focus",  # if multiple focusers, the detector should be passed, to pick the right path
                 {'lens-switch': {'x': 'off'},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': 'pass-through'},
                  # In the current convention, only the spectrograph-dedicated
                  # can be after the fiber, so no need to check for spectrograph
-                 'spectrograph-dedicated': {'slit-in': 10e-6},  # slit to the minimum
+                 'spectrograph-dedicated': {'slit-in': 50e-6},  # small, to get a sharp line, but enought to get some light
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': 'pass-through'},
                 }),
