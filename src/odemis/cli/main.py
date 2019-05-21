@@ -132,7 +132,13 @@ def print_component(comp, pretty=True, level=0):
             indent = u""
         else:
             indent = u"  " * level + u"↳ "
-        print(u"%s%s\trole:%s" % (indent, comp.name, comp.role))
+        role = comp.role
+        if role is None:
+            str_role = "(no role)"
+        else:
+            str_role = "role:%s" % (role,)
+
+        print(u"%s%s\t%s" % (indent, comp.name, str_role))
     else:
         pstr = u""
         try:
