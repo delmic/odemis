@@ -1304,7 +1304,6 @@ class StreamBar(wx.Panel):
         acq.stream.ScannedTemporalSettingsStream,
         acq.stream.TemporalSpectrumSettingsStream,
         acq.stream.MonochromatorSettingsStream,
-        acq.stream.MomentOfInertiaLiveStream,
         acq.stream.CameraCountStream,
         acq.stream.ScannedTCSettingsStream
     )

@@ -148,14 +148,6 @@ MultipleDetectorStream(Stream)
           It handles acquisition, but not rendering (so .image always returns an empty
           image).
 
-        - *MomentOfInertiaMDStream(SEMCCDMDStream):*
-
-          Multiple detector Stream made of SEM + CCD, with direct computation of the
-          moment of inertia (MoI) and spot size of the CCD images. The MoI is
-          assembled into one big image for the CCD.
-          Used by the MomentOfInertiaLiveStream to provide display in the mirror
-          alignment mode for SPARCv2.
-
     - **SEMMDStream(MultipleDetectorStream):**
 
       Same as SEMCCDMDStream, but expects two SEM streams: the first one is the
@@ -193,11 +185,6 @@ RepetitionStream(LiveStream)
           should not be used for live view. So it has no .image (for now).
           See StaticARStream for displaying a stream, and CameraStream for displaying
           just the current AR view.
-
-        - *MomentOfInertiaLiveStream(CCDSettingsStream):*
-
-          Special stream to acquire AR view and display moment of inertia live.
-          Also provides spot size information.
 
     - **PMTSettingsStream(RepetitionStream):**
 
