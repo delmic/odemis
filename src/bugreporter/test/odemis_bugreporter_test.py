@@ -51,8 +51,8 @@ class TestOdemisBugreporter(unittest.TestCase):
         # check this key, otherwise expect LookupError
         customer_key_path = os.path.join(os.path.expanduser(u"~"), '.local', 'share',
                                          'odemis', 'osticket.key')
-        fallback_key_path = os.path.join('usr', 'share', 'odemis', 'osticket.key')
-        if not os.path.isdir(customer_key_path) and not os.path.isdir(fallback_key_path):
+        fallback_key_path = os.path.join('/usr', 'share', 'odemis', 'osticket.key')
+        if not os.path.isfile(customer_key_path) and not os.path.isfile(fallback_key_path):
             self.assertRaises(LookupError, self.bugreporter.search_api_key)
         else:
             try:
@@ -129,10 +129,8 @@ class TestOdemisBugreporter(unittest.TestCase):
             self.fail("Compression of large file failed with exception %s" % e)
         self.assertTrue(zipfile.is_zipfile(self.bugreporter.zip_fn))
 
-        home_dir = os.path.expanduser(u"~")
-        files = ['/var/log/odemis.log', os.path.join(home_dir, 'odemis-gui.log'),
-                 os.path.join(home_dir, 'odemis-gui.log.1'), '/etc/odemis.conf', '/var/log/syslog',
-                 os.path.join(home_dir, 'odemis-mic-selector.log'), '/tmp/odemis-bug-screenshot.png']
+        files = ['odemis.log', 'odemis-gui.log', 'odemis-gui.log.1', 'odemis.conf', 'syslog',
+                 'odemis-mic-selector.log', 'odemis-bug-screenshot.png']
 
         zip_file = zipfile.ZipFile(self.bugreporter.zip_fn)
         for f in files:
