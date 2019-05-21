@@ -48,6 +48,11 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_STARTING: 3,
                     }
 
+# Special VigilantAttributes
+VAS_COMPS = {"alive", "dependencies"}
+VAS_HIDDEN = {"children", "affects"}
+
+
 # small object that can be remotely executed for scanning
 class Scanner(model.Component):
     def __init__(self, cls, **kwargs):
@@ -271,6 +276,7 @@ def print_events(component, pretty):
     for name, value in model.getEvents(component).items():
         print_event(name, value, pretty)
 
+
 def print_vattribute(name, va, pretty):
     if va.unit:
         if pretty:
@@ -313,6 +319,13 @@ def print_vattribute(name, va, pretty):
 
     if pretty:
         val = va.value
+        if name in VAS_COMPS:
+            try:
+                val = {c.name for c in val}
+            except Exception:
+                logging.info("Failed to convert %s to component names")
+                # Leave the value as-is
+
         # Display set/dict sorted, so that they always look the same.
         # Especially handy for VAs such as .position, which show axis names.
         if isinstance(val, dict):
@@ -327,11 +340,10 @@ def print_vattribute(name, va, pretty):
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
-special_va_names = ("children", "affects") # , "alive", "ghosts")
-# TODO: handle .ghosts and .alive correctly in print_va and don't consider them special
+
 def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
-        if name in special_va_names:
+        if name in VAS_HIDDEN:
             continue
         print_vattribute(name, value, pretty)
 
