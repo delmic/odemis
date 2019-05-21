@@ -17,10 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 import logging
 from odemis import model, util, dataio
 from odemis.model import oneway
@@ -206,7 +203,7 @@ class ReadoutCamera(model.DigitalCamera):
         if self._sync_event:
             # softwareTrigger subscribes to onEvent method: if softwareTrigger.notify() called, onEvent method called
             self._sync_event.subscribe(self)  # must have onEvent method
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
 
     @oneway
     def onEvent(self):

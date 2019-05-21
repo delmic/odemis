@@ -17,10 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 from ctypes import *
 import ctypes
 import logging
@@ -344,7 +341,7 @@ class PH300(model.Detector):
         # * "S" to start
         # * "E" to end
         # * "T" to terminate
-        self._genmsg = Queue.Queue()
+        self._genmsg = queue.Queue()
         self._generator = threading.Thread(target=self._acquire,
                                            name="PicoHarp300 acquisition thread")
         self._generator.start()
@@ -641,7 +638,7 @@ class PH300(model.Detector):
         """
         Read one message from the acquisition queue
         return (str): message
-        raises Queue.Empty: if no message on the queue
+        raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
         if msg not in ("S", "E", "T"):
@@ -666,7 +663,7 @@ class PH300(model.Detector):
                 state = self._get_acq_msg(block=False)
                 if state == "T":
                     raise StopIteration()
-            except Queue.Empty:
+            except queue.Empty:
                 pass
 
             if state == "S":
@@ -689,7 +686,7 @@ class PH300(model.Detector):
                 return True
             elif state == "T":
                 raise StopIteration()
-        except Queue.Empty:
+        except queue.Empty:
             pass
         return False
 

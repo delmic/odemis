@@ -16,10 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 from ctypes import *
 import ctypes
 import gc
@@ -739,7 +736,7 @@ class Camera(model.DigitalCamera):
             # Queue to control the acquisition thread:
             # * "S" to start
             # * "E" to end
-            self._genmsg = Queue.Queue()
+            self._genmsg = queue.Queue()
             self._generator = None
             self._commander = None
             self._must_stop = False
@@ -747,7 +744,7 @@ class Camera(model.DigitalCamera):
             # TODO: check with GET_SUPPORTED_TRIGGER_MODE?
             self.SetExternalTrigger(SET_TRIGGER_OFF)
             self.softwareTrigger = model.Event()
-            self._events = Queue.Queue()  # events which haven't been handled yet
+            self._events = queue.Queue()  # events which haven't been handled yet
 
             self.data = UEyeDataFlow(self)
         except Exception:
@@ -1087,7 +1084,7 @@ class Camera(model.DigitalCamera):
                     while not self._must_stop:
                         state = self._genmsg.get(block=False)
                         logging.debug("Acq received message %s", state)
-                except Queue.Empty:
+                except queue.Empty:
                     pass
 
                 if state == prev_state:

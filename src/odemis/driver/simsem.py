@@ -22,10 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 import logging
 import math
 import numpy
@@ -575,7 +572,7 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
             self._sync_event.subscribe(self)
 
     @oneway

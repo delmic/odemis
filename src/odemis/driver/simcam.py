@@ -21,10 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 import logging
 import numpy
 from odemis import model, util, dataio
@@ -334,7 +331,7 @@ class SimpleDataFlow(model.DataFlow):
         self._sync_event = event
         if self._sync_event:
             event.subscribe(self)
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
 
     @oneway
     def onEvent(self):

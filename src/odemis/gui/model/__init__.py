@@ -23,10 +23,7 @@ This file is part of Odemis.
 from __future__ import division
 
 from past.builtins import basestring
-try:
-    import Queue
-except ImportError:  # Python 3 naming
-    import queue as Queue
+import queue
 from abc import ABCMeta
 import collections
 import logging
@@ -1107,7 +1104,7 @@ class StreamView(View):
 
         # Will be created on the first time it's needed
         self._focus_thread = {}  # Focuser -> thread
-        self._focus_queue = {}  # Focuser -> Queue.Queue() of float (relative distance)
+        self._focus_queue = {}  # Focuser -> queue.Queue() of float (relative distance)
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
@@ -1189,7 +1186,7 @@ class StreamView(View):
             return self._focus_queue[focuser]
         except KeyError:
             # Create a new thread and queue
-            q = Queue.Queue()
+            q = queue.Queue()
             self._focus_queue[focuser] = q
 
             t = threading.Thread(target=self._moveFocus, args=(q, focuser),
@@ -1254,7 +1251,7 @@ class StreamView(View):
                     while True:
                         ns = q.get(block=False)
                         shift += ns
-                except Queue.Empty:
+                except queue.Empty:
                     pass
 
                 logging.debug(u"Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
