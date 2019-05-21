@@ -742,8 +742,6 @@ def _getSpectrometerFocusingComponents(focuser):
     raise LookupError: if not all the components could be found
     """
     dets = []
-    # The order of the detectors shouldn't matter for the SpectrometerAutofocus.
-    # So we leave it to the microscope file to specify the order.
     for n in focuser.affects.value:
         try:
             d = model.getComponent(name=n)
@@ -761,6 +759,11 @@ def _getSpectrometerFocusingComponents(focuser):
 
     if not dets:
         raise LookupError("Failed to find any detector for the spectrometer focusing")
+
+    # The order doesn't matter for SpectrometerAutofocus, but the first detector
+    # is used for detecting the light is on. In addition it's nice to be reproducible.
+    # => Use alphabetical order of the roles
+    dets.sort(key=lambda c: c.role)
 
     # Get the spectrograph and selector based on the fact they affect the
     # same detectors.
