@@ -516,14 +516,14 @@ class Instantiator(object):
         name (str): name of the component to instantiate
         return (None or container): None means a new container must be created
         """
-        # If it's a leaf, use its own container
-        if self.create_sub_containers and self.is_leaf(name):
-            return None
-
         attr = self.ast[name]
         if attr.get("class") == "Microscope":
             # The Microscope (root) is special
             return self.root_container
+
+        # If it's a leaf, use its own container
+        if self.create_sub_containers and self.is_leaf(name):
+            return None
 
         # If it's not a leaf, it's probably a wrapper (eg, MultiplexActuator),
         # which is simple Python code and so doesn't need to run in a
