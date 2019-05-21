@@ -1218,7 +1218,7 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
     # TODO: only provide set_data(), and store the data as a single 2xN numpy array.
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None,
                  display_xrange=None, display_yrange=None):
-        xs, ys = zip(*data)
+        xs, ys = list(zip(*data))
         self.set_1d_data(xs, ys, unit_x, unit_y, range_x, range_y, display_xrange, display_yrange)
 
     def set_1d_data(self, xs, ys, unit_x=None, unit_y=None, range_x=None, range_y=None,
