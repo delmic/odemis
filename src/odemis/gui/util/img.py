@@ -1226,7 +1226,7 @@ def spectrum_to_export_data(proj, raw, vp=None):
             spectrum_range, spec = clip_data_window(vp.hrange.value, vp.vrange.value, spectrum_range, spec)
 
         # Draw spectrum bar plot
-        data = zip(spectrum_range, spec)
+        data = list(zip(spectrum_range, spec))
         fill_colour = BAR_PLOT_COLOUR
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         data_to_draw = numpy.empty((client_size.y, client_size.x, 4), dtype=numpy.uint8)

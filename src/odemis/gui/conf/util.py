@@ -483,10 +483,10 @@ def format_choices(choices):
             if abs(choices[-1] / mn_non0) < 1000:
                 fmt, choices_si_prefix = utun.si_scale_list(choices)
                 fmt = [utun.to_string_pretty(c, 3) for c in fmt]
-                choices_formatted = zip(choices, fmt)
+                choices_formatted = list(zip(choices, fmt))
             else:
                 fmt = [to_string_si_prefix(c, sig=3) for c in choices]
-                return zip(choices, fmt), None
+                return list(zip(choices, fmt)), None
         except Exception:
             logging.exception("Formatting error for %s", choices)
             choices_formatted = [(c, choice_to_str(c)) for c in choices]
@@ -545,7 +545,7 @@ def format_axis_choices(name, axis_def):
             if abs(choices[-1] / mn_non0) < 1000:
                 fmt, choices_si_prefix = utun.si_scale_list(choices)
                 fmt = [utun.to_string_pretty(c, 3, unit) for c in fmt]
-                choices_formatted = zip(choices, fmt)
+                choices_formatted = list(zip(choices, fmt))
         except Exception:
             logging.exception("Formatting error for %s", choices)
         if choices_formatted is None:

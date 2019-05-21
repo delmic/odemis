@@ -1776,7 +1776,7 @@ class PlotCanvas(BufferedCanvas):
         if len(xs) != len(ys):
             msg = "X and Y list are of unequal length. X: %s, Y: %s, Xs: %s..."
             raise ValueError(msg % (len(xs), len(ys), str(xs)[:30]))
-        self.set_data(zip(xs, ys), unit_x, unit_y, range_x, range_y)
+        self.set_data(list(zip(xs, ys)), unit_x, unit_y, range_x, range_y)
 
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Set the data to be plotted
