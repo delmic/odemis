@@ -215,7 +215,7 @@ class BackendContainer(model.Container):
                             return
                         failed = set() # not recent anymore
 
-                logging.debug("Trying to instantiate comp: %s", ", ".join(nexts))
+                logging.debug("Trying to instantiate comps: %s", ", ".join(nexts))
 
                 for n in nexts:
                     ghosts = mic.ghosts.value.copy()
