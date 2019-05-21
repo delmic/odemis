@@ -95,8 +95,7 @@ class Camera(model.DigitalCamera):
         tran_rng = [(-hlf_shape[0], -hlf_shape[1]),
                     (hlf_shape[0], hlf_shape[1])]
         self._translation = (0, 0)
-        self.translation = model.ResolutionVA(self._translation, tran_rng,
-                                              cls=(int, long), unit="px",
+        self.translation = model.ResolutionVA(self._translation, tran_rng, unit="px",
                                               setter=self._setTranslation)
 
         exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s

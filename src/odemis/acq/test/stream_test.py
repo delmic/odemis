@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division, print_function
 
+from builtins import int
 from concurrent.futures import CancelledError
 import gc
 import logging
@@ -71,9 +72,9 @@ class FakeEBeam(model.Emitter):
         self.pixelSize = model.VigilantAttribute((1e-9, 1e-9), unit="m", readonly=True)
         self.magnification = model.FloatVA(1000.)
         self.scale = model.TupleContinuous((1, 1), [(1, 1), self._shape],
-                                           cls=(int, long, float), unit="")
+                                           cls=(int, float), unit="")
         self.translation = model.TupleContinuous((0, 0), ((0, 0), (0, 0)),
-                                           cls=(int, long, float), unit="px")
+                                           cls=(int, float), unit="px")
 
 
 class FakeDetector(model.Detector):

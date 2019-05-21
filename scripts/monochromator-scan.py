@@ -18,6 +18,7 @@ select spot mode, and pick the point you're interested.
 
 from __future__ import division, print_function
 
+from builtins import int
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -72,7 +73,7 @@ class MonochromatorScanStream(stream.Stream):
                                                unit="s")
         self.emtTranslation = model.TupleContinuous((0, 0),
                                                     range=self._emitter.translation.range,
-                                                    cls=(int, long, float),
+                                                    cls=(int, float),
                                                     unit="px")
 
         # For acquisition
