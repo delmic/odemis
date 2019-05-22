@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from builtins import basestring
 import Pyro4
 from Pyro4.core import oneway
 import collections
@@ -30,6 +31,7 @@ import multiprocessing
 import os
 import threading
 from future.moves.urllib.parse import quote
+
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
 # There is a problem with threadpool: threads have a timeout on waiting for a
@@ -348,6 +350,7 @@ class Container(Pyro4.core.Daemon):
          container.
         component (Component)
         """
+        assert isinstance(component._pyroId, basestring)
         self.rootId = component._pyroId
 
 
