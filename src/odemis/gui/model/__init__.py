@@ -258,7 +258,7 @@ class MainGUIData(object):
         if microscope:
             self.role = microscope.role
 
-            for c in microscope.children.value:
+            for c in model.getComponents():
                 if c.role is None:
                     continue
                 try:
@@ -290,13 +290,6 @@ class MainGUIData(object):
                 self.sp_ccd = self.sp_ccds[0]
             if self.spectrometer is None and self.spectrometers:
                 self.spectrometer = self.spectrometers[0]
-
-            # Spectrograph is not directly a child, but a sub-comp of spectrometer
-            # TODO: now it's also a direct child. Code can be removed once all installs have been updated
-            if self.spectrometer:
-                for child in self.spectrometer.children.value:
-                    if child.role == "spectrograph":
-                        self.spectrograph = child
 
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
