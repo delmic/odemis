@@ -422,7 +422,13 @@ class OpticalPathManager(object):
         if self.microscope.role in ("secom", "delphi"):
             if quality == ACQ_QUALITY_FAST:
                 # Restore the fan (if it was active before)
-                self._setCCDFan(True)
+                try:
+                    self._setCCDFan(True)
+                except Exception:
+                    # This can happen mainly if the hardware is in a bad state
+                    # let's not make a big fuss: only report the error.
+                    logging.exception("Failed to turn on CCD fan")
+
             # Don't turn off the fan if BEST: first wait for setPath()
 
     def setPath(self, mode, detector=None):
@@ -473,10 +479,16 @@ class OpticalPathManager(object):
 
         # Special SECOM mode: just look at the fan and be done
         if self.microscope.role in ("secom", "delphi"):
-            if self.quality == ACQ_QUALITY_FAST:
-                self._setCCDFan(True)
-            elif self.quality == ACQ_QUALITY_BEST:
-                self._setCCDFan(target.role == "ccd")
+            try:
+                if self.quality == ACQ_QUALITY_FAST:
+                    self._setCCDFan(True)
+                elif self.quality == ACQ_QUALITY_BEST:
+                    self._setCCDFan(target.role == "ccd")
+            except Exception:
+                # This can happen mainly if the hardware is in a bad state
+                # let's not make a big fuss: only report the error. The optical
+                # path is correct anyway, just potentially more vibrations.
+                logging.exception("Failed to change CCD fan")
 
         fmoves = []  # moves in progress, list of (future, Component, dict(axis->pos) tuples
 
