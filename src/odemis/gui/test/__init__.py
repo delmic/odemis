@@ -37,8 +37,7 @@ import wx
 
 import odemis.gui.model as gmodel
 import odemis.model as omodel
-import test_gui
-
+from . import test_gui
 
 # Common configuration and code for the GUI test cases
 MANUAL = False

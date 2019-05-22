@@ -25,7 +25,7 @@ import unittest
 import os
 import logging
 import zipfile
-from bugreporter import OdemisBugreporter
+from ..odemis_bugreporter import OdemisBugreporter
 from future.moves.urllib.error import HTTPError
 import odemis
 
