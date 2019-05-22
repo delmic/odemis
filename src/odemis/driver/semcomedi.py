@@ -268,7 +268,7 @@ class SEMComedi(model.HwComponent):
         # self._acquisition_data_lock = threading.Lock()
         self._acquisition_mng_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
-        self._acq_cmd_q = Queue.Queue()
+        self._acq_cmd_q = queue.Queue()
         # TODO: The .wait() of this event is never used, which is a sign it's
         # probably not useful anymore => just check if _acquisitions is empty?
         self._acquisition_must_stop = threading.Event()
@@ -1638,7 +1638,7 @@ class SEMComedi(model.HwComponent):
         while True:
             try:
                 cmd = self._acq_cmd_q.get(block=block)
-            except Queue.Empty:
+            except queue.Empty:
                 break
 
             # Decode command
@@ -2712,7 +2712,7 @@ class Scanner(model.Emitter):
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
 
-        self._scan_state_req = Queue.Queue()
+        self._scan_state_req = queue.Queue()
         self._scanning_ready = threading.Event()
         self._scan_state = True  # To force changing the digital output when the state go to False
         t = threading.Thread(target=self._scan_state_mng_run,
@@ -2991,7 +2991,7 @@ class Scanner(model.Emitter):
                     timeout = stopt - now
                     try:
                         msg = q.get(timeout=timeout)
-                    except Queue.Empty:
+                    except queue.Empty:
                         # time to stop the encoder => just do the loop again
                         continue
                 else:  # time to stop
@@ -3705,7 +3705,7 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
-            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._evtq = queue.Queue()  # to be sure it's empty
             self._prev_max_discard = self._max_discard
             self.max_discard = 0
             self._sync_event.subscribe(self)
