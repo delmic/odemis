@@ -1958,7 +1958,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
 
             # Wait for detector to acquire image
             for i, s in enumerate(self._streams):
-                timeout = 1.5 * self._tc_stream._getDetectorVA("dwellTime").value + 1
+                timeout = 2.5 * self._tc_stream._getDetectorVA("dwellTime").value + 3
                 if not self._acq_complete[i].wait(timeout):
                     raise TimeoutError()
             if self._acq_state == CANCELLED:
