@@ -52,7 +52,7 @@ Pyro4.config.THREADPOOL_MAXTHREADS = 128
 
 # maximum call time for the instantiation (which can be extra long for some hardware)
 # and the standard call (normally, the long ones return a future).
-INIT_TIMEOUT = 200  # s
+INIT_TIMEOUT = 300  # s
 CALL_TIMEOUT = 30  # s
 
 # TODO needs a different value on Windows
