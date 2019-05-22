@@ -742,8 +742,6 @@ def _getSpectrometerFocusingComponents(focuser):
     raise LookupError: if not all the components could be found
     """
     dets = []
-    # The order of the detectors shouldn't matter for the SpectrometerAutofocus.
-    # So we leave it to the microscope file to specify the order.
     for n in focuser.affects.value:
         try:
             d = model.getComponent(name=n)
@@ -761,6 +759,11 @@ def _getSpectrometerFocusingComponents(focuser):
 
     if not dets:
         raise LookupError("Failed to find any detector for the spectrometer focusing")
+
+    # The order doesn't matter for SpectrometerAutofocus, but the first detector
+    # is used for detecting the light is on. In addition it's nice to be reproducible.
+    # => Use alphabetical order of the roles
+    dets.sort(key=lambda c: c.role)
 
     # Get the spectrograph and selector based on the fact they affect the
     # same detectors.
@@ -842,10 +845,15 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             # The stream takes care of configuring its detector, so no need
             # In case there is no streams for the detector, take the binning and exposureTime values as far as they exist
             if not streams:
+                binning = 1, 1
                 if model.hasVA(d, "binning"):
                     d.binning.value = d.binning.clip((2, 2))
+                    binning = d.binning.value
                 if model.hasVA(d, "exposureTime"):
-                    d.exposureTime.value = d.exposureTime.clip(0.2)
+                    # 0.2 s tends to be good for most cameras, but need to compensate
+                    # if binning is smaller
+                    exp = 0.2 * ((2 * 2) / numpy.prod(binning))
+                    d.exposureTime.value = d.exposureTime.clip(exp)
         ret = {}
         logging.debug("Running AutoFocusSpectrometer on %s, using %s, for the detectors %s, and using selector %s",
                       spgr, focuser, dets, selector)

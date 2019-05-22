@@ -4020,6 +4020,18 @@ class Sparc2AlignTab(Tab):
         """
         Called when the mirror is moved (and the tab is shown)
         """
+        # HACK: This is actually a hack of a hack. Normally, the user can only
+        # access the alignment tab if the mirror is engaged, so it should never
+        # get close from the parked position. However, for maintenance, it's
+        # possible to hack the GUI and enable the tab even if the mirror is
+        # not engaged. In such case, if by mistake the mirror moves, we should
+        # not set the "random" position as the engaged position.
+        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
+                                 pos["s"] - MIRROR_POS_PARKED["s"])
+        if dist_parked <= MIRROR_ONPOS_RADIUS:
+            logging.warning("Mirror seems parked, not updating FAV_POS_ACTIVE")
+            return
+
         # Save mirror position as the "calibrated" one
         m = self.tab_data_model.main.mirror
         m.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
