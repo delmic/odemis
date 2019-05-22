@@ -3903,6 +3903,8 @@ class Sparc2AlignTab(Tab):
     def _on_autofocus_done(self, future):
         try:
             future.result()
+        except CancelledError:
+            pass
         except Exception:
             logging.exception("Autofocus failed")
 
