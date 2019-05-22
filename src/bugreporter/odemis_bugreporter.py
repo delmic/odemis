@@ -39,7 +39,7 @@ import shlex
 import socket
 import subprocess
 import time
-import urllib2
+from future.moves.urllib.request import Request, urlopen
 import webbrowser
 import wx
 import zipfile
@@ -178,8 +178,8 @@ class OdemisBugreporter(object):
         :arg files: (None or list of Strings) pathname of zip files that should be attached
         :returns: (int) response code
         :raises ValueError: ticket upload failed
-        :raises urllib2.HTTPError: key not accepted
-        :raises urllib2.URLError: connection problem
+        :raises urllib.error.HTTPError: key not accepted
+        :raises urllib.error.URLError: connection problem
         """
         if not files:
             files = []
@@ -191,8 +191,8 @@ class OdemisBugreporter(object):
             fields["attachments"].append(att_desc)
 
         description = json.dumps(fields)
-        req = urllib2.Request(OS_TICKET_URL, description, headers={"X-API-Key": api_key})
-        f = urllib2.urlopen(req)
+        req = Request(OS_TICKET_URL, description, headers={"X-API-Key": api_key})
+        f = urlopen(req)
         response = f.getcode()
         f.close()
         if response == RESPONSE_SUCCESS:

@@ -33,10 +33,7 @@ import math
 import numpy
 import re
 import requests
-try:
-    import urlparse
-except ImportError:  # Python 3 naming
-    import urllib.parse as urlparse
+from future.moves.urllib.parse import urlparse, parse_qs
 
 from PIL import Image
 from io import BytesIO
@@ -111,8 +108,8 @@ def open_data(url):
         url = re.sub(r"catmaid([s]?)://", r"http\1://", url, 1)
     else:
         raise IOError("URL should start with catmaid:// or catmaids://")
-    urlo = urlparse.urlparse(url)
-    parameters = urlparse.parse_qs(urlo.query)
+    urlo = urlparse(url)
+    parameters = parse_qs(urlo.query)
     base_url = '{uri.scheme}://{uri.netloc}{uri.path}'.format(uri=urlo).rstrip("/")
     project_id = int(parameters["pid"][0]) if "pid" in parameters.keys() else None
     stack_id = int(parameters["sid0"][0]) if "sid0" in parameters.keys() else None

@@ -26,7 +26,7 @@ import os
 import logging
 import zipfile
 from bugreporter import OdemisBugreporter
-from urllib2 import HTTPError
+from future.moves.urllib.error import HTTPError
 import odemis
 
 REPORTER_TEST_ID = 12

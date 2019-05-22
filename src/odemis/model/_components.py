@@ -30,7 +30,7 @@ import inspect
 import logging
 import math
 import odemis
-import urllib
+from future.moves.urllib.parse import quote
 import weakref
 
 from . import _core, _dataflow, _vattributes, _metadata
@@ -122,7 +122,7 @@ class Component(ComponentBase):
         self._name = name
         if daemon:
             # registered under its name
-            daemon.register(self, urllib.quote(name))
+            daemon.register(self, quote(name))
 
         self._parent = None
         self.parent = parent  # calls the setter, which updates ._parent

@@ -29,8 +29,7 @@ import logging
 import multiprocessing
 import os
 import threading
-import urllib
-
+from future.moves.urllib.parse import quote
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
 # There is a problem with threadpool: threads have a timeout on waiting for a
@@ -269,7 +268,7 @@ class Container(Pyro4.core.Daemon):
         assert "/" not in name
         self._name = name
         # all the sockets are in the same directory so it's independent from the PWD
-        self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
+        self.ipc_name = BASE_DIRECTORY + "/" + quote(name) + ".ipc"
 
         if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable
             logging.error("Directory " + BASE_DIRECTORY + " is not accessible, "
@@ -337,7 +336,7 @@ class Container(Pyro4.core.Daemon):
             try:
                 # If the component already auto-registered, unregister it, so
                 # that it can try again later
-                self.unregister(urllib.quote(kwargs["name"]))
+                self.unregister(quote(kwargs["name"]))
             except Exception:
                 pass
             raise
@@ -364,7 +363,7 @@ def getContainer(name, validate=True):
         raise IOError("Directory " + BASE_DIRECTORY + " is not accessible.")
 
     # the container is the default pyro daemon at the address named by the container
-    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc")
+    container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:" + BASE_DIRECTORY + "/" + quote(name) + ".ipc")
     container._pyroTimeout = CALL_TIMEOUT
     container._pyroOneway.add("terminate")
 
@@ -380,7 +379,7 @@ def getObject(container_name, object_name):
     raises an exception if no such object or container exist
     """
     container = getContainer(container_name, validate=False)
-    return container.getObject(urllib.quote(object_name))
+    return container.getObject(quote(object_name))
 
 
 def createNewContainer(name, validate=True, in_own_process=True):
