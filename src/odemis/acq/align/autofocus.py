@@ -808,11 +808,11 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
 
         logging.debug("Turning on the light")
         bl = model.getComponent(role="brightlight")
-        f = light.turnOnLight(bl, dets[0])
+        future._running_subf = light.turnOnLight(bl, dets[0])
         try:
-            f.result(timeout=60)
+            future._running_subf.result(timeout=60)
         except TimeoutError:
-            f.cancel()
+            future._running_subf.cancel()
             logging.warning("Light doesn't appear to have turned on after 60s, will try focusing anyway")
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled after turning on the light")
@@ -825,8 +825,8 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         # multiple detectors, any of them should be fine, as the only difference
         # should be the selector, which AutoFocusSpectrometer() takes care of.
         logging.debug("Adjusting the optical path to %s", align_mode)
-        fopm = opm.setPath(align_mode, detector=dets[0])
-        fopm.result()
+        future._running_subf = opm.setPath(align_mode, detector=dets[0])
+        future._running_subf.result()
         if future._autofocus_state == CANCELLED:
             logging.info("Autofocus procedure cancelled after closing the slit")
             raise CancelledError()
@@ -853,7 +853,7 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
             ret = future._running_subf.result(timeout=3 * future._actions_time[0] + 10)
         except TimeoutError:
-            f.cancel()
+            future._running_subf.cancel()
             logging.warning("Timeout error for autofocus spectrometer")
         except IOError:
             if future._autofocus_state == CANCELLED:
