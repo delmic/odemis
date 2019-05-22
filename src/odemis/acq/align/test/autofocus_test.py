@@ -234,7 +234,7 @@ class TestSparc2AutoFocus(unittest.TestCase):
         """
         Test cancelling does cancel (relatively quickly)
         """
-        self.focus.moveAbs({"z": self._good_focus - 400e-6}).result()
+        self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
