@@ -103,7 +103,7 @@ def binning_1d_from_2d(comp, va, conf):
     try:
         nbpx_full = comp.shape[0] * comp.shape[1]  # res at binning 1
         choices = {cur_val[0]}
-        minbin = max(va.range[0])
+        minbin = max(1, max(va.range[0]))  # Force minimum binning 1 (for scanners with scale < 1)
         maxbin = min(va.range[1])
         if "range_1d" in conf:
             conf_rng = conf["range_1d"]
