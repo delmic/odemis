@@ -107,6 +107,7 @@ MAX_FRAMES = 255
 # additional overhead for the transfer. In any case, 300 second should be enough
 SOCKET_TIMEOUT = 300  # s, timeout for suds client
 
+# TODO: depends on the Phenom -> Update range on first time it's possible to read them
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
 HFW_RANGE = (2.5e-06, 0.0031)
@@ -164,9 +165,9 @@ class SEM(model.HwComponent):
                           "the network." % (host,))
         # Decide if we still need to blank/unblank the beam by tweaking the
         # source tilt or we can just access the blanking Phenom API methods
-        phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
-        logging.debug("Methods available in Phenom host: %s", phenom_methods)
-        if "SEMBlankBeam" not in phenom_methods:
+        self._phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
+        logging.debug("Methods available in Phenom host: %s", self._phenom_methods)
+        if "SEMBlankBeam" not in self._phenom_methods:
             raise HwError("This Phenom version doesn't support beam blanking! Version 4.4 or later is required.")
         self._device = client.service
 
@@ -324,12 +325,17 @@ class Scanner(model.Emitter):
 
         # (float, float) in m => physically moves the e-beam. The move is
         # clipped within the actual limits by the setter function.
-        shift_rng = ((-1, -1),
-                     (1, 1))
-        self.shift = model.TupleContinuous((0, 0), shift_rng,
-                                              cls=(int, long, float), unit="m",
-                                              setter=self._setShift)
-        self.shift.subscribe(self._onShift, init=True)
+        try:
+            # Just to check that the SEMImageShift is allowed
+            rng = self.parent._device.GetSEMImageShiftRange()
+            shift_rng = ((-1, -1),
+                         (1, 1))
+            self.shift = model.TupleContinuous((0, 0), shift_rng,
+                                                  cls=(int, long, float), unit="m",
+                                                  setter=self._setShift)
+            self.shift.subscribe(self._onShift, init=True)
+        except suds.WebFault as ex:
+            logging.warning("Disabling shift as ImageShift is not supported (%s)", ex)
 
         # (-0.5<=float<=0.5, -0.5<=float<=0.5) translation in ratio of the SEM
         # image shape
@@ -698,6 +704,10 @@ class Detector(model.Detector):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
+        # TODO: if the SED is available, it should be seen as a separate
+        # detector, to match the Odemis API.
+        self._has_sed = "SEMHasSED" in parent._phenom_methods and parent._device.SEMHasSED()
+
         # will take care of executing autocontrast asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -945,6 +955,7 @@ class Detector(model.Detector):
             metadata = self.parent._metadata.copy()
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
+            # TODO: if translation, the MD_POS must be updated.
 
             # Spot is achieved by setting a scale = 0
             # The Phenom needs _some_ resolution. Smaller is better because
@@ -997,7 +1008,7 @@ class Detector(model.Detector):
 
                 logging.debug("Returning spot SEM image with data %d", sem_img[0, 0])
                 return model.DataArray(sem_img, metadata)
-            elif res[0] <= 128 or res[1] <= 128:
+            elif res[0] * res[1] <= (16 * 16):
                 # Scan spot by spot (as fast as possible)
                 logging.debug("Grid scanning of %s...", res)
 
@@ -1036,6 +1047,7 @@ class Detector(model.Detector):
                 nframes = self.parent._scanner._nr_frames
                 logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                               res, bpp, nframes)
+                # With the SW 5.4, Phenom XL works fine down to (at least) 32x32 px
                 if res[0] < 256 or res[1] < 256:
                     logging.warning("Scanning at resolution < 256 %s, which is unsupported.", res)
 
@@ -1051,7 +1063,12 @@ class Detector(model.Detector):
 
                 scan_params, need_set = self._get_viewing_mode(res, nframes, shift, fovscale)
                 scan_params.HDR = (bpp == 16)
-                scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
+
+                if (self._has_sed and
+                    self._acq_device.SEMGetSEDState() in ("SED-STATE-ENABLED", "SED-STATE-ENABLING")):
+                    scan_params.detector = 'SEM-DETECTOR-MODE-SED'
+                else:
+                    scan_params.detector = 'SEM-DETECTOR-MODE-ALL'
 
                 # last check before we initiate the actual acquisition
                 if self._acquisition_must_stop.is_set():
@@ -1083,8 +1100,8 @@ class Detector(model.Detector):
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
-                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth * fovscale,
-                                                 img_str.aAcqState.pixelHeight * fovscale)
+                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
+                                                 img_str.aAcqState.pixelHeight)
                 metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
 
                 dtype = {8: numpy.uint8, 16: numpy.uint16}[img_str.image.descriptor.bits]
