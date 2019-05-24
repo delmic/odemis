@@ -48,6 +48,11 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_STARTING: 3,
                     }
 
+# Special VigilantAttributes
+VAS_COMPS = {"alive", "dependencies"}
+VAS_HIDDEN = {"children", "affects"}
+
+
 # small object that can be remotely executed for scanning
 class Scanner(model.Component):
     def __init__(self, cls, **kwargs):
@@ -132,7 +137,13 @@ def print_component(comp, pretty=True, level=0):
             indent = u""
         else:
             indent = u"  " * level + u"↳ "
-        print(u"%s%s\trole:%s" % (indent, comp.name, comp.role))
+        role = comp.role
+        if role is None:
+            str_role = "(no role)"
+        else:
+            str_role = "role:%s" % (role,)
+
+        print(u"%s%s\t%s" % (indent, comp.name, str_role))
     else:
         pstr = u""
         try:
@@ -148,35 +159,73 @@ def print_component(comp, pretty=True, level=0):
     # * if detector, display .shape
     # * if actuator, display .axes
 
-def print_component_tree(root, pretty=True, level=0):
+
+def print_component_graph(graph, pretty=True, level=0):
     """
     Print all the components starting from the root.
-    root (Component): the component at the root of the tree
+    graph (dict {Component -> dict {Component -> dict...}}): parent -> children, recursive
     pretty (bool): if True, display with pretty-printing
     level (int > 0): hierarchy level (for pretty printing)
     """
-    if pretty:
+    for comp, subg in graph.items():
         # first print the root component
-        print_component(root, pretty, level)
+        print_component(comp, pretty, level)
+        print_component_graph(subg, pretty, level + 1)
 
-        # display all the children
-        for comp in root.children.value:
-            print_component_tree(comp, pretty, level + 1)
-    else:
-        for c in model.getComponents():
-            print_component(c, pretty)
+
+def build_graph_children(comps):
+    """
+    Constructs a graph based on the children hierarchy, so each component is a
+    node, and the children are sub-nodes of their parent. Precisely, it builds a
+    tree, or several trees if there is more than one root component.
+    comps (set of Component): All the components
+    return (dict {Component -> dict {Component -> dict...}}): parent -> children, recursive
+    """
+    # Start from the leaves, which have no children, and merge all the leaves
+    # into their parent, once the parent has all its children in the graph.
+    # Note: the children must have a single parent, otherwise, it'll not work
+    lefts = set(comps)
+    graph = {}
+    while lefts:
+        prev_lefts = lefts.copy()
+        for comp in prev_lefts:
+            children = set(comp.children.value)
+            if not (children - set(graph.keys())):
+                graph[comp] = {k: v for k, v in graph.items() if k in children}
+                for child in children:
+                    del graph[child]
+                lefts.remove(comp)
+
+        if lefts == prev_lefts:
+            logging.warning("Some components have children not in the graph: %s",
+                            ", ".join(c.name for c in lefts))
+            # Let's not completely fail: put all the components left-over as
+            # roots, and leave their children as-is.
+            for comp in lefts:
+                graph[comp] = {}
+            break
+
+    return graph
+
 
 def list_components(pretty=True):
     """
     pretty (bool): if True, display with pretty-printing
     """
-    # We actually just browse as a tree the microscope
-    try:
-        microscope = model.getMicroscope()
-    except Exception:
-        raise IOError("Failed to contact the back-end")
+    # Show the root first, and don't use it for the graph, because its "children"
+    # are actually "dependencies", and it'd multiple parents in the graph.
+    microscope = model.getMicroscope()
+    subcomps = model.getComponents() - {microscope}
 
-    print_component_tree(microscope, pretty=pretty)
+    print_component(microscope, pretty)
+    if pretty:
+        graph = build_graph_children(subcomps)
+        print_component_graph(graph, pretty, 1)
+    else:
+        # The "pretty" code would do the same, but much slower
+        for c in subcomps:
+            print_component(c, pretty)
+
 
 def print_axes(name, value, pretty):
     if pretty:
@@ -227,6 +276,7 @@ def print_events(component, pretty):
     for name, value in model.getEvents(component).items():
         print_event(name, value, pretty)
 
+
 def print_vattribute(name, va, pretty):
     if va.unit:
         if pretty:
@@ -269,6 +319,13 @@ def print_vattribute(name, va, pretty):
 
     if pretty:
         val = va.value
+        if name in VAS_COMPS:
+            try:
+                val = {c.name for c in val}
+            except Exception:
+                logging.info("Failed to convert %s to component names")
+                # Leave the value as-is
+
         # Display set/dict sorted, so that they always look the same.
         # Especially handy for VAs such as .position, which show axis names.
         if isinstance(val, dict):
@@ -283,11 +340,10 @@ def print_vattribute(name, va, pretty):
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
-special_va_names = ("children", "affects") # , "alive", "ghosts")
-# TODO: handle .ghosts and .alive correctly in print_va and don't consider them special
+
 def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
-        if name in special_va_names:
+        if name in VAS_HIDDEN:
             continue
         print_vattribute(name, value, pretty)
 
