@@ -266,6 +266,9 @@ class StreamController(object):
 
         add_divider = False
 
+        # TODO "integrationTime" not part of detector VAs now, as stream VA
+        #  -> should be handled as detector VA as it replaces exposureTime VA
+
         # Process the hardware VAs first (emitter and detector hardware VAs are combined into one
         # attribute called 'hw_vas'
         vas_names = util.sorted_according_to(list(self.stream.hw_vas.keys()), list(emitter_conf.keys()))
@@ -2541,6 +2544,13 @@ class SparcStreamsController(StreamBarController):
         """ Create a camera stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
+
+        detvas = get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config)
+
+        if main_data.ccd.exposureTime.range[1] < 3600:  # 1h
+            # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
+            detvas.remove("exposureTime")
+
         ar_stream = acqstream.ARSettingsStream(
             "Angle-resolved",
             main_data.ccd,
@@ -2550,7 +2560,7 @@ class SparcStreamsController(StreamBarController):
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             # TODO: add a focuser for the SPARCv2?
-            detvas=get_local_vas(main_data.ccd, self._main_data_model.hw_settings_config),
+            detvas=detvas,
         )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         if model.hasVA(ar_stream, "detBinning"):
@@ -2671,6 +2681,12 @@ class SparcStreamsController(StreamBarController):
 
         main_data = self._main_data_model
 
+        detvas = get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config)
+
+        if main_data.streak_ccd.exposureTime.range[1] < 86400:  # 24h
+            # remove exposureTime from local (GUI) VAs to use a new one, which allows to integrate images
+            detvas.remove("exposureTime")
+
         ts_stream = acqstream.TemporalSpectrumSettingsStream(
             "Temporal Spectrum",
             main_data.streak_ccd,
@@ -2680,7 +2696,7 @@ class SparcStreamsController(StreamBarController):
             main_data.streak_delay,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
-            detvas=get_local_vas(main_data.streak_ccd, self._main_data_model.hw_settings_config),
+            detvas=detvas,
             streak_unit_vas=get_local_vas(main_data.streak_unit, self._main_data_model.hw_settings_config))
 
         # Create the equivalent MDStream
