@@ -628,6 +628,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_INTEGRATION_COUNT: 1,
                      model.MD_EBEAM_CURRENT_TIME: cot,
                      },
                     ]
@@ -697,6 +698,8 @@ class TestHDF5IO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_TRIGGER_DELAY], md[model.MD_TRIGGER_DELAY])
             if model.MD_TRIGGER_RATE in md:
                 self.assertEqual(im.metadata[model.MD_TRIGGER_RATE], md[model.MD_TRIGGER_RATE])
+            if model.MD_INTEGRATION_COUNT in md:
+                self.assertEqual(im.metadata[model.MD_INTEGRATION_COUNT], md[model.MD_INTEGRATION_COUNT])
 
             if model.MD_EBEAM_CURRENT_TIME in md:
                 # Note: technically, it could be a list or tuple and still be fine

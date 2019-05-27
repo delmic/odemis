@@ -671,6 +671,7 @@ def _parse_physical_data(pdgroup, da):
         # Our extended metadata
         read_metadata(pdgroup, i, md, "Baseline", model.MD_BASELINE, converter=float)
         read_metadata(pdgroup, i, md, "IntegrationTime", model.MD_EXP_TIME, converter=float)
+        read_metadata(pdgroup, i, md, "IntegrationCount", model.MD_INTEGRATION_COUNT, converter=float)
         read_metadata(pdgroup, i, md, "RefractiveIndexLensImmersionMedium", model.MD_LENS_RI, converter=float,
                       bad_states=(ST_INVALID, ST_DEFAULT))
         read_metadata(pdgroup, i, md, "NumericalAperture", model.MD_LENS_NA, converter=float,
@@ -803,6 +804,7 @@ def _h5py_enum_commit(group, name, dtype):
     enum_type = h5py.h5t.py_create(dtype, logical=True)
     enum_type.commit(group.id, name)
     # TODO: return the TypeEnumID created?
+
 
 def _add_image_metadata(group, image, mds):
     """
@@ -996,6 +998,8 @@ def _add_image_metadata(group, image, mds):
 
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
+    # IntegrationCount: number of samples/images recorded at one pixel (ebeam) position
+    itc, st_itc = [], []
     # PolePosition: position (in floating px) of the pole in the image
     # (only meaningful for AR/SPARC)
     pp, st_pp = [], []
@@ -1038,6 +1042,8 @@ def _add_image_metadata(group, image, mds):
             append_metadata(st_its, its, md, model.MD_DWELL_TIME, default_value=0)
         else:
             append_metadata(st_its, its, md, model.MD_EXP_TIME, default_value=0)
+
+        append_metadata(st_itc, itc, md, model.MD_INTEGRATION_COUNT, default_value=0)
         # angle resolved
         append_metadata(st_pp, pp, md, model.MD_AR_POLE, default_value=(0, 0))
         append_metadata(st_xm, xm, md, model.MD_AR_XMAX, default_value=0)
@@ -1057,6 +1063,8 @@ def _add_image_metadata(group, image, mds):
 
     # integration time
     set_metadata(gp, "IntegrationTime", st_its, its)
+    # integration count
+    set_metadata(gp, "IntegrationCount", st_itc, itc)
     # angle resolved
     set_metadata(gp, "PolePosition", st_pp, pp)
     set_metadata(gp, "XMax", st_xm, xm)
