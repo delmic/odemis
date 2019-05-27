@@ -85,19 +85,18 @@ class LeechAcquirer(object):
         return 0
 
     # TODO: also pass the stream?
-    def start(self, dt, shape):
+    def start(self, acq_t, shape):
         """
         Called before an acquisition starts.
         Note: it can access the hardware, but if it modifies the settings of the
           hardware, it should put them back afterwards so that the main
           acquisition runs as expected.
-        dt (0 < float): The expected duration between two pixels (assuming there
-           is no "leech"). IOW, the integration time.
+        acq_t (0 < float): The expected duration between two acquisitons (assuming there is no "leech").
         shape (tuple of 0<int): The number of pixels to acquire. When there are
           several dimensions, the last ones are scanned fastest.
         return (1<=int or None): how many pixels before .next() should be called
         """
-        self._dt = dt
+        self._dt = acq_t
         self._shape = shape
 
         return None
@@ -144,14 +143,14 @@ class AnchorDriftCorrector(LeechAcquirer):
 
     def __init__(self, scanner, detector):
         """
-        scanner (Emitter): a component with a .dwellTime, .translation, .scale
-        detector (Detector): to acquire the signal
+        :param scanner: (Emitter) A component with a .dwellTime, .translation, .scale.
+        :param detector: (Detector) To acquire the signal.
         """
         super(AnchorDriftCorrector, self).__init__()
         self._scanner = scanner
         self._detector = detector
         self._dc_estimator = None
-        self._next_px = None
+        self._period_acq = None  # number of acq left until next drift correction is performed
 
         # roi: the anchor region, it must be set to something different from
         #  UNDEFINED_ROI to run.
@@ -243,24 +242,34 @@ class AnchorDriftCorrector(LeechAcquirer):
 
         return tuple(roi)
 
-    def estimateAcquisitionTime(self, dt, shape):
+    def estimateAcquisitionTime(self, acq_t, shape):
         """
-        Compute an approximation of how long the leech will increase the
-        time of an acquisition.
-        return (0<float): time in s added to the whole acquisition
+        Compute an approximation of how long the leech will increase the time of an acquisition.
+        :param acq_t: (float) Time spend for acquiring one data at the fastest dimension.
+        :param shape: (tuple of int): Dimensions are sorted from slowest to fasted axis for acquisition.
+                                      It always includes the number of pixel positions to be acquired (y, x).
+                                      Other dimensions can be multiple images that are acquired per pixel
+                                      (ebeam) position.
+        :returns: (0<float) Time in s added to the whole acquisition.
         """
         if self.roi.value == UNDEFINED_ROI:
             return 0
 
-        # number of times the anchor will be acquired * anchor acquisition time
         dce = drift.AnchoredEstimator(self._scanner, self._detector,
                                       self.roi.value, self.dwellTime.value)
-        period = dce.estimateCorrectionPeriod(self.period.value, dt, shape[-2:])
-        npixels = numpy.prod(shape)
-        n_anchor = 1 + npixels // next(period)
+
+        # only pass the two fastest axes of the acquisition to retrieve the period when a leech should be run again
+        period = dce.estimateCorrectionPeriod(self.period.value, acq_t, shape[-2:])
+        nimages = numpy.prod(shape)
+        n_anchor = 1 + nimages // period.next()
+        # number of times the anchor will be acquired * anchor acquisition time
         return n_anchor * dce.estimateAcquisitionTime()
 
     def series_start(self):
+        """
+        Creates the drift estimator object for the acquisition series and
+        runs a first acquisition of the anchor region.
+        """
         if self.roi.value == UNDEFINED_ROI:
             raise ValueError("AnchorDriftCorrector.roi is not defined")
 
@@ -273,19 +282,25 @@ class AnchorDriftCorrector(LeechAcquirer):
         self._dc_estimator.acquire()
 
     def series_complete(self, das):
+        """
+        Erases the drift estimator, when the acquisition series is completed.
+        """
         self._dc_estimator = None
 
-    def start(self, dt, shape):
+    def start(self, acq_t, shape):
         """
         Called before an acquisition starts.
-        Note: it can access the hardware, but if it modifies the settings of the
-          hardware, it should put them back afterwards so that the main
-          acquisition runs as expected.
-        dt (0 < float): The expected duration between two pixels (assuming there
-           is no "leech"). IOW, the integration time.
-        shape (tuple of 0<int): The number of pixels to acquire. When there are
-          several dimensions, the last ones are scanned fastest.
-        return (1<=int or None): how many pixels before .next() should be called
+        Note: It can access the hardware, but if it modifies the settings of the
+              hardware, it should put them back afterwards so that the main
+              acquisition runs as expected.
+        :param acq_t: (0 < float) The expected duration between two acquisitons (assuming there
+                      is no "leech").
+        :param shape: (tuple of 0<int) Dimensions are sorted from slowest to fasted axis for acquisition.
+                      It always includes the number of pixel positions to be acquired (y, x).
+                      Other dimensions can be multiple images that are acquired per pixel
+                      (ebeam) position.
+        :returns: (1<=int or None) How many acquisitions before .next() should be called and
+                  the next drift correction needs to be run.
         """
         assert self._dc_estimator is not None
         # TODO: automatically call series_start if it hasn't been called?
@@ -294,15 +309,16 @@ class AnchorDriftCorrector(LeechAcquirer):
 #             logging.warning("start() called before series_start(), will call it now")
 #             self.series_start()
 
-        super(AnchorDriftCorrector, self).start(dt, shape)
-        self._next_px = self._dc_estimator.estimateCorrectionPeriod(self.period.value, dt, shape)
+        super(AnchorDriftCorrector, self).start(acq_t, shape)
+        self._period_acq = self._dc_estimator.estimateCorrectionPeriod(self.period.value, acq_t, shape[-2:])
 
         # Skip if the last acquisition is very recent (compared to the period)
         try:
             last_acq_date = self._dc_estimator.raw[-1].metadata[model.MD_ACQ_DATE]
             if last_acq_date > time.time() - self.period.value:
                 logging.debug("Skipping DC estimation at acquisition start, as latest anchor is still fresh")
-                return next(self._next_px)
+
+                return next(self._period_acq)
         except KeyError:  # No MD_ACQ_DATE => no short-cut
             pass
 
@@ -311,29 +327,29 @@ class AnchorDriftCorrector(LeechAcquirer):
 
     def next(self, das):
         """
-        Called after the Nth pixel has been acquired.
-        das (list of DataArrays): the data which has just been acquired. It
-          might be modified by this function.
-        return (1<=int or None): how many pixels before .next() should be called
-         Note: it may return more pixels than what still needs to be acquired.
+        Called after the Nth acquisition has been performed.
+        :param das: (list of DataArrays) The data which has just been acquired. It
+                    might be modified by this function.  TODO unused?  please comment
+        :returns: (1<=int or None) How many sub-acquisitions before .next() should be called
+                  Note: it may return more sub-acquisitions than what still needs to be acquired.
         """
-        assert self._next_px is not None
+        assert self._period_acq is not None
 
         # Acquisition of anchor area & estimate drift
         # Cannot cancel during this time, but hopefully it's short
         self._dc_estimator.acquire()
         self._dc_estimator.estimate()
 
-        # TODO: if next() would mean all the pixels, skip the last call by returning None
-        return next(self._next_px)
+        # TODO: if next() would mean all the acquisitions, skip the last call by returning None
+        return next(self._period_acq)
 
     def complete(self, das):
         """
-        Called after the last pixel has been acquired, and the data processed
-        das (list of DataArrays): the data which has just been acquired. It
-          might be modified by this function.
+        Called after the last sub-acquisition has been performed, and the data processed
+        :param das: (list of DataArrays) The data which has just been acquired.
+                    It might be modified by this function.
         """
-        self._next_px = None
+        self._period_acq = None
         # TODO: add (a copy of) self.raw to the das? Or in series_complete()
         return None
 
