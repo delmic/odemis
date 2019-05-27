@@ -2068,7 +2068,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
 
         # concatenate into one big array of (lambda, time, z=1, ebeam pos y, ebeam pos x)
         # CTZYX, ebeam scans x and then y (x slow axis)
-        ts_data = numpy.concatenate(data_list, axis=1)
+        ts_data = numpy.concatenate(data_list, axis=2)  # CTL (L: number of ebeam pos)
         # reshape to (C, T, 1, Y, X)
         spec_res = data_list[0].shape[0]
         temp_res = data_list[0].shape[1]
