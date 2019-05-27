@@ -34,6 +34,7 @@ from functools import wraps
 import inspect
 import logging
 import math
+import numpy
 import signal
 import sys
 import threading
@@ -42,6 +43,28 @@ import weakref
 import types
 
 from . import weak
+
+
+# helper functions
+def get_best_dtype_for_acc(idtype, count):
+    """
+    Computes the smallest dtype that allows to integrate the number of inputs without overflowing.
+    :param idtype: (dtype) dtype of the input (the raw data that is integrated).
+    :param count: (int) Number of values/images to be accumulated/integrated.
+    :returns: (adtype) The best fitting dtype.
+    """
+    if idtype.kind not in "i":
+        return idtype
+    else:
+        maxval = numpy.iinfo(idtype).max * count
+
+        if maxval <= numpy.iinfo(numpy.uint64).max:
+            adtype = numpy.min_scalar_type(maxval)
+        else:
+            logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
+            adtype = numpy.float64  # might accumulate errors
+
+        return adtype
 
 
 def find_closest(val, l):
