@@ -2227,7 +2227,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
 
-    def test_streak_live_stream(self):
+    def test_streak_live_stream(self):  # TODO  this one has still exposureTime
         """ Test playing TemporalSpectrumSettingsStream
         and check shape and MD for image received are correct."""
 
@@ -2438,6 +2438,89 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # checks that HW VA and GUI VA are equal when stream active
         self.assertEqual(self.streak_unit.MCPGain.value, streaks.detMCPGain.value)
 
+    def test_streak_stream_va_integrated_images(self):
+        """ Test playing TemporalSpectrumSettingsStream
+        and check that images are correctly integrated when
+        an exposure time (integration time) is requested,
+        which is longer than the detector is capable of."""
+
+        # Create the settings stream without "exposureTime" VA
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        # shouldn't affect
+        streaks.roi.value = (0.15, 0.6, 0.8, 0.8)
+        streaks.repetition.value = (5, 6)
+
+        ###inactive stream######################################################################################
+        # set stream VA
+        streaks.integrationTime.value = 2.0  # s
+
+        # set HW VA to position different from stream VA
+        self.streak_ccd.exposureTime.value = 0.3  # s
+
+        # while stream is not active, HW should not move, therefore
+        # check stream VA did not trigger HW VA to change
+        self.assertNotEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
+
+        ###active stream######################################################################################
+        # update stream (live, uses SettingsStream, CCDSettingsStream, RepetitionStream, LiveStream, Stream (_base.py))
+        streaks.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        streaks.is_active.value = True
+        self.assertEqual(len(streaks.raw), 0)  # empty list of raw images when stream deactivated
+
+        # HW VA should be updated with the correct value when acquiring or playing the stream
+        # check explicit values of stream and HW VA
+        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
+        self.assertEqual(streaks.integrationTime.value, 2)
+
+        # change stream VA --> HW VAs should change as stream is still active
+        streaks.integrationTime.value = 4.0  # s
+        time.sleep(streaks.integrationTime.value + 0.5)
+        # check stream VA shows not the same value as the HW VA
+        self.assertNotEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
+        # check stream VA and HW VA show the correct value
+        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
+        self.assertEqual(streaks.integrationTime.value, 4)
+        self.assertEqual(streaks.integrationCounts.value, 4)
+        self.assertEqual(len(streaks.raw), 4)  # list of raw images when stream active
+
+        # change stream VA --> HW VAs should change as stream is still active
+        streaks.integrationTime.value = 0.9  # s
+        time.sleep(0.1)
+        # check stream VA shows now the same value as the HW VA
+        self.assertEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
+        # check stream VA and HW VA show the correct value
+        self.assertEqual(self.streak_ccd.exposureTime.value, 0.9)
+        self.assertEqual(streaks.integrationTime.value, 0.9)
+        self.assertEqual(streaks.integrationCounts.value, 1)
+
+        # change stream VA --> HW VAs should change as stream is still active
+        streaks.integrationTime.value = 1.0  # s
+        time.sleep(0.1)
+        # check stream VA shows now the same value as the HW VA
+        self.assertEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
+        # check stream VA and HW VA show the correct value
+        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
+        self.assertEqual(streaks.integrationTime.value, 1)
+        self.assertEqual(streaks.integrationCounts.value, 1)
+
+        streaks.integrationTime.value = 4.0  # s
+        time.sleep(0.1)
+
+        ###inactive stream######################################################################################
+        # deactivate stream
+        streaks.is_active.value = False
+        time.sleep(0.1)
+
+        # check stream and HW VA still shows the same value as before and are different from each other
+        self.assertNotEqual(streaks.integrationTime.value, self.streak_ccd.exposureTime.value)
+        self.assertEqual(self.streak_ccd.exposureTime.value, 1)
+        self.assertEqual(streaks.integrationTime.value, 4)
+
     def test_streak_acq(self):
         """Test acquisition with streak camera"""
 
@@ -2446,21 +2529,22 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # test with streak camera
         streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
                                                         self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"exposureTime", "readoutRate", "binning", "resolution"},
                                                         streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
 
         stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
 
         streaks.detStreakMode.value = True
 
-        self.streak_ccd.exposureTime.value = 0.01  # 10ms
+        streaks.detExposureTime.value = 0.01  # 10ms
         # # TODO use fixed repetition value -> set ROI?
         streaks.repetition.value = (10, 5)
         num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
         exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
 
         # Start acquisition
-        # estimated acquisition time should be accurate with less than 50% margin + 1 extra second
-        timeout = 10 + 1.5 * stss.estimateAcquisitionTime()
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
         start = time.time()
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
 
@@ -2506,7 +2590,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertIn(model.MD_POS, md)
 
         # start same acquisition again and check acquisition does not timeout due to sync failures
-        timeout2 = 10 + 1.5 * stss.estimateAcquisitionTime()
+        timeout2 = 1.5 * stss.estimateAcquisitionTime()
         start = time.time()
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
         # wait until it's over
@@ -2514,6 +2598,257 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+
+    def test_streak_acq_leech(self):
+        """
+        Test acquisition for SEM + temporal spectrum acquisition + 1 leech (drift correction).
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # test with streak camera
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"exposureTime", "readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
+
+        streaks.detStreakMode.value = True
+
+        streaks.detExposureTime.value = 1  # 1s
+        # # TODO use fixed repetition value -> set ROI?
+        streaks.repetition.value = (10, 5)
+
+        streaks.roi.value = (0, 0.2, 0.3, 0.6)
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 1  # s
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
+
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+
+        for l in stss.leeches:
+            l.series_start()
+
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # stss.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second array are temporal spectrum images
+        # data: array should contain same images as stss.raw
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        for l in streaks.leeches:
+            l.series_complete(data)
+
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        # check if number of images in the received data (sem image + temporal spectrum images) is the same as
+        # number of images stored in raw
+        self.assertEqual(len(data), len(stss.raw))
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = stss.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check that the number of acquired temporal spectrum images matches the number of ebeam positions
+        ts_da = stss.raw[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        self.assertEqual(shape[3] * shape[4], num_ts)
+        # len of shape should be 5: CTZXY
+        self.assertEqual(len(shape), 5)
+
+        # check last image in .raw has a time axis greater than 1
+        # TODO this is always the case for temporalSpetrum, copied that from ar acq, why is time axis there greater 1?
+        temporalSpectrum_drift = ts_da  # temporal spectrum data array
+        self.assertGreaterEqual(temporalSpectrum_drift.shape[-4], 2)
+        # TODO how to test that drift correction worked actually?
+
+    def test_streak_acq_integrated_images(self):
+        """Test acquisition with streak camera with a long exposure time
+        (integration time), so image integration is necessary."""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        # test with streak camera
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
+
+        streaks.detStreakMode.value = True
+        sems.emtDwellTime.value = 1e-06
+
+        # set a baseline, which does not effect data, but needed later to verify baseline is handled correctly
+        self.streak_ccd.updateMetadata({model.MD_BASELINE: 0})
+
+        # set stream VAs
+        streaks.integrationTime.value = 2  # s
+        # TODO use fixed repetition value -> set ROI?
+        streaks.repetition.value = (2, 4)  # results in (2, 3)
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # stss.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second array are temporal spectrum images
+        # data: array should contain same images as stss.raw
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        ts_da = data[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        # check that the number of acquired temporal spectrum images matches the number of ebeam position
+        self.assertEqual(shape[3] * shape[4], num_ts)
+
+        # check if number of images in the received data (sem image + temporal spectrum images) is the same as
+        # number of images stored in raw
+        self.assertEqual(len(data), len(stss.raw))
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = stss.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check if metadata is correctly stored
+        md = ts_da.metadata
+        self.assertEqual(md[model.MD_EXP_TIME], streaks.integrationTime.value)
+        self.assertIn(model.MD_INTEGRATION_COUNT, md)
+        # check that HW exp time * numberOfImages = integration time
+        self.assertEqual(self.streak_ccd.exposureTime.value * md[model.MD_INTEGRATION_COUNT],
+                         streaks.integrationTime.value)
+
+        # check the dtype is correct
+        self.assertEqual(ts_da.dtype, numpy.uint16)
+
+        # do a second acquisition with longer exp time and check values are bigger due to integration
+        streaks.integrationTime.value = 2.5  # s
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        data2 = f.result(timeout)
+        ts_da2 = data2[1]  # temporal spectrum data array
+
+        # test that the values in the second acquisition are greater (integrationCount greater than first acq)
+        numpy.testing.assert_array_less(ts_da, ts_da2)
+
+        # check background subtraction
+        streaks.integrationTime.value = 2  # s
+        self.streak_ccd.updateMetadata({model.MD_BASELINE: 100})
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        data3 = f.result(timeout)
+        ts_da3 = data3[1]  # temporal spectrum data array
+
+        # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
+        self.assertEqual(ts_da3.metadata[model.MD_BASELINE], 100)
+        # test that the baseline is actually removed compared to same acquisition without baseline
+        numpy.testing.assert_array_less(ts_da3, ts_da)
+
+    def test_streak_acq_integrated_images_leech(self):
+        """Test acquisition with streak camera with a long exposure time
+        (integration time), so image integration is necessary and one leech (drift correction)."""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        # test with streak camera
+        streaks = stream.TemporalSpectrumSettingsStream("test streak cam", self.streak_ccd, self.streak_ccd.data,
+                                                        self.ebeam, self.streak_unit, self.streak_delay,
+                                                        detvas={"readoutRate", "binning", "resolution"},
+                                                        streak_unit_vas={"timeRange", "MCPGain", "streakMode"})
+
+        stss = stream.SEMTemporalSpectrumMDStream("test sem-temporal spectrum", [sems, streaks])
+
+        streaks.detStreakMode.value = True
+        sems.emtDwellTime.value = 1e-06
+
+        # set stream VAs
+        streaks.integrationTime.value = 2  # s
+        # TODO use fixed repetition value -> set ROI?
+        streaks.repetition.value = (3, 5)  # results in (1, 2)
+
+        streaks.roi.value = (0, 0.2, 0.3, 0.6)
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 1  # s  so should run leech for sub acquisitions (between integrating 2 images)
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
+
+        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * stss.estimateAcquisitionTime()
+        start = time.time()
+
+        for l in stss.leeches:
+            l.series_start()
+
+        f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # stss.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second array are temporal spectrum images
+        # data: array should contain same images as stss.raw
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        for l in streaks.leeches:
+            l.series_complete(data)
+
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        ts_da = data[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        # check that the number of acquired temporal spectrum images matches the number of ebeam position
+        self.assertEqual(shape[3] * shape[4], num_ts)
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = stss.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check that the number of acquired temporal spectrum images matches the number of ebeam positions
+        ts_da = stss.raw[1]  # temporal spectrum data array
+        shape = ts_da.shape
+        self.assertEqual(shape[3] * shape[4], num_ts)
+        # len of shape should be 5: CTZXY
+        self.assertEqual(len(shape), 5)
+
+        # check last image in .raw has a time axis greater than 1 (last image is the drift correction image)
+        temporalSpectrum_drift = ts_da[-1]  # drift correction image
+        self.assertGreaterEqual(temporalSpectrum_drift.shape[-4], 2)
 
 
 class SPARC2PolAnalyzerTestCase(unittest.TestCase):
@@ -2610,9 +2945,9 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
             ars.polarization.value = pos
 
             # Short acquisition (< 0.1s)
-            self.ccd.exposureTime.value = 0.03  # s
+            ars.integrationTime.value = 0.03  # s
             # TODO use fixed repetition value -> set ROI?
-            ars.repetition.value = (10, 5)
+            ars.repetition.value = (1, 1)
             num_ar = numpy.prod(ars.repetition.value)
             exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
 
@@ -2691,8 +3026,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         dc.dwellTime.value = 1e-06
         sems.leeches.append(dc)
 
-        self.ccd.exposureTime.value = 0.03  # s
-        ars.repetition.value = (10, 5)  # TODO use fixed repetition value -> set ROI?
+        ars.integrationTime.value = 1  # s
+        ars.repetition.value = (2, 3)  # TODO use fixed repetition value -> set ROI?
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
 
         num_ar = numpy.prod(ars.repetition.value)
@@ -2731,8 +3066,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         self.assertEqual(len(ar_das), num_ar)
 
-        # check last image in .raw has a time axis greater than 1
-        ar_drift = sas.raw[-1]  # angle resolved data arrays
+        # check last image in .raw has a time axis greater than 1 (last image is drift correction image)
+        ar_drift = sas.raw[-1]  # drift correction image
         self.assertGreaterEqual(ar_drift.shape[-4], 2)
 
     def test_arpol_ss(self): # TODO move to SettingStreamTest cases?
@@ -2745,7 +3080,6 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # shouldn't affect
         ars.roi.value = (0.15, 0.6, 0.8, 0.8)
         ars.repetition.value = (5, 6)
-        ars.detExposureTime.value = 0.3  # s
 
         # set analyzer to position different from polarization VA connected to GUI
         f = self.analyzer.moveAbs({"pol": "rhc"})
@@ -2778,6 +3112,258 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         time.sleep(2)
         # check polarization VA connected to GUI did not trigger position VA listening to HW
         self.assertNotEqual(ars.polarization.value, self.analyzer.position.value["pol"])
+
+    def test_ar_stream_va_integrated_images(self):
+        """ Test playing ARSettingsStream
+        and check that images are correctly integrated when
+        an exposure time (integration time) is requested,
+        which is longer than the detector is capable of."""
+
+        # Create the settings stream without "exposureTime" VA
+        ars = stream.ARSettingsStream("test ar integrate images",
+                                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                                      detvas={"readoutRate", "binning", "resolution"})
+
+        # shouldn't affect
+        ars.roi.value = (0.15, 0.6, 0.8, 0.8)
+        ars.repetition.value = (5, 6)
+
+        ###inactive stream######################################################################################
+        # set stream VA
+        ars.integrationTime.value = 11.0  # s
+
+        # set HW VA to position different from stream VA
+        self.ccd.exposureTime.value = 0.3  # s
+
+        # while stream is not active, HW should not move, therefore
+        # check stream VA did not trigger HW VA to change
+        self.assertNotEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
+
+        ###active stream######################################################################################
+        # update stream (live, uses SettingsStream, CCDSettingsStream, RepetitionStream, LiveStream, Stream (_base.py))
+        ars.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        ars.is_active.value = True
+        self.assertEqual(len(ars.raw), 0)  # empty list of raw images when stream deactivated
+
+        # HW VA should be updated with the correct value when acquiring or playing the stream
+        # check explicit values of stream and HW VA
+        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
+        self.assertEqual(ars.integrationTime.value, 11)
+
+        # change stream VA --> HW VAs should change as stream is still active
+        ars.integrationTime.value = 12.0  # s
+        time.sleep(ars.integrationTime.value + 0.5)
+        # check stream VA shows not the same value as the HW VA
+        self.assertNotEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
+        # check stream VA and HW VA show the correct value
+        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
+        self.assertEqual(ars.integrationTime.value, 12)
+        self.assertEqual(ars.integrationCounts.value, 2)
+        self.assertEqual(len(ars.raw), 2)  # list of raw images when stream active
+
+        # change stream VA --> HW VAs should change as stream is still active
+        ars.integrationTime.value = 0.9  # s
+        time.sleep(0.1)
+        # check stream VA shows now the same value as the HW VA
+        self.assertEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
+        # check stream VA and HW VA show the correct value
+        self.assertEqual(self.ccd.exposureTime.value, 0.9)
+        self.assertEqual(ars.integrationTime.value, 0.9)
+        self.assertEqual(ars.integrationCounts.value, 1)
+
+        # change stream VA --> HW VAs should change as stream is still active
+        ars.integrationTime.value = 1.0  # s
+        time.sleep(0.1)
+        # check stream VA shows now the same value as the HW VA
+        self.assertEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
+        # check stream VA and HW VA show the correct value
+        self.assertEqual(self.ccd.exposureTime.value, 1)
+        self.assertEqual(ars.integrationTime.value, 1)
+        self.assertEqual(ars.integrationCounts.value, 1)
+
+        ars.integrationTime.value = 12.0  # s
+        time.sleep(0.1)
+
+        ###inactive stream######################################################################################
+        # deactivate stream
+        ars.is_active.value = False
+        time.sleep(0.1)
+
+        # check stream and HW VA still shows the same value as before and are different from each other
+        self.assertNotEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
+        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
+        self.assertEqual(ars.integrationTime.value, 12)
+
+    def test_ar_acq_integrated_images(self):
+        """Test acquisition with camera with a long exposure time
+        (integration time), so image integration is necessary."""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+
+        # Create the settings stream without "exposureTime" VA
+        ars = stream.ARSettingsStream("test ar integrate images",
+                                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                                      detvas={"readoutRate", "binning", "resolution"})
+
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        ars.acquireAllPol.value = False
+        sems.emtDwellTime.value = 1e-06
+
+        # set a baseline, which does not effect data, but needed later to verify baseline is handled correctly
+        self.ccd.updateMetadata({model.MD_BASELINE: 0})
+
+        # set stream VAs
+        ars.integrationTime.value = 11  # s
+        # TODO use fixed repetition value -> set ROI?
+        ars.repetition.value = (1, 1)
+        num_ar = numpy.prod(ars.repetition.value)  # number of expected ar images
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
+        f = sas.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # sas.raw: array containing as first entry the sem scan image for the scanning positions,
+        # the second to rest are ar images
+        # data: array should contain same images as sas.raw
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        ar_da = data[1:]  # angle resolved data arrays
+        # check that the number of acquired ar images matches the number of ebeam position
+        self.assertEqual(len(ar_da), num_ar)
+
+        # check if number of images in the received data (sem image + ar images) is the same as
+        # number of images stored in raw
+        self.assertEqual(len(data), len(sas.raw))
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = sas.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check if metadata is correctly stored
+        md = ar_da[0].metadata
+        self.assertEqual(md[model.MD_EXP_TIME], ars.integrationTime.value)
+        self.assertIn(model.MD_INTEGRATION_COUNT, md)
+        # check that HW exp time * numberOfImages = integration time
+        self.assertAlmostEqual(self.ccd.exposureTime.value * md[model.MD_INTEGRATION_COUNT],
+                               ars.integrationTime.value)
+
+        # check the dtype is correct
+        self.assertEqual(ar_da[0].dtype, numpy.uint16)
+
+        # do a second acquisition with shorter exp time and check values are smaller (integrationCount smaller)
+        ars.integrationTime.value = 1  # s
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * sas.estimateAcquisitionTime()
+        f = sas.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        data2 = f.result(timeout)
+        ar_da2 = data2[1:]  # angle resolved data arrays
+
+        # test that the values in the second acquisition are smaller
+        numpy.testing.assert_array_less(ar_da2[0], ar_da[0])
+
+        # check background subtraction
+        ars.integrationTime.value = 11  # s
+        self.ccd.updateMetadata({model.MD_BASELINE: 100})
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * sas.estimateAcquisitionTime()
+        f = sas.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+        # wait until it's over
+        data3 = f.result(timeout)
+        ar_da3 = data3[1:]  # angle resolved data arrays
+
+        # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
+        self.assertEqual(ar_da3[0].metadata[model.MD_BASELINE], 100)
+        # test that the baseline is actually removed compared to same acquisition without baseline
+        numpy.testing.assert_array_less(ar_da3[0], ar_da[0])
+
+    def test_ar_acq_integrated_images_leech(self):
+        """Test acquisition with camera with a long exposure time
+        (integration time), so image integration is necessary and one leech (drift correction)."""
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+
+        # Create the settings stream without "exposureTime" VA
+        ars = stream.ARSettingsStream("test ar integrate images",
+                                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                                      detvas={"readoutRate", "binning", "resolution"})
+
+        sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
+
+        sems.emtDwellTime.value = 1e-06
+
+        # set stream VAs
+        ars.integrationTime.value = 11  # s
+        ars.polarization.value = "vertical"
+        ars.acquireAllPol.value = False
+        ars.roi.value = (0, 0.2, 0.3, 0.6)
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 5  # s
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 1e-06
+        sems.leeches.append(dc)
+
+        ars.repetition.value = (2, 1)  # TODO use fixed repetition value -> set ROI?
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+        num_ar = numpy.prod(ars.repetition.value)  # number of expected ar images
+
+        # Start acquisition
+        # estimated acquisition time should be accurate with less than 50% margin
+        timeout = 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
+
+        for l in sas.leeches:
+            l.series_start()
+
+        f = sas.acquire()  # calls acquire method in MultiDetectorStream in sync.py
+
+        # sas.raw: array containing as first entry the sem scan image for the scanning positions,
+        # from second to rest are ar images
+        # data: array should contain same images as sas.raw
+
+        # wait until it's over
+        data = f.result(timeout)
+
+        for l in ars.leeches:
+            l.series_complete(data)
+
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+
+        ar_da = data[1:-1]  # angle resolved data arrays
+        # check that the number of acquired angle resolved images matches the number of ebeam position
+        self.assertEqual(len(ar_da), num_ar)
+
+        # check that sem data array has same shape as expected for the scanning positions of ebeam
+        sem_da = sas.raw[0]  # sem data array for scanning positions
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+
+        # check that the number of acquired ar images in raw matches the number of ebeam positions
+        ar_da = sas.raw[1:-1]  # angle resolved data arrays
+        self.assertEqual(len(ar_da), num_ar)
+
+        # check last image in .raw has a time axis greater than 1  (last image is drift correction image)
+        ar_drift = sas.raw[-1]  # drift correction image
+        self.assertGreaterEqual(ar_drift.shape[-4], 2)
 
 
 class TimeCorrelatorTestCase(unittest.TestCase):
@@ -2815,7 +3401,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
     def setUp(self):
         if self.backend_was_running:
             self.skipTest("Running backend found")
-            
+
     def test_acquisition(self):
         """
         Test the output of a simple acquisition and one with subpixel drift correction.
@@ -2864,10 +3450,10 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         dc.dwellTime.value = 1e-06
         dc.period.value = 1
         sem_tc_stream._se_stream.leeches.append(dc)
-        
+
         sem_tc_stream._tc_stream.repetition.value = (1, 2)
         sem_tc_stream._tc_stream._detector.dwellTime.value = 2
-        
+
         f = sem_tc_stream.acquire()
         time.sleep(0.1)
         # Dwell time on detector and emitter should be reduced by 1/2
@@ -2877,7 +3463,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         # Dwell time on detector and emitter should be back to normal
         self.assertEqual(self.time_correlator.dwellTime.value, 2)
         self.assertEqual(sem_tc_stream._emitter.dwellTime.value, 2)
-        
+
         self.assertEqual(len(data), 3)  # additional anchor region data array
         self.assertEqual(data[0].shape[-1], 1)
         self.assertEqual(data[0].shape[-2], 2)
@@ -4214,7 +4800,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # really small rect on the center, the tile is in the cache
         pj.rect.value = (POS[0], POS[1] + 0.00001, POS[0] + 0.00001, POS[1])
-        
+
         # Wait a little bit to make sure the image has been generated
         time.sleep(0.5)
         self.assertEqual(40, len(read_tiles))
