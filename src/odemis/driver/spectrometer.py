@@ -147,6 +147,9 @@ class CompositedSpectrometer(model.Detector):
         self.binning.subscribe(self._onResBinning)
         self._updateWavelengthList()
 
+        # Indicate the data contains spectrum on the "fast" dimension
+        self._metadata[model.MD_DIMS] = "XC"
+
     # The metadata is an overlay of our special metadata with the standard one
     # from the CCD
     def getMetadata(self):
