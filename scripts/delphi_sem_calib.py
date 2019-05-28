@@ -64,8 +64,8 @@ def main(args):
 
         # Compute spot shift percentage
         f = delphi.ScaleShiftFactor(bsd, escan, logpath="./")
-        spot_shift = f.result()
-        print("Spot shift = %s" % (spot_shift,))
+        scale_shift = f.result()
+        print("Spot shift = %s" % (scale_shift,))
 
         # Compute HFW-related values
         f = delphi.HFWShiftFactor(bsd, escan, logpath="./")
@@ -74,8 +74,24 @@ def main(args):
 
         # Compute resolution-related values
         f = delphi.ResolutionShiftFactor(bsd, escan, logpath="./")
-        res_sa, res_sb = f.result()
-        print("res A = %s, res B = %s" % (res_sa, res_sb))
+        resa, resb = f.result()
+        print("res A = %s, res B = %s" % (resa, resb))
+
+        # Final metadata, as understood by the phenom driver
+        print("Calibration is:\n"
+              "RESOLUTION_SLOPE: %s\n"
+              "RESOLUTION_INTERCEPT: %s\n"
+              "HFW_SLOPE: %s\n"
+              "SPOT_SHIFT: %s\n" %
+              (resa, resb, hfw_shift, scale_shift)
+             )
+        calib_md = {
+            model.MD_RESOLUTION_SLOPE: resa,
+            model.MD_RESOLUTION_INTERCEPT: resb,
+            model.MD_HFW_SLOPE: hfw_shift,
+            model.MD_SPOT_SHIFT: scale_shift
+        }
+        escan.updateMetadata(calib_md)
     except Exception:
         logging.exception("Unexpected error while performing action.")
         return 127
