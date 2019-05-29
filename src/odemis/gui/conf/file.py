@@ -19,6 +19,7 @@ This file is part of Odemis.
 """
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 try:
     import ConfigParser
@@ -38,7 +39,7 @@ CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 
-class Config(object):
+class Config(with_metaclass(ABCMeta, object)):
     """ Abstract configuration super class
 
     Configurations are built around the :py:class:`ConfigParser.SafeConfigParser` class.
@@ -46,8 +47,6 @@ class Config(object):
     The main difference is that the filename is fixed, and changes are automatically saved.
 
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractproperty
     def file_name(self):

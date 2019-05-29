@@ -29,6 +29,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 import fcntl
 import glob
@@ -621,8 +622,7 @@ class DevxX(object):
         self._setValue("POf")
 
 
-class GenericxX(model.Emitter):
-    __metaclass__ = ABCMeta
+class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
 
     def __init__(self, name, role, ports, **kwargs):
         """
