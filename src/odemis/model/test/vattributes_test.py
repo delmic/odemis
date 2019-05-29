@@ -31,7 +31,6 @@ import unittest
 from unittest.case import skip
 import weakref
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -197,7 +196,7 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertEqual(self.called, 12, "Called has value %s" % self.called)
 
         # Item assignment
-        prop.value = range(5) # +1
+        prop.value = list(range(5))  # +1
         prop.value[1] = 5 # +1
         prop.value[1] = 5 # +0
         self.assertEqual(prop.value, [0, 5, 2, 3, 4])

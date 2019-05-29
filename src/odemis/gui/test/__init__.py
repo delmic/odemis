@@ -34,6 +34,7 @@ import random
 import time
 import unittest
 import wx
+from builtins import range
 
 import odemis.gui.model as gmodel
 import odemis.model as omodel
@@ -292,7 +293,7 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
         rgb[..., 0, 1] = numpy.linspace(tl[1], bl[1], height)
         rgb[..., 0, 2] = numpy.linspace(tl[2], bl[2], height)
 
-        for i in xrange(height):
+        for i in range(height):
             sr, sg, sb = rgb[i, 0, :3]
             er, eg, eb = rgb[i, -1, :3]
 
@@ -304,8 +305,8 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
             rgb[..., 3] = min(255, max(alpha, 0))
 
     else:
-        for w in xrange(width):
-            for h in xrange(height):
+        for w in range(width):
+            for h in range(height):
                 if color:
                     rgb[h, w] = color + (alpha,)
                 else:

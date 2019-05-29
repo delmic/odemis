@@ -175,7 +175,7 @@ class TestSpectrum(unittest.TestCase):
         # Background data
         dcalib = numpy.array([1, 2, 2, 3, 4, 5, 4, 6, 9], dtype=numpy.uint16)
         dcalib.shape += (1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         # Give one DA, the correct one, so expect to get it back
@@ -194,9 +194,9 @@ class TestSpectrum(unittest.TestCase):
         # should also load spectra with more than one points (then return just
         # the first point)
         dcalibxy = numpy.ones((128, 1, 1, 24, 25), dtype=numpy.uint8)
-        dcalibxy[:, :, :, :] = range(dcalibxy.shape[-1])
+        dcalibxy[:, :, :, :] = numpy.arange(dcalibxy.shape[-1])
         dcalibxy[0, 0, 0, 0, 0] = 0
-        wl_calibxy = 400e-9 + numpy.array(range(dcalibxy.shape[0])) * 10e-9
+        wl_calibxy = 400e-9 + numpy.arange(dcalibxy.shape[0]) * 10e-9
         calibxy = model.DataArray(dcalibxy, metadata={model.MD_WL_LIST: wl_calibxy})
         out = calibration.get_spectrum_data([data1, calibxy])
         eout = calibxy[:, 0:1, 0:1, 0:1, (dcalibxy.shape[-1] - 1) // 2] # middle should contain average
@@ -209,7 +209,7 @@ class TestSpectrum(unittest.TestCase):
         # Compensation data
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         # Give one DA, the correct one, so expect to get it back
@@ -233,7 +233,7 @@ class TestSpectrum(unittest.TestCase):
         # Background data
         dbckg = numpy.array([1, 2, 2, 3, 4, 5, 4, 6, 9], dtype=numpy.uint16)
         dbckg.shape += (1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dbckg.shape[0]) * 10e-9
         bckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_calib})
 
         # Give one DA, the correct one, so expect to get it back
@@ -241,7 +241,7 @@ class TestSpectrum(unittest.TestCase):
         # Compensation data
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         # More DataArrays, just to make it slightly harder to find the data
@@ -286,19 +286,19 @@ class TestSpectrum(unittest.TestCase):
         """Test applying efficiency compensation"""
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16") + 1
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         spec = model.DataArray(data, metadata={model.MD_WL_LIST: wld})
 
         # Background data
         dbckg = numpy.ones(data.shape, dtype=numpy.uint16)
-        wl_bckg = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
+        wl_bckg = 400e-9 + numpy.arange(dbckg.shape[0]) * 10e-9
         obckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg})
         bckg = calibration.get_spectrum_data([obckg])
 
         # Compensation data
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         compensated = calibration.compensate_spectrum_efficiency(spec, bckg, calib)
@@ -323,13 +323,13 @@ class TestSpectrum(unittest.TestCase):
         """Test applying efficiency compensation on an edge of calibration"""
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        wld = 333e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        wld = 333e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         spec = model.DataArray(data, metadata={model.MD_WL_LIST: wld})
 
         # Only from 400 nm => need to use the border (=1) for everything below
         dcalib = numpy.array([1, 1, 2, 3, 4, 5, 1, 6, 9], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         compensated = calibration.compensate_spectrum_efficiency(spec, coef=calib)

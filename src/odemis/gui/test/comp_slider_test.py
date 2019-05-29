@@ -33,6 +33,7 @@ import math
 from odemis.gui.util import widgets
 import unittest
 import wx
+from builtins import range
 
 test.goto_manual() # Keep the test frame open after the tests are run
 # test.goto_inspect()
@@ -76,13 +77,13 @@ def gen_test_data():
 
     for f in functions:
         for s in sizes:
-            print("%s," % [f(i) for i in xrange(s)])
+            print("%s," % [f(i) for i in range(s)])
         print("")
         for s in sizes:
-            print("%s," % [abs(math.sin(i / (10 * math.pi))) for i in xrange(s)])
+            print("%s," % [abs(math.sin(i / (10 * math.pi))) for i in range(s)])
         print("")
         for s in sizes:
-            print("%s," % [i / float(s) for i in xrange(s)])
+            print("%s," % [i / float(s) for i in range(s)])
         print("")
 
     import sys
