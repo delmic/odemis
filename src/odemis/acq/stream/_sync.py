@@ -2065,6 +2065,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         # transpose to (lambda, time)
         for index, img in enumerate(data_list):
             data_list[index] = img.T
+            data_list[index].shape = data_list[index].shape + (1,)  # add third dim for data assembly
 
         # concatenate into one big array of (lambda, time, z=1, ebeam pos y, ebeam pos x)
         # CTZYX, ebeam scans x and then y (x slow axis)
