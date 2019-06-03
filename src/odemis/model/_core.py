@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from builtins import basestring
+from past.builtins import basestring
 import Pyro4
 from Pyro4.core import oneway
 import collections
