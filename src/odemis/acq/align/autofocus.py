@@ -35,6 +35,7 @@ from odemis.util import executeAsyncTask, almost_equal
 from odemis.util.img import Subtract
 from scipy import ndimage
 from scipy.optimize import curve_fit
+from scipy.signal import medfilt
 import threading
 import time
 
@@ -120,20 +121,28 @@ def Measure1d(image):
     Given an image of a 1 line ccd, measure the focus based on the inverse of the width of a gaussian fit of the data.
     It is assumed that the signal is in focus when the width of the signal is smallest and therefore sigma is smallest.
     image (model.DataArray): 1D image from 1 line ccd.
-    returns (float): The focus level of the image.
+    returns (float): The focus level of the image, based on the inverse of the width of a gaussian fitted on the image.
     """
-    def gauss(x, *p):
-        a, b, c, d = p
-        y = a * numpy.exp(-numpy.power((x - b), 2.) / (2. * c ** 2.)) + d
+    # Use the gauss function to fit a gaussian to the 1 line image.
+    def gauss(x, amplitude, pos, width, base):
+        y = amplitude * numpy.exp(-(x - pos) ** 2 / (2 * width ** 2)) + base
         return y
     # squeeze to make sure the image array is 1d.
     signal = numpy.squeeze(image)
+    # Apply a median filter with a kernel of 5, to handle noise with up to 2 neighbouring pixels with a very high value,
+    # resembling a peak, which sometimes happens on CCDs.
+    signal = medfilt(signal, 5)
     x = numpy.arange(len(signal))
-    # give an initial estimate for the parameters of the gaussian fit: [max, mu, sigma, y-offset]
-    p_initial = [max(signal), numpy.argmax(signal), 10, min(signal)]
+    width = max(3.0, 0.01 * len(signal))
+    # determine the indices and the values of the 1% highest points in the signal.
+    max_ids = signal.argsort()[-int(width):]
+    max_sig = signal[max_ids]
+    med_sig = numpy.median(signal)
+    # give an initial estimate for the parameters of the gaussian fit: [amplitude, expected position, width, base]
+    p_initial = [numpy.median(max_sig) - med_sig, numpy.median(max_ids), width, med_sig]
     # Use curve_fit to fit the gauss function to the data. Use p_initial as our initial guess.
     popt, pcov = curve_fit(gauss, x, signal, p0=p_initial)
-    # The focus metric is the inverse of sigma of the gaussian fit; a smaller sigma is a higher focus level.
+    # The focus metric is the inverse of width of the gaussian fit (a smaller width is a higher focus level).
     return 1 / abs(popt[2])
 
 
