@@ -330,8 +330,7 @@ class AndorCam3(model.DigitalCamera):
             uh_shape = self._transposeSizeToUser(hlf_shape)
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
-            self.translation = model.ResolutionVA((0, 0), tran_rng,
-                                                  cls=(int, long), unit="px",
+            self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
                                                   setter=self._setTranslation)
         else:
             # to keep it simple, provide a translation VA but fixed to 0,0

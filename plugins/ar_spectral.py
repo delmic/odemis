@@ -41,6 +41,7 @@ other dealings in the software.
 
 from __future__ import division
 
+from builtins import int
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -94,7 +95,7 @@ class SpectralARScanStream(stream.Stream):
                                                unit="s")
         self.emtTranslation = model.TupleContinuous((0, 0),
                                                     range=self._emitter.translation.range,
-                                                    cls=(int, long, float),
+                                                    cls=(int, float),
                                                     unit="px")
 
         # Distance between the center of each pixel
@@ -103,12 +104,12 @@ class SpectralARScanStream(stream.Stream):
         # Region of acquisition. ROI form is LEFT Top RIGHT Bottom, relative to full field size
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, float))
 
         # For drift correction
         self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
                                               range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                              cls=(int, long, float))
+                                              cls=(int, float))
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                                  range=emitter.dwellTime.range, unit="s")
 

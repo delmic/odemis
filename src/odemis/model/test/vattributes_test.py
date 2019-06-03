@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from builtins import int
 import logging
 import numpy
 from odemis import model
@@ -384,7 +385,7 @@ class VigilantAttributeTest(unittest.TestCase):
         """
         TupleContinuous
         """
-        va = model.TupleContinuous((0.1,10,.5), ((-1.3,12,0), (100.,150.,1.)), cls=(int, long, float))
+        va = model.TupleContinuous((0.1, 10, .5), ((-1.3, 12, 0), (100., 150., 1.)), cls=(int, float))
         self.assertEqual(va.value, (0.1,10,.5))
         self.assertEqual(va.range, ((-1.3,12,0), (100.,150.,1.)))
 

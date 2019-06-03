@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import queue
+from builtins import int
 import collections
 import functools
 import gc
@@ -2768,7 +2769,7 @@ class Scanner(model.Emitter):
         tran_rng = ((-self._shape[0] / 2, -self._shape[1] / 2),
                     (self._shape[0] / 2, self._shape[1] / 2))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="px",
+                                              cls=(int, float), unit="px",
                                               setter=self._setTranslation)
 
         # .resolution is the number of pixels actually scanned. If it's less than
@@ -2783,7 +2784,7 @@ class Scanner(model.Emitter):
         # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
         self.scale = model.TupleContinuous(self._scale, ((1, 1), self._shape),
-                                           cls=(int, long, float),
+                                           cls=(int, float),
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True) # to update metadata
 

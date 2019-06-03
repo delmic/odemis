@@ -22,6 +22,8 @@
 """
 
 from __future__ import division
+
+from builtins import int
 from odemis.util.conversion import hex_to_frgba
 from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
@@ -453,7 +455,7 @@ class Slider(BaseSlider):
 
         The value will be clipped if it is out of range.
         """
-        if not isinstance(value, (int, long, float)):
+        if not isinstance(value, (int, float)):
             raise TypeError("Illegal data type %s" % type(value))
 
         if self.current_value == value:

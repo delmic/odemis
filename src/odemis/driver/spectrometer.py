@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from builtins import int
 import logging
 import math
 import numpy
@@ -298,7 +299,7 @@ class SpecDataFlow(model.DataFlow):
                 # If the baseline is too high compared to the actual black, we
                 # could end up subtracting too much, and values would underflow
                 # => be extra careful and never subtract more than min value.
-                extra_bl = min(long(data.min()), baseline_sum) - baseline
+                extra_bl = min(int(data.min()), baseline_sum) - baseline
                 if extra_bl > 0:
                     data -= extra_bl
                 else:

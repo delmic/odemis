@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from builtins import int
 from concurrent.futures.thread import ThreadPoolExecutor
 import gc
 import logging
@@ -55,7 +56,7 @@ class LiveStream(Stream):
         # whole area of the emitter => between 0 and 1)
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, float))
 
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
@@ -1023,7 +1024,7 @@ class ScannerSettingsStream(Stream):
         # Resolution assumes that we scan the whole roi. For smaller ROIs, the
         # actual hardware setting is proportional.
         self.resolution = model.TupleContinuous(hwres.value, range=hwres.range,
-                                                cls=(int, long, float),
+                                                cls=int,
                                                 setter=self._setResolution)
         self.resolution.subscribe(self._onResolution)
 
@@ -1031,7 +1032,7 @@ class ScannerSettingsStream(Stream):
         # whole area of the scanner => between 0 and 1)
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, float))
         self.roi.subscribe(self._onROI)
 
         mxzoom = min(1 / hwscale.range[0][0], 1 / hwscale.range[0][1])
