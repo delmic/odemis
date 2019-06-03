@@ -33,20 +33,14 @@ if [ -n "$OLD_BE_PIDS" ]; then
     # try nicely
     echo "Stopping the back-end"
     odemis-cli --kill
-
-    sleep 3 # wait for the backend to finish peacefully
-    # in case it's still there => kill
     # Only kill the old processes, so that if the user has started a new
     # instance in the mean time, it doesn't get killed
-    NOW_BE_PIDS=$(pgrep -f $BACKEND)
-    # pick PIDs which were seen at the beginning and still seen now
-    LEFT_BE_PIDS=$(sort <<< "$OLD_BE_PIDS"$'\n'"$NOW_BE_PIDS" | uniq -d | sed '/^ $/d')
-    NOLD_PIDS=$(wc -w <<< "$OLD_BE_PIDS")
-    NLEFT_PIDS=$(wc -w <<< "$LEFT_BE_PIDS")
-    echo "was $NOLD_PIDS, now $NLEFT_PIDS"
+    NLEFT_PIDS=$(wc -w <<< "$OLD_BE_PIDS")
+    NOLD_PIDS=$(($NLEFT_PIDS + 1)) # To force it to enter the while block on the first time
+
     # As long as number of PIDS decreases, sleep more
     while [ "$NLEFT_PIDS" -gt 0 -a "$NLEFT_PIDS" -lt "$NOLD_PIDS" ]; do
-        echo "Waiting for a back-end a bit more ($NLEFT_PIDS processes left)..."
+        echo "Waiting for the back-end ($NLEFT_PIDS processes left)..."
         sleep $GRACE_PER_COMP
         NOLD_PIDS="$NLEFT_PIDS"
         NOW_BE_PIDS=$(pgrep -f $BACKEND)
