@@ -304,7 +304,13 @@ class VirtualTestCam(object):
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.size[::-1])
-        self.assertGreaterEqual(duration, exposure / 2, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
+        # It should be about the exposure time. However, as the acquisition has
+        # started as soon as the previous image was received, it might take a
+        # tiny bit less than the exposure time (eg, a few ms less). On a real
+        # hardware, the overhead is usually much higher than these few ms, but
+        # for some simulators, that's important.
+        self.assertGreaterEqual(duration, exposure / 2 - 0.1,
+                                "Error execution took %f s, far less than exposure time %f." % (duration, exposure / 2))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
         for i in range(number):
