@@ -134,7 +134,8 @@ Graphical data is drawn using the following sequence of method calls:
 
 from __future__ import division
 
-from abc import ABCMeta, abstractmethod
+from future.utils import with_metaclass
+from abc import abstractmethod
 import cairo
 from decorator import decorator
 import logging
@@ -147,7 +148,6 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
 from odemis.util import intersect
-from odemis.util import no_conflict
 import os
 import sys
 import wx
@@ -170,8 +170,6 @@ def ignore_if_disabled(f, self, *args, **kwargs):
 
 class BufferedCanvas(wx.Panel):
     """ Abstract base class for buffered canvasses that display graphical data """
-
-    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     def __init__(self, *args, **kwargs):
         # Set default style

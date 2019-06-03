@@ -26,6 +26,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
@@ -73,14 +74,13 @@ EBEAM_DETECTORS = ("se-detector", "bs-detector", "cl-detector", "monochromator",
                    "ebic-detector")
 
 
-class MultipleDetectorStream(Stream):
+class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
     """
     Abstract class for all specialised streams which are actually a combination
     of multiple streams acquired simultaneously. The main difference from a
     normal stream is the init arguments are Streams, and .raw is composed of all
     the .raw from the sub-streams.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, streams):
         """

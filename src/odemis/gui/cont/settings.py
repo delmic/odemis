@@ -28,6 +28,7 @@ user interface.
 from __future__ import division
 
 from builtins import int
+from future.utils import with_metaclass
 from abc import ABCMeta
 import collections
 import csv
@@ -57,7 +58,7 @@ import wx
 import odemis.gui.conf as guiconf
 
 
-class SettingsController(object):
+class SettingsController(with_metaclass(ABCMeta, object)):
     """ Settings base class which describes an indirect wrapper for FoldPanelItems
 
     :param fold_panel_item: (FoldPanelItem) Parent window
@@ -67,8 +68,6 @@ class SettingsController(object):
         match the cached values.
 
     """
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, fold_panel_item, default_msg, highlight_change=False, tab_data=None):
 

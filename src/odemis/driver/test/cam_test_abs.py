@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 import gc
 import logging
@@ -52,11 +53,10 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               }
 
 
-class VirtualStaticTestCam(object):
+class VirtualStaticTestCam(with_metaclass(ABCMeta, object)):
     """
     For tests which don't need a camera ready
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -87,11 +87,10 @@ class VirtualStaticTestCam(object):
 
 # It doesn't inherit from TestCase because it should not be run by itself
 #class VirtualTestCam(unittest.TestCase):
-class VirtualTestCam(object):
+class VirtualTestCam(with_metaclass(ABCMeta, object)):
     """
     Abstract class for all the DigitalCameras
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -481,11 +480,10 @@ class VirtualTestCam(object):
             pass # good!
 
 
-class VirtualTestSynchronized(object):
+class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera

@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from future.utils import with_metaclass
 from past.builtins import basestring
 
 import Pyro4
@@ -97,9 +98,8 @@ def getEvents(component):
     return dict(evts)
 
 
-class ComponentBase(object):
+class ComponentBase(with_metaclass(ABCMeta, object)):
     """Abstract class for a component"""
-    __metaclass__ = ABCMeta
 
 
 class Component(ComponentBase):
@@ -270,12 +270,11 @@ def ComponentSerializer(self):
 Pyro4.Daemon.serializers[Component] = ComponentSerializer
 
 
-class HwComponent(Component):
+class HwComponent(with_metaclass(ABCMeta, Component)):
     """
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, power_supplier=None, transp=None, *args, **kwargs):
         """
@@ -568,12 +567,11 @@ class Microscope(HwComponent):
         return self._model
 
 
-class Detector(HwComponent):
+class Detector(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents a detector.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, transpose=None, transp=None, **kwargs):
         """
@@ -614,12 +612,11 @@ class Detector(HwComponent):
         return self._transposeSizeToUser(self._shape)
 
 
-class DigitalCamera(Detector):
+class DigitalCamera(with_metaclass(ABCMeta, Detector)):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
     It's basically a detector with a few more compulsory VAs
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         Detector.__init__(self, name, role, **kwargs)
@@ -744,12 +741,11 @@ class Axis(object):
         return "%s in %s%s%s" % (self.__class__.__name__, pos_str, abs_str, speed_str)
 
 
-class Actuator(HwComponent):
+class Actuator(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, axes=None, inverted=None, **kwargs):
         """
@@ -940,12 +936,11 @@ class Actuator(HwComponent):
             raise ValueError("Cannot reference the following axes: %s" % (nonref,))
 
 
-class PowerSupplier(HwComponent):
+class PowerSupplier(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents a power supplier for one or multiple components.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
@@ -978,12 +973,11 @@ class PowerSupplier(HwComponent):
                 raise ValueError("Unknown component %s" % (component,))
 
 
-class Emitter(HwComponent):
+class Emitter(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents an emitter.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)

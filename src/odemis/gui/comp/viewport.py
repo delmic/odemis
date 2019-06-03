@@ -25,7 +25,7 @@ Created on 8 Feb 2012
 
 from __future__ import division
 
-from abc import abstractmethod, ABCMeta
+from abc import abstractmethod
 from concurrent.futures._base import CancelledError
 from functools import partial
 import logging
@@ -43,7 +43,6 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
-from odemis.util import no_conflict
 from odemis.util import units, spectrum, peak
 import wx
 
@@ -937,7 +936,6 @@ class AngularResolvedViewport(ViewPort):
 
 class PlotViewport(ViewPort):
     """ Abstract Class for displaying plotted data """
-    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     # Default class
     canvas_class = miccanvas.BarPlotCanvas
@@ -1107,7 +1105,6 @@ class NavigablePlotViewport(PlotViewport):
     the clamping behavior must function differently for pans, drags, and scrolling
 
     """
-    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     # Default class
     canvas_class = miccanvas.NavigableBarPlotCanvas
@@ -1576,7 +1573,6 @@ class TwoDViewPort(ViewPort):
     """
     An abstract class to show a (non draggable) 2D image, with axes on both sides
     """
-    __metaclass__ = no_conflict.classmaker(right_metas=(ABCMeta,))
 
     canvas_class = miccanvas.TwoDPlotCanvas
     bottom_legend_class = AxisLegend

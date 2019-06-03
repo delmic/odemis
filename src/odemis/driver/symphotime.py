@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from __future__ import division
+
+from future.utils import with_metaclass
 import logging
 import abc
 
@@ -273,11 +275,10 @@ def DecodeOptionalDataRecordString(data):
     return records
 
 
-class Message(object):
+class Message(with_metaclass(abc.ABCMeta, object)):
     '''
     Defines a base class for Messages sent between client and server.
     '''
-    __metaclass__ = abc.ABCMeta
 
     def __init__(self):
         self._bType = 0

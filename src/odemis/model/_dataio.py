@@ -22,17 +22,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 
 
-class DataArrayShadow(object):
+class DataArrayShadow(with_metaclass(ABCMeta, object)):
     """
     This class contains information about a DataArray.
     It has all the useful attributes of a DataArray, but not the actual data.
     If the image represented by an instance of this class is tiled, it should have a
     method called 'getTile()', that fetches one tile from the image.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, shape, dtype, metadata=None, maxzoom=None, tile_shape=None):
         """
@@ -76,13 +76,12 @@ class DataArrayShadow(object):
 #         """
 
 
-class AcquisitionData(object):
+class AcquisitionData(with_metaclass(ABCMeta, object)):
     """
     It's an abstract class to represent an opened file. It allows
     to have random access to a sub-part of any image in the file. It's extended by
     each dataio converter to actually support the specific file format.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, content, thumbnails=None):
         self.content = content
