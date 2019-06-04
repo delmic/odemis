@@ -1197,30 +1197,29 @@ def clip_data_window(hrange, vrange, xd, yd):
 
 def spectrum_to_export_data(proj, raw, vp=None):
     """
-    Creates either raw or WYSIWYG representation for the spectrum data plot
-
-    proj (DataProjection): DataProjection of the spectrum to export
-    raw (boolean): if True returns raw representation
-    vp (Viewport): Viewport object
-
+    Creates either the raw or the representation as shown in the viewport in the GUI
+    (WYSIWYG) of the spectrum data plot for export.
+    :param proj: (SinglePointSpectrumProjection) A spectrum projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :param vp: (Viewport or None) The viewport selected for export to get the data displayed
+               in the viewport.
+    :returns: (model.DataArray) The data array to export.
     TODO: Instead of a viewport, pass a gui.model.StreamView. That (special) view
     would have the corresponding VAs hrange and vrange.
     The NavigablePlotViewport would just read/write them,
     whenever the user moves or zooms around.
-
-    returns (model.DataArray)
     """
-    spec = proj.projectAsRaw()
-    if spec is None:
-        raise LookupError("No pixel selected to pick a spectrum")
-    spectrum_range, unit = spectrum.get_spectrum_range(spec)
-
-    if raw:
-        if unit == "m":
-            spec.metadata[model.MD_WL_LIST] = spectrum_range
-        spec.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
-        return spec
-    else:
+    if raw:  # csv
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick a spectrum")
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        return data
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick a spectrum")
+        spectrum_range, unit = spectrum.get_spectrum_range(spec)
         # Take data window
         if vp is not None:
             spectrum_range, spec = clip_data_window(vp.hrange.value, vp.vrange.value, spectrum_range, spec)
@@ -1320,26 +1319,29 @@ def spectrum_to_export_data(proj, raw, vp=None):
 
 def chronogram_to_export_data(proj, raw, vp=None):
     """
-    Creates either raw or WYSIWYG representation for the time spectrum data plot
-
-    stream (SpectrumStream): spectrum stream
-    raw (boolean): if True returns raw representation
-    vp (Viewport): the viewport of the export to get display window data
-
-    returns (model.DataArray)
+    Creates either the raw or the representation as shown in the viewport in the GUI
+    (WYSIWYG) of the time data plot for export.
+    :param proj: (SinglePointTemporalProjection) A chronogram projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :param vp: (Viewport or None) The viewport selected for export to get the data displayed
+               in the viewport.
+    :returns: (model.DataArray) The data array to export.
     """
+    # TODO check if this needs to be done, and if yes implement for other exports as well
     if not isinstance(proj, SinglePointTemporalProjection):
         raise ValueError("Trying to export a time spectrum of an invalid projection")
 
-    spec = proj.projectAsRaw()
-    if spec is None:
-        raise LookupError("No pixel selected to pick a spectrum")
-    time_range, unit = spectrum.get_time_range(spec)
-
-    if raw:
-        spec.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
-        return spec
-    else:
+    if raw:  # csv
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick a chronogram")
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        return data
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick a chronogram")
+        time_range, unit = spectrum.get_time_range(spec)
         # Draw spectrum bar plot
         if vp is not None:
             # Deal with x
@@ -1439,25 +1441,24 @@ def chronogram_to_export_data(proj, raw, vp=None):
 
 def line_to_export_data(proj, raw):
     """
-    Creates either raw or WYSIWYG representation for the spectrum line data
-
-    stream (SpectrumStream)
-    raw (boolean): if True returns raw representation
-
-    returns (model.DataArray)
+    Creates either the raw or the representation as shown in the viewport in the GUI
+    (WYSIWYG) of the spectrum line data for export.
+    :param proj: (LineSpectrumProjection) A line spectrum projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :returns: (model.DataArray) The data array to export.
     """
-    data = proj.projectAsRaw()
-
-    spec = model.DataArray(img.DataArray2RGB(data), data.metadata)
-    if spec is None:
-        raise LookupError("No line selected to pick a spectrum")
-    spectrum_range, unit = spectrum.get_spectrum_range(spec)
-
-    if raw:
+    if raw:  # csv
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No line selected to pick a spectrum")
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return data
-    else:
-        # TODO: Investigate why the vertical flip is needed to make it work properly
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No line selected to pick a spectrum")
+        spectrum_range, unit = spectrum.get_spectrum_range(spec)
+        # TODO shall we really inverse the y scale or should we have zero top left
         images = set_images([(spec, (0, 0), (1, 1), True, None, None, wx.VERTICAL, None, "Spatial Spectrum", None, None, {})])
         # TODO: just use a standard tuple, instead of wx.Size
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
@@ -1560,27 +1561,27 @@ def line_to_export_data(proj, raw):
 
 def temporal_spectrum_to_export_data(proj, raw):
     """
-    Creates either raw or WYSIWYG representation for the temporal spectrum data
-
-    proj (RGBSpatialSpectrumProjection)
-    raw (boolean): if True returns raw representation
-
-    returns (model.DataArray)
+    Creates either the raw or the representation as shown in the viewport in the GUI
+    (WYSIWYG) of the temporal spectrum data for export.
+    :param proj: (RGBSpatialSpectrumProjection) A temporal spectrum projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :returns: (model.DataArray) The data array to export.
     """
 
-    data = proj.projectAsRaw()
-
-    md = data.metadata
-    spec = model.DataArray(img.DataArray2RGB(data), md)
-
-    spectrum_range, unit_wl = spectrum.get_spectrum_range(data)
-    time_range, unit_tl = spectrum.get_time_range(data)
-
-    if raw:
+    if raw:  # csv
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick a temporal-spectrum")
         data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_TEMPSPECTRUM
         return data
-    else:
-        images = set_images([(spec, (0, 0), (1, 1), True, None, None, wx.VERTICAL, None, "Spatial Spectrum", None, None, {})])
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick a temporal-spectrum")
+        spectrum_range, unit_wl = spectrum.get_spectrum_range(spec)
+        time_range, unit_tl = spectrum.get_time_range(spec)
+
+        images = set_images([(spec, (0, 0), (1, 1), True, None, None, 0, None, "Spatial Spectrum", None, None, {})])
         # TODO: just use a standard tuple, instead of wx.Size
         client_size = wx.Size(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
         im = images[0]  # just one image
@@ -1641,7 +1642,7 @@ def temporal_spectrum_to_export_data(proj, raw):
         # Draw left vertical (time) legend
         orientation = wx.VERTICAL
         tick_spacing = SPEC_PLOT_SIZE // 6
-        value_range = (time_range[-1], time_range[0])
+        value_range = (time_range[-1], time_range[0])  # so zero is top left corner
         scale_y_draw = numpy.empty((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
