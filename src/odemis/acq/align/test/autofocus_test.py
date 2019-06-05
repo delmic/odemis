@@ -643,11 +643,15 @@ class TestAutofocus1d(unittest.TestCase):
         """
         Test AutoFocus on 1 line CCD for example spectrum.
         """
+        # Make sure the image is the example spectrum image, in case this test runs after test_autofocus_slit.
+        data = hdf5.read_data(os.path.dirname(odemis.__file__) + "/driver/sparc-spec-sim.h5")
+        new_img = img.ensure2DImage(data[0])
+        self.ccd.set_image(new_img)
         self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
-        self.ccd.updateMetadata({model.MD_LENS_RI: 1.0e-2})
         f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
         foc_pos, foc_lev = f.result(timeout=900)
         logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
+        # The focus step size is 10.9e-6, the tolerance is set to 2.5e-5; approximately two focus steps.
         numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)
 
     @timeout(1000)
@@ -660,18 +664,18 @@ class TestAutofocus1d(unittest.TestCase):
         new_img = img.ensure2DImage(data[0])
         self.ccd.set_image(new_img)
         self.spectrometer.binning.value = (4, 64)
-        self.ccd.updateMetadata({model.MD_LENS_RI: 1.0e-2})
         self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
         f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
         foc_pos, foc_lev = f.result(timeout=900)
         logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
-        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=1e-6)
-        self.ccd.updateMetadata({model.MD_LENS_RI: 1.0e-2})
+        # The focus step size is 10.9e-6, the tolerance is set to 2.5e-5; approximately two focus steps.
+        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)
         self.focus.moveAbs({"z": self._good_focus + 400e-6}).result()
         f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
         foc_pos, foc_lev = f.result(timeout=900)
         logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
-        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=1e-6)
+        # The focus step size is 10.9e-6, the tolerance is set to 2.5e-5; approximately two focus steps.
+        numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)
 
 
 if __name__ == '__main__':
