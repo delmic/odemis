@@ -315,9 +315,13 @@ scripts, or via a command-line interface.
    your preference).
 
 #. Create an empty text file `odemis.pth` in the Anaconda Python installation folder:
-   ``C:\Users\YOURUSERNAME\Anaconda2\Lib\site-packages``. Make sure the file does
-   *not* have a `.txt` extension. Edit that file and enter the full path to the
-   Odemis source code, such as: ``C:\Program Files\Odemis\src\``.
+   ``C:\Users\YOURUSERNAME\AppData\Local\Continuum\anaconda2\Lib\site-packages``
+   (if you cannot find it, check using the console in Spyder with ``import numpy``,
+   then ``numpy.__file__``). Make sure the file does *not* have a `.txt`
+   extension (which the File Explorer automatically hides). Open that file, type
+   the full path to the Odemis source code, such as: ``C:\Program Files\Odemis\src\``,
+   and save the file.
+   Note this can be done automatically by typing in a terminal ``conda-develop C:\Program Files\Odemis\src\``.
 
 You can now use Python via the "Spyder" interface or the "Jupyter" notebook.
 To read an acquisition file you can use code such as:
