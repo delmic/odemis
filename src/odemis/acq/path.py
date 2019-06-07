@@ -677,7 +677,8 @@ class OpticalPathManager(object):
         Sets the selectors so the optical path leads to the target component
         (usually a detector).
         target (str): component name
-        return (list of futures)
+        return (list of tuple (futures, Component, dict)): for each move: the
+          future, the component, and the new position requested
         """
         fmoves = []
         for comp in self._actuators:
