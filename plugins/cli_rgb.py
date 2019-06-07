@@ -140,9 +140,12 @@ class RGBCLIntensity(Plugin):
             dt_cl = self._cl_int_s.estimateAcquisitionTime()
 
         # For each CL filter acquisition, the drift correction will run once
+        # (*in addition* to the standard in-frame drift correction)
         dc = self._acqui_tab.driftCorrector
         if dc.roi.value != UNDEFINED_ROI:
-            dt_drift = dc.estimateAcquisitionTime() + 0.1
+            drift_est = drift.AnchoredEstimator(self.ebeam, self.sed,
+                                    dc.roi.value, dc.dwellTime.value)
+            dt_drift = drift_est.estimateAcquisitionTime() + 0.1
 
         return dt_survey, dt_cl, dt_drift
 
@@ -183,13 +186,8 @@ class RGBCLIntensity(Plugin):
         """
         tab_data = self.main_app.main_data.tab.value.tab_data_model
 
-        if hasattr(tab_data, "acquisitionStreams"):  # Odemis v2.7+
-            acq_st = tab_data.acquisitionStreams
-        elif hasattr(tab_data, "acquisitionView"):  # Odemis v2.6 and earlier
-            acq_st = tab_data.acquisitionView.getStreams()
-
         # Look for the MultiDetector stream which contains a CL intensity stream
-        for mds in acq_st:
+        for mds in tab_data.acquisitionStreams:
             if not isinstance(mds, stream.MultipleDetectorStream):
                 continue
             for ss in mds.streams:
@@ -269,7 +267,8 @@ class RGBCLIntensity(Plugin):
         # during the acquisition, and in-between each acquisition. The drift
         # between each acquisition is corrected by updating the metadata. So
         # it's some kind of post-processing compensation. The advantage is that
-        # it doesn't affect the data, but when opening in another software (eg,
+        # it doesn't affect the data, and if the entire field of view is imaged,
+        # it still works properly, but when opening in another software (eg,
         # ImageJ), that compensation will not be applied automatically).
         # Alternatively, the images could be cropped to just the region which is
         # common for all the acquisitions, but there might then be data loss.
