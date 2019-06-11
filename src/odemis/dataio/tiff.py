@@ -1947,7 +1947,7 @@ class DataArrayShadowTIFF(DataArrayShadow):
             subcls = DataArrayShadowPyramidalTIFF
         else:
             subcls = DataArrayShadowTIFF
-        return super(DataArrayShadowTIFF, cls).__new__(subcls, tiff_info, *args, **kwargs)
+        return super(DataArrayShadowTIFF, cls).__new__(subcls)
 
     def __init__(self, tiff_info, shape, dtype, metadata=None):
         """
