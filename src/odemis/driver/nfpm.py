@@ -211,7 +211,7 @@ class PM8742(model.Actuator):
             modl, fw, sn = m.groups()
         except Exception:
             raise IOError("Failed to decode firmware answer '%s'" %
-                          resp.encode('string_escape'))
+                          resp.encode('unicode_escape'))
 
         return modl, fw, sn
 
@@ -319,7 +319,7 @@ class PM8742(model.Actuator):
             return True
         else:
             raise IOError("Failed to decode answer about motion '%s'" %
-                          resp.encode('string_escape'))
+                          resp.encode('unicode_escape'))
 
     def AbortMotion(self):
         """
@@ -351,7 +351,7 @@ class PM8742(model.Actuator):
             no, msg = int(m.group("no")), m.group("msg")
         except Exception:
             raise IOError("Failed to decode error info '%s'" %
-                          resp.encode('string_escape'))
+                          resp.encode('unicode_escape'))
 
         if no == 0:
             return None
@@ -782,7 +782,7 @@ class IPAccesser(object):
         msg = "%s%s%s\r" % (str_axis, cmd, val)
 
         with self._net_access:
-            logging.debug("Sending: '%s'", msg.encode('string_escape'))
+            logging.debug("Sending: '%s'", msg.encode('unicode_escape'))
             self.socket.sendall(msg)
 
     def sendQueryCommand(self, cmd, val="", axis=None):
@@ -808,7 +808,7 @@ class IPAccesser(object):
         msg = "%s%s?%s\r" % (str_axis, cmd, val)
 
         with self._net_access:
-            logging.debug("Sending: '%s'", msg.encode('string_escape'))
+            logging.debug("Sending: '%s'", msg.encode('unicode_escape'))
             self.socket.sendall(msg)
 
             # read the answer
@@ -819,7 +819,7 @@ class IPAccesser(object):
                     data = self.socket.recv(4096)
                 except socket.timeout:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.encode('unicode_escape')))
 
                 if not data:
                     logging.debug("Received empty message")
@@ -831,15 +831,15 @@ class IPAccesser(object):
 
                 if time.time() > end_time:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.encode('unicode_escape')))
                 time.sleep(0.01)
 
-        logging.debug("Received: %s", ans.encode('string_escape'))
+        logging.debug("Received: %s", ans.encode('unicode_escape'))
 
         ans, left = ans.split("\r\n", 1)  # remove the end of line characters
         if left:
             logging.error("Received too much data, will discard the end: %s",
-                          left.encode('string_escape'))
+                          left.encode('unicode_escape'))
         return ans
 
     def flushInput(self):
@@ -935,7 +935,7 @@ class PM8742Simulator(object):
 
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
-        logging.debug("SIM: Sending %s", ret.encode('string_escape'))
+        logging.debug("SIM: Sending %s", ret.encode('unicode_escape'))
         return ret
 
     def settimeout(self, t):
@@ -973,7 +973,7 @@ class PM8742Simulator(object):
         # decode command into axis | command | (query | value) (xxCC?nn)
         m = re.match("(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
         if not m:
-            logging.warning("SIM: failed to decode '%s'", msg.encode('string_escape'))
+            logging.warning("SIM: failed to decode '%s'", msg.encode('unicode_escape'))
             self._push_error(6) # COMMAND DOES NOT EXIST
             return
 

@@ -1047,16 +1047,16 @@ class StreakCamera(model.HwComponent):
 
             # send command to socket
             try:
-                logging.debug("Sending: '%s'", command.encode('string_escape'))
+                logging.debug("Sending: '%s'", command.encode('unicode_escape'))
                 self._commandport.send(command)
             except Exception:
                 try:  # try to reconnect if connection was lost
                     logging.exception("Failed to send the command %s, will try to reconnect to RemoteEx."
-                                      % command.encode('string_escape'))
+                                      % command.encode('unicode_escape'))
                     self._commandport, self._dataport = self._openConnection()
                     # restart receiver thread, which keeps reading the commandport response continuously
                     self._start_receiverThread()
-                    logging.debug("Sending: '%s'", command.encode('string_escape'))
+                    logging.debug("Sending: '%s'", command.encode('unicode_escape'))
                     self._commandport.send(command)
                 except (socket.error, socket.timeout) as err:
                     raise model.HwError(err, "Could not connect to RemoteEx.")
@@ -1071,7 +1071,7 @@ class StreakCamera(model.HwComponent):
                         logging.error("Last error code for function %s before timeout was %s with message %s."
                                   % (last_error_fct, last_error_code, last_error_msg))
                     raise util.TimeoutError("No answer received after %s sec for command %s."
-                                            % (timeout, command.encode('string_escape')))
+                                            % (timeout, command.encode('unicode_escape')))
 
                 try:
                     error_code, rfunc, rargs = int(response[0]), response[1], response[2:]

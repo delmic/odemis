@@ -486,14 +486,14 @@ class Controller(object):
 
                 if success:
                     logging.warning("Controller %s timeout after '%s', but recovered.",
-                                    self.address, full_com.encode('string_escape'))
+                                    self.address, full_com.encode('unicode_escape'))
                     # try one more time (and it has to work this time)
                     lines = self.busacc.sendQueryCommand(self.address, com)
                 else:
                     logging.error("Controller %s timeout after '%s', not recovered.",
-                                  self.address, full_com.encode('string_escape'))
+                                  self.address, full_com.encode('unicode_escape'))
                     raise IOError("Controller %s timeout after '%s', not recovered." %
-                                  (self.address, full_com.encode('string_escape')))
+                                  (self.address, full_com.encode('unicode_escape')))
 
         return lines
 
@@ -3456,7 +3456,7 @@ class Bus(model.Actuator):
                             # (in practice, it seems to always be 50000)
                             found.add((fulladdr[0], 50000))
                         else:
-                            logging.info("Received %s from %s", data.encode('string_escape'), fulladdr)
+                            logging.info("Received %s from %s", data.encode('unicode_escape'), fulladdr)
                 except socket.timeout:
                     pass
                 except socket.error:
@@ -3540,7 +3540,7 @@ class SerialBusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", full_com.encode('unicode_escape'))
             self.serial.write(full_com)
             # We don't flush, as it will be done anyway if an answer is needed
 
@@ -3579,7 +3579,7 @@ class SerialBusAccesser(object):
             prefix = "0 %d " % addr
 
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", full_com)
             self.serial.write(full_com)
 
             # ensure everything is received, before expecting an answer
@@ -3599,7 +3599,7 @@ class SerialBusAccesser(object):
                 # if the answer finishes with \n, last split is empty
                 anssplited, ans = anssplited[:-1], anssplited[-1]
                 if anssplited:
-                    logging.debug("Received: '%s'", "\n".join(anssplited).encode('string_escape'))
+                    logging.debug("Received: '%s'", "\n".join(anssplited).encode('unicode_escape'))
 
                 for l in anssplited:
                     if not continuing:
@@ -3613,7 +3613,7 @@ class SerialBusAccesser(object):
                                 logging.debug("Reconcidering previous line as beginning of multi-line")
                                 ret = ret[:-1]
                             else:
-                                logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                                logging.debug("Failed to decode answer '%s'", l.encode('unicode_escape'))
                                 raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
 
                     if l[-1:] == " ":  # multi-line
@@ -3656,7 +3656,7 @@ class SerialBusAccesser(object):
                 data = self.serial.read(100)
                 if len(data) < 100:
                     break
-                logging.debug("Flushing data %s", data.encode('string_escape'))
+                logging.debug("Flushing data %s", data.encode('unicode_escape'))
 
 
 class IPBusAccesser(object):
@@ -3680,7 +3680,7 @@ class IPBusAccesser(object):
 
             # Get the master controller version
             version = self.sendQueryCommand(master, "*IDN?\n")
-            self.driverInfo = "%s" % (version.encode('string_escape'),)
+            self.driverInfo = "%s" % (version.encode('unicode_escape'),)
 
     def terminate(self):
         self.socket.close()
@@ -3699,7 +3699,7 @@ class IPBusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", full_com.encode('unicode_escape'))
             self.socket.sendall(full_com)
 
     def sendQueryCommand(self, addr, com):
@@ -3736,7 +3736,7 @@ class IPBusAccesser(object):
             prefix = "0 %d " % addr
 
         with self.ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", full_com.encode('unicode_escape'))
             self.socket.sendall(full_com)
 
             # Read the answer
@@ -3767,7 +3767,7 @@ class IPBusAccesser(object):
                     time.sleep(0.01)
                     continue
 
-                logging.debug("Received: '%s'", data.encode('string_escape'))
+                logging.debug("Received: '%s'", data.encode('unicode_escape'))
                 ans += data
 
                 anssplited = ans.split("\n")
@@ -3790,7 +3790,7 @@ class IPBusAccesser(object):
                                 # TODO: maybe we got some garbage data from before,
                                 # check if there is already data available that fits the
                                 # prefix. (=> keep reading but with a short timeout)
-                                logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                                logging.debug("Failed to decode answer '%s'", l.encode('unicode_escape'))
                                 raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
 
                     if l[-1:] == " ":  # multi-line
@@ -3830,7 +3830,7 @@ class IPBusAccesser(object):
                 end = time.time() + 1
                 while True:
                     data = self.socket.recv(4096)
-                    logging.debug("Flushing data '%s'", data.encode('string_escape'))
+                    logging.debug("Flushing data '%s'", data.encode('unicode_escape'))
                     if time.time() > end:
                         logging.warning("Still trying to flush data after 1 s")
                         return
@@ -4017,7 +4017,7 @@ class E861Simulator(object):
 #                           self._address, addr)
             return
         logging.debug("Fake controller %d processing command '%s'",
-                      self._address, com.encode('string_escape'))
+                      self._address, com.encode('unicode_escape'))
 
         com = m.group("com") # also removes the \n at the end if it's there
         # split into arguments separated by spaces (not including empty strings)
@@ -4028,7 +4028,7 @@ class E861Simulator(object):
             # if errno is not null, most commands don't work any more
             if com not in ["*IDN?", "RBT", "ERR?", "CSV?"]:
                 logging.debug("received command %s while errno = %d",
-                              com.encode('string_escape'), self._errno)
+                              com.encode('unicode_escape'), self._errno)
                 return
 
         # TODO: to support more commands, we should have a table, with name of
@@ -4290,8 +4290,9 @@ class E861Simulator(object):
         else:
             out = "%s%s\n" % (prefix, out)
             logging.debug("Fake controller %d responding '%s'", self._address,
-                          out.encode('string_escape'))
+                          out.encode('unicode_escape'))
             self._output_buf += out
+
 
 class DaisyChainSimulator(object):
     """

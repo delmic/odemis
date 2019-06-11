@@ -89,8 +89,8 @@ class WaveGenerator(model.Emitter):
         val (str): the value of the command string. e.g. "1,2,3,4"
         Returns true if successful.
         '''
-        logging.debug("Sending command %s %s", cmd.encode('string_escape'),
-                      val.encode('string_escape'))
+        logging.debug("Sending command %s %s", cmd.encode('unicode_escape'),
+                      val.encode('unicode_escape'))
         ret = self._accesser.sendOrderCommand(cmd, val)
 
         return ret
@@ -99,7 +99,7 @@ class WaveGenerator(model.Emitter):
         """
         Same as accesser's sendQueryCommand, but with error recovery
         """
-        logging.debug("Sending command %s", cmd.encode('string_escape'))
+        logging.debug("Sending command %s", cmd.encode('unicode_escape'))
 
         trials = 0
         while True:
@@ -288,7 +288,7 @@ class IPAccesser(object):
                     data = self.socket.recv(4096)
                 except socket.timeout:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.encode('unicode_escape')))
 
                 if not data:
                     logging.debug("Received empty message")
@@ -300,15 +300,15 @@ class IPAccesser(object):
 
                 if time.time() > end_time:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.encode('unicode_escape')))
                 time.sleep(0.01)
 
-        logging.debug("Received: %s", ans.encode('string_escape'))
+        logging.debug("Received: %s", ans.encode('unicode_escape'))
 
         ans, left = ans.split("\n", 1)  # remove the end of line characters
         if left:
             logging.error("Received too much data, will discard the end: %s",
-                          left.encode('string_escape'))
+                          left.encode('unicode_escape'))
         return ans
 
 
@@ -357,7 +357,7 @@ class FakeDG1000Z(object):
         if self._output_buffer: # check if there is data in the buffer
             connection.sendall(self._output_buffer)
             logging.debug('%s: Sending transmission: %s', self.name,
-                          self._output_buffer.encode('string_escape'))
+                          self._output_buffer.encode('unicode_escape'))
             self._output_buffer = ''  # clear the buffer
 
     def _listen(self):
@@ -382,7 +382,7 @@ class FakeDG1000Z(object):
                         data = data.strip()
                         # determine a command
                         for line in data.splitlines():
-                            logging.debug('%s: Received: %s' % (self.name, line.encode('string_escape')))
+                            logging.debug('%s: Received: %s' % (self.name, line.encode('unicode_escape')))
                             self._decodeMessage(line)
                             time.sleep(0.105) # wait a little before responding
                             self._sendBuffer(connection)
@@ -432,7 +432,7 @@ class FakeDG1000Z(object):
                               self.name, frequency, amplitude_pp, dc_bias, phase_shift)
             except TypeError:   # could not unpack message
                 self._error_state = True
-                logging.exception('%s: Error Setting square wave %s', self.name, cmd.encode('string_escape'))
+                logging.exception('%s: Error Setting square wave %s', self.name, cmd.encode('unicode_escape'))
         elif re.match(":SOUR(1|2):FUNC:SQU:DCYC", msg):  # Duty cycle setting
             # Try to unpack the command to see if the format is correct
             try:
@@ -441,8 +441,8 @@ class FakeDG1000Z(object):
             except TypeError:   # could not unpack message
                 self._error_state = True
                 logging.exception('%s: Error Setting duty cycle %s', self.name,
-                                  cmd.encode('string_escape'))
+                                  cmd.encode('unicode_escape'))
         else:
             self._error_state = True
             logging.exception('%s: Error state set for message: %s', self.name,
-                              msg.encode('string_escape'))
+                              msg.encode('unicode_escape'))

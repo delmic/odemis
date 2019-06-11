@@ -186,7 +186,7 @@ class FW102c(model.Actuator):
 
             # Shouldn't be necessary, but just in case
             skipped = self._serial.read(1000) # More than 1000 chars => give up
-            logging.debug("Skipping input %s", skipped.encode('string_escape'))
+            logging.debug("Skipping input %s", skipped.encode('unicode_escape'))
 
     re_err = r"Command error (.*)"
     def _sendQuery(self, com):
@@ -203,7 +203,7 @@ class FW102c(model.Actuator):
         assert(len(com) <= 50) # commands cannot be long
         full_com = com + "\r"
         with self._ser_access:
-            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+            logging.debug("Sending: '%s'", full_com.encode('unicode_escape'))
             self._serial.write(full_com)
 
             # ensure everything is received, before expecting an answer
@@ -214,14 +214,14 @@ class FW102c(model.Actuator):
             while True:
                 char = self._serial.read() # empty if timeout
                 if not char: # should always finish by a "> "
-                    raise IOError("Controller timeout, after receiving '%s'" % line.encode('string_escape'))
+                    raise IOError("Controller timeout, after receiving '%s'" % line.encode('unicode_escape'))
 
                 # normal char
                 line += char
                 if line[-2:] == "> ":
                     break
 
-            logging.debug("Received: '%s'", line.encode('string_escape'))
+            logging.debug("Received: '%s'", line.encode('unicode_escape'))
 
         # remove echo + suffix + new line
         line = line[len(full_com):-2].rstrip("\r")

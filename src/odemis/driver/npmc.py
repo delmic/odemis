@@ -282,7 +282,7 @@ class ESP(model.Actuator):
         """
         cmd = cmd + "\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", cmd.encode('unicode_escape'))
             self._serial.write(cmd.encode('ascii'))
 
     def _sendQuery(self, cmd):
@@ -294,7 +294,7 @@ class ESP(model.Actuator):
         """
         cmd = cmd + "\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", cmd.encode('unicode_escape'))
             self._serial.write(cmd.encode('ascii'))
 
             self._serial.timeout = 1
@@ -302,10 +302,10 @@ class ESP(model.Actuator):
             while ans[-1:] != '\r':
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % ans.encode('unicode_escape'))
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", ans.encode('unicode_escape'))
 
             return ans.strip()
 

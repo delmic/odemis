@@ -170,7 +170,7 @@ class PIRedStone(object):
         for sc in com.split(","):
             assert(len(sc) < 10)
 
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        logging.debug("Sending: %s", com.encode('unicode_escape'))
         self.serial.write(com)
         # TODO allow to check for error via TellStatus afterwards
 
@@ -186,7 +186,7 @@ class PIRedStone(object):
         """
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        logging.debug("Sending: %s", com.encode('unicode_escape'))
         self.serial.write(com)
 
         char = self.serial.read() # empty if timeout
@@ -206,7 +206,7 @@ class PIRedStone(object):
             else:
                 raise IOError("PI controller %d timeout, not recovered." % self.address)
 
-        logging.debug("Receive: %s", report.encode('string_escape'))
+        logging.debug("Receive: %s", report.encode('unicode_escape'))
         if not report.startswith(prefix):
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, report))
 
@@ -758,7 +758,7 @@ class FakePIRedStone(PIRedStone):
         # Should normally never be called
         assert(len(com) <= 10)
         assert(len(prefix) <= 2)
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        logging.debug("Sending: %s", com.encode('unicode_escape'))
         self.serial.write(com)
 
         return ""

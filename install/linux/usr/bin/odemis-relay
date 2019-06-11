@@ -54,7 +54,7 @@ def main(args):
     while char != '\n':
         char = ser.read()
         ans += char
-    logging.debug("Device identified itself as '%s'", ans.encode('string_escape'))
+    logging.debug("Device identified itself as '%s'", ans.encode('unicode_escape'))
     if ans.startswith("Delmic Analog PMT version"):
         # Send command
         logging.info("Will now reset the power relay for 10s.")

@@ -603,7 +603,7 @@ class TMCLController(model.Actuator):
             self._serial.flushInput()
             garbage = self._serial.read(1000)
             if garbage:
-                logging.debug("Received unexpected bytes '%s'", garbage.encode('string_escape'))
+                logging.debug("Received unexpected bytes '%s'", garbage.encode('unicode_escape'))
             if len(garbage) == 1000:
                 # Probably a sign that it's not the device we are expecting
                 logging.warning("Lots of garbage sent from device")
@@ -616,7 +616,6 @@ class TMCLController(model.Actuator):
             # As there is no command 0, either we will receive a "wrong command" or
             # a "wrong checksum", but it's unlikely to ever do anything more.
             msg = b"\x00" * 9  # a 9-byte message
-            logging.debug("Sending '%s'", msg.encode('string_escape'))
             self._serial.write(msg)
             self._serial.flush()
             res = self._serial.read(10)  # See if the device is trying to talk too much
@@ -637,7 +636,7 @@ class TMCLController(model.Actuator):
                 else:
                     logging.debug("Device message has wrong checksum")
             else:
-                logging.debug("Device replied unexpected message: %s", res.encode('string_escape'))
+                logging.debug("Device replied unexpected message: %s", res.encode('unicode_escape'))
 
             raise IOError("Device did not answer correctly to any sync message")
 
@@ -694,7 +693,7 @@ class TMCLController(model.Actuator):
         # Compute header
         s = struct.pack(">HBB", checksum, UC_FORMAT, len(sd) // 4) + sd
 
-        logging.debug("Encoded user config as '%s'", s.encode('string_escape'))
+        logging.debug("Encoded user config as '%s'", s.encode('unicode_escape'))
 
         # Write s as a series of uint32 into the user area
         assert(len(s) // 4 <= 56)
@@ -732,7 +731,7 @@ class TMCLController(model.Actuator):
             d = self.GetGlobalParam(2, i + 1)
             s += struct.pack(">i", d)
 
-        logging.debug("Read user config as '%s%s'", sh.encode('string_escape'), s.encode('string_escape'))
+        logging.debug("Read user config as '%s%s'", sh.encode('unicode_escape'), s.encode('unicode_escape'))
 
         # Compute checksum (= sum of everything on 16 bits)
         hpres = numpy.frombuffer(s, dtype=numpy.uint16)

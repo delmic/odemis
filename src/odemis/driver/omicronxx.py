@@ -123,7 +123,7 @@ class USBAccesser(object):
             data = self._serial.read(100)
             if len(data) < 100:
                 break
-            logging.debug("Flushing data %s", data.encode('string_escape'))
+            logging.debug("Flushing data %s", data.encode('unicode_escape'))
 
     def sendCommand(self, com):
         """
@@ -133,7 +133,7 @@ class USBAccesser(object):
         """
         assert(len(com) <= 50)
         full_com = "?" + com + "\r"
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+        logging.debug("Sending: '%s'", full_com.encode('unicode_escape'))
         self._serial.write(full_com)
 
         # ensure everything is received, before expecting an answer
@@ -143,7 +143,7 @@ class USBAccesser(object):
         while True:
             line = self.readMessage()
             if line[0] == "$": # ad-hoc message => we don't care
-                logging.debug("Skipping ad-hoc message '%s'", line.encode('string_escape'))
+                logging.debug("Skipping ad-hoc message '%s'", line.encode('unicode_escape'))
             else:
                 break
 
@@ -173,7 +173,7 @@ class USBAccesser(object):
             # normal char
             line += char
             char = self._serial.read()
-        logging.debug("Received: '%s'", line.encode('string_escape'))
+        logging.debug("Received: '%s'", line.encode('unicode_escape'))
 
         # Check it's a valid answer
         if not char: # should always finish by a "\r"
@@ -368,7 +368,7 @@ class DevxX(object):
         ans = self.acc.sendCommand(fullcom)
         if not ans.startswith(fullcom):
             raise IOError("Expected answer to start with %s but got %s" %
-                          (fullcom, ans.encode('string_escape')))
+                          (fullcom, ans.encode('unicode_escape')))
         return ans[len(fullcom):]
 
     def _setValue(self, com, val=None):
@@ -385,18 +385,18 @@ class DevxX(object):
         ans = self.acc.sendCommand("%s%s%s" % (com, self._com_chan, val))
         if not ans.startswith(com):
             raise IOError("Expected answer to start with %s but got %s" %
-                          (com, ans.encode('string_escape')))
+                          (com, ans.encode('unicode_escape')))
         status = ans[len(com) + len(self._com_chan):]
         if not status:
             logging.warning("Answer too short after setting %s: %s",
-                            com, ans.encode('string_escape'))
+                            com, ans.encode('unicode_escape'))
         elif status[0] == "x":
             raise OXXError("Failed to set %s to %s" % (com, val))
         elif status[0] == ">":
             pass
         else:
             logging.warning("Unexpected answer after setting %s: %s",
-                            com, ans.encode('string_escape'))
+                            com, ans.encode('unicode_escape'))
 
     # Wrappers from each command into a method
     def GetFirmware(self):
@@ -411,7 +411,7 @@ class DevxX(object):
             m = re.match(r"(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
             modl, devid, fw = m.group("model"), int(m.group("devid")), m.group("fw")
         except Exception:
-            raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('unicode_escape'))
 
         return modl, devid, fw
 
@@ -435,7 +435,7 @@ class DevxX(object):
             wl = int(m.group("wl")) * 1e-9 # m
             power = int(m.group("power")) * 1e-3 # W
         except Exception:
-            raise ValueError("Failed to decode spec info answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode spec info answer '%s'" % ans.encode('unicode_escape'))
 
         # Convert the bitmask into a set of int
         subdev = set()
@@ -464,7 +464,7 @@ class DevxX(object):
         try:
             power = int(ans) * 1e-3 # W
         except Exception:
-            raise ValueError("Failed to decode max power answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode max power answer '%s'" % ans.encode('unicode_escape'))
 
         return power
 

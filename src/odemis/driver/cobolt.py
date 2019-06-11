@@ -152,17 +152,17 @@ class DPSS(model.PowerSupplier):
         """
         cmd = cmd + "\r"
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", cmd.encode('unicode_escape'))
             self._serial.write(cmd)
 
             ans = ''
             while ans[-2:] != '\r\n':
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % ans.encode('unicode_escape'))
                 ans += char
 
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", ans.encode('unicode_escape'))
 
             # TODO: check for other error answer?
             # Normally the device either answers OK, or a value, for commands finishing with a "?"

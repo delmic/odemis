@@ -340,7 +340,7 @@ class SpectraPro(model.Actuator):
         assert(1 < len(com) <= 100) # commands cannot be long
         com += "\r"
 
-        logging.debug("Sending: %s", com.encode('string_escape'))
+        logging.debug("Sending: %s", com.encode('unicode_escape'))
         # send command until it succeeds
         while True:
             try:
@@ -363,7 +363,7 @@ class SpectraPro(model.Actuator):
                 break
             response += char
 
-        logging.debug("Received: %s", response.encode('string_escape'))
+        logging.debug("Received: %s", response.encode('unicode_escape'))
         if response.endswith(" ok\r\n"):
             return response[:-5]
         else:
@@ -372,7 +372,7 @@ class SpectraPro(model.Actuator):
                 if self._try_recover:
                     self._tryRecover()
                 else:
-                    raise IOError("Device timeout after receiving '%s'." % response.encode('string_escape'))
+                    raise IOError("Device timeout after receiving '%s'." % response.encode('unicode_escape'))
             else: # just non understood command
                 # empty the serial port
                 self._serial.timeout = 0.1
@@ -381,7 +381,7 @@ class SpectraPro(model.Actuator):
                     raise IOError("Device keeps sending data")
                 response += garbage
                 raise SPError("Sent '%s' and received error: '%s'" %
-                              (com.encode('string_escape'), response.encode('string_escape')))
+                              (com.encode('unicode_escape'), response.encode('unicode_escape')))
 
     def _tryRecover(self):
         # no other access to the serial port should be done

@@ -176,7 +176,7 @@ class ArrowFocus(object):
                 elif c == "\x03":  # Ctrl+C
                     raise KeyboardInterrupt()
                 else:
-                    logging.debug("Unhandled key: %s", c.encode('string_escape'))
+                    logging.debug("Unhandled key: %s", c.encode('unicode_escape'))
         finally:
             self._move_must_stop.set()
             self._focus_thread.join(10)
