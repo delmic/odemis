@@ -87,21 +87,20 @@ class PMT(model.Detector):
         if not hasattr(pmt, "data") or not isinstance(pmt.data, DataFlowBase):
             raise ValueError("Dependency detector is not a Detector component.")
         self._pmt = pmt
-        self.dependencies.value.add(pmt)
         self._shape = pmt.shape
         # copy all the VAs and Events from the PMT to here (but .state and .dependencies).
         pmtVAs = model.getVAs(pmt)
         for key, value in pmtVAs.items():
-            setattr(self, key, value)
+            if not hasattr(self, key):
+                setattr(self, key, value)
         pmtEvents = model.getEvents(pmt)
         for key, value in pmtEvents.items():
             setattr(self, key, value)
 
         ctrl = dependencies["pmt-control"]
         if not isinstance(ctrl, ComponentBase):
-            raise ValueError("Child pmt-control is not a component.")
+            raise ValueError("Dependency pmt-control is not a component.")
         self._control = ctrl
-        self.dependencies.value.add(ctrl)
 
         self.data = PMTDataFlow(self, self._pmt, self._control)
 
@@ -127,7 +126,7 @@ class PMT(model.Detector):
 
         # Protection VA should be available anyway
         if not model.hasVA(ctrl, "protection"):
-            raise IOError("Given component appears to be neither a PMT control "
+            raise ValueError("Given component appears to be neither a PMT control "
                           "unit or a spectrograph since protection VA is not "
                           "available.")
 
