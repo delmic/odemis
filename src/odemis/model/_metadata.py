@@ -139,6 +139,7 @@ MD_ROTATION_COR = "Rotation cor" # radians, to be subtracted from MD_ROTATION
 MD_PIXEL_SIZE_COR = "Pixel size cor" # (m, m), to be multiplied with MD_PIXEL_SIZE
 MD_POS_COR = "Centre position cor"  # (m, m), to be subtracted from MD_POS
 MD_SHEAR_COR = "Shear cor"  # float, vertical shear to be subtracted from MD_SHEAR
+MD_BASELINE_COR = "Baseline cor"  # value, to be added to MD_BASELINE
 
 # The following metadata is the correction metadata for the Phenom image and
 # spot shift as calculated by delphi.DelphiCalibration.
