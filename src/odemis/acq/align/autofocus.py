@@ -811,6 +811,7 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
 
         logging.debug("Turning on the light")
         bl = model.getComponent(role="brightlight")
+        _playStream(dets[0], streams)
         future._running_subf = light.turnOnLight(bl, dets[0])
         try:
             future._running_subf.result(timeout=60)
@@ -844,7 +845,7 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         for d in dets:
             # The stream takes care of configuring its detector, so no need
             # In case there is no streams for the detector, take the binning and exposureTime values as far as they exist
-            if not streams:
+            if not any(s.detector.role == d.role for s in streams):
                 binning = 1, 1
                 if model.hasVA(d, "binning"):
                     d.binning.value = d.binning.clip((2, 2))
@@ -1088,9 +1089,12 @@ def _playStream(detector, streams):
     for s in streams:
         if s.detector.role != detector.role:
             s.is_active.value = False
+            s.should_update.value = False
+
     # After all the streams are paused, play only the steam that is related to the detector
     for s in streams:
         if s.detector.role == detector.role:
+            s.should_update.value = True
             s.is_active.value = True
             break
 
