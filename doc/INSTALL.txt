@@ -96,9 +96,19 @@ Needs to be done after every boot.
 sudo modprobe comedi comedi_num_legacy_minors=4
 sudo modprobe comedi_test
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+sudo comedi_config /dev/comedi1 comedi_test 100000,100000
 
 Note: if you use this simulator, you probably want to ensure you have a kernel >= 3.2.38 or
 >= 3.5.7.4, as earlier versions are known to crash.
+
+In order for this change to be applied at every reboot, add the following lines to /etc/rc.local (before the "exit 0" line):
+sudo gedit /etc/rc.local
+
+modprobe comedi comedi_num_legacy_minors=4
+modprobe comedi_test
+comedi_config /dev/comedi0 comedi_test 1000000,1000000
+comedi_config /dev/comedi1 comedi_test 100000,100000
+
 
 = Installing Odemis =
 
