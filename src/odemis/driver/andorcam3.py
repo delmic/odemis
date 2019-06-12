@@ -327,7 +327,7 @@ class AndorCam3(model.DigitalCamera):
         if max_bin is not None:
             mxb = [min(hb, ub) for hb, ub in zip(mxb, max_bin)]
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                                          (self._transposeSizeToUser((1, 1)), max_bin),
+                                          (self._transposeSizeToUser((1, 1)), mxb),
                                           setter=self._setBinning)
 
         # translation is automatically adjusted to fit whenever res/bin change
