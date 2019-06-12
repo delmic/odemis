@@ -42,6 +42,7 @@ import sys
 import threading
 import time
 import yaml
+from concurrent import futures
 
 DEFAULT_SETTINGS_FILE = "/etc/odemis-settings.yaml"
 
@@ -321,78 +322,94 @@ class BackendContainer(model.Container):
         """
         Stops all the components that are currently alive (excepted the
           microscope)
-        It terminate the parents (aka "users") first as the instantiated children should
-         never need their parent but the parent might rely on the children.
-         Delegated children should be directly terminated by their creator, so
-         by the time we terminate them, it's a no-op.
+        It terminates the dependents (aka "users") first as the dependencies should
+         never need their dependent but the dependent might rely on the dependency.
+         Children will be terminated before their creator.
         It also stops the containers, once no component is running in them.
         """
         mic = self._instantiator.microscope
-        alive = set(mic.alive.value)
 
-        # create a "graph" child->parents
-        parents = {c: set() for c in alive}  # comp -> set of comps (all its parents)
-        for comp in alive:
-            # TODO: if a component was created by delegation, use its creator
-            # instead of itself as "used" by the other components, to ensure
-            # they might not be terminated too early.
-            try:
-                for child in comp.children.value:
-                    # TODO: do not add the creator
-                    parents[child].add(comp)
-            except Exception:
-                logging.warning("Failed to find children of component %s when terminating",
-                                comp.name, exc_info=True)
-
-        # TODO: for the components created by delegation, either terminate them
-        # before their parents, or don't do it at all (as the parent normally
-        # is in charge of it).
-
+        # alive component -> components which depends on it
+        self._dependents = {c: set() for c in set(mic.alive.value)}  # comp -> set of comps (all the comps that depend on it)
+        # Children will be terminated when their parents are terminated, so no need to keep them in .dependents
+        for comp in list(self._dependents.keys()):  # ._dependents will be modified, so we need a copy
+            for child in comp.children.value:
+                self._dependents.pop(child, None)
+        for comp in self._dependents:
+            deps = comp.dependencies.value
+            for dep in deps:
+                # if a component was created by delegation, use its creator
+                # instead of itself as "used" by the other components, to ensure
+                # they might not be terminated too early.
+                try:
+                    d = dep.parent or dep
+                    self._dependents[d].add(comp)
+                except Exception:
+                    # if a component died early due to accidents (e.g. a segfault), we might not be able to
+                    # access dep.parent
+                    logging.warning("Failed to find dependency %s of component %s when terminating.",
+                                    dep.name, comp.name, exc_info=True)
         # terminate all the components in order
-        while parents:
-            parent_less = tuple(c for c, p in parents.items() if not p)
-            if not parent_less:
-                # just pick a random component if some loop
+        terminating_comps = []  # components that are already terminated or in the process of terminating
+        executor = futures.ThreadPoolExecutor(max_workers=20)
+        fs_running = set()
+        while self._dependents:
+            independents = tuple(c for c, p in self._dependents.items() if not p and not c in terminating_comps)
+            if not independents and not fs_running:
+                # just pick a random component
                 logging.warning("All the components to terminate have parents: %s",
-                                parents)
-                parent_less = (tuple(parents.keys())[0],)
+                                self._dependents)
+                independents = tuple(self._dependents.keys())[:1]
 
-            for c in parent_less:
-                cname = c.name
-                logging.debug("Stopping comp %s", cname)
-                # TODO: update the .alive VA every time a component is stopped?
-                # maybe not necessary as we are finishing _everything_
-                try:
-                    # FIXME: don't try to terminate the children created by
-                    # delegation after terminating their parent (and container)
-                    # For now it just causes a warning message, but it'd be
-                    # better to not have the warning at all.
-                    c.terminate()
-                except Exception:
-                    logging.warning("Failed to terminate component '%s'", cname, exc_info=True)
+            for comp in independents:
+                terminating_comps.append(comp)
+                f = executor.submit(self._terminate_independent, comp)
+                fs_running.add(f)
 
-                # Terminate the container if that was the component for which it
-                # was created.
-                # TODO: check there is really no component still running in the
-                # container?
-                if cname in self._instantiator.sub_containers:
-                    container = self._instantiator.sub_containers[cname]
-                    logging.debug("Stopping container %s", container)
-                    try:
-                        container.terminate()
-                    except Exception:
-                        logging.warning("Failed to terminate container %r", container, exc_info=True)
-                    del self._instantiator.sub_containers[cname]
+            # Block until one future is completed, then continue looping
+            done, fs_running = futures.wait(fs_running, return_when=futures.FIRST_COMPLETED)
 
-                # remove from the graph
-                del parents[c]
-                for p in parents.values():
-                    p.discard(c)
-                alive.discard(c)
-                try:
-                    mic.alive.value = alive
-                except Exception:
-                    logging.warning("Failed to update the alive VA", exc_info=True)
+        logging.debug("Finished requesting termination of all components. Waiting for %s components to terminate." % len(fs_running))
+        futures.wait(fs_running, return_when=futures.ALL_COMPLETED)
+
+    def _terminate_independent(self, comp):
+        # First terminate the children
+        children = comp.children.value
+        for child in children:
+            self._terminate_component(child)
+        # Terminate component itself
+        self._terminate_component(comp)
+        del self._dependents[comp]  # children are already deleted from ._parents
+
+    def _terminate_component(self, c):
+        # remove from the graph
+        for p in self._dependents.values():
+            p.discard(c)
+
+        cname = c.name
+        logging.debug("Stopping comp %s", cname)
+        try:
+            c.terminate()
+        except Exception:
+            logging.warning("Failed to terminate component '%s'", cname, exc_info=True)
+
+        # Terminate the container if that was the component for which it
+        # was created.
+        # TODO: check there is really no component still running in the
+        # container?
+        if cname in self._instantiator.sub_containers:
+            container = self._instantiator.sub_containers[cname]
+            logging.debug("Stopping container %s", container)
+            try:
+                container.terminate()
+            except Exception:
+                logging.warning("Failed to terminate container %r", container, exc_info=True)
+            del self._instantiator.sub_containers[cname]
+
+        try:
+            self._instantiator.microscope.alive.value.discard(c)
+        except Exception:
+            logging.warning("Failed to update the alive VA", exc_info=True)
 
     def terminate(self):
         if self._must_stop.is_set():
