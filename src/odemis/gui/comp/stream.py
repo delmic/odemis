@@ -378,7 +378,7 @@ class StreamPanelHeader(wx.Control):
         dlg = wx.ColourDialog(self, cldata)
 
         if dlg.ShowModal() == wx.ID_OK:
-            colour = dlg.ColourData.GetColour().Get()  # convert to a 3-tuple
+            colour = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
             logging.debug("Colour %r selected", colour)
             # Setting the VA will automatically update the button's colour
             self.Parent.stream.tint.value = colour
