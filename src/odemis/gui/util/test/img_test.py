@@ -335,6 +335,7 @@ class TestSpectrumExport(unittest.TestCase):
     def test_spectrum_ready(self):
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.spectrum_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
@@ -351,6 +352,7 @@ class TestSpectrumExport(unittest.TestCase):
     def test_spectrum_temporal(self):
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointTemporalProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.chronogram_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
@@ -370,6 +372,7 @@ class TestSpectrumExport(unittest.TestCase):
 
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.spectrum_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])  # exported image includes only raw data
 
@@ -401,6 +404,7 @@ class TestSpectrumExport(unittest.TestCase):
 
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointTemporalProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.chronogram_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[0], self.spec_data.shape[1])  # exported image includes only raw data
 
@@ -456,6 +460,7 @@ class TestSpectrumLineExport(unittest.TestCase):
     def test_line_ready(self):
         self.spec_stream.selectionWidth.value = 1
         proj = LineSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.line_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
@@ -474,6 +479,7 @@ class TestSpectrumLineExport(unittest.TestCase):
 
         self.spec_stream.selectionWidth.value = 1
         proj = LineSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.line_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[1], self.spec_data.shape[0])
         self.assertGreater(exported_data.shape[0], 64)  # at least 65-1 px
@@ -828,6 +834,7 @@ class TestOverviewFunctions(unittest.TestCase):
         # Test if at least one element of ovv image is different from original images
         # self.assertEqual(merged.shape, (10, 10, 3))
         self.assertTrue(numpy.all(merged == 255))
+
 
 if __name__ == "__main__":
     unittest.main()
