@@ -182,9 +182,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         return deque(sine_list)
 
-    # @unittest.skip("simple")
+    # Currently disabled as support for Python 2&3 + wxPython3&4 makes it too messy
+    @unittest.skip("no ABC support")
     def test_buffered_canvas(self):
-        # BufferedCanvas is abstract and shoul not be instantiated
+        # BufferedCanvas is abstract and should not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
 
     # @unittest.skip("simple")
