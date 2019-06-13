@@ -56,17 +56,17 @@ class TestPVCam(VirtualTestCam, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not TEST_NOHW:
-            VirtualTestCam.setUpClass()
+            super(TestPVCam, cls).setUpClass()
 
     @classmethod
-    def tearDownClass(self):
+    def tearDownClass(cls):
         if not TEST_NOHW:
-            VirtualTestCam.tearDown(self)
+            super(TestPVCam, cls).tearDownClass()
 
     def setUp(self):
         if TEST_NOHW:
             self.skipTest("No simulator available")
-        VirtualTestCam.setUp(self)
+        super(TestPVCam, self).setUp()
 
 
 #@skip("simple")
@@ -80,17 +80,17 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not TEST_NOHW:
-            VirtualTestCam.setUpClass()
+            super(TestPVCam, cls).setUpClass()
 
     @classmethod
-    def tearDownClass(self):
+    def tearDownClass(cls):
         if not TEST_NOHW:
-            VirtualTestCam.tearDown(self)
+            super(TestPVCam, cls).tearDownClass()
 
     def setUp(self):
         if TEST_NOHW:
             self.skipTest("No simulator available")
-        VirtualTestCam.setUp(self)
+        super(TestPVCam, self).setUp()
 
 
 if __name__ == '__main__':
