@@ -876,12 +876,17 @@ class UnitNumberCtrl(_NumberTextCtrl):
     def _display_pretty(self):
         if self._number_value is None:
             str_val = u""
-        elif self._number_value == 0 and self.key_step and self.unit not in units.IGNORE_UNITS:
+        elif self._number_value == 0 and self.unit not in units.IGNORE_UNITS:
             # Special case with 0: readable_str return just "0 unit", without
             # prefix. This is technically correct, but quite inconvenient and
             # a little strange when the typical value has a prefix (eg, nm, kV).
             # => use prefix of key_step (as it's a "small value")
-            _, prefix = units.get_si_scale(self.key_step)
+            if self.key_step:
+                _, prefix = units.get_si_scale(self.key_step)
+            elif self.key_step_min:
+                _, prefix = units.get_si_scale(self.key_step_min)
+            else:
+                prefix = ""
             str_val = "0 %s%s" % (prefix, self.unit)
         else:
             str_val = units.readable_str(self._number_value, self.unit, self.accuracy)
