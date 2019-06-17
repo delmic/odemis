@@ -439,6 +439,7 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
                 "accuracy": 3,
+                "key_step_min": 1e-9,
             }),
             ("grating", {}),
             ("slit-in", {
@@ -670,6 +671,7 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
                 "range": (0.0, 1900e-9),
+                "key_step_min": 1e-9,
             }),
             ("grating", {}),
             ("slit-in", {
@@ -698,6 +700,7 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
                 "range": (0.0, 1900e-9),
+                "key_step_min": 1e-9,
             }),
             ("grating", {}),
             ("slit-in", {
@@ -714,6 +717,7 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": "Center wavelength of the spectrograph",
                 "control_type": odemis.gui.CONTROL_FLT,
                 "range": (0.0, 1900e-9),
+                "key_step_min": 1e-9,
             }),
             ("grating", {}),
             ("slit-in", {
