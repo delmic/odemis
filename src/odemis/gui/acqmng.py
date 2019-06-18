@@ -84,7 +84,7 @@ def apply_preset(preset):
     # => do it in order: binning | scale > resolution > translation
 
     def apply_presets_named(name):
-        for se, value in preset.items():
+        for se, value in list(preset.items()):  # need to create separate list because elements can be deleted
             if se.name == name:
                 logging.debug("Updating preset %s -> %s", se.name, value)
                 try:
