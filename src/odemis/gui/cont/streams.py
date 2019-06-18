@@ -369,7 +369,7 @@ class StreamController(object):
         """
 
         # By default the key is a nice user-readable string
-        label = unicode(key)
+        label = str(key)
 
         # Convert value to a nice string according to the metadata type
         try:
@@ -388,7 +388,7 @@ class StreamController(object):
                 ):
                     nice_str = readable_str(value, unit, 3)
                 else:
-                    nice_str = unicode(value)
+                    nice_str = str(value)
             self.stream_panel.add_readonly_field(label, nice_str)
         except Exception:
             logging.exception("Trying to convert metadata %s", key)

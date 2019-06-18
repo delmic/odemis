@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from builtins import str
 import queue
 from past.builtins import long
 import logging
@@ -60,7 +61,7 @@ class SimSEM(model.HwComponent):
         # fake image setup
         if image is None:
             image = u"simsem-fake-output.h5"
-        image = unicode(image)
+        image = str(image)
         # ensure relative path is from this file
         if not os.path.isabs(image):
             image = os.path.join(os.path.dirname(__file__), image)

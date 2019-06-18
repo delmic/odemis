@@ -445,7 +445,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
         if isinstance(choices, set):
             choices.add(setting_va.value)
         elif isinstance(choices, dict):
-            choices[setting_va.value] = unicode(setting_va.value)
+            choices[setting_va.value] = str(setting_va.value)
         else:
             logging.warning("Don't know how to extend choices of type %s", type(choices))
 
@@ -563,8 +563,8 @@ def format_axis_choices(name, axis_def):
 def choice_to_str(choice):
     """ Return a list of choices, where iterable choices are joined by an `x` """
     if isinstance(choice, basestring) or not isinstance(choice, collections.Iterable):
-        return unicode(choice)
-    return u" x ".join(unicode(c) for c in choice)
+        return str(choice)
+    return u" x ".join(str(c) for c in choice)
 
 
 def label_to_human(camel_label):

@@ -21,6 +21,7 @@ This file is part of Odemis.
 """
 from __future__ import division
 
+from builtins import str
 import os
 import wx
 from decorator import decorator
@@ -110,7 +111,7 @@ class SettingsPanel(wx.Panel):
         self.clear_default_message()
 
         # Create label
-        lbl_ctrl = wx.StaticText(self, -1, unicode(label_text))
+        lbl_ctrl = wx.StaticText(self, -1, str(label_text))
         self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
@@ -141,14 +142,14 @@ class SettingsPanel(wx.Panel):
 
         if value is not None:
             if selectable:
-                value_ctrl = wx.TextCtrl(self, value=unicode(value),
+                value_ctrl = wx.TextCtrl(self, value=str(value),
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                                   flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
-                value_ctrl = wx.StaticText(self, label=unicode(value))
+                value_ctrl = wx.StaticText(self, label=str(value))
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
         else:
@@ -169,7 +170,7 @@ class SettingsPanel(wx.Panel):
         """
 
         lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = wx.TextCtrl(self, value=unicode(value or ""),
+        value_ctrl = wx.TextCtrl(self, value=str(value or ""),
                                  style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
         if readonly:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
@@ -321,7 +322,7 @@ class SettingsPanel(wx.Panel):
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         if value:
-            value_ctrl.SetValue(unicode(value))
+            value_ctrl.SetValue(str(value))
 
         return lbl_ctrl, value_ctrl
 

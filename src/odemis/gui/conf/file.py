@@ -106,7 +106,7 @@ class Config(with_metaclass(ABCMeta, object)):
         """ Set the value of an option in the given section
         section (string)
         option (string)
-        value (string or unicode): if unicode, it's encoded as UTF-8
+        value (byte string or unicode): if unicode, it's encoded as UTF-8
         """
         if not self.config.has_section(section):
             logging.warn("Section %s not found, creating...", section)
@@ -118,7 +118,7 @@ class Config(with_metaclass(ABCMeta, object)):
     def set_many(self, section, option_value_list):
         """ Set the values of options in the given section
         section (string)
-        option_value_list (dict string->string or unicode): option name -> value
+        option_value_list (dict string->byte string or unicode): option name -> value
           (if the value is unicode, it's encoded as UTF-8)
         """
         if not self.config.has_section(section):

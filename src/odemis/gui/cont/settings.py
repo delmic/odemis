@@ -197,7 +197,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         """
 
         # By default the key is a nice user-readable string
-        label = unicode(key)
+        label = str(key)
 
         # Convert value to a nice string according to the metadata type
         try:
@@ -216,7 +216,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
                 ):
                     nice_str = readable_str(value, sig=3)
                 else:
-                    nice_str = unicode(value)
+                    nice_str = str(value)
         except Exception:
             logging.exception("Trying to convert metadata %s", key)
             nice_str = "N/A"

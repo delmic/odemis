@@ -27,6 +27,7 @@ Combobox and similar controls.
 """
 from __future__ import division
 
+from builtins import str
 import logging
 from odemis.gui import img
 import odemis.gui
@@ -107,7 +108,7 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
 
         # If no labels are provided, create them from the choices
         if not labels and choices:
-            labels = [unicode(c) for c in choices]
+            labels = [str(c) for c in choices]
 
         for label, choice in zip(labels, choices):
             self.Append(label, choice)

@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
 from __future__ import division
 
+from builtins import str
 from past.builtins import basestring
 import calendar
 from libtiff import TIFF
@@ -1808,8 +1809,8 @@ def _genResizedShapes(data):
 
 
 def _ensure_fs_encoding(filename):
-    if not isinstance(filename, unicode):
-        logging.info("Got filename encoded as a string, while should be "
+    if not isinstance(filename, str):
+        logging.info("Got filename encoded as a byte string, while should be "
                      "unicode: %r", filename)
         return filename # hope it's the correct encoding
     else:

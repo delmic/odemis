@@ -29,6 +29,7 @@ of microscope images.
 
 from __future__ import division
 
+from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
 import logging
@@ -547,10 +548,10 @@ class SparcAcquiController(object):
         """ updates the GUI when the filename is updated """
         # decompose into path/file
         path, base = os.path.split(name)
-        self._tab_panel.txt_destination.SetValue(unicode(path))
+        self._tab_panel.txt_destination.SetValue(str(path))
         # show the end of the path (usually more important)
         self._tab_panel.txt_destination.SetInsertionPointEnd()
-        self._tab_panel.txt_filename.SetValue(unicode(base))
+        self._tab_panel.txt_filename.SetValue(str(base))
 
     def _onROA(self, roi):
         """ updates the acquire button according to the acquisition ROI """

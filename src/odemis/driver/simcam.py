@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from past.builtins import long
+from builtins import str
 import queue
 import logging
 import numpy
@@ -49,7 +50,7 @@ class Camera(model.DigitalCamera):
         '''
         # TODO: support transpose? If not, warn that it's not accepted
         # fake image setup
-        image = unicode(image)
+        image = str(image)
         # ensure relative path is from this file
         if not os.path.isabs(image):
             image = os.path.join(os.path.dirname(__file__), image)
