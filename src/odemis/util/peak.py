@@ -24,6 +24,7 @@ from scipy.optimize import curve_fit, OptimizeWarning
 import threading
 import time
 import warnings
+from builtins import range
 
 # TODO: this code is full of reliance on numpy being quite lax with wrong
 # computation, and easily triggers numpy warnings. To force numpy to be
@@ -122,7 +123,7 @@ def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
 
     length = len(y_vector)
     if x_vector is None:
-        x_vector = range(length)
+        x_vector = numpy.arange(length)
 
     # First check if parameters can be processed
     if length != len(x_vector):

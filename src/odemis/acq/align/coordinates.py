@@ -30,6 +30,7 @@ from numpy import unravel_index
 import numpy
 from odemis import model
 import operator
+from builtins import range
 
 from scipy.spatial import cKDTree
 
@@ -195,7 +196,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     filtered_subimages = []
     filtered_subimage_coordinates = []
 
-    for i in xrange(number_of_subimages):
+    for i in range(number_of_subimages):
         hist, bin_edges = histogram(subimages[i], bins=10)
         # Remove subimage if its histogram implies a cosmic ray
         hist_list = hist.tolist()
@@ -223,7 +224,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
         avg_3 = numpy.average(list_distance[:, 3])
         avg_4 = numpy.average(list_distance[:, 4])
         diff_avg_list = numpy.array(list_distance[:, 1:5])
-        for i in xrange(0, len(list_distance), 1):
+        for i in range(len(list_distance)):
             diff_avg = [abs(list_distance[i, 1] - avg_1),
                         abs(list_distance[i, 2] - avg_2),
                         abs(list_distance[i, 3] - avg_3),
@@ -234,7 +235,7 @@ def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
         var_3 = numpy.average(diff_avg_list[:, 2])
         var_4 = numpy.average(diff_avg_list[:, 3])
 
-        for i in xrange(len(clean_subimage_coordinates)):
+        for i in range(len(clean_subimage_coordinates)):
             if (diff_avg_list[i, 0] <= var_1
                 or diff_avg_list[i, 1] <= var_2
                 or diff_avg_list[i, 2] <= var_3
@@ -280,7 +281,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
     transformed_coordinates = [(c[0] - guess_center[0], c[1] - guess_center[1]) for c in guess_coordinates]
 
     max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
-    for step in xrange(MAX_STEPS_NUMBER):
+    for step in range(MAX_STEPS_NUMBER):
         # Calculate nearest point
         try:
             (estimated_coordinates, index1, e_wrong_points,
@@ -322,10 +323,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
                           (max_diff, max_allowed_diff))
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
-    ordered_coordinates_index = sorted(zip(index1, electron_coordinates))
-    ordered_coordinates = []
-    for i in xrange(len(ordered_coordinates_index)):
-        ordered_coordinates.append(ordered_coordinates_index[i][1])
+    ordered_coordinates = [ec for _, ec in sorted(zip(index1, electron_coordinates))]
 
     # Remove unknown coordinates
     known_ordered_coordinates = list(compress(ordered_coordinates, e_match_points))

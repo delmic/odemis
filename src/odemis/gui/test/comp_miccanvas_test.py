@@ -43,6 +43,7 @@ import odemis.gui.comp.viewport as viewport
 import odemis.gui.test as test
 from odemis.gui.test import generate_img_data
 
+from builtins import range
 
 test.goto_manual()
 # test.goto_inspect()
@@ -152,7 +153,7 @@ def gen_test_data():
             y_axis = []
             start = 0
 
-            for j in xrange(s):
+            for j in range(s):
                 start += randrange(20)
                 x_axis.append(j)
                 y_axis.append(start)
@@ -160,10 +161,10 @@ def gen_test_data():
 
             x = 0
             x_axis = []
-            for j in xrange(s):
+            for j in range(s):
                 x += randrange(20)
                 x_axis.append(x)
-            y_axis = [abs(math.sin(i / (10 * math.pi))) * 20 for i in xrange(s)]
+            y_axis = [abs(math.sin(i / (10 * math.pi))) * 20 for i in range(s)]
             print("\n(%s, %s)," % (x_axis, y_axis))
         print("\n")
 

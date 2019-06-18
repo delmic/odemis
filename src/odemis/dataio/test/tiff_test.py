@@ -40,7 +40,6 @@ from unittest.case import skip
 import libtiff.libtiff_ctypes as T # for the constant names
 import xml.etree.ElementTree as ET
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 
 FILENAME = u"test" + tiff.EXTENSIONS[0]
@@ -1760,7 +1759,7 @@ class TestTiffIO(unittest.TestCase):
         """
         size = (257, 295)
         dtype = numpy.uint16
-        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1]).reshape(size[::-1]).astype(dtype)
         data = model.DataArray(arr)
 
         # export
@@ -1801,8 +1800,7 @@ class TestTiffIO(unittest.TestCase):
         Checks that can both write and read back a thin pyramidal grayscale 16 bit image
         """
         size = (2, 2049)
-        dtype = numpy.uint16
-        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.uint16).reshape(size[::-1])
         data = model.DataArray(arr)
 
         # export
@@ -1908,9 +1906,9 @@ class TestTiffIO(unittest.TestCase):
                 count += 1
                 continue
 
-            for n in xrange(len(sub_ifds)):
+            for sifd in sub_ifds:
                 # set the offset of the current subimage
-                f.SetSubDirectory(sub_ifds[n])
+                f.SetSubDirectory(si)
                 # read the subimage
                 subim = f.read_image()
                 zoom_level_images.append(subim)
@@ -2017,14 +2015,13 @@ class TestTiffIO(unittest.TestCase):
             return tiles
 
         size = (3, 257, 295)
-        dtype = numpy.uint16
         md = {
             model.MD_INTEGRATION_COUNT: 3,
             model.MD_DIMS: 'YXC',
             model.MD_POS: (2e-6, 10e-6),
             model.MD_PIXEL_SIZE: (1e-6, 1e-6)
         }
-        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1] * size[2], dtype=numpy.uint16).reshape(size[::-1])
         data = model.DataArray(arr, metadata=md)
 
         # export
@@ -2051,7 +2048,7 @@ class TestTiffIO(unittest.TestCase):
             tile = rdata.content[0].getTile(50, 0, 0)
 
         # save the same file, but not pyramidal this time
-        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1] * size[2], dtype=numpy.uint16).reshape(size[::-1])
         data = model.DataArray(arr, metadata=md)
         tiff.export(FILENAME, data)
 
@@ -2079,7 +2076,6 @@ class TestTiffIO(unittest.TestCase):
         ROTATION = 0.3
         SHEAR = 0.2
         size = (6000, 5000)
-        dtype = numpy.uint8
         md = {
             model.MD_DIMS: 'YX',
             model.MD_POS: (5.0, 7.0),
@@ -2087,7 +2083,7 @@ class TestTiffIO(unittest.TestCase):
             model.MD_ROTATION: ROTATION,
             model.MD_SHEAR: SHEAR
         }
-        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.uint8).reshape(size[::-1])
         data = model.DataArray(arr, metadata=md)
 
         # export

@@ -43,7 +43,7 @@ import libtiff.libtiff_ctypes as T  # for the constant names
 import xml.etree.ElementTree as ET
 from odemis.util.conversion import get_tile_md_pos
 from datetime import datetime
-
+from builtins import range
 
 #pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
@@ -1868,9 +1868,9 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
             nfiles = len(_findImageGroups(data))
             # Create the whole list of uuid's to pass it to each file
             uuid_list = []
-            for i in xrange(nfiles):
+            for i in range(nfiles):
                 uuid_list.append(uuid.uuid4().urn)
-            for i in xrange(nfiles):
+            for i in range(nfiles):
                 # TODO: Take care of thumbnails
                 _saveAsMultiTiffLT(filename, data, None, compressed,
                                    multiple_files, i, uuid_list, pyramid)

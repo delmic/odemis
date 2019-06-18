@@ -28,6 +28,7 @@ import os
 import time
 import unittest
 import wx
+from builtins import range
 
 from odemis import model, dataio
 from odemis.acq import stream
@@ -308,13 +309,13 @@ class TestSpectrumExport(unittest.TestCase):
 
     def setUp(self):
         data = numpy.ones((251, 3, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[:, 0, 0, 1, 3] = range(251)
-        data[2, 0, 0, :, :] = range(300)
-        data[200, 0, 0, 2, :] = range(300)
-        wld = list(433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9)
-        tld = list(numpy.array(range(data.shape[1])) * 0.1e-9)
+        data[:, 0, 0, 1, 3] = numpy.arange(251)
+        data[2, 0, 0, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2, :] = numpy.arange(300)
+        wld = list(433e-9 + numpy.arange(data.shape[0]) * 0.1e-9)
+        tld = list(numpy.arange(data.shape[1]) * 0.1e-9)
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -435,12 +436,12 @@ class TestSpectrumLineExport(unittest.TestCase):
 
     def setUp(self):
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[:, 0, 0, 1, 3] = range(251)
-        data[2, :, :, :, :] = range(300)
-        data[200, 0, 0, 2] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        data[:, 0, 0, 1, 3] = numpy.arange(251)
+        data[2, :, :, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2] = numpy.arange(300)
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -546,13 +547,13 @@ class TestSpatialExport(unittest.TestCase):
 
         # Spectrum stream
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[:, 0, 0, 1, 3] = range(251)
-        data[2, :, :, :, :] = range(300)
-        data[200, 0, 0, 2] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
-        tld = model.DataArray(range(data.shape[1])) * 0.1e-9
+        data[:, 0, 0, 1, 3] = numpy.arange(251)
+        data[2, :, :, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2] = numpy.arange(300)
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
+        tld = model.DataArray(numpy.arange(data.shape[1])) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",

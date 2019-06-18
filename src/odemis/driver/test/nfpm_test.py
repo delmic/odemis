@@ -24,7 +24,7 @@ import os
 import time
 import unittest
 from unittest.case import skip
-
+from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -251,7 +251,7 @@ class TestActuator(unittest.TestCase):
         steps = 100
         cur_pos = (0, 0)
         move = {}
-        for i in xrange(steps):
+        for i in range(steps):
             next_pos = (radius * math.cos(2 * math.pi * float(i) / steps),
                         radius * math.sin(2 * math.pi * float(i) / steps))
             move['x'] = next_pos[0] - cur_pos[0]

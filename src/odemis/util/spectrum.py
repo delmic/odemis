@@ -31,6 +31,7 @@ from __future__ import division
 import logging
 from numpy.polynomial import polynomial
 from odemis import model
+from builtins import range
 
 
 def get_wavelength_per_pixel(da):
@@ -117,7 +118,7 @@ def get_spectrum_range(data):
 
         max_bw = data.shape[ci] // 2
         min_bw = (max_bw - data.shape[ci]) + 1
-        return range(min_bw, max_bw + 1), "px"
+        return list(range(min_bw, max_bw + 1)), "px"
 
 
 def get_time_per_pixel(da):
@@ -186,7 +187,7 @@ def get_time_range(data):
         # no time list. just show pixels values (ex: 0 -> +50 px)
         max_t = data.shape[ti] // 2  # Typically, a TC array
         min_t = (max_t - data.shape[ti]) + 1
-        return range(min_t, max_t + 1), "px"
+        return list(range(min_t, max_t + 1)), "px"
 
 
 def coefficients_to_dataarray(coef):

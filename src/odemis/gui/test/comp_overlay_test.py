@@ -35,6 +35,7 @@ from odemis.gui.model import TOOL_POINT, TOOL_LINE
 from odemis.util.conversion import hex_to_frgb
 import unittest
 import wx
+from builtins import range
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
@@ -414,7 +415,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         steps = 800
         step_size = 16
-        for i in xrange(0, steps * step_size, step_size):
+        for i in range(0, steps * step_size, step_size):
             phi = (math.pi * 2) / steps
             x = (100 * i / (steps * 5)) * math.cos(i * phi)
             y = (100 * i / (steps * 5)) * math.sin(i * phi)
@@ -781,7 +782,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         from itertools import product
 
-        phys_points = product(xrange(-200, 201, 50), xrange(-200, 201, 50))
+        phys_points = product(range(-200, 201, 50), range(-200, 201, 50))
         phys_points = [(a / 1.0e5, b / 1.0e5) for a, b in phys_points]
 
         point = model.VAEnumerated(phys_points[0], choices=frozenset(phys_points))
