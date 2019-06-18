@@ -495,7 +495,7 @@ def format_choices(choices):
         choices_formatted = [(c, choice_to_str(c)) for c in choices]
 
     if not isinstance(choices, OrderedDict):
-        choices_formatted = sorted(choices_formatted)
+        choices_formatted = sorted(choices_formatted, key=lambda x: float('-inf') if x[0] is None else x[0])
 
     return choices_formatted, choices_si_prefix
 
