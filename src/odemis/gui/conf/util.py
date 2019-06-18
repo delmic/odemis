@@ -37,7 +37,6 @@ from odemis import util
 import odemis.gui
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
-from odemis.model import NotApplicableError
 from odemis.util import fluo
 from odemis.util.conversion import reproduce_typed_value
 from odemis.util.units import readable_str, to_string_si_prefix, decompose_si_prefix, \
@@ -80,7 +79,7 @@ def resolution_from_range(comp, va, conf, init=None):
                 break
 
         return OrderedDict(tuple((v, "%d x %d" % v) for v in sorted(choices)))
-    except NotApplicableError:
+    except AttributeError:
         return {cur_val: str(cur_val)}
 
 
@@ -130,7 +129,7 @@ def binning_1d_from_2d(comp, va, conf):
 
         choices = sorted(list(choices))
         return OrderedDict(tuple(((v, v), str(int(v))) for v in choices))
-    except NotApplicableError:
+    except AttributeError:
         return {cur_val: str(cur_val[0])}
 
 
@@ -172,7 +171,7 @@ def hfw_choices(comp, va, conf):
     """
     try:
         choices = va.choices
-    except (NotApplicableError, AttributeError):
+    except AttributeError:
         # Pick every x2, x5, x10, starting from the min value
         factors = (2, 5, 10)
         mn, mx = va.range
@@ -267,7 +266,7 @@ def determine_default_control(va):
             else:
                 # Combo boxes (drop down) are used otherwise
                 return odemis.gui.CONTROL_COMBO
-        except (AttributeError, NotApplicableError):
+        except AttributeError:
             pass
 
         try:
@@ -278,7 +277,7 @@ def determine_default_control(va):
             if isinstance(va.value, (int, float)):
                 # If the value is a number with a range, return the slider control
                 return odemis.gui.CONTROL_SLIDER
-        except (AttributeError, NotApplicableError):
+        except AttributeError:
             pass
 
         # Simple input => look at the type
@@ -401,7 +400,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             # TODO: handle iterables
             minv, maxv = r
             minv, maxv = max(minv, setting_va.range[0]), min(maxv, setting_va.range[1])
-    except (AttributeError, NotApplicableError):
+    except AttributeError:
         pass
 
     # Ensure the range encompasses the current value
@@ -428,7 +427,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             # TODO: handle iterables
             rng = setting_va.range
             choices = set(c for c in choices if rng[0] <= c <= rng[1])
-    except (AttributeError, NotApplicableError):
+    except AttributeError:
         pass
 
     # Ensure the choices are within the range (if both are given)

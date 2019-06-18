@@ -45,10 +45,6 @@ class NotSettableError(AttributeError):
     pass
 
 
-class NotApplicableError(Exception):
-    pass
-
-
 class VigilantAttributeBase(object):
     """
     An abstract class for VigilantAttributes and its proxy
@@ -352,6 +348,22 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._commands = None
         self._thread = None
 
+    def __getattr__(self, name):
+        # Behaviour of .range and .choices remote attributes:
+        # When calling .range or .choices, Pyro4.Proxy__getattr__ is called. If the remote
+        # object does not have these attributes, a remote AttributeError is raised.
+        # This AttributeError results in a call to self.__getattr__. If we don't overwrite
+        # __getattr__ here, the corresponding method of the superclass would be called
+        # and return a RemoteObject. However, we actually do want the AttributeError to be
+        # raised, otherwise we get unexpected behaviour, for example: when calling
+        # hasattr(object, attribute) and the remote object does **not** have the attribute
+        # we are looking for, it would still return True because the call object.attribute
+        # does not raise an error.
+        if name == "choices" or name == "range":
+            raise AttributeError()
+
+        return super(VigilantAttributeProxy, self).__getattr__(name)
+
     @property
     def value(self):
         return self.__getattr__("_get_value")()
@@ -366,22 +378,15 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # for enumerated VA
     @property
     def choices(self):
-        try:
-            value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
-        except AttributeError:
-            # if we let AttributeError, python will look in the super classes,
-            # and eventually get a RemoteMethod from the Proxy :-(
-            # So return our own NotApplicableError exception
-            raise NotApplicableError()
+        # raises AttributeError if not found
+        value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
         return value
 
     # for continuous VA
     @property
     def range(self):
-        try:
-            value = Pyro4.Proxy.__getattr__(self, "_get_range")()
-        except AttributeError:
-            raise NotApplicableError()
+        # raises AttributeError if not found
+        value = Pyro4.Proxy.__getattr__(self, "_get_range")()
         return value
 
     def __getstate__(self):

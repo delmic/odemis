@@ -29,7 +29,6 @@ import math
 import re
 from odemis import model, util
 from odemis.acq import stream
-from odemis.model import NotApplicableError
 import time
 from odemis.util import TimeoutError
 
@@ -879,7 +878,7 @@ class OpticalPathManager(object):
                 try:
                     try:
                         temp.value = min(comp.targetTemperature.range[1], 25)
-                    except (AttributeError, NotApplicableError):
+                    except AttributeError:
                         temp.value = util.find_closest(25, comp.targetTemperature.choices)
                 except Exception:
                     logging.warning("Failed to change targetTemperature when disabling fan",
