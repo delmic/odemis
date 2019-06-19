@@ -134,8 +134,9 @@ SPARC2: {
     role: ccd,
     power_supplier: "Power Control Unit",
     init: {
-        device: "fake",
-        image: "sparc-ar.h5", # only for simulator
+      device: "fake",
+      image: "ar-example-input.h5", # only for simulator
+      transp: [1, -2],
     },
 }
 
@@ -246,6 +247,10 @@ SPARC2: {
     role: lens,
     # Standard mirror config
     init: {
+       configurations: {
+        "Mirror up": {pole_pos: [458, 519],  focus_dist: 0.5e-3},
+        "Mirror down": {pole_pos: [634, 652],  focus_dist: -0.5e-3}
+       },
        mag: 0.31, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
@@ -257,7 +262,7 @@ SPARC2: {
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
     persistent: {
-        properties: [polePosition],
+        properties: [configuration, polePosition],
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
