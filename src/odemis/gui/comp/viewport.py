@@ -42,7 +42,6 @@ from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
-from odemis.model import NotApplicableError
 from odemis.util import units, spectrum, peak
 import wx
 
@@ -573,7 +572,7 @@ class MicroscopeViewport(ViewPort):
                 choices = fov_va.choices
                 # Get the choice that matches hfw most closely
                 hfov = util.find_closest(hfov, choices)
-            except (AttributeError, NotApplicableError):
+            except AttributeError:
                 hfov = fov_va.clip(hfov)
 
             logging.debug("Setting hardware FoV to %s", hfov)

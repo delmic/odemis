@@ -301,7 +301,7 @@ def print_vattribute(name, va, pretty):
             str_range = u" (range: %s → %s)" % (varange[0], varange[1])
         else:
             str_range = u"\trange:%s" % unicode(varange)
-    except (AttributeError, model.NotApplicableError):
+    except AttributeError:
         str_range = u""
 
     try:
@@ -314,7 +314,7 @@ def print_vattribute(name, va, pretty):
                 str_choices = u" (choices: %s)" % u", ".join([str(c) for c in vachoices])
         else:
             str_choices = u"\tchoices:%s" % unicode(vachoices)
-    except (AttributeError, model.NotApplicableError):
+    except AttributeError:
         str_choices = ""
 
     if pretty:
