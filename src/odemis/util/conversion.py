@@ -20,8 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from past.builtins import basestring
-from builtins import int
+from past.builtins import basestring, long
 import collections
 import logging
 import re
@@ -262,7 +261,7 @@ def reproduce_typed_value(typed_value, str_val):
 
         # Try to be open-minded if the sub-type is a number (so that things like
         # " 3 x 5 px" returns (3, 5)
-        if isinstance(typed_val_elm, int):
+        if isinstance(typed_val_elm, (int, long)):
             pattern = r"[+-]?[\d]+"  # ex: -15
         elif isinstance(typed_val_elm, float):
             pattern = r"[+-]?[\d.]+(?:[eE][+-]?[\d]+)?"  # ex: -156.41e-9

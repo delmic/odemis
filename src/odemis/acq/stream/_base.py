@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from builtins import int
+from past.builtins import long
 import collections
 import functools
 import gc
@@ -187,7 +187,7 @@ class Stream(object):
         # black/white. Its range is ._drange (will be updated by _updateDRange)
         self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
-                                                    cls=(int, float),
+                                                    cls=(int, long, float),
                                                     setter=self._setIntensityRange)
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.

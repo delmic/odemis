@@ -25,7 +25,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from builtins import int
+from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
@@ -89,7 +89,7 @@ class CorrelatorScanStream(stream.Stream):
         # Region of acquisition. ROI form is LEFT Top RIGHT Bottom, relative to full field size
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, float))
+                                         cls=(int, long, float))
 
         # Cropvalue that  can be used to crop the data for better visualization in odemis
         self.cropvalue = model.IntContinuous(1024, (1, 65536), unit="px")
@@ -97,7 +97,7 @@ class CorrelatorScanStream(stream.Stream):
         # For drift correction
         self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
                                               range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                              cls=(int, float))
+                                              cls=(int, long, float))
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                                  range=emitter.dwellTime.range, unit="s")
         #number of drift corrections per scanning pixel

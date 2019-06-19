@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from builtins import int
+from past.builtins import long
 import logging
 import math
 import numpy
@@ -164,7 +164,7 @@ class AnchorDriftCorrector(LeechAcquirer):
         #  still not scanning too many pixels.
         self.roi = model.TupleContinuous(UNDEFINED_ROI,
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, float),
+                                         cls=(int, long, float),
                                          setter=self._setROI)
         self.dwellTime = model.FloatContinuous(scanner.dwellTime.range[0],
                                                range=scanner.dwellTime.range, unit="s")

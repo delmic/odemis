@@ -25,8 +25,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from builtins import int
-from past.builtins import basestring
+from past.builtins import basestring, long
 import collections
 import logging
 import gc
@@ -733,7 +732,7 @@ class StaticSpectrumStream(StaticStream):
                                         (cwl - width, cwl + width),
                                         range=((min_bw, min_bw), (max_bw, max_bw)),
                                         unit=unit_bw,
-                                        cls=(int, float))
+                                        cls=(int, long, float))
             self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
 
             # Whether the (per bandwidth) display should be split intro 3 sub-bands

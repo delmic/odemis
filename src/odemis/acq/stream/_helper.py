@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from builtins import int
+from past.builtins import long
 from abc import abstractmethod
 from concurrent.futures._base import CancelledError
 from functools import wraps
@@ -99,7 +99,7 @@ class RepetitionStream(LiveStream):
         # We overwrite the VA provided by LiveStream to define a setter.
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, float),
+                                         cls=(int, long, float),
                                          setter=self._setROI)
 
         # Start with pixel size to fit 1024 px, as it's typically a sane value

@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from past.builtins import long
 import queue
 import logging
 import numpy
@@ -96,7 +97,7 @@ class Camera(model.DigitalCamera):
                     (hlf_shape[0], hlf_shape[1])]
         self._translation = (0, 0)
         self.translation = model.ResolutionVA(self._translation, tran_rng, unit="px",
-                                              setter=self._setTranslation)
+                                              cls=(int, long), setter=self._setTranslation)
 
         self._orig_exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1)  # s
         self.exposureTime = model.FloatContinuous(self._orig_exp, (1e-3, 1e3), unit="s")
