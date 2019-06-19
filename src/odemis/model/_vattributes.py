@@ -19,10 +19,9 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division
-from past.builtins import basestring
-from builtins import int
 
+from __future__ import division
+from past.builtins import basestring, long
 import Pyro4
 from Pyro4.core import oneway
 import collections
@@ -632,7 +631,7 @@ class IntVA(VigilantAttribute):
 
     def _check(self, value):
         # we really accept only int, to avoid hiding lose of precision
-        if not isinstance(value, int):
+        if not isinstance(value, (int, long)):
             raise TypeError("Value '%r' is not a int." % value)
 
 # ListVA is difficult: not only change of the .value must be detected, but we
@@ -1161,5 +1160,5 @@ class ResolutionVA(TupleContinuous):
     # old name for TupleContinuous, when it was fixed to len == 2 and cls == int
     # and default unit == "px"
     def __init__(self, value, rng, unit="px", cls=None, **kwargs):
-        cls = cls or int
+        cls = cls or (int, long)
         TupleContinuous.__init__(self, value, rng, unit=unit, cls=cls, **kwargs)

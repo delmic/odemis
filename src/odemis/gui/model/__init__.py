@@ -22,9 +22,8 @@ This file is part of Odemis.
 """
 from __future__ import division
 
-from builtins import int
 from future.utils import with_metaclass
-from past.builtins import basestring
+from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
 import collections
@@ -525,7 +524,7 @@ class LiveViewGUIData(MicroscopyGUIData):
 
             self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
                                              range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                             cls=(int, float))
+                                             cls=(int, long, float))
 
             # Component to which the (relative) ROIs and spot position refer to for
             # the field-of-view.
@@ -863,7 +862,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
             # pixels from the top-left corner of the AR image.
             self.polePositionPhysical = model.TupleContinuous((0, 0),
                                            ((-1, -1), (1, 1)), unit="m",
-                                           cls=(int, float),
+                                           cls=(int, long, float),
                                            setter=self._setPolePosPhysical)
 
             main.lens.polePosition.subscribe(self._onPolePosCCD, init=True)

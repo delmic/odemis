@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from builtins import int
+from past.builtins import long
 import logging
 import time
 
@@ -92,7 +92,7 @@ class FakeCCD(model.HwComponent):
         self.exposureTime = model.FloatContinuous(0.1, (1e-6, 1000), unit="s")
         res = fake_img.shape[1], fake_img.shape[0]  # X, Y
         self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
-                                       cls=(int, float), unit="")
+                                       cls=(int, long, float), unit="")
         self.resolution = model.ResolutionVA(res, [(1, 1), res])
 
         self.data = CCDDataFlow(self)

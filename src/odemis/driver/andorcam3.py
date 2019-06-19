@@ -28,6 +28,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import long
+from builtins import str
 import collections
 from ctypes import *
 import gc
@@ -338,6 +340,7 @@ class AndorCam3(model.DigitalCamera):
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
             self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
+                                                  cls=(int, long),
                                                   setter=self._setTranslation)
         else:
             # to keep it simple, provide a translation VA but fixed to 0,0

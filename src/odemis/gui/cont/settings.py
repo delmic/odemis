@@ -27,7 +27,7 @@ user interface.
 
 from __future__ import division
 
-from builtins import int
+from past.builtins import long
 from future.utils import with_metaclass
 from abc import ABCMeta
 import collections
@@ -202,11 +202,11 @@ class SettingsController(with_metaclass(ABCMeta, object)):
             else:
                 # Still try to beautify a bit if it's a number
                 if (
-                    isinstance(value, (int, float)) or
+                    isinstance(value, (int, long, float)) or
                     (
                         isinstance(value, collections.Iterable) and
                         len(value) > 0 and
-                        isinstance(value[0], (int, float))
+                        isinstance(value[0], (int, long, float))
                     )
                 ):
                     nice_str = readable_str(value, sig=3)
