@@ -26,7 +26,6 @@ from builtins import int
 import Pyro4
 from Pyro4.core import oneway
 import collections
-import inspect
 import logging
 import numbers
 import numpy
@@ -39,6 +38,7 @@ import zmq
 from scipy.spatial import distance
 
 from . import _core
+from odemis.util import inspect_getmembers
 
 
 class NotSettableError(AttributeError):
@@ -548,7 +548,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
+    for _, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         value._unregister()
 
 
@@ -562,7 +562,7 @@ def dump_vigilant_attributes(self):
     """
     vas = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         vas[name] = value

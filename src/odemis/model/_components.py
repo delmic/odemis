@@ -27,7 +27,6 @@ from past.builtins import basestring
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
-import inspect
 import logging
 import math
 import odemis
@@ -36,6 +35,7 @@ import weakref
 
 from . import _core, _dataflow, _vattributes, _metadata
 from ._core import roattribute
+from odemis.util import inspect_getmembers
 
 
 class HwError(IOError):
@@ -60,7 +60,7 @@ def getVAs(component):
     returns (dict of name -> VigilantAttributeBase): all the VAs in the component with their name
     """
     # like dump_vigilante_attributes, but doesn't register them
-    vas = inspect.getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
+    vas = inspect_getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
     return dict(vas)
 
 
@@ -85,7 +85,7 @@ def getDataFlows(component):
     returns (dict of name -> DataFlow): all the DataFlows in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
+    dfs = inspect_getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
     return dict(dfs)
 
 
@@ -94,7 +94,7 @@ def getEvents(component):
     returns (dict of name -> Events): all the Events in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
+    evts = inspect_getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
     return dict(evts)
 
 
