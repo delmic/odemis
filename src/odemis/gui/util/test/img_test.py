@@ -25,6 +25,7 @@ import cairo
 import logging
 import numpy
 import os
+import threading
 import time
 import unittest
 import wx
@@ -37,7 +38,7 @@ from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile
 from odemis.dataio import tiff
 from odemis.acq.stream import SinglePointSpectrumProjection, \
     RGBSpatialProjection, LineSpectrumProjection, \
-    SinglePointTemporalProjection
+    SinglePointTemporalProjection, POL_POSITIONS, POL_POSITIONS_RESULTS
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -112,22 +113,31 @@ class TestRGBA(unittest.TestCase):
 
 
 class TestARExport(unittest.TestCase):
-    FILENAME_RAW = "test-ar.csv"
-    FILENAME_PR = "test-ar.png"
+    FILENAME_CSV = "test-ar.csv"
+    FILENAME_PNG = "test-ar.png"
+    FILENAME_TIFF = "test-ar.tiff"
 
     def tearDown(self):
         # clean up
         try:
-            os.remove(self.FILENAME_RAW)
+            os.remove(self.FILENAME_CSV)
         except Exception:
             pass
 
         try:
-            os.remove(self.FILENAME_PR)
+            os.remove(self.FILENAME_PNG)
+        except Exception:
+            pass
+
+        try:
+            os.remove(self.FILENAME_TIFF)
         except Exception:
             pass
 
     def test_ar_frame(self):
+        """
+        Test for TODO???
+        """
         ar_margin = 100
         img_size = 512, 512
         ar_size = img_size[0] + ar_margin, img_size[1] + ar_margin
@@ -147,26 +157,10 @@ class TestARExport(unittest.TestCase):
         img.draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius)
         self.assertEqual(data_to_draw.shape[:2], ar_size)  # frame includes the margin
 
-    def test_ar_raw(self):
-        data = model.DataArray(numpy.zeros((256, 256)), metadata={model.MD_AR_POLE: (100, 100),
-                                                                  model.MD_PIXEL_SIZE: (1e-03, 1e-03)})
-        raw_polar = img.calculate_raw_ar(data, data)
-        # shape = raw data + theta/phi axes values
-        self.assertGreater(raw_polar.shape[0], 50)
-        self.assertGreater(raw_polar.shape[1], 50)
-
-    def test_ar_raw_rect(self):
-        data = model.DataArray(numpy.zeros((256, 512)), metadata={model.MD_AR_POLE: (100, 250),
-                                                                  model.MD_PIXEL_SIZE: (1e-03, 1e-03)})
-        raw_polar = img.calculate_raw_ar(data, data)
-        # shape = raw data + theta/phi axes values
-        self.assertGreater(raw_polar.shape[0], 50)
-        self.assertGreater(raw_polar.shape[1], 50)
-
-    # TODO add test export polarization and polarimetry visualization data
-
     def test_ar_export(self):
-
+        """
+        Test export of raw angle resolved data to png, tiff and csv.
+        """
         # Create AR data
         md = {
             model.MD_SW_VERSION: "1.0-test",
@@ -201,7 +195,7 @@ class TestARExport(unittest.TestCase):
             self.assertLess(time.time(), tend, "Timeout during AR computation")
             time.sleep(0.1)
 
-        # Convert to exportable RGB image
+        # Convert to exportable RGB image (png, tiff)
         exdata = img.ar_to_export_data([ars_raw_pj], raw=False)
         # shape = RGBA
         self.assertGreater(exdata.shape[0], 200)
@@ -215,11 +209,17 @@ class TestARExport(unittest.TestCase):
 
         # Save into a PNG file
         exporter = dataio.get_converter("PNG")
-        exporter.export(self.FILENAME_PR, exdata)
-        st = os.stat(self.FILENAME_PR)  # this test also that the file is created
+        exporter.export(self.FILENAME_PNG, exdata)
+        st = os.stat(self.FILENAME_PNG)  # this test also that the file is created
         self.assertGreater(st.st_size, 1000)
 
-        # Convert to exportable RGB image
+        # Save into a TIFF file
+        exporter = dataio.get_converter("TIFF")
+        exporter.export(self.FILENAME_TIFF, exdata)
+        st = os.stat(self.FILENAME_TIFF)  # this test also that the file is created
+        self.assertGreater(st.st_size, 1000)
+
+        # Convert to exportable table (csv)
         exdata = img.ar_to_export_data([ars_raw_pj], raw=True)
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
@@ -227,14 +227,17 @@ class TestARExport(unittest.TestCase):
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
-        exporter.export(self.FILENAME_RAW, exdata)
-        st = os.stat(self.FILENAME_RAW)  # this test also that the file is created
+        exporter.export(self.FILENAME_CSV, exdata)
+        st = os.stat(self.FILENAME_CSV)  # this test also that the file is created
         self.assertGreater(st.st_size, 100)
 
     # TODO: check that exporting large AR image doesn't get crazy memory usage
 
     def test_big_ar_export(self):
-
+        """
+        Test export of big raw angle resolved data to png, tiff and csv. The data and also the
+        background data will be internally resized by the projections for further processing.
+        """
         # Create AR data
         md = {
             model.MD_SW_VERSION: "1.0-test",
@@ -269,7 +272,7 @@ class TestARExport(unittest.TestCase):
             self.assertLess(time.time(), tend, "Timeout during AR computation")
             time.sleep(0.1)
 
-        # Convert to exportable RGB image
+        # Convert to exportable RGB image (png, tiff)
         exdata = img.ar_to_export_data([ars_raw_pj], raw=False)
         # shape = RGBA
         self.assertGreater(exdata.shape[0], 200)
@@ -283,11 +286,17 @@ class TestARExport(unittest.TestCase):
 
         # Save into a PNG file
         exporter = dataio.get_converter("PNG")
-        exporter.export(self.FILENAME_PR, exdata)
-        st = os.stat(self.FILENAME_PR)  # this test also that the file is created
+        exporter.export(self.FILENAME_PNG, exdata)
+        st = os.stat(self.FILENAME_PNG)  # this test also that the file is created
         self.assertGreater(st.st_size, 1000)
 
-        # Convert to equirectangular (RAW) image
+        # Save into a TIFF file
+        exporter = dataio.get_converter("TIFF")
+        exporter.export(self.FILENAME_TIFF, exdata)
+        st = os.stat(self.FILENAME_TIFF)  # this test also that the file is created
+        self.assertGreater(st.st_size, 1000)
+
+        # Convert to exportable table (csv)
         exdata = img.ar_to_export_data([ars_raw_pj], raw=True)
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
@@ -295,8 +304,8 @@ class TestARExport(unittest.TestCase):
 
         # Save into a CSV file
         exporter = dataio.get_converter("CSV")
-        exporter.export(self.FILENAME_RAW, exdata)
-        st = os.stat(self.FILENAME_RAW)  # this test also that the file is created
+        exporter.export(self.FILENAME_CSV, exdata)
+        st = os.stat(self.FILENAME_CSV)  # this test also that the file is created
         self.assertGreater(st.st_size, 100)
 
         # Create AR stream with background image
@@ -307,6 +316,274 @@ class TestARExport(unittest.TestCase):
         # shape = raw data + theta/phi axes values
         self.assertGreater(exdata.shape[0], 50)
         self.assertGreater(exdata.shape[1], 50)
+
+    # TODO add test export polarization and polarimetry visualization data
+    def test_ar_export_negativeValues(self):
+        """
+        Test that the csv export keeps negative values if present after background correction.
+        """
+        # Create AR data
+        md = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_HW_NAME: "fake ccd",
+            model.MD_DESCRIPTION: "AR",
+            model.MD_ACQ_TYPE: model.MD_AT_AR,
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+            model.MD_PIXEL_SIZE: (5.2e-5, 5.2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_AR_POLE: (283, 259),
+        }
+
+        data = model.DataArray(100 + numpy.zeros((512, 512), dtype=numpy.uint16), md)  # image
+        data_bg = model.DataArray(200 + numpy.zeros((512, 512), dtype=numpy.uint16), md)  # bg image
+
+        # Create AR stream
+        ars = stream.StaticARStream("test export static ar stream with negative values", [data])
+        ars_raw_pj = stream.ARRawProjection(ars)
+
+        # Create AR stream with background image
+        ars.background.value = data_bg
+
+        # Wait for the projection to be computed
+        tend = time.time() + 30
+        while ars_raw_pj.image.value is None:
+            self.assertLess(time.time(), tend, "Timeout during AR computation")
+            time.sleep(0.1)
+
+        # Convert to exportable table (csv)
+        exdata = img.ar_to_export_data([ars_raw_pj], raw=True)
+        # shape = raw data + theta/phi axes values
+        self.assertLessEqual(exdata.all(), 0)  # there should be only values <= 0
+
+        # Save into a CSV file
+        exporter = dataio.get_converter("CSV")
+        exporter.export(self.FILENAME_CSV, exdata)
+        st = os.stat(self.FILENAME_CSV)  # this test also that the file is created
+        self.assertGreater(st.st_size, 100)
+
+    def test_ar_export_polarizer(self):
+        """
+        Test batch export for polarization analyzer raw data. Check that all images (one for each polarization
+        analyzer position) is exported.
+        """
+
+        # Create AR data
+        metadata = []
+        qwp_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
+
+        # AR polarizer metadata
+        for idx in range(len(POL_POSITIONS)):
+            metadata.append({model.MD_SW_VERSION: "1.0-test",
+                             model.MD_HW_NAME: "fake ccd",
+                             model.MD_DESCRIPTION: "AR polarization analyzer",
+                             model.MD_ACQ_DATE: time.time(),
+                             model.MD_BPP: 12,
+                             model.MD_BINNING: (1, 1),  # px, px
+                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+                             model.MD_POS: (1.2e-3, -30e-3),  # m
+                             model.MD_EXP_TIME: 1.2,  # s
+                             model.MD_AR_POLE: (253.1, 65.1),
+                             model.MD_LENS_MAG: 0.4,  # ratio
+                             model.MD_POL_MODE: POL_POSITIONS[idx],
+                             model.MD_POL_POS_LINPOL: qwp_positions[idx],  # rad
+                             model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
+                             })
+
+        # AR polarization analyzer data
+        data = []
+        for index, md in enumerate(metadata):
+            data_pol = model.DataArray(1500 + 100 * index + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+            data_pol[200:250, 50:70] = 1000 * index  # modify a few px close to AR_POLE
+            data.append(data_pol)
+
+        # Create AR stream
+        ars = stream.StaticARStream("test export static ar stream with polarization analyzer", data)
+        ars_raw_pol = stream.ARRawProjection(ars)
+        ars.point.value = next(iter(metadata))[model.MD_POS]
+
+        # Wait for the projection to be computed
+        tend = time.time() + 30
+        while ars_raw_pol.image.value is None:
+            self.assertLess(time.time(), tend, "Timeout during AR computation")
+            time.sleep(0.1)
+
+        # Convert to exportable RGB images (png, tiff)
+        exdata = img.ar_to_export_data([ars_raw_pol], raw=False)
+        # check its a dictionary equal to length of polarization analyzer positions
+        self.assertIsInstance(exdata, dict)
+        self.assertEqual(len(exdata), len(POL_POSITIONS))
+        # shape = RGBA
+        for image in exdata.values():
+            self.assertGreater(image.shape[0], 200)
+            self.assertGreater(image.shape[1], 200)
+            self.assertEqual(image.shape[2], 4)
+
+            # The top-left corner should be white
+            numpy.testing.assert_equal(image[0, 0], [255, 255, 255, 255])
+            # There should be some non-white data
+            self.assertTrue(numpy.any(image != 255))
+
+            # Save into a PNG file
+            exporter = dataio.get_converter("PNG")
+            exporter.export(self.FILENAME_PNG, image)
+            st = os.stat(self.FILENAME_PNG)  # this test also that the file is created
+            self.assertGreater(st.st_size, 1000)
+
+            # Save into a TIFF file
+            exporter = dataio.get_converter("TIFF")
+            # TODO: INFO:root:Got filename encoded as a string, while should be unicode: 'test-ar.tiff' only for tiff @Eric
+            exporter.export(self.FILENAME_TIFF, image)
+            st = os.stat(self.FILENAME_TIFF)  # this test also that the file is created
+            self.assertGreater(st.st_size, 1000)
+
+        # Convert to exportable table (csv)
+        exdata = img.ar_to_export_data([ars_raw_pol], raw=True)
+        # check its a dictionary equal to length of polarization analyzer positions
+        self.assertIsInstance(exdata, dict)
+        self.assertEqual(len(exdata), len(POL_POSITIONS))
+
+        for image in exdata.values():
+            # shape = raw data + theta/phi axes values
+            self.assertGreater(image.shape[0], 50)
+            self.assertGreater(image.shape[1], 50)
+
+            # Save into a CSV file
+            exporter = dataio.get_converter("CSV")
+            exporter.export(self.FILENAME_CSV, image)
+            st = os.stat(self.FILENAME_CSV)  # this test also that the file is created
+            self.assertGreater(st.st_size, 100)
+
+        #################################################################################
+        # take one AR polarization analyzer image as input data and export
+        data = [next(iter(data))]
+
+        # Create AR stream
+        ars = stream.StaticARStream("test export static ar stream with polarization analyzer", data)
+        ars_raw_pol = stream.ARRawProjection(ars)
+        ars.point.value = next(iter(metadata))[model.MD_POS]
+
+        # Wait for the projection to be computed
+        tend = time.time() + 30
+        while ars_raw_pol.image.value is None:
+            self.assertLess(time.time(), tend, "Timeout during AR computation")
+            time.sleep(0.1)
+
+        # Convert to exportable RGB images (png, tiff)
+        exdata = img.ar_to_export_data([ars_raw_pol], raw=False)
+        # check its a dictionary equal to length of polarization analyzer positions
+        self.assertIsInstance(exdata, model.DataArray)
+        # shape = RGBA
+        self.assertGreater(exdata.shape[0], 200)
+        self.assertGreater(exdata.shape[1], 200)
+        self.assertEqual(exdata.shape[2], 4)
+
+        # The top-left corner should be white
+        numpy.testing.assert_equal(exdata[0, 0], [255, 255, 255, 255])
+        # There should be some non-white data
+        self.assertTrue(numpy.any(exdata != 255))
+
+        # Convert to exportable table (csv)
+        exdata = img.ar_to_export_data([ars_raw_pol], raw=True)
+        # check its a dictionary equal to length of polarization analyzer positions
+        self.assertIsInstance(exdata, model.DataArray)
+        # shape = raw data + theta/phi axes values
+        self.assertGreater(exdata.shape[0], 50)
+        self.assertGreater(exdata.shape[1], 50)
+
+    def test_ar_export_polarimetry(self):
+        """
+        Test batch export for polarimetry data (visualized polarization analyzer data).
+        Check that all images are exported.
+        """
+
+        # Create AR data
+        metadata = []
+        qwp_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.0, 0.0]
+        linpol_positions = [1.6, 0.0, 1.570796, 0.785398, 2.356194, 0.785398, 2.356194]
+
+        # AR polarizer metadata
+        for idx in range(len(POL_POSITIONS)):
+            metadata.append({model.MD_SW_VERSION: "1.0-test",
+                             model.MD_HW_NAME: "fake ccd",
+                             model.MD_DESCRIPTION: "AR polarization analyzer",
+                             model.MD_ACQ_DATE: time.time(),
+                             model.MD_BPP: 12,
+                             model.MD_BINNING: (1, 1),  # px, px
+                             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6),  # m/px
+                             model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+                             model.MD_POS: (1.2e-3, -30e-3),  # m
+                             model.MD_EXP_TIME: 1.2,  # s
+                             model.MD_AR_POLE: (253.1, 65.1),
+                             model.MD_LENS_MAG: 0.4,  # ratio
+                             model.MD_POL_MODE: POL_POSITIONS[idx],
+                             model.MD_POL_POS_LINPOL: qwp_positions[idx],  # rad
+                             model.MD_POL_POS_QWP: linpol_positions[idx],  # rad
+                             })
+
+        # AR polarization analyzer data
+        data = []
+        for index, md in enumerate(metadata):
+            data_pol = model.DataArray(1500 + 100 * index + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+            data_pol[200:250, 50:70] = 1000 * index  # modify a few px close to AR_POLE
+            data.append(data_pol)
+
+        # Create AR stream
+        ars = stream.StaticARStream("test export static ar stream with polarimetry visualization", data)
+        ars_vis_pol = stream.ARPolarimetryProjection(ars)
+        ars.point.value = next(iter(metadata))[model.MD_POS]
+
+        # Wait for the projection to be computed
+        tend = time.time() + 60
+        while ars_vis_pol.image.value is None:
+            self.assertLess(time.time(), tend, "Timeout during AR computation")
+            time.sleep(0.1)
+
+        # Convert to exportable RGB images (png, tiff)
+        exdata = img.ar_to_export_data([ars_vis_pol], raw=False)
+        # check its a dictionary equal to length of polarization analyzer positions
+        self.assertIsInstance(exdata, dict)
+        self.assertEqual(len(exdata), len(POL_POSITIONS_RESULTS))
+        # shape = RGBA
+        for image in exdata.values():
+            self.assertGreater(image.shape[0], 200)
+            self.assertGreater(image.shape[1], 200)
+            self.assertEqual(image.shape[2], 4)
+
+            # Save into a PNG file
+            exporter = dataio.get_converter("PNG")
+            exporter.export(self.FILENAME_PNG, image)
+            st = os.stat(self.FILENAME_PNG)  # this test also that the file is created
+            self.assertGreater(st.st_size, 1000)
+
+            # Save into a TIFF file
+            exporter = dataio.get_converter("TIFF")
+            # TODO: INFO:root:Got filename encoded as a string, while should be unicode: 'test-ar.tiff' only for tiff @Eric
+            exporter.export(self.FILENAME_TIFF, image)
+            st = os.stat(self.FILENAME_TIFF)  # this test also that the file is created
+            self.assertGreater(st.st_size, 1000)
+
+        # Convert to exportable table (csv)
+        exdata = img.ar_to_export_data([ars_vis_pol], raw=True)
+        # check its a dictionary equal to length of polarization analyzer positions
+        self.assertIsInstance(exdata, dict)
+        self.assertEqual(len(exdata), len(POL_POSITIONS_RESULTS))
+
+        for image in exdata.values():
+            # shape = raw data + theta/phi axes values
+            self.assertGreater(image.shape[0], 50)
+            self.assertGreater(image.shape[1], 50)
+
+            # Save into a CSV file
+            exporter = dataio.get_converter("CSV")
+            exporter.export(self.FILENAME_CSV, image)
+            st = os.stat(self.FILENAME_CSV)  # this test also that the file is created
+            self.assertGreater(st.st_size, 100)
 
 
 class TestSpectrumExport(unittest.TestCase):
