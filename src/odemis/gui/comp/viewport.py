@@ -1155,7 +1155,14 @@ class NavigablePlotViewport(PlotViewport):
         self.bottom_legend.Bind(wx.EVT_LEFT_DOWN, self.on_drag_start)
         self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.on_drag_end)
         self.bottom_legend.Bind(wx.EVT_MOTION, self.on_hlegend_motion)
-        
+
+    def _connect_projection(self, proj):
+        if self._projection is not proj:
+            self.hrange.value = None
+            self.vrange.value = None
+
+        super(NavigablePlotViewport, self)._connect_projection(proj)
+
     def on_fit_view(self, _):
         """
         Called when a fit view to content event occurs.
@@ -1180,43 +1187,45 @@ class NavigablePlotViewport(PlotViewport):
         """
         Setter for VA hrange
         """
-        if hrange[0] > hrange[1]:
-            raise ValueError("Bad range tuple. First element should be less than the second")
+        if hrange is not None and hrange[0] > hrange[1]:
+            raise ValueError("Bad horizontal range: %s > %s" % (hrange[0], hrange[1]))
         return hrange
 
     def on_hrange(self, hrange):
         """
         Refreshes the plot and axis legend displays with the new scale
         """
-        self.canvas.set_ranges(hrange, self.canvas.display_yrange)
-
+        logging.debug("HRange: %s", hrange)
         self.bottom_legend.range = hrange
+        if hrange is None:
+            return
+
+        self.canvas.set_ranges(hrange, self.canvas.display_yrange)
         if self.canvas.has_data():
             self.bottom_legend.lo_ellipsis = self.canvas.display_xrange[0] > self.canvas.data_xrange[0]
             self.bottom_legend.hi_ellipsis = self.canvas.display_xrange[1] < self.canvas.data_xrange[1]
-
-        logging.debug("HRange: %s", hrange)
 
     def set_vrange(self, vrange):
         """
         Setter for VA vrange
         """
-        if vrange[0] > vrange[1]:
-            raise ValueError("Bad range tuple. First element should be less than the second")
+        if vrange is not None and vrange[0] > vrange[1]:
+            raise ValueError("Bad vertical range: %s > %s" % (vrange[0], vrange[1]))
         return vrange
 
     def on_vrange(self, vrange):
         """
         Refreshes the plot and axis legend displays with the new scale
         """
-        self.canvas.set_ranges(self.canvas.display_xrange, vrange)
-
+        logging.debug("VRange: %s", vrange)
         self.left_legend.range = vrange
+        if vrange is None:
+            return
+
+        self.canvas.set_ranges(self.canvas.display_xrange, vrange)
         if self.canvas.has_data():
             self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
             self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
-
-        logging.debug("VRange: %s", vrange)
 
     def on_hlegend_scroll(self, evt=None):
         """ Scroll event for the bottom legend.
