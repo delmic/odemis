@@ -1421,6 +1421,13 @@ class PointSpectrumViewport(NavigablePlotViewport):
         wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
 
+    def _connect_projection(self, proj):
+        if self._projection is not proj:
+            # In case it the peak was updating right at the moment the stream changes
+            self._peak_future.cancel()
+
+        super(PointSpectrumViewport, self)._connect_projection(proj)
+
     def clear(self):
         # Try to clear previous curve (if already initialised)
         if self._curve_overlay is not None:
@@ -1486,6 +1493,10 @@ class PointSpectrumViewport(NavigablePlotViewport):
     def _update_peak(self, f):
         try:
             peak_data, peak_offset = f.result()
+            if not hasattr(self._stream, "peak_method"):
+                # In case the stream has just changed, or removed.
+                return
+
             self._curve_overlay.update_data(peak_data, peak_offset,
                                             self.spectrum_range, self.unit_x,
                                             self._stream.peak_method.value)
