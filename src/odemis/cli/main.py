@@ -34,7 +34,7 @@ import logging
 import numbers
 from odemis import model, dataio, util
 import odemis
-from odemis.util import units
+from odemis.util import units, inspect_getmembers
 from odemis.util.conversion import convert_to_object
 from odemis.util.driver import BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status, BACKEND_STARTING
@@ -85,7 +85,7 @@ def scan(cls=None):
             logging.warning("Cannot try module %s, failed to load." % module_name)
         except Exception:
             logging.exception("Failed to load module %s" % module_name)
-        for cls_name, clso in inspect.getmembers(module, inspect.isclass):
+        for cls_name, clso in inspect_getmembers(module, inspect.isclass):
             if issubclass(clso, model.HwComponent) and hasattr(clso, "scan"):
                 if cls:
                     full_name = "%s.%s" % (module_name, cls_name)
@@ -477,7 +477,7 @@ def update_metadata(comp_name, key_val_str):
     for key_name, str_val in key_val_str.items():
         # Check that the metadata is a valid one. It's a bit tricky as there is no
         # "official" list. But we look at the ones defined in model.MD_*
-        for n, v in inspect.getmembers(model, lambda m: isinstance(m, str)):
+        for n, v in inspect_getmembers(model, lambda m: isinstance(m, str)):
             if n.startswith("MD_") and v == key_name:
                 key = key_name
                 break

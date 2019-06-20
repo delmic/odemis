@@ -45,6 +45,7 @@ from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
+from odemis.util import inspect_getmembers
 
 
 def find_plugins():
@@ -125,7 +126,7 @@ def load_plugin(filename, microscope, main_app):
 
     # For each subclass of Plugin in the module, start it by instantiating it
     found_plugin = False
-    for n, pc in inspect.getmembers(pm, inspect.isclass):
+    for n, pc in inspect_getmembers(pm, inspect.isclass):
         # We only want Plugin subclasses, not even the Plugin class itself
         if not issubclass(pc, Plugin) or pc is Plugin:
             continue
