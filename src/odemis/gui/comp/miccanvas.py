@@ -1247,6 +1247,10 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         
         self.refresh_plot()
 
+    def clear(self):
+        self._data_buffer = None
+        super(NavigableBarPlotCanvas, self).clear()
+
     # TODO: refactor so that the viewports has fit_view_to_content(), and they
     # are in charge of calling the right function in the canvas
     def fit_view_to_content(self, recenter=None):
