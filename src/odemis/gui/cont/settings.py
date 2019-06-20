@@ -726,13 +726,6 @@ class SparcAlignSettingsController(SettingsBarController):
                 self._spect_setting_cont.add_axis(a, comp, conf.get(a))
 
 
-# constants defining the displayed status in the GUI
-SAVE = "Save"
-LOAD = "Load"
-ERROR = "Error"
-STATUS = "Status"
-
-
 class StreakCamAlignSettingsController(SettingsBarController):
     """
     Controller, which creates the streak panel in the alignment tab and
@@ -813,26 +806,16 @@ class StreakCamAlignSettingsController(SettingsBarController):
         # catches errors regarding type and out-of-range inputs
 
         # update txt displayed in GUI
-        self._onUpdateTriggerDelayGUI(STATUS, None)
+        self._onUpdateTriggerDelayGUI("Calibration not saved yet", odemis.gui.FG_COLOUR_WARNING)
 
-    def _onUpdateTriggerDelayGUI(self, mode, filename):
+    def _onUpdateTriggerDelayGUI(self, text, colour=odemis.gui.FG_COLOUR_EDIT):
         """
         Updates the GUI elements regarding the new trigger delay value.
-        :parameter mode: (constant) SAVE, LOAD, ERROR or STATUS for display
-        :parameter filename: (str) filename of the loaded/saved file
+        :parameter text (str): the text to show
+        :parameter colour (wx.Colour): the colour to use
         """
-        if mode in (LOAD, SAVE):
-            self.panel.txt_StreakCalibFilename.Value = "%s" % filename
-            self.panel.txt_StreakCalibFilename.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        elif mode == ERROR:
-            self.panel.txt_StreakCalibFilename.Value = "Error while loading file!"
-            self.panel.txt_StreakCalibFilename.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
-        elif mode == STATUS:
-            self.panel.txt_StreakCalibFilename.Value = "Calibration not saved yet!"
-            self.panel.txt_StreakCalibFilename.SetForegroundColour(odemis.gui.FG_COLOUR_WARNING)
-        else:
-            raise ValueError("Mode %s for display of the current status of the trigger delay "
-                             "calibration file is unknown.", mode)
+        self.panel.txt_StreakCalibFilename.Value = text
+        self.panel.txt_StreakCalibFilename.SetForegroundColour(colour)
 
     def _onOpenCalibFile(self, event):
         """
@@ -866,8 +849,8 @@ class StreakCamAlignSettingsController(SettingsBarController):
                                                                         self.streak_unit.timeRange.choices,
                                                                         self.streak_delay.triggerDelay.range)
             except ValueError as error:
-                self._onUpdateTriggerDelayGUI(ERROR, filename)  # update txt displayed in GUI
-                logging.error(error)
+                self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
+                logging.error("Failed loading %s: %s", filename, error)
                 return
 
         # update the MD
@@ -880,7 +863,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
         # Note: no need to check almost_equal again as we do that already when loading the file
         self.streak_delay.triggerDelay.value = tr2d_dict[key]  # set the new value
 
-        self._onUpdateTriggerDelayGUI(LOAD, filename)  # update txt displayed in GUI
+        self._onUpdateTriggerDelayGUI(filename)  # update txt displayed in GUI
 
     def _onSaveCalibFile(self, event):
         """
@@ -920,4 +903,4 @@ class StreakCamAlignSettingsController(SettingsBarController):
                 calibFile.writerow([key, triggerDelay_dict[key]])
 
         # update txt displayed in GUI
-        self._onUpdateTriggerDelayGUI(SAVE, filename)
+        self._onUpdateTriggerDelayGUI(filename)
