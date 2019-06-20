@@ -40,7 +40,7 @@ For some other boards, which are calibrated in hardware, you need to do:
 sudo comedi_calibrate -f /dev/comedi0
 
 
-To Loading the comedi simulator driver, you can either type the following after every boot:
+To load the comedi simulator driver, you can type the following (once, after every boot):
 sudo modprobe comedi comedi_num_legacy_minors=4
 sudo modprobe comedi_test
 sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
@@ -78,9 +78,11 @@ To get the fluorophores database (for the SECOM/DELPHI), you can run this comman
 Then copy all the fluodb directory to /usr/share/odemis/fluodb/
 
 = Installing the vendor device drivers =
-Several hardware require a dedicated driver (provided by the hardware manufacturer)
-to be installed. That's the case in particular of the Andor cameras and spectrographs.
-The IDS uEye cameras and the PicoQuant time-correlator also need a driver.
+Several hardware require a dedicated driver (provided by the hardware manufacturer).
+to be installed. That's the case in particular of the Andor cameras and spectrographs (libandor.so.2 and libatcore.so.3).
+The IDS uEye cameras (libueye_api.so.1) and the PicoQuant time-correlator (libph300.so) also need a driver.
+
+Please refer to the manufacturer documentation on how to install these drivers.
 
 
 = Configuring the microscope file =
