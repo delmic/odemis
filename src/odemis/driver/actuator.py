@@ -109,7 +109,7 @@ class MultiplexActuator(model.Actuator):
                 children_axes[child] = {axis}
 
         # position & speed: special VAs combining multiple VAs
-        self.position = model.VigilantAttribute(self._position, readonly=True)
+        self.position = model.VigilantAttribute(self._applyInversion(self._position), readonly=True)
         for c, ax in children_axes.items():
             def update_position_per_child(value, ax=ax, c=c):
                 logging.debug("updating position of child %s", c.name)
@@ -181,7 +181,7 @@ class MultiplexActuator(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        pos = self._applyInversion(self._position)
+        pos = self._applyInversion(self._position)  # makes a copy
         logging.debug("reporting position %s", pos)
         self.position._set_value(pos, force_write=True)
 
@@ -189,9 +189,8 @@ class MultiplexActuator(model.Actuator):
         """
         update the speed VA
         """
-        # we must not call the setter, so write directly the raw value
-        self.speed._value = self._speed
-        self.speed.notify(self._speed)
+        # .speed is copied to detect changes to it on next update
+        self.speed.notify(self._speed.copy(), force_write=True)
 
     def _updateReferenced(self):
         """
