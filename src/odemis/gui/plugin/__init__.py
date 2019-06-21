@@ -22,6 +22,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from functools import partial
 from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
@@ -44,6 +45,7 @@ from odemis.model import VigilantAttribute, getVAs
 import os
 import threading
 import wx
+from odemis.util import inspect_getmembers
 
 
 def find_plugins():
@@ -124,7 +126,7 @@ def load_plugin(filename, microscope, main_app):
 
     # For each subclass of Plugin in the module, start it by instantiating it
     found_plugin = False
-    for n, pc in inspect.getmembers(pm, inspect.isclass):
+    for n, pc in inspect_getmembers(pm, inspect.isclass):
         # We only want Plugin subclasses, not even the Plugin class itself
         if not issubclass(pc, Plugin) or pc is Plugin:
             continue
@@ -158,7 +160,7 @@ def load_plugin(filename, microscope, main_app):
     return ret
 
 
-class Plugin(object):
+class Plugin(with_metaclass(ABCMeta, object)):
     """
     This is the root class for Odemis GUI plugins.
     Every plugin must be a subclass of that class.
@@ -168,7 +170,6 @@ class Plugin(object):
       /usr/local/share/odemis/plugins/
       $HOME/.local/share/odemis/plugins/
     """
-    __metaclass__ = ABCMeta
 
     # The following 4 attributes must be overridden
     @abstractproperty
@@ -289,7 +290,9 @@ class Plugin(object):
         # Attach the callback function
         def menu_callback_wrapper(evt):
             try:
+                logging.info("Menu '%s' handled by %s, %s", entry, self.__class__.__name__, callback)
                 callback()
+                logging.debug("Menu '%s' callback completed", entry)
             except Exception:
                 logging.exception("Error when processing menu entry %s of plugin %s",
                                   path[-1], self)
@@ -310,12 +313,13 @@ class AcquisitionDialog(xrcfr_plugin):
         """
         Creates a modal window. The return code is the button number that was
           last pressed before closing the window.
+        plugin (Plugin): The plugin creating this dialog
         title (str): The title of the window
         text (None or str): If provided, it is displayed at the top of the window
         """
-
         super(AcquisitionDialog, self).__init__(plugin.main_app.main_frame)
 
+        logging.debug("Creating acquisition dialog for %s", plugin.__class__.__name__)
         self.plugin = plugin
 
         self.SetTitle(title)

@@ -21,16 +21,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from builtins import basestring
+from past.builtins import basestring
 import Pyro4
 from Pyro4.core import oneway
 import collections
-import inspect
 import logging
 import multiprocessing
 import os
 import threading
 from future.moves.urllib.parse import quote
+from odemis.util import inspect_getmembers
 
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
@@ -192,7 +192,7 @@ def get_roattributes(self):
     list all roattributes of an instance
     Note: this only works on an original class, not on a proxy
     """
-    members = inspect.getmembers(self.__class__)
+    members = inspect_getmembers(self.__class__)
     return [name for name, obj in members if isinstance(obj, roattribute)]
 
 

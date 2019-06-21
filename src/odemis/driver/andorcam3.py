@@ -28,6 +28,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import long
+from builtins import str
 import collections
 from ctypes import *
 import gc
@@ -195,13 +197,18 @@ class AndorCam3(model.DigitalCamera):
     It also provides low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, bitflow_install_dirs=None, **kwargs):
+    def __init__(self, name, role, device=None, bitflow_install_dirs=None,
+                 max_bin=None, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
         bitflow_install_dirs (None or str): path of bitflow install directory,
           used to set BITFLOW_INSTALL_DIRS
+        max_bin (1 <= int, 1 <= int): maximum binning accepted. If None, it'll
+          use the one officially reported. Can be used to workaround issues on
+          some cameras where full vertical binning tends to cause too much data
+          clipping.
         Raises:
           ATError if the device cannot be opened.
         """
@@ -318,9 +325,11 @@ class AndorCam3(model.DigitalCamera):
                                self._transposeSizeToUser(resolution)),
                                              setter=self._setResolution)
 
+        mxb = self._transposeSizeToUser(self._getMaxBinnings())
+        if max_bin is not None:
+            mxb = [min(hb, ub) for hb, ub in zip(mxb, max_bin)]
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                              (self._transposeSizeToUser((1, 1)),
-                               self._transposeSizeToUser(self._getMaxBinnings())),
+                                          (self._transposeSizeToUser((1, 1)), mxb),
                                           setter=self._setBinning)
 
         # translation is automatically adjusted to fit whenever res/bin change
@@ -330,8 +339,8 @@ class AndorCam3(model.DigitalCamera):
             uh_shape = self._transposeSizeToUser(hlf_shape)
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
-            self.translation = model.ResolutionVA((0, 0), tran_rng,
-                                                  cls=(int, long), unit="px",
+            self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
+                                                  cls=(int, long),
                                                   setter=self._setTranslation)
         else:
             # to keep it simple, provide a translation VA but fixed to 0,0
@@ -1603,6 +1612,10 @@ class AndorCam3(model.DigitalCamera):
                 tend = time.time() + exposure_time + readout_time * 1.2 + 3  # s
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
+                # merge BASELINE and BASELINE_COR immediately
+                if model.MD_BASELINE in metadata and model.MD_BASELINE_COR in metadata:
+                    metadata[model.MD_BASELINE] += metadata[model.MD_BASELINE_COR]
+                    del metadata[model.MD_BASELINE_COR]
 
                 try:
                     cbuffer = self._get_new_frame(tend, size, buffers, max_discard)

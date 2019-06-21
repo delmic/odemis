@@ -25,6 +25,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from past.builtins import long
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging

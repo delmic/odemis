@@ -27,10 +27,10 @@ from __future__ import division, print_function
 
 from past.builtins import basestring
 import Pyro4
-import inspect
 import logging
 import numpy
 from odemis.model import _metadata
+from odemis.util import inspect_getmembers
 from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
@@ -602,7 +602,7 @@ class SubscribeProxyThread(threading.Thread):
 
 def unregister_dataflows(self):
     # Only for the "DataFlow"s, the real objects, not the proxys
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlow)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, DataFlow)):
         value._unregister()
 
 def dump_dataflows(self):
@@ -615,7 +615,7 @@ def dump_dataflows(self):
     """
     dataflows = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, DataFlowBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, DataFlowBase)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         dataflows[name] = value
@@ -718,7 +718,7 @@ class EventProxy(EventBase, Pyro4.Proxy):
 
 
 def unregister_events(self):
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, Event)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, Event)):
         daemon = getattr(value, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(value)
@@ -733,7 +733,7 @@ def dump_events(self):
     """
     events = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, EventBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, EventBase)):
         if not hasattr(value, "_pyroDaemon"):
             daemon.register(value)
         events[name] = value

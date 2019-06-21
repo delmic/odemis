@@ -28,6 +28,7 @@ import os
 import time
 import unittest
 import wx
+from builtins import range
 
 from odemis import model, dataio
 from odemis.acq import stream
@@ -308,13 +309,13 @@ class TestSpectrumExport(unittest.TestCase):
 
     def setUp(self):
         data = numpy.ones((251, 3, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[:, 0, 0, 1, 3] = range(251)
-        data[2, 0, 0, :, :] = range(300)
-        data[200, 0, 0, 2, :] = range(300)
-        wld = list(433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9)
-        tld = list(numpy.array(range(data.shape[1])) * 0.1e-9)
+        data[:, 0, 0, 1, 3] = numpy.arange(251)
+        data[2, 0, 0, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2, :] = numpy.arange(300)
+        wld = list(433e-9 + numpy.arange(data.shape[0]) * 0.1e-9)
+        tld = list(numpy.arange(data.shape[1]) * 0.1e-9)
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -335,6 +336,7 @@ class TestSpectrumExport(unittest.TestCase):
     def test_spectrum_ready(self):
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.spectrum_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
@@ -351,6 +353,7 @@ class TestSpectrumExport(unittest.TestCase):
     def test_spectrum_temporal(self):
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointTemporalProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.chronogram_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
@@ -370,6 +373,7 @@ class TestSpectrumExport(unittest.TestCase):
 
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.spectrum_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[0], self.spec_data.shape[0])  # exported image includes only raw data
 
@@ -401,6 +405,7 @@ class TestSpectrumExport(unittest.TestCase):
 
         self.spec_stream.selectionWidth.value = 1
         proj = SinglePointTemporalProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.chronogram_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[0], self.spec_data.shape[1])  # exported image includes only raw data
 
@@ -431,12 +436,12 @@ class TestSpectrumLineExport(unittest.TestCase):
 
     def setUp(self):
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[:, 0, 0, 1, 3] = range(251)
-        data[2, :, :, :, :] = range(300)
-        data[200, 0, 0, 2] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        data[:, 0, 0, 1, 3] = numpy.arange(251)
+        data[2, :, :, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2] = numpy.arange(300)
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -456,6 +461,7 @@ class TestSpectrumLineExport(unittest.TestCase):
     def test_line_ready(self):
         self.spec_stream.selectionWidth.value = 1
         proj = LineSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.line_to_export_data(proj, False)
         self.assertEqual(exported_data.metadata[model.MD_DIMS], 'YXC')  # ready for RGB export
         self.assertEqual(exported_data.shape[:2],
@@ -474,6 +480,7 @@ class TestSpectrumLineExport(unittest.TestCase):
 
         self.spec_stream.selectionWidth.value = 1
         proj = LineSpectrumProjection(self.spec_stream)
+        time.sleep(0.1)  # wait a bit until image is actually generated before exporting
         exported_data = img.line_to_export_data(proj, True)
         self.assertEqual(exported_data.shape[1], self.spec_data.shape[0])
         self.assertGreater(exported_data.shape[0], 64)  # at least 65-1 px
@@ -540,13 +547,13 @@ class TestSpatialExport(unittest.TestCase):
 
         # Spectrum stream
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[:, 0, 0, 1, 3] = range(251)
-        data[2, :, :, :, :] = range(300)
-        data[200, 0, 0, 2] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
-        tld = model.DataArray(range(data.shape[1])) * 0.1e-9
+        data[:, 0, 0, 1, 3] = numpy.arange(251)
+        data[2, :, :, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2] = numpy.arange(300)
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
+        tld = model.DataArray(numpy.arange(data.shape[1])) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -828,6 +835,7 @@ class TestOverviewFunctions(unittest.TestCase):
         # Test if at least one element of ovv image is different from original images
         # self.assertEqual(merged.shape, (10, 10, 3))
         self.assertTrue(numpy.all(merged == 255))
+
 
 if __name__ == "__main__":
     unittest.main()

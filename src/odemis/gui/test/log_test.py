@@ -27,7 +27,7 @@ from odemis.gui import test, log
 import random
 import threading
 import unittest
-
+from builtins import range
 
 log.init_logger(logging.DEBUG)
 test.goto_manual()
@@ -43,7 +43,7 @@ class TestLogWindow(test.GuiTestCase):
         log.create_gui_logger(self.frame.txt_log)
 
         def log_msg():
-            for i in xrange(50000):
+            for i in range(50000):
                 random.choice(LOG_FUNCTIONS)("WEEEEEE %d" % i)
                 threading._sleep(0.0001)
 

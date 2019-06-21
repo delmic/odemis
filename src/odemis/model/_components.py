@@ -21,12 +21,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from future.utils import with_metaclass
 from past.builtins import basestring
 
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
-import inspect
 import logging
 import math
 import odemis
@@ -35,6 +35,7 @@ import weakref
 
 from . import _core, _dataflow, _vattributes, _metadata
 from ._core import roattribute
+from odemis.util import inspect_getmembers
 
 
 class HwError(IOError):
@@ -59,7 +60,7 @@ def getVAs(component):
     returns (dict of name -> VigilantAttributeBase): all the VAs in the component with their name
     """
     # like dump_vigilante_attributes, but doesn't register them
-    vas = inspect.getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
+    vas = inspect_getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
     return dict(vas)
 
 
@@ -84,7 +85,7 @@ def getDataFlows(component):
     returns (dict of name -> DataFlow): all the DataFlows in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
+    dfs = inspect_getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
     return dict(dfs)
 
 
@@ -93,13 +94,12 @@ def getEvents(component):
     returns (dict of name -> Events): all the Events in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
+    evts = inspect_getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
     return dict(evts)
 
 
-class ComponentBase(object):
+class ComponentBase(with_metaclass(ABCMeta, object)):
     """Abstract class for a component"""
-    __metaclass__ = ABCMeta
 
 
 class Component(ComponentBase):
@@ -270,12 +270,11 @@ def ComponentSerializer(self):
 Pyro4.Daemon.serializers[Component] = ComponentSerializer
 
 
-class HwComponent(Component):
+class HwComponent(with_metaclass(ABCMeta, Component)):
     """
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, power_supplier=None, transp=None, *args, **kwargs):
         """
@@ -568,12 +567,11 @@ class Microscope(HwComponent):
         return self._model
 
 
-class Detector(HwComponent):
+class Detector(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents a detector.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, transpose=None, transp=None, **kwargs):
         """
@@ -614,12 +612,11 @@ class Detector(HwComponent):
         return self._transposeSizeToUser(self._shape)
 
 
-class DigitalCamera(Detector):
+class DigitalCamera(with_metaclass(ABCMeta, Detector)):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
     It's basically a detector with a few more compulsory VAs
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         Detector.__init__(self, name, role, **kwargs)
@@ -744,12 +741,11 @@ class Axis(object):
         return "%s in %s%s%s" % (self.__class__.__name__, pos_str, abs_str, speed_str)
 
 
-class Actuator(HwComponent):
+class Actuator(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, axes=None, inverted=None, **kwargs):
         """
@@ -940,12 +936,11 @@ class Actuator(HwComponent):
             raise ValueError("Cannot reference the following axes: %s" % (nonref,))
 
 
-class PowerSupplier(HwComponent):
+class PowerSupplier(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents a power supplier for one or multiple components.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
@@ -978,12 +973,11 @@ class PowerSupplier(HwComponent):
                 raise ValueError("Unknown component %s" % (component,))
 
 
-class Emitter(HwComponent):
+class Emitter(with_metaclass(ABCMeta, HwComponent)):
     """
     A component which represents an emitter.
     This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)

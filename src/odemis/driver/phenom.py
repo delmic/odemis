@@ -21,7 +21,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from future.utils import with_metaclass
 import queue
+from past.builtins import long
 from abc import abstractmethod, ABCMeta
 import base64
 import collections
@@ -1328,12 +1330,11 @@ class Stage(model.Actuator):
             self._executor = None
 
 
-class PhenomFocus(model.Actuator):
+class PhenomFocus(with_metaclass(ABCMeta, model.Actuator)):
     """
     This is an extension of the model.Actuator class and represents a focus
     actuator. This is an abstract class that should be inherited.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, parent, axes, rng, **kwargs):
         assert len(axes) > 0

@@ -370,8 +370,7 @@ class Controller(object):
             else:
                 subcls = OLController
 
-        return super(Controller, cls).__new__(subcls, busacc, address, axes,
-                                              *args, **kwargs)
+        return super(Controller, cls).__new__(subcls)
 
     def __init__(self, busacc, address=None, axes=None, _stem=False):
         """

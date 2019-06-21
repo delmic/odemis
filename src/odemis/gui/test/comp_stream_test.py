@@ -38,7 +38,6 @@ import odemis.gui.model.dye as dye
 import odemis.gui.test as test
 import odemis.model as model
 
-
 test.goto_manual()
 
 
@@ -374,11 +373,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[2, :, :, :, :] = range(300)
-        data[200, 0, 0, 2] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        data[2, :, :, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2] = numpy.arange(300)
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_DESCRIPTION: "Spectrum",
              model.MD_ACQ_DATE: time.time(),

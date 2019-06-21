@@ -893,9 +893,9 @@ class TestTiffIO(unittest.TestCase):
                     count += 1
                     continue
 
-                for n in xrange(len(sub_ifds)):
+                for sifd in sub_ifds:
                     # set the offset of the current subimage
-                    f.SetSubDirectory(sub_ifds[n])
+                    f.SetSubDirectory(sifd)
                     # read the subimage
                     subim = f.read_image()
                     zoom_level_images.append(subim)

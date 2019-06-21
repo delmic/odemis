@@ -25,7 +25,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from past.builtins import basestring
+from past.builtins import basestring, long
 import collections
 import logging
 import gc

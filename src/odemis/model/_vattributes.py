@@ -19,13 +19,12 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division
-from past.builtins import basestring
 
+from __future__ import division
+from past.builtins import basestring, long
 import Pyro4
 from Pyro4.core import oneway
 import collections
-import inspect
 import logging
 import numbers
 import numpy
@@ -38,13 +37,10 @@ import zmq
 from scipy.spatial import distance
 
 from . import _core
+from odemis.util import inspect_getmembers
 
 
 class NotSettableError(AttributeError):
-    pass
-
-
-class NotApplicableError(Exception):
     pass
 
 
@@ -351,6 +347,22 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._commands = None
         self._thread = None
 
+    def __getattr__(self, name):
+        # Behaviour of .range and .choices remote attributes:
+        # When calling .range or .choices, Pyro4.Proxy__getattr__ is called. If the remote
+        # object does not have these attributes, a remote AttributeError is raised.
+        # This AttributeError results in a call to self.__getattr__. If we don't overwrite
+        # __getattr__ here, the corresponding method of the superclass would be called
+        # and return a RemoteObject. However, we actually do want the AttributeError to be
+        # raised, otherwise we get unexpected behaviour, for example: when calling
+        # hasattr(object, attribute) and the remote object does **not** have the attribute
+        # we are looking for, it would still return True because the call object.attribute
+        # does not raise an error.
+        if name == "choices" or name == "range":
+            raise AttributeError()
+
+        return super(VigilantAttributeProxy, self).__getattr__(name)
+
     @property
     def value(self):
         return self.__getattr__("_get_value")()
@@ -365,22 +377,15 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # for enumerated VA
     @property
     def choices(self):
-        try:
-            value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
-        except AttributeError:
-            # if we let AttributeError, python will look in the super classes,
-            # and eventually get a RemoteMethod from the Proxy :-(
-            # So return our own NotApplicableError exception
-            raise NotApplicableError()
+        # raises AttributeError if not found
+        value = Pyro4.Proxy.__getattr__(self, "_get_choices")()
         return value
 
     # for continuous VA
     @property
     def range(self):
-        try:
-            value = Pyro4.Proxy.__getattr__(self, "_get_range")()
-        except AttributeError:
-            raise NotApplicableError()
+        # raises AttributeError if not found
+        value = Pyro4.Proxy.__getattr__(self, "_get_range")()
         return value
 
     def __getstate__(self):
@@ -547,7 +552,7 @@ class SubscribeProxyThread(threading.Thread):
 
 
 def unregister_vigilant_attributes(self):
-    for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
+    for _, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         value._unregister()
 
 
@@ -561,7 +566,7 @@ def dump_vigilant_attributes(self):
     """
     vas = dict()
     daemon = self._pyroDaemon
-    for name, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
+    for name, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         vas[name] = value

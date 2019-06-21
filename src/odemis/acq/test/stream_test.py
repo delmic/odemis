@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division, print_function
 
+from past.builtins import long
 from concurrent.futures import CancelledError
 import gc
 import logging
@@ -1177,6 +1178,8 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
         # Short acquisition (< 0.1s)
         self.spec.exposureTime.value = 0.01 # s
@@ -1206,7 +1209,8 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
-
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
 #     @skip("simple")
     def test_acq_fuz(self):
@@ -1804,6 +1808,8 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
         # Check the stage is back to top-left
         pos = self.sstage.position.value
@@ -3627,11 +3633,11 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
         # data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
-        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] = numpy.arange(200)
         data[:, 0, 0, :, 3] *= 3
-        data[2, :, :, :, :] = range(300)
-        data[200, 0, 0, 2] = range(300)
-        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        data[2, :, :, :, :] = numpy.arange(300)
+        data[200, 0, 0, 2] = numpy.arange(300)
+        wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -3823,7 +3829,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
-        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         specs.efficiencyCompensation.value = calib
@@ -3842,8 +3848,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Temporal Spectrum
         data = numpy.random.randint(1, 100, size=(256, 128, 1, 20, 30), dtype="uint16")
         # data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
-        wld = 433e-9 + model.DataArray(range(data.shape[0])) * 0.1e-9
-        tld = model.DataArray(range(data.shape[1])) * 0.1e-9
+        wld = 433e-9 + model.DataArray(numpy.arange(data.shape[0])) * 0.1e-9
+        tld = model.DataArray(numpy.arange(data.shape[1])) * 0.1e-9
         md = {model.MD_SW_VERSION: "1.0-test",
              model.MD_HW_NAME: "fake ccd",
              model.MD_DESCRIPTION: "Spectrum",
@@ -3958,13 +3964,12 @@ class StaticStreamsTestCase(unittest.TestCase):
     def test_tiled_stream(self):
         POS = (5.0, 7.0)
         size = (2000, 1000)
-        dtype = numpy.uint8
         md = {
             model.MD_DIMS: 'YX',
             model.MD_POS: POS,
             model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
-        arr = numpy.array(range(size[0] * size[1])).reshape(size[::-1]).astype(dtype)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.uint8).reshape(size[::-1])
         data = model.DataArray(arr, metadata=md)
 
         # export
@@ -4003,14 +4008,13 @@ class StaticStreamsTestCase(unittest.TestCase):
     def test_rgb_tiled_stream(self):
         POS = (5.0, 7.0)
         size = (2000, 1000, 3)
-        dtype = numpy.uint8
         md = {
             model.MD_DIMS: 'YXC',
             model.MD_POS: POS,
             model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
         arr_shape = (1000, 2000, 3)
-        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(arr_shape).astype(dtype)
+        arr = numpy.arange(size[0] * size[1] * size[2], dtype=numpy.uint8).reshape(arr_shape)
         data = model.DataArray(arr, metadata=md)
 
         # export
@@ -4059,14 +4063,13 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         POS = (5.0, 7.0)
         size = (3000, 2000, 3)
-        dtype = numpy.uint8
         md = {
             model.MD_DIMS: 'YXC',
             model.MD_POS: POS,
             model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
         arr_shape = (2000, 3000, 3)
-        arr = numpy.array(range(size[0] * size[1] * size[2])).reshape(arr_shape).astype(dtype)
+        arr = numpy.arange(size[0] * size[1] * size[2], dtype=numpy.uint8).reshape(arr_shape)
         data = model.DataArray(arr, metadata=md)
 
         # export

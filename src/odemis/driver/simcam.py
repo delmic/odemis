@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from past.builtins import long
 import queue
 import logging
 import numpy
@@ -95,12 +96,11 @@ class Camera(model.DigitalCamera):
         tran_rng = [(-hlf_shape[0], -hlf_shape[1]),
                     (hlf_shape[0], hlf_shape[1])]
         self._translation = (0, 0)
-        self.translation = model.ResolutionVA(self._translation, tran_rng,
-                                              cls=(int, long), unit="px",
-                                              setter=self._setTranslation)
+        self.translation = model.ResolutionVA(self._translation, tran_rng, unit="px",
+                                              cls=(int, long), setter=self._setTranslation)
 
-        exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
-        self.exposureTime = model.FloatContinuous(exp, (1e-3, 1e3), unit="s")
+        self._orig_exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1)  # s
+        self.exposureTime = model.FloatContinuous(self._orig_exp, (1e-3, 1e3), unit="s")
         # Some code care about the readout rate to know how long an acquisition will take
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
 
@@ -244,6 +244,8 @@ class Camera(model.DigitalCamera):
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
             img = gen_img
+        # to simulate changing the exposure time exp/self._orig_exp
+        numpy.multiply(img, exp/self._orig_exp, out=img, casting="unsafe")
 
         img = model.DataArray(img, metadata)
 

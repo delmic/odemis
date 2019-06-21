@@ -31,25 +31,26 @@ from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 from functools import partial
+from future.utils import with_metaclass
 import logging
 import math
 import numpy
 from odemis import model, util
+from odemis.acq import drift
 from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
-import random
-import queue
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME
-
+    MD_DWELL_TIME, MD_DIMS
+from odemis.model import hasVA
 from odemis.util import img, units, spot, executeAsyncTask
+import queue
+import random
 import threading
 import time
-from odemis.acq import drift
+
 import odemis.util.driver as udriver
 
-from odemis.model import hasVA
 from ._base import Stream, POL_POSITIONS, POL_MOVE_TIME
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
@@ -73,14 +74,13 @@ EBEAM_DETECTORS = ("se-detector", "bs-detector", "cl-detector", "monochromator",
                    "ebic-detector")
 
 
-class MultipleDetectorStream(Stream):
+class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
     """
     Abstract class for all specialised streams which are actually a combination
     of multiple streams acquired simultaneously. The main difference from a
     normal stream is the init arguments are Streams, and .raw is composed of all
     the .raw from the sub-streams.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, streams):
         """
@@ -1766,7 +1766,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         data_list (list of M DataArray of shape (1, N)): all the data received
         repetition (list of 2 int): X,Y shape of the high dimensions of the cube
          so that X * Y = M
-        return (DataArray)
+        return (DataArray of shape N,1,1,Y,X)
         """
         assert len(data_list) > 0
 
@@ -1782,6 +1782,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata.copy()
+        md[MD_DIMS] = "CTZYX"
         return model.DataArray(spec_data, metadata=md)
 
 class SEMTemporalMDStream(MultipleDetectorStream):
@@ -1984,7 +1985,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         shape = das.shape  # N1T = rep[1] * rep[0], 1, detector.resolution[0]
         das.shape = (1, 1, rep[1], rep[0], shape[-1])  # Add CZ == 11 + separate YX
         das = numpy.rollaxis(das, 4, 1)  # Move T: CZYXT -> CTZYX
-        md[model.MD_DIMS] = "CTZYX"
+        md[MD_DIMS] = "CTZYX"
 
         # Compute metadata based on SEM metadata
         sem_md = self._raw[0].metadata  # _onCompletedData() should be called in order
@@ -2065,10 +2066,11 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
         # transpose to (lambda, time)
         for index, img in enumerate(data_list):
             data_list[index] = img.T
+            data_list[index].shape = data_list[index].shape + (1,)  # add third dim for data assembly
 
         # concatenate into one big array of (lambda, time, z=1, ebeam pos y, ebeam pos x)
         # CTZYX, ebeam scans x and then y (x slow axis)
-        ts_data = numpy.concatenate(data_list, axis=1)
+        ts_data = numpy.concatenate(data_list, axis=2)  # CTL (L: number of ebeam pos)
         # reshape to (C, T, 1, Y, X)
         spec_res = data_list[0].shape[0]
         temp_res = data_list[0].shape[1]
@@ -2076,6 +2078,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata.copy()
+        md[MD_DIMS] = "CTZYX"
         return model.DataArray(ts_data, metadata=md)
 
 

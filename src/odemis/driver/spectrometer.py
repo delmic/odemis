@@ -146,6 +146,9 @@ class CompositedSpectrometer(model.Detector):
         self.binning.subscribe(self._onResBinning)
         self._updateWavelengthList()
 
+        # Indicate the data contains spectrum on the "fast" dimension
+        self._metadata[model.MD_DIMS] = "XC"
+
     # The metadata is an overlay of our special metadata with the standard one
     # from the CCD
     def getMetadata(self):
@@ -291,19 +294,24 @@ class SpecDataFlow(model.DataFlow):
             orig_bin = data.metadata.get(model.MD_BINNING, (1, 1))
             data.metadata[model.MD_BINNING] = orig_bin[0], orig_bin[1] * orig_shape[0]
 
-            # Subtract baseline (aka black level) to avoid it from being multiplied
+            # Subtract baseline (aka black level) to avoid it from being multiplied,
+            # so instead of having "Sum(data) + Sum(bl)", we have "Sum(data) + bl".
             try:
                 baseline = data.metadata[model.MD_BASELINE]
-                baseline_sum = orig_shape[1] * baseline
+                baseline_sum = orig_shape[0] * baseline
                 # If the baseline is too high compared to the actual black, we
                 # could end up subtracting too much, and values would underflow
                 # => be extra careful and never subtract more than min value.
-                extra_bl = min(long(data.min()), baseline_sum) - baseline
-                if extra_bl > 0:
-                    data -= extra_bl
-                else:
-                    logging.info("Baseline reported at %d, but lower values found, so not compensating",
-                                 baseline)
+                minv = float(data.min())
+                extra_bl = baseline_sum - baseline
+                if extra_bl > minv:
+                    extra_bl = minv
+                    logging.info("Baseline reported at %d * %d, but lower values found, so only subtracting %d",
+                                 baseline, orig_shape[0], extra_bl)
+
+                # Same as "data -= extra_bl", but also works if extra_bl < 0
+                numpy.subtract(data, extra_bl, out=data, casting="unsafe")
+                data.metadata[model.MD_BASELINE] = baseline_sum - extra_bl
             except KeyError:
                 pass
 

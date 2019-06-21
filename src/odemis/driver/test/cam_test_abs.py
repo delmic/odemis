@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 import gc
 import logging
@@ -52,11 +53,10 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               }
 
 
-class VirtualStaticTestCam(object):
+class VirtualStaticTestCam(with_metaclass(ABCMeta, object)):
     """
     For tests which don't need a camera ready
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -87,11 +87,10 @@ class VirtualStaticTestCam(object):
 
 # It doesn't inherit from TestCase because it should not be run by itself
 #class VirtualTestCam(unittest.TestCase):
-class VirtualTestCam(object):
+class VirtualTestCam(with_metaclass(ABCMeta, object)):
     """
     Abstract class for all the DigitalCameras
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera
@@ -304,7 +303,13 @@ class VirtualTestCam(object):
         duration = time.time() - start
 
         self.assertEqual(im.shape, self.size[::-1])
-        self.assertGreaterEqual(duration, exposure / 2, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
+        # It should be about the exposure time. However, as the acquisition has
+        # started as soon as the previous image was received, it might take a
+        # tiny bit less than the exposure time (eg, a few ms less). On a real
+        # hardware, the overhead is usually much higher than these few ms, but
+        # for some simulators, that's important.
+        self.assertGreaterEqual(duration, exposure / 2 - 0.1,
+                                "Error execution took %f s, far less than exposure time %f." % (duration, exposure / 2))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
         for i in range(number):
@@ -475,11 +480,10 @@ class VirtualTestCam(object):
             pass # good!
 
 
-class VirtualTestSynchronized(object):
+class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM
     """
-    __metaclass__ = ABCMeta
 
     # needs:
     # camera_type : class of the camera

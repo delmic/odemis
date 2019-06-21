@@ -29,6 +29,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 import fcntl
 import glob
@@ -280,6 +281,15 @@ class DevxX(object):
         if not (status & (1 << 6)):  # bit 6: "external" light enabler (=1)
             raise HwError("Electronic shutter active, open the shutter by pressing the button on the device")
 
+        # Disable ad-hoc mode (on the master device)
+        # (alternatively, we could listen to the messages, and update info such
+        # as the temperature)
+        # Also disable external modulation, to control fully by software
+        mode = self.GetOperatingMode()
+        # Disable: Ad-hoc mode (13), analog modulation (7), digital modulation (5)
+        mode &= ~((1 << 13) | (1 << 7) | (1 << 5))
+        self.SetOperatingMode(mode)
+
         if channel == 0:  # master
             return
 
@@ -290,15 +300,6 @@ class DevxX(object):
         else:
             # old style
             self.setLightPower = self.SetLevelPower
-
-        # Disable ad-hoc mode (on the master device)
-        # (alternatively, we could listen to the messages, and update info such
-        # as the temperature)
-        # Also disable external modulation, to control fully by software
-        mode = self.GetOperatingMode()
-        # Disable: Ad-hoc mode (13), analog modulation (7), digital modulation (5)
-        mode &= ~((1 << 13) | (1 << 7) | (1 << 5))
-        self.SetOperatingMode(mode)
 
         if devid in (19, 20):  # LEDMOD, LedHUB => led
             # The wavelength range is not precisely provided by the hardware,
@@ -621,8 +622,7 @@ class DevxX(object):
         self._setValue("POf")
 
 
-class GenericxX(model.Emitter):
-    __metaclass__ = ABCMeta
+class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
 
     def __init__(self, name, role, ports, **kwargs):
         """

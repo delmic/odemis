@@ -22,7 +22,8 @@ This file is part of Odemis.
 """
 from __future__ import division
 
-from past.builtins import basestring
+from future.utils import with_metaclass
+from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
 import collections
@@ -409,7 +410,7 @@ class MainGUIData(object):
                               (name, len(self.tab.choices)))
 
 
-class MicroscopyGUIData(object):
+class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
     """Contains all the data corresponding to a GUI tab.
 
     In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
@@ -474,7 +475,6 @@ class MicroscopyGUIData(object):
                             focussedView VA)
 
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, main):
         self.main = main
