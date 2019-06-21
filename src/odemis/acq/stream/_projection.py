@@ -230,9 +230,9 @@ class RGBSpatialProjection(RGBProjection):
     def __new__(cls, stream):
 
         if isinstance(stream, StaticSpectrumStream):
-            return super(RGBSpatialProjection, cls).__new__(RGBSpatialSpectrumProjection, stream)
+            return super(RGBSpatialProjection, cls).__new__(RGBSpatialSpectrumProjection)
         else:
-            return super(RGBSpatialProjection, cls).__new__(RGBSpatialProjection, stream)
+            return super(RGBSpatialProjection, cls).__new__(RGBSpatialProjection)
 
     def __init__(self, stream):
         '''
