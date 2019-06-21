@@ -26,31 +26,31 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 from functools import partial
+from future.utils import with_metaclass
 import logging
 import math
 import numpy
 from odemis import model, util
+from odemis.acq import drift
 from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
-import random
-import queue
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME
-
+    MD_DWELL_TIME, MD_DIMS
+from odemis.model import hasVA
 from odemis.util import img, units, spot, executeAsyncTask
+import queue
+import random
 import threading
 import time
-from odemis.acq import drift
+
 import odemis.util.driver as udriver
 
-from odemis.model import hasVA
 from ._base import Stream, POL_POSITIONS, POL_MOVE_TIME
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
@@ -1766,7 +1766,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         data_list (list of M DataArray of shape (1, N)): all the data received
         repetition (list of 2 int): X,Y shape of the high dimensions of the cube
          so that X * Y = M
-        return (DataArray)
+        return (DataArray of shape N,1,1,Y,X)
         """
         assert len(data_list) > 0
 
@@ -1782,6 +1782,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata.copy()
+        md[MD_DIMS] = "CTZYX"
         return model.DataArray(spec_data, metadata=md)
 
 class SEMTemporalMDStream(MultipleDetectorStream):
@@ -1984,7 +1985,7 @@ class SEMTemporalMDStream(MultipleDetectorStream):
         shape = das.shape  # N1T = rep[1] * rep[0], 1, detector.resolution[0]
         das.shape = (1, 1, rep[1], rep[0], shape[-1])  # Add CZ == 11 + separate YX
         das = numpy.rollaxis(das, 4, 1)  # Move T: CZYXT -> CTZYX
-        md[model.MD_DIMS] = "CTZYX"
+        md[MD_DIMS] = "CTZYX"
 
         # Compute metadata based on SEM metadata
         sem_md = self._raw[0].metadata  # _onCompletedData() should be called in order
@@ -2077,6 +2078,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
 
         # copy the metadata from the first point and add the ones from metadata
         md = data_list[0].metadata.copy()
+        md[MD_DIMS] = "CTZYX"
         return model.DataArray(ts_data, metadata=md)
 
 

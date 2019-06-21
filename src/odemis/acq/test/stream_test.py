@@ -1178,6 +1178,8 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
         # Short acquisition (< 0.1s)
         self.spec.exposureTime.value = 0.01 # s
@@ -1207,7 +1209,8 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
-
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
 #     @skip("simple")
     def test_acq_fuz(self):
@@ -1805,6 +1808,8 @@ class SPARC2TestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
 
         # Check the stage is back to top-left
         pos = self.sstage.position.value
