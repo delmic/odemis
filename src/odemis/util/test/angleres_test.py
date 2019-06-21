@@ -22,6 +22,8 @@ If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import numpy
+from odemis.util.img import ensure2DImage
+
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.util import angleres
@@ -35,6 +37,9 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
     def setUp(self):
         data = hdf5.read_data("ar-example-input.h5")
         self.data = data
+
+        data_inverted_mirror = hdf5.read_data("ar-inverted-mirror.h5")
+        self.data_invMir = data_inverted_mirror
 
         # test also for different polar parameters
         data_mini = hdf5.read_data("ar-example-minimirror-input.h5")
@@ -90,6 +95,20 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         white_data_2500.metadata[model.MD_PIXEL_SIZE] = white_pxs_2500
         self.white_data_2500 = white_data_2500
 
+    def test_inverted_mirror_ar2polar(self):
+        data_invMirror = ensure2DImage(self.data_invMir[0])
+        result_invMirror = angleres.AngleResolved2Polar(data_invMirror, 1134)
+
+        # get the inverted image of the one that corresponds to the flipped mirror
+        data = data_invMirror[::-1, :]
+        data.metadata[model.MD_AR_FOCUS_DISTANCE] *= -1
+        arpole = data.metadata[model.MD_AR_POLE]
+        data.metadata[model.MD_AR_POLE] = (arpole[0], data_invMirror.shape[0] - 1 - arpole[1])
+
+        result_standardMirror = angleres.AngleResolved2Polar(data, 1134)
+
+        numpy.testing.assert_allclose(result_invMirror, result_standardMirror, atol=1e-7)
+
     def test_precomputed(self):
         data = self.data
         C, T, Z, Y, X = data[0].shape
@@ -140,6 +159,20 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         result = angleres.AngleResolved2Rectangular(data[0], (100, 400))
 
         self.assertEqual(result.shape, (100, 400))
+
+    def test_inverted_mirror_ar2rectangular(self):
+        data_invMirror = ensure2DImage(self.data_invMir[0])
+        result_invMirror = angleres.AngleResolved2Rectangular(data_invMirror, (90, 360))
+
+        # get the inverted image of the one that corresponds to the flipped mirror
+        data = data_invMirror[::-1, :]
+        data.metadata[model.MD_AR_FOCUS_DISTANCE] *= -1
+        arpole = data.metadata[model.MD_AR_POLE]
+        data.metadata[model.MD_AR_POLE] = (arpole[0], data_invMirror.shape[0] - 1 - arpole[1])
+
+        result_standardMirror = angleres.AngleResolved2Rectangular(data, (90, 360))
+
+        numpy.testing.assert_allclose(result_invMirror, result_standardMirror, atol=1e-7)
 
     def test_uint16_input_rect_intensity(self):
         """
