@@ -290,7 +290,9 @@ class Plugin(with_metaclass(ABCMeta, object)):
         # Attach the callback function
         def menu_callback_wrapper(evt):
             try:
+                logging.info("Menu '%s' handled by %s, %s", entry, self.__class__.__name__, callback)
                 callback()
+                logging.debug("Menu '%s' callback completed", entry)
             except Exception:
                 logging.exception("Error when processing menu entry %s of plugin %s",
                                   path[-1], self)
@@ -311,12 +313,13 @@ class AcquisitionDialog(xrcfr_plugin):
         """
         Creates a modal window. The return code is the button number that was
           last pressed before closing the window.
+        plugin (Plugin): The plugin creating this dialog
         title (str): The title of the window
         text (None or str): If provided, it is displayed at the top of the window
         """
-
         super(AcquisitionDialog, self).__init__(plugin.main_app.main_frame)
 
+        logging.debug("Creating acquisition dialog for %s", plugin.__class__.__name__)
         self.plugin = plugin
 
         self.SetTitle(title)
