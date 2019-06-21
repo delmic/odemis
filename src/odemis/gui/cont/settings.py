@@ -726,6 +726,36 @@ class SparcAlignSettingsController(SettingsBarController):
                 self._spect_setting_cont.add_axis(a, comp, conf.get(a))
 
 
+class CenterAlignSettingsController(SettingsBarController):
+    """
+    Controller, which creates the centering panel in the alignment tab and provides the user with the option to
+    select among different configurations regarding the mirror position. For example, the user can select the
+    configuration with the flipped mirror which is under the sample and placed upside-down.
+    """
+    def __init__(self, tab_panel, tab_data):
+        super(CenterAlignSettingsController, self).__init__(tab_data)
+        self.panel = tab_panel
+        mirror_lens = tab_data.main.lens
+
+        self.panel_center = SettingsPanel(self.panel.pnl_centering)
+        self.panel_center.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        self.panel.pnl_centering.GetSizer().Add(self.panel_center, 1, border=5,
+                                             flag=wx.BOTTOM | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+
+        entry_mirrorPosition = create_setting_entry(self.panel_center, "Mirror type",
+                                                    mirror_lens.configuration,
+                                                    mirror_lens,
+                                                    conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                          "label": "Mirror type",
+                                                          "tooltip": "Change the type of the mirror"})
+
+        entry_mirrorPosition.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+
+        # remove border
+        self.panel_center.GetSizer().GetItem(0).SetBorder(0)
+        self.panel_center.Layout()
+
+
 class StreakCamAlignSettingsController(SettingsBarController):
     """
     Controller, which creates the streak panel in the alignment tab and
