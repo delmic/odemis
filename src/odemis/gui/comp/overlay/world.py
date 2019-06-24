@@ -266,19 +266,20 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         roa (None or VA of 4 floats): If not None, it's linked to the rectangle
           displayed (ie, when the user changes the rectangle, its value is
           updated, and when its value changes, the rectangle is redrawn
-          accordingly). Value is relative to the scanner.
+          accordingly). Value is relative to the scanner (if passed), and otherwise it's absolute (in m).
         scanner (None or HwComponent): The scanner component to which the relative
-          ROA values refer to. Required if a roa argument is passed.
+         ROA. If None, the roa argument is interpreted as absolute physical coordinates (m). If it's a HwComponent, the roa will be interpreted as a ratio of its fielf of viewd.
+
+
         """
         WorldSelectOverlay.__init__(self, cnvs, colour)
 
         self._fill = self.FILL_NONE
         self._repetition = (0, 0)
+
         self._roa = roa
         self._scanner = scanner
         if roa:
-            if not scanner:
-                raise ValueError("scanner is required when roa VA passed")
             self._roa.subscribe(self.on_roa, init=True)
 
         self._bmp = None  # used to cache repetition with FILL_POINT
@@ -390,25 +391,31 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         roi (tuple of 4 floats): left, top, right, bottom position relative to the SEM image
 
         """
-        phys_rect = self.convert_roi_ratio_to_phys(roa)
+        if self._scanner:
+            phys_rect = self.convert_roi_phys_to_ratio(roa)
+        else:
+            phys_rect = roa
+
         self.set_physical_sel(phys_rect)
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     def on_left_up(self, evt):
         WorldSelectOverlay.on_left_up(self, evt)
-
         if self._roa:
             if self.active:
                 if self.get_size() != (None, None):
                     phys_rect = self.get_physical_sel()
-                    rel_rect = self.convert_roi_phys_to_ratio(phys_rect)
+                    if self._scanner:
+                        rect = self.convert_roi_phys_to_ratio(phys_rect)
+                    else:
+                        rect = phys_rect
 
                     # Update VA. We need to unsubscribe to be sure we don't received
                     # intermediary values as the VA is modified by the stream further on, and
                     # VA don't ensure the notifications are ordered (so the listener could
                     # receive the final value, and then our requested ROI value).
                     self._roa.unsubscribe(self.on_roa)
-                    self._roa.value = rel_rect
+                    self._roa.value = rect
                     self._roa.subscribe(self.on_roa, init=True)
                 else:
                     self._roa.value = UNDEFINED_ROI
@@ -461,23 +468,23 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             ctx.stroke()
         else:
             # This cairo-way would work, but it's a little slow
-#             r, g, b, _ = self.colour
-#             ctx.set_source_rgba(r, g, b, 0.9)
-#             ctx.set_line_width(1)
-#
-#             # The number of repetitions that fits into the buffer clipped
-#             # selection
-#             buf_rep_x = int((end_x - start_x) / step_x)
-#             buf_rep_y = int((end_y - start_y) / step_y)
-#             buf_shift_x = (b_pos[0] - start_x) % step_x + step_x / 2  # - 3 / 2
-#             buf_shift_y = (b_pos[1] - start_y) % step_y + step_y / 2  # - 3 / 2
-#
-#             for i in range(buf_rep_x):
-#                 for j in range(buf_rep_y):
-#                     ctx.arc(start_x + buf_shift_x + i * step_x,
-#                             start_y + buf_shift_y + j * step_y,
-#                             2, 0, 2 * math.pi)
-#                     ctx.stroke()
+            #             r, g, b, _ = self.colour
+            #             ctx.set_source_rgba(r, g, b, 0.9)
+            #             ctx.set_line_width(1)
+            #
+            #             # The number of repetitions that fits into the buffer clipped
+            #             # selection
+            #             buf_rep_x = int((end_x - start_x) / step_x)
+            #             buf_rep_y = int((end_y - start_y) / step_y)
+            #             buf_shift_x = (b_pos[0] - start_x) % step_x + step_x / 2  # - 3 / 2
+            #             buf_shift_y = (b_pos[1] - start_y) % step_y + step_y / 2  # - 3 / 2
+            #
+            #             for i in range(buf_rep_x):
+            #                 for j in range(buf_rep_y):
+            #                     ctx.arc(start_x + buf_shift_x + i * step_x,
+            #                             start_y + buf_shift_y + j * step_y,
+            #                             2, 0, 2 * math.pi)
+            #                     ctx.stroke()
 
             # check whether the cache is still valid
             cl_pos = (start_x, start_y, end_x, end_y)
