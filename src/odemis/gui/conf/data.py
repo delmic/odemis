@@ -443,7 +443,18 @@ HW_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light.",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and worse resolution.",
+            }),
+        )),
+    "slit-in-big":
+        OrderedDict((
+            ("x", {
+                "label": "Slit fully opened",
+                # TODO: CONTROL_CHECK or CONTROL_RADIO (once supported as axis entry)
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "To open or close the input slit of the spectrograph. "
+                           "If ON the slit is completely opened, if OFF it is closed "
+                           "and can be fine-tuned with the input slit slider.",
             }),
         )),
     "cl-detector": {

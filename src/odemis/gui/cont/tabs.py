@@ -67,7 +67,8 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
     PlotViewport, LineSpectrumViewport, TemporalSpectrumViewport, ChronographViewport
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
+from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
+    get_hw_config
 from odemis.gui.cont import settings
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
@@ -3265,39 +3266,19 @@ class Sparc2AlignTab(Tab):
                              add_to_view=self.panel.vp_align_streak.view)
             streak.stream_panel.flatten()  # No need for the stream name
 
-            self.spectrograph = main_data.spectrograph
+            # Add the standard spectrograph axes (wavelength, grating, slit-in),
+            # but in-between inserts the special slit-in-big axis, which is a
+            # separate hardware.
+            # It allows to switch the slit of the spectrograph between "fully
+            # opened" and opened according to the slit-in (aka "closed").
+            def add_axis(axisname, comp):
+                hw_conf = get_hw_config(comp, main_data.hw_settings_config)
+                streak.add_axis_entry(axisname, comp, hw_conf.get(axisname))
 
-            # add spectrograph VA "grating"
-            streak.add_axis_entry("grating", self.spectrograph,
-                                  conf={"control_type": odemis.gui.CONTROL_COMBO,
-                                        "label": "Grating",
-                                        "tooltip": "Change/mirror the grating of the spectrograph."}
-                                  )
-
-            # add spectrograph VA "wavelength"
-            streak.add_axis_entry("wavelength", self.spectrograph,
-                                  conf={"control_type": odemis.gui.CONTROL_FLT,
-                                        "label": "Wavelength",
-                                        "tooltip": "Change the center wavelength of the spectrograph. If "
-                                                   "grating 'mirror' is selected, wavelength equals 0."}
-                                  )
-
-            # add slit VA "slit-in-big" for opening/closing the slit of the spectrograph
-            streak.add_axis_entry("x", main_data.slit_in_big,
-                                  conf={"control_type": odemis.gui.CONTROL_COMBO,  # TODO CONTROL_CHECK or CONTROL_RADIO
-                                        "label": "Slit fully opened",
-                                        "tooltip": "To open or close the input slit of the spectrograph. "
-                                                   "If ON the slit is completely opened, if OFF it is closed "
-                                                   "and can be fine-tuned with the input slit slider."}
-                                  )
-
-            # add spectrograph VA "slit-in" for fine tuning
-            streak.add_axis_entry("slit-in", self.spectrograph,
-                                  conf={"control_type": odemis.gui.CONTROL_SLIDER,
-                                        "label": "Input slit",
-                                        "tooltip": "Opening size of the spectrograph input slit. "
-                                                   "A wide opening means more light and a worse resolution."}
-                                  )
+            add_axis("grating", main_data.spectrograph)
+            add_axis("wavelength", main_data.spectrograph)
+            add_axis("x", main_data.slit_in_big)
+            add_axis("slit-in", main_data.spectrograph)
 
             # To activate the SEM spot when the camera plays
             # (ebeam centered in image)
@@ -3822,7 +3803,7 @@ class Sparc2AlignTab(Tab):
             f = main.opm.setPath(opath).result()
 
             # force wavelength 0
-            self.spectrograph.moveAbsSync({"wavelength": 0})
+            main.spectrograph.moveAbsSync({"wavelength": 0})
 
             if align_mode != "streak-align":
                 self._stream_controller.pauseStreams()
