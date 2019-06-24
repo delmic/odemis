@@ -31,7 +31,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = simcam.Camera
 KWARGS_FOCUS = {"name": "focus", "role": "overview-focus", "axes": ["z"], "ranges": {"z": [0, 0.012]}}
-KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
+
+KWARGS_STAGE = {"name": "stage", "role": "stage", "axes": ["x","y"], "ranges": {"x": [0, 0.013],"y": [0, 0.013]}}
+#KWARGS = dict(name="camera", role="overview", image="/home/zaabouti/Downloads/FM-grid/tile.tif", resolution=[128, 128])
+KWARGS = dict(name="camera", role="overview", image="9.tif", resolution=[512, 512])
 KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h5")
 
 # TODO focus
@@ -39,10 +42,17 @@ KWARGS_POL = dict(name="camera", role="overview", image="sparc-ar-mirror-align.h
 
 class TestSimCam(unittest.TestCase):
 
+    # @classmethod
+    # def setUpClass(cls):
+    #     cls.focus = simulated.Stage(**KWARGS_FOCUS)
+    #     cls.camera = CLASS(children={"focus": cls.focus}, **KWARGS)
+
     @classmethod
     def setUpClass(cls):
+        cls.stage = simulated.Stage(**KWARGS_STAGE)
         cls.focus = simulated.Stage(**KWARGS_FOCUS)
-        cls.camera = CLASS(dependencies={"focus": cls.focus}, **KWARGS)
+
+        cls.camera = CLASS(dependencies={"focus": cls.focus, "stage": cls.stage}, **KWARGS)
 
     @classmethod
     def tearDownClass(cls):
@@ -108,11 +118,13 @@ class TestSimCam(unittest.TestCase):
         self.camera.resolution.value = self.camera.resolution.range[1]
         self.camera.translation.value = (0, 0)
 
-#     @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_acquire(self):
         self.assertGreaterEqual(len(self.camera.shape), 3)
         exposure = 0.1
         self._ensureExp(exposure)
+
+        self.camera.updateMetadata({model.MD_IN_WL: (500e-9, 700e-9)})
 
         im = self.camera.data.get()
         start = im.metadata[model.MD_ACQ_DATE]
@@ -282,16 +294,18 @@ class TestSimCam(unittest.TestCase):
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
 
-#     @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_focus(self):
         """
         Check it's possible to change the focus
         """
         pos = self.focus.position.value
+        d0 = self.camera.data.get()
         f = self.focus.moveRel({"z": 1e-3}) # 1 mm
         f.result()
         self.assertNotEqual(self.focus.position.value, pos)
-        self.camera.data.get()
+        d1 = self.camera.data.get()
+        self.assertTrue(numpy.any(d0 != d1))
 
         f = self.focus.moveRel({"z":-10e-3}) # 10 mm
         f.result()
@@ -302,6 +316,40 @@ class TestSimCam(unittest.TestCase):
         f = self.focus.moveAbs(pos)
         f.result()
         self.assertEqual(self.focus.position.value, pos)
+
+    def test_stage(self):
+
+
+        pos = self.stage.position.value
+
+        d0 = self.camera.data.get()
+        self.assertEqual(d0.shape, (128,128))
+
+        f = self.stage.moveRel({"x": 1e-3}) # 1 mm
+        f.result()
+        logging.debug('pos= %s',pos)
+        self.assertNotEqual(self.stage.position.value, pos)
+        d1 = self.camera.data.get()
+        self.assertTrue(numpy.any(d0 != d1))
+
+
+        f = self.stage.moveRel({"y": 1e-3}) # 1 mm
+        f.result()
+        self.assertNotEqual(self.stage.position.value, pos)
+        self.camera.data.get()
+
+
+        # restore original position
+        f = self.stage.moveAbs(pos)
+        logging.debug('pos= %s',pos)
+        f.result()
+        self.assertEqual(self.stage.position.value, pos)
+        d0n =  self.camera.data.get()
+        numpy.testing.assert_array_almost_equal(d0, d0n)
+
+
+
+
 
 
 class TestSimCamWithPolarization(unittest.TestCase):

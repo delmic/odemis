@@ -2,21 +2,21 @@
 '''
 Created on 19 Jun 2014
 
-@author: Éric Piel
+@author: Éric Piel, Iheb Zaabouti
 
 Copyright © 2014 Éric Piel, Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -38,7 +38,7 @@ class Camera(model.DigitalCamera):
     given at initialisation.
     '''
 
-    def __init__(self, name, role, image, dependencies=None, daemon=None, blur_factor=1e4, **kwargs):
+    def __init__(self, name, role, image, dependencies=None, daemon=None, blur_factor=1e4, resolution=None, **kwargs):
         '''
         dependencies (dict string->Component): If "focus" is passed, and it's an
             actuator with a z axis, the image will be blurred based on the
@@ -46,6 +46,7 @@ class Camera(model.DigitalCamera):
         image (str or None): path to a file to use as fake image (relative to
          the directory of this class)
         '''
+
         # TODO: support transpose? If not, warn that it's not accepted
         # fake image setup
         image = unicode(image)
@@ -53,33 +54,41 @@ class Camera(model.DigitalCamera):
         if not os.path.isabs(image):
             image = os.path.join(os.path.dirname(__file__), image)
         converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
-        self._img = converter.read_data(image)[0]  # can be RGB or greyscale
-
+        self._imgs = converter.read_data(image)      # can be RGB or greyscale
         model.DigitalCamera.__init__(self, name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
-        if self._img.ndim > 3:  # remove dims of length 1
-            self._img = numpy.squeeze(self._img)
+        for i, img in enumerate(self._imgs):
+            if img.ndim > 3:  # remove dims of length 1
+                self._imgs[i] = numpy.squeeze(img)
+            imshp = img.shape
+            if len(imshp) == 3 and imshp[i] in {3, 4}:
+                # CYX, change it to YXC, to simulate a RGB detector
+                self._imgs[i] = util.img.ensureYXC(img)
 
-        imshp = self._img.shape
-        if len(imshp) == 3 and imshp[0] in {3, 4}:
-            # CYX, change it to YXC, to simulate a RGB detector
-            self._img = numpy.rollaxis(self._img, 2) # XCY
-            self._img = numpy.rollaxis(self._img, 2) # YXC
-            imshp = self._img.shape
+        for img in self._imgs[1:]:
+            if self._imgs[0].shape != self._imgs[i].shape:
+                raise ValueError("all images must have the same resolution")
+        imshp = self._imgs[0].shape
 
         # For RGB, the colour is last dim, but we still indicate it as higher
         # dimension to ensure shape always starts with X, Y
         if len(imshp) == 3 and imshp[-1] in {3, 4}:
             # resolution doesn't affect RGB dim
-            res = imshp[-2::-1]
+            if resolution:
+                if resolution >= imshp[-2::-1]:
+                    res = tuple(resolution)
+            else:
+                res = imshp[-2::-1]
             self._shape = res + imshp[-1::] # X, Y, C
-            # indicate it's RGB pixel-per-pixel ordered
-            self._img.metadata[model.MD_DIMS] = "YXC"
         else:
-            res = imshp[::-1]
+            if resolution:
+                res = tuple(resolution)
+            else:
+                res = imshp[::-1]
+
             self._shape = res # X, Y,...
         # TODO: handle non integer dtypes
-        depth = 2 ** (self._img.dtype.itemsize * 8)
+        depth = 2 ** (self._imgs[0].dtype.itemsize * 8)
         self._shape += (depth,)
 
         self._resolution = res
@@ -99,19 +108,20 @@ class Camera(model.DigitalCamera):
                                               cls=(int, long), unit="px",
                                               setter=self._setTranslation)
 
-        exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
+        exp = self._imgs[0].metadata.get(model.MD_EXP_TIME, 0.1) # s
         self.exposureTime = model.FloatContinuous(exp, (1e-3, 1e3), unit="s")
         # Some code care about the readout rate to know how long an acquisition will take
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
 
-        pxs = self._img.metadata.get(model.MD_PIXEL_SIZE, (10e-6, 10e-6))
-        mag = self._img.metadata.get(model.MD_LENS_MAG, 1)
+        pxs = self._imgs[0].metadata.get(model.MD_PIXEL_SIZE, (10e-6, 10e-6))
+        mag = self._imgs[0].metadata.get(model.MD_LENS_MAG, 1)
         spxs = tuple(s * mag for s in pxs)
         self.pixelSize = model.VigilantAttribute(spxs, unit="m", readonly=True)
 
         self._metadata = {model.MD_HW_NAME: "FakeCam",
                           model.MD_SENSOR_PIXEL_SIZE: spxs,
-                          model.MD_DET_TYPE: model.MD_DT_INTEGRATING}
+                          model.MD_DET_TYPE: model.MD_DT_INTEGRATING,
+                          model.MD_PIXEL_SIZE: pxs}
 
         # Set the amount of blurring during defocusing.
         self._blur_factor = float(blur_factor)
@@ -132,6 +142,22 @@ class Camera(model.DigitalCamera):
         except (TypeError, KeyError):
             logging.info("Will not simulate focus")
             self._focus = None
+
+        try:
+            stage = dependencies["stage"]
+            if (not isinstance(stage, model.ComponentBase) or
+                not hasattr(stage, "axes") or not isinstance(stage.axes, dict)
+               ):
+                raise ValueError("stage %s must be a Actuator with a 'z' axis", stage)
+            self._stage = stage
+            if resolution == None:
+                raise ValueError("resolution is %s", resolution)
+            # the position of the center of the image
+            self._orig_stage_pos = self._stage.position.value["x"], self._stage.position.value["y"]
+            logging.debug("Simulating stage at %s m", self._orig_stage_pos)
+        except (TypeError, KeyError):
+            logging.info("Will not simulate stage")
+            self._stage = None
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
@@ -244,6 +270,10 @@ class Camera(model.DigitalCamera):
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
             img = gen_img
+        if self._stage:
+
+            pos = self._stage.position.value["x"], self._stage.position.value["y"]
+            dista = abs(numpy.array(pos) - numpy.array(self._orig_stage_pos)) * 1e4
 
         img = model.DataArray(img, metadata)
 
@@ -271,7 +301,6 @@ class Camera(model.DigitalCamera):
 
         return image
 
-
     def set_image(self, new_img):
         """
         Warning : Used only for unit tests
@@ -279,7 +308,6 @@ class Camera(model.DigitalCamera):
             new_img: a new image with the light on
         """
         self._img = new_img
-
 
     def _simulate(self):
         """
@@ -289,21 +317,49 @@ class Camera(model.DigitalCamera):
         binning = self.binning.value
         res = self.resolution.value
         pxs_pos = self.translation.value
-        shape = self._img.shape
+
+        #Shift the image based on the stage position
+        if self._stage:
+            pos = self._stage.position.value["x"], self._stage.position.value["y"]
+
+            phys_shift = self._orig_stage_pos[0] - pos[0], self._orig_stage_pos[1] - pos[1]
+            phys_shift = tuple(phys_shift)
+
+            # #convert to pxl
+            pxs = self._metadata[model.MD_PIXEL_SIZE]
+            px_shift = phys_shift[0] / pxs[0], phys_shift[1] / pxs[1]
+
+            npos=pxs_pos[0]+px_shift[0], pxs_pos[1]+px_shift[1]
+            pxs_pos=tuple(npos)
+            logging.debug('the position is %s',pxs_pos)
+        # Pick the image based on the current excitation wl
+        def dist_wl(img):
+            try:
+                current_inwl = self.getMetadata()[model.MD_IN_WL]   # (350e-9, 360e-9)
+                current_inwl_c = util.fluo.get_center(current_inwl) # 355e-9
+                c = util.fluo.get_center(img.metadata[model.MD_IN_WL])
+                return abs(current_inwl_c - c)
+            except Exception:
+                return float('inf')
+
+        img = min(self._imgs, key=dist_wl)
+        shape = img.shape
+
         center = (shape[1] / 2, shape[0] / 2)
-        lt = (center[0] + pxs_pos[0] - (res[0] / 2) * binning[0],
+
+        lt = (-center[0] - pxs_pos[0] - (res[0] / 2) * binning[0],
               center[1] + pxs_pos[1] - (res[1] / 2) * binning[1])
-        assert(lt[0] >= 0 and lt[1] >= 0)
+
+        # assert(lt[0] >= 0 and lt[1] >= 0)
         # compute each row and column that will be included
         # TODO: Could use something more hardwarish like that:
         # data0 = data0.reshape(shape[0]//b0, b0, shape[1]//b1, b1).mean(3).mean(1)
         # (or use sum, to simulate binning)
         # Alternatively, it could use just [lt:lt+res:binning]
-        coord = ([int(round(lt[0] + i * binning[0])) for i in range(res[0])],
-                 [int(round(lt[1] + i * binning[1])) for i in range(res[1])])
-        sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
+        coord = ([int(round(lt[0] + i * binning[0])) % res[0] for i in range(res[0])],
+                 [int(round(lt[1] + i * binning[1])) % res[1] for i in range(res[1])])
+        sim_img = img[numpy.ix_(coord[1], coord[0])]
         return sim_img
-
 
 class SimpleDataFlow(model.DataFlow):
     def __init__(self, ccd):
@@ -352,4 +408,3 @@ class SimpleDataFlow(model.DataFlow):
         """
         if self._sync_event:
             self._evtq.get()
-
