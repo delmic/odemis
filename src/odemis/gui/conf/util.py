@@ -159,7 +159,7 @@ def binning_firstd_only(comp, va, conf):
 
         choices = sorted(list(choices))
         return OrderedDict(tuple(((v, cur_val[1]), str(int(v))) for v in choices))
-    except NotApplicableError:
+    except AttributeError:
         return {cur_val: str(cur_val[0])}
 
 

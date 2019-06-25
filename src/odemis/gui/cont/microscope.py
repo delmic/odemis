@@ -367,18 +367,18 @@ class SecomStateController(object):
         if on:
             try:
                 power.value = power.range[1]  # max!
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 try:
                     # if enumerated: the biggest
                     power.value = max(power.choices)
-                except (AttributeError, model.NotApplicableError):
+                except AttributeError:
                     logging.error("Unknown ebeam power range, setting to 1")
                     power.value = 1
         else:
             try:
                 # if enumerated: the lowest
                 power.value = min(power.choices)
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 power.value = 0
 
     def _reset_streams(self):

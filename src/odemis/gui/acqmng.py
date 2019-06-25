@@ -145,7 +145,7 @@ def preset_hq(entries):
             # if resolution => get the best one
             try:
                 value = entry.vigilattr.range[1] # max
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 pass
 
         elif entry.name == "dwellTime":
@@ -179,10 +179,10 @@ def preset_hq(entries):
             prev_val = entry.vigilattr.value
             try:
                 value = entry.vigilattr.range[0]  # min
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 try:
                     value = min(entry.vigilattr.choices)
-                except (AttributeError, model.NotApplicableError):
+                except AttributeError:
                     pass
             # Compensate decrease in energy by longer exposure time
             et_entries = _get_entries(entries, entry.hw_comp, "exposureTime")
@@ -207,10 +207,10 @@ def preset_hq(entries):
             # the smallest, the less noise (and slower, but we don't care)
             try:
                 value = entry.vigilattr.range[0]  # min
-            except (AttributeError, model.NotApplicableError):
+            except AttributeError:
                 try:
                     value = min(entry.vigilattr.choices)
-                except (AttributeError, model.NotApplicableError):
+                except AttributeError:
                     pass
         # rest => as is
 
