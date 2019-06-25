@@ -1,3 +1,16 @@
+odemis (2.9.4-1) precise; urgency=medium
+
+  * New version 2.9.4
+  * Main bug fixes:
+    - Spectrum export to CSV didn't contain wavelength information
+    - Don't raise an error when changing CCD fan speed fails (SECOM)
+    - Changing the Fluorescence stream tint didn't always work (SECOM)
+    - OmicronxX could miss some answer from the hardware (SECOM)
+    - MultiplexActuator didn't report the very first position change
+    - plugin cli-rgb failed to estimate the acquisition time if drift correction was selected
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 25 Jun 2019 10:01:38 +0200
+
 odemis (2.9.3-1) precise; urgency=medium
 
   * New version: 2.9.3
