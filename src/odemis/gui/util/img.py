@@ -1158,6 +1158,7 @@ def spectrum_to_export_data(stream, raw):
     if raw:
         if unit == "m":
             spectrum.metadata[model.MD_WL_LIST] = spectrum_range
+        spectrum.metadata[model.MD_DIMS] = "C"
         spectrum.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
         return spectrum
     else:
