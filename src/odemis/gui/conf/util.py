@@ -966,6 +966,11 @@ def create_axis_entry(container, name, comp, conf=None):
             'accuracy': conf.get('accuracy', 3),
         }
 
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
+
         lbl_ctrl, value_ctrl = container.add_float_slider(label_text, pos, ctrl_conf)
 
         # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
@@ -986,6 +991,11 @@ def create_axis_entry(container, name, comp, conf=None):
             'unit': unit,
             'accuracy': conf.get('accuracy', 3),
         }
+
+        if 'key_step' in conf:
+            ctrl_conf['key_step'] = conf['key_step']
+        if 'key_step_min' in conf:
+            ctrl_conf['key_step_min'] = conf['key_step_min']
 
         lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
         axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
