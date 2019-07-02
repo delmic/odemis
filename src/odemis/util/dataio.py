@@ -171,8 +171,8 @@ def _split_planes(data):
 
     # Anything to split?
     dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-    hdims = dims.translate(None, "XY") # remove XY while keeping order
-    ldims = dims.translate(None, hdims)
+    hdims = dims.replace("XY", "") # remove XY while keeping order
+    ldims = dims.replace(hdims, "")
     if "X" not in dims or "Y" not in dims:
         return [data]
 

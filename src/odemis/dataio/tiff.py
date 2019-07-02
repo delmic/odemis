@@ -983,7 +983,7 @@ def _getIFDsFromOME(pxe, offset=0):
                 logging.warning("High dims are %s = %s, which would require %d IFDs, but only %d seem present",
                                 hdims, hdshape, needed_ifds, nbifds)
             break
-        ldims = dims.translate(None, hdims)  # low dim = dims - hdims
+        ldims = dims.replace(hdims, "")  # low dim = dims - hdims
         if len(ldims) <= 3 and needed_ifds == nbifds:
             # If the next ldim is not XY and =1, consider it to be high dim
             nxtdim = ldims[0]
@@ -2410,7 +2410,7 @@ class AcquisitionDataTIFF(AcquisitionData):
             # in IFDs to be 2D, but we allow to have RGB images too (so dimension C).
             dims = pxe.get("DimensionOrder", "XYZTC")[::-1]
             if fim.ndim == 3:
-                planedims = dims.translate(None, "TZ")  # remove TZ
+                planedims = dims.replace("TZ", "")  # remove TZ
                 ci = planedims.index("C")
                 if fim.shape[ci] > 1:
                     if "C" in hdims:
