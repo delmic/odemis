@@ -373,13 +373,13 @@ class DataFlow(DataFlowBase):
                     # TODO: if it's just rotated, send the info to reconstruct it
                     # and avoid the memory copy
                     raise TypeError("Need C ordered array")
-                self.pipe.send(numpy.getbuffer(data), copy=False)
+                self.pipe.send(memoryview(data), copy=False)
             except TypeError:
                 # not all buffers can be sent zero-copy (e.g., has strides)
                 # try harder by copying (which removes the strides)
                 logging.debug("Failed to send data with zero-copy")
                 data = numpy.require(data, requirements=["C_CONTIGUOUS"])
-                self.pipe.send(numpy.getbuffer(data), copy=False)
+                self.pipe.send(memoryview(data), copy=False)
 
         # publish locally
         DataFlowBase.notify(self, data)

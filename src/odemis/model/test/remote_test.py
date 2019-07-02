@@ -27,7 +27,6 @@ from concurrent import futures
 from concurrent.futures import CancelledError
 import gc
 import logging
-from multiprocessing.process import Process
 import numpy
 from odemis import model
 from odemis.model import roattribute, oneway, isasync, VigilantAttributeBase
@@ -38,6 +37,7 @@ import sys
 import threading
 import time
 import unittest
+from multiprocessing import Process
 
 
 logging.getLogger().setLevel(logging.DEBUG)
