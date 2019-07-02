@@ -20,6 +20,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+# Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
 from __future__ import division
 
 from PIL import Image
@@ -169,11 +170,11 @@ class TestTiffIO(unittest.TestCase):
         # check OME-TIFF metadata
         imo = libtiff.TIFF.open(FILENAME)
         omemd = imo.GetField("ImageDescription")
-        self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
+        self.assertTrue(omemd.startswith(b'<?xml') or omemd[:4].lower() == b'<ome')
 
         # remove "xmlns" which is the default namespace and is appended everywhere
-        omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                       "", omemd, count=1)
+        omemd = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                       b"", omemd, count=1)
         root = ET.fromstring(omemd)
 
         # check the IFD of each TIFFData is different
@@ -304,7 +305,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         tiff.export(FILENAME, ldata)
 
-       # check it's here
+        # check it's here
         st = os.stat(FILENAME)  # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         im = Image.open(FILENAME)
@@ -447,18 +448,18 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(T.SAMPLEFORMAT_UINT, imo.GetField("SampleFormat"))
 
         # check metadata
-        self.assertEqual("Odemis " + odemis.__version__, imo.GetField("Software"))
-        self.assertEqual(metadata[model.MD_HW_NAME], imo.GetField("Make"))
+        self.assertEqual("Odemis " + odemis.__version__, imo.GetField("Software").decode('utf-8'))
+        self.assertEqual(metadata[model.MD_HW_NAME], imo.GetField("Make").decode('utf-8'))
         self.assertEqual(metadata[model.MD_HW_VERSION] + " (driver %s)" % metadata[model.MD_SW_VERSION],
-                         imo.GetField("Model"))
-        self.assertEqual(metadata[model.MD_DESCRIPTION], imo.GetField("PageName"))
+                         imo.GetField("Model").decode('utf-8'))
+        self.assertEqual(metadata[model.MD_DESCRIPTION], imo.GetField("PageName").decode('utf-8'))
         yres = imo.GetField("YResolution")
         self.assertAlmostEqual(1 / metadata[model.MD_PIXEL_SIZE][1], yres * 100)
         ypos = imo.GetField("YPosition")
         self.assertAlmostEqual(metadata[model.MD_POS][1], (ypos / 100) - 1)
 
         # check OME-TIFF metadata
-        omemd = imo.GetField("ImageDescription")
+        omemd = imo.GetField("ImageDescription").decode('utf-8')
         self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
 
         # remove "xmlns" which is the default namespace and is appended everywhere
@@ -631,7 +632,7 @@ class TestTiffIO(unittest.TestCase):
                 rcot = im.metadata[model.MD_EBEAM_CURRENT_TIME]
                 assert len(ocot) == len(rcot)
                 for (od, oc), (rd, rc) in zip(ocot, rcot):
-                    self.assertAlmostEqual(od, rd)
+                    self.assertAlmostEqual(od, rd, places=6)
                     self.assertAlmostEqual(oc, rc)
 
         # check thumbnail
@@ -751,7 +752,7 @@ class TestTiffIO(unittest.TestCase):
                 rcot = im.metadata[model.MD_EBEAM_CURRENT_TIME]
                 assert len(ocot) == len(rcot)
                 for (od, oc), (rd, rc) in zip(ocot, rcot):
-                    self.assertAlmostEqual(od, rd)
+                    self.assertAlmostEqual(od, rd, places=6)
                     self.assertAlmostEqual(oc, rc)
 
         # check thumbnail

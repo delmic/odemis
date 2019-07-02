@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+# Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
 from __future__ import division
 
 from past.builtins import basestring
@@ -95,18 +96,18 @@ def _convertToTiffTag(metadata):
     # unidecode (but they are lossy).
 
     tiffmd = {T.TIFFTAG_RESOLUTIONUNIT: T.RESUNIT_CENTIMETER,
-              T.TIFFTAG_SOFTWARE: "%s %s" % (odemis.__shortname__, odemis.__version__)}
+              T.TIFFTAG_SOFTWARE: (u"%s %s" % (odemis.__shortname__, odemis.__version__)).encode("utf-8", "ignore")}
     # we've got choice between inches and cm... so it's easy
     for key, val in metadata.items():
         if key == model.MD_HW_NAME:
-            tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8")
+            tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8", "ignore")
         elif key == model.MD_HW_VERSION:
             v = val
             if model.MD_SW_VERSION in metadata:
-                v += " (driver %s)" % (metadata[model.MD_SW_VERSION],)
-            tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8")
+                v += u" (driver %s)" % (metadata[model.MD_SW_VERSION],)
+            tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8", "ignore")
         elif key == model.MD_ACQ_DATE:
-            tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
+            tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val)).encode("utf-8", "ignore")
         elif key == model.MD_PIXEL_SIZE:
             # convert m/px -> px/cm
             # Note: apparently some reader (Word?) try to use this to display
@@ -137,7 +138,7 @@ def _convertToTiffTag(metadata):
         # N = SPP in the specification, but libtiff duplicates the values
         elif key == model.MD_DESCRIPTION:
             # We don't use description as it's used for OME-TIFF
-            tiffmd[T.TIFFTAG_PAGENAME] = val.encode("utf-8")
+            tiffmd[T.TIFFTAG_PAGENAME] = val.encode("utf-8", "ignore")
         # TODO save the brightness and contrast applied by the user?
         # Could use GrayResponseCurve, DotRange, or TransferFunction?
         # TODO save the tint applied by the user? maybe WhitePoint can help
@@ -207,20 +208,20 @@ def _readTiffTag(tfile):
     # informative metadata
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
     if val is not None:
-        md[model.MD_DESCRIPTION] = val
+        md[model.MD_DESCRIPTION] = val.decode("utf-8", "ignore")
 #     val = tfile.GetField(T.TIFFTAG_SOFTWARE)
 #     if val is not None:
 #         md[model.MD_SW_VERSION] = val
     val = tfile.GetField(T.TIFFTAG_MAKE)
     if val is not None:
-        md[model.MD_HW_NAME] = val
+        md[model.MD_HW_NAME] = val.decode("utf-8", "ignore")
     val = tfile.GetField(T.TIFFTAG_MODEL)
     if val is not None:
-        md[model.MD_HW_VERSION] = val
+        md[model.MD_HW_VERSION] = val.decode("utf-8", "ignore")
     val = tfile.GetField(T.TIFFTAG_DATETIME)
     if val is not None:
         try:
-            t = calendar.timegm(time.strptime(val, "%Y:%m:%d %H:%M:%S"))
+            t = calendar.timegm(time.strptime(val.decode("utf-8", "ignore"), "%Y:%m:%d %H:%M:%S"))
             md[model.MD_ACQ_DATE] = t
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
@@ -467,7 +468,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 
     # make it more readable
     _indent(root)
-    ometxt = ('<?xml version="1.0" encoding="UTF-8"?>' +
+    ometxt = (b'<?xml version="1.0" encoding="UTF-8"?>' +
               ET.tostring(root, encoding="utf-8"))
     return ometxt
 
@@ -1675,7 +1676,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         # clever thumbnailer?
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
         ometxt = None
-        f.SetField(T.TIFFTAG_PAGENAME, "Composited image")
+        f.SetField(T.TIFFTAG_PAGENAME, b"Composited image")
         # Flag for saying it's a thumbnail
         f.SetField(T.TIFFTAG_SUBFILETYPE, T.FILETYPE_REDUCEDIMAGE)
 
@@ -2301,13 +2302,13 @@ class AcquisitionDataTIFF(AcquisitionData):
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
 
-        if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower()) or
-                      desc[:4].lower() == '<ome')):
+        if (desc and ((desc.startswith(b"<?xml") and b"<ome " in desc.lower()) or
+                      desc[:4].lower() == b'<ome')):
             try:
-                desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                              "", desc, count=1)
-                desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                              "", desc)
+                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                              b"", desc, count=1)
+                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                              b"", desc)
                 root = ET.fromstring(desc)
                 if root.tag.lower() == "ome":
                     return root
