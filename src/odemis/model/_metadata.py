@@ -164,3 +164,8 @@ MD_FAV_POS_ACTIVE_DEST = "Favourite position active destination"  # list or set 
 MD_FAV_POS_DEACTIVE_DEST = "Favourite position deactive destination"  # list or set of str
 
 MD_AXES_ORDER_REF = "Axes order for referencing"  # list of str
+
+# The following metadata is used for the PID controller on the Focus Tracker.
+MD_GAIN_P = "Proportional gain"  # float
+MD_GAIN_I = "Integral gain"  # float
+MD_GAIN_D = "Derivative gain"  # float
