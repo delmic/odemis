@@ -26,7 +26,6 @@ from scipy.spatial import Delaunay as DelaunayTriangulation
 from scipy.interpolate import LinearNDInterpolator
 import numpy
 from odemis import model
-# import matplotlib.pyplot as plt
 
 # Functions to convert/manipulate Angle resolved image to polar projection
 # Based on matlab script created by Ernst Jan Vesseur (from AMOLF).
@@ -161,6 +160,26 @@ def _FindAngle(x_array, y_array, pixel_size, parabola_f):
     return theta, phi, omega
 
 
+def _flipDataIfMirrorFlipped(data):
+    """
+        Inverts data and adjusts metadata for flipped mirror
+        :parameter data: (model.DataArray) The image that was projected on the detector.
+        The data is inverted and its metadata is adjusted in case of a flipped mirror.
+        :returns: (model.DataArray) the image as it is in case of a standard mirror,
+        the image with the inverted data and adjusted metadata in case of a flipped mirror.
+    """
+
+    focus_distance = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
+    if focus_distance < 0:
+        data = data[::-1, :]
+        data.metadata = data.metadata.copy()
+        data.metadata[model.MD_AR_FOCUS_DISTANCE] *= -1  # invert the focus distance for inverted mirror
+        # put new y pole coordinate
+        arpole = data.metadata[model.MD_AR_POLE]
+        data.metadata[model.MD_AR_POLE] = (arpole[0], data.shape[0] - 1 - arpole[1])
+    return data
+
+
 def AngleResolved2Polar(data, output_size, hole=True):
     """
     Converts an angle resolved image to polar (aka azimuthal) projection
@@ -172,6 +191,8 @@ def AngleResolved2Polar(data, output_size, hole=True):
     :parameter hole: (boolean) Crop the pole if True
     :returns: (model.DataArray) converted image in polar view
     """
+
+    data = _flipDataIfMirrorFlipped(data)
 
     # calculate the corresponding theta and phi angles based on the geometrical properties
     # of the mirror for each px on the raw data
@@ -259,6 +280,8 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
     :parameter hole: (boolean) Crop the pole if True
     :returns: (model.DataArray) converted image in equirectangular view
     """
+
+    data = _flipDataIfMirrorFlipped(data)
 
     # calculate the corresponding theta and phi angles based on the geometrical properties
     # of the mirror for each px on the raw data
