@@ -195,7 +195,7 @@ class MultiplexActuator(model.Actuator):
         update the speed VA
         """
         # .speed is copied to detect changes to it on next update
-        self.speed.notify(self._speed.copy(), force_write=True)
+        self.speed._set_value(self._speed.copy(), force_write=True)
 
     def _updateReferenced(self):
         """
