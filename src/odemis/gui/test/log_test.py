@@ -26,6 +26,7 @@ import logging
 from odemis.gui import test, log
 import random
 import threading
+import time
 import unittest
 from builtins import range
 
@@ -45,7 +46,7 @@ class TestLogWindow(test.GuiTestCase):
         def log_msg():
             for i in range(50000):
                 random.choice(LOG_FUNCTIONS)("WEEEEEE %d" % i)
-                threading._sleep(0.0001)
+                time.sleep(0.0001)
 
         t = threading.Thread(target=log_msg)
         # Setting Daemon to True, will cause the thread to exit when the parent does
