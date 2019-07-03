@@ -40,6 +40,7 @@ from subprocess import CalledProcessError
 import subprocess
 import threading
 import time
+import sys
 
 
 class NewFocusError(Exception):
@@ -159,10 +160,10 @@ class PM8742(model.Actuator):
             self._accesser.terminate()
             self._accesser = None
 
-    def _sendOrderCommand(self, cmd, val="", axis=None):
+    def _sendOrderCommand(self, cmd, val=b"", axis=None):
         return self._accesser.sendOrderCommand(cmd, val, axis)
 
-    def _sendQueryCommand(self, cmd, val="", axis=None):
+    def _sendQueryCommand(self, cmd, val=b"", axis=None):
         """
         Same as accesser's sendQueryCommand, but with error recovery
         """
@@ -203,15 +204,15 @@ class PM8742(model.Actuator):
              Firmware version (and date)
              serial number
         """
-        resp = self._sendQueryCommand("*IDN")
-        # expects something like this:
-        # New_Focus 8742 v2.2 08/01/13 11511
+        resp = self._sendQueryCommand(b"*IDN")
         try:
-            m = re.match("\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp)
+            resp_str = resp.decode("ascii")
+            # expects something like this:
+            # New_Focus 8742 v2.2 08/01/13 11511
+            m = re.match("\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp_str)
             modl, fw, sn = m.groups()
         except Exception:
-            raise IOError("Failed to decode firmware answer '%s'" %
-                          resp.encode('string_escape'))
+            raise IOError("Failed to decode firmware answer '%s'" % resp.decode("latin1", "backslashreplace"))
 
         return modl, fw, sn
 
@@ -223,7 +224,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (0<=int<=3): the motor type
         """
-        resp = self._sendQueryCommand("QM", axis=axis)
+        resp = self._sendQueryCommand(b"QM", axis=axis)
         return int(resp)
 
     def GetVelocity(self, axis):
@@ -232,7 +233,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (0<=int<=2000): the speed in step/s
         """
-        resp = self._sendQueryCommand("VA", axis=axis)
+        resp = self._sendQueryCommand(b"VA", axis=axis)
         return int(resp)
 
     def SetVelocity(self, axis, val):
@@ -243,7 +244,7 @@ class PM8742(model.Actuator):
         """
         if not 1 <= val <= 2000:
             raise ValueError("Velocity outside of the range 0->2000")
-        self._sendOrderCommand("VA", "%d" % (val,), axis)
+        self._sendOrderCommand(b"VA", "%d" % (val,), axis)
 
     def GetAccel(self, axis):
         """
@@ -251,7 +252,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (0<=int): the acceleration in step/s²
         """
-        resp = self._sendQueryCommand("AC", axis=axis)
+        resp = self._sendQueryCommand(b"AC", axis=axis)
         return int(resp)
 
     def SetAccel(self, axis, val):
@@ -262,14 +263,14 @@ class PM8742(model.Actuator):
         """
         if not 1 <= val <= 200000:
             raise ValueError("Acceleration outside of the range 0->200000")
-        self._sendOrderCommand("AC", "%d" % (val,), axis)
+        self._sendOrderCommand(b"AC", b"%d" % (val,), axis)
 
     def MotorCheck(self):
         """
         Run the motor check command, that automatically configure the right
         values based on the type of motors connected.
         """
-        self._sendOrderCommand("MC")
+        self._sendOrderCommand(b"MC")
 
     def MoveAbs(self, axis, pos):
         """
@@ -277,7 +278,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         pos (-2**31 <= int 2*31-1): position in step
         """
-        self._sendOrderCommand("PA", "%d" % (pos,), axis)
+        self._sendOrderCommand(b"PA", b"%d" % (pos,), axis)
 
     def GetTarget(self, axis):
         """
@@ -286,7 +287,7 @@ class PM8742(model.Actuator):
         return (int): the position in steps
         """
         # Note, it's not clear what's the difference with PR?
-        resp = self._sendQueryCommand("PA", axis=axis)
+        resp = self._sendQueryCommand(b"PA", axis=axis)
         return int(resp)
 
     def MoveRel(self, axis, offset):
@@ -295,7 +296,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         offset (-2**31 <= int 2*31-1): offset in step
         """
-        self._sendOrderCommand("PR", "%d" % (offset,), axis)
+        self._sendOrderCommand(b"PR", b"%d" % (offset,), axis)
 
     def GetPosition(self, axis):
         """
@@ -303,7 +304,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (int): the position in steps
         """
-        resp = self._sendQueryCommand("TP", axis=axis)
+        resp = self._sendQueryCommand(b"TP", axis=axis)
         return int(resp)
 
     def IsMotionDone(self, axis):
@@ -312,27 +313,27 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (bool): False if in motion, True if motion is finished
         """
-        resp = self._sendQueryCommand("MD", axis=axis)
-        if resp == "0": # motion in progress
+        resp = self._sendQueryCommand(b"MD", axis=axis)
+        if resp == b"0": # motion in progress
             return False
-        elif resp == "1": # no motion
+        elif resp == b"1": # no motion
             return True
         else:
-            raise IOError("Failed to decode answer about motion '%s'" %
-                          resp.encode('string_escape'))
+            raise IOError("Failed to decode answer about motion '%s'" % 
+                          resp.decode("latin1", "backslashreplace"))
 
     def AbortMotion(self):
         """
         Stop immediately the motion on all the axes
         """
-        self._sendOrderCommand("AB")
+        self._sendOrderCommand(b"AB")
 
     def StopMotion(self, axis):
         """
         Stop nicely the motion (using accel/decel values)
         axis (1<=int<=4): axis number
         """
-        self._sendOrderCommand("ST", axis=axis)
+        self._sendOrderCommand(b"ST", axis=axis)
 
     def GetError(self):
         """
@@ -344,14 +345,15 @@ class PM8742(model.Actuator):
         """
         # Note: there is another one "TE" which only returns the number, and so
         # is faster, but then there is no way to get the message
-        resp = self._sendQueryCommand("TB")
+        resp = self._sendQueryCommand(b"TB")
         # returns something like "108, MOTOR NOT CONNECTED"
         try:
-            m = re.match("(?P<no>\d+), (?P<msg>.+)", resp)
-            no, msg = int(m.group("no")), m.group("msg")
+            resp_str = resp.decode('ascii')
+            m = re.match("(?P<no>\d+), (?P<msg>.+)", resp_str)
+            no, msg = int(m.group("no")), m.group("msg")  # group takes unicode str even on byte str input
         except Exception:
             raise IOError("Failed to decode error info '%s'" %
-                          resp.encode('string_escape'))
+                          resp.decode("latin1", "backslashreplace"))
 
         if no == 0:
             return None
@@ -445,7 +447,7 @@ class PM8742(model.Actuator):
         shift = self._applyInversion(shift)
 
         # Check if the distance is big enough to make sense
-        for an, v in shift.items():
+        for an, v in list(shift.items()):
             aid = self._name_to_axis[an]
             if abs(v) < self._stepsize[aid - 1]:
                 # TODO: store and accumulate all the small moves instead of dropping them?
@@ -695,7 +697,7 @@ class PM8742(model.Actuator):
         # Run the separate program via authbind
         try:
             exc = os.path.join(os.path.dirname(__file__), "nfpm_netscan.py")
-            out = subprocess.check_output(["authbind", "python", exc])
+            out = subprocess.check_output(["authbind", sys.executable, exc])
         except CalledProcessError as exp:
             # and handle all the possible errors:
             # - no authbind (127)
@@ -708,15 +710,17 @@ class PM8742(model.Actuator):
                 raise IOError("Failed to find %s" % exc)
             elif ret == 13:
                 raise IOError("No permission to open network port 23")
+            else:
+                raise
 
         # or decode the output
         # hostname \t host \t port
         ret = []
-        for l in out.split("\n"):
+        for l in out.split(b"\n"):
             if not l:
                 continue
             try:
-                hn, host, port = l.split("\t")
+                hn, host, port = l.split(b"\t")
             except Exception:
                 logging.exception("Failed to decode scanner line '%s'", l)
             ret.append((hn, host, port))
@@ -760,7 +764,7 @@ class IPAccesser(object):
     def terminate(self):
         self.socket.close()
 
-    def sendOrderCommand(self, cmd, val="", axis=None):
+    def sendOrderCommand(self, cmd, val=b"", axis=None):
         """
         Sends one command, and don't expect any reply
         cmd (str): command to send
@@ -770,76 +774,76 @@ class IPAccesser(object):
             IOError: if problem with sending/receiving data over the connection
         """
         if axis is None:
-            str_axis = ""
+            str_axis = b""
         else:
-            str_axis = "%d" % axis
+            str_axis = b"%d" % axis
 
         if not 1 <= len(cmd) <= 10:
-            raise ValueError("Command %s is very likely wrong" % (cmd,))
+            raise ValueError("Command %s is very likely wrong" % (cmd.decode("latin1", "backslashreplace"),))
 
         # Note: it also accept a N> prefix to specify the controller number,
         # but we don't support multiple controllers (for now)
-        msg = "%s%s%s\r" % (str_axis, cmd, val)
+        msg = b"%s%s%s\r" % (str_axis, cmd, val)
 
         with self._net_access:
-            logging.debug("Sending: '%s'", msg.encode('string_escape'))
+            logging.debug("Sending: '%s'", msg.decode("latin1", "backslashreplace"))
             self.socket.sendall(msg)
 
-    def sendQueryCommand(self, cmd, val="", axis=None):
+    def sendQueryCommand(self, cmd, val=b"", axis=None):
         """
         Sends one command, and don't expect any reply
-        cmd (str): command to send, without ?
-        val (str): value to send (if any)
+        cmd (byte str): command to send, without ?
+        val (byte str): value to send (if any)
         axis (1<=int<=4 or None): axis number
         raises:
             IOError: if problem with sending/receiving data over the connection
             NewFocusError: if error happened
         """
         if axis is None:
-            str_axis = ""
+            str_axis = b""
         else:
-            str_axis = "%d" % axis
+            str_axis = b"%d" % axis
 
         if not 1 <= len(cmd) <= 10:
-            raise ValueError("Command %s is very likely wrong" % (cmd,))
+            raise ValueError("Command %s is very likely wrong" % (cmd.decode("latin1", "backslashreplace"),))
 
         # Note: it also accept a N> prefix to specify the controller number,
         # but we don't support multiple controllers (for now)
-        msg = "%s%s?%s\r" % (str_axis, cmd, val)
+        msg = b"%s%s?%s\r" % (str_axis, cmd, val)
 
         with self._net_access:
-            logging.debug("Sending: '%s'", msg.encode('string_escape'))
+            logging.debug("Sending: '%s'", msg.decode("latin1", "backslashreplace"))
             self.socket.sendall(msg)
 
             # read the answer
             end_time = time.time() + 0.5
-            ans = ""
+            ans = b""
             while True:
                 try:
                     data = self.socket.recv(4096)
                 except socket.timeout:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.decode("latin1", "backslashreplace")))
 
                 if not data:
                     logging.debug("Received empty message")
 
                 ans += data
                 # does it look like we received a full answer?
-                if "\r\n" in ans:
+                if b"\r\n" in ans:
                     break
 
                 if time.time() > end_time:
                     raise IOError("Controller %s timed out after %s" %
-                                  (self._host, msg.encode('string_escape')))
+                                  (self._host, msg.decode("latin1", "backslashreplace")))
                 time.sleep(0.01)
 
-        logging.debug("Received: %s", ans.encode('string_escape'))
+        logging.debug("Received: %s", ans.decode("latin1", "backslashreplace"))
 
-        ans, left = ans.split("\r\n", 1)  # remove the end of line characters
+        ans, left = ans.split(b"\r\n", 1)  # remove the end of line characters
         if left:
             logging.error("Received too much data, will discard the end: %s",
-                          left.encode('string_escape'))
+                          left.decode("latin1", "backslashreplace"))
         return ans
 
     def flushInput(self):
@@ -863,8 +867,8 @@ class PM8742Simulator(object):
     """
     def __init__(self):
         self._timeout = 1 # s
-        self._output_buf = "\xff\xfd\x03\xff\xfb\x01" # what the commands sends back to the "host computer"
-        self._input_buf = "" # what we receive from the "host computer"
+        self._output_buf = b"\xff\xfd\x03\xff\xfb\x01" # what the commands sends back to the "host computer"
+        self._input_buf = b"" # what we receive from the "host computer"
 
         self._naxes = 4
 
@@ -873,11 +877,11 @@ class PM8742Simulator(object):
 
         # internal axis param values
         # str -> int: command name -> value
-        orig_axis_state = {"QM": MT_TINY, # Motor type
-                           "PA": 0, # target position (PA? same as PR?)
-                           "TP": 0, # current position
-                           "VA": 1750, # velocity
-                           "AC": 100000, # acceleration
+        orig_axis_state = {b"QM": MT_TINY, # Motor type
+                           b"PA": 0, # target position (PA? same as PR?)
+                           b"TP": 0, # current position
+                           b"VA": 1750, # velocity
+                           b"AC": 100000, # acceleration
                            }
         self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
 
@@ -892,7 +896,7 @@ class PM8742Simulator(object):
         """
         now = time.time()
         startt, endt, startp = self._axis_move[axis - 1]
-        endp = self._astates[axis - 1]["PA"]
+        endp = self._astates[axis - 1][b"PA"]
         if endt < now:
             return endp
         # model as if it was linear (it's not, it's ramp-based positioning)
@@ -921,11 +925,11 @@ class PM8742Simulator(object):
         self._input_buf += data
 
         # separate into commands by splitting around any separator "\n\r;"
-        msgs = re.split("\r|\n|;", self._input_buf, maxsplit=1)
+        msgs = re.split(b"\r|\n|;", self._input_buf, maxsplit=1)
         while len(msgs) == 2:
             msg, self._input_buf = msgs
             self._parseMessage(msg) # will update _output_buf
-            msgs = re.split("\r|\n|;", self._input_buf, maxsplit=1)
+            msgs = re.split(b"\r|\n|;", self._input_buf, maxsplit=1)
 
     def recv(self, size=1):
         if not self._output_buf:
@@ -935,14 +939,14 @@ class PM8742Simulator(object):
 
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
-        logging.debug("SIM: Sending %s", ret.encode('string_escape'))
+        logging.debug("SIM: Sending %s", ret.decode("latin1", "backslashreplace"))
         return ret
 
     def settimeout(self, t):
         self.timeout = t
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -950,19 +954,19 @@ class PM8742Simulator(object):
         del self._input_buf
 
     # Command templates: command -> axis (bool), value converter (or None), readable (?)
-    _cmd_tmpl = {"PA": (True, int, True),
-                 "PR": (True, int, True),
-                 "VA": (True, int, True),
-                 "AC": (True, int, True),
-                 "QM": (True, int, True),
-                 "MD": (True, None, True),
-                 "TP": (True, None, True),
-                 "MC": (False, None, False),
-                 "AB": (False, None, False),
-                 "ST": (True, None, False),
-                 "TB": (False, None, True),
-                 "TE": (False, None, True),
-                 "*IDN": (False, None, True),
+    _cmd_tmpl = {b"PA": (True, int, True),
+                 b"PR": (True, int, True),
+                 b"VA": (True, int, True),
+                 b"AC": (True, int, True),
+                 b"QM": (True, int, True),
+                 b"MD": (True, None, True),
+                 b"TP": (True, None, True),
+                 b"MC": (False, None, False),
+                 b"AB": (False, None, False),
+                 b"ST": (True, None, False),
+                 b"TB": (False, None, True),
+                 b"TE": (False, None, True),
+                 b"*IDN": (False, None, True),
                  }
     # Command decoding
     def _parseMessage(self, msg):
@@ -971,15 +975,16 @@ class PM8742Simulator(object):
         return None: self._output_buf is updated if necessary
         """
         # decode command into axis | command | (query | value) (xxCC?nn)
-        m = re.match("(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
+        m = re.match(b"(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
         if not m:
-            logging.warning("SIM: failed to decode '%s'", msg.encode('string_escape'))
+            logging.warning("SIM: failed to decode '%s'", msg.decode("latin1", "backslashreplace"))
             self._push_error(6) # COMMAND DOES NOT EXIST
             return
 
         axis, cmd, val = m.groups()
-        isquery = (val == "?")
-        logging.debug("Decoded command to %s %s %s", axis, cmd, val)
+        isquery = (val == b"?")
+        logging.debug("Decoded command to %s %s %s", axis.decode("latin1", "backslashreplace"),
+                      cmd.decode("latin1", "backslashreplace"), val.decode("latin1", "backslashreplace"))
 
         # axis must be integer => so directly convert to integer and check it
         if axis:
@@ -1019,55 +1024,55 @@ class PM8742Simulator(object):
                     self._push_error(7) # PARAMETER OUT OF RANGE
                     return
         except KeyError:
-            logging.error("SIM doesn't know command %s", cmd)
+            logging.error("SIM doesn't know command %s", cmd.decode("latin1", "backslashreplace"))
             self._push_error(6) # COMMAND DOES NOT EXIST
             return
 
         # decode the command
         ret = None
-        if cmd in ("VA", "AC", "QM"): # everything about read/writing values
+        if cmd in (b"VA", b"AC", b"QM"): # everything about read/writing values
             if isquery:
-                ret = "%d" % self._astates[axis - 1][cmd]
+                ret = b"%d" % self._astates[axis - 1][cmd]
             else:
                 self._astates[axis - 1][cmd] = vconvd
-        elif cmd == "MC": # motor check
+        elif cmd == b"MC": # motor check
             # In theory, we should reset QM, but for now we don't do anything
             pass
-        elif cmd in ("PA", "PR"): # absolute/relative move
+        elif cmd in (b"PA", b"PR"): # absolute/relative move
             if isquery:
-                ret = "%d" % self._astates[axis - 1]["PA"] # same value as PA for PR?
+                ret = b"%d" % self._astates[axis - 1][b"PA"] # same value as PA for PR?
             else:
                 pos = self._getCurrentPos(axis)
-                if cmd == "PR": # Relative
+                if cmd == b"PR": # Relative
                     # convert to absolute and continue
                     vconvd += pos
                 # new move
-                speed = self._astates[axis - 1]["VA"]
+                speed = self._astates[axis - 1][b"VA"]
                 now = time.time()
                 end = now + abs(pos - vconvd) / speed
-                self._astates[axis - 1]["PA"] = vconvd
+                self._astates[axis - 1][b"PA"] = vconvd
                 self._axis_move[axis - 1] = (now, end, pos)
 
                 # Introduce an error from time to time, just to try the error path
 #                 if random.randint(0, 10) == 0:
 #                     self._push_error(7) # OUT OF RANGE
-        elif cmd == "TP": # get current postion
-            ret = "%d" % self._getCurrentPos(axis)
-        elif cmd == "MD": # motion done ?
-            ret = "0" if self._axis_move[axis - 1][1] > time.time() else "1"
-        elif cmd == "ST": # stop motion
+        elif cmd == b"TP": # get current postion
+            ret = b"%d" % self._getCurrentPos(axis)
+        elif cmd == b"MD": # motion done ?
+            ret = b"0" if self._axis_move[axis - 1][1] > time.time() else b"1"
+        elif cmd == b"ST": # stop motion
             self._axis_move[axis - 1] = (0, 0, 0)
-        elif cmd == "AB": # abort motion on all axes immediately
+        elif cmd == b"AB": # abort motion on all axes immediately
             self._axis_move = [(0, 0, 0)] * self._naxes
-        elif cmd == "TB": # error message
+        elif cmd == b"TB": # error message
             errno = self._pop_error()
-            ret = "%d, MESSAGE ABOUT ERROR %d" % (errno, errno)
-        elif cmd == "TE": # error no
-            ret = "%d" % self._pop_error()
-        elif cmd == "*IDN": # identificate
-            ret = "New_Focus 8742 v2.2fake 26/01/15 01234"
+            ret = b"%d, MESSAGE ABOUT ERROR %d" % (errno, errno)
+        elif cmd == b"TE": # error no
+            ret = b"%d" % self._pop_error()
+        elif cmd == b"*IDN": # identificate
+            ret = b"New_Focus 8742 v2.2fake 26/01/15 01234"
         else:
             logging.error("Unhandled command in simulator %s", cmd)
 
         if ret is not None:
-            self._output_buf += "%s\r\n" % ret
+            self._output_buf += b"%s\r\n" % ret
