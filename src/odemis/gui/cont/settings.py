@@ -100,8 +100,9 @@ class SettingsController(with_metaclass(ABCMeta, object)):
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries """
-        for entry in [e for e in self.entries if e.value_ctrl]:
-            entry.value_ctrl.Enable(enabled)
+        for entry in self.entries:
+            if entry.value_ctrl:
+                entry.value_ctrl.Enable(enabled)
 
     def add_file_button(self, label, value=None, tooltip=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
         config = guiconf.get_acqui_conf()
