@@ -128,9 +128,7 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
-        # TODO: make it a list, as the dict keys are not used right now, and
-        # they could be just looked up via the SettingEntry.name anyway
-        self.entries = OrderedDict()  # name -> SettingEntry
+        self.entries = []  # SettingEntry
 
         # Metadata display in analysis tab (static streams)
         if isinstance(self.stream, acqstream.StaticStream):
@@ -224,14 +222,14 @@ class StreamController(object):
         """ Pause (freeze) SettingEntry related control updates """
         # TODO: just call enable(False) from here? or is there any reason to
         # want to pause without showing it to the user?
-        for entry in self.entries.values():
+        for entry in self.entries:
             entry.pause()
 
         self.stream_panel.enable(False)
 
     def resume(self):
         """ Resume SettingEntry related control updates """
-        for entry in self.entries.values():
+        for entry in self.entries:
             entry.resume()
 
         self.stream_panel.enable(True)
@@ -248,8 +246,9 @@ class StreamController(object):
         # When all are enabled now, the position the toggle button is in, immediately causes
         # the right slider to be disabled again.
 
-        for entry in (e for e in self.entries.values() if e.value_ctrl):
-            entry.value_ctrl.Enable(enabled)
+        for entry in self.entries:
+            if entry.value_ctrl:
+                entry.value_ctrl.Enable(enabled)
 
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
@@ -334,7 +333,7 @@ class StreamController(object):
         """
 
         se = create_setting_entry(self.stream_panel, name, va, hw_comp, conf)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         return se
 
@@ -348,7 +347,7 @@ class StreamController(object):
         """
 
         ae = create_axis_entry(self.stream_panel, name, comp, conf)
-        self.entries[ae.name] = ae
+        self.entries.append(ae)
 
         return ae
 
@@ -408,7 +407,7 @@ class StreamController(object):
         if hasattr(self.stream, "repetition"):
             self.stream.repetition.unsubscribe(self._onStreamRep)
 
-        self.entries = OrderedDict()
+        self.entries = []
 
         gc.collect()
 
@@ -642,7 +641,7 @@ class StreamController(object):
         se = SettingEntry(name="selectionwidth", va=self.stream.selectionWidth, stream=self.stream,
                           lbl_ctrl=lbl_selection_width, value_ctrl=sld_selection_width,
                           events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     def _add_wl_ctrls(self):
         btn_rgbfit = self.stream_panel.add_rgbfit_ctrl()
@@ -650,13 +649,13 @@ class StreamController(object):
         se = SettingEntry(name="rgbfit", va=self.stream.fitToRGB, stream=self.stream,
                           value_ctrl=btn_rgbfit, events=wx.EVT_BUTTON,
                           va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         self._sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
 
         se = SettingEntry(name="spectrum", va=self.stream.spectrumBandwidth, stream=self.stream,
                           value_ctrl=self._sld_spec, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _get_center():
             """ Return the low/high values for the bandwidth, from the requested center """
@@ -683,7 +682,7 @@ class StreamController(object):
                           stream=self.stream, value_ctrl=txt_spec_center, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_spec_center.SetValue((r[0] + r[1]) / 2),
                           ctrl_2_va=_get_center)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _get_bandwidth():
             """ Return the low/high values for the bandwidth, from the requested bandwidth """
@@ -710,7 +709,7 @@ class StreamController(object):
                           stream=self.stream, value_ctrl=txt_spec_bw, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_spec_bw.SetValue(r[1] - r[0]),
                           ctrl_2_va=_get_bandwidth)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     @wxlimit_invocation(0.2)
     def _on_new_spec_data(self, gspec):
@@ -825,7 +824,7 @@ class StreamController(object):
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
                               va_2_ctrl=_excitation_2_ctrl, ctrl_2_va=_excitation_2_va)
 
-            self.entries[se.name] = se
+            self.entries.append(se)
 
     def _add_emission_ctrl(self, center_wl_color=None):
         """
@@ -898,7 +897,7 @@ class StreamController(object):
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
                               va_2_ctrl=_emission_2_ctrl, ctrl_2_va=_emission_2_va)
 
-            self.entries[se.name] = se
+            self.entries.append(se)
 
     def _add_brightnesscontrast_ctrls(self):
         """ Add controls for manipulating the (auto) contrast of the stream image data """
@@ -920,12 +919,12 @@ class StreamController(object):
         se = SettingEntry(name="autobc", va=self.stream.auto_bc, stream=self.stream,
                           value_ctrl=btn_autobc, events=wx.EVT_BUTTON,
                           va_2_ctrl=_va_to_autobc, ctrl_2_va=_autobc_to_va)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         # Store a setting entry for the outliers slider
         se = SettingEntry(name="outliers", va=self.stream.auto_bc_outliers, stream=self.stream,
                           value_ctrl=sld_outliers, lbl_ctrl=lbl_bc_outliers, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     def _add_outliers_ctrls(self):
         """ Add the controls for manipulation the outliers """
@@ -964,7 +963,7 @@ class StreamController(object):
 
         se = SettingEntry(name="intensity_range", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=sld_hist, events=wx.EVT_SLIDER, va_2_ctrl=_on_irange)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         if hasattr(self.stream, "auto_bc"):
             # The outlier controls need to be disabled when auto brightness/contrast is active
@@ -979,7 +978,7 @@ class StreamController(object):
             # entry is only here so that a reference to `_enable_outliers` will be preserved).
             se = SettingEntry("_auto_bc_switch", va=self.stream.auto_bc, stream=self.stream,
                               va_2_ctrl=_enable_outliers, ctrl_2_va=lambda x: x)
-            self.entries[se.name] = se
+            self.entries.append(se)
 
         def _get_lowi():
             intensity_rng_va = self.stream.intensityRange
@@ -994,7 +993,7 @@ class StreamController(object):
         se = SettingEntry(name="low_intensity", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=txt_low, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_low.SetValue(r[0]), ctrl_2_va=_get_lowi)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _get_highi():
             intensity_rng_va = self.stream.intensityRange
@@ -1009,7 +1008,7 @@ class StreamController(object):
         se = SettingEntry(name="high_intensity", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=txt_high, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_high.SetValue(r[1]), ctrl_2_va=_get_highi)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
         def _on_histogram(hist):
             """ Display the new histogram data in the histogram slider
@@ -1035,7 +1034,7 @@ class StreamController(object):
         # Again, we use an entry to keep a reference of the closure around
         se = SettingEntry("_histogram", va=self.stream.histogram, stream=self.stream,
                           va_2_ctrl=_on_histogram, ctrl_2_va=lambda x: x)
-        self.entries[se.name] = se
+        self.entries.append(se)
 
     def _add_repetition_ctrl(self):
         """

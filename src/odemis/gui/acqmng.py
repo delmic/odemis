@@ -56,7 +56,7 @@ def get_local_settings_entries(stream_cont):
         if hasattr(stream_cont.stream, vaname):
             local_vas.add(getattr(stream_cont.stream, vaname))
 
-    for e in stream_cont.entries.values():
+    for e in stream_cont.entries:
         if hasattr(e, "vigilattr") and e.vigilattr in local_vas:
             logging.debug("Added local setting %s", e.name)
             local_entries.append(e)

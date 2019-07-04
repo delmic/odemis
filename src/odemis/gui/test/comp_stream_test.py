@@ -112,6 +112,13 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrcstream_frame
 
+    @staticmethod
+    def _find_entry(name, entries):
+        for e in entries:
+            if e.name == name:
+                return e
+        raise LookupError("Failed to find entry %s" % (name,))
+
     def test_expander(self):
 
         test.gui_loop()
@@ -247,8 +254,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         )
 
         # Get the excitation combo box (there should be only one)
-        self.assertIn("excitation", sp1.entries)
-        excitation_combo = sp1.entries["excitation"].value_ctrl
+        se = self._find_entry("excitation", sp1.entries)
+        excitation_combo = se.value_ctrl
 
         # No real value testing, but at least making sure that changing the VA value, changes the
         # GUI components
@@ -264,8 +271,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
                 self.assertNotEqual(old_colour, sp1._btn_excitation.colour)
 
         # Get the emission combo box (there should be only one)
-        self.assertIn("emission", sp1.entries)
-        emission_combo = sp1.entries["emission"].value_ctrl
+        se = self._find_entry("emission", sp1.entries)
+        emission_combo = se.value_ctrl
 
         # No real value testing, but at least making sure that changing the VA value, changes the
         # GUI components
@@ -283,8 +290,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Test intensity control values by manipulating the VAs
         # TODO: Move to separate test case
 
-        txt_lowi = sp1.entries["low_intensity"].value_ctrl
-        txt_highi = sp1.entries["high_intensity"].value_ctrl
+        txt_lowi = self._find_entry("low_intensity", sp1.entries).value_ctrl
+        txt_highi = self._find_entry("high_intensity", sp1.entries).value_ctrl
 
         for i in range(0, 11):
             v = i / 10.0
@@ -336,8 +343,10 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # White box testing: we expect that the excitation/emission information
         # are simple text, so no reference to the value controls needs to be saved
         # Get the emission combo box (there should be only one)
-        self.assertNotIn("emission", fluo_panel.entries)
-        self.assertNotIn("excitation", fluo_panel.entries)
+        with self.assertRaises(LookupError):
+            self._find_entry("emission", fluo_panel.entries)
+        with self.assertRaises(LookupError):
+            self._find_entry("excitation", fluo_panel.entries)
         test.gui_loop()
 
         semmd = {
@@ -361,7 +370,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertIsInstance(sem_cont.stream, StaticSEMStream)
 
         # White box testing: we expect autobc is available
-        self.assertIn("autobc", sem_cont.entries)
+        self._find_entry("autobc", sem_cont.entries)
 
         # Clear remaining streams
         stream_bar.clear()

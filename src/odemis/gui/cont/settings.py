@@ -384,10 +384,6 @@ class SettingsBarController(object):
         entries = []
         for setting_controller in self.setting_controllers:
             ets = setting_controller.entries
-            if isinstance(ets, collections.Mapping):
-                # To handle StreamController.entries which is a dict
-                # TODO: make StreamController.entries a list and drop this
-                ets = list(ets.values())
             entries.extend(ets)
         return entries
 
