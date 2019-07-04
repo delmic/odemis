@@ -128,7 +128,8 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         :param va: (VigilantAttribute)
         :param hw_comp: (Component): the component that contains this VigilantAttribute
         :param conf: ({}): Configuration items that may override default settings
-
+        :return SettingEntry or None: the entry created, or None, if no entry was
+          created (eg, because the conf indicates CONTROL_NONE).
         """
 
         assert isinstance(va, VigilantAttributeBase)
@@ -137,6 +138,9 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         self.panel.clear_default_message()
 
         ne = create_setting_entry(self.panel, name, va, hw_comp, conf, self.on_setting_changed)
+        if ne is None:
+            return None
+
         self.entries.append(ne)
 
         if self.highlight_change:

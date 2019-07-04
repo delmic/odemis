@@ -329,11 +329,13 @@ class StreamController(object):
         :param va: (VigilantAttribute)
         :param hw_comp: (Component): the component that contains this VigilantAttribute
         :param conf: ({}): Configuration items that may override default settings
-
+        :return SettingEntry or None: the entry created, or None, if no entry was
+          created (eg, because the conf indicates CONTROL_NONE).
         """
 
         se = create_setting_entry(self.stream_panel, name, va, hw_comp, conf)
-        self.entries.append(se)
+        if se is not None:
+            self.entries.append(se)
 
         return se
 
@@ -347,7 +349,8 @@ class StreamController(object):
         """
 
         ae = create_axis_entry(self.stream_panel, name, comp, conf)
-        self.entries.append(ae)
+        if ae is not None:
+            self.entries.append(ae)
 
         return ae
 

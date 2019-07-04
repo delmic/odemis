@@ -613,7 +613,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         change_callback (callable): Callable to bind to the control's change event
 
     Returns:
-        SettingEntry
+        SettingEntry or None (if CONTROL_NONE)
 
     """
 
@@ -631,9 +631,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
     # Special case, early stop
     if control_type == odemis.gui.CONTROL_NONE:
-        # No value, not even a label, just an empty entry, so that the settings are saved
-        # during acquisition
-        return SettingEntry(name=name, va=va, hw_comp=hw_comp)
+        return None
 
     # Format label
     label_text = conf.get('label', label_to_human(name))
