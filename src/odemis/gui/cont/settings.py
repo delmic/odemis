@@ -726,21 +726,21 @@ class SparcAlignSettingsController(SettingsBarController):
                 self._spect_setting_cont.add_axis(a, comp, conf.get(a))
 
 
-class CenterAlignSettingsController(SettingsBarController):
+class MirrorSettingsController(SettingsBarController):
     """
-    Controller, which creates the centering panel in the alignment tab and provides the user with the option to
+    Controller, which provides the user with the option to
     select among different configurations regarding the mirror position. For example, the user can select the
     configuration with the flipped mirror which is under the sample and placed upside-down.
     """
     def __init__(self, tab_panel, tab_data):
-        super(CenterAlignSettingsController, self).__init__(tab_data)
+        super(MirrorSettingsController, self).__init__(tab_data)
         self.panel = tab_panel
         mirror_lens = tab_data.main.lens
 
-        self.panel_center = SettingsPanel(self.panel.pnl_centering)
+        self.panel_center = SettingsPanel(self.panel.pnl_mode_btns)
         self.panel_center.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-        self.panel.pnl_centering.GetSizer().Add(self.panel_center, 1, border=5,
-                                             flag=wx.BOTTOM | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+        self.panel.pnl_mode_btns.GetSizer().Add(self.panel_center, 1, border=5,
+                                            flag=wx.LEFT | wx.RIGHT | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
 
         entry_mirrorPosition = create_setting_entry(self.panel_center, "Mirror type",
                                                     mirror_lens.configuration,
@@ -750,10 +750,17 @@ class CenterAlignSettingsController(SettingsBarController):
                                                           "tooltip": "Change the type of the mirror"})
 
         entry_mirrorPosition.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-
         # remove border
         self.panel_center.GetSizer().GetItem(0).SetBorder(0)
         self.panel_center.Layout()
+
+    @call_in_wx_main
+    def on_preparation(self, is_preparing):
+        # Don't change enable based on the preparation
+        pass
+
+    def enable(self, enabled):
+        self.panel_center.Enable(enabled)
 
 
 class StreakCamAlignSettingsController(SettingsBarController):

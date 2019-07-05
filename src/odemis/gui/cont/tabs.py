@@ -2986,8 +2986,10 @@ class Sparc2AlignTab(Tab):
         panel.html_moi_doc.SetBorders(0)
         panel.html_moi_doc.LoadPage(self.doc_path)
 
+        self._mirror_settings_controller = None
         if model.hasVA(main_data.lens, "configuration"):
-            self._centering_settings_controller = settings.CenterAlignSettingsController(panel, tab_data)
+            self._mirror_settings_controller = settings.MirrorSettingsController(panel, tab_data)
+            self._mirror_settings_controller.enable(False)
 
         if main_data.streak_ccd:
             self._streak_settings_controller = settings.StreakCamAlignSettingsController(panel, tab_data)
@@ -3294,9 +3296,7 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.btn_manualfocus.Bind(wx.EVT_BUTTON, self._onManualFocus)
 
-        if "center-align" not in tab_data.align_mode.choices:
-            self.panel.pnl_centering.Show(False)
-        else:
+        if "center-align" in tab_data.align_mode.choices:
             # The center align view share the same CCD stream (and settings)
             self.panel.vp_align_center.view.addStream(ccd_stream)
 
@@ -3610,9 +3610,10 @@ class Sparc2AlignTab(Tab):
         if mode == "lens-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view
             self._ccd_stream.should_update.value = True
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.pnl_lens_mover.Enable(True)
-            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_focus.Enable(True)
             self.panel.btn_autofocus.Enable(True)
             self.panel.gauge_autofocus.Enable(True)
@@ -3629,8 +3630,9 @@ class Sparc2AlignTab(Tab):
             self.tab_data_model.focussedView.value = self.panel.vp_moi.view
             if self._moi_stream:
                 self._moi_stream.should_update.value = True
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Enable(True)
-            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
@@ -3639,7 +3641,8 @@ class Sparc2AlignTab(Tab):
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
             self._ccd_stream.should_update.value = True
-            self.panel.pnl_centering.Enable(True)
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(True)
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
@@ -3650,8 +3653,9 @@ class Sparc2AlignTab(Tab):
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.view
             if self._speccnt_stream:
                 self._speccnt_stream.should_update.value = True
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
@@ -3671,8 +3675,9 @@ class Sparc2AlignTab(Tab):
                 self._ts_stream.should_update.value = True
                 self._ts_stream.auto_bc.value = False  # default manual brightness/contrast
                 self._ts_stream.intensityRange.value = self._ts_stream.intensityRange.clip((100, 1000))  # default range
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_centering.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(True)
             self.panel.btn_manualfocus.Enable(True)
