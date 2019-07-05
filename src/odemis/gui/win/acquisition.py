@@ -308,6 +308,7 @@ class AcquisitionDialog(xrcfr_acq):
         # if gauge was left over from an error => now hide it
         if self.acquiring:
             self.gauge_acq.Show()
+            return
         elif self.gauge_acq.IsShown():
             self.gauge_acq.Hide()
             self.Layout()
