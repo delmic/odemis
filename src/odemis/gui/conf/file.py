@@ -34,6 +34,8 @@ import os.path
 from odemis.dataio import tiff
 from odemis.acq.align import delphi
 from odemis.gui.util import get_picture_folder, get_home_folder
+import sys
+from past.builtins import unicode
 
 CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
@@ -109,8 +111,7 @@ class Config(with_metaclass(ABCMeta, object)):
         if not self.config.has_section(section):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
-        if isinstance(value, unicode):
-            value = value.encode("utf-8")
+        value = self._ensure_str_format(value)
         self.config.set(section, option, value)
         self.write()
 
@@ -124,8 +125,7 @@ class Config(with_metaclass(ABCMeta, object)):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
         for option, value in option_value_list:
-            if isinstance(value, unicode):
-                value = value.encode("utf-8")
+            value = self._ensure_str_format(value)
             self.config.set(section, option, value)
         self.write()
 
@@ -138,9 +138,24 @@ class Config(with_metaclass(ABCMeta, object)):
         try:
             # Try to convert back from UTF-8 (and if it's not working, don't fail
             # but replace it by U+FFFD)
-            return self.config.get(section, option).decode("utf-8", "replace")
+            ret = self.config.get(section, option)
+            if isinstance(ret, bytes):  # python2
+                return ret.decode("utf-8", "replace")
+            else:  # python3
+                return ret
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             return self.default.get(section, option)
+
+    def _ensure_str_format(self, s):
+        """
+        The value argument of ConfigParser requires a unicode str in python3 and a byte str
+        in python2. This function makes sure a string is in the right format.
+        """
+        if sys.version_info[0] >= 3 and isinstance(s, bytes):
+            s = s.decode("utf-8")
+        elif sys.version_info[0] < 3 and isinstance(s, unicode):
+            s = s.encode("utf-8")
+        return s
 
 
 class GeneralConfig(Config):
