@@ -586,17 +586,23 @@ def str_to_value(text, va):
     logging.debug("Parsing free text value %s", text)
     va_val = va.value
     # Try to find a good corresponding value inside the string
-    str_val, str_si, _ = decompose_si_prefix(text, unit=va.unit)
+    if isinstance(va_val, collections.Iterable) and text.endswith(va.unit):
+        _, str_si, _ = decompose_si_prefix("1" + text[-(len(va.unit) + 1):], unit=va.unit)
+        str_val = text
+    else:
+        str_val, str_si, _ = decompose_si_prefix(text, unit=va.unit)
     new_val = reproduce_typed_value(va_val, str_val)
 
     # In case of list, be lenient by dropping the extra values if it's too many
     if isinstance(new_val, collections.Iterable):
         new_val = new_val[:len(va_val)]
 
-    # If an SI prefix was found, scale the new value
-    # TODO: support iterables too
-    if isinstance(new_val, numbers.Real):
-        new_val = si_scale_val(new_val, str_si)
+        if new_val and isinstance(new_val[0], numbers.Real):
+            new_val = tuple(si_scale_val(v, str_si) for v in new_val)
+    else:
+        # If an SI prefix was found, scale the new value
+        if isinstance(new_val, numbers.Real):
+            new_val = si_scale_val(new_val, str_si)
 
     return new_val
 
