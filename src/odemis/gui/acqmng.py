@@ -38,7 +38,12 @@ def get_global_settings_entries(settings_cont):
     settings_cont (SettingsBarController)
     return (list of SettingsEntry): all the SettingsEntry on the settings controller
     """
-    return settings_cont.entries
+    entries = []
+    for e in settings_cont.entries:
+        if hasattr(e, "vigilattr") and e.vigilattr is not None and not e.vigilattr.readonly:
+            entries.append(e)
+
+    return entries
 
 
 def get_local_settings_entries(stream_cont):
@@ -56,8 +61,10 @@ def get_local_settings_entries(stream_cont):
         if hasattr(stream_cont.stream, vaname):
             local_vas.add(getattr(stream_cont.stream, vaname))
 
-    for e in stream_cont.entries.values():
-        if hasattr(e, "vigilattr") and e.vigilattr in local_vas:
+    for e in stream_cont.entries:
+        if (hasattr(e, "vigilattr") and e.vigilattr in local_vas
+            and e.vigilattr is not None and not e.vigilattr.readonly
+           ):
             logging.debug("Added local setting %s", e.name)
             local_entries.append(e)
 
@@ -133,6 +140,7 @@ def preset_hq(entries):
     ret = {}
     # TODO: also handle AxisEntry ?
     for entry in entries:
+        # TODO: not needed anymore?
         if (not hasattr(entry, "vigilattr") or entry.vigilattr is None or
             entry.vigilattr.readonly or entry.value_ctrl is None
            ):

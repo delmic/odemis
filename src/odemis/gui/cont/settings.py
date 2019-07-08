@@ -100,8 +100,9 @@ class SettingsController(with_metaclass(ABCMeta, object)):
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries """
-        for entry in [e for e in self.entries if e.value_ctrl]:
-            entry.value_ctrl.Enable(enabled)
+        for entry in self.entries:
+            if entry.value_ctrl:
+                entry.value_ctrl.Enable(enabled)
 
     def add_file_button(self, label, value=None, tooltip=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard="*.*"):
         config = guiconf.get_acqui_conf()
@@ -127,7 +128,8 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         :param va: (VigilantAttribute)
         :param hw_comp: (Component): the component that contains this VigilantAttribute
         :param conf: ({}): Configuration items that may override default settings
-
+        :return SettingEntry or None: the entry created, or None, if no entry was
+          created (eg, because the conf indicates CONTROL_NONE).
         """
 
         assert isinstance(va, VigilantAttributeBase)
@@ -136,6 +138,9 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         self.panel.clear_default_message()
 
         ne = create_setting_entry(self.panel, name, va, hw_comp, conf, self.on_setting_changed)
+        if ne is None:
+            return None
+
         self.entries.append(ne)
 
         if self.highlight_change:
@@ -384,10 +389,6 @@ class SettingsBarController(object):
         entries = []
         for setting_controller in self.setting_controllers:
             ets = setting_controller.entries
-            if isinstance(ets, collections.Mapping):
-                # To handle StreamController.entries which is a dict
-                # TODO: make StreamController.entries a list and drop this
-                ets = list(ets.values())
             entries.extend(ets)
         return entries
 
