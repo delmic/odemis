@@ -46,18 +46,11 @@ CONFIG = {"name": "Delay Stage",
           "axes": {
                 'x': {
                     'number': 1,
-                    'range': [-1, 1],
+                    'range': [0, 0.604644],
                     'unit': 'm',
                     'conv_factor': 1000,  # from internal unit mm to unit m
                 },
-                'z': {
-                    'number': 3,
-                    'range': [0, 3.14],
-                    'unit': 'rad',
-                    'conv_factor': 10000,  # from internal unit mm to unit rad
-                },
            },
-          "inverted": ["z"],
 }
 
 COMP_ARGS = {
@@ -68,6 +61,13 @@ COMP_ARGS = {
 # arguments used for the creation of basic components
 if TEST_NOHW:
     CONFIG["port"] = "/dev/fake"
+    CONFIG["axes"]['z'] = {
+
+                    'number': 3,
+                    'range': [0, 3.14],
+                    'unit': 'rad',
+                    'conv_factor': 10000,  # from internal unit mm to unit rad
+                }
 
 
 def add_coord(pos1, pos2):
@@ -113,7 +113,6 @@ class TestNPMC(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.dev.updateMetadata({model.MD_POS_COR: {'x': 0}})
-        cls.dev.moveAbs(cls.start_position)
         cls.dev.terminate()  # free up socket.
 
     def test_position_abs(self):
@@ -121,7 +120,7 @@ class TestNPMC(unittest.TestCase):
         Test moving to an absolute position.
         """
         exp_pos = self.dev.position.value.copy()
-        for pos in (0, 0.1, 0.15, -0.1, 0):
+        for pos in (0, 0.1, 0.15, 0.5, 0):
             new_pos = {'x': pos}
             f = self.dev.moveAbs(new_pos)
             f.result()
@@ -132,9 +131,8 @@ class TestNPMC(unittest.TestCase):
         """
         Test moving to a relative position.
         """
-
         # Start at the origin to prevent hitting the ends
-        self.dev.moveAbs({'x': 0}).result()
+        self.dev.moveAbs({'x': 0.3}).result()
 
         # Test another relative move
         for shift in (0, 0.12, -0.12):
@@ -160,7 +158,7 @@ class TestNPMC(unittest.TestCase):
 
     def test_offset(self):
         # Start near the origin
-        self.dev.moveAbs({'x': 0.01}).result()
+        self.dev.moveAbs({'x': 0.2}).result()
         logging.info("POSITION = %s", self.dev.position.value)
 
         # Bad offset
@@ -175,7 +173,7 @@ class TestNPMC(unittest.TestCase):
 
         # Test offset #2
         old_pos = self._getRealPosition()
-        offset_2 = {'x':-0.05}
+        offset_2 = {'x':0.3}
         self.dev.updateMetadata({model.MD_POS_COR: offset_2})
         exp_pos = subtract_coord(old_pos, offset_2)
         test.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
@@ -198,9 +196,12 @@ class TestNPMC(unittest.TestCase):
         """
         Test the error handling when it hits a limit
         """
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs({'x':-1000}).result()
+
         with self.assertRaises(npmc.ESPError):
-            self.dev.moveAbs({'x': 1}).result()
-        self.dev.moveAbs({'x': 0}).result()
+            self.dev.LockKeypad(500)
+            self.dev.checkError()
 
     def test_cancellation(self):
         """
@@ -209,10 +210,10 @@ class TestNPMC(unittest.TestCase):
         # start at origin
         self.dev.moveAbs({'x': 0}).result()
 
-        for pos in (0.15, -0.15, 0.2, -0.1):
+        for pos in (0.4, 0.5):
             new_pos = {'x': pos}
             f = self.dev.moveAbs({'x': 0.15})
-            time.sleep(0.02)
+            time.sleep(0.01)
             f.cancel()
 
             # make sure the position is not the new position
@@ -234,6 +235,31 @@ class TestNPMC(unittest.TestCase):
 
         f2.result()
         test.assert_pos_almost_equal(orig_pos, self.dev.position.value, **COMP_ARGS)
+
+    def test_reference(self):
+        """
+        Test referencing
+        """
+
+        # Test cancellation of referencing
+        self.dev.updateMetadata({model.MD_POS_COR: {'x': 0}})
+        self.dev.moveAbs({'x': 0.5}).result()
+        f = self.dev.reference({'x'})
+        time.sleep(0.01)
+        f.cancel()
+        self.assertFalse(self.dev.referenced.value['x'])
+        self.assertNotEqual(self.dev.position.value['x'], 0)
+
+        # TODO: NOTE!!! If homing aborts, you MUST run referencing again. Otherwise,
+        # the controller will be stuck and won't do anything!
+
+        # Test proper referencing
+        self.assertFalse(self.dev.referenced.value['x'])
+        self.dev.reference({'x'}).result()
+        self.assertTrue(self.dev.referenced.value['x'])
+        # The new position shoudl be the origin (0)
+        origin = {'x': 0}
+        test.assert_pos_almost_equal(self.dev.position.value, origin, **COMP_ARGS)
 
 
 if __name__ == "__main__":
