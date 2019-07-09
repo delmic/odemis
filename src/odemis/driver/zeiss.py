@@ -41,10 +41,10 @@ PC_RANGE = (1.0e-14, 2.0e-5)  # Amp probe current range
 VOLTAGE_RANGE = (0.0, 40.0)  # kV acceleration voltage range
 
 # Status responses
-RS_VALID = "@"
-RS_INVALID = "#"
-RS_SUCCESS = ">"
-RS_FAIL = "*"
+RS_VALID = b"@"
+RS_INVALID = b"#"
+RS_SUCCESS = b">"
+RS_FAIL = b"*"
 
 
 class RemconError(Exception):
@@ -65,7 +65,7 @@ class SEM(model.HwComponent):
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
-        self.eol = "\r\n"
+        self.eol = b"\r\n"
         # create a special function, that look for the port, cf _findDevice
         self._ser_access = threading.Lock()
         self._ser_access_sub = threading.Lock()
@@ -189,7 +189,7 @@ class SEM(model.HwComponent):
         """
         cmd = cmd + self.eol
         with self._ser_access:
-            logging.debug("Sending command %s", cmd.encode('string_escape'))
+            logging.debug("Sending command %s", cmd.decode('latin1', 'backslashreplace'))
             self._serial.write(cmd)
 
             # Acknowledge
@@ -202,10 +202,10 @@ class SEM(model.HwComponent):
             while ans[-len(self.eol):] != self.eol:
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % ans.decode('latin1', 'backslashreplace'))
                 else:
                     ans += char
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", ans.decode('latin1', 'backslashreplace'))
 
             # Status
             stat = self._serial.read()  # Success/fail
@@ -215,10 +215,10 @@ class SEM(model.HwComponent):
             while ans[-len(self.eol):] != self.eol:
                 char = self._serial.read()
                 if not char:
-                    raise IOError("Timeout after receiving %s" % ans.encode('string_escape'))
+                    raise IOError("Timeout after receiving %s" % ans.decode('latin1', 'backslashreplace'))
                 else:
                     ans += char
-            logging.debug("Received answer %s", ans.encode('string_escape'))
+            logging.debug("Received answer %s", ans.decode('latin1', 'backslashreplace'))
 
             value = ans[1:-len(self.eol)]
             if stat == RS_SUCCESS:
@@ -240,7 +240,7 @@ class SEM(model.HwComponent):
         """
         return (String): version number
         """
-        return self._SendCmd('VER?')
+        return self._SendCmd(b'VER?')
 
     def GetStagePosition(self):
         """
@@ -250,70 +250,70 @@ class SEM(model.HwComponent):
         # Return something like:
         # 65.60162 64.75846 38.91104 0.0
         # stage moving is either 0.0 or 1.0
-        s = self._SendCmd('STG?')
-        vals = s.split(' ')
+        s = self._SendCmd(b'STG?')
+        vals = s.split(b' ')
         return tuple(float(i) for i in vals[0:3]) + (vals[3] == "1.0",)
 
     def GetBlankBeam(self):
         """
         returns (bool): True (on), False (off)
         """
-        ans = self._SendCmd('BBL?')
+        ans = self._SendCmd(b'BBL?')
         return int(ans) != 0
 
     def GetExternal(self):
         """
         returns (bool): True (on), False (off)
         """
-        ans = self._SendCmd('EXS?')
+        ans = self._SendCmd(b'EXS?')
         return int(ans) != 0
 
     def GetMagnification(self):
         """
         returns (float): magnification
         """
-        ans = self._SendCmd('MAG?')
+        ans = self._SendCmd(b'MAG?')
         return float(ans)
 
     def GetFocus(self):
         """
         return (float): unit mm
         """
-        ans = self._SendCmd('FOC?')
+        ans = self._SendCmd(b'FOC?')
         return float(ans)
 
     def GetPixelSize(self):
         """
         returns (float): pixel size in nm
         """
-        ans = self._SendCmd('PIX?')
+        ans = self._SendCmd(b'PIX?')
         return float(ans)
 
     def GetProbeCurrent(self):
         """
         returns (float): probe current in Amps
         """
-        ans = self._SendCmd('PRB?')
+        ans = self._SendCmd(b'PRB?')
         return float(ans)
 
     def GetAccelerationVoltage(self):
         """
         returns (float): acceleration voltage in V
         """
-        ans = self._SendCmd('EHT?')
+        ans = self._SendCmd(b'EHT?')
         return float(ans) * 1e3
 
     def SetMagnification(self, mag):
         """
         mag (float): magnification in MAGNIFICATION_RANGE
         """
-        self._SendCmd('MAG %d' % mag)
+        self._SendCmd(b'MAG %d' % mag)
 
     def SetFocus(self, foc):
         """
         foc (float): focus in FOCUS_RANGE
         """
-        self._SendCmd('FOCS %f' % foc)
+        self._SendCmd(b'FOCS %f' % foc)
 
     def SetExternal(self, state):
         """
@@ -321,9 +321,9 @@ class SEM(model.HwComponent):
         state (bool): True (on), False (off)
         """
         if state:
-            self._SendCmd('EDX 1')
+            self._SendCmd(b'EDX 1')
         else:
-            self._SendCmd('EDX 0')
+            self._SendCmd(b'EDX 0')
 
     def SetBlankBeam(self, state):
         """
@@ -331,16 +331,16 @@ class SEM(model.HwComponent):
         state (bool): True (on), False (off)
         """
         if state:
-            self._SendCmd('BBLK 1')
+            self._SendCmd(b'BBLK 1')
         else:
-            self._SendCmd('BBLK 0')
+            self._SendCmd(b'BBLK 0')
 
     def SetProbeCurrent(self, cur):
         """
         Set probe current to cur
         cur (1.0E-14 <= float <= to 2.0E-5): probe current in Amps
         """
-        self._SendCmd('PROB %G' % cur)
+        self._SendCmd(b'PROB %G' % cur)
 
     def SetAccelerationVoltage(self, vol):
         """
@@ -349,13 +349,13 @@ class SEM(model.HwComponent):
         """
         # Convert to kV
         vol = vol * 1e-3
-        self._SendCmd('EHT %G' % vol)
+        self._SendCmd(b'EHT %G' % vol)
 
     def Abort(self):
         """
         Aborts current command
         """
-        return self._SendCmd('ABO')
+        return self._SendCmd(b'ABO')
 
     def MoveStage(self, x, y, z):
         """
@@ -363,7 +363,7 @@ class SEM(model.HwComponent):
         Use GetStagePosition() to check the move status.
         x, y, z (floats): absolute target position in mm
         """
-        c = 'STG %s %s %s' % (x, y, z)
+        c = b'STG %f %f %f' % (x, y, z)
         self._SendCmd(c)
 
 
@@ -837,12 +837,12 @@ class RemconSimulator(object):
 
     def __init__(self, timeout=1, *args, **kwargs):
         self.timeout = timeout
-        self._output_buf = ""  # what the commands sends back to the "host computer"
-        self._input_buf = ""  # what we receive from the "host computer"
+        self._output_buf = b""  # what the commands sends back to the "host computer"
+        self._input_buf = b""  # what we receive from the "host computer"
 
         self._speed = 0.1  # mm/s
         self._hfw_nomag = 1  # m
-        self.eol = '\r\n'
+        self.eol = b'\r\n'
 
         # Initialize parameters
         self.magnification = 10
@@ -902,7 +902,7 @@ class RemconSimulator(object):
         pass
 
     def flushInput(self):
-        self._output_buf = ""
+        self._output_buf = b""
 
     def close(self):
         # using read or write will fail after that
@@ -910,10 +910,10 @@ class RemconSimulator(object):
         del self._input_buf
 
     def _sendAck(self, status):
-        self._output_buf += "%s\r\n" % (status,)
+        self._output_buf += b"%s\r\n" % (status,)
 
     def _sendAnswer(self, status, ans):
-        self._output_buf += "%s%s\r\n" % (status, ans)
+        self._output_buf += b"%s%s\r\n" % (status, ans)
 
     def _parseMessage(self, msg):
         """
@@ -922,42 +922,42 @@ class RemconSimulator(object):
         """
 
         logging.debug("SIM: parsing %s", msg)
-        l = re.split(" ", msg)
+        l = re.split(b" ", msg)
 
         com = l[0]
         args = l[1:]
-        logging.debug("SIM: decoded message as %s %s", com, args)
+        logging.debug("SIM: decoded message as %s %s", com.decode('latin1', 'backslashreplace'), args)
 
         # decode the command
-        if com == "VER?":
+        if com == b"VER?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "SmartSEM Remote Control V01.23, DELMIC Sim")
-        elif com == "STG?":
+            self._sendAnswer(RS_SUCCESS, b"SmartSEM Remote Control V01.23, DELMIC Sim")
+        elif com == b"STG?":
             self._sendAck(RS_VALID)
-            mv_str = "1.0" if self._is_moving else "0.0"
-            self._sendAnswer(RS_SUCCESS, " ".join("%G" % v for v in self.pos) + " " + mv_str)
-        elif com == "BBL?":
+            mv_str = b"1.0" if self._is_moving else b"0.0"
+            self._sendAnswer(RS_SUCCESS, b" ".join(b"%G" % v for v in self.pos) + b" " + mv_str)
+        elif com == b"BBL?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.blanker)
-        elif com == "MAG?":
+            self._sendAnswer(RS_SUCCESS, b"%d" % self.blanker)
+        elif com == b"MAG?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.magnification)
-        elif com == "EXS?":
+            self._sendAnswer(RS_SUCCESS, b"%f" % self.magnification)
+        elif com == b"EXS?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.external)
-        elif com == "PIX?":
+            self._sendAnswer(RS_SUCCESS, b"%d" % self.external)
+        elif com == b"PIX?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.pixelSize)
-        elif com == "FOC?":
+            self._sendAnswer(RS_SUCCESS, b"%f" % self.pixelSize)
+        elif com == b"FOC?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.focus)
-        elif com == "EHT?":
+            self._sendAnswer(RS_SUCCESS, b"%f" % self.focus)
+        elif com == b"EHT?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.eht)
-        elif com == "PRB?":
+            self._sendAnswer(RS_SUCCESS, b"%f" % self.eht)
+        elif com == b"PRB?":
             self._sendAck(RS_VALID)
-            self._sendAnswer(RS_SUCCESS, "%s" % self.pc)
-        elif com == "STG":
+            self._sendAnswer(RS_SUCCESS, b"%f" % self.pc)
+        elif com == b"STG":
             self._sendAck(RS_VALID)
             self._sendAck(RS_SUCCESS)
             self.target_pos = numpy.array([float(i) for i in args])
@@ -970,31 +970,31 @@ class RemconSimulator(object):
             self._stage_stop.clear()
             self._mover = threading.Thread(target=self._run_move)
             self._mover.start()
-        elif com == "FOCS":
+        elif com == b"FOCS":
             self._sendAck(RS_VALID)
-            self.focus = args[0]
+            self.focus = float(args[0])
             self._sendAck(RS_SUCCESS)
-        elif com == "EDX":
+        elif com == b"EDX":
             self._sendAck(RS_VALID)
-            self.external = args[0]
+            self.external = int(args[0])
             self._sendAck(RS_SUCCESS)
-        elif com == "BBLK":
+        elif com == b"BBLK":
             self._sendAck(RS_VALID)
             self.blanker = int(args[0])
             self._sendAck(RS_SUCCESS)
-        elif com == "MAG":
+        elif com == b"MAG":
             self._sendAck(RS_VALID)
-            self.magnification = args[0]
+            self.magnification = float(args[0])
             self._sendAck(RS_SUCCESS)
-        elif com == "PROB":
+        elif com == b"PROB":
             self._sendAck(RS_VALID)
-            self.pc = args[0]
+            self.pc = float(args[0])
             self._sendAck(RS_SUCCESS)
-        elif com == "EHT":
+        elif com == b"EHT":
             self._sendAck(RS_VALID)
-            self.eht = args[0]
+            self.eht = float(args[0])
             self._sendAck(RS_SUCCESS)
-        elif com == "ABO":
+        elif com == b"ABO":
             self._sendAck(RS_VALID)
             self._stage_stop.set()
             self._sendAck(RS_SUCCESS)
