@@ -62,7 +62,6 @@ COMP_ARGS = {
 if TEST_NOHW:
     CONFIG["port"] = "/dev/fake"
     CONFIG["axes"]['z'] = {
-
                     'number': 3,
                     'range': [0, 3.14],
                     'unit': 'rad',
@@ -257,9 +256,8 @@ class TestNPMC(unittest.TestCase):
         self.assertFalse(self.dev.referenced.value['x'])
         self.dev.reference({'x'}).result()
         self.assertTrue(self.dev.referenced.value['x'])
-        # The new position shoudl be the origin (0)
-        origin = {'x': 0}
-        test.assert_pos_almost_equal(self.dev.position.value, origin, **COMP_ARGS)
+        # The new position should be the origin (0)
+        self.assertAlmostEqual(self.dev.position.value["x"], 0, places=3)
 
 
 if __name__ == "__main__":
